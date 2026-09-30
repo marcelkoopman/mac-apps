@@ -48,6 +48,5 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
-      # Per-app .cargo/audit.toml files are not read from the workspace root;
-      # mirror their ignores here (quick-xml <0.41 via polars/object_store).
-      - run: cargo audit --ignore RUSTSEC-2026-0194 --ignore RUSTSEC-2026-0195
+      # Ignores live in .cargo/audit.toml at the repo root.
+      - run: cargo audit
