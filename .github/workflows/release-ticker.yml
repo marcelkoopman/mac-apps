@@ -13,6 +13,7 @@ env:
   APP_NAME: Ticker
   PKG: ticker
   APP_DIR: apps/ticker
+  ENTITLEMENTS: apps/ticker/assets/entitlements.plist
   # cargo-bundle run inside apps/ticker writes to the WORKSPACE ROOT target/
   BUNDLE_DIR: target/aarch64-apple-darwin/release/bundle
 
@@ -80,10 +81,30 @@ jobs:
           ls -la "$APP/Contents/"
           file "$APP/Contents/MacOS/ticker"
 
-      - name: Ad-hoc sign the app
+      # Must run after "Copy assets into app bundle" (changing the bundle after
+      # signing breaks the seal) and before create-dmg. cargo-bundle cannot embed
+      # entitlements, so the app is (re)signed here. Same flags as scripts/sign_app.sh.
+      # No --deep: one executable, no nested frameworks/helpers.
+      - name: Ad-hoc sign the app (App Sandbox entitlements, hardened runtime)
         run: |
-          codesign --force --deep --sign - "$APP"
-          codesign -v "$APP"
+          plutil -lint "$ENTITLEMENTS"
+          codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS" "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+
+      - name: Verify signature and entitlements
+        run: |
+          echo "=== Signature ==="
+          codesign -dv "$APP" 2>&1 | tee "$RUNNER_TEMP/sig.txt"
+          grep -Eq '^CodeDirectory .*flags=.*runtime' "$RUNNER_TEMP/sig.txt" \
+            || { echo "::error::Hardened runtime flag missing"; exit 1; }
+          echo "=== Entitlements ==="
+          codesign -d --entitlements - "$APP"
+          codesign -d --entitlements - --xml "$APP" > "$RUNNER_TEMP/entitlements.plist"
+          SANDBOX=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$RUNNER_TEMP/entitlements.plist")
+          if [ "$SANDBOX" != "true" ]; then
+            echo "::error::com.apple.security.app-sandbox is not true in the signed app"
+            exit 1
+          fi
 
       - name: Install create-dmg
         run: brew install create-dmg

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ticker App Sandbox entitlements. Applied by `codesign ... entitlements` in
+  .github/workflows/release-ticker.yml and scripts/sign_app.sh.
+  - app-sandbox: required for the Mac App Store.
+  - network.client: price polling with reqwest (src/price_fetcher.rs:18, :52).
+  No file-access entitlement: Ticker only uses files in its own container
+  (HOME is redirected there) and reads its own bundle resources.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>
