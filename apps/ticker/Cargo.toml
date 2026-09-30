@@ -1,6 +1,6 @@
 [package]
 name = "ticker"
-version = "0.1.37"
+version = "0.1.38"
 edition.workspace = true
 
 [package.metadata.bundle]
@@ -8,7 +8,7 @@ name = "Ticker"
 identifier = "com.github.marcelkoopman.ticker"
 icon = ["assets/icon.icns"]
 resources = ["config.toml"]
-version = "0.1.37"
+version = "0.1.38"
 category = "Utilities"
 short_description = "Price Ticker"
 long_description = "A menubar price ticker for Bitcoin, Gold, and TTF Gas"
