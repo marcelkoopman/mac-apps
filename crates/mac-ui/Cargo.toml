@@ -9,18 +9,32 @@ edition.workspace = true
 appkit-full = ["objc2-app-kit/default", "objc2-foundation/default"]
 # `mac_ui::theme`: appearance switch stored in the user defaults.
 theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-foundation/NSUserDefaults"]
-# `mac_ui::widgets`: AppKit control constructors.
+# `mac_ui::widgets` and `mac_ui::fonts`: AppKit control constructors and font lookup.
 widgets = [
     "objc2-app-kit/NSBox",
     "objc2-app-kit/NSButton",
     "objc2-app-kit/NSCell",
+    "objc2-app-kit/NSClipView",
     "objc2-app-kit/NSControl",
     "objc2-app-kit/NSFont",
+    "objc2-app-kit/NSFontDescriptor",
     "objc2-app-kit/NSImageCell",
     "objc2-app-kit/NSImageView",
     "objc2-app-kit/NSParagraphStyle",
+    "objc2-app-kit/NSScrollView",
     "objc2-app-kit/NSSearchField",
+    "objc2-app-kit/NSText",
     "objc2-app-kit/NSTextField",
+    "objc2-app-kit/NSTextView",
+]
+# `mac_ui::panel`: borderless floating panel creation, activation and placement.
+panel = [
+    "objc2-app-kit/NSApplication",
+    "objc2-app-kit/NSEvent",
+    "objc2-app-kit/NSScreen",
+    "objc2-app-kit/NSWindow",
+    "objc2-foundation/NSArray",
+    "objc2-foundation/NSEnumerator",
 ]
 
 [dependencies]

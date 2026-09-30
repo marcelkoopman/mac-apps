@@ -87,12 +87,7 @@ fn editor_font() -> Retained<NSFont> {
         "SF Mono",
         "Menlo",
     ];
-    for name in NAMES {
-        if let Some(font) = NSFont::fontWithName_size(&NSString::from_str(name), 12.0) {
-            return font;
-        }
-    }
-    NSFont::monospacedSystemFontOfSize_weight(12.0, 0.0)
+    mac_ui::fonts::monospace(12.0, &NAMES)
 }
 
 fn plain(body: &str, font: &NSFont, color: &NSColor) -> Retained<NSMutableAttributedString> {

@@ -2,13 +2,15 @@
 //! `NSVisualEffectView` fallback on older macOS.
 
 use objc2::rc::Retained;
-use objc2::runtime::{AnyClass, AnyObject};
-use objc2::{MainThreadMarker, MainThreadOnly, Message, msg_send};
+use objc2::runtime::AnyClass;
+use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSGlassEffectView, NSGlassEffectViewStyle, NSView,
     NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView,
     NSWindowOrderingMode,
 };
+
+use crate::layer::round_view;
 
 /// Which effect [`background`] installed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,7 +76,7 @@ fn frosted(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) -> Backgr
     frosted.setEmphasized(true);
     frosted.setState(NSVisualEffectState::Active);
     track_size(&frosted);
-    round_layer(&frosted, corner_radius);
+    round_view(&frosted, corner_radius);
     install_backmost(parent, &frosted);
     Background {
         effect: frosted.into_super(),
@@ -91,16 +93,4 @@ fn track_size(view: &NSView) {
 
 fn install_backmost(parent: &NSView, view: &NSView) {
     parent.addSubview_positioned_relativeTo(view, NSWindowOrderingMode::Below, None);
-}
-
-fn round_layer(view: &NSView, radius: f64) {
-    view.setWantsLayer(true);
-    // SAFETY: `layer` returns the view's CALayer or nil; both setters exist on CALayer.
-    unsafe {
-        let layer: *mut AnyObject = msg_send![view, layer];
-        if !layer.is_null() {
-            let _: () = msg_send![layer, setCornerRadius: radius];
-            let _: () = msg_send![layer, setMasksToBounds: true];
-        }
-    }
 }

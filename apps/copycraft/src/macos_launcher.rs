@@ -3,25 +3,22 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 
-use mac_ui::glass;
-use mac_ui::icon::system_symbol;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, Sel};
+use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSBackgroundColorAttributeName, NSBackingStoreType, NSBorderType, NSBox, NSButton,
-    NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
-    NSEvent, NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont,
-    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageScaling, NSImageView,
-    NSLineBreakMode, NSMenu, NSMenuItem, NSScreen, NSScrollView, NSSearchField, NSTextAlignment,
-    NSTextField, NSTextView, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowOrderingMode,
-    NSWindowStyleMask,
+    NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont,
+    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageView, NSLineBreakMode,
+    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextView,
+    NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMutableAttributedString, NSNotification, NSPoint, NSRange, NSRect,
     NSSize, NSString,
 };
-use mac_ui::widgets::{self, filled_box, raise_view, round_view};
+use mac_ui::panel;
+use mac_ui::widgets::{self, filled_box, raise_view};
 use zeroize::Zeroize;
 
 use crate::appearance::Theme;
@@ -339,8 +336,7 @@ pub fn order_front() {
     }
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
-            window.makeKeyAndOrderFront(None);
-            window.orderFrontRegardless();
+            panel::bring_to_front(window);
         }
     });
 }
@@ -370,7 +366,7 @@ fn present(data: LaunchData, fresh: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    activate_app(mtm);
+    panel::activate_app(mtm);
     ensure_window(mtm);
     if fresh {
         set_query("");
@@ -385,8 +381,7 @@ fn present(data: LaunchData, fresh: bool) {
     layout(fresh);
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
-            window.makeKeyAndOrderFront(None);
-            window.orderFrontRegardless();
+            panel::bring_to_front(window);
         }
     });
     focus_card();
@@ -459,55 +454,25 @@ fn window_is_visible() -> bool {
     })
 }
 
-fn activate_app(mtm: MainThreadMarker) {
-    use mac_ui::objc2_app_kit::NSApplication;
-    let app = NSApplication::sharedApplication(mtm);
-    #[allow(deprecated)]
-    app.activateIgnoringOtherApps(true);
-}
-
 fn ensure_window(mtm: MainThreadMarker) {
     if WINDOW.with(|slot| slot.borrow().is_some()) {
         return;
     }
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, 420.0));
-    let style = NSWindowStyleMask::Borderless;
-    let allocated = LauncherWindow::alloc(mtm);
-    let window: Retained<LauncherWindow> = unsafe {
-        msg_send![
-            allocated,
-            initWithContentRect: frame,
-            styleMask: style,
-            backing: NSBackingStoreType::Buffered,
-            defer: false,
-        ]
-    };
-    unsafe { window.setReleasedWhenClosed(false) };
-    window.setOpaque(false);
-    window.setHasShadow(true);
-    window.setBackgroundColor(Some(&NSColor::clearColor()));
-    window.setLevel(NSFloatingWindowLevel);
-    window.setMovableByWindowBackground(true);
-    window.setCollectionBehavior(
-        NSWindowCollectionBehavior::CanJoinAllSpaces
-            | NSWindowCollectionBehavior::Transient
-            | NSWindowCollectionBehavior::FullScreenAuxiliary
-            | NSWindowCollectionBehavior::IgnoresCycle,
-    );
+    let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(WIDTH, 420.0));
+    panel::configure_floating(&window);
 
     let delegate = LauncherDelegate::new(mtm);
-    unsafe {
-        let _: () = msg_send![&*window, setDelegate: &*delegate];
-    }
+    // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like WINDOW.
+    unsafe { panel::set_delegate(&window, &*delegate) };
     DELEGATE.with(|slot| slot.replace(Some(delegate)));
 
     let window_view = window.contentView().expect("content view");
     window_view.setWantsLayer(true);
     window_view.setLayerUsesCoreImageFilters(true);
-    round_view(&window_view, 16.0);
 
-    // Liquid Glass on macOS 26+, else the frosted view. Before 26, `content` is `window_view`.
-    let content = glass::background(mtm, &window_view, 16.0).content;
+    // Rounded corners plus Liquid Glass on macOS 26+, else the frosted view. Before 26,
+    // `content` is `window_view`.
+    let content = panel::rounded_glass(mtm, &window_view, 16.0).content;
 
     let header = widgets::label(mtm, 13.0, &NSColor::labelColor());
     let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
@@ -773,68 +738,27 @@ fn place_sections(
     }
 }
 
+/// A fresh launcher opens just above (or below) the pointer, 8 pt inside the visible screen.
+const NEAR_CURSOR: panel::NearCursor = panel::NearCursor {
+    margin: 8.0,
+    lead_x: 36.0,
+    gap_y: 12.0,
+};
+
 fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
     WINDOW.with(|slot| {
         let borrowed = slot.borrow();
         let Some(window) = borrowed.as_ref() else {
             return;
         };
+        let size = NSSize::new(WIDTH, height);
         let frame = if fresh {
-            cursor_frame(mtm, height)
+            panel::near_cursor(mtm, size, &NEAR_CURSOR)
         } else {
-            let current = window.frame();
-            let top = current.origin.y + current.size.height;
-            NSRect::new(
-                NSPoint::new(current.origin.x, top - height),
-                NSSize::new(WIDTH, height),
-            )
+            panel::keep_top_left(window.frame(), size)
         };
         window.setFrame_display(frame, true);
     });
-}
-
-fn cursor_frame(mtm: MainThreadMarker, height: f64) -> NSRect {
-    let cursor = NSEvent::mouseLocation();
-    let visible = screen_for_point(mtm, cursor)
-        .map(|screen| screen.visibleFrame())
-        .unwrap_or_else(|| NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 900.0)));
-    let min_x = visible.origin.x + 8.0;
-    let max_x = visible.origin.x + visible.size.width - WIDTH - 8.0;
-    let x = clamp_axis(cursor.x - 36.0, min_x, max_x);
-    let top = visible.origin.y + visible.size.height - 8.0;
-    let mut y = cursor.y + 12.0;
-    if y + height > top {
-        y = cursor.y - 12.0 - height;
-    }
-    y = clamp_axis(
-        y,
-        visible.origin.y + 8.0,
-        (top - height).max(visible.origin.y),
-    );
-    NSRect::new(NSPoint::new(x, y), NSSize::new(WIDTH, height))
-}
-
-fn screen_for_point(mtm: MainThreadMarker, point: NSPoint) -> Option<Retained<NSScreen>> {
-    let screens = NSScreen::screens(mtm);
-    for screen in screens.iter() {
-        let frame = screen.frame();
-        let inside = point.x >= frame.origin.x
-            && point.x < frame.origin.x + frame.size.width
-            && point.y >= frame.origin.y
-            && point.y < frame.origin.y + frame.size.height;
-        if inside {
-            return Some(screen);
-        }
-    }
-    NSScreen::mainScreen(mtm)
-}
-
-fn clamp_axis(value: f64, min: f64, max: f64) -> f64 {
-    if max < min {
-        min
-    } else {
-        value.clamp(min, max)
-    }
 }
 
 fn place_well(y: f64) {
@@ -2477,13 +2401,7 @@ fn place_item_find(y: f64, shown: bool) {
 }
 
 fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
-    let text = NSTextView::initWithFrame(NSTextView::alloc(mtm), NSRect::ZERO);
-    text.setEditable(false);
-    text.setSelectable(false);
-    text.setUsesFindPanel(false);
-    text.setDrawsBackground(false);
-    text.setRichText(true);
-    text.setTextContainerInset(NSSize::new(12.0, 10.0));
+    let text = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     crate::macos_card_text::configure_scrolling(&text);
     text
 }
@@ -2492,14 +2410,7 @@ fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<PreviewScro
     let allocated = PreviewScroll::alloc(mtm);
     let scroll: Retained<PreviewScroll> =
         unsafe { msg_send![allocated, initWithFrame: NSRect::ZERO] };
-    scroll.setDrawsBackground(false);
-    scroll.setBorderType(NSBorderType::NoBorder);
-    scroll.setHasVerticalScroller(true);
-    scroll.setHasHorizontalScroller(true);
-    scroll.setAutohidesScrollers(true);
-    scroll.setAutomaticallyAdjustsContentInsets(false);
-    scroll.contentView().setDrawsBackground(false);
-    scroll.setDocumentView(Some(text));
+    widgets::configure_text_scroll(&scroll, text);
     scroll.setHidden(true);
     scroll.setAlphaValue(0.0);
     scroll
@@ -2511,10 +2422,7 @@ fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     view
 }
 
-struct NavButton {
-    root: Retained<NSView>,
-    hit: Retained<NSButton>,
-}
+type NavButton = widgets::OverlayButton;
 
 fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
     let newer_x = WIDTH - PAD - commands::NAV_BUTTON;
@@ -2643,86 +2551,27 @@ fn set_text_gutter(right: f64) {
     });
 }
 
-struct WellAction {
-    root: Retained<NSView>,
-    hit: Retained<NSButton>,
-}
+type WellAction = widgets::OverlayButton;
 
 fn well_action(mtm: MainThreadMarker, symbol: &str, fallback: &str, action: Sel) -> WellAction {
-    let frame = NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(WELL_ACTION, WELL_ACTION),
-    );
-    let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    let fill = filled_box(mtm, WELL_ACTION / 2.0, &NSColor::controlBackgroundColor());
-    fill.setFrame(frame);
-    fill.setAlphaValue(0.92);
-    let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
-    hit.setBordered(false);
-    hit.setFocusRingType(NSFocusRingType::None);
-    hit.setImagePosition(NSCellImagePosition::ImageOnly);
-    hit.setImageScaling(NSImageScaling::ScaleProportionallyDown);
-    if let Some(image) = system_symbol(symbol, fallback) {
-        image.setTemplate(true);
-        image.setSize(NSSize::new(15.0, 15.0));
-        hit.setImage(Some(&image));
-        hit.setTitle(&NSString::from_str(""));
-        if hit.respondsToSelector(sel!(setContentTintColor:)) {
-            hit.setContentTintColor(Some(&NSColor::labelColor()));
-        }
-    } else {
-        hit.setTitle(&NSString::from_str(fallback));
-        hit.setFont(Some(&NSFont::systemFontOfSize(13.0)));
-    }
-    wire_button(&hit, action);
-    root.addSubview(&fill);
-    root.addSubview(&hit);
-    root.setHidden(true);
-    WellAction { root, hit }
+    let button = widgets::symbol_button(mtm, symbol, fallback, WELL_ACTION, 15.0, 13.0);
+    wire_button(&button.hit, action);
+    button.root.setHidden(true);
+    button
 }
 
 fn nav_button(mtm: MainThreadMarker, title: &str, action: Sel) -> NavButton {
-    let root = NSView::initWithFrame(
-        NSView::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(0.0, 0.0),
-            NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
-        ),
-    );
-    let fill = filled_box(
+    let button = widgets::pill_button(
         mtm,
-        commands::CHIP_PILL_H / 2.0,
-        &NSColor::unemphasizedSelectedContentBackgroundColor(),
+        title,
+        commands::NAV_BUTTON,
+        commands::CHIP_PILL_H,
+        15.0,
+        18.0,
     );
-    fill.setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
-    ));
-    let label = widgets::label(mtm, 15.0, &NSColor::labelColor());
-    label.setAlignment(NSTextAlignment::Center);
-    label.setLineBreakMode(NSLineBreakMode::ByClipping);
-    label.setFrame(NSRect::new(
-        NSPoint::new(0.0, 5.0),
-        NSSize::new(commands::NAV_BUTTON, 18.0),
-    ));
-    label.setStringValue(&NSString::from_str(title));
-    let hit = NSButton::initWithFrame(
-        NSButton::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(0.0, 0.0),
-            NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
-        ),
-    );
-    hit.setBordered(false);
-    hit.setTransparent(true);
-    hit.setTitle(&NSString::from_str(""));
-    hit.setFocusRingType(NSFocusRingType::None);
-    wire_button(&hit, action);
-    root.addSubview(&fill);
-    root.addSubview(&label);
-    root.addSubview(&hit);
-    root.setHidden(true);
-    NavButton { root, hit }
+    wire_button(&button.hit, action);
+    button.root.setHidden(true);
+    button
 }
 
 fn icon_button(mtm: MainThreadMarker, title: &str, action: Sel) -> Retained<NSButton> {
