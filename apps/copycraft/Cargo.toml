@@ -1,0 +1,90 @@
+[package]
+name = "copycraft"
+version = "0.1.41"
+edition = "2024"
+
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+[profile.dist]
+inherits = "release"
+strip = "symbols"
+panic = "abort"
+
+[package.metadata.bundle]
+name = "Copycraft"
+identifier = "com.github.marcelkoopman.copycraft"
+icon = ["assets/icon.icns"]
+version = "0.1.41"
+category = "Utilities"
+short_description = "Clipboard transformer"
+long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
+
+[package.metadata.bundle.macos]
+minimum_system_version = "10.13"
+info_plist_exts = ["assets/Info.plist.ext"]
+
+[dependencies]
+anyhow = "1.0.104"
+arboard = "3"
+base64 = "0.23"
+global-hotkey = "0.8"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
+infer = "0.22"
+leakguard = "0.9.1"
+polars = { version = "0.55.2", default-features = false, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
+redact-core = "0.12"
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+tray-icon = "0.25"
+winit = "0.30"
+zeroize = "1.9.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+dispatch2 = "0.3"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSAttributedString", "NSArray", "NSDate", "NSURL", "NSURLRequest", "NSURLResponse", "NSUserDefaults", "NSData", "NSDictionary", "NSError"] }
+objc2-app-kit = { version = "0.3", features = [
+    "NSAnimation",
+    "NSAnimationContext",
+    "NSAppearance",
+    "NSApplication",
+    "NSBitmapImageRep",
+    "NSPasteboard",
+    "NSButton",
+    "NSCell",
+    "NSEvent",
+    "NSMenu",
+    "NSMenuItem",
+    "NSColor",
+    "NSControl",
+    "NSFont",
+    "NSGraphics",
+    "NSImage",
+    "NSImageCell",
+    "NSImageRep",
+    "NSImageView",
+    "NSResponder",
+    "NSOpenPanel",
+    "NSPanel",
+    "NSSavePanel",
+    "NSScrollView",
+    "NSText",
+    "NSTextContainer",
+    "NSTextStorage",
+    "NSTextView",
+    "NSView",
+    "NSVisualEffectView",
+    "NSWindow",
+] }
+objc2-vision = { version = "0.3.2", default-features = false, features = ["std", "VNRecognizeTextRequest", "VNDetectBarcodesRequest", "VNRequestHandler", "VNObservation", "VNRequest", "VNTypes"] }

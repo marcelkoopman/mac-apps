@@ -1,0 +1,12 @@
+# cargo-audit configuration (also read as .cargo/audit.toml by some setups)
+# https://docs.rs/cargo-audit/latest/cargo_audit/
+
+[advisories]
+# quick-xml DoS advisories (fixed in >=0.41.0).
+# Still pulled transitively by some polars/object_store versions as 0.38.x.
+# This app does not parse untrusted XML at runtime (menubar price ticker).
+# Remove these ignores once Cargo.lock only has quick-xml >= 0.41.
+ignore = [
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]

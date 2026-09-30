@@ -1,0 +1,106 @@
+name: Build Release DMG
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build DMG
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
+      - name: Build app bundle
+        run: cargo bundle --release --target aarch64-apple-darwin
+
+      - name: Copy assets into app bundle
+        run: |
+          APP="target/aarch64-apple-darwin/release/bundle/osx/Ticker.app"
+          RES="$APP/Contents/Resources"
+          mkdir -p "$RES/assets"
+
+          # Copy icon for DMG
+          cp -v assets/icon.icns "$RES/icon.icns"
+
+          # Copy runtime icons
+          cp -v assets/normal.png "$RES/assets/normal.png"
+          cp -v assets/update.png "$RES/assets/update.png"
+
+          # Verify
+          echo "=== Resources ==="
+          ls -lah "$RES"
+          echo "=== Assets ==="
+          ls -lah "$RES/assets"
+
+      - name: Verify app bundle
+        run: |
+          echo "=== App bundle ==="
+          ls -la target/aarch64-apple-darwin/release/bundle/osx/Ticker.app/Contents/
+          file target/aarch64-apple-darwin/release/bundle/osx/Ticker.app/Contents/MacOS/ticker
+
+      - name: Ad-hoc sign the app
+        run: |
+          codesign --force --deep --sign - target/aarch64-apple-darwin/release/bundle/osx/Ticker.app
+          codesign -v target/aarch64-apple-darwin/release/bundle/osx/Ticker.app
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create professional DMG
+        run: |
+          create-dmg \
+            --volname "Ticker" \
+            --volicon target/aarch64-apple-darwin/release/bundle/osx/Ticker.app/Contents/Resources/icon.icns \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Ticker.app" 150 190 \
+            --icon "Applications" 450 190 \
+            --hide-extension "Ticker.app" \
+            --app-drop-link 450 190 \
+            target/aarch64-apple-darwin/release/bundle/dmg/Ticker-temp.dmg \
+            target/aarch64-apple-darwin/release/bundle/osx/Ticker.app
+
+      - name: Move DMG to final location
+        run: |
+          mv target/aarch64-apple-darwin/release/bundle/dmg/Ticker-temp.dmg target/aarch64-apple-darwin/release/bundle/dmg/Ticker.dmg
+
+      - name: Verify DMG
+        run: |
+          file target/aarch64-apple-darwin/release/bundle/dmg/Ticker.dmg
+          hdiutil verify target/aarch64-apple-darwin/release/bundle/dmg/Ticker.dmg || true
+
+      - name: Rename DMG with version
+        run: |
+          VERSION=${{ github.ref_name }}
+          mv target/aarch64-apple-darwin/release/bundle/dmg/Ticker.dmg target/aarch64-apple-darwin/release/bundle/dmg/Ticker-${VERSION}.dmg
+          ls -lah target/aarch64-apple-darwin/release/bundle/dmg/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/aarch64-apple-darwin/release/bundle/dmg/Ticker-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        if: success()
+        run: echo "✅ Professional DMG release created!"

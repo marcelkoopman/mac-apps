@@ -1,0 +1,3 @@
+[submodule "tools/mac-tooling"]
+	path = tools/mac-tooling
+	url = https://github.com/marcelkoopman/mac-tooling.git

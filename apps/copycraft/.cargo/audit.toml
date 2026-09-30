@@ -1,0 +1,18 @@
+# cargo-audit configuration (`cargo audit` reads this path)
+# https://docs.rs/cargo-audit/latest/cargo_audit/
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0194 / 0195: quick-xml <0.41 quadratic attribute checks and
+    # unbounded NsReader namespace allocation. Pulled by unused optional
+    # object_store 0.13 (polars cloud I/O). copycraft enables only csv/json/fmt/
+    # dtype-slim; `cargo tree -i quick-xml@0.39.4` is empty. Drop when polars
+    # publishes a release on object_store >=0.14.1 (quick-xml >=0.41).
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
+
+[yanked]
+# Sparse-index yank checks over a 500+ crate lockfile often time out in GHA
+# (`couldn't check if the package is yanked: ... allotted timeframe`).
+enabled = false

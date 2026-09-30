@@ -1,0 +1,114 @@
+name: Build Release DMG
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build DMG
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
+      - name: Build app bundle
+        run: cargo bundle --release --target aarch64-apple-darwin
+
+      - name: Copy assets into app bundle
+        run: |
+          APP="target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app"
+          RES="$APP/Contents/Resources"
+          mkdir -p "$RES/assets"
+
+          if [ -f assets/icon.icns ]; then
+            cp -v assets/icon.icns "$RES/icon.icns"
+          fi
+
+          if [ -f assets/normal.png ]; then
+            cp -v assets/normal.png "$RES/assets/normal.png"
+          fi
+          if [ -f assets/update.png ]; then
+            cp -v assets/update.png "$RES/assets/update.png"
+          fi
+
+          echo "=== Resources ==="
+          ls -lah "$RES"
+          echo "=== Assets ==="
+          ls -lah "$RES/assets"
+
+      - name: Verify app bundle
+        run: |
+          echo "=== App bundle ==="
+          ls -la target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app/Contents/
+          file target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app/Contents/MacOS/copycraft
+
+      - name: Ad-hoc sign the app
+        run: |
+          codesign --force --deep --sign - target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app
+          codesign -v target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create professional DMG
+        run: |
+          VOLICON_ARGS=()
+          if [ -f target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app/Contents/Resources/icon.icns ]; then
+            VOLICON_ARGS=(--volicon target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app/Contents/Resources/icon.icns)
+          fi
+
+          mkdir -p target/aarch64-apple-darwin/release/bundle/dmg
+          create-dmg \
+            --volname "Copycraft" \
+            "${VOLICON_ARGS[@]}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Copycraft.app" 150 190 \
+            --hide-extension "Copycraft.app" \
+            --app-drop-link 450 190 \
+            target/aarch64-apple-darwin/release/bundle/dmg/Copycraft-temp.dmg \
+            target/aarch64-apple-darwin/release/bundle/osx/Copycraft.app
+
+      - name: Move DMG to final location
+        run: |
+          mv target/aarch64-apple-darwin/release/bundle/dmg/Copycraft-temp.dmg target/aarch64-apple-darwin/release/bundle/dmg/Copycraft.dmg
+
+      - name: Verify DMG
+        run: |
+          file target/aarch64-apple-darwin/release/bundle/dmg/Copycraft.dmg
+          hdiutil verify target/aarch64-apple-darwin/release/bundle/dmg/Copycraft.dmg || true
+
+      - name: Rename DMG with version
+        run: |
+          VERSION=${{ github.ref_name }}
+          mv target/aarch64-apple-darwin/release/bundle/dmg/Copycraft.dmg target/aarch64-apple-darwin/release/bundle/dmg/Copycraft-${VERSION}.dmg
+          ls -lah target/aarch64-apple-darwin/release/bundle/dmg/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/aarch64-apple-darwin/release/bundle/dmg/Copycraft-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        if: success()
+        run: echo "✅ Professional DMG release created!"

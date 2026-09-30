@@ -1,0 +1,37 @@
+[package]
+name = "ticker"
+version = "0.1.36"
+edition = "2024"
+
+[package.metadata.bundle]
+name = "Ticker"
+identifier = "com.github.marcelkoopman.ticker"
+icon = ["assets/icon.icns"]
+resources = ["config.toml"]
+version = "0.1.0"
+category = "Utilities"
+short_description = "Price Ticker"
+long_description = "A menubar price ticker for Bitcoin, Gold, and TTF Gas"
+
+[package.metadata.bundle.macos]
+minimum_system_version = "10.13"
+info_plist_entries = { LSUIElement = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+reqwest = { version = "0.13", features = ["blocking", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "1.1"
+tray-icon = "0.25"
+winit = "0.30"
+image = "0.25"
+chrono = "0.4"
+dirs = "7.0"
+dhat = "0.3"
+arboard = "3"
+# Minimal features: DataFrame + Display. Avoids polars-io/object_store → quick-xml 0.38 (RUSTSEC-2026-0194/0195).
+polars = { version = "0.55.2", default-features = false, features = ["fmt"] }
+
+[features]
+dhat-heap = []

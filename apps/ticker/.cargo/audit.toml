@@ -1,0 +1,7 @@
+[advisories]
+# quick-xml DoS (fixed in >=0.41.0). May still appear transitively via object_store.
+# This app does not parse untrusted XML. Drop ignores when lockfile is clean.
+ignore = [
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
