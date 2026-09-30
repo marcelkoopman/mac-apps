@@ -855,6 +855,7 @@ dependencies = [
  "image",
  "infer",
  "leakguard",
+ "mac-ui",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
@@ -2570,6 +2571,14 @@ dependencies = [
 [[package]]
 name = "mac-ui"
 version = "0.1.0"
+dependencies = [
+ "image",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "tray-icon",
+ "winit",
+]
 
 [[package]]
 name = "maybe-rayon"
@@ -5536,6 +5545,7 @@ dependencies = [
  "dhat",
  "dirs",
  "image",
+ "mac-ui",
  "polars",
  "reqwest 0.13.5",
  "serde",

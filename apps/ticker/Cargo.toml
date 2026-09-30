@@ -29,6 +29,7 @@ image = { workspace = true }
 chrono = "0.4"
 dirs = "7.0"
 dhat = "0.3"
+mac-ui = { path = "../../crates/mac-ui" }
 arboard = { workspace = true }
 # Minimal features: DataFrame + Display. Avoids polars-io/object_store → quick-xml 0.38 (RUSTSEC-2026-0194/0195).
 polars = { workspace = true, features = ["fmt"] }

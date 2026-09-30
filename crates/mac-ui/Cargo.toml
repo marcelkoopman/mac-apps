@@ -1,6 +1,16 @@
 [package]
 name = "mac-ui"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
 
 [dependencies]
+# Not inherited from the workspace: default-features = false (same reason as copycraft). PNG only,
+# for `icon::from_image_file`; apps that need more formats enable them on their own `image` dep.
+image = { version = "0.25", default-features = false, features = ["png"] }
+tray-icon = { workspace = true }
+winit = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }

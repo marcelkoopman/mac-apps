@@ -1,14 +1,19 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Shared look & feel and UI frameworks for the mac-apps menubar apps.
+//!
+//! The framework crates are re-exported so apps can reach them as `mac_ui::tray_icon::...`,
+//! `mac_ui::objc2_app_kit::...` and so on, with versions and features pinned in one place.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use tray_icon;
+pub use winit;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+#[cfg(target_os = "macos")]
+pub use objc2;
+#[cfg(target_os = "macos")]
+pub use objc2_app_kit;
+#[cfg(target_os = "macos")]
+pub use objc2_foundation;
+
+#[cfg(target_os = "macos")]
+pub mod glass;
+pub mod icon;
+pub mod tray;

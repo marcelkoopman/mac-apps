@@ -3,17 +3,18 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 
+use mac_ui::glass;
+use mac_ui::icon::system_symbol;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, Sel};
-use objc2::{AnyThread, ClassType, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSBackgroundColorAttributeName, NSBackingStoreType, NSBorderType, NSBox, NSBoxType, NSButton,
     NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
     NSEvent, NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont,
     NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageAlignment, NSImageScaling,
     NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScreen, NSScrollView, NSSearchField,
-    NSTextAlignment, NSTextField, NSTextView, NSTitlePosition, NSView, NSVisualEffectBlendingMode,
-    NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSTextAlignment, NSTextField, NSTextView, NSTitlePosition, NSView, NSWindow,
     NSWindowCollectionBehavior, NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_foundation::{
@@ -499,23 +500,13 @@ fn ensure_window(mtm: MainThreadMarker) {
     }
     DELEGATE.with(|slot| slot.replace(Some(delegate)));
 
-    let content = window.contentView().expect("content view");
-    content.setWantsLayer(true);
-    content.setLayerUsesCoreImageFilters(true);
-    round_view(&content, 16.0);
+    let window_view = window.contentView().expect("content view");
+    window_view.setWantsLayer(true);
+    window_view.setLayerUsesCoreImageFilters(true);
+    round_view(&window_view, 16.0);
 
-    let frosted =
-        NSVisualEffectView::initWithFrame(NSVisualEffectView::alloc(mtm), content.bounds());
-    frosted.setMaterial(NSVisualEffectMaterial::Popover);
-    frosted.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-    frosted.setEmphasized(true);
-    frosted.setState(NSVisualEffectState::Active);
-    frosted.setAutoresizingMask(
-        objc2_app_kit::NSAutoresizingMaskOptions::ViewWidthSizable
-            | objc2_app_kit::NSAutoresizingMaskOptions::ViewHeightSizable,
-    );
-    round_view(&frosted, 16.0);
-    content.addSubview(&frosted);
+    // Liquid Glass on macOS 26+, else the frosted view. Before 26, `content` is `window_view`.
+    let content = glass::background(mtm, &window_view, 16.0).content;
 
     let header = static_label(mtm, 13.0, &NSColor::labelColor());
     let meta = static_label(mtm, 12.0, &NSColor::secondaryLabelColor());
@@ -2706,17 +2697,6 @@ fn well_action(mtm: MainThreadMarker, symbol: &str, fallback: &str, action: Sel)
     root.addSubview(&hit);
     root.setHidden(true);
     WellAction { root, hit }
-}
-
-fn system_symbol(name: &str, description: &str) -> Option<Retained<NSImage>> {
-    let selector = sel!(imageWithSystemSymbolName:accessibilityDescription:);
-    if !NSImage::class().metaclass().responds_to(selector) {
-        return None;
-    }
-    NSImage::imageWithSystemSymbolName_accessibilityDescription(
-        &NSString::from_str(name),
-        Some(&NSString::from_str(description)),
-    )
 }
 
 fn raise_view(view: &NSView) {

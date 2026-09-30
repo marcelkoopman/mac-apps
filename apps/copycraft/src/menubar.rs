@@ -4,9 +4,10 @@ use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
-use tray_icon::{
+use mac_ui::tray;
+use mac_ui::tray_icon::{
     MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
-    menu::{IconMenuItem, Menu, MenuEvent, MenuItem, NativeIcon, PredefinedMenuItem, Submenu},
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 use winit::{
     application::ApplicationHandler,
@@ -86,7 +87,7 @@ impl ApplicationHandler<UserEvent> for App {
         }
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
-                "quit" => {
+                tray::QUIT_ID => {
                     event_loop.exit();
                     return;
                 }
@@ -839,7 +840,7 @@ fn hash_text(text: &str) -> u64 {
 }
 
 fn version_label() -> String {
-    format!("Copycraft {}", env!("CARGO_PKG_VERSION"))
+    tray::version_label("Copycraft", env!("CARGO_PKG_VERSION"))
 }
 
 fn status_labels() -> [String; 3] {
@@ -862,36 +863,10 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     rows
 }
 
-fn info_item(label: &str) -> MenuItem {
-    let item = MenuItem::new(label, false, None);
-    #[cfg(target_os = "macos")]
-    {
-        use objc2::AnyThread;
-        use objc2_app_kit::{NSColor, NSForegroundColorAttributeName};
-        use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSRange, NSString};
-
-        let ns = NSString::from_str(label);
-        let attr =
-            NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
-        let all = NSRange::new(0, ns.length());
-        // SAFETY: NSForegroundColorAttributeName takes an NSColor value.
-        unsafe {
-            attr.addAttribute_value_range(
-                NSForegroundColorAttributeName,
-                &NSColor::secondaryLabelColor(),
-                all,
-            );
-        }
-        let title: &NSAttributedString = &attr;
-        item.set_attributed_title(Some(title));
-    }
-    item
-}
-
 fn status_menu(entries: &[(usize, String)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
     let menu = Menu::new();
-    let _ = menu.append(&info_item(&hotkey));
+    let _ = menu.append(&tray::info_item(&hotkey));
     if !entries.is_empty() {
         let history = Submenu::new("History", true);
         for (index, title) in entries {
@@ -905,14 +880,8 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
         let _ = menu.append(&history);
     }
     let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&info_item(&version));
-    let _ = menu.append(&IconMenuItem::with_id_and_native_icon(
-        "quit",
-        &quit,
-        true,
-        Some(NativeIcon::StopProgress),
-        None,
-    ));
+    let _ = menu.append(&tray::info_item(&version));
+    let _ = menu.append(&tray::quit_item(&quit));
     menu
 }
 

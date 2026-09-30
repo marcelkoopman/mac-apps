@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 
-# Dependencies shared by copycraft and ticker. Per-app features stay in the app manifests.
+# Dependencies shared by copycraft, ticker and mac-ui. Per-app features stay in the app manifests.
 [workspace.dependencies]
 arboard = "3"
 # Not `default-features = false`: ticker uses image's default features. copycraft (no defaults)
@@ -14,6 +14,25 @@ arboard = "3"
 image = "0.25"
 polars = { version = "0.55.2", default-features = false }
 serde_json = "1.0"
+
+# UI frameworks, owned by `crates/mac-ui` (re-exported there). objc2-foundation/objc2-app-kit have
+# default features off and only what mac-ui itself needs, so ticker (via mac-ui) does not build all
+# of AppKit/Foundation. Apps add their own features on the inherited entry (copycraft: "default").
+# objc2* are macOS-only: inherit them from a `[target.'cfg(target_os = "macos")'.dependencies]` table.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "NSAttributedString",
+    "NSColor",
+    "NSGlassEffectView",
+    "NSGraphics",
+    "NSImage",
+    "NSResponder",
+    "NSView",
+    "NSVisualEffectView",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAttributedString", "NSGeometry", "NSRange", "NSString"] }
 tray-icon = "0.26"
 winit = "0.30"
 

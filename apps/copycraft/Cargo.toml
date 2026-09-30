@@ -25,6 +25,7 @@ global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
 leakguard = "0.9.1"
+mac-ui = { path = "../../crates/mac-ui" }
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
 redact-core = "0.12"
 serde_json = { workspace = true, features = ["preserve_order"] }
@@ -35,9 +36,11 @@ zeroize = "1.9.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch2 = "0.3"
-objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSAttributedString", "NSArray", "NSDate", "NSURL", "NSURLRequest", "NSURLResponse", "NSUserDefaults", "NSData", "NSDictionary", "NSError"] }
-objc2-app-kit = { version = "0.3", features = [
+objc2 = { workspace = true }
+# "default" restores the full default feature set; the workspace entry turns defaults off for mac-ui.
+objc2-foundation = { workspace = true, features = ["default", "NSString", "NSAttributedString", "NSArray", "NSDate", "NSURL", "NSURLRequest", "NSURLResponse", "NSUserDefaults", "NSData", "NSDictionary", "NSError"] }
+objc2-app-kit = { workspace = true, features = [
+    "default",
     "NSAnimation",
     "NSAnimationContext",
     "NSAppearance",

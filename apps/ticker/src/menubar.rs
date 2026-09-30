@@ -1,4 +1,3 @@
-use image::ImageReader;
 use polars::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -557,17 +556,13 @@ fn bundle_assets_dir() -> PathBuf {
 
 fn load_icon(name: &str) -> Result<Icon, Box<dyn std::error::Error>> {
     let path = bundle_assets_dir().join(name);
-    let img = ImageReader::open(&path)?.decode()?.to_rgba8();
-    let (w, h) = img.dimensions();
-    Ok(Icon::from_rgba(img.into_raw(), w, h)?)
+    Ok(mac_ui::icon::from_image_file(&path)?)
 }
 
 fn fallback_icon(r: u8, g: u8, b: u8) -> Icon {
-    let mut rgba = Vec::with_capacity(1024);
-    for _ in 0..256 {
-        rgba.extend_from_slice(&[r, g, b, 255]);
-    }
-    Icon::from_rgba(rgba, 16, 16).expect("icon")
+    mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255])
+        .into_icon()
+        .expect("icon")
 }
 
 pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {

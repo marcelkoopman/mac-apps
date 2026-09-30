@@ -6,7 +6,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 | --- | --- | --- |
 | [`apps/copycraft`](apps/copycraft/README.md) | app | Clipboard transformer. A global hotkey opens a card at the cursor for whatever you copied: format, convert, decode, table view, schema, OCR/QR, with sensitivity labels and in-memory history. |
 | [`apps/ticker`](apps/ticker/README.md) | app | Menu bar price ticker (Bitcoin, ETH, gold, TTF gas, NL fuel and power prices) with day change and price-watch notifications. |
-| `crates/mac-ui` | library | Planned shared look & feel for the apps. It is a placeholder for now, and neither app uses it yet. |
+| `crates/mac-ui` | library | Shared look & feel for the apps. Owns and re-exports the UI frameworks (tray-icon, winit, objc2*) and holds generic menu bar helpers (`tray`: info/version/quit rows; `icon`: RGBA canvas, image-file icons, SF Symbols; `glass`: Liquid Glass window background with a frosted fallback before macOS 26). Both apps depend on it. |
 
 ## Layout
 
@@ -19,7 +19,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── copycraft/          # bin: Cargo.toml, src/, assets/, LICENSE (Apache-2.0)
 │   └── ticker/             # bin: Cargo.toml, src/, assets/, config.toml, LICENSE (MIT)
 ├── crates/
-│   └── mac-ui/             # lib (placeholder)
+│   └── mac-ui/             # lib: shared UI frameworks + menu bar helpers
 ├── scripts/
 │   └── tag_release.sh      # bump + tag + push a release for one app
 └── .github/workflows/
