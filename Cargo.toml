@@ -1,3 +1,37 @@
 [workspace]
 members = ["apps/*", "crates/*"]
 resolver = "2"
+
+[workspace.package]
+edition = "2024"
+
+# Dependencies shared by copycraft and ticker. Per-app features stay in the app manifests.
+[workspace.dependencies]
+arboard = "3"
+# Not `default-features = false`: ticker uses image's default features. copycraft (no defaults)
+# cannot inherit this entry (edition 2024 rejects `default-features = false` on an inherited
+# dependency unless the workspace entry sets it), so it keeps its own `image = "0.25"` spec.
+image = "0.25"
+polars = { version = "0.55.2", default-features = false }
+serde_json = "1.0"
+tray-icon = "0.25"
+winit = "0.30"
+
+# Profiles moved from apps/copycraft/Cargo.toml (Cargo ignores profiles in non-root members).
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+[profile.dist]
+inherits = "release"
+strip = "symbols"
+panic = "abort"
