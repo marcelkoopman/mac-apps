@@ -45,7 +45,9 @@ jobs:
           echo "DMG_DIR=$BUNDLE_DIR/dmg" >> "$GITHUB_ENV"
 
       - name: Install cargo-bundle
-        run: cargo install cargo-bundle
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bundle
 
       - name: Build app bundle
         # Run from the package dir: cargo-bundle resolves icon/resources/
@@ -110,12 +112,13 @@ jobs:
           hdiutil verify "$DMG_DIR/$PKG-$VERSION.dmg" || true
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Copycraft ${{ env.VERSION }}
-          files: ${{ env.DMG_DIR }}/${{ env.PKG }}-${{ env.VERSION }}.dmg
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$DMG_DIR/$PKG-$VERSION.dmg" \
+            --title "$APP_NAME $VERSION" \
+            --generate-notes
 
       - name: Release summary
         if: success()
