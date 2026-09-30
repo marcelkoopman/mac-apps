@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use winit::event_loop::EventLoopProxy;
+use mac_ui::winit::event_loop::EventLoopProxy;
 
 use crate::commands::{CommandId, LaunchData};
 

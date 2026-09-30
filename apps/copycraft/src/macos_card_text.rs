@@ -1,11 +1,11 @@
 #![cfg(target_os = "macos")]
 
-use objc2::AnyThread;
-use objc2::rc::Retained;
-use objc2_app_kit::{
+use mac_ui::objc2::AnyThread;
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2_app_kit::{
     NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSTextView,
 };
-use objc2_foundation::{NSMutableAttributedString, NSRange, NSSize, NSString};
+use mac_ui::objc2_foundation::{NSMutableAttributedString, NSRange, NSSize, NSString};
 
 use crate::format::FormatKind;
 use crate::highlight::{self, TokenKind};

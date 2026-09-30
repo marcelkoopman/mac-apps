@@ -1,8 +1,8 @@
 #![cfg(target_os = "macos")]
 
-use objc2::MainThreadMarker;
-use objc2_app_kit::{NSModalResponseOK, NSSavePanel};
-use objc2_foundation::{NSArray, NSString};
+use mac_ui::objc2::MainThreadMarker;
+use mac_ui::objc2_app_kit::{NSModalResponseOK, NSSavePanel};
+use mac_ui::objc2_foundation::{NSArray, NSString};
 
 /// Ask where to write `bytes`. Returns false when the panel is cancelled or the write fails.
 pub fn write_with_panel(filename: &str, extension: &str, bytes: &[u8]) -> bool {

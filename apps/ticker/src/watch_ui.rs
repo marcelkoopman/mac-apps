@@ -1,5 +1,5 @@
+use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 use polars::prelude::*;
-use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 
 use crate::price_watch::{PriceWatch, WatchDirection, WatchList};
 

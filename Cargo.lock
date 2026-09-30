@@ -856,16 +856,11 @@ dependencies = [
  "infer",
  "leakguard",
  "mac-ui",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
  "objc2-vision",
  "polars",
  "redact-core",
  "serde_json",
  "serde_yaml",
- "tray-icon",
- "winit",
  "zeroize",
 ]
 
@@ -5551,8 +5546,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 1.1.6+spec-1.1.0",
- "tray-icon",
- "winit",
 ]
 
 [[package]]

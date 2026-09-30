@@ -9,13 +9,13 @@ use mac_ui::tray_icon::{
     MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
-use winit::{
+use mac_ui::winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
 };
 
-use crate::appearance::{self, Theme};
+use crate::appearance;
 use crate::clipboard::{self, ClipboardHistory, ClipboardView, SecretBytes};
 use crate::commands::{self, CardView, CommandId, Hist, LaunchData, SubjectKind};
 use crate::format;
@@ -71,7 +71,13 @@ impl Default for ClipSig {
 impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, _: &ActiveEventLoop) {}
 
-    fn window_event(&mut self, _: &ActiveEventLoop, _: winit::window::WindowId, _: WindowEvent) {}
+    fn window_event(
+        &mut self,
+        _: &ActiveEventLoop,
+        _: mac_ui::winit::window::WindowId,
+        _: WindowEvent,
+    ) {
+    }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
@@ -164,7 +170,7 @@ impl App {
                 self.refresh_popup();
             }
             CommandId::Appearance(theme) => {
-                theme.save();
+                appearance::save(theme);
                 self.refresh_popup();
             }
             CommandId::Quit => event_loop.exit(),
@@ -295,7 +301,7 @@ impl App {
             can_clear_history: !self.history.is_empty(),
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
             warm_links: warm_history_links(&self.history, self.history_cursor),
-            theme: Theme::load(),
+            theme: appearance::load(),
             view: self.card_view,
             image_scan: self.image_scan.clone(),
             source_name: None,
@@ -894,7 +900,7 @@ fn register_format_hotkey() -> Result<(GlobalHotKeyManager, u32), Box<dyn std::e
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    appearance::apply(Theme::load());
+    appearance::apply(appearance::load());
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     let icon = icon::menu_icon()?;
     let tray = TrayIconBuilder::new()

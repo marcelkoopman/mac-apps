@@ -5,22 +5,23 @@ use std::ops::Range;
 
 use mac_ui::glass;
 use mac_ui::icon::system_symbol;
-use objc2::rc::Retained;
-use objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, Sel};
-use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{
-    NSBackgroundColorAttributeName, NSBackingStoreType, NSBorderType, NSBox, NSBoxType, NSButton,
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, NSObjectProtocol, Sel};
+use mac_ui::objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use mac_ui::objc2_app_kit::{
+    NSBackgroundColorAttributeName, NSBackingStoreType, NSBorderType, NSBox, NSButton,
     NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
     NSEvent, NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont,
-    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScreen, NSScrollView, NSSearchField,
-    NSTextAlignment, NSTextField, NSTextView, NSTitlePosition, NSView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowOrderingMode, NSWindowStyleMask,
+    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageScaling, NSImageView,
+    NSLineBreakMode, NSMenu, NSMenuItem, NSScreen, NSScrollView, NSSearchField, NSTextAlignment,
+    NSTextField, NSTextView, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowOrderingMode,
+    NSWindowStyleMask,
 };
-use objc2_foundation::{
+use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMutableAttributedString, NSNotification, NSPoint, NSRange, NSRect,
     NSSize, NSString,
 };
+use mac_ui::widgets::{self, filled_box, raise_view, round_view};
 use zeroize::Zeroize;
 
 use crate::appearance::Theme;
@@ -459,7 +460,7 @@ fn window_is_visible() -> bool {
 }
 
 fn activate_app(mtm: MainThreadMarker) {
-    use objc2_app_kit::NSApplication;
+    use mac_ui::objc2_app_kit::NSApplication;
     let app = NSApplication::sharedApplication(mtm);
     #[allow(deprecated)]
     app.activateIgnoringOtherApps(true);
@@ -508,14 +509,14 @@ fn ensure_window(mtm: MainThreadMarker) {
     // Liquid Glass on macOS 26+, else the frosted view. Before 26, `content` is `window_view`.
     let content = glass::background(mtm, &window_view, 16.0).content;
 
-    let header = static_label(mtm, 13.0, &NSColor::labelColor());
-    let meta = static_label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let header = widgets::label(mtm, 13.0, &NSColor::labelColor());
+    let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
     // Keep the warning at the end when a long filename is cut short.
     meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     meta.setAllowsEditingTextAttributes(true);
     let field = search_field(mtm);
     let item_find = item_search_field(mtm);
-    let item_count = static_label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let item_count = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
     item_count.setAlignment(NSTextAlignment::Right);
     item_count.setHidden(true);
     let well = filled_box(mtm, 10.0, &NSColor::controlBackgroundColor());
@@ -1259,7 +1260,7 @@ fn event_shift() -> bool {
     let Some(mtm) = MainThreadMarker::new() else {
         return false;
     };
-    let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+    let app = mac_ui::objc2_app_kit::NSApplication::sharedApplication(mtm);
     app.currentEvent()
         .is_some_and(|event| event.modifierFlags().contains(NSEventModifierFlags::Shift))
 }
@@ -1829,13 +1830,13 @@ fn publish_link(page: String) {
         return;
     }
     if crate::youtube::video_id(&page).is_some() {
-        let bytes = objc2::rc::autoreleasepool(|_| youtube_thumb_bytes(&page));
+        let bytes = mac_ui::objc2::rc::autoreleasepool(|_| youtube_thumb_bytes(&page));
         let image_page = page.clone();
         dispatch2::DispatchQueue::main().exec_async(move || {
             store_link_image(&image_page, &bytes);
             reveal_link(&image_page);
         });
-        let caption = objc2::rc::autoreleasepool(|_| youtube_caption(&page));
+        let caption = mac_ui::objc2::rc::autoreleasepool(|_| youtube_caption(&page));
         dispatch2::DispatchQueue::main().exec_async(move || {
             store_link_caption(&page, caption);
             end_link_fetch(&page);
@@ -1843,7 +1844,7 @@ fn publish_link(page: String) {
         });
         return;
     }
-    let (bytes, caption) = objc2::rc::autoreleasepool(|_| page_preview_parts(&page));
+    let (bytes, caption) = mac_ui::objc2::rc::autoreleasepool(|_| page_preview_parts(&page));
     dispatch2::DispatchQueue::main().exec_async(move || {
         store_link_caption(&page, caption);
         store_link_image(&page, &bytes);
@@ -1930,7 +1931,7 @@ fn rebuild_pills(
     }
     if shown.is_empty() {
         if show_empty {
-            let empty = static_label(mtm, 13.0, &NSColor::secondaryLabelColor());
+            let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
             empty.setFrame(NSRect::new(
                 NSPoint::new(2.0, 4.0),
                 NSSize::new(text_width, 20.0),
@@ -1959,7 +1960,7 @@ fn rebuild_pills(
             NSPoint::new(0.0, 0.0),
             NSSize::new(frame.width, commands::CHIP_PILL_H),
         ));
-        let title = static_label(mtm, 13.0, &NSColor::labelColor());
+        let title = widgets::label(mtm, 13.0, &NSColor::labelColor());
         title.setAlignment(NSTextAlignment::Center);
         title.setFrame(NSRect::new(
             NSPoint::new(8.0, 5.0),
@@ -2427,15 +2428,7 @@ fn place_header_button(
 }
 
 fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
-    let field = NSTextField::initWithFrame(NSTextField::alloc(mtm), NSRect::ZERO);
-    field.setBordered(false);
-    field.setDrawsBackground(false);
-    field.setEditable(true);
-    field.setSelectable(true);
-    field.setFocusRingType(NSFocusRingType::None);
-    field.setFont(Some(&NSFont::systemFontOfSize(16.0)));
-    field.setTextColor(Some(&NSColor::labelColor()));
-    field.setPlaceholderString(Some(&NSString::from_str("Search")));
+    let field = widgets::plain_field(mtm, 16.0, "Search");
     field.setAlphaValue(0.0);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
@@ -2448,15 +2441,7 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
 }
 
 fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
-    let field = NSSearchField::initWithFrame(NSSearchField::alloc(mtm), NSRect::ZERO);
-    field.setSendsSearchStringImmediately(true);
-    field.setSendsWholeSearchString(false);
-    field.setMaximumRecents(0);
-    field.setRecentsAutosaveName(None);
-    field.setFocusRingType(NSFocusRingType::None);
-    field.setFont(Some(&NSFont::systemFontOfSize(13.0)));
-    field.setTextColor(Some(&NSColor::labelColor()));
-    field.setPlaceholderString(Some(&NSString::from_str("Find")));
+    let field = widgets::search_field(mtm, 13.0, "Find");
     field.setHidden(true);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
@@ -2521,10 +2506,7 @@ fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<PreviewScro
 }
 
 fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
-    let view = NSImageView::initWithFrame(NSImageView::alloc(mtm), NSRect::ZERO);
-    view.setEditable(false);
-    view.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
-    view.setImageAlignment(NSImageAlignment::AlignCenter);
+    let view = widgets::image_view(mtm);
     view.setHidden(true);
     view
 }
@@ -2699,12 +2681,6 @@ fn well_action(mtm: MainThreadMarker, symbol: &str, fallback: &str, action: Sel)
     WellAction { root, hit }
 }
 
-fn raise_view(view: &NSView) {
-    if let Some(parent) = unsafe { view.superview() } {
-        parent.addSubview(view);
-    }
-}
-
 fn nav_button(mtm: MainThreadMarker, title: &str, action: Sel) -> NavButton {
     let root = NSView::initWithFrame(
         NSView::alloc(mtm),
@@ -2722,7 +2698,7 @@ fn nav_button(mtm: MainThreadMarker, title: &str, action: Sel) -> NavButton {
         NSPoint::new(0.0, 0.0),
         NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
     ));
-    let label = static_label(mtm, 15.0, &NSColor::labelColor());
+    let label = widgets::label(mtm, 15.0, &NSColor::labelColor());
     label.setAlignment(NSTextAlignment::Center);
     label.setLineBreakMode(NSLineBreakMode::ByClipping);
     label.setFrame(NSRect::new(
@@ -2750,11 +2726,7 @@ fn nav_button(mtm: MainThreadMarker, title: &str, action: Sel) -> NavButton {
 }
 
 fn icon_button(mtm: MainThreadMarker, title: &str, action: Sel) -> Retained<NSButton> {
-    let button = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
-    button.setBordered(false);
-    button.setFocusRingType(NSFocusRingType::None);
-    button.setTitle(&NSString::from_str(title));
-    button.setFont(Some(&NSFont::systemFontOfSize(14.0)));
+    let button = widgets::text_button(mtm, title, 14.0);
     wire_button(&button, action);
     button
 }
@@ -2768,41 +2740,6 @@ fn wire_button(button: &NSButton, action: Sel) {
             }
         }
     });
-}
-
-fn static_label(mtm: MainThreadMarker, size: f64, color: &NSColor) -> Retained<NSTextField> {
-    let field = NSTextField::initWithFrame(NSTextField::alloc(mtm), NSRect::ZERO);
-    field.setEditable(false);
-    field.setSelectable(false);
-    field.setBordered(false);
-    field.setDrawsBackground(false);
-    field.setFont(Some(&NSFont::systemFontOfSize(size)));
-    field.setTextColor(Some(color));
-    field.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
-    field.setUsesSingleLineMode(true);
-    field
-}
-
-fn filled_box(mtm: MainThreadMarker, radius: f64, color: &NSColor) -> Retained<NSBox> {
-    let fill = NSBox::initWithFrame(NSBox::alloc(mtm), NSRect::ZERO);
-    fill.setBoxType(NSBoxType::Custom);
-    fill.setBorderWidth(0.0);
-    fill.setCornerRadius(radius);
-    fill.setTitlePosition(NSTitlePosition::NoTitle);
-    fill.setContentViewMargins(NSSize::new(0.0, 0.0));
-    fill.setFillColor(color);
-    fill
-}
-
-fn round_view(view: &NSView, radius: f64) {
-    view.setWantsLayer(true);
-    unsafe {
-        let layer: *mut AnyObject = msg_send![view, layer];
-        if !layer.is_null() {
-            let _: () = msg_send![layer, setCornerRadius: radius];
-            let _: () = msg_send![layer, setMasksToBounds: true];
-        }
-    }
 }
 
 #[cfg(test)]

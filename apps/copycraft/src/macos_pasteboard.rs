@@ -4,13 +4,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use base64::Engine;
-use objc2::AnyThread;
-use objc2::rc::{Retained, autoreleasepool};
-use objc2_app_kit::{
+use mac_ui::objc2::AnyThread;
+use mac_ui::objc2::rc::{Retained, autoreleasepool};
+use mac_ui::objc2_app_kit::{
     NSImage, NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeString,
     NSPasteboardTypeTIFF,
 };
-use objc2_foundation::{NSArray, NSData, NSString, NSURL};
+use mac_ui::objc2_foundation::{NSArray, NSData, NSString, NSURL};
 
 use zeroize::{Zeroize, Zeroizing};
 

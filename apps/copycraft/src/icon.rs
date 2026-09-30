@@ -1,5 +1,5 @@
 use mac_ui::icon::Canvas;
-use tray_icon::Icon;
+use mac_ui::tray_icon::Icon;
 
 use crate::format::FormatKind;
 

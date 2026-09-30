@@ -1,8 +1,8 @@
 #![cfg(target_os = "macos")]
 
-use objc2::{ClassType, MainThreadMarker};
-use objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
-use objc2_foundation::NSString;
+use mac_ui::objc2::{ClassType, MainThreadMarker};
+use mac_ui::objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
+use mac_ui::objc2_foundation::NSString;
 
 /// Ask for one file. Returns the path, or nothing when the panel is cancelled.
 pub fn choose_path() -> Option<String> {

@@ -1,8 +1,8 @@
 #![cfg(target_os = "macos")]
 
-use objc2::AnyThread;
-use objc2::rc::Retained;
-use objc2_foundation::{NSArray, NSData, NSDictionary, NSString};
+use mac_ui::objc2::AnyThread;
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2_foundation::{NSArray, NSData, NSDictionary, NSString};
 use objc2_vision::{
     VNBarcodeObservation, VNDetectBarcodesRequest, VNImageRequestHandler, VNRecognizeTextRequest,
     VNRequest, VNRequestTextRecognitionLevel,

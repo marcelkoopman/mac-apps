@@ -25,52 +25,15 @@ global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
 leakguard = "0.9.1"
-mac-ui = { path = "../../crates/mac-ui" }
+# `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
+# `theme`, `widgets`: the mac_ui::theme and mac_ui::widgets modules.
+mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "theme", "widgets"] }
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
 redact-core = "0.12"
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = "0.9"
-tray-icon = { workspace = true }
-winit = { workspace = true }
 zeroize = "1.9.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch2 = "0.3"
-objc2 = { workspace = true }
-# "default" restores the full default feature set; the workspace entry turns defaults off for mac-ui.
-objc2-foundation = { workspace = true, features = ["default", "NSString", "NSAttributedString", "NSArray", "NSDate", "NSURL", "NSURLRequest", "NSURLResponse", "NSUserDefaults", "NSData", "NSDictionary", "NSError"] }
-objc2-app-kit = { workspace = true, features = [
-    "default",
-    "NSAnimation",
-    "NSAnimationContext",
-    "NSAppearance",
-    "NSApplication",
-    "NSBitmapImageRep",
-    "NSPasteboard",
-    "NSButton",
-    "NSCell",
-    "NSEvent",
-    "NSMenu",
-    "NSMenuItem",
-    "NSColor",
-    "NSControl",
-    "NSFont",
-    "NSGraphics",
-    "NSImage",
-    "NSImageCell",
-    "NSImageRep",
-    "NSImageView",
-    "NSResponder",
-    "NSOpenPanel",
-    "NSPanel",
-    "NSSavePanel",
-    "NSScrollView",
-    "NSText",
-    "NSTextContainer",
-    "NSTextStorage",
-    "NSTextView",
-    "NSView",
-    "NSVisualEffectView",
-    "NSWindow",
-] }
 objc2-vision = { version = "0.3.2", default-features = false, features = ["std", "VNRecognizeTextRequest", "VNDetectBarcodesRequest", "VNRequestHandler", "VNObservation", "VNRequest", "VNTypes"] }

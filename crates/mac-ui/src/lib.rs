@@ -16,4 +16,8 @@ pub use objc2_foundation;
 #[cfg(target_os = "macos")]
 pub mod glass;
 pub mod icon;
+#[cfg(feature = "theme")]
+pub mod theme;
 pub mod tray;
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub mod widgets;

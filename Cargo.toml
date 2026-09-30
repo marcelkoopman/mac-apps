@@ -15,10 +15,10 @@ image = "0.25"
 polars = { version = "0.55.2", default-features = false }
 serde_json = "1.0"
 
-# UI frameworks, owned by `crates/mac-ui` (re-exported there). objc2-foundation/objc2-app-kit have
-# default features off and only what mac-ui itself needs, so ticker (via mac-ui) does not build all
-# of AppKit/Foundation. Apps add their own features on the inherited entry (copycraft: "default").
-# objc2* are macOS-only: inherit them from a `[target.'cfg(target_os = "macos")'.dependencies]` table.
+# UI frameworks, used only by `crates/mac-ui`; apps import them via its re-exports (`mac_ui::objc2`
+# etc.). objc2-foundation/objc2-app-kit have default features off and only what mac-ui itself
+# needs, so ticker does not build all of AppKit/Foundation. copycraft enables mac-ui's
+# `appkit-full` feature instead. objc2* are macOS-only (mac-ui inherits them in a macOS target table).
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",

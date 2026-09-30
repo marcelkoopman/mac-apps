@@ -3,8 +3,8 @@
 use std::ffi::c_void;
 use std::path::Path;
 
-use objc2::rc::Retained;
-use objc2_foundation::{NSData, NSString, NSURL};
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2_foundation::{NSData, NSString, NSURL};
 
 use crate::clipboard::ClipboardImage;
 use crate::image_ops::PREVIEW_MAX_EDGE;

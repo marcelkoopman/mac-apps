@@ -1,11 +1,11 @@
 #![cfg(target_os = "macos")]
 
-use objc2::rc::Retained;
-use objc2::{AnyThread, ClassType};
-use objc2_app_kit::{
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2::{AnyThread, ClassType};
+use mac_ui::objc2_app_kit::{
     NSBitmapFormat, NSBitmapImageRep, NSCalibratedRGBColorSpace, NSImage, NSPasteboard,
 };
-use objc2_foundation::{NSArray, NSData, NSSize};
+use mac_ui::objc2_foundation::{NSArray, NSData, NSSize};
 
 use crate::clipboard::ClipboardImage;
 
@@ -114,8 +114,8 @@ mod tests {
     use image::ExtendedColorType;
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;
-    use objc2_app_kit::{NSPasteboard, NSPasteboardTypePNG};
-    use objc2_foundation::{NSData, NSString};
+    use mac_ui::objc2_app_kit::{NSPasteboard, NSPasteboardTypePNG};
+    use mac_ui::objc2_foundation::{NSData, NSString};
 
     use super::{nsimage_from_bytes, nsimage_from_pasteboard, pixel_size};
 

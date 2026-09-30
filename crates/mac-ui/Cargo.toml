@@ -3,6 +3,26 @@ name = "mac-ui"
 version = "0.1.0"
 edition.workspace = true
 
+[features]
+# All objc2-app-kit and objc2-foundation features (their default feature sets). The workspace
+# entries turn defaults off so ticker only builds what mac-ui needs; copycraft enables this.
+appkit-full = ["objc2-app-kit/default", "objc2-foundation/default"]
+# `mac_ui::theme`: appearance switch stored in the user defaults.
+theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-foundation/NSUserDefaults"]
+# `mac_ui::widgets`: AppKit control constructors.
+widgets = [
+    "objc2-app-kit/NSBox",
+    "objc2-app-kit/NSButton",
+    "objc2-app-kit/NSCell",
+    "objc2-app-kit/NSControl",
+    "objc2-app-kit/NSFont",
+    "objc2-app-kit/NSImageCell",
+    "objc2-app-kit/NSImageView",
+    "objc2-app-kit/NSParagraphStyle",
+    "objc2-app-kit/NSSearchField",
+    "objc2-app-kit/NSTextField",
+]
+
 [dependencies]
 # Not inherited from the workspace: default-features = false (same reason as copycraft). PNG only,
 # for `icon::from_image_file`; apps that need more formats enable them on their own `image` dep.

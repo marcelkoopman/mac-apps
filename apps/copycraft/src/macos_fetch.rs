@@ -3,7 +3,7 @@
 #[cfg(test)]
 use std::cell::Cell;
 
-use objc2_foundation::{NSMutableURLRequest, NSString, NSURL, NSURLConnection};
+use mac_ui::objc2_foundation::{NSMutableURLRequest, NSString, NSURL, NSURLConnection};
 
 #[cfg(test)]
 thread_local! {
@@ -68,8 +68,8 @@ fn load(url: &str, agent: &str, range: Option<&str>) -> Option<Vec<u8>> {
 fn send(
     request: &NSMutableURLRequest,
 ) -> Result<
-    objc2::rc::Retained<objc2_foundation::NSData>,
-    objc2::rc::Retained<objc2_foundation::NSError>,
+    mac_ui::objc2::rc::Retained<mac_ui::objc2_foundation::NSData>,
+    mac_ui::objc2::rc::Retained<mac_ui::objc2_foundation::NSError>,
 > {
     NSURLConnection::sendSynchronousRequest_returningResponse_error(request, None)
 }

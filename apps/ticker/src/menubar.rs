@@ -1,18 +1,18 @@
+use mac_ui::tray_icon::{
+    Icon, TrayIcon, TrayIconBuilder,
+    menu::{Menu, MenuEvent, MenuItem},
+};
+use mac_ui::winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+};
 use polars::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
-use tray_icon::{
-    Icon, TrayIcon, TrayIconBuilder,
-    menu::{Menu, MenuEvent, MenuItem},
-};
-use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-};
 
 use crate::config::{self, load_config};
 use crate::menu_builder::MenuBuilder;
@@ -39,7 +39,13 @@ struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, _: &ActiveEventLoop) {}
-    fn window_event(&mut self, _: &ActiveEventLoop, _: winit::window::WindowId, _: WindowEvent) {}
+    fn window_event(
+        &mut self,
+        _: &ActiveEventLoop,
+        _: mac_ui::winit::window::WindowId,
+        _: WindowEvent,
+    ) {
+    }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if !self.config_loaded {
