@@ -14,7 +14,7 @@ arboard = "3"
 image = "0.25"
 polars = { version = "0.55.2", default-features = false }
 serde_json = "1.0"
-tray-icon = "0.25"
+tray-icon = "0.26"
 winit = "0.30"
 
 # Profiles moved from apps/copycraft/Cargo.toml (Cargo ignores profiles in non-root members).
