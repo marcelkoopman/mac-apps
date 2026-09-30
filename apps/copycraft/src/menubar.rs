@@ -6,9 +6,7 @@ use zeroize::Zeroizing;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use tray_icon::{
     MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
-    menu::{
-        IconMenuItem, Menu, MenuEvent, MenuItem, NativeIcon, PredefinedMenuItem, Submenu, TextStyle,
-    },
+    menu::{IconMenuItem, Menu, MenuEvent, MenuItem, NativeIcon, PredefinedMenuItem, Submenu},
 };
 use winit::{
     application::ApplicationHandler,
@@ -866,7 +864,27 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
 
 fn info_item(label: &str) -> MenuItem {
     let item = MenuItem::new(label, false, None);
-    item.set_styled_text(vec![(label.to_string(), TextStyle::Secondary)]);
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::AnyThread;
+        use objc2_app_kit::{NSColor, NSForegroundColorAttributeName};
+        use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSRange, NSString};
+
+        let ns = NSString::from_str(label);
+        let attr =
+            NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
+        let all = NSRange::new(0, ns.length());
+        // SAFETY: NSForegroundColorAttributeName takes an NSColor value.
+        unsafe {
+            attr.addAttribute_value_range(
+                NSForegroundColorAttributeName,
+                &NSColor::secondaryLabelColor(),
+                all,
+            );
+        }
+        let title: &NSAttributedString = &attr;
+        item.set_attributed_title(Some(title));
+    }
     item
 }
 
@@ -912,7 +930,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let icon = icon::menu_icon()?;
     let tray = TrayIconBuilder::new()
         .with_icon(icon)
-        .with_icon_as_template(false)
         .with_menu(Box::new(status_menu(&[])))
         .with_menu_on_left_click(false)
         .with_tooltip("Copycraft")
