@@ -1,0 +1,125 @@
+name: Release Ticker
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "ticker-v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: Ticker
+  PKG: ticker
+  APP_DIR: apps/ticker
+  # cargo-bundle run inside apps/ticker writes to the WORKSPACE ROOT target/
+  BUNDLE_DIR: target/aarch64-apple-darwin/release/bundle
+
+jobs:
+  build:
+    name: Build Ticker DMG
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Resolve version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#ticker-v}"
+          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "ticker") | .version')
+          echo "Tag version: $VERSION / Cargo.toml version: $CARGO_VERSION"
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match ticker version $CARGO_VERSION in $APP_DIR/Cargo.toml"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "APP=$BUNDLE_DIR/osx/$APP_NAME.app" >> "$GITHUB_ENV"
+          echo "DMG_DIR=$BUNDLE_DIR/dmg" >> "$GITHUB_ENV"
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+
+      - name: Build app bundle
+        # Run from the package dir: cargo-bundle resolves icon/resources/
+        # info_plist_exts paths relative to the current directory.
+        working-directory: ${{ env.APP_DIR }}
+        run: cargo bundle --release --target aarch64-apple-darwin
+
+      - name: Copy assets into app bundle
+        run: |
+          RES="$APP/Contents/Resources"
+          mkdir -p "$RES/assets"
+          # Copy icon for DMG
+          cp -v "$APP_DIR/assets/icon.icns" "$RES/icon.icns"
+
+          # Copy runtime icons (read from Contents/Resources/assets at runtime)
+          cp -v "$APP_DIR/assets/normal.png" "$RES/assets/normal.png"
+          cp -v "$APP_DIR/assets/update.png" "$RES/assets/update.png"
+
+          # config.toml is bundled via [package.metadata.bundle] resources
+          test -f "$RES/config.toml"
+
+          echo "=== Resources ==="
+          ls -lah "$RES"
+          echo "=== Assets ==="
+          ls -lah "$RES/assets"
+
+      - name: Verify app bundle
+        run: |
+          echo "=== App bundle ==="
+          ls -la "$APP/Contents/"
+          file "$APP/Contents/MacOS/ticker"
+
+      - name: Ad-hoc sign the app
+        run: |
+          codesign --force --deep --sign - "$APP"
+          codesign -v "$APP"
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create professional DMG
+        run: |
+          VOLICON_ARGS=(--volicon "$APP/Contents/Resources/icon.icns")
+          mkdir -p "$DMG_DIR"
+          create-dmg \
+            --volname "$APP_NAME" \
+            "${VOLICON_ARGS[@]}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME.app" 150 190 \
+            --hide-extension "$APP_NAME.app" \
+            --app-drop-link 450 190 \
+            "$DMG_DIR/$PKG-temp.dmg" \
+            "$APP"
+
+      - name: Rename DMG with version
+        run: |
+          mv "$DMG_DIR/$PKG-temp.dmg" "$DMG_DIR/$PKG-$VERSION.dmg"
+          ls -lah "$DMG_DIR"
+
+      - name: Verify DMG
+        run: |
+          file "$DMG_DIR/$PKG-$VERSION.dmg"
+          hdiutil verify "$DMG_DIR/$PKG-$VERSION.dmg" || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Ticker ${{ env.VERSION }}
+          files: ${{ env.DMG_DIR }}/${{ env.PKG }}-${{ env.VERSION }}.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        if: success()
+        run: echo "✅ $APP_NAME $VERSION DMG release created!"
