@@ -24,7 +24,7 @@ fn log_file_path() -> PathBuf {
     home.join(".ticker_debug.log")
 }
 
-fn log_message(message: &str) {
+pub(crate) fn log_message(message: &str) {
     eprintln!("{}", message);
 
     if let Ok(mut file) = OpenOptions::new()

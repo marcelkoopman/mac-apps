@@ -4,13 +4,17 @@
 //! front in a menu bar / `LSUIElement` app) and blocks in `runModal` until it is answered.
 //! `title` is the bold message text, `message` the informative text under it (may be empty).
 //! Prompts and picks have "OK" (default, Return) and "Cancel" (Escape) buttons.
+//!
+//! Do not start one while a menu is still tracking (see [`can_run_modal`]): run it from the
+//! event loop once the run loop is back in its default mode.
 
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSAlert, NSAlertFirstButtonReturn, NSMenuItem, NSModalResponse, NSPopUpButton, NSTextField,
+    NSAlert, NSAlertFirstButtonReturn, NSApplication, NSMenuItem, NSModalPanelWindowLevel,
+    NSModalResponse, NSPopUpButton, NSTextField,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSDefaultRunLoopMode, NSPoint, NSRect, NSRunLoop, NSSize, NSString};
 
 use crate::activation::activate_app;
 
@@ -117,8 +121,44 @@ fn new_alert(
     alert
 }
 
+/// Mode the main run loop is currently in (e.g. `kCFRunLoopDefaultMode`,
+/// `NSEventTrackingRunLoopMode` while a menu is open, `NSModalPanelRunLoopMode` inside a modal).
+/// `None` when the run loop is not running.
+pub fn run_loop_mode(_mtm: MainThreadMarker) -> Option<String> {
+    NSRunLoop::currentRunLoop()
+        .currentMode()
+        .map(|mode| mode.to_string())
+}
+
+/// True when a modal alert can start now: the run loop is idle in its default mode (or not
+/// running). False while a menu is tracking or another modal session runs; starting `runModal`
+/// then can leave the alert hidden behind the closing menu.
+pub fn can_run_modal(_mtm: MainThreadMarker) -> bool {
+    let Some(mode) = NSRunLoop::currentRunLoop().currentMode() else {
+        return true;
+    };
+    // SAFETY: `NSDefaultRunLoopMode` is an immutable NSString constant exported by Foundation.
+    let default = unsafe { NSDefaultRunLoopMode };
+    mode.isEqualToString(default)
+}
+
+/// Whether the app is the active (frontmost) app, e.g. to log if activation worked.
+pub fn app_is_active(mtm: MainThreadMarker) -> bool {
+    NSApplication::sharedApplication(mtm).isActive()
+}
+
 fn run(mtm: MainThreadMarker, alert: &NSAlert) -> NSModalResponse {
     activate_app(mtm);
+    // An accessory (LSUIElement) app is often not made active on macOS 14+ (cooperative
+    // activation), and a window of an inactive app can stay behind the frontmost app. Build the
+    // alert window now and put it in front at modal-panel level regardless of activation.
+    alert.layout();
+    let window = alert.window();
+    window.setHidesOnDeactivate(false);
+    window.setLevel(NSModalPanelWindowLevel);
+    window.center();
+    window.makeKeyAndOrderFront(None);
+    window.orderFrontRegardless();
     alert.runModal()
 }
 

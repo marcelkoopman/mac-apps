@@ -27,7 +27,8 @@ widgets = [
     "objc2-app-kit/NSTextField",
     "objc2-app-kit/NSTextView",
 ]
-# `mac_ui::dialog`: modal NSAlert message, confirm, button choice, text prompt and list pick.
+# `mac_ui::dialog`: modal NSAlert message, confirm, button choice, text prompt and list pick, plus
+# the run loop mode check that defers them until a menu has closed.
 dialog = [
     "objc2-app-kit/NSAlert",
     "objc2-app-kit/NSApplication",
@@ -38,6 +39,7 @@ dialog = [
     "objc2-app-kit/NSPopUpButton",
     "objc2-app-kit/NSTextField",
     "objc2-app-kit/NSWindow",
+    "objc2-foundation/NSRunLoop",
 ]
 # `mac_ui::panel`: borderless floating panel creation, activation and placement.
 panel = [

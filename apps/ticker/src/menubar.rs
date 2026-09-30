@@ -9,13 +9,14 @@ use mac_ui::winit::{
 };
 use polars::prelude::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::config::{self, load_config};
 use crate::dialogs::{self, prompt_text};
+use crate::log_message;
 use crate::menu_builder::MenuBuilder;
 use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
@@ -24,9 +25,21 @@ use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_
 use crate::watch_ui::{self, WatchUIBuilder};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// A dialog item clicked while the menu is still tracking is retried this often ...
+const MENU_RETRY: Duration = Duration::from_millis(50);
+/// ... and opened anyway after this long.
+const MENU_MAX_DEFER: Duration = Duration::from_secs(2);
 
-/// Sent from the fetch thread to the event loop (wakes it up).
+/// Menu items whose handler opens a modal dialog.
+fn opens_dialog(id: &str) -> bool {
+    matches!(id, "add_watch" | "manage_watches" | "edit_asset")
+}
+
+/// Sent to the event loop (wakes it up): fetch results from the fetch thread, menu clicks from
+/// the muda event handler.
 enum UserEvent {
+    /// Id of the clicked menu item.
+    Menu(String),
     PricesFetched {
         generation: Generation,
         /// `Box<dyn Error>` is not `Send`; the error is only logged anyway.
@@ -39,6 +52,10 @@ struct App {
     fetcher: Option<PriceFetcher>,
     proxy: EventLoopProxy<UserEvent>,
     poll_gate: PollGate,
+    /// Clicked menu items not handled yet (dialog items wait until the menu has closed).
+    pending_menu: VecDeque<String>,
+    /// When the first pending item started waiting for the menu to close.
+    menu_deferred_since: Option<Instant>,
     config: Option<crate::config::Config>,
     prices_df: Option<DataFrame>,
     watch_list: WatchList,
@@ -54,6 +71,10 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
         match event {
+            UserEvent::Menu(id) => {
+                log_message(&format!("menu: queued {id:?}"));
+                self.pending_menu.push_back(id);
+            }
             UserEvent::PricesFetched { generation, result } => {
                 let finished = self.poll_gate.finish(generation);
                 if finished.apply {
@@ -96,45 +117,80 @@ impl ApplicationHandler<UserEvent> for App {
             return;
         }
 
-        while let Ok(event) = MenuEvent::receiver().try_recv() {
-            match event.id.0.as_str() {
-                "quit" => event_loop.exit(),
-                "poll" => {
-                    if self.config.is_some() {
-                        self.poll_prices();
-                        self.schedule_next_poll();
-                    }
-                }
-                "copy" => self.copy_prices_to_clipboard(),
-                "add_watch" => self.handle_add_watch(),
-                "manage_watches" => self.handle_manage_watches(),
-                "edit_asset" => self.handle_edit_asset(),
-                "reset_assets" => self.handle_reset_assets(),
-                id if id.starts_with("watch_") => {
-                    if let Some((asset, price)) = WatchUIBuilder::parse_watch_id(id)
-                        && self.watch_list.remove_watch(&asset, price)
-                    {
-                        let _ = save_watch_list(&self.watch_list);
-                        self.update_menu();
-                    }
-                }
-                id => self.pin_menubar_from_item(id),
-            }
-        }
+        let retry_at = self.handle_pending_menu(event_loop);
 
         if self.config.is_some() && SystemTime::now() >= self.next_check {
             self.poll_prices();
             self.schedule_next_poll();
         }
-        if let Ok(d) = self.next_check.duration_since(SystemTime::now()) {
-            event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + d));
-        } else {
-            event_loop.set_control_flow(ControlFlow::Wait);
+        let poll_at = self
+            .next_check
+            .duration_since(SystemTime::now())
+            .ok()
+            .map(|d| Instant::now() + d);
+        match (retry_at, poll_at) {
+            (Some(a), Some(b)) => event_loop.set_control_flow(ControlFlow::WaitUntil(a.min(b))),
+            (Some(t), None) | (None, Some(t)) => {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(t))
+            }
+            (None, None) => event_loop.set_control_flow(ControlFlow::Wait),
         }
     }
 }
 
 impl App {
+    /// Runs queued menu actions in click order. A dialog action waits (up to `MENU_MAX_DEFER`)
+    /// until the menu has stopped tracking; returns when to look again in that case.
+    fn handle_pending_menu(&mut self, event_loop: &ActiveEventLoop) -> Option<Instant> {
+        while let Some(id) = self.pending_menu.front() {
+            if opens_dialog(id) && !dialogs::can_run_modal() {
+                let since = *self.menu_deferred_since.get_or_insert_with(Instant::now);
+                if since.elapsed() < MENU_MAX_DEFER {
+                    return Some(Instant::now() + MENU_RETRY);
+                }
+                log_message(&format!(
+                    "menu: {id:?} waited {MENU_MAX_DEFER:?} for the menu to close; opening anyway"
+                ));
+            }
+            self.menu_deferred_since = None;
+            let Some(id) = self.pending_menu.pop_front() else {
+                break;
+            };
+            self.handle_menu_item(&id, event_loop);
+        }
+        None
+    }
+
+    fn handle_menu_item(&mut self, id: &str, event_loop: &ActiveEventLoop) {
+        log_message(&format!("menu: handling {id:?}"));
+        match id {
+            "quit" => event_loop.exit(),
+            "poll" => {
+                if self.config.is_some() {
+                    self.poll_prices();
+                    self.schedule_next_poll();
+                } else {
+                    log_message("menu: poll ignored, no config loaded");
+                }
+            }
+            "copy" => self.copy_prices_to_clipboard(),
+            "add_watch" => self.handle_add_watch(),
+            "manage_watches" => self.handle_manage_watches(),
+            "edit_asset" => self.handle_edit_asset(),
+            "reset_assets" => self.handle_reset_assets(),
+            id if id.starts_with("watch_") => {
+                if let Some((asset, price)) = WatchUIBuilder::parse_watch_id(id)
+                    && self.watch_list.remove_watch(&asset, price)
+                {
+                    let _ = save_watch_list(&self.watch_list);
+                    self.update_menu();
+                }
+            }
+            id => self.pin_menubar_from_item(id),
+        }
+        log_message(&format!("menu: done {id:?}"));
+    }
+
     fn pin_menubar_from_item(&mut self, item_id: &str) {
         let Some(df) = &self.prices_df else {
             return;
@@ -153,9 +209,11 @@ impl App {
 
     fn handle_edit_asset(&mut self) {
         let Some(config) = &self.config else {
+            log_message("edit_asset: no config loaded");
             return;
         };
         if config.assets.is_empty() {
+            log_message("edit_asset: no assets in config");
             watch_ui::send_macos_notification("Ticker", "No assets in config.");
             return;
         }
@@ -281,7 +339,7 @@ impl App {
                 let _ = proxy.send_event(UserEvent::PricesFetched { generation, result });
             });
         if let Err(e) = spawned {
-            eprintln!("Poll failed: cannot start fetch thread: {e}");
+            log_message(&format!("Poll failed: cannot start fetch thread: {e}"));
             self.poll_gate.abort();
         }
     }
@@ -292,7 +350,7 @@ impl App {
         let mut df = match result {
             Ok(df) => df,
             Err(e) => {
-                eprintln!("Poll failed: {e}");
+                log_message(&format!("Poll failed: {e}"));
                 return;
             }
         };
@@ -362,6 +420,7 @@ impl App {
             Vec::new()
         };
         if asset_names.is_empty() {
+            log_message("add_watch: no prices loaded yet, nothing to pick");
             watch_ui::send_macos_notification(
                 "Ticker",
                 "No prices loaded yet. Press Poll now first.",
@@ -427,6 +486,7 @@ impl App {
 
     fn handle_manage_watches(&mut self) {
         if self.watch_list.watches.is_empty() {
+            log_message("manage_watches: no watches configured");
             watch_ui::send_macos_notification("Ticker", "No watches configured.");
             return;
         }
@@ -601,11 +661,23 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         .with_title("Ticker")
         .build()?;
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+    // Menu clicks go through the event loop proxy instead of `MenuEvent::receiver()`: sending a
+    // user event wakes the loop, so a click is never left sitting in the channel until the next
+    // timer tick. muda calls this on the main thread, from the menu item action.
+    let menu_proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        log_message(&format!("menu: clicked {:?}", event.id.0));
+        if menu_proxy.send_event(UserEvent::Menu(event.id.0)).is_err() {
+            log_message("menu: event loop closed, click dropped");
+        }
+    }));
     let mut app = App {
         tray: Rc::new(RefCell::new(tray_icon)),
         fetcher: Some(fetcher),
         proxy: event_loop.create_proxy(),
         poll_gate: PollGate::new(),
+        pending_menu: VecDeque::new(),
+        menu_deferred_since: None,
         config: None,
         prices_df: None,
         watch_list: WatchList::new(),
@@ -615,6 +687,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         config_loaded: false,
         config_error: None,
     };
+    log_message("menubar: event loop starting");
     event_loop.run_app(&mut app)?;
     Ok(())
 }
