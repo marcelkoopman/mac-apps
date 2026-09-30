@@ -15,12 +15,12 @@ use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
 use crate::config::{self, load_config};
+use crate::dialogs::{self, prompt_text};
 use crate::menu_builder::MenuBuilder;
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
 use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_list};
 use crate::watch_ui::{self, WatchUIBuilder};
-use std::process::Command;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -132,20 +132,12 @@ impl App {
             watch_ui::send_macos_notification("Ticker", "No assets in config.");
             return;
         }
-        let names: Vec<String> = config.assets.iter().map(|a| a.name.clone()).collect();
-        let list = names
-            .iter()
-            .map(|n| format!("\"{}\"", n))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let pick = format!(
-            "choose from list {{{}}} with prompt \"Asset to edit:\" default items {{\"{}\"}}",
-            list,
-            names.first().cloned().unwrap_or_default()
-        );
-        let asset_name = match run_osascript_output(&pick) {
-            Some(s) if s != "false" => s.trim().to_string(),
-            _ => return,
+        let names: Vec<&str> = config.assets.iter().map(|a| a.name.as_str()).collect();
+        let Some(asset_name) = dialogs::choose("Asset to edit:", &names)
+            .and_then(|i| names.get(i))
+            .map(|name| name.to_string())
+        else {
+            return;
         };
         let Some(current) = config.assets.iter().find(|a| a.name == asset_name).cloned() else {
             return;
@@ -303,31 +295,23 @@ impl App {
             );
             return;
         }
-        let asset_list = asset_names
-            .iter()
-            .map(|n| format!("\"{}\"", n))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let pick_script = format!(
-            "choose from list {{{}}} with prompt \"Select asset for price watch:\" default items {{\"{}\"}}",
-            asset_list,
-            asset_names.first().cloned().unwrap_or_default()
-        );
-        let asset = match run_osascript_output(&pick_script) {
-            Some(s) if s != "false" => s.trim().to_string(),
-            _ => return,
+        let options: Vec<&str> = asset_names.iter().map(String::as_str).collect();
+        let Some(asset) = dialogs::choose("Select asset for price watch:", &options)
+            .and_then(|i| asset_names.get(i))
+            .cloned()
+        else {
+            return;
         };
         let default_price = self
             .prices_df
             .as_ref()
             .and_then(|df| current_price_for(df, &asset))
             .unwrap_or(0.0);
-        let price_script = format!(
-            "text returned of (display dialog \"Target price for {} (€):\" default answer \"{:.2}\" buttons {{\"Cancel\", \"OK\"}} default button \"OK\")",
-            asset, default_price
-        );
-        let target_price: f64 = match run_osascript_output(&price_script) {
-            Some(s) => match s.trim().replace(',', ".").parse() {
+        let target_price: f64 = match prompt_text(
+            &format!("Target price for {asset} (€):"),
+            &format!("{default_price:.2}"),
+        ) {
+            Some(s) => match s.replace(',', ".").parse() {
                 Ok(v) => v,
                 Err(_) => {
                     watch_ui::send_macos_notification("Ticker", "Invalid price entered.");
@@ -336,11 +320,9 @@ impl App {
             },
             None => return,
         };
-        let direction = match run_osascript_output(
-            "choose from list {\"above\", \"below\"} with prompt \"Trigger when price goes:\" default items {\"above\"}",
-        ) {
-            Some(s) if s.trim() == "below" => WatchDirection::Below,
-            Some(s) if s.trim() == "above" => WatchDirection::Above,
+        let direction = match dialogs::choose("Trigger when price goes:", &["above", "below"]) {
+            Some(0) => WatchDirection::Above,
+            Some(1) => WatchDirection::Below,
             _ => return,
         };
         if self
@@ -375,10 +357,10 @@ impl App {
             watch_ui::send_macos_notification("Ticker", "No watches configured.");
             return;
         }
-        let mut lines = String::from("Current watches:\\n");
+        let mut lines = String::new();
         for (i, w) in self.watch_list.watches.iter().enumerate() {
             lines.push_str(&format!(
-                "{}. {} {} €{:.2}{}\\n",
+                "{}. {} {} €{:.2}{}\n",
                 i + 1,
                 w.direction.emoji(),
                 w.asset_name,
@@ -386,14 +368,9 @@ impl App {
                 if w.triggered { " ✓" } else { "" }
             ));
         }
-        lines.push_str("\\nClick a watch in the menu to remove it, or choose Clear All.");
-        let script = format!(
-            "display dialog \"{}\" buttons {{\"Close\", \"Clear All\"}} default button \"Close\"",
-            lines
-        );
-        if let Some(btn) = run_osascript_button(&script)
-            && btn.contains("Clear All")
-        {
+        lines.push_str("\nClick a watch in the menu to remove it, or choose Clear All.");
+        // "Close" stays the default button (Return), as in the old osascript dialog.
+        if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) == Some(1) {
             self.watch_list = WatchList::new();
             let _ = save_watch_list(&self.watch_list);
             watch_ui::send_macos_notification("Ticker", "All watches cleared.");
@@ -473,42 +450,6 @@ fn current_price_for(df: &DataFrame, asset: &str) -> Option<f64> {
     None
 }
 
-fn applescript_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn prompt_text(message: &str, default: &str) -> Option<String> {
-    let script = format!(
-        "text returned of (display dialog \"{}\" default answer \"{}\" buttons {{\"Cancel\", \"OK\"}} default button \"OK\")",
-        applescript_escape(message),
-        applescript_escape(default)
-    );
-    run_osascript_output(&script).map(|s| s.trim().to_string())
-}
-
-fn run_osascript_output(script: &str) -> Option<String> {
-    let output = Command::new("osascript")
-        .args(["-e", script])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
-}
-
-fn run_osascript_button(script: &str) -> Option<String> {
-    let output = Command::new("osascript")
-        .args(["-e", script])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
 fn fill_nan_from_prev(
     df: &mut DataFrame,
     prev: &DataFrame,
@@ -572,6 +513,7 @@ fn fallback_icon(r: u8, g: u8, b: u8) -> Icon {
 }
 
 pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
+    watch_ui::request_notification_permission();
     let fetcher = PriceFetcher::new()?;
     let normal_icon = load_icon("normal.png").unwrap_or_else(|_| fallback_icon(255, 255, 255));
     let alert_icon = load_icon("update.png").unwrap_or_else(|_| fallback_icon(255, 80, 80));

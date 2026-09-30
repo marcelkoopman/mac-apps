@@ -27,7 +27,9 @@ image = { workspace = true }
 chrono = "0.4"
 dirs = "7.0"
 dhat = "0.3"
-mac-ui = { path = "../../crates/mac-ui" }
+# `dialog`: native NSAlert prompts and pickers (mac_ui::dialog). `notify`: native notifications
+# (mac_ui::notify; osascript when not run from the app bundle).
+mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify"] }
 arboard = { workspace = true }
 # Minimal features: DataFrame + Display. Avoids polars-io/object_store → quick-xml 0.38 (RUSTSEC-2026-0194/0195).
 polars = { workspace = true, features = ["fmt"] }

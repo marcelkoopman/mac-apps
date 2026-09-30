@@ -6,11 +6,12 @@
 use objc2::rc::{Allocated, Retained};
 use objc2::{MainThreadMarker, Message, msg_send};
 use objc2_app_kit::{
-    NSApplication, NSBackingStoreType, NSColor, NSEvent, NSFloatingWindowLevel, NSScreen, NSView,
-    NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSBackingStoreType, NSColor, NSEvent, NSFloatingWindowLevel, NSScreen, NSView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
+pub use crate::activation::activate_app;
 use crate::glass;
 use crate::layer::round_view;
 
@@ -75,14 +76,6 @@ pub unsafe fn set_delegate<D: Message>(window: &NSWindow, delegate: &D) {
 pub fn rounded_glass(mtm: MainThreadMarker, view: &NSView, radius: f64) -> glass::Background {
     round_view(view, radius);
     glass::background(mtm, view, radius)
-}
-
-/// Bring the app to the front, even while another app is active. For menu bar (accessory) apps
-/// that open a panel from a hotkey or menu.
-pub fn activate_app(mtm: MainThreadMarker) {
-    let app = NSApplication::sharedApplication(mtm);
-    #[allow(deprecated)]
-    app.activateIgnoringOtherApps(true);
 }
 
 /// Make `window` key and put it in front, also when the app is not active.

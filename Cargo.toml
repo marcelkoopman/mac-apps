@@ -33,6 +33,17 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
     "NSVisualEffectView",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAttributedString", "NSGeometry", "NSRange", "NSString"] }
+# mac-ui `notify` only: posting a notification with a completion-handler block.
+block2 = { version = "0.6", default-features = false, features = ["alloc"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "UNNotification",
+    "UNNotificationContent",
+    "UNNotificationRequest",
+    "UNNotificationTrigger",
+    "UNUserNotificationCenter",
+] }
 tray-icon = "0.26"
 winit = "0.30"
 

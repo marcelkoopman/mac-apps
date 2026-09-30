@@ -109,23 +109,22 @@ impl WatchUIBuilder {
     }
 }
 
-/// Send a native notification on macOS.
+/// Send a native notification on macOS (osascript when not run from the app bundle).
 #[cfg(target_os = "macos")]
 pub fn send_macos_notification(title: &str, message: &str) {
-    use std::process::Command;
-
-    let escape_applescript_string = |value: &str| value.replace('\\', "\\\\").replace('"', "\\\"");
-
-    let escaped_title = escape_applescript_string(title);
-    let escaped_message = escape_applescript_string(message);
-
-    let script = format!(
-        "display notification \"{}\" with title \"{}\"",
-        escaped_message, escaped_title
-    );
-
-    let _ = Command::new("osascript").args(["-e", &script]).status();
+    mac_ui::notify::send(title, message);
 }
+
+/// Ask for notification permission (first launch of the bundled app only) and show
+/// notifications while ticker is frontmost too.
+#[cfg(target_os = "macos")]
+pub fn request_notification_permission() {
+    mac_ui::notify::request_authorization();
+}
+
+/// No-op on non-macOS platforms.
+#[cfg(not(target_os = "macos"))]
+pub fn request_notification_permission() {}
 
 /// No-op notification implementation on non-macOS platforms.
 #[cfg(not(target_os = "macos"))]

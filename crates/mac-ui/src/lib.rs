@@ -13,6 +13,10 @@ pub use objc2_app_kit;
 #[cfg(target_os = "macos")]
 pub use objc2_foundation;
 
+#[cfg(all(target_os = "macos", any(feature = "panel", feature = "dialog")))]
+mod activation;
+#[cfg(all(target_os = "macos", feature = "dialog"))]
+pub mod dialog;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod fonts;
 #[cfg(target_os = "macos")]
@@ -20,6 +24,8 @@ pub mod glass;
 pub mod icon;
 #[cfg(target_os = "macos")]
 pub mod layer;
+#[cfg(all(target_os = "macos", feature = "notify"))]
+pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]
 pub mod panel;
 #[cfg(feature = "theme")]

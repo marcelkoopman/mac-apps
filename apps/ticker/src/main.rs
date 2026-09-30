@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 mod config;
+mod dialogs;
 mod menu_builder;
 mod menubar;
 mod price_fetcher;

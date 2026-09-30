@@ -27,6 +27,18 @@ widgets = [
     "objc2-app-kit/NSTextField",
     "objc2-app-kit/NSTextView",
 ]
+# `mac_ui::dialog`: modal NSAlert message, confirm, button choice, text prompt and list pick.
+dialog = [
+    "objc2-app-kit/NSAlert",
+    "objc2-app-kit/NSApplication",
+    "objc2-app-kit/NSButton",
+    "objc2-app-kit/NSControl",
+    "objc2-app-kit/NSMenu",
+    "objc2-app-kit/NSMenuItem",
+    "objc2-app-kit/NSPopUpButton",
+    "objc2-app-kit/NSTextField",
+    "objc2-app-kit/NSWindow",
+]
 # `mac_ui::panel`: borderless floating panel creation, activation and placement.
 panel = [
     "objc2-app-kit/NSApplication",
@@ -36,6 +48,9 @@ panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSEnumerator",
 ]
+# `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
+# `display notification` without one).
+notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]
 
 [dependencies]
 # Not inherited from the workspace: default-features = false (same reason as copycraft). PNG only,
@@ -48,3 +63,6 @@ winit = { workspace = true }
 objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
 objc2-app-kit = { workspace = true }
+# `notify` only.
+block2 = { workspace = true, optional = true }
+objc2-user-notifications = { workspace = true, optional = true }
