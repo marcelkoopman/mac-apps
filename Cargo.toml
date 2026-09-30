@@ -8,10 +8,6 @@ edition = "2024"
 # Dependencies shared by copycraft, ticker and mac-ui. Per-app features stay in the app manifests.
 [workspace.dependencies]
 arboard = "3"
-# Not `default-features = false`: ticker uses image's default features. copycraft (no defaults)
-# cannot inherit this entry (edition 2024 rejects `default-features = false` on an inherited
-# dependency unless the workspace entry sets it), so it keeps its own `image = "0.25"` spec.
-image = "0.25"
 polars = { version = "0.55.2", default-features = false }
 serde_json = "1.0"
 

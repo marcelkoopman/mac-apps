@@ -4,8 +4,10 @@ use std::path::PathBuf;
 
 mod config;
 mod dialogs;
+mod instance_lock;
 mod menu_builder;
 mod menubar;
+mod poll_gate;
 mod price_fetcher;
 mod price_history;
 mod price_watch;
@@ -36,6 +38,32 @@ fn log_message(message: &str) {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let cli_mode = args.len() > 1;
+
+    // Menubar mode only: a second instance exits before touching the running one's log file.
+    // CLI subcommands (watch_cli) never take the lock.
+    let instance_guard = if cli_mode {
+        None
+    } else {
+        match instance_lock::default_lock_path()
+            .map_err(|e| e.to_string())
+            .and_then(|path| instance_lock::try_acquire(&path).map_err(|e| e.to_string()))
+        {
+            Ok(Some(lock)) => Some(lock),
+            Ok(None) => {
+                log_message("Another Ticker instance is already running; exiting.");
+                return;
+            }
+            Err(e) => {
+                log_message(&format!(
+                    "⚠️  Single-instance lock unavailable ({e}); continuing"
+                ));
+                None
+            }
+        }
+    };
+
     let log_path = log_file_path();
     let _ = std::fs::remove_file(&log_path);
 
@@ -48,8 +76,7 @@ fn main() {
     let _profiler = dhat::Profiler::new_heap();
 
     // Check for CLI arguments for watch management
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
+    if cli_mode {
         match watch_cli::handle_watch_command(&args[1..]) {
             Ok(output) => {
                 println!("{}", output);
@@ -60,6 +87,10 @@ fn main() {
                 std::process::exit(1);
             }
         }
+    }
+
+    if let Some(lock) = &instance_guard {
+        log_message(&format!("Instance lock: {:?}", lock.path()));
     }
 
     match menubar::run_menubar() {

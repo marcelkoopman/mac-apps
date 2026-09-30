@@ -5,7 +5,7 @@ use mac_ui::tray_icon::{
 use mac_ui::winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
 };
 use polars::prelude::*;
 use std::cell::RefCell;
@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
 use crate::config::{self, load_config};
 use crate::dialogs::{self, prompt_text};
 use crate::menu_builder::MenuBuilder;
+use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
 use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_list};
@@ -24,9 +25,20 @@ use crate::watch_ui::{self, WatchUIBuilder};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
+/// Sent from the fetch thread to the event loop (wakes it up).
+enum UserEvent {
+    PricesFetched {
+        generation: Generation,
+        /// `Box<dyn Error>` is not `Send`; the error is only logged anyway.
+        result: Result<DataFrame, String>,
+    },
+}
+
 struct App {
     tray: Rc<RefCell<TrayIcon>>,
     fetcher: Option<PriceFetcher>,
+    proxy: EventLoopProxy<UserEvent>,
+    poll_gate: PollGate,
     config: Option<crate::config::Config>,
     prices_df: Option<DataFrame>,
     watch_list: WatchList,
@@ -37,8 +49,23 @@ struct App {
     config_error: Option<String>,
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, _: &ActiveEventLoop) {}
+
+    fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::PricesFetched { generation, result } => {
+                let finished = self.poll_gate.finish(generation);
+                if finished.apply {
+                    self.apply_poll_result(result);
+                }
+                if let Some(next) = finished.restart {
+                    self.spawn_fetch(next);
+                }
+            }
+        }
+    }
+
     fn window_event(
         &mut self,
         _: &ActiveEventLoop,
@@ -181,7 +208,7 @@ impl App {
                     &format!("{asset_name} saved ({unit})"),
                 );
                 self.prices_df = None;
-                self.poll_prices();
+                self.repoll_after_config_change();
             }
             Err(e) => watch_ui::send_macos_notification("Ticker", &e),
         }
@@ -193,7 +220,7 @@ impl App {
                 self.config = Some(config);
                 self.prices_df = None;
                 watch_ui::send_macos_notification("Ticker", "Assets reset to defaults.");
-                self.poll_prices();
+                self.repoll_after_config_change();
             }
             Err(e) => watch_ui::send_macos_notification("Ticker", &format!("Reset failed: {e}")),
         }
@@ -208,14 +235,60 @@ impl App {
         }
     }
 
+    /// Timer, "Poll now" and startup: start a background fetch unless one is already running
+    /// (its result is just as fresh, so the request is dropped).
     fn poll_prices(&mut self) {
-        let Some(config) = &self.config else { return };
-        let Some(fetcher) = &self.fetcher else { return };
-        let day_opens = price_history::load_day_opens();
-        let result = match &self.prices_df {
-            None => fetcher.build_initial_dataframe(&config.assets, &day_opens),
-            Some(prev) => fetcher.update_dataframe(prev, &config.assets, &day_opens),
+        if self.config.is_none() || self.fetcher.is_none() {
+            return;
+        }
+        if let Some(generation) = self.poll_gate.try_start() {
+            self.spawn_fetch(generation);
+        }
+    }
+
+    /// Assets were edited or reset (`prices_df` already cleared): a fetch still running for the old
+    /// assets is discarded and a fresh one starts (now, or as soon as the running one returns).
+    fn repoll_after_config_change(&mut self) {
+        if self.config.is_none() || self.fetcher.is_none() {
+            return;
+        }
+        if let Some(generation) = self.poll_gate.invalidate() {
+            self.spawn_fetch(generation);
+        }
+    }
+
+    /// Runs the blocking HTTP requests on a worker thread; the result comes back as
+    /// `UserEvent::PricesFetched` and is applied on the main thread in `apply_poll_result`.
+    fn spawn_fetch(&mut self, generation: Generation) {
+        let (Some(config), Some(fetcher)) = (&self.config, &self.fetcher) else {
+            self.poll_gate.abort();
+            return;
         };
+        let fetcher = fetcher.clone();
+        let assets = config.assets.clone();
+        let previous = self.prices_df.clone();
+        let proxy = self.proxy.clone();
+        let spawned = std::thread::Builder::new()
+            .name("ticker-fetch".into())
+            .spawn(move || {
+                let day_opens = price_history::load_day_opens();
+                let result = match &previous {
+                    None => fetcher.build_initial_dataframe(&assets, &day_opens),
+                    Some(prev) => fetcher.update_dataframe(prev, &assets, &day_opens),
+                }
+                .map_err(|e| e.to_string());
+                // Fails only when the event loop has already exited (app quitting).
+                let _ = proxy.send_event(UserEvent::PricesFetched { generation, result });
+            });
+        if let Err(e) = spawned {
+            eprintln!("Poll failed: cannot start fetch thread: {e}");
+            self.poll_gate.abort();
+        }
+    }
+
+    /// Main thread: merge a finished fetch into state, save history, fire watch alerts and
+    /// refresh the menu (unchanged from the former synchronous poll).
+    fn apply_poll_result(&mut self, result: Result<DataFrame, String>) {
         let mut df = match result {
             Ok(df) => df,
             Err(e) => {
@@ -527,9 +600,12 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         .with_tooltip("Price Ticker")
         .with_title("Ticker")
         .build()?;
+    let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     let mut app = App {
         tray: Rc::new(RefCell::new(tray_icon)),
         fetcher: Some(fetcher),
+        proxy: event_loop.create_proxy(),
+        poll_gate: PollGate::new(),
         config: None,
         prices_df: None,
         watch_list: WatchList::new(),
@@ -539,6 +615,6 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         config_loaded: false,
         config_error: None,
     };
-    EventLoop::new()?.run_app(&mut app)?;
+    event_loop.run_app(&mut app)?;
     Ok(())
 }

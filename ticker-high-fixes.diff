@@ -1,0 +1,2307 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 0be85bd..6e73944 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -90,24 +90,6 @@ dependencies = [
+  "memchr",
+ ]
+ 
+-[[package]]
+-name = "aligned"
+-version = "0.4.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685"
+-dependencies = [
+- "as-slice",
+-]
+-
+-[[package]]
+-name = "aligned-vec"
+-version = "0.6.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "dc890384c8602f339876ded803c97ad529f3842aba97f6392b3dba0dd171769b"
+-dependencies = [
+- "equator",
+-]
+-
+ [[package]]
+ name = "alloc-no-stdlib"
+ version = "2.0.4"
+@@ -178,12 +160,6 @@ dependencies = [
+  "object 0.39.1",
+ ]
+ 
+-[[package]]
+-name = "arbitrary"
+-version = "1.4.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
+-
+ [[package]]
+ name = "arboard"
+ version = "3.6.1"
+@@ -204,17 +180,6 @@ dependencies = [
+  "x11rb",
+ ]
+ 
+-[[package]]
+-name = "arg_enum_proc_macro"
+-version = "0.3.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0ae92a5119aa49cdbcf6b9f893fe4e1d98b04ccbf82ee0584ad948a44a734dea"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 2.0.119",
+-]
+-
+ [[package]]
+ name = "argminmax"
+ version = "0.6.3"
+@@ -249,15 +214,6 @@ version = "1.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
+ 
+-[[package]]
+-name = "as-slice"
+-version = "0.2.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516"
+-dependencies = [
+- "stable_deref_trait",
+-]
+-
+ [[package]]
+ name = "async-channel"
+ version = "2.5.0"
+@@ -348,49 +304,6 @@ version = "1.5.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+ 
+-[[package]]
+-name = "av-scenechange"
+-version = "0.14.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0f321d77c20e19b92c39e7471cf986812cbb46659d2af674adc4331ef3f18394"
+-dependencies = [
+- "aligned",
+- "anyhow",
+- "arg_enum_proc_macro",
+- "arrayvec",
+- "log",
+- "num-rational",
+- "num-traits",
+- "pastey",
+- "rayon",
+- "thiserror 2.0.21",
+- "v_frame",
+- "y4m",
+-]
+-
+-[[package]]
+-name = "av1-grain"
+-version = "0.2.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8cfddb07216410377231960af4fcab838eaa12e013417781b78bd95ee22077f8"
+-dependencies = [
+- "anyhow",
+- "arrayvec",
+- "log",
+- "nom",
+- "num-rational",
+- "v_frame",
+-]
+-
+-[[package]]
+-name = "avif-serialize"
+-version = "0.8.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e7178fe5f7d460b13895ebb9dcb28a3a6216d2df2574a0806cb51b555d297f38"
+-dependencies = [
+- "arrayvec",
+-]
+-
+ [[package]]
+ name = "aws-lc-rs"
+ version = "1.18.1"
+@@ -461,12 +374,6 @@ dependencies = [
+  "virtue",
+ ]
+ 
+-[[package]]
+-name = "bit_field"
+-version = "0.10.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1e4b40c7323adcfc0a41c4b88143ed58346ff65a288fc144329c5c45e05d70c6"
+-
+ [[package]]
+ name = "bitflags"
+ version = "1.3.2"
+@@ -482,15 +389,6 @@ dependencies = [
+  "serde_core",
+ ]
+ 
+-[[package]]
+-name = "bitstream-io"
+-version = "4.10.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7eff00be299a18769011411c9def0d827e8f2d7bf0c3dbf53633147a8867fd1f"
+-dependencies = [
+- "no_std_io2",
+-]
+-
+ [[package]]
+ name = "blake3"
+ version = "1.8.7"
+@@ -558,12 +456,6 @@ dependencies = [
+  "alloc-stdlib",
+ ]
+ 
+-[[package]]
+-name = "built"
+-version = "0.8.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5c0e531d93d39c34eef561e929e8a7f86d77a5af08aac4f6d6e39976c51858e9"
+-
+ [[package]]
+ name = "bumpalo"
+ version = "3.20.3"
+@@ -718,7 +610,7 @@ checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
+ dependencies = [
+  "cfg-if",
+  "cpufeatures",
+- "rand_core 0.10.1",
++ "rand_core",
+ ]
+ 
+ [[package]]
+@@ -780,12 +672,6 @@ version = "0.5.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
+ 
+-[[package]]
+-name = "color_quant"
+-version = "1.1.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+-
+ [[package]]
+ name = "combine"
+ version = "4.6.8"
+@@ -1024,7 +910,7 @@ checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
+ dependencies = [
+  "getrandom 0.4.3",
+  "hybrid-array",
+- "rand_core 0.10.1",
++ "rand_core",
+ ]
+ 
+ [[package]]
+@@ -1206,26 +1092,6 @@ dependencies = [
+  "simdutf8",
+ ]
+ 
+-[[package]]
+-name = "equator"
+-version = "0.4.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4711b213838dfee0117e3be6ac926007d7f433d7bbe33595975d4190cb07e6fc"
+-dependencies = [
+- "equator-macro",
+-]
+-
+-[[package]]
+-name = "equator-macro"
+-version = "0.4.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "44f23cf4b44bfce11a86ace86f8a73ffdec849c9fd00a386a53d278bd9e81fb3"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 2.0.119",
+-]
+-
+ [[package]]
+ name = "equivalent"
+ version = "1.0.2"
+@@ -1274,23 +1140,6 @@ dependencies = [
+  "pin-project-lite",
+ ]
+ 
+-[[package]]
+-name = "exr"
+-version = "1.74.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "711fe42c9964295e01ee3fba3f9fe0e1d24b98886950d68efe81b1c76e21adf3"
+-dependencies = [
+- "bit_field",
+- "half",
+- "lebe",
+- "miniz_oxide 0.8.9",
+- "num-complex",
+- "pulp",
+- "rayon-core",
+- "smallvec",
+- "zune-inflate",
+-]
+-
+ [[package]]
+ name = "fallible-streaming-iterator"
+ version = "0.1.9"
+@@ -1621,7 +1470,7 @@ dependencies = [
+  "js-sys",
+  "libc",
+  "r-efi 6.0.0",
+- "rand_core 0.10.1",
++ "rand_core",
+  "wasm-bindgen",
+ ]
+ 
+@@ -1634,16 +1483,6 @@ dependencies = [
+  "polyval",
+ ]
+ 
+-[[package]]
+-name = "gif"
+-version = "0.14.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+-dependencies = [
+- "color_quant",
+- "weezl",
+-]
+-
+ [[package]]
+ name = "gimli"
+ version = "0.32.3"
+@@ -2189,38 +2028,14 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
+ dependencies = [
+  "bytemuck",
+  "byteorder-lite",
+- "color_quant",
+- "exr",
+- "gif",
+- "image-webp",
+  "moxcms",
+  "num-traits",
+  "png",
+- "qoi",
+- "ravif",
+- "rayon",
+- "rgb",
+  "tiff",
+  "zune-core",
+  "zune-jpeg",
+ ]
+ 
+-[[package]]
+-name = "image-webp"
+-version = "0.2.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+-dependencies = [
+- "byteorder-lite",
+- "quick-error",
+-]
+-
+-[[package]]
+-name = "imgref"
+-version = "1.12.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
+-
+ [[package]]
+ name = "indexmap"
+ version = "2.14.2"
+@@ -2251,17 +2066,6 @@ dependencies = [
+  "hybrid-array",
+ ]
+ 
+-[[package]]
+-name = "interpolate_name"
+-version = "0.2.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c34819042dc3d3971c46c2190835914dfbe0c3c13f61449b2997f4e9722dfa60"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 2.0.119",
+-]
+-
+ [[package]]
+ name = "ipnet"
+ version = "2.12.2"
+@@ -2406,12 +2210,6 @@ version = "0.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "6167bebdc18e253cba9f4e672dfbb5948b6ae6a2e4a2d5c3dd4fac70e32aaed7"
+ 
+-[[package]]
+-name = "lebe"
+-version = "0.5.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
+-
+ [[package]]
+ name = "libappindicator"
+ version = "0.9.0"
+@@ -2442,16 +2240,6 @@ version = "0.2.189"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+ 
+-[[package]]
+-name = "libfuzzer-sys"
+-version = "0.4.13"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2"
+-dependencies = [
+- "arbitrary",
+- "cc",
+-]
+-
+ [[package]]
+ name = "libloading"
+ version = "0.7.4"
+@@ -2529,15 +2317,6 @@ version = "0.4.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+ 
+-[[package]]
+-name = "loop9"
+-version = "0.1.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
+-dependencies = [
+- "imgref",
+-]
+-
+ [[package]]
+ name = "lru-slab"
+ version = "0.1.3"
+@@ -2577,16 +2356,6 @@ dependencies = [
+  "winit",
+ ]
+ 
+-[[package]]
+-name = "maybe-rayon"
+-version = "0.1.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
+-dependencies = [
+- "cfg-if",
+- "rayon",
+-]
+-
+ [[package]]
+ name = "memchr"
+ version = "2.8.3"
+@@ -2721,36 +2490,6 @@ dependencies = [
+  "jni-sys 0.3.1",
+ ]
+ 
+-[[package]]
+-name = "new_debug_unreachable"
+-version = "1.0.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
+-
+-[[package]]
+-name = "no_std_io2"
+-version = "0.9.4"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "418abd1b6d34fbf6cae440dc874771b0525a604428704c76e48b29a5e67b8003"
+-dependencies = [
+- "memchr",
+-]
+-
+-[[package]]
+-name = "nom"
+-version = "8.0.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
+-dependencies = [
+- "memchr",
+-]
+-
+-[[package]]
+-name = "noop_proc_macro"
+-version = "0.3.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
+-
+ [[package]]
+ name = "now"
+ version = "0.1.3"
+@@ -2769,26 +2508,6 @@ dependencies = [
+  "winapi",
+ ]
+ 
+-[[package]]
+-name = "num-bigint"
+-version = "0.4.8"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
+-dependencies = [
+- "num-integer",
+- "num-traits",
+-]
+-
+-[[package]]
+-name = "num-complex"
+-version = "0.4.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+-dependencies = [
+- "bytemuck",
+- "num-traits",
+-]
+-
+ [[package]]
+ name = "num-derive"
+ version = "0.4.2"
+@@ -2800,26 +2519,6 @@ dependencies = [
+  "syn 2.0.119",
+ ]
+ 
+-[[package]]
+-name = "num-integer"
+-version = "0.1.47"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7ce2d95d4b3734dc35aa2f45e1aa22cd416814592a4f9d9205e11affd5b8e10b"
+-dependencies = [
+- "num-traits",
+-]
+-
+-[[package]]
+-name = "num-rational"
+-version = "0.4.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
+-dependencies = [
+- "num-bigint",
+- "num-integer",
+- "num-traits",
+-]
+-
+ [[package]]
+ name = "num-traits"
+ version = "0.2.19"
+@@ -3273,7 +2972,7 @@ dependencies = [
+  "parking_lot",
+  "percent-encoding",
+  "quick-xml 0.39.4",
+- "rand 0.10.3",
++ "rand",
+  "reqwest 0.12.28",
+  "ring",
+  "serde",
+@@ -3379,18 +3078,6 @@ dependencies = [
+  "windows-link",
+ ]
+ 
+-[[package]]
+-name = "paste"
+-version = "1.0.15"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+-
+-[[package]]
+-name = "pastey"
+-version = "0.1.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
+-
+ [[package]]
+ name = "pbkdf2"
+ version = "0.13.0"
+@@ -3570,7 +3257,7 @@ dependencies = [
+  "polars-config",
+  "polars-error",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "slotmap",
+  "tokio",
+ ]
+@@ -3606,7 +3293,7 @@ dependencies = [
+  "polars-buffer",
+  "polars-error",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "serde",
+  "strength_reduce",
+  "strum_macros",
+@@ -3652,7 +3339,7 @@ dependencies = [
+  "polars-row",
+  "polars-schema",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "rand_distr",
+  "rayon",
+  "regex",
+@@ -3714,7 +3401,7 @@ dependencies = [
+  "polars-row",
+  "polars-time",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "rayon",
+  "recursive",
+  "regex",
+@@ -3758,7 +3445,7 @@ dependencies = [
+  "polars-schema",
+  "polars-time",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "rayon",
+  "regex",
+  "reqwest 0.12.28",
+@@ -3855,7 +3542,7 @@ dependencies = [
+  "polars-error",
+  "polars-io",
+  "polars-utils",
+- "rand 0.10.3",
++ "rand",
+  "rand_distr",
+  "thread_local",
+  "tokio",
+@@ -4123,7 +3810,7 @@ dependencies = [
+  "num-traits",
+  "polars-config",
+  "polars-error",
+- "rand 0.10.3",
++ "rand",
+  "raw-cpuid",
+  "rayon",
+  "regex",
+@@ -4173,15 +3860,6 @@ dependencies = [
+  "zerovec",
+ ]
+ 
+-[[package]]
+-name = "ppv-lite86"
+-version = "0.2.21"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
+-dependencies = [
+- "zerocopy",
+-]
+-
+ [[package]]
+ name = "proc-macro-crate"
+ version = "1.3.1"
+@@ -4244,25 +3922,6 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
+-[[package]]
+-name = "profiling"
+-version = "1.0.18"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
+-dependencies = [
+- "profiling-procmacros",
+-]
+-
+-[[package]]
+-name = "profiling-procmacros"
+-version = "1.0.18"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
+-dependencies = [
+- "quote",
+- "syn 2.0.119",
+-]
+-
+ [[package]]
+ name = "psm"
+ version = "0.1.32"
+@@ -4273,44 +3932,12 @@ dependencies = [
+  "cc",
+ ]
+ 
+-[[package]]
+-name = "pulp"
+-version = "0.22.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "046aa45b989642ec2e4717c8e72d677b13edd831a4d3b6cf37d9a3e54912496a"
+-dependencies = [
+- "bytemuck",
+- "cfg-if",
+- "libm",
+- "num-complex",
+- "paste",
+- "pulp-wasm-simd-flag",
+- "raw-cpuid",
+- "reborrow",
+- "version_check",
+-]
+-
+-[[package]]
+-name = "pulp-wasm-simd-flag"
+-version = "0.1.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740"
+-
+ [[package]]
+ name = "pxfm"
+ version = "0.1.30"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+ 
+-[[package]]
+-name = "qoi"
+-version = "0.4.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
+-dependencies = [
+- "bytemuck",
+-]
+-
+ [[package]]
+ name = "quick-error"
+ version = "2.0.1"
+@@ -4366,7 +3993,7 @@ dependencies = [
+  "bytes",
+  "getrandom 0.4.3",
+  "lru-slab",
+- "rand 0.10.3",
++ "rand",
+  "rand_pcg",
+  "ring",
+  "rustc-hash 2.1.3",
+@@ -4414,16 +4041,6 @@ version = "6.0.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+ 
+-[[package]]
+-name = "rand"
+-version = "0.9.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b9ef1d0d795eb7d84685bca4f72f3649f064e6641543d3a8c415898726a57b41"
+-dependencies = [
+- "rand_chacha",
+- "rand_core 0.9.5",
+-]
+-
+ [[package]]
+ name = "rand"
+ version = "0.10.3"
+@@ -4432,26 +4049,7 @@ checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
+ dependencies = [
+  "chacha20",
+  "getrandom 0.4.3",
+- "rand_core 0.10.1",
+-]
+-
+-[[package]]
+-name = "rand_chacha"
+-version = "0.9.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
+-dependencies = [
+- "ppv-lite86",
+- "rand_core 0.9.5",
+-]
+-
+-[[package]]
+-name = "rand_core"
+-version = "0.9.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
+-dependencies = [
+- "getrandom 0.3.4",
++ "rand_core",
+ ]
+ 
+ [[package]]
+@@ -4467,7 +4065,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4d431c2703ccf129de4d45253c03f49ebb22b97d6ad79ee3ecfc7e3f4862c1d8"
+ dependencies = [
+  "num-traits",
+- "rand 0.10.3",
++ "rand",
+ ]
+ 
+ [[package]]
+@@ -4476,57 +4074,7 @@ version = "0.10.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
+ dependencies = [
+- "rand_core 0.10.1",
+-]
+-
+-[[package]]
+-name = "rav1e"
+-version = "0.8.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "43b6dd56e85d9483277cde964fd1bdb0428de4fec5ebba7540995639a21cb32b"
+-dependencies = [
+- "aligned-vec",
+- "arbitrary",
+- "arg_enum_proc_macro",
+- "arrayvec",
+- "av-scenechange",
+- "av1-grain",
+- "bitstream-io",
+- "built",
+- "cfg-if",
+- "interpolate_name",
+- "itertools",
+- "libc",
+- "libfuzzer-sys",
+- "log",
+- "maybe-rayon",
+- "new_debug_unreachable",
+- "noop_proc_macro",
+- "num-derive",
+- "num-traits",
+- "paste",
+- "profiling",
+- "rand 0.9.5",
+- "rand_chacha",
+- "simd_helpers",
+- "thiserror 2.0.21",
+- "v_frame",
+- "wasm-bindgen",
+-]
+-
+-[[package]]
+-name = "ravif"
+-version = "0.13.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e52310197d971b0f5be7fe6b57530dcd27beb35c1b013f29d66c1ad73fbbcc45"
+-dependencies = [
+- "avif-serialize",
+- "imgref",
+- "loop9",
+- "quick-error",
+- "rav1e",
+- "rayon",
+- "rgb",
++ "rand_core",
+ ]
+ 
+ [[package]]
+@@ -4564,12 +4112,6 @@ dependencies = [
+  "crossbeam-utils",
+ ]
+ 
+-[[package]]
+-name = "reborrow"
+-version = "0.5.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "03251193000f4bd3b042892be858ee50e8b3719f2b08e5833ac4353724632430"
+-
+ [[package]]
+ name = "recursive"
+ version = "0.1.1"
+@@ -4602,7 +4144,7 @@ dependencies = [
+  "chrono",
+  "lazy_static",
+  "pbkdf2",
+- "rand 0.10.3",
++ "rand",
+  "regex",
+  "serde",
+  "serde_json",
+@@ -4782,12 +4324,6 @@ dependencies = [
+  "web-sys",
+ ]
+ 
+-[[package]]
+-name = "rgb"
+-version = "0.8.53"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+-
+ [[package]]
+ name = "ring"
+ version = "0.17.14"
+@@ -5200,15 +4736,6 @@ dependencies = [
+  "simdutf8",
+ ]
+ 
+-[[package]]
+-name = "simd_helpers"
+-version = "0.1.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
+-dependencies = [
+- "quote",
+-]
+-
+ [[package]]
+ name = "simdutf8"
+ version = "0.1.5"
+@@ -5553,7 +5080,6 @@ dependencies = [
+  "chrono",
+  "dhat",
+  "dirs",
+- "image",
+  "mac-ui",
+  "polars",
+  "reqwest 0.13.5",
+@@ -5972,17 +5498,6 @@ dependencies = [
+  "wasm-bindgen",
+ ]
+ 
+-[[package]]
+-name = "v_frame"
+-version = "0.3.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "666b7727c8875d6ab5db9533418d7c764233ac9c0cff1d469aec8fa127597be2"
+-dependencies = [
+- "aligned-vec",
+- "num-traits",
+- "wasm-bindgen",
+-]
+-
+ [[package]]
+ name = "value-trait"
+ version = "0.12.2"
+@@ -6722,12 +6237,6 @@ version = "0.8.19"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "550a2b930b62486a393c52d5c3b84bff264b28aa437ed64694d31e93b1757af7"
+ 
+-[[package]]
+-name = "y4m"
+-version = "0.8.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
+-
+ [[package]]
+ name = "yoke"
+ version = "0.8.3"
+@@ -6877,15 +6386,6 @@ version = "0.5.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
+ 
+-[[package]]
+-name = "zune-inflate"
+-version = "0.2.54"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
+-dependencies = [
+- "simd-adler32",
+-]
+-
+ [[package]]
+ name = "zune-jpeg"
+ version = "0.5.15"
+diff --git a/Cargo.toml b/Cargo.toml
+index 9b25ec1..f6b6ea0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -8,10 +8,6 @@ edition = "2024"
+ # Dependencies shared by copycraft, ticker and mac-ui. Per-app features stay in the app manifests.
+ [workspace.dependencies]
+ arboard = "3"
+-# Not `default-features = false`: ticker uses image's default features. copycraft (no defaults)
+-# cannot inherit this entry (edition 2024 rejects `default-features = false` on an inherited
+-# dependency unless the workspace entry sets it), so it keeps its own `image = "0.25"` spec.
+-image = "0.25"
+ polars = { version = "0.55.2", default-features = false }
+ serde_json = "1.0"
+ 
+diff --git a/apps/ticker/Cargo.toml b/apps/ticker/Cargo.toml
+index 7c01a58..f65af07 100644
+--- a/apps/ticker/Cargo.toml
++++ b/apps/ticker/Cargo.toml
+@@ -23,7 +23,6 @@ reqwest = { version = "0.13", features = ["blocking", "json"] }
+ serde = { version = "1.0", features = ["derive"] }
+ serde_json = { workspace = true }
+ toml = "1.1"
+-image = { workspace = true }
+ chrono = "0.4"
+ dirs = "7.0"
+ dhat = "0.3"
+diff --git a/apps/ticker/README.md b/apps/ticker/README.md
+index f3b53f7..720823e 100644
+--- a/apps/ticker/README.md
++++ b/apps/ticker/README.md
+@@ -52,6 +52,7 @@ State files in your home directory:
+ | `~/.ticker_watches.json` | Price watches |
+ | `~/.ticker_price_history.json` | Day-open and last-poll prices |
+ | `~/.ticker_debug.log` | Log, recreated at every start |
++| `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |
+ 
+ ## Watch CLI
+ 
+diff --git a/apps/ticker/assets/update.png b/apps/ticker/assets/update.png
+index 5ecda7a1191c4982019bf3e50baa5851fe864c43..dba583fe7e1643ee0f0bc8551589004983742dee 100644
+GIT binary patch
+literal 15510
+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
+bIDSY?6$P>9Sa>|XZwx5Ps>#&6G7tGbS;V9L
+
+literal 13161
+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
+
+diff --git a/apps/ticker/src/instance_lock.rs b/apps/ticker/src/instance_lock.rs
+new file mode 100644
+index 0000000..c17c636
+--- /dev/null
++++ b/apps/ticker/src/instance_lock.rs
+@@ -0,0 +1,105 @@
++//! Single-instance guard for the menubar app: an exclusive, non-blocking lock (`flock` on macOS,
++//! via `std::fs::File::try_lock`) on a file next to the user config. The OS drops the lock when the
++//! process exits or crashes, so a stale file never blocks the next start.
++
++use std::fs::{File, OpenOptions, TryLockError};
++use std::io::{self, Write};
++use std::path::{Path, PathBuf};
++
++const LOCK_FILE_NAME: &str = ".ticker.lock";
++
++/// Held for the lifetime of the menubar app; dropping it releases the lock.
++#[derive(Debug)]
++pub struct InstanceLock {
++    _file: File,
++    path: PathBuf,
++}
++
++impl InstanceLock {
++    pub fn path(&self) -> &Path {
++        &self.path
++    }
++}
++
++/// Lock file in the directory of `.ticker_config.toml` (inside the sandbox container when
++/// sandboxed; follows `TICKER_USER_CONFIG_PATH`).
++pub fn default_lock_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
++    let config = crate::config::user_config_path()?;
++    let dir = config
++        .parent()
++        .filter(|p| !p.as_os_str().is_empty())
++        .map(Path::to_path_buf)
++        .unwrap_or_else(|| PathBuf::from("."));
++    Ok(dir.join(LOCK_FILE_NAME))
++}
++
++/// `Ok(Some(lock))`: this is the only instance. `Ok(None)`: another process holds the lock.
++/// `Err`: the lock file could not be opened or locked for another reason.
++pub fn try_acquire(path: &Path) -> io::Result<Option<InstanceLock>> {
++    // No truncate on open: the file may belong to a running instance.
++    let mut file = OpenOptions::new()
++        .create(true)
++        .truncate(false)
++        .write(true)
++        .open(path)?;
++    match file.try_lock() {
++        Ok(()) => {}
++        Err(TryLockError::WouldBlock) => return Ok(None),
++        Err(TryLockError::Error(e)) => return Err(e),
++    }
++    // Informational only (the lock is what counts).
++    let _ = file.set_len(0);
++    let _ = writeln!(file, "{}", std::process::id());
++    Ok(Some(InstanceLock {
++        _file: file,
++        path: path.to_path_buf(),
++    }))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn temp_lock_path(tag: &str) -> PathBuf {
++        let dir =
++            std::env::temp_dir().join(format!("ticker-lock-test-{}-{tag}", std::process::id()));
++        std::fs::create_dir_all(&dir).unwrap();
++        dir.join(LOCK_FILE_NAME)
++    }
++
++    #[test]
++    fn first_acquire_succeeds_and_writes_pid() {
++        let path = temp_lock_path("first");
++        let lock = try_acquire(&path).unwrap().expect("lock is free");
++        assert_eq!(lock.path(), path);
++        let pid = std::fs::read_to_string(&path).unwrap();
++        assert_eq!(pid.trim(), std::process::id().to_string());
++    }
++
++    #[test]
++    fn second_acquire_is_refused_until_first_is_dropped() {
++        // flock locks belong to the open file description, so a second open in the same process
++        // conflicts just like a second process would.
++        let path = temp_lock_path("second");
++        let first = try_acquire(&path).unwrap().expect("lock is free");
++        assert!(try_acquire(&path).unwrap().is_none());
++        // The refused attempt must not clobber the holder's pid.
++        let pid = std::fs::read_to_string(&path).unwrap();
++        assert_eq!(pid.trim(), std::process::id().to_string());
++        drop(first);
++        assert!(try_acquire(&path).unwrap().is_some());
++    }
++
++    #[test]
++    fn stale_lock_file_without_holder_does_not_block() {
++        let path = temp_lock_path("stale");
++        std::fs::write(&path, "99999\n").unwrap();
++        assert!(try_acquire(&path).unwrap().is_some());
++    }
++
++    #[test]
++    fn missing_directory_is_an_error() {
++        let path = temp_lock_path("missing").join("nope").join(LOCK_FILE_NAME);
++        assert!(try_acquire(&path).is_err());
++    }
++}
+diff --git a/apps/ticker/src/main.rs b/apps/ticker/src/main.rs
+index 0567f28..c4e23d7 100644
+--- a/apps/ticker/src/main.rs
++++ b/apps/ticker/src/main.rs
+@@ -4,8 +4,10 @@ use std::path::PathBuf;
+ 
+ mod config;
+ mod dialogs;
++mod instance_lock;
+ mod menu_builder;
+ mod menubar;
++mod poll_gate;
+ mod price_fetcher;
+ mod price_history;
+ mod price_watch;
+@@ -36,6 +38,32 @@ fn log_message(message: &str) {
+ }
+ 
+ fn main() {
++    let args: Vec<String> = std::env::args().collect();
++    let cli_mode = args.len() > 1;
++
++    // Menubar mode only: a second instance exits before touching the running one's log file.
++    // CLI subcommands (watch_cli) never take the lock.
++    let instance_guard = if cli_mode {
++        None
++    } else {
++        match instance_lock::default_lock_path()
++            .map_err(|e| e.to_string())
++            .and_then(|path| instance_lock::try_acquire(&path).map_err(|e| e.to_string()))
++        {
++            Ok(Some(lock)) => Some(lock),
++            Ok(None) => {
++                log_message("Another Ticker instance is already running; exiting.");
++                return;
++            }
++            Err(e) => {
++                log_message(&format!(
++                    "⚠️  Single-instance lock unavailable ({e}); continuing"
++                ));
++                None
++            }
++        }
++    };
++
+     let log_path = log_file_path();
+     let _ = std::fs::remove_file(&log_path);
+ 
+@@ -48,8 +76,7 @@ fn main() {
+     let _profiler = dhat::Profiler::new_heap();
+ 
+     // Check for CLI arguments for watch management
+-    let args: Vec<String> = std::env::args().collect();
+-    if args.len() > 1 {
++    if cli_mode {
+         match watch_cli::handle_watch_command(&args[1..]) {
+             Ok(output) => {
+                 println!("{}", output);
+@@ -62,6 +89,10 @@ fn main() {
+         }
+     }
+ 
++    if let Some(lock) = &instance_guard {
++        log_message(&format!("Instance lock: {:?}", lock.path()));
++    }
++
+     match menubar::run_menubar() {
+         Ok(_) => log_message("✓ Ticker app exited normally"),
+         Err(e) => {
+diff --git a/apps/ticker/src/menubar.rs b/apps/ticker/src/menubar.rs
+index e5fed95..6aca2d3 100644
+--- a/apps/ticker/src/menubar.rs
++++ b/apps/ticker/src/menubar.rs
+@@ -5,7 +5,7 @@ use mac_ui::tray_icon::{
+ use mac_ui::winit::{
+     application::ApplicationHandler,
+     event::WindowEvent,
+-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
++    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+ };
+ use polars::prelude::*;
+ use std::cell::RefCell;
+@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
+ use crate::config::{self, load_config};
+ use crate::dialogs::{self, prompt_text};
+ use crate::menu_builder::MenuBuilder;
++use crate::poll_gate::{Generation, PollGate};
+ use crate::price_fetcher::PriceFetcher;
+ use crate::price_history;
+ use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_list};
+@@ -24,9 +25,20 @@ use crate::watch_ui::{self, WatchUIBuilder};
+ 
+ const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
+ 
++/// Sent from the fetch thread to the event loop (wakes it up).
++enum UserEvent {
++    PricesFetched {
++        generation: Generation,
++        /// `Box<dyn Error>` is not `Send`; the error is only logged anyway.
++        result: Result<DataFrame, String>,
++    },
++}
++
+ struct App {
+     tray: Rc<RefCell<TrayIcon>>,
+     fetcher: Option<PriceFetcher>,
++    proxy: EventLoopProxy<UserEvent>,
++    poll_gate: PollGate,
+     config: Option<crate::config::Config>,
+     prices_df: Option<DataFrame>,
+     watch_list: WatchList,
+@@ -37,8 +49,23 @@ struct App {
+     config_error: Option<String>,
+ }
+ 
+-impl ApplicationHandler for App {
++impl ApplicationHandler<UserEvent> for App {
+     fn resumed(&mut self, _: &ActiveEventLoop) {}
++
++    fn user_event(&mut self, _: &ActiveEventLoop, event: UserEvent) {
++        match event {
++            UserEvent::PricesFetched { generation, result } => {
++                let finished = self.poll_gate.finish(generation);
++                if finished.apply {
++                    self.apply_poll_result(result);
++                }
++                if let Some(next) = finished.restart {
++                    self.spawn_fetch(next);
++                }
++            }
++        }
++    }
++
+     fn window_event(
+         &mut self,
+         _: &ActiveEventLoop,
+@@ -181,7 +208,7 @@ impl App {
+                     &format!("{asset_name} saved ({unit})"),
+                 );
+                 self.prices_df = None;
+-                self.poll_prices();
++                self.repoll_after_config_change();
+             }
+             Err(e) => watch_ui::send_macos_notification("Ticker", &e),
+         }
+@@ -193,7 +220,7 @@ impl App {
+                 self.config = Some(config);
+                 self.prices_df = None;
+                 watch_ui::send_macos_notification("Ticker", "Assets reset to defaults.");
+-                self.poll_prices();
++                self.repoll_after_config_change();
+             }
+             Err(e) => watch_ui::send_macos_notification("Ticker", &format!("Reset failed: {e}")),
+         }
+@@ -208,14 +235,60 @@ impl App {
+         }
+     }
+ 
++    /// Timer, "Poll now" and startup: start a background fetch unless one is already running
++    /// (its result is just as fresh, so the request is dropped).
+     fn poll_prices(&mut self) {
+-        let Some(config) = &self.config else { return };
+-        let Some(fetcher) = &self.fetcher else { return };
+-        let day_opens = price_history::load_day_opens();
+-        let result = match &self.prices_df {
+-            None => fetcher.build_initial_dataframe(&config.assets, &day_opens),
+-            Some(prev) => fetcher.update_dataframe(prev, &config.assets, &day_opens),
++        if self.config.is_none() || self.fetcher.is_none() {
++            return;
++        }
++        if let Some(generation) = self.poll_gate.try_start() {
++            self.spawn_fetch(generation);
++        }
++    }
++
++    /// Assets were edited or reset (`prices_df` already cleared): a fetch still running for the old
++    /// assets is discarded and a fresh one starts (now, or as soon as the running one returns).
++    fn repoll_after_config_change(&mut self) {
++        if self.config.is_none() || self.fetcher.is_none() {
++            return;
++        }
++        if let Some(generation) = self.poll_gate.invalidate() {
++            self.spawn_fetch(generation);
++        }
++    }
++
++    /// Runs the blocking HTTP requests on a worker thread; the result comes back as
++    /// `UserEvent::PricesFetched` and is applied on the main thread in `apply_poll_result`.
++    fn spawn_fetch(&mut self, generation: Generation) {
++        let (Some(config), Some(fetcher)) = (&self.config, &self.fetcher) else {
++            self.poll_gate.abort();
++            return;
+         };
++        let fetcher = fetcher.clone();
++        let assets = config.assets.clone();
++        let previous = self.prices_df.clone();
++        let proxy = self.proxy.clone();
++        let spawned = std::thread::Builder::new()
++            .name("ticker-fetch".into())
++            .spawn(move || {
++                let day_opens = price_history::load_day_opens();
++                let result = match &previous {
++                    None => fetcher.build_initial_dataframe(&assets, &day_opens),
++                    Some(prev) => fetcher.update_dataframe(prev, &assets, &day_opens),
++                }
++                .map_err(|e| e.to_string());
++                // Fails only when the event loop has already exited (app quitting).
++                let _ = proxy.send_event(UserEvent::PricesFetched { generation, result });
++            });
++        if let Err(e) = spawned {
++            eprintln!("Poll failed: cannot start fetch thread: {e}");
++            self.poll_gate.abort();
++        }
++    }
++
++    /// Main thread: merge a finished fetch into state, save history, fire watch alerts and
++    /// refresh the menu (unchanged from the former synchronous poll).
++    fn apply_poll_result(&mut self, result: Result<DataFrame, String>) {
+         let mut df = match result {
+             Ok(df) => df,
+             Err(e) => {
+@@ -527,9 +600,12 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
+         .with_tooltip("Price Ticker")
+         .with_title("Ticker")
+         .build()?;
++    let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+     let mut app = App {
+         tray: Rc::new(RefCell::new(tray_icon)),
+         fetcher: Some(fetcher),
++        proxy: event_loop.create_proxy(),
++        poll_gate: PollGate::new(),
+         config: None,
+         prices_df: None,
+         watch_list: WatchList::new(),
+@@ -539,6 +615,6 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
+         config_loaded: false,
+         config_error: None,
+     };
+-    EventLoop::new()?.run_app(&mut app)?;
++    event_loop.run_app(&mut app)?;
+     Ok(())
+ }
+diff --git a/apps/ticker/src/models.rs b/apps/ticker/src/models.rs
+deleted file mode 100644
+index b4c6390..0000000
+--- a/apps/ticker/src/models.rs
++++ /dev/null
+@@ -1,98 +0,0 @@
+-use serde::Deserialize;
+-
+-#[derive(Debug, Deserialize, Clone)]
+-pub struct Config {
+-    pub assets: Vec<Asset>,
+-}
+-
+-#[derive(Debug, Deserialize, Clone)]
+-pub struct Asset {
+-    pub name: String,
+-    pub url: String,
+-    pub price_path: String,
+-    pub unit: String,
+-    #[serde(default = "default_poll_interval")]
+-    pub poll_interval: String,
+-}
+-
+-fn default_poll_interval() -> String {
+-    "1m".to_string()
+-}
+-
+-impl Asset {
+-    /// Converts poll_interval string to seconds
+-    /// Valid values: "1m", "1h", "24h"
+-    pub fn poll_interval_seconds(&self) -> u64 {
+-        match self.poll_interval.as_str() {
+-            "1m" => 60,
+-            "1h" => 3600,
+-            "24h" => 86400,
+-            _ => 60, // default to 1 minute
+-        }
+-    }
+-}
+-
+-#[derive(Debug, Clone)]
+-pub struct Price {
+-    pub name: String,
+-    pub value: f64,
+-    pub unit: String,
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn test_poll_interval_1m() {
+-        let asset = Asset {
+-            name: "Bitcoin".to_string(),
+-            url: "https://example.com".to_string(),
+-            price_path: "price".to_string(),
+-            unit: "EUR".to_string(),
+-            poll_interval: "1m".to_string(),
+-        };
+-        assert_eq!(asset.poll_interval_seconds(), 60);
+-    }
+-
+-    #[test]
+-    fn test_poll_interval_1h() {
+-        let asset = Asset {
+-            name: "Gold".to_string(),
+-            url: "https://example.com".to_string(),
+-            price_path: "price".to_string(),
+-            unit: "EUR".to_string(),
+-            poll_interval: "1h".to_string(),
+-        };
+-        assert_eq!(asset.poll_interval_seconds(), 3600);
+-    }
+-
+-    #[test]
+-    fn test_poll_interval_24h() {
+-        let asset = Asset {
+-            name: "Gas".to_string(),
+-            url: "https://example.com".to_string(),
+-            price_path: "price".to_string(),
+-            unit: "EUR/MWh".to_string(),
+-            poll_interval: "24h".to_string(),
+-        };
+-        assert_eq!(asset.poll_interval_seconds(), 86400);
+-    }
+-
+-    #[test]
+-    fn test_poll_interval_default() {
+-        let asset = Asset {
+-            name: "Test".to_string(),
+-            url: "https://example.com".to_string(),
+-            price_path: "price".to_string(),
+-            unit: "EUR".to_string(),
+-            poll_interval: "invalid".to_string(),
+-        };
+-        assert_eq!(asset.poll_interval_seconds(), 60); // defaults to 60s
+-    }
+-
+-    #[test]
+-    fn test_default_poll_interval_function() {
+-        assert_eq!(default_poll_interval(), "1m");
+-    }
+-}
+diff --git a/apps/ticker/src/poll_gate.rs b/apps/ticker/src/poll_gate.rs
+new file mode 100644
+index 0000000..f40ecea
+--- /dev/null
++++ b/apps/ticker/src/poll_gate.rs
+@@ -0,0 +1,145 @@
++//! Bookkeeping for the background price fetch: at most one fetch in flight, and results from a
++//! fetch that was started before the asset config changed are dropped.
++//!
++//! Pure state (no threads or I/O) so the coalescing rules are unit-testable on any platform.
++
++/// Generation tag handed to a fetch when it starts and returned with its result.
++pub type Generation = u64;
++
++#[derive(Debug, Default)]
++pub struct PollGate {
++    in_flight: bool,
++    /// A fresh fetch must start as soon as the running one finishes (config changed mid-fetch).
++    rerun_queued: bool,
++    generation: Generation,
++}
++
++/// What to do with a finished fetch.
++#[derive(Debug, PartialEq, Eq)]
++pub struct Finished {
++    /// The result belongs to the current config and should be applied.
++    pub apply: bool,
++    /// Start another fetch right away with this generation.
++    pub restart: Option<Generation>,
++}
++
++impl PollGate {
++    pub fn new() -> Self {
++        Self::default()
++    }
++
++    /// Regular poll (timer or "Poll now"). Returns the generation to fetch with, or `None` when a
++    /// fetch is already running; that one is just as fresh, so the request is skipped.
++    pub fn try_start(&mut self) -> Option<Generation> {
++        if self.in_flight {
++            None
++        } else {
++            self.in_flight = true;
++            Some(self.generation)
++        }
++    }
++
++    /// The asset config changed (edit/reset): results of any running fetch are now stale. Starts a
++    /// fetch now if idle, otherwise queues one to start when the running fetch finishes.
++    pub fn invalidate(&mut self) -> Option<Generation> {
++        self.generation = self.generation.wrapping_add(1);
++        if self.in_flight {
++            self.rerun_queued = true;
++            None
++        } else {
++            self.in_flight = true;
++            Some(self.generation)
++        }
++    }
++
++    /// Call when the fetch tagged `generation` has finished (successfully or not).
++    pub fn finish(&mut self, generation: Generation) -> Finished {
++        self.in_flight = false;
++        let apply = generation == self.generation;
++        let restart = if std::mem::take(&mut self.rerun_queued) {
++            self.in_flight = true;
++            Some(self.generation)
++        } else {
++            None
++        };
++        Finished { apply, restart }
++    }
++
++    /// The fetch could not be started (thread spawn failed): release the slot.
++    pub fn abort(&mut self) {
++        self.in_flight = false;
++        self.rerun_queued = false;
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn second_poll_is_skipped_while_one_is_in_flight() {
++        let mut gate = PollGate::new();
++        let g = gate.try_start().expect("idle gate starts");
++        assert!(gate.in_flight);
++        assert_eq!(gate.try_start(), None);
++        assert_eq!(gate.try_start(), None);
++        assert_eq!(
++            gate.finish(g),
++            Finished {
++                apply: true,
++                restart: None
++            }
++        );
++        assert!(!gate.in_flight);
++        assert!(gate.try_start().is_some());
++    }
++
++    #[test]
++    fn invalidate_when_idle_starts_immediately_with_new_generation() {
++        let mut gate = PollGate::new();
++        let first = gate.try_start().unwrap();
++        gate.finish(first);
++        let g = gate.invalidate().expect("idle gate starts");
++        assert_ne!(g, first);
++        assert!(gate.in_flight);
++        assert_eq!(
++            gate.finish(g),
++            Finished {
++                apply: true,
++                restart: None
++            }
++        );
++    }
++
++    #[test]
++    fn invalidate_mid_fetch_drops_stale_result_and_reruns_once() {
++        let mut gate = PollGate::new();
++        let stale = gate.try_start().unwrap();
++        assert_eq!(gate.invalidate(), None);
++        assert_eq!(gate.invalidate(), None); // several edits coalesce into one rerun
++        assert_eq!(gate.try_start(), None);
++        let done = gate.finish(stale);
++        assert!(!done.apply);
++        let fresh = done.restart.expect("queued rerun starts");
++        assert_ne!(fresh, stale);
++        assert!(gate.in_flight);
++        assert_eq!(
++            gate.finish(fresh),
++            Finished {
++                apply: true,
++                restart: None
++            }
++        );
++        assert!(!gate.in_flight);
++    }
++
++    #[test]
++    fn abort_releases_the_slot() {
++        let mut gate = PollGate::new();
++        gate.try_start().unwrap();
++        gate.invalidate();
++        gate.abort();
++        assert!(!gate.in_flight);
++        assert!(gate.try_start().is_some());
++    }
++}
+diff --git a/apps/ticker/src/price_fetcher.rs b/apps/ticker/src/price_fetcher.rs
+index 152b12f..2bc7fb1 100644
+--- a/apps/ticker/src/price_fetcher.rs
++++ b/apps/ticker/src/price_fetcher.rs
+@@ -8,7 +8,15 @@ use std::time::Duration;
+ 
+ const MAX_FETCH_ATTEMPTS: u32 = 3;
+ const RETRY_DELAY: Duration = Duration::from_millis(500);
+-
++/// Whole request (connect + headers + body). Bounds one attempt, so `fetch_price` on one asset
++/// takes at most 3 × 10 s + 2 × 0.5 s = 31 s, and a poll (assets fetched one after another, on the
++/// fetch thread) at most `assets.len()` times that.
++const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
++const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
++
++/// Cheap to clone (the reqwest client is reference-counted), so a clone can move into the fetch
++/// thread.
++#[derive(Clone)]
+ pub struct PriceFetcher {
+     client: Client,
+ }
+@@ -17,6 +25,8 @@ impl PriceFetcher {
+     pub fn new() -> Result<Self, Box<dyn Error>> {
+         let client = Client::builder()
+             .user_agent("rust-price-fetcher/1.0")
++            .timeout(REQUEST_TIMEOUT)
++            .connect_timeout(CONNECT_TIMEOUT)
+             .build()?;
+         Ok(PriceFetcher { client })
+     }
+@@ -290,6 +300,16 @@ mod tests {
+         assert_eq!(MAX_FETCH_ATTEMPTS, 3);
+     }
+ 
++    #[test]
++    fn worst_case_fetch_time_is_bounded() {
++        assert!(CONNECT_TIMEOUT <= REQUEST_TIMEOUT);
++        let per_asset =
++            REQUEST_TIMEOUT * MAX_FETCH_ATTEMPTS + RETRY_DELAY * (MAX_FETCH_ATTEMPTS - 1);
++        assert_eq!(per_asset, Duration::from_secs(31));
++        // Default config (7 assets) finishes within one poll interval (5 min) even if all time out.
++        assert!(per_asset * 7 < Duration::from_secs(5 * 60));
++    }
++
+     #[test]
+     fn empty_assets_dataframe() {
+         let f = fetcher();
+diff --git a/apps/ticker/src/singleton.rs b/apps/ticker/src/singleton.rs
+deleted file mode 100644
+index 238739c..0000000
+--- a/apps/ticker/src/singleton.rs
++++ /dev/null
+@@ -1,157 +0,0 @@
+-use std::error::Error;
+-use std::fs;
+-use std::path::PathBuf;
+-use std::process;
+-
+-fn default_lock_file_path() -> PathBuf {
+-    let home = dirs::home_dir().expect("Cannot find home directory");
+-    home.join(".ticker.lock")
+-}
+-
+-fn lock_file_path() -> PathBuf {
+-    if let Ok(path) = std::env::var("TICKER_LOCK_PATH") {
+-        PathBuf::from(path)
+-    } else {
+-        default_lock_file_path()
+-    }
+-}
+-
+-fn is_process_running(pid: u32) -> bool {
+-    #[cfg(target_os = "macos")]
+-    {
+-        use std::process::Command;
+-
+-        Command::new("kill")
+-            .arg("-0")
+-            .arg(pid.to_string())
+-            .output()
+-            .map(|output| output.status.success())
+-            .unwrap_or(false)
+-    }
+-
+-    #[cfg(not(target_os = "macos"))]
+-    {
+-        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+-    }
+-}
+-
+-fn try_acquire_lock_at(lock_file: &PathBuf) -> Result<(), Box<dyn Error>> {
+-    let current_pid = process::id();
+-
+-    if lock_file.exists() {
+-        if let Ok(contents) = fs::read_to_string(lock_file) {
+-            if let Ok(old_pid) = contents.trim().parse::<u32>() {
+-                if is_process_running(old_pid) {
+-                    eprintln!("❌ Ticker is already running (PID: {})!", old_pid);
+-                    return Err("Ticker is already running!".into());
+-                } else {
+-                    eprintln!(
+-                        "🧹 Cleaning up stale lock file (PID: {} not running)",
+-                        old_pid
+-                    );
+-                    let _ = fs::remove_file(lock_file);
+-                }
+-            } else {
+-                let _ = fs::remove_file(lock_file);
+-            }
+-        } else {
+-            let _ = fs::remove_file(lock_file);
+-        }
+-    }
+-
+-    fs::write(lock_file, current_pid.to_string())?;
+-    eprintln!("🔒 Lock acquired (PID: {})", current_pid);
+-    Ok(())
+-}
+-
+-fn release_lock_at(lock_file: &PathBuf) {
+-    if let Ok(contents) = fs::read_to_string(lock_file)
+-        && let Ok(pid) = contents.trim().parse::<u32>()
+-        && pid == process::id()
+-    {
+-        let _ = fs::remove_file(lock_file);
+-        eprintln!("🔓 Lock released");
+-    }
+-}
+-
+-pub fn try_acquire_lock() -> Result<(), Box<dyn Error>> {
+-    let lock_file = lock_file_path();
+-    try_acquire_lock_at(&lock_file)
+-}
+-
+-pub fn release_lock() {
+-    let lock_file = lock_file_path();
+-    release_lock_at(&lock_file);
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    use std::time::{SystemTime, UNIX_EPOCH};
+-
+-    fn unique_test_lock_path(name: &str) -> PathBuf {
+-        let stamp = SystemTime::now()
+-            .duration_since(UNIX_EPOCH)
+-            .unwrap()
+-            .as_nanos();
+-
+-        std::env::temp_dir().join(format!("ticker-{}-{}.lock", name, stamp))
+-    }
+-
+-    #[test]
+-    fn test_acquire_lock_success() {
+-        let lock_file = unique_test_lock_path("acquire_success");
+-        let _ = fs::remove_file(&lock_file);
+-
+-        assert!(try_acquire_lock_at(&lock_file).is_ok());
+-
+-        release_lock_at(&lock_file);
+-        let _ = fs::remove_file(&lock_file);
+-    }
+-
+-    #[test]
+-    fn test_lock_contains_pid() {
+-        let lock_file = unique_test_lock_path("contains_pid");
+-        let _ = fs::remove_file(&lock_file);
+-
+-        assert!(try_acquire_lock_at(&lock_file).is_ok());
+-
+-        let contents = fs::read_to_string(&lock_file).unwrap();
+-        let pid: u32 = contents.trim().parse().unwrap();
+-
+-        assert_eq!(pid, process::id());
+-
+-        release_lock_at(&lock_file);
+-        let _ = fs::remove_file(&lock_file);
+-    }
+-
+-    #[test]
+-    fn test_stale_lock_cleanup() {
+-        let lock_file = unique_test_lock_path("stale_cleanup");
+-        let _ = fs::remove_file(&lock_file);
+-
+-        // Schrijf een fake PID
+-        fs::write(&lock_file, "999999").unwrap();
+-
+-        assert!(try_acquire_lock_at(&lock_file).is_ok());
+-
+-        let contents = fs::read_to_string(&lock_file).unwrap();
+-        let pid: u32 = contents.trim().parse().unwrap();
+-        assert_eq!(pid, process::id());
+-
+-        release_lock_at(&lock_file);
+-        let _ = fs::remove_file(&lock_file);
+-    }
+-
+-    #[test]
+-    fn test_release_lock_removes_file() {
+-        let lock_file = unique_test_lock_path("release_removes");
+-        let _ = fs::remove_file(&lock_file);
+-
+-        assert!(try_acquire_lock_at(&lock_file).is_ok());
+-        release_lock_at(&lock_file);
+-
+-        assert!(!lock_file.exists());
+-        let _ = fs::remove_file(&lock_file);
+-    }
+-}

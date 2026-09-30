@@ -52,6 +52,7 @@ State files in your home directory:
 | `~/.ticker_watches.json` | Price watches |
 | `~/.ticker_price_history.json` | Day-open and last-poll prices |
 | `~/.ticker_debug.log` | Log, recreated at every start |
+| `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |
 
 ## Watch CLI
 

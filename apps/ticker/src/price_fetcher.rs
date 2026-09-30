@@ -8,7 +8,15 @@ use std::time::Duration;
 
 const MAX_FETCH_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_millis(500);
+/// Whole request (connect + headers + body). Bounds one attempt, so `fetch_price` on one asset
+/// takes at most 3 × 10 s + 2 × 0.5 s = 31 s, and a poll (assets fetched one after another, on the
+/// fetch thread) at most `assets.len()` times that.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Cheap to clone (the reqwest client is reference-counted), so a clone can move into the fetch
+/// thread.
+#[derive(Clone)]
 pub struct PriceFetcher {
     client: Client,
 }
@@ -17,6 +25,8 @@ impl PriceFetcher {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let client = Client::builder()
             .user_agent("rust-price-fetcher/1.0")
+            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(CONNECT_TIMEOUT)
             .build()?;
         Ok(PriceFetcher { client })
     }
@@ -288,6 +298,16 @@ mod tests {
     #[test]
     fn max_fetch_attempts_is_three() {
         assert_eq!(MAX_FETCH_ATTEMPTS, 3);
+    }
+
+    #[test]
+    fn worst_case_fetch_time_is_bounded() {
+        assert!(CONNECT_TIMEOUT <= REQUEST_TIMEOUT);
+        let per_asset =
+            REQUEST_TIMEOUT * MAX_FETCH_ATTEMPTS + RETRY_DELAY * (MAX_FETCH_ATTEMPTS - 1);
+        assert_eq!(per_asset, Duration::from_secs(31));
+        // Default config (7 assets) finishes within one poll interval (5 min) even if all time out.
+        assert!(per_asset * 7 < Duration::from_secs(5 * 60));
     }
 
     #[test]
