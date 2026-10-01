@@ -9,10 +9,14 @@ edition.workspace = true
 appkit-full = ["objc2-app-kit/default", "objc2-foundation/default"]
 # `mac_ui::theme`: appearance switch stored in the user defaults.
 theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-foundation/NSUserDefaults"]
-# `mac_ui::widgets` and `mac_ui::fonts`: AppKit control constructors and font lookup.
+# `mac_ui::widgets`, `mac_ui::button` and `mac_ui::fonts`: AppKit control constructors, the glass
+# push button (NSBezelStyle in NSButtonCell, NSControlBorderShape in NSControl, NSTintProminence,
+# accessibility labels in NSAccessibilityProtocols) and font lookup.
 widgets = [
+    "objc2-app-kit/NSAccessibilityProtocols",
     "objc2-app-kit/NSBox",
     "objc2-app-kit/NSButton",
+    "objc2-app-kit/NSButtonCell",
     "objc2-app-kit/NSCell",
     "objc2-app-kit/NSClipView",
     "objc2-app-kit/NSControl",
@@ -26,6 +30,7 @@ widgets = [
     "objc2-app-kit/NSText",
     "objc2-app-kit/NSTextField",
     "objc2-app-kit/NSTextView",
+    "objc2-app-kit/NSTintProminence",
 ]
 # `mac_ui::dialog`: modal NSAlert message, confirm, button choice, text prompt and list pick, plus
 # the run loop mode check that defers them until a menu has closed.

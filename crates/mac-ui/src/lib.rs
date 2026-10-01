@@ -9,7 +9,8 @@
 //! features it needs:
 //!
 //! - `theme`: `theme`, the appearance switch stored in the user defaults.
-//! - `widgets`: `widgets` and `fonts`, AppKit control constructors and font lookup.
+//! - `widgets`: `widgets`, `button` and `fonts`: AppKit control constructors, the glass push
+//!   button ([`button::GlassButton`]) and font lookup.
 //! - `dialog`: `dialog`, modal `NSAlert` message, confirm, choice, prompt and list pick.
 //! - `panel`: `panel`, borderless floating panel creation, activation and placement.
 //! - `notify`: `notify`, user notifications.
@@ -32,6 +33,8 @@ pub use objc2_foundation;
 
 #[cfg(all(target_os = "macos", any(feature = "panel", feature = "dialog")))]
 mod activation;
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub mod button;
 #[cfg(all(target_os = "macos", feature = "dialog"))]
 pub mod dialog;
 #[cfg(all(target_os = "macos", feature = "file_panel"))]

@@ -3,6 +3,7 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 
+use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
@@ -303,7 +304,7 @@ define_class!(
         fn show_all_clicked(&self, _sender: Option<&NSButton>) {
             SHOW_ALL.with(|slot| {
                 if let Some(pill) = slot.borrow().as_ref() {
-                    pill.button.root.setHidden(true);
+                    pill.button.view().setHidden(true);
                 }
             });
             launcher::emit(UserEvent::Run(CommandId::ShowAll));
@@ -557,14 +558,20 @@ fn ensure_window(mtm: MainThreadMarker) {
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_image = image_view(mtm);
     let pills = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
-    let older = nav_button(mtm, "<", sel!(olderClicked:));
-    let newer = nav_button(mtm, ">", sel!(newerClicked:));
+    let older = nav_button(mtm, "<", "Older", sel!(olderClicked:));
+    let newer = nav_button(mtm, ">", "Newer", sel!(newerClicked:));
     let more = icon_button(mtm, "⋯", sel!(moreClicked:));
     let clear = icon_button(mtm, "Wipe", sel!(clearClicked:));
     clear.setToolTip(Some(&NSString::from_str("Wipe copied data from memory")));
     let close = icon_button(mtm, "✕", sel!(closeClicked:));
-    let copy_button = well_action(mtm, "doc.on.doc", "⎘", sel!(copyClicked:));
-    let save_button = well_action(mtm, "square.and.arrow.down", "↓", sel!(saveClicked:));
+    let copy_button = well_action(mtm, "doc.on.doc", "Copy", "⎘", sel!(copyClicked:));
+    let save_button = well_action(
+        mtm,
+        "square.and.arrow.down",
+        "Save",
+        "↓",
+        sel!(saveClicked:),
+    );
     let reveal = reveal_cover(mtm);
 
     content.addSubview(&header);
@@ -580,10 +587,10 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&meta);
     content.addSubview(&field);
     content.addSubview(&pills);
-    content.addSubview(&older.root);
-    content.addSubview(&newer.root);
-    content.addSubview(&copy_button.root);
-    content.addSubview(&save_button.root);
+    content.addSubview(older.view());
+    content.addSubview(newer.view());
+    content.addSubview(copy_button.view());
+    content.addSubview(save_button.view());
 
     HEADER.with(|slot| slot.replace(Some(header)));
     META.with(|slot| slot.replace(Some(meta)));
@@ -2491,7 +2498,7 @@ fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     view
 }
 
-type NavButton = widgets::OverlayButton;
+type NavButton = GlassButton;
 
 fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
     let newer_x = WIDTH - PAD - commands::NAV_BUTTON;
@@ -2522,27 +2529,27 @@ fn place_nav_button(slot: &RefCell<Option<NavButton>>, x: f64, y: f64, shown: bo
     let Some(button) = borrowed.as_ref() else {
         return;
     };
-    button.root.setHidden(!shown);
-    button.root.setFrame(NSRect::new(
+    button.view().setHidden(!shown);
+    button.view().setFrame(NSRect::new(
         NSPoint::new(x, y),
         NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
     ));
-    button.hit.setEnabled(enabled);
-    button.root.setAlphaValue(if enabled { 1.0 } else { 0.35 });
+    // A real NSButton draws its own disabled state.
+    button.button().setEnabled(enabled);
     if shown {
-        raise_view(&button.root);
+        raise_view(button.view());
     }
 }
 
 fn raise_history_nav() {
     OLDER.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            raise_view(&button.root);
+            raise_view(button.view());
         }
     });
     NEWER.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            raise_view(&button.root);
+            raise_view(button.view());
         }
     });
 }
@@ -2587,14 +2594,14 @@ fn place_well_action(slot: &RefCell<Option<WellAction>>, x: f64, y: f64, shown: 
     let Some(button) = borrowed.as_ref() else {
         return;
     };
-    button.root.setHidden(!shown);
-    button.root.setFrame(NSRect::new(
+    button.view().setHidden(!shown);
+    button.view().setFrame(NSRect::new(
         NSPoint::new(x, y),
         NSSize::new(WELL_ACTION, WELL_ACTION),
     ));
-    button.hit.setToolTip(Some(&NSString::from_str(tip)));
+    button.button().setToolTip(Some(&NSString::from_str(tip)));
     if shown {
-        raise_view(&button.root);
+        raise_view(button.view());
     }
 }
 
@@ -2602,17 +2609,17 @@ fn raise_content_actions() {
     for slot in [&COPY_BUTTON, &SAVE_BUTTON] {
         slot.with(|slot| {
             if let Some(button) = slot.borrow().as_ref()
-                && !button.root.isHidden()
+                && !button.view().isHidden()
             {
-                raise_view(&button.root);
+                raise_view(button.view());
             }
         });
     }
     SHOW_ALL.with(|slot| {
         if let Some(pill) = slot.borrow().as_ref()
-            && !pill.button.root.isHidden()
+            && !pill.button.view().isHidden()
         {
-            raise_view(&pill.button.root);
+            raise_view(pill.button.view());
         }
     });
     SPINNER.with(|slot| {
@@ -2626,7 +2633,7 @@ fn raise_content_actions() {
 
 /// "Show all" pill, with the preview note in its title.
 struct ShowAllButton {
-    button: WellAction,
+    button: GlassButton,
     title: String,
 }
 
@@ -2642,23 +2649,15 @@ fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
         let mut slot = slot.borrow_mut();
         if !shown {
             if let Some(pill) = slot.as_ref() {
-                pill.button.root.setHidden(true);
+                pill.button.view().setHidden(true);
             }
             return;
         }
-        let inner = WIDTH - PAD * 2.0 - WELL_INSET * 2.0;
-        // About 6.6 pt per character of the 12 pt system font, plus the pill's round ends.
-        let width = (title.chars().count() as f64 * 6.6 + 28.0)
-            .min(inner)
-            .round();
-        if slot.as_ref().is_none_or(|pill| pill.title != title) {
-            if let Some(old) = slot.take() {
-                old.button.root.removeFromSuperview();
-            }
-            let button = widgets::pill_button(mtm, &title, width, SHOW_ALL_H, 12.0, 16.0);
-            wire_button(&button.hit, sel!(showAllClicked:));
+        if slot.is_none() {
+            let button = GlassButton::pill(mtm, &title, ButtonSize::Small);
+            wire_button(button.button(), sel!(showAllClicked:));
             button
-                .hit
+                .button()
                 .setToolTip(Some(&NSString::from_str("Load and show the whole text")));
             let parent = WELL.with(|well| {
                 well.borrow()
@@ -2668,22 +2667,31 @@ fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
                     .and_then(|well| unsafe { well.superview() })
             });
             if let Some(parent) = parent {
-                parent.addSubview(&button.root);
+                parent.addSubview(button.view());
             }
-            *slot = Some(ShowAllButton { button, title });
+            *slot = Some(ShowAllButton {
+                button,
+                title: title.clone(),
+            });
         }
-        let Some(pill) = slot.as_ref() else {
+        let Some(pill) = slot.as_mut() else {
             return;
         };
-        pill.button.root.setFrame(NSRect::new(
+        if pill.title != title {
+            pill.button.set_title(&title);
+            pill.title = title;
+        }
+        let inner = WIDTH - PAD * 2.0 - WELL_INSET * 2.0;
+        let width = pill.button.width_within(inner);
+        pill.button.view().setFrame(NSRect::new(
             NSPoint::new(
                 PAD + (WIDTH - PAD * 2.0 - width) / 2.0,
                 preview_y + WELL_INSET,
             ),
             NSSize::new(width, SHOW_ALL_H),
         ));
-        pill.button.root.setHidden(false);
-        raise_view(&pill.button.root);
+        pill.button.view().setHidden(false);
+        raise_view(pill.button.view());
     });
 }
 
@@ -2705,26 +2713,27 @@ fn set_text_gutter(right: f64, bottom: f64) {
     });
 }
 
-type WellAction = widgets::OverlayButton;
+type WellAction = GlassButton;
 
-fn well_action(mtm: MainThreadMarker, symbol: &str, fallback: &str, action: Sel) -> WellAction {
-    let button = widgets::symbol_button(mtm, symbol, fallback, WELL_ACTION, 15.0, 13.0);
-    wire_button(&button.hit, action);
-    button.root.setHidden(true);
+fn well_action(
+    mtm: MainThreadMarker,
+    symbol: &str,
+    label: &str,
+    fallback: &str,
+    action: Sel,
+) -> WellAction {
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, 15.0);
+    wire_button(button.button(), action);
+    button.view().setHidden(true);
     button
 }
 
-fn nav_button(mtm: MainThreadMarker, title: &str, action: Sel) -> NavButton {
-    let button = widgets::pill_button(
-        mtm,
-        title,
-        commands::NAV_BUTTON,
-        commands::CHIP_PILL_H,
-        15.0,
-        18.0,
-    );
-    wire_button(&button.hit, action);
-    button.root.setHidden(true);
+/// `<` or `>` pill; `label` ("Older", "Newer") is what VoiceOver reads.
+fn nav_button(mtm: MainThreadMarker, title: &str, label: &str, action: Sel) -> NavButton {
+    let button = GlassButton::pill(mtm, title, ButtonSize::Regular);
+    button.set_accessibility_label(label);
+    wire_button(button.button(), action);
+    button.view().setHidden(true);
     button
 }
 

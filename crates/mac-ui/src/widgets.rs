@@ -3,16 +3,15 @@
 //! The helpers only configure the view. Callers set frames, visibility, targets and delegates.
 
 use objc2::rc::Retained;
-use objc2::runtime::NSObjectProtocol;
-use objc2::{MainThreadMarker, MainThreadOnly, sel};
+use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSBorderType, NSBox, NSBoxType, NSButton, NSCellImagePosition, NSColor, NSFocusRingType,
-    NSFont, NSImageAlignment, NSImageScaling, NSImageView, NSLineBreakMode, NSScrollView,
-    NSSearchField, NSTextAlignment, NSTextField, NSTextView, NSTitlePosition, NSView,
+    NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFocusRingType, NSFont, NSImageAlignment,
+    NSImageScaling, NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField,
+    NSTextView, NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
-use crate::icon::system_symbol;
+use crate::button::{ButtonSize, GlassButton};
 
 /// Read-only, single-line label in the system font, truncating at the tail.
 pub fn label(mtm: MainThreadMarker, size: f64, color: &NSColor) -> Retained<NSTextField> {
@@ -101,17 +100,33 @@ pub fn raise_view(view: &NSView) {
     }
 }
 
-/// A drawn button: `root` holds the background (and label), `hit` is the clickable button on top.
+/// A button as two views: `root` to position and show, `hit` to wire target and action.
 ///
-/// Position and show `root`; wire target and action on `hit`.
+/// Legacy shape of [`symbol_button`] and [`pill_button`]. Both now return one
+/// [`GlassButton`](crate::button::GlassButton) `NSButton` as `root` and `hit` alike, so existing
+/// callers keep working.
+#[deprecated(note = "use `mac_ui::button::GlassButton`, a single NSButton with the system bezel")]
+#[derive(Debug, Clone)]
 pub struct OverlayButton {
     pub root: Retained<NSView>,
     pub hit: Retained<NSButton>,
 }
 
-/// Round `diameter`-sized button showing SF Symbol `symbol` (`symbol_size` points, template,
-/// `labelColor` tint) on a `controlBackgroundColor` disc at 92% opacity. Without SF Symbols
-/// (before macOS 11) it shows `fallback` text at `fallback_font_size` instead.
+#[allow(deprecated)]
+impl OverlayButton {
+    fn from_glass(button: &GlassButton, frame: NSRect) -> Self {
+        let hit = button.button().retain();
+        hit.setFrame(frame);
+        let root = button.view().retain();
+        Self { root, hit }
+    }
+}
+
+/// `diameter`-sized circle [`GlassButton`] showing SF Symbol `symbol` at `symbol_size` points.
+/// Without SF Symbols (before macOS 11) it shows `fallback` text at `fallback_font_size`
+/// instead. VoiceOver reads `fallback` as the label.
+#[deprecated(note = "use `GlassButton::symbol`, which takes an accessibility label")]
+#[allow(deprecated)]
 pub fn symbol_button(
     mtm: MainThreadMarker,
     symbol: &str,
@@ -120,36 +135,20 @@ pub fn symbol_button(
     symbol_size: f64,
     fallback_font_size: f64,
 ) -> OverlayButton {
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(diameter, diameter));
-    let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    let fill = filled_box(mtm, diameter / 2.0, &NSColor::controlBackgroundColor());
-    fill.setFrame(frame);
-    fill.setAlphaValue(0.92);
-    let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
-    hit.setBordered(false);
-    hit.setFocusRingType(NSFocusRingType::None);
-    hit.setImagePosition(NSCellImagePosition::ImageOnly);
-    hit.setImageScaling(NSImageScaling::ScaleProportionallyDown);
-    if let Some(image) = system_symbol(symbol, fallback) {
-        image.setTemplate(true);
-        image.setSize(NSSize::new(symbol_size, symbol_size));
-        hit.setImage(Some(&image));
-        hit.setTitle(&NSString::from_str(""));
-        if hit.respondsToSelector(sel!(setContentTintColor:)) {
-            hit.setContentTintColor(Some(&NSColor::labelColor()));
-        }
-    } else {
-        hit.setTitle(&NSString::from_str(fallback));
-        hit.setFont(Some(&NSFont::systemFontOfSize(fallback_font_size)));
+    let button = GlassButton::symbol(mtm, symbol, fallback, fallback, symbol_size);
+    if button.button().image().is_none() {
+        button
+            .button()
+            .setFont(Some(&NSFont::systemFontOfSize(fallback_font_size)));
     }
-    root.addSubview(&fill);
-    root.addSubview(&hit);
-    OverlayButton { root, hit }
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(diameter, diameter));
+    OverlayButton::from_glass(&button, frame)
 }
 
-/// `width`×`height` pill (`unemphasizedSelectedContentBackgroundColor`) with a centered
-/// `title` label (`font_size`, `labelColor`, `label_height` tall, vertically centered) and a
-/// transparent button over it.
+/// `width`×`height` capsule [`GlassButton`] titled `title` in the system font at `font_size`.
+/// `label_height` is ignored: the button centers its own title.
+#[deprecated(note = "use `GlassButton::pill`, which sizes itself with sizeToFit")]
+#[allow(deprecated)]
 pub fn pill_button(
     mtm: MainThreadMarker,
     title: &str,
@@ -158,31 +157,13 @@ pub fn pill_button(
     font_size: f64,
     label_height: f64,
 ) -> OverlayButton {
+    let _ = label_height;
+    let button = GlassButton::pill(mtm, title, ButtonSize::Regular);
+    button
+        .button()
+        .setFont(Some(&NSFont::systemFontOfSize(font_size)));
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, height));
-    let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    let fill = filled_box(
-        mtm,
-        height / 2.0,
-        &NSColor::unemphasizedSelectedContentBackgroundColor(),
-    );
-    fill.setFrame(frame);
-    let text = label(mtm, font_size, &NSColor::labelColor());
-    text.setAlignment(NSTextAlignment::Center);
-    text.setLineBreakMode(NSLineBreakMode::ByClipping);
-    text.setFrame(NSRect::new(
-        NSPoint::new(0.0, (height - label_height) / 2.0),
-        NSSize::new(width, label_height),
-    ));
-    text.setStringValue(&NSString::from_str(title));
-    let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
-    hit.setBordered(false);
-    hit.setTransparent(true);
-    hit.setTitle(&NSString::from_str(""));
-    hit.setFocusRingType(NSFocusRingType::None);
-    root.addSubview(&fill);
-    root.addSubview(&text);
-    root.addSubview(&hit);
-    OverlayButton { root, hit }
+    OverlayButton::from_glass(&button, frame)
 }
 
 /// Read-only, non-selectable rich text view without background, with `inset` around the text.
