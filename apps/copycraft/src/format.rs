@@ -90,24 +90,6 @@ impl FormatKind {
     pub fn suggested_filename(self) -> String {
         format!("clipboard.{}", self.suggested_extension())
     }
-
-    pub fn accent_rgba(self) -> Option<[u8; 4]> {
-        match self {
-            Self::Json => Some([245, 197, 66, 255]),
-            Self::Yaml => Some([203, 123, 239, 255]),
-            Self::Rust => Some([222, 165, 132, 255]),
-            Self::Java => Some([231, 111, 0, 255]),
-            Self::Url => Some([90, 200, 250, 255]),
-            Self::Xml => Some([52, 199, 89, 255]),
-            Self::Markdown => Some([126, 166, 224, 255]),
-            Self::Csv => Some([100, 210, 255, 255]),
-            Self::Tsv => Some([64, 186, 232, 255]),
-            Self::Dataframe => Some([100, 210, 255, 255]),
-            Self::Image => Some([255, 126, 182, 255]),
-            Self::Text => Some([94, 196, 166, 255]),
-            Self::Plain => Some([186, 190, 204, 255]),
-        }
-    }
 }
 
 /// Format of `text`. Remembered for large texts (see [`crate::memo`]): the card asks many times
@@ -1183,22 +1165,6 @@ mod tests {
         assert_eq!(
             FormatKind::Dataframe.suggested_filename(),
             "clipboard.parquet"
-        );
-    }
-
-    #[test]
-    fn accent_rgba_for_typed_kinds() {
-        assert_eq!(FormatKind::Rust.accent_rgba(), Some([222, 165, 132, 255]));
-        assert_eq!(FormatKind::Image.accent_rgba(), Some([255, 126, 182, 255]));
-        assert_eq!(FormatKind::Text.accent_rgba(), Some([94, 196, 166, 255]));
-        assert_eq!(FormatKind::Plain.accent_rgba(), Some([186, 190, 204, 255]));
-        assert_ne!(
-            FormatKind::Text.accent_rgba(),
-            FormatKind::Plain.accent_rgba()
-        );
-        assert_ne!(
-            FormatKind::Text.accent_rgba(),
-            FormatKind::Rust.accent_rgba()
         );
     }
 

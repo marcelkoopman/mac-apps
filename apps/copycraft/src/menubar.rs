@@ -34,7 +34,6 @@ const PREWARM_LEN: usize = 64 * 1024;
 
 struct App {
     tray: TrayIcon,
-    shown_kind: Option<format::FormatKind>,
     history: ClipboardHistory,
     /// Index into history while the arrows are browsing. 0 is the newest.
     history_cursor: usize,
@@ -766,7 +765,6 @@ impl App {
         }
         self.signature = ClipSig::default();
         let view = ClipboardView::from_os();
-        self.sync_icon(detected_kind(&view));
         self.sync_tooltip(&view);
         self.refresh_status_menu();
         if launcher::is_open() {
@@ -948,7 +946,6 @@ impl App {
         if let Some(text) = view.text() {
             prewarm(text);
         }
-        self.sync_icon(detected_kind(&view));
         self.sync_tooltip(&view);
         self.refresh_status_menu();
         true
@@ -964,25 +961,14 @@ impl App {
         self.tray.set_menu(Some(Box::new(status_menu(&entries))));
     }
 
-    fn sync_icon(&mut self, kind: Option<format::FormatKind>) {
-        if kind == self.shown_kind {
-            return;
-        }
-        self.shown_kind = kind;
-        match icon::menu_icon_for(icon::accent_for_kind(kind)) {
-            Ok((icon, template)) => {
-                if let Err(e) = mac_ui::tray::set_icon(&self.tray, icon, template) {
-                    eprintln!("menu bar icon failed: {e}");
-                }
-            }
-            Err(e) => eprintln!("menu bar icon failed: {e}"),
-        }
-    }
-
+    /// The icon is always the same template, so the tooltip and the VoiceOver label are where
+    /// the detected kind shows.
     fn sync_tooltip(&self, view: &ClipboardView) {
-        if let Err(e) = self.tray.set_tooltip(Some(icon_tip(view))) {
+        let tip = icon_tip(view);
+        if let Err(e) = self.tray.set_tooltip(Some(&tip)) {
             eprintln!("menu bar tooltip failed: {e}");
         }
+        mac_ui::tray::set_accessibility_label(&self.tray, &tray_label(&tip));
     }
 }
 
@@ -1004,11 +990,12 @@ fn icon_tip(view: &ClipboardView) -> String {
     }
 }
 
-fn detected_kind(view: &ClipboardView) -> Option<format::FormatKind> {
-    match view {
-        ClipboardView::Image => Some(format::FormatKind::Image),
-        ClipboardView::Text(text) => Some(format::detect(text.as_str())),
-        ClipboardView::Empty | ClipboardView::NoText => None,
+/// VoiceOver label of the menu bar button: the app name, then the kind from the tooltip.
+fn tray_label(tip: &str) -> String {
+    if tip == "Copycraft" {
+        tip.to_string()
+    } else {
+        format!("Copycraft, {tip}")
     }
 }
 
@@ -1119,22 +1106,21 @@ fn register_format_hotkey() -> Result<(GlobalHotKeyManager, u32), Box<dyn std::e
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     appearance::apply(appearance::load());
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
+    // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     let icon = icon::menu_icon()?;
-    // Nothing detected yet: the template glyph (see `icon::menu_icon_for`).
     let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icon, true)
         .with_menu(Box::new(status_menu(&[])))
         .with_menu_on_left_click(false)
         .with_tooltip("Copycraft")
         .build()?;
-    // Icon only: name the button for VoiceOver. The tooltip (the clipboard kind) is its help.
-    mac_ui::tray::set_accessibility_label(&tray, "Copycraft");
+    // Icon only: name the button for VoiceOver. `sync_tooltip` adds the kind.
+    mac_ui::tray::set_accessibility_label(&tray, &tray_label("Copycraft"));
 
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     launcher::install_proxy(event_loop.create_proxy());
 
     let mut app = App {
         tray,
-        shown_kind: None,
         history: ClipboardHistory::default(),
         history_cursor: 0,
         current_image: None,
@@ -1160,11 +1146,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{detected_kind, status_labels, status_rows, version_label};
+    use super::{icon_tip, status_labels, status_rows, tray_label, version_label};
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use crate::hotkey;
-    use crate::icon;
     use zeroize::Zeroizing;
 
     #[test]
@@ -1176,48 +1161,27 @@ mod tests {
     }
 
     #[test]
-    fn icon_accent_follows_detected_content() {
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Empty)),
-            None
-        );
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Text(Zeroizing::new(
-                "hello".into(),
-            )))),
-            FormatKind::Plain.accent_rgba()
-        );
-        let agents = "Notes from the review.\nThe document continues on this line.\n";
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Text(Zeroizing::new(
-                agents.into(),
-            )))),
-            FormatKind::Text.accent_rgba()
-        );
-        assert_ne!(
-            FormatKind::Text.accent_rgba(),
-            FormatKind::Plain.accent_rgba()
-        );
-        assert_ne!(
-            FormatKind::Text.accent_rgba(),
-            FormatKind::Rust.accent_rgba()
-        );
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Text(Zeroizing::new(
-                r#"{"a":1}"#.into(),
-            )))),
-            FormatKind::Json.accent_rgba()
-        );
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Text(Zeroizing::new(
-                "fn main() {}".into(),
-            )))),
-            FormatKind::Rust.accent_rgba()
-        );
-        assert_eq!(
-            icon::accent_for_kind(detected_kind(&ClipboardView::Image)),
-            FormatKind::Image.accent_rgba()
-        );
+    fn tooltip_and_voiceover_label_name_the_kind() {
+        let text = |s: &str| ClipboardView::Text(Zeroizing::new(s.into()));
+        assert_eq!(icon_tip(&ClipboardView::Empty), "Copycraft");
+        assert_eq!(icon_tip(&ClipboardView::NoText), "Copycraft");
+        assert_eq!(icon_tip(&ClipboardView::Image), "Image");
+        let kinds = [
+            ("hello", FormatKind::Plain),
+            (
+                "Notes from the review.\nThe document continues on this line.\n",
+                FormatKind::Text,
+            ),
+            (r#"{"a":1}"#, FormatKind::Json),
+            ("fn main() {}", FormatKind::Rust),
+        ];
+        for (src, kind) in kinds {
+            let tip = icon_tip(&text(src));
+            assert_eq!(tip, kind.source_heading(), "{src}");
+            assert_eq!(tray_label(&tip), format!("Copycraft, {tip}"));
+        }
+        assert_eq!(tray_label("Copycraft"), "Copycraft");
+        assert_eq!(tray_label("Image"), "Copycraft, Image");
     }
 
     #[test]
