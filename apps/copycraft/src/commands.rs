@@ -710,6 +710,19 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
     }
 }
 
+/// File name and extension [`text_save_file`] gives `view`, when they follow from `source`
+/// alone (Original, Format, Dataframe). The save panel can then open before the bytes are
+/// built, and the conversion runs after a path is chosen. `None` for views whose name depends
+/// on the converted text.
+pub fn deferred_save_name(source: &str, view: CardView) -> Option<(String, &'static str)> {
+    let kind = match view {
+        CardView::Original | CardView::Format => format::detect(source),
+        CardView::Dataframe => FormatKind::Dataframe,
+        _ => return None,
+    };
+    Some((kind.suggested_filename(), kind.suggested_extension()))
+}
+
 pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     if view == CardView::Dataframe {
         let bytes = dataframe::try_parquet_bytes(source)?;
@@ -1310,9 +1323,9 @@ mod tests {
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
-        history_label, history_nav, keeps_card_open, layout_chips, masks_content, matching,
-        overflow, payload_excerpt, presented_view, save_tip, search_pool, step_chip, step_history,
-        text_save_file, transformed_text, well_mask, work_card,
+        deferred_save_name, history_label, history_nav, keeps_card_open, layout_chips,
+        masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
+        step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
     };
     use crate::appearance::Theme;
 
@@ -2539,5 +2552,29 @@ Kleinste opdracht die de change dekt.
         for frame in frames.iter().filter(|frame| frame.row == 0) {
             assert!(frame.x + frame.width <= nav_left - super::CHIP_GAP + 0.01);
         }
+    }
+
+    #[test]
+    fn deferred_save_name_matches_the_built_file() {
+        let sources = [
+            "{\"name\":\"copycraft\",\"n\":3}",
+            "name: copycraft\nn: 3\n",
+            "<a><b>x</b></a>",
+            "# Title\n\n- item\n",
+            "name,age\nalice,30\nbob,40",
+            "plain words",
+        ];
+        for src in sources {
+            for view in [CardView::Original, CardView::Format, CardView::Dataframe] {
+                let Some(file) = text_save_file(src, view) else {
+                    continue;
+                };
+                let (filename, extension) = deferred_save_name(src, view).unwrap();
+                assert_eq!(filename, file.filename, "{view:?} {src:?}");
+                assert_eq!(extension, file.extension, "{view:?} {src:?}");
+            }
+        }
+        assert!(deferred_save_name("{}", CardView::Convert).is_none());
+        assert!(deferred_save_name("{}", CardView::Schema).is_none());
     }
 }

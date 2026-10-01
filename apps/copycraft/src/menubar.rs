@@ -26,6 +26,8 @@ use crate::icon;
 use crate::launcher::{self, UserEvent};
 
 const REFRESH: Duration = Duration::from_millis(400);
+/// A save that finishes sooner shows no spinner, so small files do not flicker.
+const SPINNER_DELAY: Duration = Duration::from_millis(180);
 
 struct App {
     tray: TrayIcon,
@@ -47,8 +49,18 @@ struct App {
     /// Pasteboard change a scan is already running for.
     image_scan_for: Option<isize>,
     signature: ClipSig,
+    /// The save running on its thread. One at a time; Save is ignored meanwhile.
+    saving: Option<SaveRun>,
     _hotkeys: GlobalHotKeyManager,
     format_hotkey_id: u32,
+}
+
+/// A save that is writing in the background.
+#[derive(Debug, Clone, Copy)]
+struct SaveRun {
+    started: Instant,
+    /// The card spinner is showing (only after [`SPINNER_DELAY`]).
+    spinner: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -85,6 +97,7 @@ impl ApplicationHandler<UserEvent> for App {
         match event {
             UserEvent::Run(id) => self.run_command(event_loop, id),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
+            UserEvent::SaveFinished(result) => self.finish_save(result),
         }
     }
 
@@ -131,7 +144,8 @@ impl ApplicationHandler<UserEvent> for App {
         if changed && launcher::is_open() {
             launcher::sync(self.current_launch_data());
         }
-        event_loop.set_control_flow(ControlFlow::WaitUntil(Instant::now() + REFRESH));
+        let wake = self.spin_slow_save(Instant::now());
+        event_loop.set_control_flow(ControlFlow::WaitUntil(wake));
     }
 }
 
@@ -411,86 +425,123 @@ impl App {
     fn save_current(&mut self) {
         #[cfg(target_os = "macos")]
         {
-            launcher::set_suppress_resign(true);
-            let saved = if self.opened.is_some() {
-                self.save_opened_file()
-            } else {
-                self.save_clipboard()
-            };
-            if let Err(e) = saved {
-                eprintln!("save failed: {e:#}");
+            if self.saving.is_some() {
+                return;
             }
+            launcher::set_suppress_resign(true);
+            let started = self.start_save();
             launcher::set_suppress_resign(false);
             launcher::order_front();
+            if let Err(e) = started {
+                log_save_failure(&format!("{e:#}"));
+            }
         }
     }
 
-    /// `Ok` also covers a cancelled save panel and a card with nothing to save.
+    /// Ask for a path on the main thread, then build and write the file on a save thread,
+    /// which reports back with [`UserEvent::SaveFinished`]. `Ok` also covers a cancelled save
+    /// panel and a card with nothing to save.
     #[cfg(target_os = "macos")]
-    fn save_opened_file(&self) -> anyhow::Result<()> {
-        let Some(opened) = &self.opened else {
+    fn start_save(&mut self) -> anyhow::Result<()> {
+        let job = if self.opened.is_some() {
+            self.opened_save_job()
+        } else {
+            self.clipboard_save_job()
+        };
+        let Some(job) = job else {
             return Ok(());
         };
-        let Some(source) = opened.text.as_deref() else {
+        let Some(path) = crate::macos_save::choose_path(&job.filename, job.extension)? else {
             return Ok(());
         };
-        let Some(mut file) =
-            commands::text_save_file(source, commands::presented_view(source, self.card_view))
-        else {
-            return Ok(());
-        };
-        file.filename = crate::open_file::save_name(&opened.name, file.extension);
-        crate::macos_save::write_with_panel(&file.filename, file.extension, &file.bytes)?;
+        let content = job.content;
+        std::thread::Builder::new()
+            .name("copycraft-save".into())
+            .spawn(move || {
+                let result = content.write_to(&path).map_err(|e| format!("{e:#}"));
+                launcher::emit(UserEvent::SaveFinished(result));
+            })
+            .context("cannot start the save thread")?;
+        self.saving = Some(SaveRun {
+            started: Instant::now(),
+            spinner: false,
+        });
         Ok(())
     }
 
-    /// `Ok` also covers a cancelled save panel and a card with nothing to save.
+    /// Show the card spinner once a save runs longer than [`SPINNER_DELAY`]. Returns when the
+    /// event loop should wake up next.
+    fn spin_slow_save(&mut self, now: Instant) -> Instant {
+        let wake = now + REFRESH;
+        let Some(run) = self.saving.as_mut() else {
+            return wake;
+        };
+        if run.spinner {
+            return wake;
+        }
+        let due = run.started + SPINNER_DELAY;
+        if now >= due {
+            run.spinner = true;
+            launcher::set_busy(true);
+            wake
+        } else {
+            wake.min(due)
+        }
+    }
+
+    fn finish_save(&mut self, result: Result<(), String>) {
+        if self.saving.take().is_some_and(|run| run.spinner) {
+            launcher::set_busy(false);
+        }
+        if let Err(message) = result {
+            log_save_failure(&message);
+        }
+    }
+
+    /// Save job for the chosen file's text, named after the file.
     #[cfg(target_os = "macos")]
-    fn save_clipboard(&self) -> anyhow::Result<()> {
+    fn opened_save_job(&self) -> Option<crate::macos_save::SaveJob> {
+        let opened = self.opened.as_ref()?;
+        let source = opened.text.as_deref()?;
+        let view = commands::presented_view(source, self.card_view);
+        let mut job = crate::macos_save::SaveJob::text(source, view)?;
+        job.filename = crate::open_file::save_name(&opened.name, job.extension);
+        Some(job)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn clipboard_save_job(&self) -> Option<crate::macos_save::SaveJob> {
         let view = ClipboardView::from_os();
         if view.is_image() {
-            return self.save_image_view();
+            return Some(self.image_save_job());
         }
-        let Some(source) = view.text() else {
-            return Ok(());
-        };
-        let Some(file) =
-            commands::text_save_file(source, commands::presented_view(source, self.card_view))
-        else {
-            return Ok(());
-        };
-        crate::macos_save::write_with_panel(&file.filename, file.extension, &file.bytes)?;
-        Ok(())
+        let source = view.text()?;
+        crate::macos_save::SaveJob::text(source, commands::presented_view(source, self.card_view))
     }
 
+    /// Save job for the image card: the shown scan text, else the pasteboard image as PNG or
+    /// JPEG, else the decoded preview encoded as PNG (on the save thread).
     #[cfg(target_os = "macos")]
-    fn save_image_view(&self) -> anyhow::Result<()> {
-        let (filename, extension, bytes) = self.image_view_payload()?;
-        crate::macos_save::write_with_panel(filename, extension, &bytes)?;
-        Ok(())
-    }
-
-    /// File name, extension and bytes for saving the image card: the shown scan text, else the
-    /// pasteboard image as PNG or JPEG, else the decoded preview re-encoded as PNG.
-    #[cfg(target_os = "macos")]
-    fn image_view_payload(
-        &self,
-    ) -> anyhow::Result<(&'static str, &'static str, Zeroizing<Vec<u8>>)> {
+    fn image_save_job(&self) -> crate::macos_save::SaveJob {
+        use crate::macos_save::{SaveContent, SaveJob};
+        let job = |filename: &str, extension, content| SaveJob {
+            filename: filename.to_string(),
+            extension,
+            content,
+        };
         if let Some(text) = commands::image_view_text(self.image_scan.as_ref(), self.card_view) {
-            return Ok(("clipboard.txt", "txt", Zeroizing::new(text.into_bytes())));
+            let bytes = Zeroizing::new(text.into_bytes());
+            return job("clipboard.txt", "txt", SaveContent::Bytes(bytes));
         }
         if let Some(bytes) = crate::macos_pasteboard::current_image_bytes().map(Zeroizing::new) {
             if bytes.starts_with(b"\x89PNG") {
-                return Ok(("clipboard.png", "png", bytes));
+                return job("clipboard.png", "png", SaveContent::Bytes(bytes));
             }
             if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                return Ok(("clipboard.jpg", "jpg", bytes));
+                return job("clipboard.jpg", "jpg", SaveContent::Bytes(bytes));
             }
         }
-        let decoded =
-            crate::macos_pasteboard::decode_preview().context("no image on the clipboard")?;
-        let png = decoded.image.png_bytes().map_err(anyhow::Error::msg)?;
-        Ok(("clipboard.png", "png", Zeroizing::new(png)))
+        job("clipboard.png", "png", SaveContent::ClipboardPng)
     }
 
     fn visit_current(&self) {
@@ -850,6 +901,11 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     }
 }
 
+/// The one place a failed save is reported, whether it failed before or on the save thread.
+fn log_save_failure(message: &str) {
+    eprintln!("save failed: {message}");
+}
+
 fn history_title(history: &ClipboardHistory, index: usize) -> String {
     match (history.mark(index), history.byte_len(index)) {
         (Some(mark), Some(len)) => commands::history_label(mark, len),
@@ -946,6 +1002,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_scan_change: None,
         image_scan_for: None,
         signature: ClipSig::default(),
+        saving: None,
         _hotkeys: hotkeys,
         format_hotkey_id,
     };

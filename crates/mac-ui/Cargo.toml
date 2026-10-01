@@ -62,6 +62,8 @@ file_panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSURL",
 ]
+# `mac_ui::progress`: indeterminate spinning NSProgressIndicator (busy wheel).
+progress = ["objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
 # `display notification` without one).
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]

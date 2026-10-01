@@ -15,6 +15,7 @@
 //! - `notify`: `notify`, user notifications.
 //! - `file_panel`: `file_panel`, modal `NSOpenPanel` (choose a file) and `NSSavePanel`
 //!   (choose a save path).
+//! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! The AppKit modules exist on macOS only.
@@ -46,6 +47,8 @@ pub mod layer;
 pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]
 pub mod panel;
+#[cfg(all(target_os = "macos", feature = "progress"))]
+pub mod progress;
 #[cfg(feature = "theme")]
 pub mod theme;
 pub mod tray;

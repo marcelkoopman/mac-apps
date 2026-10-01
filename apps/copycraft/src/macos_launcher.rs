@@ -18,6 +18,7 @@ use mac_ui::objc2_foundation::{
     NSSize, NSString,
 };
 use mac_ui::panel;
+use mac_ui::progress::{self, SpinnerSize};
 use mac_ui::widgets::{self, filled_box, raise_view};
 use zeroize::Zeroize;
 
@@ -102,6 +103,8 @@ thread_local! {
     static TEXT_GUTTER: Cell<f64> = const { Cell::new(-1.0) };
     static COPY_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     static SAVE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+    /// Busy wheel over the well while a save runs. Created on first use.
+    static SPINNER: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
     static REVEAL: RefCell<Option<RevealCover>> = const { RefCell::new(None) };
     static REVEALED: Cell<bool> = const { Cell::new(false) };
     /// In-item search is visible only while the well is revealed.
@@ -327,6 +330,46 @@ pub fn is_open() -> bool {
 
 pub fn set_suppress_resign(suppress: bool) {
     SUPPRESS_RESIGN.set(suppress);
+}
+
+/// Spin a busy wheel centered over the well (on top of the preview), or take it away.
+pub fn set_busy(busy: bool) {
+    if !busy {
+        SPINNER.with(|slot| {
+            if let Some(spinner) = slot.borrow().as_ref() {
+                spinner.remove();
+            }
+        });
+        return;
+    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(well) = WELL.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    // SAFETY: the superview is used right away, while the view hierarchy keeps it alive.
+    let Some(parent) = (unsafe { well.superview() }) else {
+        return;
+    };
+    SPINNER.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let spinner = slot.get_or_insert_with(|| progress::Spinner::new(mtm, SpinnerSize::Regular));
+        spinner.add_centered(&parent, well.frame());
+        spinner.start();
+    });
+}
+
+/// Keep a running spinner centered over the well and above the views raised after it.
+fn place_spinner(well_frame: NSRect) {
+    SPINNER.with(|slot| {
+        if let Some(spinner) = slot.borrow().as_ref()
+            && spinner.is_added()
+        {
+            spinner.center_in(well_frame);
+            raise_view(spinner.view());
+        }
+    });
 }
 
 pub fn order_front() {
@@ -757,14 +800,16 @@ fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
 }
 
 fn place_well(y: f64) {
+    let frame = NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(WIDTH - PAD * 2.0, PREVIEW_H),
+    );
     WELL.with(|slot| {
         if let Some(well) = slot.borrow().as_ref() {
-            well.setFrame(NSRect::new(
-                NSPoint::new(PAD, y),
-                NSSize::new(WIDTH - PAD * 2.0, PREVIEW_H),
-            ));
+            well.setFrame(frame);
         }
     });
+    place_spinner(frame);
 }
 
 struct RevealCover {
@@ -2524,6 +2569,13 @@ fn raise_content_actions() {
             }
         });
     }
+    SPINNER.with(|slot| {
+        if let Some(spinner) = slot.borrow().as_ref()
+            && spinner.is_added()
+        {
+            raise_view(spinner.view());
+        }
+    });
 }
 
 fn set_text_gutter(right: f64) {

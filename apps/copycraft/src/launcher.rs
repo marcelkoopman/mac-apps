@@ -11,6 +11,8 @@ pub enum UserEvent {
         change: isize,
         scan: Option<crate::commands::ImageScan>,
     },
+    /// The save thread is done: `Err` holds the message to log.
+    SaveFinished(Result<(), String>),
 }
 
 static PROXY: Mutex<Option<EventLoopProxy<UserEvent>>> = Mutex::new(None);
@@ -58,6 +60,14 @@ pub fn set_suppress_resign(suppress: bool) {
     crate::macos_launcher::set_suppress_resign(suppress);
     #[cfg(not(target_os = "macos"))]
     let _ = suppress;
+}
+
+/// Show (or hide) the busy spinner over the card while a save runs.
+pub fn set_busy(busy: bool) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::set_busy(busy);
+    #[cfg(not(target_os = "macos"))]
+    let _ = busy;
 }
 
 pub fn order_front() {
