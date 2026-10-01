@@ -134,15 +134,59 @@ jobs:
           ls -la "$APP/Contents/"
           file "$APP/Contents/MacOS/ticker"
 
+      # Developer ID signing and notarization are prepared but stay off until the secrets exist
+      # (README: "Developer ID-signing en notarisatie"). Without the certificate secrets the app
+      # is ad-hoc signed exactly as before. Only presence is checked here, no secret values.
+      - name: Detect signing secrets
+        env:
+          HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.MACOS_SIGN_IDENTITY != '' }}
+          HAS_API_KEY: ${{ secrets.APPLE_API_KEY_P8 != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER_ID != '' }}
+          HAS_APPLE_ID: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+        run: |
+          SIGNING=ad-hoc
+          NOTARIZE=false
+          HAS_NOTARY=false
+          if [ "$HAS_API_KEY" = true ] || [ "$HAS_APPLE_ID" = true ]; then HAS_NOTARY=true; fi
+          if [ "$HAS_CERT" = true ]; then
+            SIGNING=developer-id
+            if [ "$HAS_NOTARY" = true ]; then
+              NOTARIZE=true
+            else
+              echo "::warning::Developer ID signing without notarytool credentials: the release is not notarized"
+            fi
+          elif [ "$HAS_NOTARY" = true ]; then
+            echo "::warning::Notarization credentials without a Developer ID certificate: ad-hoc signing, no notarization"
+          fi
+          echo "Signing: $SIGNING, notarize: $NOTARIZE"
+          echo "SIGNING=$SIGNING" >> "$GITHUB_ENV"
+          echo "NOTARIZE=$NOTARIZE" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID certificate (temporary keychain)
+        if: env.SIGNING == 'developer-id'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: scripts/import_signing_cert.sh
+
       # Must run after "Copy assets into app bundle" (changing the bundle after
       # signing breaks the seal) and before create-dmg. cargo-bundle cannot embed
       # entitlements, so the app is (re)signed here. Same flags as scripts/sign_app.sh.
       # No --deep: one executable, no nested frameworks/helpers.
       - name: Ad-hoc sign the app (App Sandbox entitlements, hardened runtime)
+        if: env.SIGNING == 'ad-hoc'
         run: |
           plutil -lint "$ENTITLEMENTS"
           codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS" "$APP"
           codesign --verify --strict --verbose=2 "$APP"
+
+      # Same entitlements and hardened runtime, plus a secure timestamp (KEYCHAIN comes from
+      # the import step).
+      - name: Developer ID sign the app (App Sandbox entitlements, hardened runtime, timestamp)
+        if: env.SIGNING == 'developer-id'
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: scripts/sign_app.sh "$PKG" "$APP"
 
       - name: Verify signature and entitlements
         run: |
@@ -158,6 +202,18 @@ jobs:
             echo "::error::com.apple.security.app-sandbox is not true in the signed app"
             exit 1
           fi
+
+      # Before the DMG is built, so the DMG holds the stapled app (also opens offline).
+      - name: Notarize and staple the app
+        if: env.NOTARIZE == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: scripts/notarize.sh "$APP"
 
       - name: Install create-dmg
         run: brew install create-dmg
@@ -183,6 +239,24 @@ jobs:
           mv "$DMG_DIR/$PKG-temp.dmg" "$DMG_DIR/$PKG-$VERSION.dmg"
           ls -lah "$DMG_DIR"
 
+      - name: Sign, notarize and staple the DMG
+        if: env.SIGNING == 'developer-id'
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          DMG="$DMG_DIR/$PKG-$VERSION.dmg"
+          codesign --force --sign "$MACOS_SIGN_IDENTITY" --keychain "$KEYCHAIN" --timestamp "$DMG"
+          codesign --verify --strict --verbose=2 "$DMG"
+          if [ "$NOTARIZE" = true ]; then
+            scripts/notarize.sh "$DMG"
+          fi
+
       - name: Verify DMG
         run: |
           file "$DMG_DIR/$PKG-$VERSION.dmg"
@@ -199,4 +273,8 @@ jobs:
 
       - name: Release summary
         if: success()
-        run: echo "✅ $APP_NAME $VERSION DMG release created!"
+        run: echo "✅ $APP_NAME $VERSION DMG release created! Signing $SIGNING, notarized $NOTARIZE."
+
+      - name: Remove temporary keychain
+        if: always() && env.KEYCHAIN != ''
+        run: security delete-keychain "$KEYCHAIN" || true

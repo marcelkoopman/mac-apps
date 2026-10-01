@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Ad-hoc sign a cargo-bundle .app with its App Sandbox entitlements, the same way
-# the release workflows do (release-copycraft.yml / release-ticker.yml).
+# Sign a cargo-bundle .app with its App Sandbox entitlements and the hardened runtime, the same
+# way the release workflows do (release-copycraft.yml / release-ticker.yml).
+#
+# Default: ad-hoc (`codesign --sign -`), exactly as before.
+# With MACOS_SIGN_IDENTITY set (e.g. "Developer ID Application: Name (TEAMID)"): Developer ID
+# signing with a secure timestamp (`--timestamp`, needed for notarization). The identity must be
+# in a keychain: the login keychain locally, or the temporary keychain from
+# scripts/import_signing_cert.sh in CI (KEYCHAIN=<path> limits the lookup to that keychain).
+# Notarize afterwards with scripts/notarize.sh.
 #
 # Usage: scripts/sign_app.sh <copycraft|ticker> [path/to/App.app]
 #   Without a path (or APP_PATH) the newest of these is used:
@@ -52,14 +59,32 @@ fi
 
 plutil -lint "$ENTITLEMENTS" >/dev/null
 
-echo -e "${YELLOW}🔏 Signing $APP${NC}"
+IDENTITY="${MACOS_SIGN_IDENTITY:-}"
 # No --deep: the bundle holds one executable and no nested frameworks/helpers,
 # and --deep would push these entitlements onto nested code as well.
-codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS" "$APP"
+if [ -z "$IDENTITY" ]; then
+  echo -e "${YELLOW}🔏 Signing $APP (ad-hoc)${NC}"
+  codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS" "$APP"
+else
+  echo -e "${YELLOW}🔏 Signing $APP (${IDENTITY})${NC}"
+  KEYCHAIN_ARGS=()
+  if [ -n "${KEYCHAIN:-}" ]; then
+    KEYCHAIN_ARGS=(--keychain "$KEYCHAIN")
+  fi
+  codesign --force --sign "$IDENTITY" "${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"}" \
+    --options runtime --timestamp --entitlements "$ENTITLEMENTS" "$APP"
+fi
 codesign --verify --strict --verbose=2 "$APP"
 
 echo "=== Signature ==="
-codesign -dv "$APP" 2>&1 | grep -E '^(Identifier|CodeDirectory|Signature)' || true
+SIG="$(codesign -dvv "$APP" 2>&1)"
+echo "$SIG" | grep -E '^(Identifier|CodeDirectory|Signature|Authority|TeamIdentifier|Timestamp)' || true
+echo "$SIG" | grep -Eq '^CodeDirectory .*flags=.*runtime' || die "Hardened runtime ontbreekt in de signature"
+if [ -n "$IDENTITY" ]; then
+  echo "$SIG" | grep -q '^Authority=Developer ID Application' \
+    || die "Geen Developer ID Application-authority in de signature"
+  echo "$SIG" | grep -q '^Timestamp=' || die "Geen secure timestamp in de signature (nodig voor notarisatie)"
+fi
 echo "=== Entitlements ==="
 codesign -d --entitlements - "$APP"
 
@@ -69,4 +94,8 @@ codesign -d --entitlements - --xml "$APP" > "$ENT_OUT" 2>/dev/null
 [ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$ENT_OUT" 2>/dev/null)" = "true" ] \
   || die "com.apple.security.app-sandbox staat niet op true in de signature"
 
-echo -e "${GREEN}✅ $NAME.app ad-hoc gesigned met sandbox-entitlements${NC}"
+if [ -z "$IDENTITY" ]; then
+  echo -e "${GREEN}✅ $NAME.app ad-hoc gesigned met sandbox-entitlements${NC}"
+else
+  echo -e "${GREEN}✅ $NAME.app gesigned met $IDENTITY en sandbox-entitlements (nog notariseren: scripts/notarize.sh)${NC}"
+fi
