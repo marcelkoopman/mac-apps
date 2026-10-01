@@ -550,6 +550,10 @@ fn ensure_window(mtm: MainThreadMarker) {
     }
     let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(WIDTH, 420.0));
     panel::configure_floating(&window);
+    // Chips, header buttons and the find bar are added, removed and hidden on every layout.
+    // Recalculating the key-view loop keeps Tab and Shift-Tab in on-screen order (top left to
+    // bottom right) over the views that are actually shown.
+    window.setAutorecalculatesKeyViewLoop(true);
 
     let delegate = LauncherDelegate::new(mtm);
     // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like WINDOW.
@@ -914,7 +918,8 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     hit.setBordered(false);
     hit.setTransparent(true);
     hit.setTitle(&NSString::from_str(""));
-    hit.setFocusRingType(NSFocusRingType::None);
+    // Keyboard users can Tab to the cover and press Space to reveal, so keep the focus ring.
+    hit.setFocusRingType(NSFocusRingType::Default);
     wire_button(&hit, sel!(revealClicked:));
     root.addSubview(&shade);
     root.addSubview(&hit);

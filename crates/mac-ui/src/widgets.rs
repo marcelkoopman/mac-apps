@@ -1,13 +1,13 @@
-//! AppKit control constructors with the shared look: borderless, no focus ring, system fonts.
+//! AppKit control constructors with the shared look: borderless, native focus rings, system fonts.
 //!
 //! The helpers only configure the view. Callers set frames, visibility, targets and delegates.
 
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFocusRingType, NSFont, NSImageAlignment,
-    NSImageScaling, NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField,
-    NSTextView, NSTitlePosition, NSView,
+    NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSImageAlignment, NSImageScaling,
+    NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView,
+    NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
@@ -28,13 +28,13 @@ pub fn label(mtm: MainThreadMarker, size: f64, color: &NSColor) -> Retained<NSTe
 }
 
 /// Editable text field without border or background, in the system font and `labelColor`.
+/// It keeps the native focus ring, so keyboard focus stays visible.
 pub fn plain_field(mtm: MainThreadMarker, size: f64, placeholder: &str) -> Retained<NSTextField> {
     let field = NSTextField::initWithFrame(NSTextField::alloc(mtm), NSRect::ZERO);
     field.setBordered(false);
     field.setDrawsBackground(false);
     field.setEditable(true);
     field.setSelectable(true);
-    field.setFocusRingType(NSFocusRingType::None);
     field.setFont(Some(&NSFont::systemFontOfSize(size)));
     field.setTextColor(Some(&NSColor::labelColor()));
     field.setPlaceholderString(Some(&NSString::from_str(placeholder)));
@@ -59,11 +59,11 @@ pub fn search_field(
     field
 }
 
-/// Borderless text button in the system font, without focus ring.
+/// Borderless text button in the system font. It keeps the native focus ring for keyboard
+/// navigation (Full Keyboard Access).
 pub fn text_button(mtm: MainThreadMarker, title: &str, size: f64) -> Retained<NSButton> {
     let button = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
     button.setBordered(false);
-    button.setFocusRingType(NSFocusRingType::None);
     button.setTitle(&NSString::from_str(title));
     button.setFont(Some(&NSFont::systemFontOfSize(size)));
     button
