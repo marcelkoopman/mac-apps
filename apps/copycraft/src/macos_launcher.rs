@@ -1513,29 +1513,40 @@ fn paint_match_marks(text: &str, matches: &[Range<usize>], current: usize, scrol
         return;
     };
     if !shown_text.is_empty() {
+        let all = NSRange {
+            location: 0,
+            length: shown.length(),
+        };
         unsafe {
-            manager.removeTemporaryAttribute_forCharacterRange(
-                NSBackgroundColorAttributeName,
-                NSRange {
-                    location: 0,
-                    length: shown.length(),
-                },
-            );
+            manager.removeTemporaryAttribute_forCharacterRange(NSBackgroundColorAttributeName, all);
+            manager.removeTemporaryAttribute_forCharacterRange(NSForegroundColorAttributeName, all);
         }
     }
     if shown_text != text || matches.is_empty() {
         return;
     }
-    let wash = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.92, 0.35, 0.55);
-    let hot = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.62, 0.05, 0.9);
+    // The system find colours. The current match is drawn like the find indicator, with dark
+    // text on the opaque highlight, so it stays readable in dark mode. Other matches get a light
+    // wash of the same colour under the normal text colour.
+    let hot = NSColor::findHighlightColor();
+    let hot_text = NSColor::blackColor();
+    let wash = hot.colorWithAlphaComponent(0.35);
     for (index, range) in matches.iter().enumerate() {
+        let range = utf16_range(text, range);
         let color = if index == current { &hot } else { &wash };
         unsafe {
             manager.addTemporaryAttribute_value_forCharacterRange(
                 NSBackgroundColorAttributeName,
                 color,
-                utf16_range(text, range),
+                range,
             );
+            if index == current {
+                manager.addTemporaryAttribute_value_forCharacterRange(
+                    NSForegroundColorAttributeName,
+                    &hot_text,
+                    range,
+                );
+            }
         }
     }
     if scroll && let Some(range) = matches.get(current) {
