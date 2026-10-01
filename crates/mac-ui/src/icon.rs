@@ -189,6 +189,98 @@ pub fn from_image_file(path: &Path) -> Result<Icon, IconError> {
     Ok(Icon::from_rgba(img.into_raw(), w, h)?)
 }
 
+/// Luminance (0-255, Rec. 709 weights) at or below which [`template_mask`] makes a pixel clear.
+pub const TEMPLATE_DARK: u8 = 80;
+/// Luminance at or above which [`template_mask`] makes a pixel fully opaque.
+pub const TEMPLATE_LIGHT: u8 = 140;
+
+/// Turn full-colour RGBA8 artwork (light glyph on a dark tile) into a template image: black,
+/// with the light parts opaque and the dark tile clear. Luminance between [`TEMPLATE_DARK`] and
+/// [`TEMPLATE_LIGHT`] ramps the alpha, which keeps anti-aliased edges smooth, and the source
+/// alpha still applies. A trailing partial pixel is dropped.
+///
+/// macOS draws a template image (`NSImage.isTemplate`) from its alpha only, in the menu bar's
+/// own colour, so it adapts to light, dark and tinted menu bars.
+pub fn template_mask(rgba: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(rgba.len() / 4 * 4);
+    let (pixels, _partial) = rgba.as_chunks::<4>();
+    for px in pixels {
+        let luma =
+            (2126 * u32::from(px[0]) + 7152 * u32::from(px[1]) + 722 * u32::from(px[2])) / 10_000;
+        let (dark, light) = (u32::from(TEMPLATE_DARK), u32::from(TEMPLATE_LIGHT));
+        let ramp = if luma <= dark {
+            0
+        } else if luma >= light {
+            255
+        } else {
+            (luma - dark) * 255 / (light - dark)
+        };
+        let alpha = ramp * u32::from(px[3]) / 255;
+        // alpha <= 255: ramp <= 255 and px[3] <= 255.
+        out.extend_from_slice(&[0, 0, 0, alpha as u8]);
+    }
+    out
+}
+
+/// Crop a `width`×`height` RGBA8 image to the box around its non-clear pixels plus `pad`
+/// pixels on each side (kept inside the image). An image without visible pixels, or whose
+/// buffer does not match the size, comes back unchanged.
+pub fn trim_clear(rgba: Vec<u8>, width: u32, height: u32, pad: u32) -> (Vec<u8>, u32, u32) {
+    let (w, h) = (width as usize, height as usize);
+    if pixel_count(width, height).map(|n| n * 4) != Some(rgba.len()) {
+        return (rgba, width, height);
+    }
+    let visible = |x: usize, y: usize| rgba[(y * w + x) * 4 + 3] > 0;
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if visible(x, y) {
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
+            }
+        }
+    }
+    if min_x > max_x || min_y > max_y {
+        return (rgba, width, height);
+    }
+    let pad = pad as usize;
+    let (x0, y0) = (min_x.saturating_sub(pad), min_y.saturating_sub(pad));
+    let (x1, y1) = ((max_x + pad).min(w - 1), (max_y + pad).min(h - 1));
+    let (cw, ch) = (x1 - x0 + 1, y1 - y0 + 1);
+    let mut out = Vec::with_capacity(cw * ch * 4);
+    for y in y0..=y1 {
+        out.extend_from_slice(&rgba[(y * w + x0) * 4..(y * w + x1 + 1) * 4]);
+    }
+    // cw <= width and ch <= height, so both fit in u32.
+    (out, cw as u32, ch as u32)
+}
+
+/// Decode an image file like [`from_image_file`] and turn it into a template image with
+/// [`template_mask`], cropped to the glyph (plus a 1/16 margin) so it fills the menu bar height.
+/// Show it with [`crate::tray::set_icon`] and `template: true`.
+///
+/// # Errors
+///
+/// The same as [`from_image_file`].
+pub fn template_from_image_file(path: &Path) -> Result<Icon, IconError> {
+    let (rgba, w, h) = template_rgba_from_image_file(path)?;
+    Ok(Icon::from_rgba(rgba, w, h)?)
+}
+
+/// The pixels and size [`template_from_image_file`] makes into an icon, for tests and checks.
+///
+/// # Errors
+///
+/// [`IconError::Io`] or [`IconError::Image`], as for [`from_image_file`].
+pub fn template_rgba_from_image_file(path: &Path) -> Result<(Vec<u8>, u32, u32), IconError> {
+    let img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+    let (w, h) = img.dimensions();
+    let pad = w.max(h) / 16;
+    Ok(trim_clear(template_mask(img.as_raw()), w, h, pad))
+}
+
 /// SF Symbol by name, or `None` before macOS 11 or for an unknown symbol.
 #[cfg(target_os = "macos")]
 pub fn system_symbol(
@@ -211,7 +303,80 @@ pub fn system_symbol(
 
 #[cfg(test)]
 mod tests {
-    use super::{Canvas, IconError, from_image_file, pixel_count};
+    use super::{
+        Canvas, IconError, TEMPLATE_DARK, TEMPLATE_LIGHT, from_image_file, pixel_count,
+        template_from_image_file, template_mask, trim_clear,
+    };
+
+    #[test]
+    fn trim_clear_crops_to_the_glyph_with_padding() {
+        let mut canvas = Canvas::new(8, 6).unwrap();
+        canvas.put(3, 2, [0, 0, 0, 255]);
+        canvas.put(4, 3, [0, 0, 0, 255]);
+        let (rgba, w, h) = trim_clear(canvas.clone().into_rgba(), 8, 6, 0);
+        assert_eq!((w, h), (2, 2));
+        assert_eq!(alphas(&rgba), vec![255, 0, 0, 255]);
+        let (rgba, w, h) = trim_clear(canvas.into_rgba(), 8, 6, 1);
+        assert_eq!((w, h), (4, 4));
+        assert_eq!(rgba.len(), 4 * 4 * 4);
+        assert_eq!(alphas(&rgba)[5], 255);
+    }
+
+    #[test]
+    fn trim_clear_keeps_padding_inside_the_image() {
+        let mut canvas = Canvas::new(4, 4).unwrap();
+        canvas.put(0, 0, [0, 0, 0, 255]);
+        let (_, w, h) = trim_clear(canvas.into_rgba(), 4, 4, 2);
+        assert_eq!((w, h), (3, 3));
+    }
+
+    #[test]
+    fn trim_clear_leaves_empty_or_mismatched_images() {
+        let clear = Canvas::new(4, 4).unwrap().into_rgba();
+        assert_eq!(trim_clear(clear.clone(), 4, 4, 1), (clear, 4, 4));
+        assert_eq!(trim_clear(vec![0; 8], 4, 4, 0), (vec![0; 8], 4, 4));
+    }
+
+    fn alphas(rgba: &[u8]) -> Vec<u8> {
+        rgba.chunks(4).map(|px| px[3]).collect()
+    }
+
+    #[test]
+    fn template_mask_keeps_light_parts_and_clears_the_dark_tile() {
+        let src = [
+            255, 255, 255, 255, // white glyph
+            20, 30, 60, 255, // dark navy tile
+            45, 196, 176, 255, // teal glyph
+            0, 0, 0, 0, // transparent corner
+            255, 255, 255, 128, // half-transparent white edge
+        ];
+        let out = template_mask(&src);
+        assert_eq!(out.len(), src.len());
+        assert!(out.chunks(4).all(|px| px[..3] == [0, 0, 0]));
+        assert_eq!(alphas(&out), vec![255, 0, 255, 0, 128]);
+    }
+
+    #[test]
+    fn template_mask_ramps_between_the_thresholds() {
+        let grey = |v: u8| [v, v, v, 255];
+        let at = |v: u8| template_mask(&grey(v))[3];
+        assert_eq!(at(TEMPLATE_DARK), 0);
+        assert_eq!(at(TEMPLATE_LIGHT), 255);
+        let mid = at((TEMPLATE_DARK + TEMPLATE_LIGHT) / 2);
+        assert!(mid > 100 && mid < 155, "{mid}");
+        assert!(at(100) < at(120));
+    }
+
+    #[test]
+    fn template_mask_drops_a_partial_pixel() {
+        assert_eq!(template_mask(&[255, 255, 255, 255, 9, 9]).len(), 4);
+        assert!(template_mask(&[]).is_empty());
+    }
+
+    #[test]
+    fn missing_template_file_is_an_error() {
+        assert!(template_from_image_file(std::path::Path::new("/nonexistent/icon.png")).is_err());
+    }
 
     #[test]
     fn put_ignores_points_outside() {

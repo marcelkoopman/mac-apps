@@ -969,9 +969,9 @@ impl App {
             return;
         }
         self.shown_kind = kind;
-        match icon::menu_icon_tinted(icon::accent_for_kind(kind)) {
-            Ok(icon) => {
-                if let Err(e) = self.tray.set_icon(Some(icon)) {
+        match icon::menu_icon_for(icon::accent_for_kind(kind)) {
+            Ok((icon, template)) => {
+                if let Err(e) = mac_ui::tray::set_icon(&self.tray, icon, template) {
                     eprintln!("menu bar icon failed: {e}");
                 }
             }
@@ -1120,8 +1120,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     appearance::apply(appearance::load());
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     let icon = icon::menu_icon()?;
-    let tray = TrayIconBuilder::new()
-        .with_icon(icon)
+    // Nothing detected yet: the template glyph (see `icon::menu_icon_for`).
+    let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icon, true)
         .with_menu(Box::new(status_menu(&[])))
         .with_menu_on_left_click(false)
         .with_tooltip("Copycraft")

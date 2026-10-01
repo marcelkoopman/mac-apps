@@ -586,12 +586,14 @@ impl App {
         let title = MenuBuilder::menubar_title(&df, pin);
         if let Ok(tray) = self.tray.try_borrow_mut() {
             tray.set_menu(Some(Box::new(menu)));
-            let icon = if self.has_alert() {
-                self.alert_icon.clone()
+            // The normal icon is a template that follows the menu bar colours. The alert icon
+            // keeps its own colours (red badge), so an alert still stands out.
+            let (icon, template) = if self.has_alert() {
+                (self.alert_icon.clone(), false)
             } else {
-                self.normal_icon.clone()
+                (self.normal_icon.clone(), true)
             };
-            if let Err(e) = tray.set_icon(Some(icon)) {
+            if let Err(e) = mac_ui::tray::set_icon(&tray, icon, template) {
                 log_message(&format!("menu: setting the menubar icon failed: {e}"));
             }
             tray.set_title(Some(&title));
@@ -740,6 +742,18 @@ fn fallback_icon(r: u8, g: u8, b: u8) -> Result<Icon, mac_ui::icon::IconError> {
     Ok(mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255])?.into_icon()?)
 }
 
+/// The bundled icon `name` as a template glyph (its light parts, see
+/// `mac_ui::icon::template_mask`), or a plain square when it cannot be loaded.
+fn load_template_icon_or(name: &str) -> Result<Icon, mac_ui::icon::IconError> {
+    let path = bundle_assets_dir().join(name);
+    mac_ui::icon::template_from_image_file(&path).or_else(|e| {
+        log_message(&format!(
+            "menubar: icon {name} not loaded ({e}); using a plain one"
+        ));
+        fallback_icon(0, 0, 0)
+    })
+}
+
 /// The bundled icon `name`, or a plain square in the given color when it cannot be loaded.
 fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::icon::IconError> {
     load_icon(name).or_else(|e| {
@@ -753,15 +767,14 @@ fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::icon::Ic
 pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
     watch_ui::request_notification_permission();
     let fetcher = PriceFetcher::new()?;
-    let normal_icon = load_icon_or("normal.png", [255, 255, 255])?;
+    let normal_icon = load_template_icon_or("normal.png")?;
     let alert_icon = load_icon_or("update.png", [255, 80, 80])?;
     let menu = Menu::new();
     let _ = menu.append(&MenuItem::new("⏳ Loading...", false, None));
     let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));
     let _ = menu.append(&MenuItem::with_id("quit", " Quit", true, None));
-    let tray_icon = TrayIconBuilder::new()
+    let tray_icon = mac_ui::tray::with_icon(TrayIconBuilder::new(), normal_icon.clone(), true)
         .with_menu(Box::new(menu))
-        .with_icon(normal_icon.clone())
         .with_tooltip("Price Ticker")
         .with_title("Ticker")
         .build()?;
@@ -801,4 +814,39 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
     log_message("menubar: event loop starting");
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    fn asset(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join(name)
+    }
+
+    #[test]
+    fn normal_icon_becomes_a_cropped_template_glyph() {
+        let (rgba, w, h) =
+            mac_ui::icon::template_rgba_from_image_file(&asset("normal.png")).unwrap();
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+        // Cropped to the chart glyph: smaller than the 256 px tile, still a real glyph.
+        assert!(w < 256 && h < 256, "{w}x{h}");
+        assert!(w > 64 && h > 64, "{w}x{h}");
+        assert!(rgba.chunks(4).all(|px| px[..3] == [0, 0, 0]));
+        let opaque = rgba.chunks(4).filter(|px| px[3] > 128).count();
+        let total = (w * h) as usize;
+        // The bars and the trend line, not the whole tile.
+        assert!(
+            opaque > total / 20 && opaque < total / 2,
+            "{opaque} of {total}"
+        );
+    }
+
+    #[test]
+    fn bundled_icons_load() {
+        assert!(mac_ui::icon::template_from_image_file(&asset("normal.png")).is_ok());
+        assert!(mac_ui::icon::from_image_file(&asset("update.png")).is_ok());
+    }
 }

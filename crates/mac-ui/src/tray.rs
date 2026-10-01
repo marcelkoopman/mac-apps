@@ -1,7 +1,7 @@
 //! Generic rows for a menu bar (tray) menu.
 
-use tray_icon::TrayIcon;
 use tray_icon::menu::{IconMenuItem, MenuItem, NativeIcon};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 /// Menu id of [`quit_item`]. Match it in the app's `MenuEvent` loop.
 pub const QUIT_ID: &str = "quit";
@@ -45,6 +45,36 @@ pub fn version_label(app: &str, version: &str) -> String {
 /// Version row: an [`info_item`] showing [`version_label`].
 pub fn version_item(app: &str, version: &str) -> MenuItem {
     info_item(&version_label(app, version))
+}
+
+/// Builder with `icon`, drawn as a template image on macOS when `template` is set (see
+/// [`set_icon`]). Elsewhere the icon is used as-is.
+pub fn with_icon(builder: TrayIconBuilder, icon: Icon, template: bool) -> TrayIconBuilder {
+    #[cfg(target_os = "macos")]
+    if template {
+        return builder.with_icon_templated(icon);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = template;
+    builder.with_icon(icon)
+}
+
+/// Show `icon` in the menu bar. With `template` set, macOS draws it from its alpha channel only
+/// (`NSImage.isTemplate`) in the menu bar's colour, so it follows light, dark and tinted menu
+/// bars. Without it the colours are kept, for a state that must stand out (an alert). Elsewhere
+/// the icon is used as-is.
+///
+/// # Errors
+///
+/// When `tray_icon` cannot set the icon.
+pub fn set_icon(tray: &TrayIcon, icon: Icon, template: bool) -> tray_icon::Result<()> {
+    #[cfg(target_os = "macos")]
+    if template {
+        return tray.set_icon_templated(Some(icon));
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = template;
+    tray.set_icon(Some(icon))
 }
 
 /// VoiceOver label of the menu bar button of `tray`, for an icon without a title or a title
