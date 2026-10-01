@@ -118,6 +118,22 @@ impl MenuBuilder {
         menu
     }
 
+    /// VoiceOver label of the menu bar button: the app name, the price shown in the title (not
+    /// the "Ticker" placeholder) and whether a price watch went off. The red alert icon is
+    /// otherwise the only sign of an alert.
+    pub fn tray_accessibility_label(title: &str, alert: bool) -> String {
+        let mut label = String::from("Price Ticker");
+        let title = title.trim();
+        if !title.is_empty() && title != "Ticker" {
+            label.push_str(": ");
+            label.push_str(title);
+        }
+        if alert {
+            label.push_str(", price alert");
+        }
+        label
+    }
+
     pub fn menubar_title(df: &DataFrame, preferred: Option<&str>) -> String {
         if df.height() == 0 {
             return "Ticker".to_string();
@@ -446,6 +462,30 @@ mod tests {
         let tsv = MenuBuilder::dataframe_as_tsv(&df);
         assert!(tsv.starts_with("symbol\tname\tprice"));
         assert_eq!(tsv.lines().count(), 1);
+    }
+
+    #[test]
+    fn tray_label_names_the_app_price_and_alert() {
+        assert_eq!(
+            MenuBuilder::tray_accessibility_label("Ticker", false),
+            "Price Ticker"
+        );
+        assert_eq!(
+            MenuBuilder::tray_accessibility_label(" ", false),
+            "Price Ticker"
+        );
+        assert_eq!(
+            MenuBuilder::tray_accessibility_label("💰 €66.553", false),
+            "Price Ticker: 💰 €66.553"
+        );
+        assert_eq!(
+            MenuBuilder::tray_accessibility_label("💰 €66.553", true),
+            "Price Ticker: 💰 €66.553, price alert"
+        );
+        assert_eq!(
+            MenuBuilder::tray_accessibility_label("Ticker", true),
+            "Price Ticker, price alert"
+        );
     }
 
     #[test]

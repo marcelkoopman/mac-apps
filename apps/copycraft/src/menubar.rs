@@ -1126,6 +1126,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .with_menu_on_left_click(false)
         .with_tooltip("Copycraft")
         .build()?;
+    // Icon only: name the button for VoiceOver. The tooltip (the clipboard kind) is its help.
+    mac_ui::tray::set_accessibility_label(&tray, "Copycraft");
 
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     launcher::install_proxy(event_loop.create_proxy());

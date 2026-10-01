@@ -35,6 +35,7 @@ widgets = [
 # `mac_ui::dialog`: modal NSAlert message, confirm, button choice, text prompt and list pick, plus
 # the run loop mode check that defers them until a menu has closed.
 dialog = [
+    "objc2-app-kit/NSAccessibilityProtocols",
     "objc2-app-kit/NSAlert",
     "objc2-app-kit/NSApplication",
     "objc2-app-kit/NSButton",
@@ -68,7 +69,7 @@ file_panel = [
     "objc2-foundation/NSURL",
 ]
 # `mac_ui::progress`: indeterminate spinning NSProgressIndicator (busy wheel).
-progress = ["objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
+progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
 # `display notification` without one).
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]
@@ -83,7 +84,14 @@ winit = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
-objc2-app-kit = { workspace = true }
+# The always-on `tray` module labels the status item button for VoiceOver.
+objc2-app-kit = { workspace = true, features = [
+    "NSAccessibilityProtocols",
+    "NSButton",
+    "NSControl",
+    "NSStatusBarButton",
+    "NSStatusItem",
+] }
 # `notify` only.
 block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }

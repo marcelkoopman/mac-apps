@@ -7,8 +7,10 @@
 
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
-use objc2_app_kit::{NSControlSize, NSProgressIndicator, NSProgressIndicatorStyle, NSView};
-use objc2_foundation::{NSPoint, NSRect, NSSize};
+use objc2_app_kit::{
+    NSAccessibility, NSControlSize, NSProgressIndicator, NSProgressIndicatorStyle, NSView,
+};
+use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 /// How big a [`Spinner`] is drawn: AppKit's small or regular control size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -36,7 +38,8 @@ pub struct Spinner {
 }
 
 impl Spinner {
-    /// Create a stopped spinner of `size`, sized to fit and not yet in any view.
+    /// Create a stopped spinner of `size`, sized to fit and not yet in any view. VoiceOver reads
+    /// it as "Loading" ([`Spinner::set_accessibility_label`] to change that).
     pub fn new(mtm: MainThreadMarker, size: SpinnerSize) -> Self {
         let view =
             NSProgressIndicator::initWithFrame(NSProgressIndicator::alloc(mtm), NSRect::ZERO);
@@ -45,7 +48,15 @@ impl Spinner {
         view.setControlSize(size.control_size());
         view.setDisplayedWhenStopped(false);
         view.sizeToFit();
+        view.setAccessibilityLabel(Some(&NSString::from_str("Loading")));
         Self { view }
+    }
+
+    /// Accessibility label read by VoiceOver, for a spinner that stands for something more
+    /// specific than "Loading".
+    pub fn set_accessibility_label(&self, label: &str) {
+        self.view
+            .setAccessibilityLabel(Some(&NSString::from_str(label)));
     }
 
     /// The underlying indicator, for tooltips, accessibility or layout.

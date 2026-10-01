@@ -13,10 +13,10 @@ use mac_ui::objc2::{
     AnyThread, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel,
 };
 use mac_ui::objc2_app_kit::{
-    NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont,
-    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageView, NSLineBreakMode,
-    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
+    NSAccessibility, NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl,
+    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType,
+    NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageView,
+    NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
     NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
@@ -671,7 +671,15 @@ fn layout(fresh_place: bool) {
     // Each chip is laid out at the width its own pill measures, so titles never get cut early.
     let chips: Vec<GlassButton> = shown
         .iter()
-        .map(|cmd| GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular))
+        .map(|cmd| {
+            let chip = GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular);
+            // The title is the label. VoiceOver reads the detail as the hint.
+            if !cmd.detail.is_empty() {
+                chip.button()
+                    .setAccessibilityHelp(Some(&NSString::from_str(&cmd.detail)));
+            }
+            chip
+        })
         .collect();
     let widths: Vec<f64> = chips
         .iter()
@@ -928,6 +936,7 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     hit.setTitle(&NSString::from_str(""));
     // Keyboard users can Tab to the cover and press Space to reveal, so keep the focus ring.
     hit.setFocusRingType(NSFocusRingType::Default);
+    hit.setAccessibilityLabel(Some(&NSString::from_str("Reveal hidden content")));
     wire_button(&hit, sel!(revealClicked:));
     root.addSubview(&shade);
     root.addSubview(&hit);
@@ -1012,6 +1021,7 @@ fn gaussian_blur() -> Option<Retained<AnyObject>> {
 }
 
 fn set_well_blur(on: bool) {
+    set_well_accessible(!on);
     // The cover and the find bar follow the same mask. Revealed text can be searched.
     set_item_find(!on);
     if !on {
@@ -1036,6 +1046,22 @@ fn set_well_blur(on: bool) {
     if !plan.show_body {
         blank_masked_well();
     }
+}
+
+/// While the well is masked, its blurred text and picture are hidden from accessibility, so
+/// VoiceOver (or any accessibility client) cannot read what the blur keeps from the eye. The
+/// reveal cover button stays reachable.
+fn set_well_accessible(accessible: bool) {
+    PREVIEW_TEXT.with(|slot| {
+        if let Some(view) = slot.borrow().as_ref() {
+            view.setAccessibilityElement(accessible);
+        }
+    });
+    PREVIEW_IMAGE.with(|slot| {
+        if let Some(view) = slot.borrow().as_ref() {
+            view.setAccessibilityElement(accessible);
+        }
+    });
 }
 
 fn clear_blur() {
@@ -2449,6 +2475,7 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
     field.setDrawsBackground(true);
     field.setFocusRingType(NSFocusRingType::Default);
     field.setAlphaValue(0.0);
+    field.setAccessibilityLabel(Some(&NSString::from_str("Search commands")));
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
             unsafe {
@@ -2461,6 +2488,7 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
 
 fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
     let field = widgets::search_field(mtm, 13.0, "Find");
+    field.setAccessibilityLabel(Some(&NSString::from_str("Find in item")));
     field.setHidden(true);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
@@ -2498,6 +2526,7 @@ fn place_item_find(y: f64, shown: bool) {
 fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
     let text = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     crate::macos_card_text::configure_scrolling(&text);
+    text.setAccessibilityLabel(Some(&NSString::from_str("Clipboard content")));
     text
 }
 
@@ -2514,6 +2543,8 @@ fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<PreviewScro
 fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     let view = widgets::image_view(mtm);
     view.setHidden(true);
+    // Clipboard pictures, link page thumbnails and video thumbnails all show here.
+    view.setAccessibilityLabel(Some(&NSString::from_str("Image preview")));
     view
 }
 

@@ -5,9 +5,9 @@
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSImageAlignment, NSImageScaling,
-    NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView,
-    NSTitlePosition, NSView,
+    NSAccessibility, NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSImageAlignment,
+    NSImageScaling, NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField,
+    NSTextView, NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
@@ -78,7 +78,8 @@ pub fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     view
 }
 
-/// Borderless box filled with `color`, with rounded corners and no content margins.
+/// Borderless box filled with `color`, with rounded corners and no content margins. A purely
+/// decorative backdrop, so it is hidden from accessibility (VoiceOver skips it).
 pub fn filled_box(mtm: MainThreadMarker, radius: f64, color: &NSColor) -> Retained<NSBox> {
     let fill = NSBox::initWithFrame(NSBox::alloc(mtm), NSRect::ZERO);
     fill.setBoxType(NSBoxType::Custom);
@@ -87,6 +88,7 @@ pub fn filled_box(mtm: MainThreadMarker, radius: f64, color: &NSColor) -> Retain
     fill.setTitlePosition(NSTitlePosition::NoTitle);
     fill.setContentViewMargins(NSSize::new(0.0, 0.0));
     fill.setFillColor(color);
+    fill.setAccessibilityElement(false);
     fill
 }
 

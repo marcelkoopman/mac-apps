@@ -595,6 +595,10 @@ impl App {
                 log_message(&format!("menu: setting the menubar icon failed: {e}"));
             }
             tray.set_title(Some(&title));
+            mac_ui::tray::set_accessibility_label(
+                &tray,
+                &MenuBuilder::tray_accessibility_label(&title, self.has_alert()),
+            );
         }
     }
 
@@ -761,6 +765,10 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         .with_tooltip("Price Ticker")
         .with_title("Ticker")
         .build()?;
+    mac_ui::tray::set_accessibility_label(
+        &tray_icon,
+        &MenuBuilder::tray_accessibility_label("Ticker", false),
+    );
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     // Menu clicks go through the event loop proxy instead of `MenuEvent::receiver()`: sending a
     // user event wakes the loop, so a click is never left sitting in the channel until the next

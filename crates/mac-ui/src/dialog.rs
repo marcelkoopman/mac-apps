@@ -11,8 +11,8 @@
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSAlert, NSAlertFirstButtonReturn, NSApplication, NSMenuItem, NSModalPanelWindowLevel,
-    NSModalResponse, NSPopUpButton, NSTextField,
+    NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSApplication, NSMenuItem,
+    NSModalPanelWindowLevel, NSModalResponse, NSPopUpButton, NSTextField,
 };
 use objc2_foundation::{NSDefaultRunLoopMode, NSPoint, NSRect, NSRunLoop, NSSize, NSString};
 
@@ -58,6 +58,8 @@ pub fn prompt_text(
     let alert = new_alert(mtm, title, message, &[OK, CANCEL]);
     let field = NSTextField::initWithFrame(NSTextField::alloc(mtm), accessory_frame(24.0));
     field.setStringValue(&NSString::from_str(default));
+    // VoiceOver names the field after the question.
+    field.setAccessibilityLabel(Some(&NSString::from_str(accessory_label(title, message))));
     alert.setAccessoryView(Some(&field));
     // Build the window now so the field can take the focus (with its text selected).
     alert.layout();
@@ -97,6 +99,7 @@ pub fn choose(
     if selected < options.len() {
         popup.selectItemAtIndex(selected as isize);
     }
+    popup.setAccessibilityLabel(Some(&NSString::from_str(accessory_label(title, message))));
     alert.setAccessoryView(Some(&popup));
     if button_index(run(mtm, &alert)) != Some(0) {
         return None;
@@ -104,6 +107,15 @@ pub fn choose(
     usize::try_from(popup.indexOfSelectedItem())
         .ok()
         .filter(|&index| index < options.len())
+}
+
+/// Accessibility label for a prompt's text field or pop-up: the bold title, else the message.
+fn accessory_label<'a>(title: &'a str, message: &'a str) -> &'a str {
+    if title.trim().is_empty() {
+        message
+    } else {
+        title
+    }
 }
 
 fn new_alert(
@@ -169,4 +181,22 @@ fn button_index(response: NSModalResponse) -> Option<usize> {
 
 fn accessory_frame(height: f64) -> NSRect {
     NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(ACCESSORY_WIDTH, height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::accessory_label;
+
+    #[test]
+    fn accessory_label_prefers_the_title() {
+        assert_eq!(
+            accessory_label("Asset name", "Shown in the menu"),
+            "Asset name"
+        );
+        assert_eq!(
+            accessory_label("  ", "Shown in the menu"),
+            "Shown in the menu"
+        );
+        assert_eq!(accessory_label("", ""), "");
+    }
 }
