@@ -4,6 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::ops::Range;
 
 use mac_ui::button::{ButtonSize, GlassButton};
+use mac_ui::corners;
 use mac_ui::glass;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
@@ -56,6 +57,15 @@ const BLUR_RADIUS: f64 = 22.0;
 /// Glass controls this close merge on macOS 26+ (`glass::group`). Below the 6 pt gaps between
 /// chips and header buttons, so they only merge while they morph closer together.
 const GLASS_MERGE: f64 = 4.0;
+/// Corner radius of the launcher panel, its glass and the frosted fallback. Every nested
+/// radius derives from it. Fixed: objc2-app-kit 0.3.2 has no public API for the system window
+/// corner radius on macOS 26+ (`NSViewCornerConfiguration` is not bound), so the panel keeps
+/// this documented value instead of matching it at runtime.
+const PANEL_RADIUS: f64 = 16.0;
+/// The well (content panel) and its reveal shade sit `PAD` inside the panel edge, so their
+/// corners are concentric with the panel's: `PANEL_RADIUS - PAD`, clamped at
+/// [`corners::MIN_RADIUS`].
+const WELL_RADIUS: f64 = corners::concentric_radius(PANEL_RADIUS, PAD);
 
 #[link(name = "CoreImage", kind = "framework")]
 unsafe extern "C" {
@@ -552,7 +562,7 @@ fn ensure_window(mtm: MainThreadMarker) {
 
     // Rounded corners plus Liquid Glass on macOS 26+, else the frosted view. Before 26,
     // `content` is `window_view`.
-    let content = panel::rounded_glass(mtm, &window_view, 16.0).content;
+    let content = panel::rounded_glass(mtm, &window_view, PANEL_RADIUS).content;
 
     let header = widgets::label(mtm, 13.0, &NSColor::labelColor());
     let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
@@ -564,7 +574,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     let item_count = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
     item_count.setAlignment(NSTextAlignment::Right);
     item_count.setHidden(true);
-    let well = filled_box(mtm, 10.0, &NSColor::controlBackgroundColor());
+    let well = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
     let preview_text = payload_view(mtm);
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_image = image_view(mtm);
@@ -886,7 +896,7 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     let width = WIDTH - PAD * 2.0;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H));
     let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    let shade = filled_box(mtm, 10.0, &NSColor::controlBackgroundColor());
+    let shade = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
     shade.setFrame(frame);
     shade.setHidden(true);
     let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
@@ -2766,6 +2776,16 @@ mod tests {
         let (bytes, caption) = super::page_preview_parts(url);
         assert!(bytes.is_empty());
         assert!(caption.is_none());
+    }
+
+    #[test]
+    fn well_radius_is_concentric_with_the_panel() {
+        let inset = super::PAD;
+        assert_eq!(
+            super::WELL_RADIUS,
+            mac_ui::corners::concentric_radius(super::PANEL_RADIUS, inset)
+        );
+        assert_eq!(super::WELL_RADIUS, mac_ui::corners::MIN_RADIUS);
     }
 
     #[test]
