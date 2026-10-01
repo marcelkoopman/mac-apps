@@ -50,6 +50,16 @@ panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSEnumerator",
 ]
+# `mac_ui::file_panel`: modal NSOpenPanel (choose a file) and NSSavePanel (choose a save path).
+file_panel = [
+    "objc2-app-kit/NSApplication",
+    "objc2-app-kit/NSOpenPanel",
+    "objc2-app-kit/NSPanel",
+    "objc2-app-kit/NSSavePanel",
+    "objc2-app-kit/NSWindow",
+    "objc2-foundation/NSArray",
+    "objc2-foundation/NSURL",
+]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
 # `display notification` without one).
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]

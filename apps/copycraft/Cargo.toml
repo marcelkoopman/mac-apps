@@ -27,8 +27,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 infer = "0.22"
 leakguard = "0.9.1"
 # `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
-# `panel`, `theme`, `widgets`: the mac_ui::panel, mac_ui::theme and mac_ui::widgets modules.
-mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "panel", "theme", "widgets"] }
+# `file_panel`, `panel`, `theme`, `widgets`: the mac_ui::file_panel, mac_ui::panel, mac_ui::theme
+# and mac_ui::widgets modules.
+mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "file_panel", "panel", "theme", "widgets"] }
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
 redact-core = "0.12"
 serde_json = { workspace = true, features = ["preserve_order"] }

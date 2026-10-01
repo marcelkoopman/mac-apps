@@ -243,7 +243,7 @@ impl App {
             let path = crate::macos_open::choose_path();
             launcher::set_suppress_resign(false);
             if let Some(path) = path {
-                self.opened = Some(crate::open_file::load(std::path::Path::new(&path)));
+                self.opened = Some(crate::open_file::load(&path));
                 self.card_view = CardView::Original;
                 self.refresh_popup();
             }
