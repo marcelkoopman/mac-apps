@@ -56,8 +56,6 @@ pub struct LaunchData {
     pub can_clear_history: bool,
     /// `<` older and `>` newer, when an earlier copy exists. Absent hides both.
     pub history_nav: Option<HistoryNav>,
-    /// Current link and the copies beside it, fetched ahead of the next arrow.
-    pub warm_links: Vec<String>,
     pub theme: Theme,
     /// Which result the card is showing. Original is the clipboard itself.
     pub view: CardView,
@@ -211,9 +209,6 @@ impl Drop for LaunchData {
         for item in &mut self.history {
             item.title.zeroize();
             item.mark.zeroize();
-        }
-        for link in &mut self.warm_links {
-            link.zeroize();
         }
         if let Some(name) = self.source_name.as_mut() {
             name.zeroize();
@@ -951,46 +946,6 @@ pub fn step_history(len: usize, cursor: usize, older: bool) -> Option<usize> {
     }
 }
 
-/// Link pages for `cursor` and the entries beside it. Current first, then older, then newer.
-pub fn pages_around(entries: &[Option<&str>], cursor: usize) -> Vec<String> {
-    if entries.is_empty() {
-        return Vec::new();
-    }
-    let cursor = cursor.min(entries.len() - 1);
-    let mut pages = Vec::new();
-    let mut push = |index: usize| {
-        let Some(text) = entries.get(index).copied().flatten() else {
-            return;
-        };
-        let Some(page) = link_page_key(text) else {
-            return;
-        };
-        if !pages.iter().any(|existing| existing == &page) {
-            pages.push(page);
-        }
-    };
-    push(cursor);
-    if let Some(older) = cursor.checked_add(1) {
-        push(older);
-    }
-    if let Some(newer) = cursor.checked_sub(1) {
-        push(newer);
-    }
-    pages
-}
-
-fn link_page_key(text: &str) -> Option<String> {
-    let text = text.trim();
-    if text.is_empty() || crate::page_preview::url_has_userinfo(text) {
-        return None;
-    }
-    if crate::youtube::video_id(text).is_some() || crate::page_preview::page_url(text).is_some() {
-        Some(text.to_string())
-    } else {
-        None
-    }
-}
-
 pub fn chips_height(frames: &[ChipFrame]) -> f64 {
     if frames.is_empty() {
         0.0
@@ -1356,8 +1311,8 @@ mod tests {
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
         history_label, history_nav, keeps_card_open, layout_chips, masks_content, matching,
-        overflow, pages_around, payload_excerpt, presented_view, save_tip, search_pool, step_chip,
-        step_history, text_save_file, transformed_text, well_mask, work_card,
+        overflow, payload_excerpt, presented_view, save_tip, search_pool, step_chip, step_history,
+        text_save_file, transformed_text, well_mask, work_card,
     };
     use crate::appearance::Theme;
 
@@ -1369,7 +1324,6 @@ mod tests {
             history: Vec::new(),
             can_clear_history: false,
             history_nav: None,
-            warm_links: Vec::new(),
             theme: Theme::System,
             view: CardView::Original,
             image_scan: None,
@@ -1841,21 +1795,6 @@ fn main() {
                 .map(|cmd| cmd.title.as_str())
                 .collect::<Vec<_>>(),
             vec!["Visit"]
-        );
-    }
-
-    #[test]
-    fn history_does_not_warm_a_credential_url() {
-        let secret = "https://deploy:s3cr3t@github.com/acme/app.git";
-        let plain = "https://example.com/news";
-        assert_eq!(
-            pages_around(&[Some(secret), Some(plain)], 0),
-            vec![plain.to_string()]
-        );
-        assert!(pages_around(&[Some(secret)], 0).is_empty());
-        assert_eq!(
-            pages_around(&[Some(plain), Some(secret)], 0),
-            vec![plain.to_string()]
         );
     }
 
@@ -2588,27 +2527,6 @@ Kleinste opdracht die de change dekt.
         assert_eq!(step_history(0, 0, true), None);
         assert_eq!(step_history(1, 0, true), None);
         assert_eq!(step_history(1, 0, false), None);
-    }
-
-    #[test]
-    fn history_navigation_warms_the_page_and_its_neighbors() {
-        let current = "https://youtu.be/abcdefghijk";
-        let older = "https://www.youtube.com/watch?v=bcdefghijkl";
-        let newer = "https://example.com/news";
-        let entries = [Some(current), Some(older), Some("plain notes"), Some(newer)];
-        assert_eq!(
-            pages_around(&entries, 0),
-            vec![current.to_string(), older.to_string()]
-        );
-        assert_eq!(
-            pages_around(&entries, 1),
-            vec![older.to_string(), current.to_string()]
-        );
-        assert_eq!(
-            pages_around(&entries, 2),
-            vec![newer.to_string(), older.to_string()]
-        );
-        assert!(pages_around(&[], 0).is_empty());
     }
 
     #[test]

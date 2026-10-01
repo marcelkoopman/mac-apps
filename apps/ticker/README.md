@@ -11,7 +11,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Menu bar asset**: click a price row to show that asset in the menu bar. The choice is remembered.
 - **Price watches**: *Add Price Watch* takes an asset, a target price and *above* / *below*. When the target is reached you get a macOS notification and the menu bar icon switches to the alert icon. A watch fires once, until you reset it (`ticker reset`) or remove it. Click a watch in the menu to remove it. *Manage Watches* lists them and can clear all. Watch prices are always shown in €.
 - **Copy to clipboard**: copies all current prices as TSV (symbol, name, price, unit, unit_hint, day_open, change_day, pct_day, direction_day).
-- **Edit asset…**: change an asset's URL, currency/unit and JSON price path through dialogs. Edits are saved to the user config.
+- **Edit asset…**: change an asset's URL (`https://` only), currency/unit and JSON price path through dialogs. Edits are saved to the user config. Responses over 1 MB are refused.
 - **Reset assets to defaults**: deletes the user config and goes back to the bundled `config.toml`.
 - Prices use Dutch number formatting (`1.234,56`). The menu bar value is rounded for prices ≥ 100.
 
@@ -49,7 +49,7 @@ State files in your home directory:
 | --- | --- |
 | `~/.ticker_config.toml` | User config (written by *Edit asset…*) |
 | `~/.ticker_menubar_asset` | Menu bar asset picked from the menu |
-| `~/.ticker_watches.json` | Price watches |
+| `~/.ticker_watches.json` | Price watches. If it cannot be parsed at start, the menu bar app moves it to `.ticker_watches.json.bak` (`.1.bak`, … if that exists), starts with no watches and shows a notification |
 | `~/.ticker_price_history.json` | Day-open and last-poll prices |
 | `~/.ticker_debug.log` | Log, recreated at every start |
 | `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |

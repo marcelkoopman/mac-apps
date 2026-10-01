@@ -3,6 +3,7 @@ use polars::prelude::*;
 use reqwest::blocking::Client;
 use serde_json::Value;
 use std::error::Error;
+use std::io::Read;
 use std::thread;
 use std::time::Duration;
 
@@ -13,6 +14,8 @@ const RETRY_DELAY: Duration = Duration::from_millis(500);
 /// fetch thread) at most `assets.len()` times that.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Price APIs answer with a few KB; anything above this is refused instead of buffered.
+const MAX_BODY_BYTES: u64 = 1024 * 1024;
 
 /// Cheap to clone (the reqwest client is reference-counted), so a clone can move into the fetch
 /// thread.
@@ -61,7 +64,7 @@ impl PriceFetcher {
         );
         match self.client.get(&asset.url).send() {
             Ok(response) => match response.error_for_status() {
-                Ok(resp) => match resp.json::<Value>() {
+                Ok(resp) => match read_json_capped(resp, MAX_BODY_BYTES) {
                     Ok(json) => {
                         if let Some(price_value) = self.get_value_by_path(&json, &asset.price_path)
                         {
@@ -285,6 +288,30 @@ impl PriceFetcher {
     }
 }
 
+/// Response body as JSON, refusing bodies over `cap` bytes (by `Content-Length` up front, and
+/// while reading for chunked or lying responses).
+fn read_json_capped(resp: reqwest::blocking::Response, cap: u64) -> Result<Value, String> {
+    if let Some(len) = resp.content_length()
+        && len > cap
+    {
+        return Err(format!("response too large ({len} bytes, limit {cap})"));
+    }
+    let body = read_capped(resp, cap)?;
+    serde_json::from_slice(&body).map_err(|e| e.to_string())
+}
+
+fn read_capped(reader: impl Read, cap: u64) -> Result<Vec<u8>, String> {
+    let mut body = Vec::new();
+    reader
+        .take(cap + 1)
+        .read_to_end(&mut body)
+        .map_err(|e| e.to_string())?;
+    if body.len() as u64 > cap {
+        return Err(format!("response too large (over {cap} bytes)"));
+    }
+    Ok(body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,6 +325,15 @@ mod tests {
     #[test]
     fn max_fetch_attempts_is_three() {
         assert_eq!(MAX_FETCH_ATTEMPTS, 3);
+    }
+
+    #[test]
+    fn read_capped_accepts_up_to_cap_and_refuses_more() {
+        assert_eq!(read_capped(&b"12345"[..], 5).unwrap(), b"12345");
+        assert!(read_capped(&b"123456"[..], 5).is_err());
+        assert!(read_capped(&b""[..], 5).unwrap().is_empty());
+        let big = vec![b' '; (MAX_BODY_BYTES + 1) as usize];
+        assert!(read_capped(&big[..], MAX_BODY_BYTES).is_err());
     }
 
     #[test]

@@ -18,6 +18,8 @@ mod redact;
 mod sensitivity;
 mod toolbar_visibility;
 mod transform;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod url_policy;
 mod validate;
 mod xsd_schema;
 mod youtube;

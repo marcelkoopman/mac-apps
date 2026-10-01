@@ -13,7 +13,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Dataframe**: CSV, TSV or JSON as a table (Polars). Saving from this view writes Parquet.
 - **Schema / Sample**: JSON → Avro schema (`.avsc`), XML → XSD, XSD → sample XML.
 - **Images**: *Info* shows format, size and a data URL. *Text* runs OCR and *QR* reads barcode payloads, both with Apple Vision.
-- **Links**: *Visit* opens the URL in your browser. The card loads the page title and preview image, or for YouTube the thumbnail and title. A URL with `user:password@` is never fetched, and those credentials are stripped before the URL is opened.
+- **Links**: *Visit* opens the URL in your browser. The card loads the page title and preview image, or for YouTube the thumbnail and title. Only the link on the card shown is fetched, never history entries around it. No preview is fetched for a URL with `user:password@`, for local or LAN hosts (`localhost`, `*.local`, private and loopback addresses, single-label names) or for token-like query parameters (`token=`, `code=`, signatures, keys, JWTs); the page's preview image gets the same checks. Only 2xx responses up to 5 MB are used. *Visit* opens only `http`/`https` links (through `NSWorkspace`), with `user:password@` stripped.
 - **Copy / Save**: copy the current view back to the clipboard, or save it through a save panel. The file extension follows the content.
 - **Choose file**: show a local text file (up to 8 MB) on the card instead of the clipboard.
 - **History**: the last 20 copies (text and images), kept in memory only. Step through them with `<` / `>`, or use the menu bar *History* submenu.

@@ -105,9 +105,7 @@ pub fn apply_asset_edit(
     let url = url.trim();
     let unit = unit.trim();
     let price_path = price_path.trim();
-    if url.is_empty() {
-        return Err("URL cannot be empty".into());
-    }
+    validate_asset_url(url)?;
     if unit.is_empty() {
         return Err("Unit cannot be empty".into());
     }
@@ -117,6 +115,35 @@ pub fn apply_asset_edit(
     asset.url = url.to_string();
     asset.unit = unit.to_uppercase();
     asset.price_path = price_path.to_string();
+    Ok(())
+}
+
+/// Longest URL accepted by *Edit asset…*.
+const MAX_URL_LEN: usize = 2048;
+
+/// URL check for *Edit asset…*: `https://` with a host, no credentials, no whitespace. The
+/// bundled config only uses https; plain http would let anyone on the network change prices
+/// (and, through watches, trigger alerts).
+pub fn validate_asset_url(url: &str) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("URL cannot be empty".into());
+    }
+    if url.len() > MAX_URL_LEN {
+        return Err(format!("URL is longer than {MAX_URL_LEN} characters"));
+    }
+    if url.chars().any(char::is_whitespace) {
+        return Err("URL cannot contain spaces".into());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
+    if parsed.scheme() != "https" {
+        return Err("URL must start with https://".into());
+    }
+    if parsed.host_str().is_none_or(str::is_empty) {
+        return Err("URL has no host".into());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("URL cannot contain a user name or password".into());
+    }
     Ok(())
 }
 
@@ -289,6 +316,50 @@ url = "https://example.com"
     fn apply_asset_edit_rejects_empty_url() {
         let mut asset = gecko_btc();
         assert!(apply_asset_edit(&mut asset, "  ", "USD", "bitcoin.usd").is_err());
+    }
+
+    #[test]
+    fn apply_asset_edit_requires_https_and_keeps_asset_on_error() {
+        let mut asset = gecko_btc();
+        let before = asset.url.clone();
+        let err = apply_asset_edit(&mut asset, "http://example.com/p", "USD", "p").unwrap_err();
+        assert!(err.contains("https"), "{err}");
+        assert_eq!(asset.url, before);
+    }
+
+    #[test]
+    fn validate_asset_url_cases() {
+        for ok in [
+            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur",
+            "HTTPS://example.com/x",
+            "https://example.com:8443/p",
+            "https://bücher.example/preis",
+        ] {
+            assert!(validate_asset_url(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "http://example.com/p",
+            "ftp://example.com/p",
+            "file:///etc/passwd",
+            "example.com/p",
+            "https://",
+            "https://user:pw@example.com/p",
+            "https://exa mple.com/p",
+            "javascript:alert(1)",
+        ] {
+            assert!(validate_asset_url(bad).is_err(), "{bad}");
+        }
+        let long = format!("https://example.com/{}", "a".repeat(MAX_URL_LEN));
+        assert!(validate_asset_url(&long).is_err());
+    }
+
+    #[test]
+    fn bundled_config_urls_pass_validation() {
+        let config = parse_config(include_str!("../config.toml")).unwrap();
+        for asset in &config.assets {
+            assert!(validate_asset_url(&asset.url).is_ok(), "{}", asset.url);
+        }
     }
 
     #[test]

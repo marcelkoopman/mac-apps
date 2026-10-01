@@ -18,8 +18,31 @@ env:
   BUNDLE_DIR: target/aarch64-apple-darwin/release/bundle
 
 jobs:
+  # Same gate as ci.yml: a tag on a commit that fails fmt, clippy or tests publishes nothing.
+  check:
+    name: fmt, clippy, test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
   build:
     name: Build Copycraft DMG
+    needs: check
     runs-on: macos-latest
 
     steps:
@@ -49,6 +72,11 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-bundle
+
+      # cargo-bundle has no --locked flag: build once with --locked first so a stale Cargo.lock
+      # fails here instead of being re-resolved; cargo bundle then reuses this build.
+      - name: Build release binary (locked)
+        run: cargo build --release --locked --target aarch64-apple-darwin -p "$PKG"
 
       - name: Build app bundle
         # Run from the package dir: cargo-bundle resolves icon/resources/
@@ -130,7 +158,7 @@ jobs:
       - name: Verify DMG
         run: |
           file "$DMG_DIR/$PKG-$VERSION.dmg"
-          hdiutil verify "$DMG_DIR/$PKG-$VERSION.dmg" || true
+          hdiutil verify "$DMG_DIR/$PKG-$VERSION.dmg"
 
       - name: Create Release
         env:

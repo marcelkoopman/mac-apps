@@ -14,7 +14,8 @@ short_description = "Price Ticker"
 long_description = "A menubar price ticker for Bitcoin, Gold, and TTF Gas"
 
 [package.metadata.bundle.macos]
-minimum_system_version = "10.13"
+# Apple silicon only (aarch64-apple-darwin, whose Rust default deployment target is 11.0).
+minimum_system_version = "11.0"
 info_plist_exts = ["assets/Info.plist.ext"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -25,7 +26,8 @@ serde_json = { workspace = true }
 toml = "1.1"
 chrono = "0.4"
 dirs = "7.0"
-dhat = "0.3"
+# Heap profiling only (`--features dhat-heap`); not built otherwise.
+dhat = { version = "0.3", optional = true }
 # `dialog`: native NSAlert prompts and pickers (mac_ui::dialog). `notify`: native notifications
 # (mac_ui::notify; osascript when not run from the app bundle).
 mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify"] }
@@ -34,4 +36,4 @@ arboard = { workspace = true }
 polars = { workspace = true, features = ["fmt"] }
 
 [features]
-dhat-heap = []
+dhat-heap = ["dep:dhat"]

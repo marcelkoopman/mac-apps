@@ -3,13 +3,24 @@
 #[cfg(test)]
 use std::cell::Cell;
 
-use mac_ui::objc2_foundation::{NSMutableURLRequest, NSString, NSURL, NSURLConnection};
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2_foundation::{
+    NSData, NSHTTPURLResponse, NSMutableURLRequest, NSString, NSURL, NSURLConnection, NSURLResponse,
+};
 
 #[cfg(test)]
 thread_local! {
     static FETCH_ATTEMPTS: Cell<usize> = const { Cell::new(0) };
     static SKIP_SEND: Cell<bool> = const { Cell::new(false) };
 }
+
+/// Largest body any fetch accepts (thumbnails, oEmbed JSON, preview images, pages).
+///
+/// `NSURLConnection`'s synchronous API only returns once the body is in memory, so the cap
+/// rejects oversized bodies after the transfer, not during it; the 8 s request timeout bounds
+/// slow transfers. A streaming cap needs an `NSURLSession` delegate (not done: no Mac to test it
+/// here, and the completion-handler API would need `block2` as a new direct dependency).
+pub const MAX_BODY_BYTES: usize = 5 * 1024 * 1024;
 
 const DOCUMENT_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
@@ -18,7 +29,7 @@ pub fn get(url: &str) -> Option<Vec<u8>> {
     load(url, "Copycraft", None)
 }
 
-/// GET a preview image with a browser user agent and no byte cap.
+/// GET a preview image with a browser user agent (capped at `MAX_BODY_BYTES`).
 pub fn get_asset(url: &str) -> Option<Vec<u8>> {
     load(url, DOCUMENT_AGENT, None)
 }
@@ -60,25 +71,64 @@ fn load(url: &str, agent: &str, range: Option<&str>) -> Option<Vec<u8>> {
             &NSString::from_str("Range"),
         );
     }
-    let data = send(&request).ok()?;
+    let (data, response) = send(&request)?;
+    let status = response
+        .and_then(|response| response.downcast::<NSHTTPURLResponse>().ok())
+        .map(|http| http.statusCode());
+    if let Err(why) = check_response(status, data.length(), MAX_BODY_BYTES) {
+        eprintln!("fetch skipped: {why}");
+        return None;
+    }
     Some(data.to_vec())
+}
+
+/// Only a 2xx HTTP response with a body within `cap` is used. Without an HTTP response (no
+/// status) the body is refused too.
+fn check_response(status: Option<isize>, len: usize, cap: usize) -> Result<(), String> {
+    match status {
+        Some(code) if (200..300).contains(&code) => {}
+        Some(code) => return Err(format!("HTTP status {code}")),
+        None => return Err("not an HTTP response".into()),
+    }
+    if len > cap {
+        return Err(format!("body of {len} bytes is over the {cap} byte limit"));
+    }
+    Ok(())
 }
 
 #[allow(deprecated)]
 fn send(
     request: &NSMutableURLRequest,
-) -> Result<
-    mac_ui::objc2::rc::Retained<mac_ui::objc2_foundation::NSData>,
-    mac_ui::objc2::rc::Retained<mac_ui::objc2_foundation::NSError>,
-> {
-    NSURLConnection::sendSynchronousRequest_returningResponse_error(request, None)
+) -> Option<(Retained<NSData>, Option<Retained<NSURLResponse>>)> {
+    let mut response = None;
+    let data = NSURLConnection::sendSynchronousRequest_returningResponse_error(
+        request,
+        Some(&mut response),
+    )
+    .ok()?;
+    Some((data, response))
 }
 
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
 
-    use super::{FETCH_ATTEMPTS, SKIP_SEND};
+    use super::{FETCH_ATTEMPTS, MAX_BODY_BYTES, SKIP_SEND, check_response};
+
+    #[test]
+    fn only_2xx_within_the_cap_is_accepted() {
+        assert!(check_response(Some(200), 10, MAX_BODY_BYTES).is_ok());
+        assert!(check_response(Some(206), MAX_BODY_BYTES, MAX_BODY_BYTES).is_ok());
+        assert!(check_response(Some(204), 0, MAX_BODY_BYTES).is_ok());
+        for code in [101, 301, 304, 404, 416, 500, 503] {
+            assert!(
+                check_response(Some(code), 10, MAX_BODY_BYTES).is_err(),
+                "{code}"
+            );
+        }
+        assert!(check_response(None, 10, MAX_BODY_BYTES).is_err());
+        assert!(check_response(Some(200), MAX_BODY_BYTES + 1, MAX_BODY_BYTES).is_err());
+    }
 
     struct HoldSend;
 

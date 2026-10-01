@@ -6,6 +6,7 @@ mod config;
 mod dialogs;
 mod instance_lock;
 mod menu_builder;
+mod menu_ids;
 mod menubar;
 mod poll_gate;
 mod price_fetcher;

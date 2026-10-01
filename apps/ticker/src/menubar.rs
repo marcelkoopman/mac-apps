@@ -18,10 +18,13 @@ use crate::config::{self, load_config};
 use crate::dialogs::{self, prompt_text};
 use crate::log_message;
 use crate::menu_builder::MenuBuilder;
+use crate::menu_ids::{self, RowRef};
 use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
-use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_list};
+use crate::price_watch::{
+    WatchDirection, WatchList, WatchLoad, load_watch_list_for_app, save_watch_list,
+};
 use crate::watch_ui::{self, WatchUIBuilder};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -59,6 +62,12 @@ struct App {
     config: Option<crate::config::Config>,
     prices_df: Option<DataFrame>,
     watch_list: WatchList,
+    /// The watch file exists but could not be read or moved aside: never overwrite it.
+    watch_save_blocked: bool,
+    /// Part of the row ids (`menu_ids`). Bumped whenever watch or asset rows are added, removed
+    /// or reordered, so a click on a row of a menu built before that is ignored. Price updates
+    /// keep it, so rows stay clickable while a poll refreshes the open menu.
+    rows_generation: u64,
     next_check: SystemTime,
     normal_icon: Icon,
     alert_icon: Icon,
@@ -101,9 +110,7 @@ impl ApplicationHandler<UserEvent> for App {
             match load_config() {
                 Ok(config) => {
                     self.config = Some(config);
-                    if let Ok(list) = load_watch_list() {
-                        self.watch_list = list;
-                    }
+                    self.load_watches();
                     if self.fetcher.is_some() {
                         self.poll_prices();
                         self.schedule_next_poll();
@@ -178,31 +185,95 @@ impl App {
             "manage_watches" => self.handle_manage_watches(),
             "edit_asset" => self.handle_edit_asset(),
             "reset_assets" => self.handle_reset_assets(),
-            id if id.starts_with("watch_") => {
-                if let Some((asset, price)) = WatchUIBuilder::parse_watch_id(id)
-                    && self.watch_list.remove_watch(&asset, price)
-                {
-                    let _ = save_watch_list(&self.watch_list);
-                    self.update_menu();
+            id => match menu_ids::parse(id) {
+                menu_ids::Parsed::Row { generation, row } => {
+                    if generation != self.rows_generation {
+                        log_message(&format!("menu: {id:?} is from an outdated menu; ignored"));
+                    } else {
+                        match row {
+                            RowRef::Watch(index) => self.remove_watch_at(index),
+                            RowRef::Asset(row) => self.pin_menubar_from_row(row),
+                        }
+                    }
                 }
-            }
-            id => self.pin_menubar_from_item(id),
+                menu_ids::Parsed::Fixed => log_message(&format!("menu: unknown id {id:?}")),
+            },
         }
         log_message(&format!("menu: done {id:?}"));
     }
 
-    fn pin_menubar_from_item(&mut self, item_id: &str) {
+    fn load_watches(&mut self) {
+        match load_watch_list_for_app() {
+            Ok(WatchLoad::Loaded(list)) => self.watch_list = list,
+            Ok(WatchLoad::Recovered {
+                list,
+                backup,
+                error,
+            }) => {
+                self.watch_list = list;
+                log_message(&format!(
+                    "watches: file unreadable ({error}); moved to {}",
+                    backup.display()
+                ));
+                watch_ui::send_macos_notification(
+                    "Ticker",
+                    &format!(
+                        "Watch list was unreadable and has been reset. Old file kept as {}",
+                        backup.display()
+                    ),
+                );
+            }
+            Err(e) => {
+                self.watch_save_blocked = true;
+                log_message(&format!(
+                    "watches: cannot load ({e}); changes will not be saved"
+                ));
+                watch_ui::send_macos_notification(
+                    "Ticker",
+                    &format!("Cannot read the watch list ({e}). Watch changes will not be saved."),
+                );
+            }
+        }
+    }
+
+    fn save_watches(&self) {
+        if self.watch_save_blocked {
+            log_message("watches: not saved (watch file could not be loaded)");
+            return;
+        }
+        if let Err(e) = save_watch_list(&self.watch_list) {
+            log_message(&format!("watches: save failed: {e}"));
+        }
+    }
+
+    fn rows_changed(&mut self) {
+        self.rows_generation = self.rows_generation.wrapping_add(1);
+    }
+
+    fn remove_watch_at(&mut self, index: usize) {
+        if let Some(w) = self.watch_list.remove_at(index) {
+            self.rows_changed();
+            log_message(&format!(
+                "watches: removed {} {:.2}",
+                w.asset_name, w.target_price
+            ));
+            self.save_watches();
+            self.update_menu();
+        }
+    }
+
+    fn pin_menubar_from_row(&mut self, row: usize) {
         let Some(df) = &self.prices_df else {
             return;
         };
-        let Some(name) = MenuBuilder::asset_name_for_item_id(df, item_id) else {
+        let Some(name) = MenuBuilder::asset_name_at(df, row) else {
             return;
         };
         if let Some(config) = &mut self.config {
             config.menubar_asset = Some(name.clone());
         }
         if let Err(e) = config::save_menubar_pin(&name) {
-            eprintln!("Failed to save menubar pin: {e}");
+            log_message(&format!("Failed to save menubar pin: {e}"));
         }
         self.update_menu();
     }
@@ -266,6 +337,7 @@ impl App {
                     &format!("{asset_name} saved ({unit})"),
                 );
                 self.prices_df = None;
+                self.rows_changed();
                 self.repoll_after_config_change();
             }
             Err(e) => watch_ui::send_macos_notification("Ticker", &e),
@@ -277,6 +349,7 @@ impl App {
             Ok(config) => {
                 self.config = Some(config);
                 self.prices_df = None;
+                self.rows_changed();
                 watch_ui::send_macos_notification("Ticker", "Assets reset to defaults.");
                 self.repoll_after_config_change();
             }
@@ -398,7 +471,7 @@ impl App {
                 }
             }
             if any {
-                let _ = save_watch_list(&self.watch_list);
+                self.save_watches();
             }
         }
         self.prices_df = Some(df);
@@ -471,7 +544,8 @@ impl App {
         }
         self.watch_list
             .add_watch(asset.clone(), target_price, direction.clone());
-        let _ = save_watch_list(&self.watch_list);
+        self.rows_changed();
+        self.save_watches();
         watch_ui::send_macos_notification(
             "Ticker",
             &format!(
@@ -505,7 +579,8 @@ impl App {
         // "Close" stays the default button (Return), as in the old osascript dialog.
         if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) == Some(1) {
             self.watch_list = WatchList::new();
-            let _ = save_watch_list(&self.watch_list);
+            self.rows_changed();
+            self.save_watches();
             watch_ui::send_macos_notification("Ticker", "All watches cleared.");
             self.update_menu();
         }
@@ -522,7 +597,7 @@ impl App {
     fn update_menu(&self) {
         let empty = Self::empty_df();
         let df = self.prices_df.clone().unwrap_or(empty);
-        let menu = MenuBuilder::build(&df, &self.watch_list);
+        let menu = MenuBuilder::build(&df, &self.watch_list, self.rows_generation);
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
         let title = MenuBuilder::menubar_title(&df, pin);
         if let Ok(tray) = self.tray.try_borrow_mut() {
@@ -681,6 +756,8 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         config: None,
         prices_df: None,
         watch_list: WatchList::new(),
+        watch_save_blocked: false,
+        rows_generation: 0,
         next_check: SystemTime::now(),
         normal_icon,
         alert_icon,

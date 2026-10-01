@@ -78,7 +78,6 @@ thread_local! {
     static LINK_PAGE: RefCell<Option<String>> = const { RefCell::new(None) };
     static LINK_CACHE: RefCell<Vec<(String, CachedLink)>> = const { RefCell::new(Vec::new()) };
     static LINK_IN_FLIGHT: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
-    static WARM_LINKS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     static WINDOW: RefCell<Option<Retained<LauncherWindow>>> = const { RefCell::new(None) };
     static FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static HEADER: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -425,10 +424,6 @@ fn store(data: LaunchData) {
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
-    WARM_LINKS.with(|slot| {
-        wipe_strings(&mut slot.borrow_mut());
-        *slot.borrow_mut() = data.warm_links.clone();
-    });
 }
 
 fn hide() {
@@ -1718,24 +1713,23 @@ fn show_link_caption(page: &str) {
     }
 }
 
+/// Fetch the preview of the link on the card being shown. History neighbours are not fetched
+/// ahead: every prefetch is a request the user did not ask for.
 fn warm_around() {
-    let mut pages = WARM_LINKS.with(|slot| slot.borrow().clone());
-    if let Some(page) = LINK_PAGE.with(|slot| slot.borrow().clone())
-        && !pages.iter().any(|existing| existing == &page)
-    {
-        pages.insert(0, page);
-    }
-    for page in pages {
+    if let Some(page) = LINK_PAGE.with(|slot| slot.borrow().clone()) {
         warm_link(page);
     }
 }
 
+/// No background request for credential URLs, local/LAN hosts or token-like query strings
+/// (`url_policy::may_prefetch`).
 fn blocks_link_fetch(page: &str) -> bool {
     if crate::page_preview::url_has_userinfo(page) {
         return true;
     }
-    crate::page_preview::canonical_url(page)
-        .is_some_and(|url| crate::page_preview::url_has_userinfo(&url))
+    let fetch_at = crate::page_preview::canonical_url(page);
+    let target = fetch_at.as_deref().unwrap_or(page);
+    crate::page_preview::url_has_userinfo(target) || !crate::url_policy::may_prefetch(target)
 }
 
 fn warm_link(page: String) {
@@ -1814,9 +1808,11 @@ fn page_preview_parts(page: &str) -> (Vec<u8>, Option<String>) {
     let html = crate::macos_fetch::get_document(&fetch_at).unwrap_or_default();
     let text = String::from_utf8_lossy(&html);
     let found = crate::page_preview::from_html(&text, &fetch_at);
+    // The page picks the image URL: it gets the same checks (no LAN/loopback image hosts).
     let bytes = found
         .image
         .as_deref()
+        .filter(|image| crate::url_policy::may_prefetch(image))
         .and_then(crate::macos_fetch::get_asset)
         .unwrap_or_default();
     (bytes, found.title)
@@ -2154,10 +2150,6 @@ pub fn wipe_shown() {
     for slot in [&ACTIONS, &POOL, &OVERFLOW, &SHOWN] {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
-    WARM_LINKS.with(|slot| {
-        wipe_strings(&mut slot.borrow_mut());
-        slot.borrow_mut().clear();
-    });
     LINK_IN_FLIGHT.with(|slot| {
         wipe_strings(&mut slot.borrow_mut());
         slot.borrow_mut().clear();
@@ -2702,7 +2694,6 @@ mod tests {
             history: Vec::new(),
             can_clear_history: false,
             history_nav: None,
-            warm_links: Vec::new(),
             theme: crate::appearance::Theme::System,
             view: crate::commands::CardView::Original,
             image_scan: None,
@@ -2742,7 +2733,6 @@ mod tests {
             history: Vec::new(),
             can_clear_history: false,
             history_nav: None,
-            warm_links: Vec::new(),
             theme: crate::appearance::Theme::System,
             view: crate::commands::CardView::Original,
             image_scan: None,

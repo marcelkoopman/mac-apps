@@ -1,6 +1,7 @@
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 use polars::prelude::*;
 
+use crate::menu_ids;
 use crate::price_watch::WatchList;
 use crate::watch_ui::WatchUIBuilder;
 
@@ -20,7 +21,8 @@ struct PriceRow<'a> {
 }
 
 impl MenuBuilder {
-    pub fn build(df: &DataFrame, watch_list: &WatchList) -> Menu {
+    /// `generation` goes into the row ids (see `menu_ids`); bump it for every rebuilt menu.
+    pub fn build(df: &DataFrame, watch_list: &WatchList, generation: u64) -> Menu {
         let menu = Menu::new();
 
         if df.height() == 0 {
@@ -50,7 +52,8 @@ impl MenuBuilder {
                         pct: pcts.as_ref().and_then(|c| c.get(i)),
                         direction: directions.as_ref().and_then(|c| c.get(i)),
                     });
-                    let _ = menu.append(&MenuItem::with_id(Self::item_id(name), &row, true, None));
+                    let id = menu_ids::asset_item_id(generation, i);
+                    let _ = menu.append(&MenuItem::with_id(id, &row, true, None));
                 }
             } else {
                 let _ = menu.append(&MenuItem::new("Invalid price data", false, None));
@@ -64,7 +67,7 @@ impl MenuBuilder {
             None,
         ));
 
-        for watch in &watch_list.watches {
+        for (index, watch) in watch_list.watches.iter().enumerate() {
             let mark = if watch.triggered { "✓" } else { " " };
             let item_text = format!(
                 "{} {} {}  €{}",
@@ -73,12 +76,8 @@ impl MenuBuilder {
                 watch.asset_name,
                 Self::format_price(watch.target_price)
             );
-            let item_id = format!(
-                "watch_{}_{}",
-                watch.asset_name.to_lowercase().replace(' ', "_"),
-                watch.target_price
-            );
-            let _ = menu.append(&MenuItem::with_id(&item_id, &item_text, true, None));
+            let item_id = menu_ids::watch_item_id(generation, index);
+            let _ = menu.append(&MenuItem::with_id(item_id, &item_text, true, None));
         }
 
         let _ = menu.append(&MenuItem::with_id(
@@ -281,19 +280,13 @@ impl MenuBuilder {
         )
     }
 
-    fn item_id(name: &str) -> String {
-        name.to_lowercase().replace(' ', "_")
-    }
-
-    pub fn asset_name_for_item_id(df: &DataFrame, item_id: &str) -> Option<String> {
+    /// Asset name in `row` of `df` (the row index of an asset menu item).
+    pub fn asset_name_at(df: &DataFrame, row: usize) -> Option<String> {
         let names = df.column("name").ok()?.str().ok()?;
-        for i in 0..df.height() {
-            let name = names.get(i)?;
-            if Self::item_id(name) == item_id {
-                return Some(name.to_string());
-            }
+        if row >= df.height() {
+            return None;
         }
-        None
+        names.get(row).map(str::to_string)
     }
 
     fn format_price(price: f64) -> String {
@@ -369,22 +362,17 @@ mod tests {
     }
 
     #[test]
-    fn item_id_normalizes_name() {
-        assert_eq!(MenuBuilder::item_id("TTF Gas"), "ttf_gas");
-    }
-
-    #[test]
-    fn asset_name_for_item_id_roundtrip() {
+    fn asset_name_at_row() {
         let df = sample_df();
         assert_eq!(
-            MenuBuilder::asset_name_for_item_id(&df, "bitcoin").as_deref(),
+            MenuBuilder::asset_name_at(&df, 0).as_deref(),
             Some("Bitcoin")
         );
         assert_eq!(
-            MenuBuilder::asset_name_for_item_id(&df, "benzine").as_deref(),
+            MenuBuilder::asset_name_at(&df, 1).as_deref(),
             Some("Benzine")
         );
-        assert_eq!(MenuBuilder::asset_name_for_item_id(&df, "poll"), None);
+        assert_eq!(MenuBuilder::asset_name_at(&df, 2), None);
     }
 
     #[test]

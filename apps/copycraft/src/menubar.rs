@@ -300,7 +300,6 @@ impl App {
             history,
             can_clear_history: !self.history.is_empty(),
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
-            warm_links: warm_history_links(&self.history, self.history_cursor),
             theme: appearance::load(),
             view: self.card_view,
             image_scan: self.image_scan.clone(),
@@ -486,14 +485,14 @@ impl App {
         } else {
             url
         };
+        if !crate::url_policy::may_visit(&url) {
+            eprintln!("visit refused: only http and https links are opened");
+            return;
+        }
         #[cfg(target_os = "macos")]
-        std::thread::spawn(move || {
-            if let Err(e) = std::process::Command::new("open").arg(url).status() {
-                eprintln!("visit failed: {e}");
-            }
-        });
-        #[cfg(not(target_os = "macos"))]
-        let _ = url;
+        if !crate::macos_open::open_web_url(&url) {
+            eprintln!("visit failed: the system could not open the link");
+        }
     }
 
     fn format_link_in_place(&mut self) -> bool {
@@ -825,11 +824,6 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     {
         None
     }
-}
-
-fn warm_history_links(history: &ClipboardHistory, cursor: usize) -> Vec<String> {
-    let entries: Vec<Option<&str>> = (0..history.len()).map(|index| history.get(index)).collect();
-    commands::pages_around(&entries, cursor)
 }
 
 fn history_title(history: &ClipboardHistory, index: usize) -> String {
