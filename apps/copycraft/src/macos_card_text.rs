@@ -167,7 +167,10 @@ fn colored_capped(body: &str, kind: FormatKind) -> Retained<NSMutableAttributedS
 /// Byte index after the last line end within the first [`HIGHLIGHT_CAP`] bytes (or at the cap,
 /// on a char boundary, when that stretch has no line end).
 fn highlight_split(body: &str) -> usize {
-    let mut cap = HIGHLIGHT_CAP.min(body.len());
+    if body.len() <= HIGHLIGHT_CAP {
+        return body.len();
+    }
+    let mut cap = HIGHLIGHT_CAP;
     while !body.is_char_boundary(cap) {
         cap -= 1;
     }
