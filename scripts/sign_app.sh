@@ -7,8 +7,8 @@
 #     target/aarch64-apple-darwin/release/bundle/osx/<Name>.app  (CI / --target build)
 #     target/release/bundle/osx/<Name>.app                       (plain `cargo bundle --release`)
 #
-# Run it AFTER everything is copied into the bundle: changing the bundle after
-# signing breaks the signature.
+# Run it AFTER everything is copied into the bundle (including scripts/build_app_icon.sh):
+# changing the bundle after signing breaks the signature.
 set -euo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'

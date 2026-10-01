@@ -103,6 +103,14 @@ jobs:
           echo "=== Assets ==="
           ls -lah "$RES/assets"
 
+      # cargo-bundle only copies an .icns and cannot read the macOS 26 Icon Composer format.
+      # This compiles the icon with actool into Assets.car + AppIcon.icns and sets
+      # CFBundleIconName/CFBundleIconFile. Source: $APP_DIR/assets/AppIcon.icon, else
+      # AppIcon.appiconset, else icon.icns; it skips itself when there is none. Must run before
+      # signing: it changes the bundle.
+      - name: Compile app icon (actool)
+        run: scripts/build_app_icon.sh "$PKG" "$APP"
+
       - name: Verify app bundle
         run: |
           echo "=== App bundle ==="

@@ -21,9 +21,10 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 ├── crates/
 │   └── mac-ui/             # lib: shared UI frameworks + menu bar helpers
 ├── scripts/
+│   ├── build_app_icon.sh   # compile the app icon into a .app with actool (before signing)
 │   └── tag_release.sh      # bump + tag + push a release for one app
 └── .github/workflows/
-    ├── ci.yml              # fmt, clippy, test (macos-latest); cargo audit weekly/manual
+    ├── ci.yml              # fmt, clippy, test + app icon check (macos-latest); cargo audit weekly/manual
     ├── release-copycraft.yml
     └── release-ticker.yml
 ```
@@ -77,9 +78,10 @@ The tag triggers `release-<app>.yml`:
 
 1. check that the tag matches the version in `Cargo.toml`
 2. `cargo bundle --release --target aarch64-apple-darwin`
-3. ad-hoc sign the app (`codesign --sign -`)
-4. build a DMG with `create-dmg`
-5. publish `<app>-X.Y.Z.dmg` with `gh release create` (auto-generated notes)
+3. compile the app icon with `scripts/build_app_icon.sh` (actool: `Assets.car` + `AppIcon.icns`, `CFBundleIconName`/`CFBundleIconFile`). The source is the first of `apps/<app>/assets/AppIcon.icon` (Icon Composer, macOS 26; needs Xcode 26), `AppIcon.appiconset/`, or the existing `icon.icns`; without any of them the step is skipped
+4. ad-hoc sign the app (`codesign --sign -`, also `scripts/sign_app.sh`)
+5. build a DMG with `create-dmg`
+6. publish `<app>-X.Y.Z.dmg` with `gh release create` (auto-generated notes)
 
 Downloads: [Releases](https://github.com/marcelkoopman/mac-apps/releases).
 

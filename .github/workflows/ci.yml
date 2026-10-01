@@ -38,6 +38,31 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+  # The release workflows compile the app icon with scripts/build_app_icon.sh. Run it here on a
+  # stub bundle for each app, so a broken icon source or actool change shows up before a tag.
+  app-icon:
+    name: app icon (actool)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compile the app icons into stub bundles
+        run: |
+          xcrun actool --version --output-format human-readable-text
+          for pkg in copycraft ticker; do
+            app="$RUNNER_TEMP/$pkg/Stub.app"
+            mkdir -p "$app/Contents/Resources"
+            plutil -create xml1 "$app/Contents/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleName string $pkg" "$app/Contents/Info.plist"
+            scripts/build_app_icon.sh "$pkg" "$app"
+            if [ -f "$app/Contents/Resources/Assets.car" ]; then
+              xcrun --sdk macosx assetutil --info "$app/Contents/Resources/Assets.car" > "$RUNNER_TEMP/$pkg-assets.json"
+              grep -q '"AppIcon"' "$RUNNER_TEMP/$pkg-assets.json" \
+                || { echo "::error::$pkg Assets.car has no AppIcon"; exit 1; }
+              test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = AppIcon
+            fi
+          done
+
   audit:
     name: Security audit
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
