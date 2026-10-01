@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use mac_ui::tray;
 use mac_ui::tray_icon::{
-    MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
+    Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 use mac_ui::winit::{
@@ -59,6 +59,9 @@ struct App {
     full_card: Option<Box<launcher::FullCard>>,
     /// The card spinner is showing (some background work ran past [`SPINNER_DELAY`]).
     spinner_on: bool,
+    /// The short blink of the menu bar icon after a copy, and its two template glyphs.
+    blink: icon::Blink,
+    icons: MenuIcons,
     _hotkeys: GlobalHotKeyManager,
     format_hotkey_id: u32,
 }
@@ -81,12 +84,30 @@ impl Background {
     }
 }
 
+/// The menu bar glyph and its blink frame, both templates, built once.
+struct MenuIcons {
+    normal: Icon,
+    flash: Icon,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct ClipSig {
     text_hash: u64,
     image: bool,
     image_change: isize,
     history_len: usize,
+}
+
+impl ClipSig {
+    /// Whether going from `self` to `next` is a new copy worth a blink: the pasteboard changed
+    /// (text, image or change count), it is not the first look after launch or a clear (default
+    /// signature), and it holds something. History edits alone do not count.
+    fn is_new_copy(&self, next: &Self, empty: bool) -> bool {
+        !empty
+            && *self != Self::default()
+            && (self.text_hash, self.image, self.image_change)
+                != (next.text_hash, next.image, next.image_change)
+    }
 }
 
 impl Default for ClipSig {
@@ -159,12 +180,16 @@ impl ApplicationHandler<UserEvent> for App {
             }
         }
 
-        let changed = self.note_clipboard();
+        let now = Instant::now();
+        let changed = self.note_clipboard(now);
         if changed && launcher::is_open() {
             let data = self.current_launch_data();
             self.sync_popup(data);
         }
-        let wake = self.spin_slow_work(Instant::now());
+        let mut wake = self.spin_slow_work(now);
+        if let Some(blink_wake) = self.show_blink(now) {
+            wake = wake.min(blink_wake);
+        }
         event_loop.set_control_flow(ControlFlow::WaitUntil(wake));
     }
 }
@@ -915,7 +940,7 @@ impl App {
         }
     }
 
-    fn note_clipboard(&mut self) -> bool {
+    fn note_clipboard(&mut self, now: Instant) -> bool {
         let view = ClipboardView::from_os();
         self.record_current(&view);
         #[cfg(target_os = "macos")]
@@ -930,6 +955,12 @@ impl App {
         };
         if signature == self.signature {
             return false;
+        }
+        if self
+            .signature
+            .is_new_copy(&signature, matches!(view, ClipboardView::Empty))
+        {
+            self.blink.start(now);
         }
         // A chosen file stays on the card while the clipboard keeps its own history.
         if self.opened.is_none() {
@@ -961,7 +992,23 @@ impl App {
         self.tray.set_menu(Some(Box::new(status_menu(&entries))));
     }
 
-    /// The icon is always the same template, so the tooltip and the VoiceOver label are where
+    /// Swap the menu bar glyph when the blink asks for it. Returns when the blink needs the
+    /// event loop again; `None` when it is idle.
+    fn show_blink(&mut self, now: Instant) -> Option<Instant> {
+        let step = self.blink.tick(now);
+        if let Some(glyph) = step.swap {
+            let icon = match glyph {
+                icon::Glyph::Normal => self.icons.normal.clone(),
+                icon::Glyph::Flash => self.icons.flash.clone(),
+            };
+            if let Err(e) = tray::set_icon(&self.tray, icon, true) {
+                eprintln!("menu bar icon blink failed: {e}");
+            }
+        }
+        step.wake
+    }
+
+    /// The icon is always the same template (apart from the blink), so the tooltip and the VoiceOver label are where
     /// the detected kind shows.
     fn sync_tooltip(&self, view: &ClipboardView) {
         let tip = icon_tip(view);
@@ -1107,8 +1154,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     appearance::apply(appearance::load());
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
-    let icon = icon::menu_icon()?;
-    let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icon, true)
+    // A copy blinks it briefly with a filled variant, also a template.
+    let icons = MenuIcons {
+        normal: icon::menu_icon()?,
+        flash: icon::flash_icon()?,
+    };
+    let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icons.normal.clone(), true)
         .with_menu(Box::new(status_menu(&[])))
         .with_menu_on_left_click(false)
         .with_tooltip("Copycraft")
@@ -1137,6 +1188,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         loading_all: None,
         full_card: None,
         spinner_on: false,
+        blink: icon::Blink::default(),
+        icons,
         _hotkeys: hotkeys,
         format_hotkey_id,
     };
@@ -1146,7 +1199,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{icon_tip, status_labels, status_rows, tray_label, version_label};
+    use super::{ClipSig, icon_tip, status_labels, status_rows, tray_label, version_label};
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use crate::hotkey;
@@ -1182,6 +1235,45 @@ mod tests {
         }
         assert_eq!(tray_label("Copycraft"), "Copycraft");
         assert_eq!(tray_label("Image"), "Copycraft, Image");
+    }
+
+    #[test]
+    fn only_a_real_new_copy_blinks() {
+        let seen = ClipSig {
+            text_hash: 1,
+            image: false,
+            image_change: 7,
+            history_len: 1,
+        };
+        let copy = ClipSig {
+            text_hash: 2,
+            image_change: 8,
+            history_len: 2,
+            ..seen
+        };
+        assert!(seen.is_new_copy(&copy, false));
+        // The same text copied again still bumps the pasteboard change count.
+        let again = ClipSig {
+            image_change: 8,
+            ..seen
+        };
+        assert!(seen.is_new_copy(&again, false));
+        let image = ClipSig {
+            image: true,
+            image_change: 8,
+            ..seen
+        };
+        assert!(seen.is_new_copy(&image, false));
+        // First look after launch or a clear: no blink.
+        assert!(!ClipSig::default().is_new_copy(&copy, false));
+        // A cleared (empty) pasteboard: no blink.
+        assert!(!seen.is_new_copy(&copy, true));
+        // Only the history changed (cleared or trimmed): no blink.
+        let history_only = ClipSig {
+            history_len: 0,
+            ..seen
+        };
+        assert!(!seen.is_new_copy(&history_only, false));
     }
 
     #[test]
