@@ -15,8 +15,8 @@ use mac_ui::objc2_app_kit::{
     NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont,
     NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageView, NSLineBreakMode,
-    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextView,
-    NSView, NSWindow, NSWindowOrderingMode,
+    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
+    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMutableAttributedString, NSNotification, NSPoint, NSRange, NSRect,
@@ -2415,6 +2415,11 @@ fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) 
 
 fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
     let field = widgets::plain_field(mtm, 16.0, "Search");
+    // Native rounded border, background and focus ring while the field is shown.
+    field.setBezeled(true);
+    field.setBezelStyle(NSTextFieldBezelStyle::RoundedBezel);
+    field.setDrawsBackground(true);
+    field.setFocusRingType(NSFocusRingType::Default);
     field.setAlphaValue(0.0);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {

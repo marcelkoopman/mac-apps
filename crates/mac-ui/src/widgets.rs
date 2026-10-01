@@ -41,7 +41,8 @@ pub fn plain_field(mtm: MainThreadMarker, size: f64, placeholder: &str) -> Retai
     field
 }
 
-/// Search field that reports every keystroke, keeps no recents and draws no focus ring.
+/// Search field in the system's rounded style that reports every keystroke and keeps no recents.
+/// It keeps the native border and focus ring.
 pub fn search_field(
     mtm: MainThreadMarker,
     size: f64,
@@ -52,7 +53,6 @@ pub fn search_field(
     field.setSendsWholeSearchString(false);
     field.setMaximumRecents(0);
     field.setRecentsAutosaveName(None);
-    field.setFocusRingType(NSFocusRingType::None);
     field.setFont(Some(&NSFont::systemFontOfSize(size)));
     field.setTextColor(Some(&NSColor::labelColor()));
     field.setPlaceholderString(Some(&NSString::from_str(placeholder)));
