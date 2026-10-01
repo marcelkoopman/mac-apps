@@ -19,8 +19,8 @@
 //! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
-//! Always on: `corners` (concentric corner radii), `icon` and `tray`. The AppKit modules
-//! exist on macOS only.
+//! Always on: `corners` (concentric corner radii), `icon`, `keys` (named key codes) and
+//! `tray`. The AppKit modules exist on macOS only.
 
 pub use tray_icon;
 pub use winit;
@@ -46,6 +46,7 @@ pub mod fonts;
 #[cfg(target_os = "macos")]
 pub mod glass;
 pub mod icon;
+pub mod keys;
 #[cfg(target_os = "macos")]
 pub mod layer;
 #[cfg(all(target_os = "macos", feature = "notify"))]

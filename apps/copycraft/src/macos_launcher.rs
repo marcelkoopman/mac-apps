@@ -6,6 +6,7 @@ use std::ops::Range;
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::corners;
 use mac_ui::glass;
+use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{
@@ -2169,13 +2170,13 @@ fn on_key(event: &NSEvent) {
         }
         return;
     }
-    match event.keyCode() {
-        123 => nudge(-1, 0),
-        124 => nudge(1, 0),
-        126 => nudge(0, -1),
-        125 => nudge(0, 1),
-        36 | 76 => activate_selected(),
-        53 => {
+    match Key::from_key_code(event.keyCode()) {
+        Some(Key::Left) => nudge(-1, 0),
+        Some(Key::Right) => nudge(1, 0),
+        Some(Key::Up) => nudge(0, -1),
+        Some(Key::Down) => nudge(0, 1),
+        Some(Key::Return) => activate_selected(),
+        Some(Key::Escape) => {
             // Esc empties the in-item field. A second Esc closes the popup.
             if !item_query().is_empty() {
                 clear_item_query();
