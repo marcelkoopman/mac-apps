@@ -10,6 +10,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Pinned runner image: macos-26 (arm64). Xcode path as listed in the image README
+  # (actions/runner-images, macos-26-arm64), also printed by the "Select Xcode" step.
+  XCODE_VERSION: "26.6"
   APP_NAME: Copycraft
   PKG: copycraft
   APP_DIR: apps/copycraft
@@ -21,13 +24,20 @@ jobs:
   # Same gate as ci.yml: a tag on a commit that fails fmt, clippy or tests publishes nothing.
   check:
     name: fmt, clippy, test
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
 
       - uses: Swatinem/rust-cache@v2
 
@@ -43,14 +53,21 @@ jobs:
   build:
     name: Build Copycraft DMG
     needs: check
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
 
       - uses: Swatinem/rust-cache@v2
 

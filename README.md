@@ -14,6 +14,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 .
 ├── Cargo.toml              # workspace: members, shared [workspace.dependencies], all [profile.*]
 ├── Cargo.lock
+├── rust-toolchain.toml     # pinned Rust version (local and CI)
 ├── AGENTS.md               # rules for coding agents
 ├── apps/
 │   ├── copycraft/          # bin: Cargo.toml, src/, assets/, LICENSE (Apache-2.0)
@@ -24,7 +25,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── build_app_icon.sh   # compile the app icon into a .app with actool (before signing)
 │   └── tag_release.sh      # bump + tag + push a release for one app
 └── .github/workflows/
-    ├── ci.yml              # fmt, clippy, test + app icon check (macos-latest); cargo audit weekly/manual
+    ├── ci.yml              # fmt, clippy, test + app icon check (macos-26, Xcode 26.6); cargo audit weekly/manual
     ├── release-copycraft.yml
     └── release-ticker.yml
 ```
@@ -32,7 +33,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 ## Requirements
 
 - macOS (both apps target macOS; the release DMGs are built for Apple silicon, `aarch64-apple-darwin`)
-- Rust stable (edition 2024)
+- Rust as pinned in `rust-toolchain.toml` (rustup installs it on first use; edition 2024)
 - [`cargo-bundle`](https://github.com/burtonageo/cargo-bundle), only to build a `.app` bundle locally
 
 ## Build and run
@@ -64,7 +65,9 @@ cargo test --workspace
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests on `macos-latest` for pushes and PRs to `main`. `cargo audit` runs weekly and on manual dispatch.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests for pushes and PRs to `main`. `cargo audit` runs weekly and on manual dispatch.
+
+CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
 ## Release
 

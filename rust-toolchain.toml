@@ -1,0 +1,8 @@
+# Pinned Rust toolchain for local builds and CI. CI installs exactly this with
+# `rustup toolchain install` (no floating `stable`). Bump the channel on purpose, in its own commit,
+# after `cargo clippy --workspace --all-targets -- -D warnings` is clean with the new version.
+[toolchain]
+channel = "1.99.0"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = ["aarch64-apple-darwin"]

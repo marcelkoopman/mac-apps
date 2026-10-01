@@ -15,17 +15,27 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Pinned runner image: macos-26 (arm64). Xcode path as listed in the image README
+  # (actions/runner-images, macos-26-arm64), also printed by the "Select Xcode" step.
+  XCODE_VERSION: "26.6"
 
 jobs:
   check:
     name: fmt, clippy, test
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
 
       - uses: Swatinem/rust-cache@v2
 
@@ -42,9 +52,14 @@ jobs:
   # stub bundle for each app, so a broken icon source or actool change shows up before a tag.
   app-icon:
     name: app icon (actool)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
 
       - name: Compile the app icons into stub bundles
         run: |
@@ -66,10 +81,14 @@ jobs:
   audit:
     name: Security audit
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
