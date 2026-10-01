@@ -1,14 +1,16 @@
 //! Window and panel backgrounds: Liquid Glass (`NSGlassEffectView`, macOS 26+) with a frosted
-//! `NSVisualEffectView` fallback on older macOS.
+//! `NSVisualEffectView` fallback on older macOS, and [`group`]s that let nearby glass controls
+//! (`NSGlassEffectContainerView`) render, merge and morph together.
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyClass;
 use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSGlassEffectView, NSGlassEffectViewStyle, NSView,
-    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView,
-    NSWindowOrderingMode,
+    NSAutoresizingMaskOptions, NSGlassEffectContainerView, NSGlassEffectView,
+    NSGlassEffectViewStyle, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+    NSVisualEffectState, NSVisualEffectView, NSWindowOrderingMode,
 };
+use objc2_foundation::NSRect;
 
 use crate::layer::round_view;
 
@@ -85,6 +87,77 @@ fn frosted(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) -> Backgr
     }
 }
 
+/// Which view [`group`] built.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GroupKind {
+    /// `NSGlassEffectContainerView` (macOS 26+).
+    Container,
+    /// A plain `NSView`; older macOS has no glass to merge.
+    Plain,
+}
+
+/// Result of [`group`]: a container for glass controls such as a row of
+/// [`GlassButton`](crate::button::GlassButton)s.
+#[derive(Debug)]
+pub struct Group {
+    root: Retained<NSView>,
+    content: Retained<NSView>,
+    kind: GroupKind,
+}
+
+impl Group {
+    /// The view to add to the parent and give a frame.
+    pub fn view(&self) -> &NSView {
+        &self.root
+    }
+
+    /// Where the grouped controls go, in the coordinates of [`view`](Self::view)'s bounds. It
+    /// tracks the group's size. Without the container it is [`view`](Self::view) itself.
+    pub fn content(&self) -> &NSView {
+        &self.content
+    }
+
+    /// Which view was built.
+    pub fn kind(&self) -> GroupKind {
+        self.kind
+    }
+}
+
+/// Whether this macOS has `NSGlassEffectContainerView`. Checked at runtime.
+pub fn group_is_available() -> bool {
+    AnyClass::get(c"NSGlassEffectContainerView").is_some()
+}
+
+/// A group for glass controls placed close together: on macOS 26+ an
+/// `NSGlassEffectContainerView` that renders them in one pass and merges controls that come
+/// within `spacing` points of each other (0 only batches, without merging), else a plain view.
+///
+/// Add the controls to [`Group::content`], then position [`Group::view`].
+pub fn group(mtm: MainThreadMarker, spacing: f64) -> Group {
+    if !group_is_available() {
+        let root = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
+        return Group {
+            content: root.clone(),
+            root,
+            kind: GroupKind::Plain,
+        };
+    }
+    // Only reached when the class exists, so the binding's class lookup cannot fail.
+    let container = NSGlassEffectContainerView::initWithFrame(
+        NSGlassEffectContainerView::alloc(mtm),
+        NSRect::ZERO,
+    );
+    container.setSpacing(merge_spacing(spacing));
+    let content = NSView::initWithFrame(NSView::alloc(mtm), container.bounds());
+    track_size(&content);
+    container.setContentView(Some(&content));
+    Group {
+        root: container.into_super(),
+        content,
+        kind: GroupKind::Container,
+    }
+}
+
 fn track_size(view: &NSView) {
     view.setAutoresizingMask(
         NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
@@ -93,4 +166,22 @@ fn track_size(view: &NSView) {
 
 fn install_backmost(parent: &NSView, view: &NSView) {
     parent.addSubview_positioned_relativeTo(view, NSWindowOrderingMode::Below, None);
+}
+
+/// `spacing` as the container takes it: negative or NaN becomes 0 (batch only, no merging).
+fn merge_spacing(spacing: f64) -> f64 {
+    if spacing > 0.0 { spacing } else { 0.0 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_spacing;
+
+    #[test]
+    fn spacing_is_never_negative() {
+        assert_eq!(merge_spacing(6.0), 6.0);
+        assert_eq!(merge_spacing(0.0), 0.0);
+        assert_eq!(merge_spacing(-3.0), 0.0);
+        assert_eq!(merge_spacing(f64::NAN), 0.0);
+    }
 }

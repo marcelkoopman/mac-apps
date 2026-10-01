@@ -21,7 +21,7 @@ use objc2::runtime::{AnyObject, Sel};
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, sel};
 use objc2_app_kit::{
     NSAccessibility, NSBezelStyle, NSButton, NSCellImagePosition, NSColor, NSControlBorderShape,
-    NSControlSize, NSFont, NSImageScaling, NSTintProminence, NSView,
+    NSControlSize, NSFont, NSImageScaling, NSLineBreakMode, NSTintProminence, NSView,
 };
 use objc2_foundation::{NSRect, NSSize, NSString};
 
@@ -144,13 +144,17 @@ impl GlassButton {
         this
     }
 
-    /// Capsule button with `title` in the system font for `size`, sized to fit the title.
+    /// Capsule button with `title` in the system font for `size`, sized to fit the title. A
+    /// narrower frame truncates the title at the tail.
     pub fn pill(mtm: MainThreadMarker, title: &str, size: ButtonSize) -> Self {
         let this = Self::new(mtm, Shape::Capsule);
         this.button.setControlSize(size.control_size());
         this.button.setFont(Some(&NSFont::systemFontOfSize(
             NSFont::systemFontSizeForControlSize(size.control_size()),
         )));
+        // A frame narrower than the title cuts it with an ellipsis instead of clipping.
+        this.button
+            .setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
         this.set_title(title);
         this
     }

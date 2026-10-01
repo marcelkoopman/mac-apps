@@ -4,9 +4,12 @@ use std::cell::{Cell, RefCell};
 use std::ops::Range;
 
 use mac_ui::button::{ButtonSize, GlassButton};
+use mac_ui::glass;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
-use mac_ui::objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use mac_ui::objc2::{
+    AnyThread, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel,
+};
 use mac_ui::objc2_app_kit::{
     NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont,
@@ -50,6 +53,9 @@ const GAP: f64 = 8.0;
 const HOTKEY: &str = crate::hotkey::LABEL;
 /// Strong enough that 12pt text in the well cannot be read.
 const BLUR_RADIUS: f64 = 22.0;
+/// Glass controls this close merge on macOS 26+ (`glass::group`). Below the 6 pt gaps between
+/// chips and header buttons, so they only merge while they morph closer together.
+const GLASS_MERGE: f64 = 4.0;
 
 #[link(name = "CoreImage", kind = "framework")]
 unsafe extern "C" {
@@ -88,13 +94,18 @@ thread_local! {
     static PREVIEW_TEXT: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
     static PREVIEW_SCROLL: RefCell<Option<Retained<PreviewScroll>>> = const { RefCell::new(None) };
     static PREVIEW_IMAGE: RefCell<Option<Retained<NSImageView>>> = const { RefCell::new(None) };
-    static PILLS: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
+    /// Chip row: a glass group holding one GlassButton per shown command.
+    static PILLS: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
+    /// The chips in [`SHOWN`] order; index = chip tag = selection.
+    static CHIPS: RefCell<Vec<GlassButton>> = const { RefCell::new(Vec::new()) };
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
     static OLDER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
     static NEWER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
-    static MORE: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
-    static CLEAR: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
-    static CLOSE: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    /// Wipe, More and Close in one glass group at the right of the header.
+    static HEADER_GROUP: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
+    static MORE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
+    static CLEAR: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
+    static CLOSE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
     static CONTENT_ACTIONS: Cell<commands::ContentActions> = const {
         Cell::new(commands::ContentActions {
             copy: false,
@@ -557,13 +568,20 @@ fn ensure_window(mtm: MainThreadMarker) {
     let preview_text = payload_view(mtm);
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_image = image_view(mtm);
-    let pills = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
+    let pills = glass::group(mtm, GLASS_MERGE);
     let older = nav_button(mtm, "<", "Older", sel!(olderClicked:));
     let newer = nav_button(mtm, ">", "Newer", sel!(newerClicked:));
-    let more = icon_button(mtm, "⋯", sel!(moreClicked:));
-    let clear = icon_button(mtm, "Wipe", sel!(clearClicked:));
-    clear.setToolTip(Some(&NSString::from_str("Wipe copied data from memory")));
-    let close = icon_button(mtm, "✕", sel!(closeClicked:));
+    let more = header_symbol(mtm, "ellipsis", "More", "⋯", sel!(moreClicked:));
+    let clear = GlassButton::pill(mtm, "Wipe", ButtonSize::Small);
+    wire_button(clear.button(), sel!(clearClicked:));
+    clear
+        .button()
+        .setToolTip(Some(&NSString::from_str("Wipe copied data from memory")));
+    let close = header_symbol(mtm, "xmark", "Close", "✕", sel!(closeClicked:));
+    let header_group = glass::group(mtm, GLASS_MERGE);
+    header_group.content().addSubview(clear.view());
+    header_group.content().addSubview(more.view());
+    header_group.content().addSubview(close.view());
     let copy_button = well_action(mtm, "doc.on.doc", "Copy", "⎘", sel!(copyClicked:));
     let save_button = well_action(
         mtm,
@@ -577,16 +595,14 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&header);
     content.addSubview(&item_find);
     content.addSubview(&item_count);
-    content.addSubview(&more);
-    content.addSubview(&clear);
-    content.addSubview(&close);
+    content.addSubview(header_group.view());
     content.addSubview(&well);
     content.addSubview(&preview_scroll);
     content.addSubview(&preview_image);
     content.addSubview(&reveal.root);
     content.addSubview(&meta);
     content.addSubview(&field);
-    content.addSubview(&pills);
+    content.addSubview(pills.view());
     content.addSubview(older.view());
     content.addSubview(newer.view());
     content.addSubview(copy_button.view());
@@ -604,6 +620,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     PILLS.with(|slot| slot.replace(Some(pills)));
     OLDER.with(|slot| slot.replace(Some(older)));
     NEWER.with(|slot| slot.replace(Some(newer)));
+    HEADER_GROUP.with(|slot| slot.replace(Some(header_group)));
     MORE.with(|slot| slot.replace(Some(more)));
     CLEAR.with(|slot| slot.replace(Some(clear)));
     CLOSE.with(|slot| slot.replace(Some(close)));
@@ -662,9 +679,17 @@ fn layout(fresh_place: bool) {
     HEADER.with(|slot| {
         set_label(slot, PAD, placed.header_y, title_w, HEADER_H, &title);
     });
-    CLEAR.with(|slot| place_header_button(slot, clear_x, placed.header_y, CLEAR_BUTTON_W));
-    MORE.with(|slot| place_header_button(slot, more_x, placed.header_y, HEADER_BUTTON));
-    CLOSE.with(|slot| place_header_button(slot, close_x, placed.header_y, HEADER_BUTTON));
+    HEADER_GROUP.with(|slot| {
+        if let Some(group) = slot.borrow().as_ref() {
+            group.view().setFrame(NSRect::new(
+                NSPoint::new(clear_x, placed.header_y + (HEADER_H - HEADER_BUTTON) / 2.0),
+                NSSize::new(close_x + HEADER_BUTTON - clear_x, HEADER_BUTTON),
+            ));
+        }
+    });
+    CLEAR.with(|slot| place_header_button(slot, 0.0, CLEAR_BUTTON_W));
+    MORE.with(|slot| place_header_button(slot, more_x - clear_x, HEADER_BUTTON));
+    CLOSE.with(|slot| place_header_button(slot, close_x - clear_x, HEADER_BUTTON));
     place_item_find(placed.find_y, item_find);
     place_well(placed.preview_y);
     apply_preview(placed.preview_y);
@@ -701,13 +726,13 @@ fn layout(fresh_place: bool) {
     });
     PILLS.with(|slot| {
         if let Some(pills) = slot.borrow().as_ref() {
-            pills.setFrame(NSRect::new(
+            pills.view().setFrame(NSRect::new(
                 NSPoint::new(PAD, placed.chips_y),
                 NSSize::new(inner, placed.chips_h),
             ));
             rebuild_pills(
                 mtm,
-                pills,
+                pills.content(),
                 &shown,
                 &frames,
                 show_empty,
@@ -1932,6 +1957,7 @@ fn rebuild_pills(
     while list.subviews().count() > 0 {
         list.subviews().objectAtIndex(0).removeFromSuperview();
     }
+    CHIPS.with(|slot| slot.borrow_mut().clear());
     if shown.is_empty() {
         if show_empty {
             let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
@@ -1945,85 +1971,34 @@ fn rebuild_pills(
         return;
     }
     let area_h = commands::chips_height(frames);
+    let mut chips = Vec::with_capacity(shown.len());
     for (index, cmd) in shown.iter().enumerate() {
         let Some(frame) = frames.get(index) else {
             continue;
         };
         let y = area_h - (frame.row as f64 + 1.0) * commands::CHIP_PITCH
             + (commands::CHIP_PITCH - commands::CHIP_PILL_H) / 2.0;
-        let pill = NSView::initWithFrame(
-            NSView::alloc(mtm),
-            NSRect::new(
-                NSPoint::new(frame.x, y),
-                NSSize::new(frame.width, commands::CHIP_PILL_H),
-            ),
-        );
-        let fill = filled_box(mtm, commands::CHIP_PILL_H / 2.0, &NSColor::clearColor());
-        fill.setFrame(NSRect::new(
-            NSPoint::new(0.0, 0.0),
+        let chip = GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular);
+        chip.view().setFrame(NSRect::new(
+            NSPoint::new(frame.x, y),
             NSSize::new(frame.width, commands::CHIP_PILL_H),
         ));
-        let title = widgets::label(mtm, 13.0, &NSColor::labelColor());
-        title.setAlignment(NSTextAlignment::Center);
-        title.setFrame(NSRect::new(
-            NSPoint::new(8.0, 5.0),
-            NSSize::new((frame.width - 16.0).max(8.0), 18.0),
-        ));
-        title.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
-        title.setStringValue(&NSString::from_str(&cmd.title));
-        let hit = NSButton::initWithFrame(
-            NSButton::alloc(mtm),
-            NSRect::new(
-                NSPoint::new(0.0, 0.0),
-                NSSize::new(frame.width, commands::CHIP_PILL_H),
-            ),
-        );
-        hit.setBordered(false);
-        hit.setTransparent(true);
-        hit.setTitle(&NSString::from_str(""));
-        hit.setTag(index as isize);
-        wire_button(&hit, sel!(chipClicked:));
-        pill.addSubview(&fill);
-        pill.addSubview(&title);
-        pill.addSubview(&hit);
-        list.addSubview(&pill);
+        chip.button().setTag(index as isize);
+        wire_button(chip.button(), sel!(chipClicked:));
+        list.addSubview(chip.view());
+        chips.push(chip);
     }
+    CHIPS.with(|slot| *slot.borrow_mut() = chips);
 }
 
+/// Show the selected chip as the prominent one. The chip index is the `SELECTION` index.
 fn paint_pills() {
-    if SHOWN.with(|slot| slot.borrow().is_empty()) {
-        return;
-    }
     let selected = SELECTION.with(Cell::get);
-    PILLS.with(|slot| {
-        let borrowed = slot.borrow();
-        let Some(list) = borrowed.as_ref() else {
-            return;
-        };
-        for (index, pill) in list.subviews().iter().enumerate() {
-            paint_pill(&pill, index == selected);
+    CHIPS.with(|slot| {
+        for (index, chip) in slot.borrow().iter().enumerate() {
+            chip.set_prominent(index == selected);
         }
     });
-}
-
-fn paint_pill(pill: &NSView, selected: bool) {
-    let fill = if selected {
-        NSColor::controlAccentColor()
-    } else {
-        NSColor::unemphasizedSelectedContentBackgroundColor()
-    };
-    let text = if selected {
-        NSColor::whiteColor()
-    } else {
-        NSColor::labelColor()
-    };
-    for view in pill.subviews().iter() {
-        if let Some(box_view) = view.downcast_ref::<NSBox>() {
-            box_view.setFillColor(&fill);
-        } else if let Some(label) = view.downcast_ref::<NSTextField>() {
-            label.setTextColor(Some(&text));
-        }
-    }
 }
 
 fn nudge(dx: isize, dy: isize) {
@@ -2141,7 +2116,7 @@ fn pop_overflow() {
         });
         menu.addItem(&item);
     }
-    let button = MORE.with(|slot| slot.borrow().clone());
+    let button = MORE.with(|slot| slot.borrow().as_ref().map(|more| more.view().retain()));
     let Some(button) = button else {
         return;
     };
@@ -2410,19 +2385,14 @@ fn set_label(
     label.setStringValue(&NSString::from_str(text));
 }
 
-fn place_header_button(
-    slot: &RefCell<Option<Retained<NSButton>>>,
-    x: f64,
-    header_y: f64,
-    width: f64,
-) {
+/// Place a header button at `x` inside the header group (which is `HEADER_BUTTON` tall).
+fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) {
     let borrowed = slot.borrow();
     let Some(button) = borrowed.as_ref() else {
         return;
     };
-    let y = header_y + (HEADER_H - HEADER_BUTTON) / 2.0;
-    button.setFrame(NSRect::new(
-        NSPoint::new(x, y),
+    button.view().setFrame(NSRect::new(
+        NSPoint::new(x, 0.0),
         NSSize::new(width, HEADER_BUTTON),
     ));
 }
@@ -2737,9 +2707,16 @@ fn nav_button(mtm: MainThreadMarker, title: &str, label: &str, action: Sel) -> N
     button
 }
 
-fn icon_button(mtm: MainThreadMarker, title: &str, action: Sel) -> Retained<NSButton> {
-    let button = widgets::text_button(mtm, title, 14.0);
-    wire_button(&button, action);
+/// Header symbol button (More, Close); `label` is what VoiceOver reads.
+fn header_symbol(
+    mtm: MainThreadMarker,
+    symbol: &str,
+    label: &str,
+    fallback: &str,
+    action: Sel,
+) -> GlassButton {
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, 13.0);
+    wire_button(button.button(), action);
     button
 }
 
