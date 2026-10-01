@@ -728,6 +728,10 @@ fn layout(fresh_place: bool) {
     });
     FIELD.with(|slot| {
         if let Some(field) = slot.borrow().as_ref() {
+            // Not setHidden: the field stays first responder while the card is open, so typing
+            // (or "/") starts a search and the arrow keys move between chips. A hidden view
+            // would give up focus. Out of search it has a zero frame, so it takes no clicks, and
+            // alpha 0 keeps its focus ring from drawing.
             field.setHidden(false);
             let (field_y, field_h, alpha) = if searching {
                 (placed.search_y + 4.0, 28.0, 1.0)
@@ -1634,8 +1638,9 @@ fn set_preview_image_hidden(hidden: bool) {
 fn set_preview_text_hidden(hidden: bool) {
     PREVIEW_SCROLL.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
+            // setHidden keeps clicks, scrolling and focus off the hidden text. The alpha only
+            // backs it up: a layer-backed scroll view can keep painting after setHidden.
             view.setHidden(hidden);
-            // A layer-backed scroll view can keep painting after setHidden.
             view.setAlphaValue(if hidden { 0.0 } else { 1.0 });
             if let Some(parent) = unsafe { view.superview() } {
                 if hidden {
@@ -1664,7 +1669,6 @@ fn show_preview_image() {
         return;
     };
     view.setHidden(false);
-    view.setAlphaValue(1.0);
     if let Some(parent) = unsafe { view.superview() } {
         parent.addSubview(&view);
     }
