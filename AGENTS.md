@@ -37,7 +37,9 @@ Kleinste opdracht die de change dekt:
 
 ## Git & Workflow (Strikte Restricties)
 
-- **GEEN Git-commando's:** Voer NOOIT git-commando's uit (geen `git checkout`, `git add`, `git commit`, `git push`, etc.).
+Deze regels gelden voor **Grok Build** (lokaal, om tokens te besparen). Bots zoals Edsger mogen wél git gebruiken: committen en pushen naar `main`, maar alleen als Marcel daar expliciet om vraagt en nadat fmt/clippy/test schoon zijn.
+
+- **GEEN Git-commando's (Grok Build):** Voer NOOIT git-commando's uit (geen `git checkout`, `git add`, `git commit`, `git push`, etc.).
 - **Zelfwerkzaamheid:** Alle branch-afhandeling en commits worden handmatig door de gebruiker gedaan in de macOS terminal buiten Grok Build om.
 - **Geen wijzigingscontroles:** Vraag niet naar de git-status en controleer niet of de werkmap schoon is. Ga er altijd van uit dat de huidige code in de workspace de juiste basis is om op te bouwen.
 - **Stoppen na code-oplevering:** Zodra de code correct is aangepast en de lokale cargo-checks (check/test/clippy) succesvol zijn uitgevoerd, rapporteer je dat de taak klaar is. Doe geen suggesties voor commits of PR-teksten.
