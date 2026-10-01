@@ -175,6 +175,13 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, event: &NSEvent) {
+            // Tab and Shift-Tab from a focused button or the reveal cover reach the window.
+            // NSWindow's own keyDown: moves along the key-view loop. Without it, Tab would stop
+            // on the first button under Full Keyboard Access.
+            if Key::from_key_code(event.keyCode()) == Some(Key::Tab) {
+                let _: () = unsafe { msg_send![super(self), keyDown: event] };
+                return;
+            }
             on_key(event);
         }
 
