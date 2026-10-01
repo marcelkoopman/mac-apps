@@ -732,12 +732,12 @@ fn load_icon(name: &str) -> Result<Icon, Box<dyn std::error::Error>> {
     Ok(mac_ui::icon::from_image_file(&path)?)
 }
 
-fn fallback_icon(r: u8, g: u8, b: u8) -> Result<Icon, mac_ui::tray_icon::BadIcon> {
-    mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255]).into_icon()
+fn fallback_icon(r: u8, g: u8, b: u8) -> Result<Icon, mac_ui::icon::IconError> {
+    Ok(mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255])?.into_icon()?)
 }
 
 /// The bundled icon `name`, or a plain square in the given color when it cannot be loaded.
-fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::tray_icon::BadIcon> {
+fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::icon::IconError> {
     load_icon(name).or_else(|e| {
         log_message(&format!(
             "menubar: icon {name} not loaded ({e}); using a plain one"

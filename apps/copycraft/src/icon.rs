@@ -1,4 +1,4 @@
-use mac_ui::icon::Canvas;
+use mac_ui::icon::{Canvas, IconError};
 use mac_ui::tray_icon::Icon;
 
 use crate::format::FormatKind;
@@ -12,23 +12,23 @@ pub fn menu_icon() -> Result<Icon, Box<dyn std::error::Error>> {
 }
 
 pub fn menu_icon_tinted(accent: Option<[u8; 4]>) -> Result<Icon, Box<dyn std::error::Error>> {
-    Ok(Icon::from_rgba(icon_pixels(accent), SIZE, SIZE)?)
+    Ok(Icon::from_rgba(icon_pixels(accent)?, SIZE, SIZE)?)
 }
 
 pub fn accent_for_kind(kind: Option<FormatKind>) -> Option<[u8; 4]> {
     kind.and_then(FormatKind::accent_rgba)
 }
 
-fn icon_pixels(accent: Option<[u8; 4]>) -> Vec<u8> {
+fn icon_pixels(accent: Option<[u8; 4]>) -> Result<Vec<u8>, IconError> {
     let accent = accent.unwrap_or(DEFAULT_ACCENT);
-    let mut canvas = Canvas::new(SIZE, SIZE);
+    let mut canvas = Canvas::new(SIZE, SIZE)?;
     canvas.fill_round_rect(2, 4, 28, 26, 6, accent);
     canvas.fill_round_rect(5, 8, 22, 20, 4, [36, 44, 68, 255]);
     canvas.fill_round_rect(7, 10, 18, 16, 3, [244, 246, 252, 255]);
     canvas.fill_round_rect(12, 5, 8, 6, 2, accent);
     draw_brace_left(&mut canvas, companion_accent(accent));
     draw_brace_right(&mut canvas, accent);
-    canvas.into_rgba()
+    Ok(canvas.into_rgba())
 }
 
 fn companion_accent(accent: [u8; 4]) -> [u8; 4] {
@@ -81,12 +81,13 @@ mod tests {
 
     #[test]
     fn pixels_follow_the_detected_accent() {
-        let plain = icon_pixels(accent_for_kind(Some(FormatKind::Plain)));
-        let text = icon_pixels(accent_for_kind(Some(FormatKind::Text)));
-        let rust = icon_pixels(accent_for_kind(Some(FormatKind::Rust)));
-        let json = icon_pixels(accent_for_kind(Some(FormatKind::Json)));
-        let image = icon_pixels(accent_for_kind(Some(FormatKind::Image)));
-        assert_ne!(plain, icon_pixels(None));
+        let pixels = |kind| icon_pixels(accent_for_kind(kind)).unwrap();
+        let plain = pixels(Some(FormatKind::Plain));
+        let text = pixels(Some(FormatKind::Text));
+        let rust = pixels(Some(FormatKind::Rust));
+        let json = pixels(Some(FormatKind::Json));
+        let image = pixels(Some(FormatKind::Image));
+        assert_ne!(plain, pixels(None));
         assert_ne!(plain, text);
         assert_ne!(text, rust);
         assert_ne!(rust, json);
