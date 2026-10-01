@@ -653,8 +653,18 @@ fn layout(fresh_place: bool) {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
     let meta = resolved_meta();
-    let labels: Vec<String> = shown.iter().map(|cmd| cmd.title.clone()).collect();
-    let titles: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    // Each chip is laid out at the width its own pill measures, so titles never get cut early.
+    let chips: Vec<GlassButton> = shown
+        .iter()
+        .map(|cmd| GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular))
+        .collect();
+    let widths: Vec<f64> = chips
+        .iter()
+        .map(|chip| commands::chip_width(chip.fitted_size().width))
+        .collect();
     let inner = WIDTH - PAD * 2.0;
     let nav = HISTORY_NAV.with(|slot| *slot.borrow());
     let reserve = if nav.is_some() {
@@ -665,7 +675,7 @@ fn layout(fresh_place: bool) {
     let frames = if shown.is_empty() {
         Vec::new()
     } else {
-        commands::layout_chips(&titles, inner, reserve)
+        commands::layout_chips(&widths, inner, reserve)
     };
     let show_empty = shown.is_empty() && searching && !query.trim().is_empty();
     let item_find = !well_is_masked();
@@ -677,9 +687,6 @@ fn layout(fresh_place: bool) {
         nav.is_some(),
         item_find,
     );
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
     place_window(mtm, placed.height, fresh_place);
     let title = CARD_TITLE.with(|slot| format!("{} · {HOTKEY}", slot.borrow()));
     let close_x = WIDTH - PAD - 24.0;
@@ -743,7 +750,7 @@ fn layout(fresh_place: bool) {
             rebuild_pills(
                 mtm,
                 pills.content(),
-                &shown,
+                chips,
                 &frames,
                 show_empty,
                 (inner - reserve).max(0.0),
@@ -1959,7 +1966,7 @@ fn load_thumbnail() {
 fn rebuild_pills(
     mtm: MainThreadMarker,
     list: &NSView,
-    shown: &[Command],
+    chips: Vec<GlassButton>,
     frames: &[ChipFrame],
     show_empty: bool,
     text_width: f64,
@@ -1968,7 +1975,7 @@ fn rebuild_pills(
         list.subviews().objectAtIndex(0).removeFromSuperview();
     }
     CHIPS.with(|slot| slot.borrow_mut().clear());
-    if shown.is_empty() {
+    if chips.is_empty() {
         if show_empty {
             let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
             empty.setFrame(NSRect::new(
@@ -1981,14 +1988,13 @@ fn rebuild_pills(
         return;
     }
     let area_h = commands::chips_height(frames);
-    let mut chips = Vec::with_capacity(shown.len());
-    for (index, cmd) in shown.iter().enumerate() {
+    let mut placed = Vec::with_capacity(chips.len());
+    for (index, chip) in chips.into_iter().enumerate() {
         let Some(frame) = frames.get(index) else {
             continue;
         };
         let y = area_h - (frame.row as f64 + 1.0) * commands::CHIP_PITCH
             + (commands::CHIP_PITCH - commands::CHIP_PILL_H) / 2.0;
-        let chip = GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular);
         chip.view().setFrame(NSRect::new(
             NSPoint::new(frame.x, y),
             NSSize::new(frame.width, commands::CHIP_PILL_H),
@@ -1996,9 +2002,9 @@ fn rebuild_pills(
         chip.button().setTag(index as isize);
         wire_button(chip.button(), sel!(chipClicked:));
         list.addSubview(chip.view());
-        chips.push(chip);
+        placed.push(chip);
     }
-    CHIPS.with(|slot| *slot.borrow_mut() = chips);
+    CHIPS.with(|slot| *slot.borrow_mut() = placed);
 }
 
 /// Show the selected chip as the prominent one. The chip index is the `SELECTION` index.

@@ -1019,21 +1019,27 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     commands
 }
 
-/// Width of a chip. The label is inset 8pt on each side, and the text field
-/// adds its own padding around the 13pt system font. A field that is even
-/// slightly short replaces the tail with an ellipsis, so "Copy" draws as "Co…".
-pub fn chip_width(title: &str) -> f64 {
-    let chars = title.chars().count() as f64;
-    (32.0 + chars * 8.0).clamp(64.0, 220.0)
+/// Narrowest chip, so short titles ("Copy", "File") keep a comfortable click target.
+pub const CHIP_MIN_W: f64 = 56.0;
+/// Widest chip. A longer title is cut at the tail by the pill itself.
+pub const CHIP_MAX_W: f64 = 220.0;
+
+/// Laid-out width of a chip whose pill measures `measured` points after `sizeToFit`: rounded up
+/// to whole points and kept within [`CHIP_MIN_W`]..=[`CHIP_MAX_W`]. NaN gives the minimum.
+pub fn chip_width(measured: f64) -> f64 {
+    if measured.is_nan() {
+        return CHIP_MIN_W;
+    }
+    measured.ceil().clamp(CHIP_MIN_W, CHIP_MAX_W)
 }
 
+/// Flow chips of the given `widths` (from [`chip_width`]) into rows `width` wide.
 /// `trailing` is kept clear on the right of the first row only.
-pub fn layout_chips(titles: &[&str], width: f64, trailing: f64) -> Vec<ChipFrame> {
-    let mut frames = Vec::with_capacity(titles.len());
+pub fn layout_chips(widths: &[f64], width: f64, trailing: f64) -> Vec<ChipFrame> {
+    let mut frames = Vec::with_capacity(widths.len());
     let mut x = 0.0;
     let mut row = 0usize;
-    for title in titles {
-        let chip = chip_width(title);
+    for &chip in widths {
         let limit = if row == 0 {
             (width - trailing).max(0.0)
         } else {
@@ -2623,20 +2629,45 @@ Kleinste opdracht die de change dekt.
     }
 
     #[test]
-    fn chip_width_leaves_room_for_the_label() {
-        assert!(chip_width("Copy") - 16.0 >= 44.0);
-        assert!(chip_width("Visit") - 16.0 >= 44.0);
-        assert!(chip_width("Base64") - 16.0 >= 58.0);
-        assert!(chip_width("Dataframe") - 16.0 >= 60.0);
-        assert!(chip_width("Schema") - 16.0 >= 60.0);
-        assert!(chip_width("Save") - 16.0 >= 44.0);
+    fn chip_width_follows_the_measured_pill() {
+        assert_eq!(chip_width(71.2), 72.0);
+        assert_eq!(chip_width(120.0), 120.0);
+        assert_eq!(chip_width(30.0), super::CHIP_MIN_W);
+        assert_eq!(chip_width(0.0), super::CHIP_MIN_W);
+        assert_eq!(chip_width(f64::NAN), super::CHIP_MIN_W);
+        assert_eq!(chip_width(-5.0), super::CHIP_MIN_W);
+        assert_eq!(chip_width(900.0), super::CHIP_MAX_W);
+        assert_eq!(chip_width(f64::INFINITY), super::CHIP_MAX_W);
+    }
+
+    #[test]
+    fn chips_keep_their_measured_widths() {
+        let widths = [chip_width(61.5), chip_width(88.0), chip_width(40.0)];
+        let frames = layout_chips(&widths, 412.0, 0.0);
+        assert_eq!(frames.len(), 3);
+        assert!(frames.iter().all(|frame| frame.row == 0));
+        assert_eq!(frames[0].x, 0.0);
+        assert_eq!(frames[0].width, 62.0);
+        assert_eq!(frames[1].x, 62.0 + super::CHIP_GAP);
+        assert_eq!(frames[1].width, 88.0);
+        assert_eq!(frames[2].x, 62.0 + 88.0 + 2.0 * super::CHIP_GAP);
+        assert_eq!(frames[2].width, super::CHIP_MIN_W);
+    }
+
+    #[test]
+    fn a_chip_wider_than_the_row_gets_its_own_row() {
+        let frames = layout_chips(&[80.0, 220.0, 80.0], 200.0, 0.0);
+        assert_eq!(frames[0].row, 0);
+        assert_eq!((frames[1].row, frames[1].x), (1, 0.0));
+        assert_eq!((frames[2].row, frames[2].x), (2, 0.0));
+        assert!(layout_chips(&[], 200.0, 0.0).is_empty());
     }
 
     #[test]
     fn chips_wrap_and_arrows_move_between_pills() {
-        let titles = ["Preview", "Base64", "Data URL", "File", "Format", "Convert"];
-        let frames = layout_chips(&titles, 220.0, 0.0);
-        assert!(frames.len() == titles.len());
+        let widths = [78.0, 72.0, 86.0, 56.0, 74.0, 80.0];
+        let frames = layout_chips(&widths, 220.0, 0.0);
+        assert!(frames.len() == widths.len());
         assert_eq!(frames[0].row, 0);
         assert!(frames.last().unwrap().row > 0);
         assert_eq!(step_chip(&frames, 0, 1, 0), 1);
@@ -2672,9 +2703,9 @@ Kleinste opdracht die de change dekt.
 
     #[test]
     fn history_arrows_keep_the_first_row_clear() {
-        let titles = ["Visit", "Format", "Preview", "Base64", "Data URL", "File"];
+        let widths = [62.0, 74.0, 78.0, 72.0, 86.0, 56.0];
         let width = 412.0;
-        let frames = layout_chips(&titles, width, NAV_RESERVE);
+        let frames = layout_chips(&widths, width, NAV_RESERVE);
         let nav_left = width - NAV_SPAN;
         assert!(frames.iter().any(|frame| frame.row > 0));
         for frame in frames.iter().filter(|frame| frame.row == 0) {
