@@ -5,8 +5,9 @@
 //! Reading or writing the chosen file is up to the caller.
 //!
 //! `allowed_extensions` are file name extensions such as `"txt"` or `".png"` (a leading dot and
-//! surrounding whitespace are ignored, empty entries are skipped). An empty list allows every
-//! file type.
+//! surrounding whitespace are ignored, empty entries are skipped). Each one is mapped to its
+//! content type (`UTType`); extensions the system has no type for are skipped. An empty list, or
+//! one where no extension maps to a type, allows every file type.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -15,6 +16,7 @@ use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSModalResponseOK, NSOpenPanel, NSSavePanel};
 use objc2_foundation::{NSArray, NSString};
+use objc2_uniform_type_identifiers::UTType;
 
 /// Why [`choose_file`] or [`choose_save_path`] failed.
 #[derive(Debug)]
@@ -88,22 +90,19 @@ fn run(panel: &NSSavePanel) -> Result<Option<PathBuf>, FilePanelError> {
     Ok(Some(PathBuf::from(path.to_string())))
 }
 
-/// Restrict `panel` to `extensions` (after [`normalize_extensions`]); leaves it unrestricted when
-/// none remain.
+/// Restrict `panel` to the content types of `extensions` (after [`normalize_extensions`]).
+/// Extensions without a known `UTType` are skipped; when none remain the panel stays
+/// unrestricted.
 fn set_allowed_extensions(panel: &NSSavePanel, extensions: &[&str]) {
-    let extensions = normalize_extensions(extensions);
-    if extensions.is_empty() {
+    let types: Vec<Retained<UTType>> = normalize_extensions(extensions)
+        .into_iter()
+        .filter_map(|ext| UTType::typeWithFilenameExtension(&NSString::from_str(ext)))
+        .collect();
+    if types.is_empty() {
         return;
     }
-    let strings: Vec<Retained<NSString>> =
-        extensions.iter().map(|e| NSString::from_str(e)).collect();
-    let refs: Vec<&NSString> = strings.iter().map(|s| &**s).collect();
-    let types = NSArray::from_slice(&refs);
-    // `setAllowedFileTypes` is deprecated (macOS 12) in favour of `setAllowedContentTypes`, which
-    // takes `UTType`s from the `objc2-uniform-type-identifiers` crate. That crate is not a
-    // dependency (yet), so keep the extension-based setter, which still works.
-    #[allow(deprecated)]
-    panel.setAllowedFileTypes(Some(&types));
+    let refs: Vec<&UTType> = types.iter().map(|t| &**t).collect();
+    panel.setAllowedContentTypes(&NSArray::from_slice(&refs));
 }
 
 /// Trim `extensions`, strip leading dots and drop empty entries and duplicates (first one

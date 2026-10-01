@@ -40,6 +40,8 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNNotificationTrigger",
     "UNUserNotificationCenter",
 ] }
+# mac-ui `file_panel` only: `UTType`s for `NSSavePanel::setAllowedContentTypes`.
+objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTType"] }
 tray-icon = "0.26"
 winit = "0.30"
 
