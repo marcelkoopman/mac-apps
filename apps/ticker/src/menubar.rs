@@ -180,7 +180,11 @@ impl App {
                     log_message("menu: poll ignored, no config loaded");
                 }
             }
-            "copy" => self.copy_prices_to_clipboard(),
+            "copy" => {
+                if let Err(e) = self.copy_prices_to_clipboard() {
+                    log_message(&format!("copy: clipboard write failed: {e}"));
+                }
+            }
             "add_watch" => self.handle_add_watch(),
             "manage_watches" => self.handle_manage_watches(),
             "edit_asset" => self.handle_edit_asset(),
@@ -357,13 +361,11 @@ impl App {
         }
     }
 
-    fn copy_prices_to_clipboard(&self) {
+    fn copy_prices_to_clipboard(&self) -> Result<(), arboard::Error> {
         let empty = Self::empty_df();
         let df = self.prices_df.as_ref().unwrap_or(&empty);
         let tsv = MenuBuilder::dataframe_as_tsv(df);
-        if let Ok(mut cb) = arboard::Clipboard::new() {
-            let _ = cb.set_text(tsv);
-        }
+        arboard::Clipboard::new()?.set_text(tsv)
     }
 
     /// Timer, "Poll now" and startup: start a background fetch unless one is already running
@@ -427,33 +429,15 @@ impl App {
                 return;
             }
         };
-        if let Some(prev) = &self.prices_df {
-            let _ = fill_nan_from_prev(&mut df, prev);
-        }
-        let mut history = HashMap::new();
-        let mut opens = HashMap::new();
-        if let (Ok(names), Ok(prices), Ok(day_open_col)) =
-            (df.column("name"), df.column("price"), df.column("day_open"))
-            && let (Ok(ns), Ok(ps), Ok(os)) = (names.str(), prices.f64(), day_open_col.f64())
+        if let Some(prev) = &self.prices_df
+            && let Err(e) = fill_nan_from_prev(&mut df, prev)
         {
-            for i in 0..df.height() {
-                if let (Some(n), Some(p)) = (ns.get(i), ps.get(i))
-                    && !p.is_nan()
-                {
-                    history.insert(n.to_string(), p);
-                }
-                if let (Some(n), Some(o)) = (ns.get(i), os.get(i))
-                    && !o.is_nan()
-                {
-                    opens.insert(n.to_string(), o);
-                }
-            }
+            log_message(&format!(
+                "Poll: cannot fill missing prices from the last poll: {e}"
+            ));
         }
-        if !history.is_empty() {
-            let _ = price_history::save_price_history(&history);
-        }
-        if !opens.is_empty() {
-            let _ = price_history::save_day_opens(&opens);
+        if let Err(e) = save_poll_history(&df) {
+            log_message(&format!("Poll: saving price history failed: {e}"));
         }
         if let (Ok(names), Ok(prices)) = (df.column("name"), df.column("price"))
             && let (Ok(ns), Ok(ps)) = (names.str(), prices.f64())
@@ -607,7 +591,9 @@ impl App {
             } else {
                 self.normal_icon.clone()
             };
-            let _ = tray.set_icon(Some(icon));
+            if let Err(e) = tray.set_icon(Some(icon)) {
+                log_message(&format!("menu: setting the menubar icon failed: {e}"));
+            }
             tray.set_title(Some(&title));
         }
     }
@@ -640,6 +626,7 @@ impl App {
             Series::new("pct_day".into(), Vec::<Option<f64>>::new()).into(),
             Series::new("direction_day".into(), Vec::<String>::new()).into(),
         ])
+        // Invariant: every column is empty and the names are unique, so this cannot fail.
         .expect("empty")
     }
 }
@@ -656,6 +643,37 @@ fn current_price_for(df: &DataFrame, asset: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// Saves each asset's price and day open from a finished poll to the price history file.
+/// Both saves are tried; the first error is returned.
+fn save_poll_history(df: &DataFrame) -> Result<(), Box<dyn std::error::Error>> {
+    let ns = df.column("name")?.str()?;
+    let ps = df.column("price")?.f64()?;
+    let os = df.column("day_open")?.f64()?;
+    let mut history = HashMap::new();
+    let mut opens = HashMap::new();
+    for i in 0..df.height() {
+        if let (Some(n), Some(p)) = (ns.get(i), ps.get(i))
+            && !p.is_nan()
+        {
+            history.insert(n.to_string(), p);
+        }
+        if let (Some(n), Some(o)) = (ns.get(i), os.get(i))
+            && !o.is_nan()
+        {
+            opens.insert(n.to_string(), o);
+        }
+    }
+    let history_saved = if history.is_empty() {
+        Ok(())
+    } else {
+        price_history::save_price_history(&history)
+    };
+    if !opens.is_empty() {
+        price_history::save_day_opens(&opens)?;
+    }
+    history_saved
 }
 
 fn fill_nan_from_prev(
@@ -714,17 +732,25 @@ fn load_icon(name: &str) -> Result<Icon, Box<dyn std::error::Error>> {
     Ok(mac_ui::icon::from_image_file(&path)?)
 }
 
-fn fallback_icon(r: u8, g: u8, b: u8) -> Icon {
-    mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255])
-        .into_icon()
-        .expect("icon")
+fn fallback_icon(r: u8, g: u8, b: u8) -> Result<Icon, mac_ui::tray_icon::BadIcon> {
+    mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255]).into_icon()
+}
+
+/// The bundled icon `name`, or a plain square in the given color when it cannot be loaded.
+fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::tray_icon::BadIcon> {
+    load_icon(name).or_else(|e| {
+        log_message(&format!(
+            "menubar: icon {name} not loaded ({e}); using a plain one"
+        ));
+        fallback_icon(r, g, b)
+    })
 }
 
 pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
     watch_ui::request_notification_permission();
     let fetcher = PriceFetcher::new()?;
-    let normal_icon = load_icon("normal.png").unwrap_or_else(|_| fallback_icon(255, 255, 255));
-    let alert_icon = load_icon("update.png").unwrap_or_else(|_| fallback_icon(255, 80, 80));
+    let normal_icon = load_icon_or("normal.png", [255, 255, 255])?;
+    let alert_icon = load_icon_or("update.png", [255, 80, 80])?;
     let menu = Menu::new();
     let _ = menu.append(&MenuItem::new("⏳ Loading...", false, None));
     let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));

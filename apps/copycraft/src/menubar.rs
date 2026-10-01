@@ -1,6 +1,8 @@
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
+use anyhow::Context;
 use zeroize::Zeroizing;
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
@@ -102,7 +104,7 @@ impl ApplicationHandler<UserEvent> for App {
                         .strip_prefix("hist-")
                         .and_then(|value| value.parse::<usize>().ok())
                     {
-                        self.restore_history(index);
+                        self.run_command(event_loop, CommandId::History(index));
                     }
                 }
             }
@@ -137,7 +139,11 @@ impl App {
     fn run_command(&mut self, event_loop: &ActiveEventLoop, id: CommandId) {
         match id {
             CommandId::Visit => self.visit_current(),
-            CommandId::Copy => self.copy_current(),
+            CommandId::Copy => {
+                if let Err(e) = self.copy_current() {
+                    eprintln!("copy failed: {e:#}");
+                }
+            }
             CommandId::Save => self.save_current(),
             CommandId::Original
             | CommandId::Format
@@ -155,10 +161,18 @@ impl App {
                 self.card_view = CardView::from_command(&id).unwrap_or_default();
                 self.refresh_popup();
             }
-            CommandId::History(index) => self.restore_history(index),
+            CommandId::History(index) => {
+                if let Err(e) = self.restore_history(index) {
+                    eprintln!("restore history failed: {e:#}");
+                }
+            }
             CommandId::HistoryOlder => self.step_history(true),
             CommandId::HistoryNewer => self.step_history(false),
-            CommandId::ClearClipboard => self.clear_clipboard(),
+            CommandId::ClearClipboard => {
+                if let Err(e) = self.clear_clipboard() {
+                    eprintln!("clear clipboard failed: {e:#}");
+                }
+            }
             CommandId::ClearHistory => self.clear_history(),
             CommandId::Clear => self.clear_secrets(),
             CommandId::ChooseFile => self.choose_file(),
@@ -356,117 +370,127 @@ impl App {
         }
     }
 
-    fn copy_current(&mut self) {
+    fn copy_current(&mut self) -> anyhow::Result<()> {
         let from_file = self.opened.is_some();
         if !from_file && ClipboardView::from_os().is_image() {
-            self.copy_image_view();
-            return;
+            return self.copy_image_view();
         }
         let Some(source) = self.source_text().map(Zeroizing::new) else {
-            return;
+            return Ok(());
         };
         let shown = commands::presented_view(source.as_str(), self.card_view);
         let Some(body) = commands::transformed_text(source.as_str(), shown).map(Zeroizing::new)
         else {
-            return;
+            return Ok(());
         };
         // The clipboard already holds this text. A file does not, so Copy still writes it.
         if !from_file && body.as_str() == source.as_str() {
-            return;
+            return Ok(());
         }
-        if let Err(e) = clipboard::write_clipboard(body.as_str()) {
-            eprintln!("copy failed: {e}");
-            return;
-        }
+        clipboard::write_clipboard(body.as_str()).map_err(anyhow::Error::msg)?;
         if from_file {
-            return;
+            return Ok(());
         }
         self.card_view = CardView::Original;
         self.refresh_popup();
+        Ok(())
     }
 
-    fn copy_image_view(&mut self) {
+    fn copy_image_view(&mut self) -> anyhow::Result<()> {
         let Some(text) =
             commands::image_view_text(self.image_scan.as_ref(), self.card_view).map(Zeroizing::new)
         else {
-            return;
+            return Ok(());
         };
         self.card_view = CardView::Original;
-        if let Err(e) = clipboard::write_clipboard(text.as_str()) {
-            eprintln!("copy failed: {e}");
-            return;
-        }
+        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
         self.refresh_popup();
+        Ok(())
     }
 
     fn save_current(&mut self) {
         #[cfg(target_os = "macos")]
         {
             launcher::set_suppress_resign(true);
-            if self.opened.is_some() {
-                self.save_opened_file();
+            let saved = if self.opened.is_some() {
+                self.save_opened_file()
             } else {
-                let view = ClipboardView::from_os();
-                if view.is_image() {
-                    self.save_image_view();
-                } else if let Some(source) = view.text()
-                    && let Some(file) = commands::text_save_file(
-                        source,
-                        commands::presented_view(source, self.card_view),
-                    )
-                {
-                    crate::macos_save::write_with_panel(
-                        &file.filename,
-                        file.extension,
-                        &file.bytes,
-                    );
-                }
+                self.save_clipboard()
+            };
+            if let Err(e) = saved {
+                eprintln!("save failed: {e:#}");
             }
             launcher::set_suppress_resign(false);
             launcher::order_front();
         }
     }
 
+    /// `Ok` also covers a cancelled save panel and a card with nothing to save.
     #[cfg(target_os = "macos")]
-    fn save_opened_file(&self) {
+    fn save_opened_file(&self) -> anyhow::Result<()> {
         let Some(opened) = &self.opened else {
-            return;
+            return Ok(());
         };
         let Some(source) = opened.text.as_deref() else {
-            return;
+            return Ok(());
         };
         let Some(mut file) =
             commands::text_save_file(source, commands::presented_view(source, self.card_view))
         else {
-            return;
+            return Ok(());
         };
         file.filename = crate::open_file::save_name(&opened.name, file.extension);
-        crate::macos_save::write_with_panel(&file.filename, file.extension, &file.bytes);
+        crate::macos_save::write_with_panel(&file.filename, file.extension, &file.bytes)?;
+        Ok(())
+    }
+
+    /// `Ok` also covers a cancelled save panel and a card with nothing to save.
+    #[cfg(target_os = "macos")]
+    fn save_clipboard(&self) -> anyhow::Result<()> {
+        let view = ClipboardView::from_os();
+        if view.is_image() {
+            return self.save_image_view();
+        }
+        let Some(source) = view.text() else {
+            return Ok(());
+        };
+        let Some(file) =
+            commands::text_save_file(source, commands::presented_view(source, self.card_view))
+        else {
+            return Ok(());
+        };
+        crate::macos_save::write_with_panel(&file.filename, file.extension, &file.bytes)?;
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]
-    fn save_image_view(&self) {
+    fn save_image_view(&self) -> anyhow::Result<()> {
+        let (filename, extension, bytes) = self.image_view_payload()?;
+        crate::macos_save::write_with_panel(filename, extension, &bytes)?;
+        Ok(())
+    }
+
+    /// File name, extension and bytes for saving the image card: the shown scan text, else the
+    /// pasteboard image as PNG or JPEG, else the decoded preview re-encoded as PNG.
+    #[cfg(target_os = "macos")]
+    fn image_view_payload(
+        &self,
+    ) -> anyhow::Result<(&'static str, &'static str, Zeroizing<Vec<u8>>)> {
         if let Some(text) = commands::image_view_text(self.image_scan.as_ref(), self.card_view) {
-            crate::macos_save::write_with_panel("clipboard.txt", "txt", text.as_bytes());
-            return;
+            return Ok(("clipboard.txt", "txt", Zeroizing::new(text.into_bytes())));
         }
-        if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
+        if let Some(bytes) = crate::macos_pasteboard::current_image_bytes().map(Zeroizing::new) {
             if bytes.starts_with(b"\x89PNG") {
-                crate::macos_save::write_with_panel("clipboard.png", "png", &bytes);
-                return;
+                return Ok(("clipboard.png", "png", bytes));
             }
             if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                crate::macos_save::write_with_panel("clipboard.jpg", "jpg", &bytes);
-                return;
+                return Ok(("clipboard.jpg", "jpg", bytes));
             }
         }
-        let Some(decoded) = crate::macos_pasteboard::decode_preview() else {
-            return;
-        };
-        let Ok(png) = decoded.image.png_bytes() else {
-            return;
-        };
-        crate::macos_save::write_with_panel("clipboard.png", "png", &png);
+        let decoded =
+            crate::macos_pasteboard::decode_preview().context("no image on the clipboard")?;
+        let png = decoded.image.png_bytes().map_err(anyhow::Error::msg)?;
+        Ok(("clipboard.png", "png", Zeroizing::new(png)))
     }
 
     fn visit_current(&self) {
@@ -539,14 +563,12 @@ impl App {
     }
 
     /// Empty the OS pasteboard. History and the open card stay.
-    fn clear_clipboard(&mut self) {
-        if let Err(e) = clipboard::clear_clipboard() {
-            eprintln!("clear clipboard failed: {e}");
-            return;
-        }
+    fn clear_clipboard(&mut self) -> anyhow::Result<()> {
+        clipboard::clear_clipboard().map_err(anyhow::Error::msg)?;
         #[cfg(target_os = "macos")]
         crate::macos_pasteboard::zeroize_caches();
         self.skip_record = Some(Zeroizing::new(String::new()));
+        Ok(())
     }
 
     /// Overwrite clipboard text and image bytes still held in this process,
@@ -593,13 +615,18 @@ impl App {
         };
         let previous = self.history_cursor;
         self.history_cursor = next;
-        if !self.present_history(next) {
+        let presented = self.present_history(next).unwrap_or_else(|e| {
+            eprintln!("restore history failed: {e:#}");
+            false
+        });
+        if !presented {
             self.history_cursor = previous;
         }
     }
 
     // Put a history entry on the clipboard without moving it to the front.
-    fn present_history(&mut self, index: usize) -> bool {
+    // `Ok(false)`: there is no entry to show at `index`.
+    fn present_history(&mut self, index: usize) -> anyhow::Result<bool> {
         if self.history.image(index).is_some() {
             return self.present_history_image(index);
         }
@@ -608,34 +635,33 @@ impl App {
             .get(index)
             .map(|value| Zeroizing::new(value.to_string()))
         else {
-            return false;
+            return Ok(false);
         };
         // Recording would move this entry to the front, so the other arrow
         // could no longer walk back through the list.
         self.card_view = CardView::Original;
         self.skip_record = Some(text.clone());
         if let Err(e) = clipboard::write_clipboard(text.as_str()) {
-            eprintln!("restore history failed: {e}");
             self.skip_record = None;
-            return false;
+            return Err(anyhow::Error::msg(e));
         }
         self.opened = None;
         if launcher::is_open() {
             self.refresh_popup();
         }
-        true
+        Ok(true)
     }
 
-    fn present_history_image(&mut self, index: usize) -> bool {
+    fn present_history_image(&mut self, index: usize) -> anyhow::Result<bool> {
         let Some(bytes) = self.history.image(index) else {
-            return false;
+            return Ok(false);
         };
         #[cfg(target_os = "macos")]
         {
-            if let Err(e) = bytes.with(crate::macos_pasteboard::write_history_image) {
-                eprintln!("restore image failed: {e}");
-                return false;
-            }
+            bytes
+                .with(crate::macos_pasteboard::write_history_image)
+                .map_err(anyhow::Error::msg)
+                .context("image")?;
             self.card_view = CardView::Original;
             self.skip_record = None;
             self.opened = None;
@@ -643,45 +669,43 @@ impl App {
             if launcher::is_open() {
                 self.refresh_popup();
             }
-            true
+            Ok(true)
         }
         #[cfg(not(target_os = "macos"))]
         {
             let _ = bytes;
-            false
+            Ok(false)
         }
     }
 
-    fn restore_history(&mut self, index: usize) {
+    fn restore_history(&mut self, index: usize) -> anyhow::Result<()> {
         self.card_view = CardView::Original;
         if let Some(bytes) = self.history.image(index) {
             #[cfg(target_os = "macos")]
-            if let Err(e) = bytes.with(crate::macos_pasteboard::write_history_image) {
-                eprintln!("restore image failed: {e}");
-                return;
-            }
+            bytes
+                .with(crate::macos_pasteboard::write_history_image)
+                .map_err(anyhow::Error::msg)
+                .context("image")?;
             #[cfg(not(target_os = "macos"))]
             {
                 let _ = bytes;
-                return;
+                return Ok(());
             }
             self.opened = None;
             self.show_restored();
-            return;
+            return Ok(());
         }
         let Some(text) = self
             .history
             .get(index)
             .map(|value| Zeroizing::new(value.to_string()))
         else {
-            return;
+            return Ok(());
         };
-        if let Err(e) = clipboard::write_clipboard(text.as_str()) {
-            eprintln!("restore history failed: {e}");
-            return;
-        }
+        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
         self.opened = None;
         self.show_restored();
+        Ok(())
     }
 
     /// The history row stays a type mark. The card shows the copy that was chosen.
