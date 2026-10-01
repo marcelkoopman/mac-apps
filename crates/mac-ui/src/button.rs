@@ -292,6 +292,19 @@ mod tests {
     }
 
     #[test]
+    fn current_look_matches_the_running_macos() {
+        let Some(major) = crate::glass::running_macos_major() else {
+            return;
+        };
+        let expected = if major >= 26 {
+            Look::Glass
+        } else {
+            Look::Standard
+        };
+        assert_eq!(Look::current(), expected, "button look on macOS {major}");
+    }
+
+    #[test]
     fn standard_look_uses_a_flexible_push_bezel_without_border_shape() {
         assert_eq!(Look::Standard.bezel_style(), NSBezelStyle::FlexiblePush);
         assert_eq!(Look::Standard.border_shape(Shape::Circle), None);

@@ -173,9 +173,45 @@ fn merge_spacing(spacing: f64) -> f64 {
     if spacing > 0.0 { spacing } else { 0.0 }
 }
 
+/// Major version of the running macOS from `sw_vers`, for tests that check the runtime fallbacks
+/// against the OS they run on (CI runs them on macOS 26 and on an older macOS). `None` when it
+/// cannot be read.
+#[cfg(test)]
+pub(crate) fn running_macos_major() -> Option<u32> {
+    let out = std::process::Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()?;
+    String::from_utf8(out.stdout)
+        .ok()?
+        .trim()
+        .split('.')
+        .next()?
+        .parse()
+        .ok()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::merge_spacing;
+    use super::{group_is_available, is_available, merge_spacing, running_macos_major};
+    use objc2::ClassType;
+    use objc2_app_kit::NSView;
+
+    #[test]
+    fn glass_classes_match_the_running_macos() {
+        // Load AppKit before looking classes up by name.
+        let _ = NSView::class();
+        let Some(major) = running_macos_major() else {
+            return;
+        };
+        let glass = major >= 26;
+        assert_eq!(is_available(), glass, "NSGlassEffectView on macOS {major}");
+        assert_eq!(
+            group_is_available(),
+            glass,
+            "NSGlassEffectContainerView on macOS {major}"
+        );
+    }
 
     #[test]
     fn spacing_is_never_negative() {

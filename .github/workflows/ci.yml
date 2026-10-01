@@ -1,10 +1,20 @@
 name: CI
 
+# Docs-only changes skip CI. main has no required status checks; if any are added, a skipped
+# workflow leaves them "expected" forever, so move these filters into the jobs then.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/LICENSE"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/LICENSE"
   schedule:
     - cron: "0 4 * * 0"
   workflow_dispatch:
@@ -20,8 +30,9 @@ env:
   XCODE_VERSION: "26.6"
 
 jobs:
-  check:
-    name: fmt, clippy, test
+  # fmt and clippy are the same on every macOS, so they run once, on the pinned runner.
+  lint:
+    name: fmt, clippy
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
@@ -44,6 +55,39 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # Tests on the pinned macOS 26 runner and on macOS 15, where the pre-26 fallbacks run for real
+  # (FlexiblePush instead of the Glass bezel, frosted background, plain view instead of the glass
+  # group). Each runner uses its image's Xcode (keep 26.6 in step with XCODE_VERSION).
+  test:
+    name: test (${{ matrix.os }}, Xcode ${{ matrix.xcode }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            xcode: "26.6"
+          - os: macos-15
+            xcode: "16.4"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode ${{ matrix.xcode }}
+        run: |
+          sw_vers
+          sudo xcode-select -s "/Applications/Xcode_${{ matrix.xcode }}.app"
+          xcodebuild -version
+
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
 
       - name: Test
         run: cargo test --workspace --locked

@@ -25,7 +25,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── build_app_icon.sh   # compile the app icon into a .app with actool (before signing)
 │   └── tag_release.sh      # bump + tag + push a release for one app
 └── .github/workflows/
-    ├── ci.yml              # fmt, clippy, test + app icon check (macos-26, Xcode 26.6); cargo audit weekly/manual
+    ├── ci.yml              # fmt+clippy (macos-26), tests on macos-26 and macos-15, app icon check; cargo audit weekly/manual
     ├── release-copycraft.yml
     └── release-ticker.yml
 ```
@@ -65,7 +65,7 @@ cargo test --workspace
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests for pushes and PRs to `main`. `cargo audit` runs weekly and on manual dispatch.
+CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clippy once on `macos-26`, the tests on `macos-26` (Xcode 26.6) and on `macos-15` (Xcode 16.4), so the pre-26 fallbacks (FlexiblePush buttons, frosted background, plain view instead of the glass group) are tested on a real older macOS, and the app icon check. Changes that only touch Markdown, `docs/` or `LICENSE` files skip CI (`main` has no required checks, so nothing waits on a skipped run). `cargo audit` runs weekly and on manual dispatch.
 
 CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
