@@ -13,6 +13,17 @@ pub enum UserEvent {
     },
     /// The save thread is done: `Err` holds the message to log.
     SaveFinished(Result<(), String>),
+    /// The "Show all" thread built the whole-text card.
+    FullCardReady(Box<FullCard>),
+}
+
+/// The whole-text ("Show all") card for one copied item and view.
+#[derive(Debug, Clone)]
+pub struct FullCard {
+    /// [`crate::commands::content_key`] of the item.
+    pub key: u64,
+    pub view: crate::commands::CardView,
+    pub card: crate::commands::WorkCard,
 }
 
 static PROXY: Mutex<Option<EventLoopProxy<UserEvent>>> = Mutex::new(None);
@@ -52,6 +63,16 @@ pub fn sync(data: LaunchData) {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = data;
+    }
+}
+
+/// Like [`sync`], with the card already built (off the main thread).
+pub fn sync_with_card(data: LaunchData, card: crate::commands::WorkCard) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::sync_with_card(data, card);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (data, card);
     }
 }
 

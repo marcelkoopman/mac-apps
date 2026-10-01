@@ -26,8 +26,11 @@ use crate::icon;
 use crate::launcher::{self, UserEvent};
 
 const REFRESH: Duration = Duration::from_millis(400);
-/// A save that finishes sooner shows no spinner, so small files do not flicker.
+/// Background work that finishes sooner shows no spinner, so small files do not flicker.
 const SPINNER_DELAY: Duration = Duration::from_millis(180);
+/// Copies at least this long are classified on a background thread right after the copy, so the
+/// card opens without scanning them first.
+const PREWARM_LEN: usize = 64 * 1024;
 
 struct App {
     tray: TrayIcon,
@@ -50,17 +53,33 @@ struct App {
     image_scan_for: Option<isize>,
     signature: ClipSig,
     /// The save running on its thread. One at a time; Save is ignored meanwhile.
-    saving: Option<SaveRun>,
+    saving: Option<Background>,
+    /// "Show all" rendering on its thread. One at a time.
+    loading_all: Option<Background>,
+    /// The whole-text card "Show all" built, for the item and view it belongs to.
+    full_card: Option<Box<launcher::FullCard>>,
+    /// The card spinner is showing (some background work ran past [`SPINNER_DELAY`]).
+    spinner_on: bool,
     _hotkeys: GlobalHotKeyManager,
     format_hotkey_id: u32,
 }
 
-/// A save that is writing in the background.
+/// Work running on a background thread: a save, or the "Show all" card.
 #[derive(Debug, Clone, Copy)]
-struct SaveRun {
+struct Background {
     started: Instant,
-    /// The card spinner is showing (only after [`SPINNER_DELAY`]).
-    spinner: bool,
+}
+
+impl Background {
+    fn now() -> Self {
+        Self {
+            started: Instant::now(),
+        }
+    }
+
+    fn elapsed_ms(self) -> u128 {
+        self.started.elapsed().as_millis()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -98,6 +117,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Run(id) => self.run_command(event_loop, id),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
+            UserEvent::FullCardReady(card) => self.finish_show_all(card),
         }
     }
 
@@ -142,9 +162,10 @@ impl ApplicationHandler<UserEvent> for App {
 
         let changed = self.note_clipboard();
         if changed && launcher::is_open() {
-            launcher::sync(self.current_launch_data());
+            let data = self.current_launch_data();
+            self.sync_popup(data);
         }
-        let wake = self.spin_slow_save(Instant::now());
+        let wake = self.spin_slow_work(Instant::now());
         event_loop.set_control_flow(ControlFlow::WaitUntil(wake));
     }
 }
@@ -159,6 +180,7 @@ impl App {
                 }
             }
             CommandId::Save => self.save_current(),
+            CommandId::ShowAll => self.show_all(),
             CommandId::Original
             | CommandId::Format
             | CommandId::Convert
@@ -209,6 +231,7 @@ impl App {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
             self.opened = None;
+            self.full_card = None;
         }
         launcher::summon(self.launch_for_popup());
     }
@@ -217,6 +240,7 @@ impl App {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
             self.opened = None;
+            self.full_card = None;
         }
         launcher::reveal(self.launch_for_popup());
     }
@@ -229,7 +253,78 @@ impl App {
             let view = ClipboardView::from_os();
             self.record_current(&view);
         }
-        launcher::sync(self.current_launch_data());
+        let data = self.current_launch_data();
+        self.sync_popup(data);
+    }
+
+    /// Update the open card. Keeps the "Show all" card while it belongs to this item and view;
+    /// anything else drops it, so the card is back to its preview.
+    fn sync_popup(&mut self, mut data: LaunchData) {
+        let key = commands::content_key(&data);
+        let full = self
+            .full_card
+            .as_ref()
+            .filter(|full| full.key == key && full.view == data.view)
+            .map(|full| full.card.clone());
+        match full {
+            Some(card) => {
+                data.full = true;
+                launcher::sync_with_card(data, card);
+            }
+            None => {
+                self.full_card = None;
+                launcher::sync(data);
+            }
+        }
+    }
+
+    /// Build the whole-text card on a background thread; the spinner shows if it is slow.
+    fn show_all(&mut self) {
+        if self.loading_all.is_some() || !launcher::is_open() {
+            return;
+        }
+        let mut data = self.current_launch_data();
+        let key = commands::content_key(&data);
+        let view = data.view;
+        if self
+            .full_card
+            .as_ref()
+            .is_some_and(|full| full.key == key && full.view == view)
+        {
+            return;
+        }
+        data.full = true;
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-show-all".into())
+            .spawn(move || {
+                let card = commands::work_card(&data);
+                launcher::emit(UserEvent::FullCardReady(Box::new(launcher::FullCard {
+                    key,
+                    view,
+                    card,
+                })));
+            });
+        match spawned {
+            Ok(_) => self.loading_all = Some(Background::now()),
+            Err(e) => eprintln!("show all failed: {e}"),
+        }
+    }
+
+    fn finish_show_all(&mut self, full: Box<launcher::FullCard>) {
+        if let Some(run) = self.loading_all.take() {
+            eprintln!("copycraft: show all built in {} ms", run.elapsed_ms());
+        }
+        self.stop_spinner_when_idle();
+        if !launcher::is_open() {
+            return;
+        }
+        let data = self.current_launch_data();
+        // The card moved on (another copy or view) while the thread ran.
+        if commands::content_key(&data) != full.key || data.view != full.view {
+            return;
+        }
+        self.full_card = Some(full);
+        self.sync_popup(data);
     }
 
     /// Clipboard launch, unless the card is holding a chosen file.
@@ -333,6 +428,7 @@ impl App {
             image_scan: self.image_scan.clone(),
             source_name: None,
             source_note: None,
+            full: false,
         }
     }
 
@@ -462,37 +558,61 @@ impl App {
                 launcher::emit(UserEvent::SaveFinished(result));
             })
             .context("cannot start the save thread")?;
-        self.saving = Some(SaveRun {
-            started: Instant::now(),
-            spinner: false,
-        });
+        self.saving = Some(Background::now());
         Ok(())
     }
 
-    /// Show the card spinner once a save runs longer than [`SPINNER_DELAY`]. Returns when the
-    /// event loop should wake up next.
-    fn spin_slow_save(&mut self, now: Instant) -> Instant {
+    /// Show the card spinner once background work (a save, "Show all") runs longer than
+    /// [`SPINNER_DELAY`]. Returns when the event loop should wake up next.
+    fn spin_slow_work(&mut self, now: Instant) -> Instant {
         let wake = now + REFRESH;
-        let Some(run) = self.saving.as_mut() else {
-            return wake;
-        };
-        if run.spinner {
+        if self.spinner_on {
             return wake;
         }
-        let due = run.started + SPINNER_DELAY;
+        let Some(started) = [self.saving, self.loading_all]
+            .into_iter()
+            .flatten()
+            .map(|run| run.started)
+            .min()
+        else {
+            return wake;
+        };
+        let due = started + SPINNER_DELAY;
         if now >= due {
-            run.spinner = true;
+            self.spinner_on = true;
             launcher::set_busy(true);
+            eprintln!(
+                "copycraft: spinner shown after {} ms",
+                now.duration_since(started).as_millis()
+            );
             wake
         } else {
             wake.min(due)
         }
     }
 
-    fn finish_save(&mut self, result: Result<(), String>) {
-        if self.saving.take().is_some_and(|run| run.spinner) {
+    /// Take the spinner away once no background work is left.
+    fn stop_spinner_when_idle(&mut self) {
+        if self.spinner_on && self.saving.is_none() && self.loading_all.is_none() {
+            self.spinner_on = false;
             launcher::set_busy(false);
+            eprintln!("copycraft: spinner hidden");
         }
+    }
+
+    fn finish_save(&mut self, result: Result<(), String>) {
+        if let Some(run) = self.saving.take() {
+            let shown = if self.spinner_on {
+                "spinner shown"
+            } else {
+                "under the spinner delay, no spinner"
+            };
+            eprintln!(
+                "copycraft: save finished in {} ms ({shown})",
+                run.elapsed_ms()
+            );
+        }
+        self.stop_spinner_when_idle();
         if let Err(message) = result {
             log_save_failure(&message);
         }
@@ -626,6 +746,7 @@ impl App {
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
         self.opened = None;
+        self.full_card = None;
         self.history.clear();
         self.current_image = None;
         self.history_cursor = 0;
@@ -638,6 +759,7 @@ impl App {
         self.skip_record = None;
         #[cfg(target_os = "macos")]
         crate::macos_pasteboard::zeroize_caches();
+        crate::memo::forget_all();
         launcher::wipe_shown();
         if let Err(e) = clipboard::clear_clipboard() {
             eprintln!("clear clipboard failed: {e}");
@@ -823,6 +945,9 @@ impl App {
             }
         }
         self.signature = signature;
+        if let Some(text) = view.text() {
+            prewarm(text);
+        }
         self.sync_icon(detected_kind(&view));
         self.sync_tooltip(&view);
         self.refresh_status_menu();
@@ -898,6 +1023,24 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     #[cfg(not(target_os = "macos"))]
     {
         None
+    }
+}
+
+/// Classify a large copy on a background thread, so the card finds the format and the
+/// sensitive-data labels remembered (see [`crate::memo`]) instead of scanning on the main thread.
+fn prewarm(text: &str) {
+    if text.len() < PREWARM_LEN {
+        return;
+    }
+    let text = Zeroizing::new(text.to_string());
+    let spawned = std::thread::Builder::new()
+        .name("copycraft-prewarm".into())
+        .spawn(move || {
+            crate::format::detect(&text);
+            crate::sensitivity::labels(&text);
+        });
+    if let Err(e) = spawned {
+        eprintln!("prewarm skipped: {e}");
     }
 }
 
@@ -1003,6 +1146,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_scan_for: None,
         signature: ClipSig::default(),
         saving: None,
+        loading_all: None,
+        full_card: None,
+        spinner_on: false,
         _hotkeys: hotkeys,
         format_hotkey_id,
     };

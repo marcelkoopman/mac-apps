@@ -23,6 +23,10 @@ const EXCERPT_LINES: usize = 6;
 const EXCERPT_LINE_CHARS: usize = 48;
 /// Formatted code stays whole so the card can color real tokens. Past this, the tail is cut.
 const CODE_CAP: usize = 80_000;
+/// Lines (table rows) a card shows before "Show all". Enough to read the data, quick to lay out.
+pub const PREVIEW_ROWS: usize = 200;
+/// Characters a card shows before "Show all", for text with very long lines.
+pub const PREVIEW_CHARS: usize = 20_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SubjectKind {
@@ -65,6 +69,8 @@ pub struct LaunchData {
     pub source_name: Option<String>,
     /// Well text when that file cannot be shown.
     pub source_note: Option<String>,
+    /// "Show all" was chosen: the card renders the whole text, not the preview.
+    pub full: bool,
 }
 
 /// What the card shows in place of the separate preview window.
@@ -159,6 +165,8 @@ pub enum CommandId {
     ChooseFile,
     /// Leave the chosen file and show the clipboard again.
     UseClipboard,
+    /// Render the whole text on the card instead of its preview.
+    ShowAll,
     Appearance(Theme),
     Quit,
 }
@@ -199,6 +207,9 @@ pub struct WorkCard {
     /// YouTube page, when the card should load a video thumbnail.
     pub link_page: Option<String>,
     pub link_thumb: Option<String>,
+    /// Set when the excerpt is a preview of a longer text, for example
+    /// "Showing 200 of 23,220 rows". "Show all" renders the rest.
+    pub preview_note: Option<String>,
 }
 
 impl Drop for LaunchData {
@@ -333,6 +344,7 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             link_thumb: None,
+            preview_note: None,
         };
     }
     let mut card = compose_card(data);
@@ -357,18 +369,20 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             if let Some(card) = page_card(text) {
                 return card;
             }
+            let (excerpt, preview_note) = excerpt_for(text, data.full);
             let mut card = WorkCard {
                 title: text_title(text),
                 meta: text_meta(text),
-                excerpt: shown_body(text),
+                excerpt,
                 placeholder: String::new(),
                 shows_image: false,
                 highlight: None,
                 selectable: false,
                 link_page: None,
                 link_thumb: None,
+                preview_note,
             };
-            apply_text_view(&mut card, text, presented_view(text, data.view));
+            apply_text_view(&mut card, text, presented_view(text, data.view), data.full);
             card
         }
         SubjectKind::Empty => WorkCard {
@@ -381,6 +395,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             link_thumb: None,
+            preview_note: None,
         },
         SubjectKind::NoText => WorkCard {
             title: "Clipboard".to_string(),
@@ -392,6 +407,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             link_thumb: None,
+            preview_note: None,
         },
     }
 }
@@ -423,6 +439,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
             selectable: true,
             link_page: None,
             link_thumb: None,
+            preview_note: None,
         };
     }
     WorkCard {
@@ -435,6 +452,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
         selectable: false,
         link_page: None,
         link_thumb: None,
+        preview_note: None,
     }
 }
 
@@ -450,9 +468,14 @@ pub fn image_view_text(scan: Option<&ImageScan>, view: CardView) -> Option<Strin
     }
 }
 
-fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView) {
+/// `full` renders the whole text; otherwise the card shows a preview (see [`excerpt_for`]).
+fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool) {
     if view == CardView::Original {
-        show_copied_table(card, source);
+        show_copied_table(card, source, full);
+        return;
+    }
+    if view == CardView::Dataframe && !full {
+        show_dataframe_preview(card, source);
         return;
     }
     let Some(body) = transformed_text(source, view) else {
@@ -474,7 +497,7 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView) {
         text_meta(&body)
     };
     if matches!(view, CardView::Schema | CardView::Sample) {
-        card.excerpt = shown_body(&body);
+        set_excerpt(card, &body, full);
         card.highlight = Some(if view == CardView::Sample || kind == FormatKind::Xml {
             FormatKind::Xml
         } else {
@@ -483,29 +506,129 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView) {
         card.selectable = true;
     } else if view == CardView::Dataframe {
         // The grid's header chrome is already six lines, so a short excerpt hides every row.
-        card.excerpt = shown_body(&body);
+        set_excerpt(card, &body, full);
         card.highlight = Some(FormatKind::Dataframe);
         card.selectable = true;
     } else if view == CardView::Format && opens_formatted(source) {
-        card.excerpt = shown_body(&body);
+        set_excerpt(card, &body, full);
         card.highlight = Some(kind);
     } else {
-        card.excerpt = shown_body(&body);
+        set_excerpt(card, &body, full);
     }
 }
 
 /// A copied CSV or TSV opens aligned and colored as that table.
 /// The polars grid stays on the Dataframe button. Copy and save stay on the source.
-fn show_copied_table(card: &mut WorkCard, source: &str) {
+/// A preview aligns only the header and the first [`PREVIEW_ROWS`] rows.
+fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
     let kind = format::detect(source);
     if !matches!(kind, FormatKind::Csv | FormatKind::Tsv) {
         return;
     }
-    let body = align_table(source, kind).unwrap_or_else(|| source.to_string());
-    card.excerpt = shown_body(&body);
+    let cut = (!full)
+        .then(|| preview_cut(source, PREVIEW_ROWS + 1))
+        .flatten();
+    let shown = cut.map_or(source, |end| &source[..end]);
+    let body = align_table(shown, kind).unwrap_or_else(|| shown.to_string());
     card.highlight = Some(kind);
     card.selectable = true;
-    card.meta = text_meta_from(&body, source);
+    if cut.is_some() {
+        let rows = source.lines().count().saturating_sub(1);
+        let shown_rows = shown.lines().count().saturating_sub(1);
+        card.excerpt = body;
+        card.preview_note = Some(showing_note(shown_rows, rows, "rows"));
+        card.meta = text_meta(source);
+    } else {
+        set_excerpt(card, &body, full);
+        card.meta = text_meta_from(&body, source);
+    }
+}
+
+/// The first [`PREVIEW_ROWS`] rows of the table as a polars grid, with a note when the table
+/// has more. Title and meta as for the full grid; the meta measures the copied table.
+fn show_dataframe_preview(card: &mut WorkCard, source: &str) {
+    let Some(preview) = dataframe::try_format_preview(source, PREVIEW_ROWS) else {
+        return;
+    };
+    card.title = "Dataframe".to_string();
+    card.highlight = Some(FormatKind::Dataframe);
+    card.selectable = true;
+    if preview.rows > preview.shown_rows {
+        card.meta = text_meta(source);
+        card.preview_note = Some(showing_note(preview.shown_rows, preview.rows, "rows"));
+        card.excerpt = preview.grid;
+    } else {
+        card.meta = text_meta_from(&preview.grid, source);
+        card.excerpt = shown_body(&preview.grid);
+        card.preview_note = None;
+    }
+}
+
+/// Put `body` in the well: whole with `full`, else its preview and the note.
+fn set_excerpt(card: &mut WorkCard, body: &str, full: bool) {
+    let (excerpt, note) = excerpt_for(body, full);
+    card.excerpt = excerpt;
+    card.preview_note = note;
+}
+
+/// What the well shows of `body`: all of it with `full`; else at most [`PREVIEW_ROWS`] lines
+/// and [`PREVIEW_CHARS`] characters, with a note saying how much is left out. Copy, Save and
+/// Format always use the whole text, never this excerpt.
+pub fn excerpt_for(body: &str, full: bool) -> (String, Option<String>) {
+    if full {
+        return (body.to_string(), None);
+    }
+    let Some(end) = preview_cut(body, PREVIEW_ROWS) else {
+        return (shown_body(body), None);
+    };
+    let shown = &body[..end];
+    let lines = body.lines().count();
+    let shown_lines = shown.lines().count();
+    let note = if shown_lines < lines && shown.chars().count() < PREVIEW_CHARS {
+        showing_note(shown_lines, lines, "lines")
+    } else {
+        showing_note(shown.chars().count(), body.chars().count(), "characters")
+    };
+    (format!("{shown}\n…"), Some(note))
+}
+
+/// Byte length of the first `lines` lines of `text`, at most [`PREVIEW_CHARS`] characters.
+/// `None` when all of `text` fits.
+pub fn preview_cut(text: &str, lines: usize) -> Option<usize> {
+    let by_lines = text
+        .match_indices('\n')
+        .nth(lines.saturating_sub(1))
+        .map(|(index, _)| index)
+        .filter(|&index| index + 1 < text.len() && !text[index + 1..].trim().is_empty());
+    let by_chars = text
+        .char_indices()
+        .nth(PREVIEW_CHARS)
+        .map(|(index, _)| index);
+    match (by_lines, by_chars) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+
+/// "Showing 200 of 23,220 rows".
+pub fn showing_note(shown: usize, total: usize, unit: &str) -> String {
+    format!(
+        "Showing {} of {} {unit}",
+        group_thousands(shown),
+        group_thousands(total)
+    )
+}
+
+fn group_thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
 }
 
 /// Column gaps are display-only. A tab is drawn as a middle dot so the columns
@@ -770,6 +893,7 @@ fn page_card(text: &str) -> Option<WorkCard> {
         selectable: false,
         link_page: Some(page.to_string()),
         link_thumb: None,
+        preview_note: None,
     })
 }
 
@@ -785,6 +909,7 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
         selectable: false,
         link_page: Some(text.trim().to_string()),
         link_thumb: Some(crate::youtube::thumbnail_url(id)),
+        preview_note: None,
     })
 }
 
@@ -1006,6 +1131,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Clear
             | CommandId::ChooseFile
             | CommandId::UseClipboard
+            | CommandId::ShowAll
             | CommandId::Original
             | CommandId::Format
             | CommandId::Convert
@@ -1327,6 +1453,7 @@ mod tests {
         masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
         step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
     };
+    use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use crate::appearance::Theme;
 
     fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
@@ -1342,6 +1469,7 @@ mod tests {
             image_scan: None,
             source_name: None,
             source_note: None,
+            full: false,
         }
     }
 
@@ -2576,5 +2704,106 @@ Kleinste opdracht die de change dekt.
         }
         assert!(deferred_save_name("{}", CardView::Convert).is_none());
         assert!(deferred_save_name("{}", CardView::Schema).is_none());
+    }
+
+    fn csv_rows(rows: usize) -> String {
+        let mut csv = String::from("id,name,city\n");
+        for i in 0..rows {
+            csv.push_str(&format!("{i},name{i},City {}\n", i % 7));
+        }
+        csv
+    }
+
+    #[test]
+    fn thousands_are_grouped() {
+        assert_eq!(group_thousands(0), "0");
+        assert_eq!(group_thousands(999), "999");
+        assert_eq!(group_thousands(1000), "1,000");
+        assert_eq!(group_thousands(23_220), "23,220");
+        assert_eq!(group_thousands(1_234_567), "1,234,567");
+        assert_eq!(
+            showing_note(200, 48_213, "rows"),
+            "Showing 200 of 48,213 rows"
+        );
+    }
+
+    #[test]
+    fn short_text_is_not_a_preview() {
+        let (excerpt, note) = excerpt_for("one\ntwo", false);
+        assert_eq!(excerpt, "one\ntwo");
+        assert!(note.is_none());
+    }
+
+    #[test]
+    fn many_lines_preview_the_first_rows() {
+        let body: String = (0..300).map(|i| format!("line {i}\n")).collect();
+        let (excerpt, note) = excerpt_for(&body, false);
+        assert!(excerpt.starts_with("line 0\n"));
+        assert!(excerpt.contains(&format!("line {}", PREVIEW_ROWS - 1)));
+        assert!(!excerpt.contains(&format!("line {}\n", PREVIEW_ROWS)));
+        assert_eq!(note.as_deref(), Some("Showing 200 of 300 lines"));
+        let (all, none) = excerpt_for(&body, true);
+        assert_eq!(all, body);
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn one_long_line_previews_characters() {
+        let body = "x".repeat(PREVIEW_CHARS * 2);
+        let (excerpt, note) = excerpt_for(&body, false);
+        assert!(excerpt.chars().count() < PREVIEW_CHARS + 5);
+        assert_eq!(note.as_deref(), Some("Showing 20,000 of 40,000 characters"));
+    }
+
+    #[test]
+    fn trailing_blank_lines_do_not_make_a_preview() {
+        let body: String = (0..PREVIEW_ROWS)
+            .map(|i| format!("{i}\n"))
+            .collect::<String>()
+            + "\n\n";
+        assert!(excerpt_for(&body, false).1.is_none());
+    }
+
+    #[test]
+    fn large_table_card_previews_rows_and_show_all_renders_them() {
+        let src = csv_rows(300);
+        let mut d = data(SubjectKind::Text, Some(&src));
+        for view in [CardView::Original, CardView::Dataframe] {
+            d.view = view;
+            d.full = false;
+            let card = work_card(&d);
+            assert_eq!(
+                card.preview_note.as_deref(),
+                Some("Showing 200 of 300 rows"),
+                "{view:?}"
+            );
+            assert!(card.excerpt.contains("name199"), "{view:?}");
+            assert!(!card.excerpt.contains("name299"), "{view:?}");
+            d.full = true;
+            let full = work_card(&d);
+            assert!(full.preview_note.is_none(), "{view:?}");
+            if view == CardView::Original {
+                assert!(full.excerpt.contains("name299"));
+            }
+        }
+    }
+
+    #[test]
+    fn copy_and_save_use_the_whole_table_not_the_preview() {
+        let src = csv_rows(300);
+        let save = text_save_file(&src, CardView::Original).unwrap();
+        assert_eq!(save.bytes, src.as_bytes());
+        let copied = transformed_text(&src, CardView::Original).unwrap();
+        assert_eq!(copied, src);
+    }
+
+    #[test]
+    fn small_table_card_has_no_preview_note() {
+        let src = csv_rows(20);
+        let mut d = data(SubjectKind::Text, Some(&src));
+        for view in [CardView::Original, CardView::Dataframe] {
+            d.view = view;
+            assert!(work_card(&d).preview_note.is_none(), "{view:?}");
+        }
     }
 }

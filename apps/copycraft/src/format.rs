@@ -110,7 +110,20 @@ impl FormatKind {
     }
 }
 
+/// Format of `text`. Remembered for large texts (see [`crate::memo`]): the card asks many times
+/// per redraw, and each look can parse the whole copy.
 pub fn detect(text: &str) -> FormatKind {
+    DETECTED.get_or_compute(text, detect_uncached)
+}
+
+static DETECTED: crate::memo::Memo<FormatKind> = crate::memo::Memo::new(8);
+
+/// Drop the remembered formats (Wipe).
+pub fn forget_detected() {
+    DETECTED.clear();
+}
+
+fn detect_uncached(text: &str) -> FormatKind {
     if crate::clipboard::try_format_json(text).is_some() {
         return FormatKind::Json;
     }

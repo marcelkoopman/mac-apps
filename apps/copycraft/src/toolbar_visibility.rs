@@ -19,7 +19,7 @@ pub fn shows_dataframe_button(kind: FormatKind, source: &str) -> bool {
         && !crate::format::looks_like_xml(source)
         && crate::format::detect(source) != FormatKind::Json
         && crate::format::detect(source) != FormatKind::Markdown
-        && (shows_dataframe(kind) || crate::dataframe::try_format(source).is_some())
+        && (shows_dataframe(kind) || crate::dataframe::is_table(source))
 }
 
 pub fn shows_decode(kind: FormatKind) -> bool {

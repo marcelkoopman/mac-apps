@@ -11,6 +11,7 @@ mod hotkey;
 mod icon;
 mod image_ops;
 mod launcher;
+mod memo;
 mod menubar;
 mod open_file;
 mod page_preview;
@@ -44,6 +45,12 @@ mod macos_save;
 mod macos_vision;
 
 fn main() {
+    // Polars prints 10 rows of a table by default. The card limits rows itself
+    // (`commands::PREVIEW_ROWS`), and "Show all" and Copy want every row.
+    if std::env::var_os("POLARS_FMT_MAX_ROWS").is_none() {
+        // SAFETY: first thing in `main`, before any other thread exists.
+        unsafe { std::env::set_var("POLARS_FMT_MAX_ROWS", "-1") };
+    }
     if let Err(e) = menubar::run() {
         eprintln!("copycraft failed: {e}");
         std::process::exit(1);

@@ -100,11 +100,16 @@ thread_local! {
             save: false,
         })
     };
-    static TEXT_GUTTER: Cell<f64> = const { Cell::new(-1.0) };
+    /// Right and bottom insets of the text: room for the Copy/Save buttons and the Show all pill.
+    static TEXT_GUTTER: Cell<(f64, f64)> = const { Cell::new((-1.0, -1.0)) };
     static COPY_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     static SAVE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     /// Busy wheel over the well while a save runs. Created on first use.
     static SPINNER: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
+    /// "Showing 200 of 23,220 rows" when the well holds a preview. Empty otherwise.
+    static PREVIEW_NOTE: RefCell<String> = const { RefCell::new(String::new()) };
+    /// "Show all" pill at the bottom of the well, rebuilt when its title changes.
+    static SHOW_ALL: RefCell<Option<ShowAllButton>> = const { RefCell::new(None) };
     static REVEAL: RefCell<Option<RevealCover>> = const { RefCell::new(None) };
     static REVEALED: Cell<bool> = const { Cell::new(false) };
     /// In-item search is visible only while the well is revealed.
@@ -294,6 +299,16 @@ define_class!(
             launcher::emit(UserEvent::Run(CommandId::Save));
         }
 
+        #[unsafe(method(showAllClicked:))]
+        fn show_all_clicked(&self, _sender: Option<&NSButton>) {
+            SHOW_ALL.with(|slot| {
+                if let Some(pill) = slot.borrow().as_ref() {
+                    pill.button.root.setHidden(true);
+                }
+            });
+            launcher::emit(UserEvent::Run(CommandId::ShowAll));
+        }
+
         #[unsafe(method(revealClicked:))]
         fn reveal_clicked(&self, _sender: Option<&NSButton>) {
             if !MASKS.with(Cell::get) || REVEALED.with(Cell::get) {
@@ -404,6 +419,16 @@ pub fn sync(data: LaunchData) {
     layout(false);
 }
 
+/// [`sync`] with `card` already built from `data` (the "Show all" card, built off the main
+/// thread).
+pub fn sync_with_card(data: LaunchData, card: commands::WorkCard) {
+    if !is_open() {
+        return;
+    }
+    store_with_card(data, card);
+    layout(false);
+}
+
 fn present(data: LaunchData, fresh: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -444,13 +469,18 @@ fn present(data: LaunchData, fresh: bool) {
 }
 
 fn store(data: LaunchData) {
+    let card = commands::work_card(&data);
+    store_with_card(data, card);
+}
+
+fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     let key = commands::content_key(&data);
     if CONTENT_KEY.with(Cell::get) != key {
         CONTENT_KEY.set(key);
         REVEALED.set(false);
         set_item_find(false);
     }
-    let card = commands::work_card(&data);
+    PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
     MASKS.set(commands::masks_content(&card, data.view));
     CARD_TITLE.with(|slot| set_secret(slot, card.title));
     CARD_META.with(|slot| set_secret(slot, card.meta));
@@ -632,6 +662,7 @@ fn layout(fresh_place: bool) {
     place_well(placed.preview_y);
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
+    place_show_all(mtm, placed.preview_y);
     META.with(|slot| {
         let borrowed = slot.borrow();
         let Some(label) = borrowed.as_ref() else {
@@ -2187,6 +2218,7 @@ fn close_search() {
 
 pub fn wipe_shown() {
     set_item_find(false);
+    PREVIEW_NOTE.with(|slot| slot.borrow_mut().clear());
     CARD_TITLE.with(wipe_string_slot);
     CARD_META.with(wipe_string_slot);
     CARD_EXCERPT.with(wipe_string_slot);
@@ -2531,7 +2563,14 @@ fn place_content_actions(preview_y: f64) {
     SAVE_BUTTON.with(|slot| {
         place_well_action(slot, right, top, actions.save, &commands::save_tip(&title));
     });
-    set_text_gutter(text_gutter(actions));
+    // A preview keeps its last rows scrollable above the Show all pill.
+    let previewing = PREVIEW_NOTE.with(|slot| !slot.borrow().is_empty()) && !well_is_masked();
+    let bottom = if previewing {
+        SHOW_ALL_H + WELL_INSET * 2.0
+    } else {
+        0.0
+    };
+    set_text_gutter(text_gutter(actions), bottom);
 }
 
 fn text_gutter(actions: commands::ContentActions) -> f64 {
@@ -2569,6 +2608,13 @@ fn raise_content_actions() {
             }
         });
     }
+    SHOW_ALL.with(|slot| {
+        if let Some(pill) = slot.borrow().as_ref()
+            && !pill.button.root.isHidden()
+        {
+            raise_view(&pill.button.root);
+        }
+    });
     SPINNER.with(|slot| {
         if let Some(spinner) = slot.borrow().as_ref()
             && spinner.is_added()
@@ -2578,17 +2624,81 @@ fn raise_content_actions() {
     });
 }
 
-fn set_text_gutter(right: f64) {
-    if (TEXT_GUTTER.get() - right).abs() < 0.5 {
+/// "Show all" pill, with the preview note in its title.
+struct ShowAllButton {
+    button: WellAction,
+    title: String,
+}
+
+const SHOW_ALL_H: f64 = 24.0;
+
+/// Show the "Show all" pill centered at the bottom of the well while it holds a preview and is
+/// not blurred. The pill title carries the note, e.g. "Showing 200 of 23,220 rows · Show all".
+fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
+    let note = PREVIEW_NOTE.with(|slot| slot.borrow().clone());
+    let shown = !note.is_empty() && !well_is_masked() && !SHOWS_IMAGE.with(Cell::get);
+    let title = format!("{note}  ·  Show all");
+    SHOW_ALL.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if !shown {
+            if let Some(pill) = slot.as_ref() {
+                pill.button.root.setHidden(true);
+            }
+            return;
+        }
+        let inner = WIDTH - PAD * 2.0 - WELL_INSET * 2.0;
+        // About 6.6 pt per character of the 12 pt system font, plus the pill's round ends.
+        let width = (title.chars().count() as f64 * 6.6 + 28.0)
+            .min(inner)
+            .round();
+        if slot.as_ref().is_none_or(|pill| pill.title != title) {
+            if let Some(old) = slot.take() {
+                old.button.root.removeFromSuperview();
+            }
+            let button = widgets::pill_button(mtm, &title, width, SHOW_ALL_H, 12.0, 16.0);
+            wire_button(&button.hit, sel!(showAllClicked:));
+            button
+                .hit
+                .setToolTip(Some(&NSString::from_str("Load and show the whole text")));
+            let parent = WELL.with(|well| {
+                well.borrow()
+                    .as_ref()
+                    // SAFETY: the superview is used right away, while the view hierarchy keeps
+                    // it alive.
+                    .and_then(|well| unsafe { well.superview() })
+            });
+            if let Some(parent) = parent {
+                parent.addSubview(&button.root);
+            }
+            *slot = Some(ShowAllButton { button, title });
+        }
+        let Some(pill) = slot.as_ref() else {
+            return;
+        };
+        pill.button.root.setFrame(NSRect::new(
+            NSPoint::new(
+                PAD + (WIDTH - PAD * 2.0 - width) / 2.0,
+                preview_y + WELL_INSET,
+            ),
+            NSSize::new(width, SHOW_ALL_H),
+        ));
+        pill.button.root.setHidden(false);
+        raise_view(&pill.button.root);
+    });
+}
+
+fn set_text_gutter(right: f64, bottom: f64) {
+    let (old_right, old_bottom) = TEXT_GUTTER.get();
+    if (old_right - right).abs() < 0.5 && (old_bottom - bottom).abs() < 0.5 {
         return;
     }
-    TEXT_GUTTER.set(right);
+    TEXT_GUTTER.set((right, bottom));
     PREVIEW_SCROLL.with(|slot| {
         if let Some(scroll) = slot.borrow().as_ref() {
             scroll.setContentInsets(NSEdgeInsets {
                 top: 0.0,
                 left: 0.0,
-                bottom: 0.0,
+                bottom,
                 right,
             });
         }
@@ -2751,6 +2861,7 @@ mod tests {
             image_scan: None,
             source_name: None,
             source_note: None,
+            full: false,
         }
     }
 
@@ -2790,6 +2901,7 @@ mod tests {
             image_scan: None,
             source_name: None,
             source_note: None,
+            full: false,
         }
     }
 

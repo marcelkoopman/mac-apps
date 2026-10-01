@@ -75,7 +75,20 @@ fn label_named(name: &str) -> Option<Label> {
 /// Named columns such as Naam or Salaris join the leakguard hits.
 /// Rust and Java are source: a path or a field name is not personal data,
 /// so those cards do not pick up a PII label. A real key or account still does.
+/// Remembered for large texts (see [`crate::memo`]): scanning a large copy takes hundreds of
+/// milliseconds and the card asks on every redraw.
 pub fn labels(text: &str) -> Vec<Label> {
+    LABELS.get_or_compute(text, labels_uncached)
+}
+
+static LABELS: crate::memo::Memo<Vec<Label>> = crate::memo::Memo::new(8);
+
+/// Drop the remembered labels (Wipe).
+pub fn forget_labels() {
+    LABELS.clear();
+}
+
+fn labels_uncached(text: &str) -> Vec<Label> {
     let code = is_code(crate::format::detect(text));
     let mut found: Vec<Label> = guard()
         .find(text)

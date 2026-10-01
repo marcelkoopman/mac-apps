@@ -62,7 +62,7 @@ pub(crate) fn fit_document(text: &NSTextView, wrap_width: Option<f64>) {
 pub(crate) fn paint(text: &NSTextView, body: &str, highlight: Option<FormatKind>, payload: bool) {
     let attr = if payload {
         match highlight {
-            Some(kind) => colored(body, kind),
+            Some(kind) => colored_capped(body, kind),
             None => plain(body, &editor_font(), &NSColor::labelColor()),
         }
     } else {
@@ -146,6 +146,34 @@ fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString
     attr
 }
 
+/// Syntax colors cost an attribute run per token, so a "Show all" card colors its first
+/// [`HIGHLIGHT_CAP`] bytes (up to a line end) and shows the rest in the plain editor style.
+const HIGHLIGHT_CAP: usize = 80_000;
+
+fn colored_capped(body: &str, kind: FormatKind) -> Retained<NSMutableAttributedString> {
+    if body.len() <= HIGHLIGHT_CAP {
+        return colored(body, kind);
+    }
+    let split = highlight_split(body);
+    let attr = colored(&body[..split], kind);
+    attr.appendAttributedString(&plain(
+        &body[split..],
+        &editor_font(),
+        &NSColor::labelColor(),
+    ));
+    attr
+}
+
+/// Byte index after the last line end within the first [`HIGHLIGHT_CAP`] bytes (or at the cap,
+/// on a char boundary, when that stretch has no line end).
+fn highlight_split(body: &str) -> usize {
+    let mut cap = HIGHLIGHT_CAP.min(body.len());
+    while !body.is_char_boundary(cap) {
+        cap -= 1;
+    }
+    body[..cap].rfind('\n').map_or(cap, |index| index + 1)
+}
+
 fn color_for(kind: TokenKind) -> Retained<NSColor> {
     match kind {
         TokenKind::Key | TokenKind::Function => NSColor::systemBlueColor(),
@@ -157,5 +185,32 @@ fn color_for(kind: TokenKind) -> Retained<NSColor> {
         TokenKind::Comment => NSColor::secondaryLabelColor(),
         TokenKind::Punct => NSColor::tertiaryLabelColor(),
         TokenKind::Text => NSColor::labelColor(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HIGHLIGHT_CAP, highlight_split};
+
+    #[test]
+    fn short_text_is_not_split() {
+        assert_eq!(highlight_split("a\nb"), 3);
+    }
+
+    #[test]
+    fn long_text_splits_after_a_line_end_within_the_cap() {
+        let line = "x".repeat(99) + "\n";
+        let body = line.repeat(HIGHLIGHT_CAP / 100 + 10);
+        let split = highlight_split(&body);
+        assert!(split <= HIGHLIGHT_CAP);
+        assert_eq!(&body[split - 1..split], "\n");
+    }
+
+    #[test]
+    fn a_cap_inside_a_character_moves_back_to_its_start() {
+        let body = "é".repeat(HIGHLIGHT_CAP);
+        let split = highlight_split(&body);
+        assert!(body.is_char_boundary(split));
+        assert!(split <= HIGHLIGHT_CAP);
     }
 }

@@ -6,6 +6,39 @@ pub fn try_format(text: &str) -> Option<String> {
     parse(text).and_then(render)
 }
 
+/// A table's first rows as a polars grid, for the card preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataframePreview {
+    pub grid: String,
+    /// Rows in the whole table.
+    pub rows: usize,
+    /// Rows in `grid`.
+    pub shown_rows: usize,
+}
+
+/// Like [`try_format`], but renders at most `max_rows` rows. Parsing is quick; rendering every
+/// row of a large table is what takes time.
+pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePreview> {
+    let df = parse(text)?;
+    let rows = df.height();
+    let shown = if rows > max_rows {
+        df.head(Some(max_rows))
+    } else {
+        df
+    };
+    let shown_rows = shown.height();
+    Some(DataframePreview {
+        grid: render(shown)?,
+        rows,
+        shown_rows,
+    })
+}
+
+/// The text parses as a non-empty table (what [`try_format`] needs), without rendering it.
+pub fn is_table(text: &str) -> bool {
+    parse(text).is_some_and(|df| df.width() > 0 && df.height() > 0)
+}
+
 pub fn try_csv_text(text: &str) -> Option<String> {
     parse(text).and_then(write_csv)
 }
