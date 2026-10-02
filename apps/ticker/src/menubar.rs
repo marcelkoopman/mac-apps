@@ -165,7 +165,7 @@ impl App {
     fn handle_menu_item(&mut self, id: &str, event_loop: &ActiveEventLoop) {
         log_message(&format!("menu: handling {id:?}"));
         match id {
-            "quit" => event_loop.exit(),
+            mac_ui::tray::QUIT_ID => event_loop.exit(),
             "poll" => {
                 if self.config.is_some() {
                     self.poll_prices();
@@ -604,7 +604,7 @@ impl App {
             let _ = menu.append(&MenuItem::new(format!("❌ {e}"), false, None));
         }
         let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));
-        let _ = menu.append(&MenuItem::with_id("quit", " Quit", true, None));
+        let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
         if let Ok(tray) = self.tray.try_borrow_mut() {
             tray.set_menu(Some(Box::new(menu)));
         }
@@ -754,7 +754,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
     let menu = Menu::new();
     let _ = menu.append(&MenuItem::new("⏳ Loading...", false, None));
     let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));
-    let _ = menu.append(&MenuItem::with_id("quit", " Quit", true, None));
+    let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
     let tray_icon = mac_ui::tray::with_icon(TrayIconBuilder::new(), normal_icon.clone(), true)
         .with_menu(Box::new(menu))
         .with_tooltip("Price Ticker")

@@ -114,7 +114,7 @@ impl MenuBuilder {
         ));
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&Self::version_item());
-        let _ = menu.append(&MenuItem::with_id("quit", " Quit", true, None));
+        let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
         menu
     }
 
@@ -284,16 +284,13 @@ impl MenuBuilder {
         String::new()
     }
 
+    /// Grey, disabled version row ([`mac_ui::tray::info_item`]).
     pub fn version_item() -> MenuItem {
-        MenuItem::new(
-            format!(
-                "Version {} · Polars {}",
-                env!("CARGO_PKG_VERSION"),
-                POLARS_VERSION
-            ),
-            false,
-            None,
-        )
+        mac_ui::tray::info_item(&format!(
+            "Version {} · Polars {}",
+            env!("CARGO_PKG_VERSION"),
+            POLARS_VERSION
+        ))
     }
 
     /// Asset name in `row` of `df` (the row index of an asset menu item).

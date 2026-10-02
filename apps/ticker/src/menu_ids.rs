@@ -57,7 +57,7 @@ mod tests {
     use super::*;
 
     const FIXED: &[&str] = &[
-        "quit",
+        mac_ui::tray::QUIT_ID,
         "poll",
         "copy",
         "add_watch",
