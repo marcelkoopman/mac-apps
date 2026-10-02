@@ -21,6 +21,8 @@
 //! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
 //! - `drop`: `drop`, a view that takes one dropped file or dropped text, judged by type while
 //!   the drag moves. Its accept rules (`drop::judge`) build on every platform.
+//! - `blur`: `blur`, a `CIGaussianBlur` content filter on a view.
+//! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
@@ -39,6 +41,8 @@ pub use objc2_foundation;
 
 #[cfg(all(target_os = "macos", any(feature = "panel", feature = "dialog")))]
 mod activation;
+#[cfg(all(target_os = "macos", feature = "blur"))]
+pub mod blur;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod button;
 pub mod corners;
@@ -54,6 +58,8 @@ pub mod fonts;
 #[cfg(target_os = "macos")]
 pub mod glass;
 pub mod icon;
+#[cfg(all(target_os = "macos", feature = "image"))]
+pub mod image;
 pub mod keys;
 #[cfg(target_os = "macos")]
 pub mod layer;

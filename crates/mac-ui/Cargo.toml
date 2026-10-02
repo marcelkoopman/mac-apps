@@ -95,6 +95,10 @@ drop = [
 ]
 # `mac_ui::progress`: indeterminate spinning NSProgressIndicator (busy wheel).
 progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
+# `mac_ui::blur`: a CIGaussianBlur content filter on a view.
+blur = ["objc2-foundation/NSArray"]
+# `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
+image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep"]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
 # `display notification` without one).
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]
