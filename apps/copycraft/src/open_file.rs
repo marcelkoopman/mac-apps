@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 /// Pasted files larger than this stay off the card.
 pub const MAX_FILE_BYTES: u64 = 8_000_000;
@@ -32,25 +32,24 @@ pub fn load(path: &Path) -> OpenedFile {
     if meta.len() > MAX_FILE_BYTES {
         return noted(name, TOO_LARGE);
     }
-    let mut bytes = match std::fs::read(path) {
-        Ok(bytes) => bytes,
+    // Zeroizing from the first byte, so the file contents are overwritten on every path out.
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => Zeroizing::new(bytes),
         Err(_) => return noted(name, UNREADABLE),
     };
-    let opened = match classify(&bytes) {
+    match classify(&bytes) {
         Classified::Text(text) => OpenedFile {
             name,
-            text: Some(Zeroizing::new(text)),
+            text: Some(text),
             note: None,
         },
         Classified::NotText => noted(name, NOT_TEXT),
         Classified::TooLarge => noted(name, TOO_LARGE),
-    };
-    bytes.zeroize();
-    opened
+    }
 }
 
 enum Classified {
-    Text(String),
+    Text(Zeroizing<String>),
     NotText,
     TooLarge,
 }
@@ -73,18 +72,23 @@ fn noted(name: String, note: &str) -> OpenedFile {
     }
 }
 
-fn decode(bytes: &[u8]) -> Option<String> {
+/// The file's text in one exact-size allocation, so no copy of it is left behind unzeroized.
+fn decode(bytes: &[u8]) -> Option<Zeroizing<String>> {
     if let Some(text) = decode_utf16(bytes) {
         return Some(text);
     }
     if bytes.contains(&0) {
         return None;
     }
-    let text = String::from_utf8(bytes.to_vec()).ok()?;
-    Some(text.trim_start_matches('\u{feff}').to_string())
+    // Validate in place: `String::from_utf8(bytes.to_vec())` made a second copy that was
+    // dropped without being zeroized.
+    let text = std::str::from_utf8(bytes).ok()?;
+    Some(Zeroizing::new(
+        text.trim_start_matches('\u{feff}').to_string(),
+    ))
 }
 
-fn decode_utf16(bytes: &[u8]) -> Option<String> {
+fn decode_utf16(bytes: &[u8]) -> Option<Zeroizing<String>> {
     let (rest, be) = if bytes.starts_with(&[0xFF, 0xFE]) {
         (&bytes[2..], false)
     } else if bytes.starts_with(&[0xFE, 0xFF]) {
@@ -96,17 +100,24 @@ fn decode_utf16(bytes: &[u8]) -> Option<String> {
         return None;
     }
     let (pairs, _) = rest.as_chunks::<2>();
-    let units: Vec<u16> = pairs
-        .iter()
-        .map(|pair| {
-            if be {
-                u16::from_be_bytes(*pair)
-            } else {
-                u16::from_le_bytes(*pair)
-            }
-        })
-        .collect();
-    String::from_utf16(&units).ok()
+    let units = pairs.iter().map(|pair| {
+        if be {
+            u16::from_be_bytes(*pair)
+        } else {
+            u16::from_le_bytes(*pair)
+        }
+    });
+    // Measure first, then fill one buffer of that size: growing a String while decoding
+    // reallocates and frees the old buffers without zeroizing them.
+    let mut len = 0;
+    for unit in char::decode_utf16(units.clone()) {
+        len += unit.ok()?.len_utf8();
+    }
+    let mut text = Zeroizing::new(String::with_capacity(len));
+    for unit in char::decode_utf16(units) {
+        text.push(unit.ok()?);
+    }
+    Some(text)
 }
 
 /// Save panel name. The extension matches the card view, the stem the chosen file.
@@ -136,15 +147,36 @@ mod tests {
             ),
         }
         let text = decode(b"\xEF\xBB\xBFhello").unwrap();
-        assert_eq!(text, "hello");
+        assert_eq!(text.as_str(), "hello");
     }
 
     #[test]
     fn reads_utf16_and_rejects_binary() {
         let text = decode(&[0xFF, 0xFE, b'A', 0, b'B', 0]).unwrap();
-        assert_eq!(text, "AB");
+        assert_eq!(text.as_str(), "AB");
         assert!(decode(b"\x89PNG\x00\x00").is_none());
         assert!(matches!(classify(&[0, 1, 2, 3]), Classified::NotText));
+    }
+
+    #[test]
+    fn decoded_text_fills_one_exact_buffer() {
+        // An exact-size buffer was never grown, so no reallocated copy was freed unzeroized.
+        let text = decode("héllo wörld".as_bytes()).unwrap();
+        assert_eq!(text.as_str(), "héllo wörld");
+        assert_eq!(text.capacity(), text.len());
+        // UTF-16 BE with a BMP char (3 UTF-8 bytes) and a surrogate pair (4 UTF-8 bytes).
+        let utf16: Vec<u8> = [0xFE, 0xFF]
+            .into_iter()
+            .chain("a€😀".encode_utf16().flat_map(u16::to_be_bytes))
+            .collect();
+        let text = decode(&utf16).unwrap();
+        assert_eq!(text.as_str(), "a€😀");
+        assert_eq!(text.capacity(), text.len());
+    }
+
+    #[test]
+    fn unpaired_utf16_surrogate_is_not_text() {
+        assert!(decode(&[0xFF, 0xFE, 0x00, 0xD8]).is_none());
     }
 
     #[test]
