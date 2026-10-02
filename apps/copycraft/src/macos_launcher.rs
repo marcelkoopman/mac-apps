@@ -5,24 +5,24 @@ use std::ops::Range;
 
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::corners;
+use mac_ui::find::{find_matches, match_label, step_match};
 use mac_ui::glass;
 use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl,
-    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType,
-    NSFont, NSForegroundColorAttributeName, NSImage, NSImageView, NSLineBreakMode, NSMenu,
-    NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle,
-    NSTextView, NSView, NSWindow, NSWindowOrderingMode,
+    NSAccessibility, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage,
+    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment,
+    NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSNotification, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
-use mac_ui::text::{AttrText, utf16_range};
+use mac_ui::text::AttrText;
 use mac_ui::widgets::{self, filled_box, raise_view};
 use zeroize::Zeroize;
 
@@ -1350,82 +1350,6 @@ fn event_shift() -> bool {
         .is_some_and(|event| event.modifierFlags().contains(NSEventModifierFlags::Shift))
 }
 
-/// Case-insensitive, non-overlapping spans in `text`. Indexes are bytes.
-fn find_matches(text: &str, query: &str) -> Vec<Range<usize>> {
-    let needle: Vec<char> = query.chars().collect();
-    if needle.is_empty() {
-        return Vec::new();
-    }
-    let chars: Vec<(usize, char)> = text.char_indices().collect();
-    if chars.len() < needle.len() {
-        return Vec::new();
-    }
-    let mut matches = Vec::new();
-    let mut index = 0;
-    while index + needle.len() <= chars.len() {
-        let hit = needle
-            .iter()
-            .enumerate()
-            .all(|(offset, expected)| chars_equal_ignore_case(chars[index + offset].1, *expected));
-        if hit {
-            let start = chars[index].0;
-            let end_index = index + needle.len();
-            let end = chars
-                .get(end_index)
-                .map(|(byte, _)| *byte)
-                .unwrap_or(text.len());
-            matches.push(start..end);
-            index = end_index;
-        } else {
-            index += 1;
-        }
-    }
-    matches
-}
-
-fn chars_equal_ignore_case(left: char, right: char) -> bool {
-    if left == right || left.eq_ignore_ascii_case(&right) {
-        return true;
-    }
-    let mut left_chars = left.to_lowercase();
-    let mut right_chars = right.to_lowercase();
-    loop {
-        match (left_chars.next(), right_chars.next()) {
-            (Some(a), Some(b)) if a == b => {}
-            (None, None) => return true,
-            _ => return false,
-        }
-    }
-}
-
-/// `index` is zero-based. `3/12` is the third match of twelve.
-fn match_counter(index: usize, total: usize) -> String {
-    if total == 0 {
-        "0/0".to_string()
-    } else {
-        format!("{}/{}", index + 1, total)
-    }
-}
-
-fn match_label(query: &str, index: usize, total: usize) -> String {
-    if query.is_empty() {
-        String::new()
-    } else {
-        match_counter(index, total)
-    }
-}
-
-fn step_match(index: usize, total: usize, forward: bool) -> usize {
-    if total == 0 {
-        return 0;
-    }
-    if forward {
-        (index + 1) % total
-    } else {
-        (index + total - 1) % total
-    }
-}
-
 fn search_body(shows_image: bool, linked: bool, excerpt: &str, placeholder: &str) -> String {
     if shows_image || linked {
         String::new()
@@ -1548,51 +1472,7 @@ fn paint_match_marks(text: &str, matches: &[Range<usize>], current: usize, scrol
     let Some(view) = view else {
         return;
     };
-    let shown = view.string();
-    let shown_text = shown.to_string();
-    let Some(manager) = (unsafe { view.layoutManager() }) else {
-        return;
-    };
-    if !shown_text.is_empty() {
-        let all = NSRange {
-            location: 0,
-            length: shown.length(),
-        };
-        unsafe {
-            manager.removeTemporaryAttribute_forCharacterRange(NSBackgroundColorAttributeName, all);
-            manager.removeTemporaryAttribute_forCharacterRange(NSForegroundColorAttributeName, all);
-        }
-    }
-    if shown_text != text || matches.is_empty() {
-        return;
-    }
-    // The system find colours. The current match is drawn like the find indicator, with dark
-    // text on the opaque highlight, so it stays readable in dark mode. Other matches get a light
-    // wash of the same colour under the normal text colour.
-    let hot = NSColor::findHighlightColor();
-    let hot_text = NSColor::blackColor();
-    let wash = hot.colorWithAlphaComponent(0.35);
-    for (index, range) in matches.iter().enumerate() {
-        let range = utf16_range(text, range);
-        let color = if index == current { &hot } else { &wash };
-        unsafe {
-            manager.addTemporaryAttribute_value_forCharacterRange(
-                NSBackgroundColorAttributeName,
-                color,
-                range,
-            );
-            if index == current {
-                manager.addTemporaryAttribute_value_forCharacterRange(
-                    NSForegroundColorAttributeName,
-                    &hot_text,
-                    range,
-                );
-            }
-        }
-    }
-    if scroll && let Some(range) = matches.get(current) {
-        view.scrollRangeToVisible(utf16_range(text, range));
-    }
+    widgets::mark_matches(&view, text, matches, current, scroll);
 }
 
 fn wipe_item_field() {
@@ -1604,16 +1484,8 @@ fn wipe_item_field() {
         let Some(field) = borrowed.as_ref() else {
             return;
         };
-        if let Some(editor) = field.currentEditor() {
-            let current = editor.string();
-            let length = current.length();
-            if length > 0 {
-                let zeros = "\0".repeat(length);
-                editor.setString(&NSString::from_str(&zeros));
-            }
-            editor.setString(&NSString::from_str(""));
-        }
-        wipe_field(field);
+        widgets::wipe_field_editor(field);
+        widgets::wipe_text_field(field);
     });
 }
 
@@ -1621,7 +1493,7 @@ fn clear_preview_text() {
     set_item_text(String::new());
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            zero_text_view(view);
+            widgets::wipe_text_view(view);
         }
     });
     PAINTED.with(|slot| {
@@ -1630,23 +1502,6 @@ fn clear_preview_text() {
         }
         *slot.borrow_mut() = None;
     });
-}
-
-fn zero_text_view(view: &NSTextView) {
-    if let Some(storage) = unsafe { view.textStorage() } {
-        let length = storage.length();
-        if length > 0 {
-            let zeros = "\0".repeat(length);
-            storage.replaceCharactersInRange_withString(
-                NSRange {
-                    location: 0,
-                    length,
-                },
-                &NSString::from_str(&zeros),
-            );
-        }
-    }
-    view.setString(&NSString::from_str(""));
 }
 
 fn preview_holding_picture() -> bool {
@@ -1753,7 +1608,7 @@ fn paint_preview_text(body: &str, payload: bool) {
         crate::macos_card_text::paint(view, body, highlight, payload);
         let wrap = (highlight.is_none() || highlight == Some(FormatKind::Markdown))
             .then(preview_wrap_width);
-        crate::macos_card_text::fit_document(view, wrap);
+        widgets::fit_text_view(view, wrap);
         view.scrollRangeToVisible(NSRange {
             location: 0,
             length: 0,
@@ -2329,7 +2184,7 @@ fn wipe_link_pair(entry: &mut (String, CachedLink)) {
 fn wipe_shown_views() {
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            zero_text_view(view);
+            widgets::wipe_text_view(view);
         }
     });
     set_item_text(String::new());
@@ -2342,21 +2197,11 @@ fn wipe_shown_views() {
     for slot in [&HEADER, &META, &FIELD, &ITEM_COUNT] {
         slot.with(|slot| {
             if let Some(field) = slot.borrow().as_ref() {
-                wipe_field(field);
+                widgets::wipe_text_field(field);
             }
         });
     }
     wipe_item_field();
-}
-
-fn wipe_field(field: &NSTextField) {
-    let current = field.stringValue();
-    let length = current.length();
-    if length > 0 {
-        let zeros = "\0".repeat(length);
-        field.setStringValue(&NSString::from_str(&zeros));
-    }
-    field.setStringValue(&NSString::from_str(""));
 }
 
 fn current_query() -> zeroize::Zeroizing<String> {
@@ -2499,7 +2344,7 @@ fn place_item_find(y: f64, shown: bool) {
 
 fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
     let text = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
-    crate::macos_card_text::configure_scrolling(&text);
+    widgets::scroll_text_both_ways(&text);
     text.setAccessibilityLabel(Some(&NSString::from_str("Clipboard content")));
     text
 }
@@ -3061,43 +2906,5 @@ mod tests {
         assert!(super::current_item_text().is_empty());
         assert!(super::find_matches(&super::current_item_text(), "horse").is_empty());
         assert!(super::find_matches(&super::current_item_text(), "example").is_empty());
-    }
-
-    #[test]
-    fn match_counter_is_one_based() {
-        assert_eq!(super::match_counter(2, 12), "3/12");
-        assert_eq!(super::match_counter(0, 1), "1/1");
-        assert_eq!(super::match_counter(0, 0), "0/0");
-        assert_eq!(super::match_label("", 0, 4), "");
-        assert_eq!(super::match_label("a", 0, 0), "0/0");
-    }
-
-    #[test]
-    fn step_match_wraps() {
-        assert_eq!(super::step_match(0, 12, true), 1);
-        assert_eq!(super::step_match(11, 12, true), 0);
-        assert_eq!(super::step_match(0, 12, false), 11);
-        assert_eq!(super::step_match(3, 12, false), 2);
-        assert_eq!(super::step_match(0, 1, true), 0);
-        assert_eq!(super::step_match(0, 0, true), 0);
-        assert_eq!(super::step_match(4, 0, false), 0);
-    }
-
-    #[test]
-    fn find_matches_are_case_insensitive_and_nonoverlapping() {
-        let text = "Alpha alpha ALPHA";
-        let hits = super::find_matches(text, "alpha");
-        assert_eq!(hits.len(), 3);
-        assert_eq!(&text[hits[0].start..hits[0].end], "Alpha");
-        assert_eq!(&text[hits[1].start..hits[1].end], "alpha");
-        assert_eq!(super::match_counter(0, hits.len()), "1/3");
-        assert_eq!(super::step_match(0, hits.len(), true), 1);
-        assert_eq!(super::step_match(0, hits.len(), false), 2);
-        assert!(super::find_matches(text, "").is_empty());
-        assert_eq!(super::find_matches("aaaa", "aa"), vec![0..2, 2..4]);
-        let accented = "héllo héllo";
-        let marks = super::find_matches(accented, "Héllo");
-        assert_eq!(marks.len(), 2);
-        assert_eq!(&accented[marks[0].start..marks[0].end], "héllo");
     }
 }

@@ -1,15 +1,21 @@
 //! AppKit control constructors with the shared look: borderless, native focus rings, system fonts.
 //!
 //! The helpers only configure the view. Callers set frames, visibility, targets and delegates.
+//! Text views also get sizing ([`fit_text_view`]), find marks ([`mark_matches`]) and wiping
+//! ([`wipe_text_view`], [`wipe_text_field`], [`wipe_field_editor`]).
+
+use std::ops::Range;
 
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSAccessibility, NSBorderType, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSImageAlignment,
-    NSImageScaling, NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField,
-    NSTextView, NSTitlePosition, NSView,
+    NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
+    NSColor, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling, NSImageView,
+    NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView, NSTitlePosition, NSView,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
+
+use crate::text::utf16_range;
 
 use crate::button::{ButtonSize, GlassButton};
 
@@ -191,4 +197,163 @@ pub fn configure_text_scroll(scroll: &NSScrollView, text: &NSTextView) {
     scroll.setAutomaticallyAdjustsContentInsets(false);
     scroll.contentView().setDrawsBackground(false);
     scroll.setDocumentView(Some(text));
+}
+
+/// Let `text` grow in both directions without wrapping, so long lines scroll sideways in its
+/// scroll view.
+pub fn scroll_text_both_ways(text: &NSTextView) {
+    const LARGE: f64 = 10_000_000.0;
+    text.setHorizontallyResizable(true);
+    text.setVerticallyResizable(true);
+    text.setMaxSize(NSSize::new(LARGE, LARGE));
+    // SAFETY: the container is used right away, while the text view keeps it alive.
+    if let Some(container) = unsafe { text.textContainer() } {
+        container.setWidthTracksTextView(false);
+        container.setHeightTracksTextView(false);
+        container.setContainerSize(NSSize::new(LARGE, LARGE));
+    }
+}
+
+/// Size `text` to everything it holds, so its scroll view can reach the last line. With
+/// `wrap_width` the lines wrap at that width (prose); without, long lines are kept and scroll
+/// sideways as well as down.
+pub fn fit_text_view(text: &NSTextView, wrap_width: Option<f64>) {
+    // SAFETY (both): used right away, while the text view keeps them alive.
+    let Some(container) = (unsafe { text.textContainer() }) else {
+        return;
+    };
+    let Some(manager) = (unsafe { text.layoutManager() }) else {
+        return;
+    };
+    const LARGE: f64 = 10_000_000.0;
+    let inset = text.textContainerInset();
+    if let Some(width) = wrap_width {
+        text.setHorizontallyResizable(false);
+        text.setVerticallyResizable(true);
+        text.setMaxSize(NSSize::new(width.max(1.0), LARGE));
+        container.setWidthTracksTextView(true);
+        container.setHeightTracksTextView(false);
+        let inner = (width - inset.width * 2.0).max(1.0);
+        container.setContainerSize(NSSize::new(inner, LARGE));
+        text.setFrameSize(NSSize::new(
+            width.max(1.0),
+            text.frame().size.height.max(1.0),
+        ));
+    } else {
+        scroll_text_both_ways(text);
+    }
+    manager.ensureLayoutForTextContainer(&container);
+    let used = manager.usedRectForTextContainer(&container);
+    let width = match wrap_width {
+        Some(width) => width,
+        None => used.size.width + inset.width * 2.0,
+    };
+    let height = used.size.height + inset.height * 2.0;
+    text.setFrameSize(NSSize::new(width.max(1.0), height.max(1.0)));
+}
+
+/// Paint `matches` (byte ranges in `text`) in `view` as temporary highlights in the system find
+/// colours: the `current` one like the find indicator, the others as a light wash. Old marks
+/// are removed first; nothing is painted unless `view` shows exactly `text`. With `scroll` the
+/// current match is scrolled into view.
+pub fn mark_matches(
+    view: &NSTextView,
+    text: &str,
+    matches: &[Range<usize>],
+    current: usize,
+    scroll: bool,
+) {
+    let shown = view.string();
+    let shown_text = shown.to_string();
+    // SAFETY: the layout manager is used right away, while the text view keeps it alive.
+    let Some(manager) = (unsafe { view.layoutManager() }) else {
+        return;
+    };
+    if !shown_text.is_empty() {
+        let all = NSRange {
+            location: 0,
+            length: shown.length(),
+        };
+        // SAFETY: removing attributes takes no value.
+        unsafe {
+            manager.removeTemporaryAttribute_forCharacterRange(NSBackgroundColorAttributeName, all);
+            manager.removeTemporaryAttribute_forCharacterRange(NSForegroundColorAttributeName, all);
+        }
+    }
+    if shown_text != text || matches.is_empty() {
+        return;
+    }
+    // The system find colours. The current match is drawn like the find indicator, with dark
+    // text on the opaque highlight, so it stays readable in dark mode. Other matches get a light
+    // wash of the same colour under the normal text colour.
+    let hot = NSColor::findHighlightColor();
+    let hot_text = NSColor::blackColor();
+    let wash = hot.colorWithAlphaComponent(0.35);
+    for (index, range) in matches.iter().enumerate() {
+        let range = utf16_range(text, range);
+        let color = if index == current { &hot } else { &wash };
+        // SAFETY: both background and foreground colour attributes take an NSColor value.
+        unsafe {
+            manager.addTemporaryAttribute_value_forCharacterRange(
+                NSBackgroundColorAttributeName,
+                color,
+                range,
+            );
+            if index == current {
+                manager.addTemporaryAttribute_value_forCharacterRange(
+                    NSForegroundColorAttributeName,
+                    &hot_text,
+                    range,
+                );
+            }
+        }
+    }
+    if scroll && let Some(range) = matches.get(current) {
+        view.scrollRangeToVisible(utf16_range(text, range));
+    }
+}
+
+/// Overwrite the characters of `view` with NULs, then empty it, so the text does not linger
+/// in its storage. Best effort: copies AppKit made earlier are out of reach.
+pub fn wipe_text_view(view: &NSTextView) {
+    // SAFETY: the storage is used right away, while the text view keeps it alive.
+    if let Some(storage) = unsafe { view.textStorage() } {
+        let length = storage.length();
+        if length > 0 {
+            let zeros = "\0".repeat(length);
+            storage.replaceCharactersInRange_withString(
+                NSRange {
+                    location: 0,
+                    length,
+                },
+                &NSString::from_str(&zeros),
+            );
+        }
+    }
+    view.setString(&NSString::from_str(""));
+}
+
+/// [`wipe_text_view`] for a text field's value.
+pub fn wipe_text_field(field: &NSTextField) {
+    let current = field.stringValue();
+    let length = current.length();
+    if length > 0 {
+        let zeros = "\0".repeat(length);
+        field.setStringValue(&NSString::from_str(&zeros));
+    }
+    field.setStringValue(&NSString::from_str(""));
+}
+
+/// The same for the field editor of `field` while it is being edited (it holds its own copy of
+/// the text).
+pub fn wipe_field_editor(field: &NSTextField) {
+    if let Some(editor) = field.currentEditor() {
+        let current = editor.string();
+        let length = current.length();
+        if length > 0 {
+            let zeros = "\0".repeat(length);
+            editor.setString(&NSString::from_str(&zeros));
+        }
+        editor.setString(&NSString::from_str(""));
+    }
 }
