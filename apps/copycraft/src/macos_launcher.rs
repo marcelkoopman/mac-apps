@@ -9,22 +9,20 @@ use mac_ui::glass;
 use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
-use mac_ui::objc2::{
-    AnyThread, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel,
-};
+use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBox, NSButton, NSColor, NSControl,
     NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType,
-    NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageView,
-    NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
-    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
+    NSFont, NSForegroundColorAttributeName, NSImage, NSImageView, NSLineBreakMode, NSMenu,
+    NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle,
+    NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSMutableAttributedString, NSNotification, NSPoint, NSRange, NSRect,
-    NSSize, NSString,
+    NSArray, NSEdgeInsets, NSNotification, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
+use mac_ui::text::{AttrText, utf16_range};
 use mac_ui::widgets::{self, filled_box, raise_view};
 use zeroize::Zeroize;
 
@@ -1597,13 +1595,6 @@ fn paint_match_marks(text: &str, matches: &[Range<usize>], current: usize, scrol
     }
 }
 
-fn utf16_range(text: &str, range: &Range<usize>) -> NSRange {
-    NSRange {
-        location: text[..range.start].encode_utf16().count(),
-        length: text[range.start..range.end].encode_utf16().count(),
-    }
-}
-
 fn wipe_item_field() {
     if MainThreadMarker::new().is_none() {
         return;
@@ -2400,34 +2391,17 @@ fn focus_field() {
 /// Size and filename stay quiet. PII is a yellow caution; financial and
 /// credential are a red alert.
 fn paint_warning_meta(label: &NSTextField, meta: &str) {
-    let ns = NSString::from_str(meta);
-    let attr = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
-    let all = NSRange {
-        location: 0,
-        length: ns.length(),
-    };
     let font = NSFont::systemFontOfSize(12.0);
-    unsafe {
-        attr.addAttribute_value_range(NSFontAttributeName, &font, all);
-        attr.addAttribute_value_range(
-            NSForegroundColorAttributeName,
-            &NSColor::secondaryLabelColor(),
-            all,
-        );
-    }
+    let attr = AttrText::new(meta, &font, &NSColor::secondaryLabelColor());
     let warn_font = NSFont::boldSystemFontOfSize(12.0);
     for mark in crate::sensitivity::warning_marks(meta) {
-        let location = meta[..mark.start].encode_utf16().count();
-        let length = meta[mark.start..mark.end].encode_utf16().count();
-        let range = NSRange { location, length };
+        let range = mark.start..mark.end;
         let (ink, wash) = warning_colors(mark.label);
-        unsafe {
-            attr.addAttribute_value_range(NSFontAttributeName, &warn_font, range);
-            attr.addAttribute_value_range(NSForegroundColorAttributeName, &ink, range);
-            attr.addAttribute_value_range(NSBackgroundColorAttributeName, &wash, range);
-        }
+        attr.font(&range, &warn_font)
+            .color(&range, &ink)
+            .background(&range, &wash);
     }
-    label.setAttributedStringValue(&attr);
+    label.setAttributedStringValue(&attr.into_attributed());
 }
 
 fn warning_colors(label: crate::sensitivity::Label) -> (Retained<NSColor>, Retained<NSColor>) {

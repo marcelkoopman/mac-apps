@@ -9,9 +9,10 @@ edition.workspace = true
 appkit-full = ["objc2-app-kit/default", "objc2-foundation/default"]
 # `mac_ui::theme`: appearance switch stored in the user defaults.
 theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-foundation/NSUserDefaults"]
-# `mac_ui::widgets`, `mac_ui::button` and `mac_ui::fonts`: AppKit control constructors, the glass
-# push button (NSBezelStyle in NSButtonCell, NSControlBorderShape in NSControl, NSTintProminence,
-# accessibility labels in NSAccessibilityProtocols) and font lookup.
+# `mac_ui::widgets`, `mac_ui::button`, `mac_ui::fonts` and `mac_ui::text`: AppKit control
+# constructors, the glass push button (NSBezelStyle in NSButtonCell, NSControlBorderShape in
+# NSControl, NSTintProminence, accessibility labels in NSAccessibilityProtocols), font lookup and
+# attributed strings (NSAttributedString, already on in the workspace entry).
 widgets = [
     "objc2-app-kit/NSAccessibilityProtocols",
     "objc2-app-kit/NSBox",

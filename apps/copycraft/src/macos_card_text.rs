@@ -1,11 +1,9 @@
 #![cfg(target_os = "macos")]
 
-use mac_ui::objc2::AnyThread;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2_app_kit::{
-    NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSTextView,
-};
+use mac_ui::objc2_app_kit::{NSColor, NSFont, NSTextView};
 use mac_ui::objc2_foundation::{NSMutableAttributedString, NSRange, NSSize, NSString};
+use mac_ui::text::AttrText;
 
 use crate::format::FormatKind;
 use crate::highlight::{self, TokenKind};
@@ -91,17 +89,7 @@ fn editor_font() -> Retained<NSFont> {
 }
 
 fn plain(body: &str, font: &NSFont, color: &NSColor) -> Retained<NSMutableAttributedString> {
-    let ns = NSString::from_str(body);
-    let attr = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
-    let all = NSRange {
-        location: 0,
-        length: ns.length(),
-    };
-    unsafe {
-        attr.addAttribute_value_range(NSFontAttributeName, font, all);
-        attr.addAttribute_value_range(NSForegroundColorAttributeName, color, all);
-    }
-    attr
+    AttrText::new(body, font, color).into_attributed()
 }
 
 fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString> {
@@ -115,35 +103,19 @@ fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString
         display.push_str(&token);
         spans.push((token_kind, token.encode_utf16().count()));
     }
-    let ns = NSString::from_str(&display);
-    let attr = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
-    let all = NSRange {
-        location: 0,
-        length: ns.length(),
-    };
-    unsafe {
-        attr.addAttribute_value_range(NSFontAttributeName, &font, all);
-        attr.addAttribute_value_range(
-            NSForegroundColorAttributeName,
-            &color_for(TokenKind::Text),
-            all,
-        );
-    }
+    let attr = AttrText::new(&display, &font, &color_for(TokenKind::Text));
     let mut offset = 0usize;
     for (token_kind, len) in spans {
-        unsafe {
-            attr.addAttribute_value_range(
-                NSForegroundColorAttributeName,
-                &color_for(token_kind),
-                NSRange {
-                    location: offset,
-                    length: len,
-                },
-            );
-        }
+        attr.color_utf16(
+            NSRange {
+                location: offset,
+                length: len,
+            },
+            &color_for(token_kind),
+        );
         offset += len;
     }
-    attr
+    attr.into_attributed()
 }
 
 /// Syntax colors cost an attribute run per token, so a "Show all" card colors its first
