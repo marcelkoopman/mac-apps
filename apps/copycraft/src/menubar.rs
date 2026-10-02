@@ -387,20 +387,11 @@ impl App {
 
     /// Show `opened` on the card instead of the clipboard, from its original view. Every way a
     /// file gets onto the card goes through here: it is never recorded in history, and the card
-    /// labels and blurs it like the clipboard. A closed card (a drop on the menu bar icon) opens
-    /// with it.
+    /// labels and blurs it like the clipboard.
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
-        let open = launcher::is_open();
-        if !open {
-            self.full_card = None;
-        }
         self.opened = Some(opened);
         self.card_view = CardView::Original;
-        if open {
-            self.refresh_popup();
-        } else {
-            launcher::reveal(self.launch_for_popup());
-        }
+        self.refresh_popup();
     }
 
     fn launch_data(&mut self, view: &ClipboardView) -> LaunchData {
@@ -1182,8 +1173,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     // Icon only: name the button for VoiceOver. `sync_tooltip` adds the kind.
     mac_ui::tray::set_accessibility_label(&tray, &tray_label("Copycraft"));
-    // A text file or text dropped on the icon opens the card with it.
-    launcher::take_tray_drops(&tray);
 
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     launcher::install_proxy(event_loop.create_proxy());

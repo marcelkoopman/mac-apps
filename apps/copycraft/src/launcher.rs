@@ -95,14 +95,6 @@ pub fn set_busy(busy: bool) {
     let _ = busy;
 }
 
-/// Let the menu bar icon take what the card takes when it is dropped on it.
-pub fn take_tray_drops(tray: &mac_ui::tray_icon::TrayIcon) {
-    #[cfg(target_os = "macos")]
-    crate::macos_launcher::take_tray_drops(tray);
-    #[cfg(not(target_os = "macos"))]
-    let _ = tray;
-}
-
 pub fn order_front() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::order_front();

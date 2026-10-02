@@ -18,11 +18,6 @@
 //! With a [`Highlight`], a drag that can be dropped outlines the target in the accent colour
 //! (system colours only, so it follows the appearance and the user's accent) and VoiceOver
 //! announces it.
-//!
-//! [`onto_tray`] takes drops on a menu bar icon instead: a click-through drop view over the
-//! status item's button, which lights up the button like an open menu while a drag that can be
-//! dropped is over it. Only public AppKit (`NSStatusItem.button`) is used; the tray icon's own
-//! views and click handling are left alone.
 
 use std::path::PathBuf;
 
@@ -96,7 +91,7 @@ pub fn judge(files: &[FileKind], has_text: bool, accept: Accept) -> Option<Offer
 }
 
 #[cfg(target_os = "macos")]
-pub use appkit::{field_editor_without_drops, onto_tray, target};
+pub use appkit::{field_editor_without_drops, target};
 
 #[cfg(target_os = "macos")]
 mod appkit {
@@ -112,10 +107,10 @@ mod appkit {
         NSAccessibility, NSAccessibilityAnnouncementKey,
         NSAccessibilityAnnouncementRequestedNotification,
         NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
-        NSAccessibilityPriorityLevel, NSAutoresizingMaskOptions, NSBox, NSBoxType, NSButton,
-        NSColor, NSDragOperation, NSDraggingDestination, NSDraggingInfo, NSPasteboard,
-        NSPasteboardType, NSPasteboardTypeFileURL, NSPasteboardTypeString,
-        NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView, NSTitlePosition, NSView,
+        NSAccessibilityPriorityLevel, NSBox, NSBoxType, NSColor, NSDragOperation,
+        NSDraggingDestination, NSDraggingInfo, NSPasteboard, NSPasteboardType,
+        NSPasteboardTypeFileURL, NSPasteboardTypeString, NSPasteboardURLReadingFileURLsOnlyKey,
+        NSText, NSTextView, NSTitlePosition, NSView,
     };
     use objc2_foundation::{
         NSArray, NSDictionary, NSNumber, NSPoint, NSRect, NSSize, NSString, NSURL,
@@ -137,30 +132,9 @@ mod appkit {
         on_drop: Box<dyn Fn(Dropped)>,
         /// What the drag over the view offers, judged when it entered.
         offer: Cell<Option<Offer>>,
-        feedback: Option<Feedback>,
-        /// The [`Feedback::Outline`] box, made on the first drag that can be dropped.
+        highlight: Option<Highlight>,
+        /// The outline, made on the first drag that can be dropped.
         outline: RefCell<Option<Retained<NSBox>>>,
-        /// Mouse events pass through to the views below ([`onto_tray`]).
-        click_through: bool,
-    }
-
-    /// How the view shows that the drag over it can be dropped.
-    #[derive(Clone, Copy)]
-    enum Feedback {
-        Outline(Highlight),
-        /// Highlight the button the view lies on (a menu bar icon), and announce.
-        Button {
-            announcement: &'static str,
-        },
-    }
-
-    impl Feedback {
-        fn announcement(self) -> &'static str {
-            match self {
-                Self::Outline(highlight) => highlight.announcement,
-                Self::Button { announcement } => announcement,
-            }
-        }
     }
 
     define_class!(
@@ -172,20 +146,6 @@ mod appkit {
         #[name = "MacUiDropTarget"]
         #[ivars = Ivars]
         struct DropView;
-
-        impl DropView {
-            #[unsafe(method(hitTest:))]
-            fn hit_test(&self, point: NSPoint) -> *mut NSView {
-                if self.ivars().click_through {
-                    // Clicks go to the views below. Drags do not use hitTest:, so they still
-                    // find this view.
-                    std::ptr::null_mut()
-                } else {
-                    // SAFETY: NSView's hitTest:, with its argument and return types.
-                    unsafe { msg_send![super(self), hitTest: point] }
-                }
-            }
-        }
 
         unsafe impl NSObjectProtocol for DropView {}
 
@@ -305,33 +265,14 @@ mod appkit {
     }
 
     impl DropView {
-        /// Show the [`Feedback`], and tell VoiceOver when `speak` (once per drag that enters).
+        /// Outline the view over its content when it has a [`Highlight`], and tell VoiceOver
+        /// when `speak` (once per drag that enters).
         fn show_highlight(&self, speak: bool) {
-            let Some(feedback) = self.ivars().feedback else {
+            let Some(highlight) = self.ivars().highlight else {
                 return;
             };
-            match feedback {
-                Feedback::Outline(highlight) => self.show_outline(&highlight),
-                Feedback::Button { .. } => {
-                    if let Some(button) = self.button_below() {
-                        button.highlight(true);
-                    }
-                }
-            }
-            if speak {
-                announce(self, feedback.announcement());
-            }
-        }
-
-        /// The button this view lies on, for [`Feedback::Button`].
-        fn button_below(&self) -> Option<Retained<NSButton>> {
-            // SAFETY: the superview is used right away, while the view hierarchy keeps it alive.
-            unsafe { self.superview() }.and_then(|view| view.downcast::<NSButton>().ok())
-        }
-
-        fn show_outline(&self, highlight: &Highlight) {
             let mut slot = self.ivars().outline.borrow_mut();
-            let outline = slot.get_or_insert_with(|| outline_box(self.mtm(), highlight));
+            let outline = slot.get_or_insert_with(|| outline_box(self.mtm(), &highlight));
             let bounds = self.bounds();
             let inset = highlight.inset;
             outline.setFrame(NSRect::new(
@@ -344,36 +285,22 @@ mod appkit {
             // Added last, so it is above everything the app put in the view.
             self.addSubview(outline);
             outline.setHidden(false);
-        }
-
-        fn highlight_shown(&self) -> bool {
-            match self.ivars().feedback {
-                Some(Feedback::Outline(_)) => self
-                    .ivars()
-                    .outline
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|outline| !outline.isHidden()),
-                Some(Feedback::Button { .. }) => self
-                    .button_below()
-                    .is_some_and(|button| button.isHighlighted()),
-                None => true,
+            if speak {
+                announce(self, highlight.announcement);
             }
         }
 
+        fn highlight_shown(&self) -> bool {
+            self.ivars()
+                .outline
+                .borrow()
+                .as_ref()
+                .is_some_and(|outline| !outline.isHidden())
+        }
+
         fn hide_highlight(&self) {
-            match self.ivars().feedback {
-                Some(Feedback::Outline(_)) => {
-                    if let Some(outline) = self.ivars().outline.borrow().as_ref() {
-                        outline.setHidden(true);
-                    }
-                }
-                Some(Feedback::Button { .. }) => {
-                    if let Some(button) = self.button_below() {
-                        button.highlight(false);
-                    }
-                }
-                None => {}
+            if let Some(outline) = self.ivars().outline.borrow().as_ref() {
+                outline.setHidden(true);
             }
         }
 
@@ -400,59 +327,6 @@ mod appkit {
         highlight: Option<Highlight>,
         on_drop: impl Fn(Dropped) + 'static,
     ) -> Retained<NSView> {
-        drop_view(
-            mtm,
-            accept,
-            highlight.map(Feedback::Outline),
-            false,
-            Box::new(on_drop),
-        )
-        .into_super()
-    }
-
-    /// Take drops on the menu bar icon of `tray`, as described in the [module docs](super):
-    /// while a drag that can be dropped is over the icon, it is highlighted like an open menu and
-    /// VoiceOver says `announcement`. `on_drop` runs on the main thread, once per accepted drop;
-    /// the app is not active then, so activate it to show anything. Clicks, the menu and the
-    /// tooltip work as before. False when there is no icon button (not on the main thread, or
-    /// the icon is not shown). Hiding the icon (`set_visible(false)`) drops its button, so call
-    /// this again after showing it.
-    pub fn onto_tray(
-        tray: &tray_icon::TrayIcon,
-        accept: Accept,
-        announcement: &'static str,
-        on_drop: impl Fn(Dropped) + 'static,
-    ) -> bool {
-        let Some(mtm) = MainThreadMarker::new() else {
-            return false;
-        };
-        let Some(button) = tray.ns_status_item().and_then(|item| item.button(mtm)) else {
-            return false;
-        };
-        let view = drop_view(
-            mtm,
-            accept,
-            Some(Feedback::Button { announcement }),
-            true,
-            Box::new(on_drop),
-        );
-        view.setFrame(button.bounds());
-        view.setAutoresizingMask(
-            NSAutoresizingMaskOptions::ViewWidthSizable
-                | NSAutoresizingMaskOptions::ViewHeightSizable,
-        );
-        // On top of the button and of the tray icon's own click view; click-through.
-        button.addSubview(&view);
-        true
-    }
-
-    fn drop_view(
-        mtm: MainThreadMarker,
-        accept: Accept,
-        feedback: Option<Feedback>,
-        click_through: bool,
-        on_drop: Box<dyn Fn(Dropped)>,
-    ) -> Retained<DropView> {
         let types = accept
             .file_types
             .iter()
@@ -461,11 +335,10 @@ mod appkit {
         let this = DropView::alloc(mtm).set_ivars(Ivars {
             accept,
             types,
-            on_drop,
+            on_drop: Box::new(on_drop),
             offer: Cell::new(None),
-            feedback,
+            highlight,
             outline: RefCell::new(None),
-            click_through,
         });
         // SAFETY: NSView's designated initialiser, with a matching argument type.
         let view: Retained<DropView> =
@@ -478,7 +351,7 @@ mod appkit {
             registered.push(unsafe { NSPasteboardTypeString });
         }
         view.registerForDraggedTypes(&NSArray::from_slice(&registered));
-        view
+        view.into_super()
     }
 
     /// The [`Highlight`] outline: accent border, faint selection tint, no title, hidden from
@@ -612,7 +485,6 @@ mod appkit {
                 sel!(performDragOperation:),
                 sel!(concludeDragOperation:),
                 sel!(draggingEnded:),
-                sel!(hitTest:),
             ] {
                 assert!(class.instance_method(method).is_some(), "{method:?}");
             }
