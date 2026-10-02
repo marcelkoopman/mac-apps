@@ -369,12 +369,19 @@ impl App {
             let path = crate::macos_open::choose_path();
             launcher::set_suppress_resign(false);
             if let Some(path) = path {
-                self.opened = Some(crate::open_file::load(&path));
-                self.card_view = CardView::Original;
-                self.refresh_popup();
+                self.show_source(crate::open_file::load(&path));
             }
             launcher::order_front();
         }
+    }
+
+    /// Show `opened` on the card instead of the clipboard, from its original view. Every way a
+    /// file gets onto the card goes through here: it is never recorded in history, and the card
+    /// labels and blurs it like the clipboard.
+    fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
+        self.opened = Some(opened);
+        self.card_view = CardView::Original;
+        self.refresh_popup();
     }
 
     fn launch_data(&mut self, view: &ClipboardView) -> LaunchData {
