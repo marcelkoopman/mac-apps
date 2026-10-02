@@ -484,6 +484,12 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool
     let kind = format::detect(source);
     card.title = if view == CardView::Format && matches!(kind, FormatKind::Json | FormatKind::Xml) {
         text_title(source)
+    } else if let Some(flagged) = (view == CardView::Format)
+        .then(|| crate::validate::code_title(source))
+        .flatten()
+    {
+        // Formatting still runs; the title says the brackets do not balance.
+        flagged
     } else if view == CardView::Format && body == source {
         kind.source_heading().to_string()
     } else {
@@ -795,6 +801,7 @@ fn shown_body(body: &str) -> String {
 
 fn text_title(text: &str) -> String {
     crate::validate::title(text)
+        .or_else(|| crate::validate::code_title(text))
         .unwrap_or_else(|| format::detect(text).source_heading().to_string())
 }
 
@@ -2025,6 +2032,29 @@ fn main() {
         assert_eq!(
             presented_view(r#"{"a":1}"#, CardView::Original),
             CardView::Format
+        );
+    }
+
+    #[test]
+    fn unbalanced_code_says_so_in_the_title() {
+        let java = "public class Main {\n  public static void main(String[] args) {\n    System.out.println(\"Hello World\");\n  }\n";
+        let input = data(SubjectKind::Text, Some(java));
+        let card = work_card(&input);
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Java));
+        assert_eq!(card.title, "Java · missing }");
+        // Still formatted, and no bracket is added.
+        assert!(card.excerpt.contains("        System.out.println"));
+        assert_eq!(card.excerpt.matches('}').count(), java.matches('}').count());
+
+        let rust = "fn main() {\n    run());\n}\n";
+        let card = work_card(&data(SubjectKind::Text, Some(rust)));
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Rust));
+        assert_eq!(card.title, "Rust · unbalanced )");
+
+        let balanced = format!("{java}}}\n");
+        assert_eq!(
+            work_card(&data(SubjectKind::Text, Some(&balanced))).title,
+            "Formatted Java"
         );
     }
 

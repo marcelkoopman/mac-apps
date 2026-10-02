@@ -16,6 +16,14 @@ pub fn title(text: &str) -> Option<String> {
     ))
 }
 
+/// Title for Rust or Java whose brackets do not balance, e.g. `Java · missing }`. `None` for
+/// balanced code and other text, which keep their usual title.
+pub fn code_title(text: &str) -> Option<String> {
+    let kind = crate::format::detect(text);
+    let problem = crate::brackets::check(text, kind)?;
+    Some(format!("{} · {}", kind.source_heading(), problem.label()))
+}
+
 impl Report {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn summary(&self) -> String {

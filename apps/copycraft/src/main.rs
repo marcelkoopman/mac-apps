@@ -1,5 +1,6 @@
 mod appearance;
 mod avro_schema;
+mod brackets;
 mod clipboard;
 mod commands;
 mod convert;

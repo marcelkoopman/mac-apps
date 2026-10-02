@@ -6,7 +6,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 ## Features
 
-- **Detection**: JSON, YAML, XML, Markdown, Rust, Java, URLs, CSV/TSV, plain text and images. JSON and XML get a *Valid* / *Invalid* title.
+- **Detection**: JSON, YAML, XML, Markdown, Rust, Java, URLs, CSV/TSV, plain text and images. JSON and XML get a *Valid* / *Invalid* title. Rust and Java whose brackets do not balance (strings, char literals and comments ignored) get a title such as *Java · missing }* or *Rust · unbalanced )*; formatting still runs and adds no brackets.
 - **Format**: pretty-print with syntax highlighting. JSON, YAML, XML, Markdown, Rust and Java open already formatted.
 - **Convert**: JSON ↔ YAML, CSV → JSON, TSV → CSV, flat `key: value` text → JSON.
 - **Decode**: JWT, Base64, `data:` URIs, percent-encoding.
