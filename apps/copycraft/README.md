@@ -1,6 +1,6 @@
 # Copycraft
 
-A clipboard command for macOS. Press **⌃⌥⌘F** and a card opens at the cursor showing what you copied, plus the actions that fit it. The menu bar icon shows that Copycraft is running, and its accent color follows the detected content type. The app has no Dock icon.
+A clipboard command for macOS. Press **⌃⌥⌘F** and a card opens at the cursor showing what you copied, plus the actions that fit it. The menu bar icon shows that Copycraft is running: a monochrome template that follows the menu bar (light, dark or tinted) and blinks briefly on each new copy. The detected kind (JSON, Rust, Image, a link's host, YouTube, …) shows in its tooltip and its VoiceOver label. The app has no Dock icon.
 
 Part of the [mac-apps](../../README.md) monorepo.
 
