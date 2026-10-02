@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use zeroize::Zeroize;
 
 use crate::appearance::Theme;
@@ -16,7 +18,9 @@ const CHIP_GAP: f64 = 6.0;
 /// History arrow buttons. Same height as a chip, wide enough for `<` and `>`.
 pub const NAV_BUTTON: f64 = 32.0;
 pub const NAV_GAP: f64 = CHIP_GAP;
-pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_GAP + NAV_BUTTON;
+/// The copied-item total between the arrows. Wide enough for two digits (history holds 20).
+pub const NAV_COUNT_W: f64 = 28.0;
+pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_GAP + NAV_COUNT_W + NAV_GAP + NAV_BUTTON;
 /// Empty space kept on the right of the first chip row so the arrows fit.
 pub const NAV_RESERVE: f64 = CHIP_GAP + NAV_SPAN;
 const EXCERPT_LINES: usize = 6;
@@ -73,6 +77,8 @@ pub struct LaunchData {
     pub source_note: Option<String>,
     /// "Show all" was chosen: the card renders the whole text, not the preview.
     pub full: bool,
+    /// When the shown copy was copied. Absent for an opened file or an empty clipboard.
+    pub copied_at: Option<SystemTime>,
 }
 
 /// What the card shows in place of the separate preview window.
@@ -131,11 +137,13 @@ impl Drop for SaveFile {
     }
 }
 
-/// Which way history can move. Index 0 is the newest copy.
+/// Which way history can move, and how many copies are kept. Index 0 is the newest copy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HistoryNav {
     pub can_older: bool,
     pub can_newer: bool,
+    /// Copies in history, including the one on screen.
+    pub total: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1077,12 +1085,14 @@ pub fn history_nav(len: usize, cursor: usize) -> Option<HistoryNav> {
         return Some(HistoryNav {
             can_older: false,
             can_newer: false,
+            total: len,
         });
     }
     let cursor = cursor.min(len - 1);
     Some(HistoryNav {
         can_older: cursor + 1 < len,
         can_newer: cursor > 0,
+        total: len,
     })
 }
 
@@ -1487,6 +1497,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            copied_at: None,
         }
     }
 
@@ -2809,6 +2820,10 @@ Kleinste opdracht die de change dekt.
         let oldest = history_nav(3, 2).unwrap();
         assert!(!oldest.can_older);
         assert!(oldest.can_newer);
+        assert_eq!(history_nav(0, 0).unwrap().total, 0);
+        assert_eq!(history_nav(1, 0).unwrap().total, 1);
+        assert_eq!(newest.total, 3);
+        assert_eq!(middle.total, 3);
         assert_eq!(step_history(3, 0, true), Some(1));
         assert_eq!(step_history(3, 0, false), None);
         assert_eq!(step_history(3, 2, true), None);

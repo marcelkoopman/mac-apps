@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
+use std::time::SystemTime;
 
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::corners;
@@ -9,7 +10,7 @@ use mac_ui::find::{find_matches, match_label, step_match};
 use mac_ui::glass;
 use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
+use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSApplicationDidResignActiveNotification, NSBox, NSButton, NSColor, NSControl,
@@ -19,8 +20,8 @@ use mac_ui::objc2_app_kit::{
     NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize,
-    NSString,
+    NSArray, NSDate, NSDateFormatter, NSDateFormatterStyle, NSEdgeInsets, NSNotification,
+    NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
@@ -32,7 +33,6 @@ use crate::appearance::Theme;
 use crate::commands::{self, ChipFrame, Command, CommandId, LaunchData};
 use crate::format::FormatKind;
 use crate::launcher::{self, UserEvent};
-use crate::macos_preview_image::nsimage_from_bytes;
 
 const WIDTH: f64 = 440.0;
 const PAD: f64 = 14.0;
@@ -82,11 +82,6 @@ const DROP_HIGHLIGHT: mac_ui::drop::Highlight = mac_ui::drop::Highlight {
     announcement: "Drop to open",
 };
 
-#[link(name = "CoreImage", kind = "framework")]
-unsafe extern "C" {
-    static kCIInputRadiusKey: *const AnyObject;
-}
-
 thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.
@@ -127,6 +122,8 @@ thread_local! {
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
     static OLDER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
     static NEWER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
+    /// How many copies history holds, drawn between the arrows.
+    static NAV_COUNT: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Wipe, More and Close in one glass group at the right of the header.
     static HEADER_GROUP: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
     static MORE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
@@ -163,6 +160,8 @@ thread_local! {
     static SHADE_ON: Cell<bool> = const { Cell::new(false) };
     static MASKS: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
+    /// When the item on the card was copied. `None` formats as the current time.
+    static COPIED_AT: Cell<Option<SystemTime>> = const { Cell::new(None) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
     /// The window's one field editor, made on first use. It takes no drops (see
     /// `windowWillReturnFieldEditor:toObject:`).
@@ -559,6 +558,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
+    COPIED_AT.set(data.copied_at);
 }
 
 fn hide() {
@@ -631,6 +631,8 @@ fn ensure_window(mtm: MainThreadMarker) {
     let content = panel::rounded_glass(mtm, &window_view, PANEL_RADIUS).content;
 
     let header = widgets::label(mtm, 13.0, &NSColor::labelColor());
+    // A long type name is cut in the middle so the hotkey and the time stay visible.
+    header.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
     // Keep the warning at the end when a long filename is cut short.
     meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
@@ -647,6 +649,9 @@ fn ensure_window(mtm: MainThreadMarker) {
     let pills = glass::group(mtm, GLASS_MERGE);
     let older = nav_button(mtm, "<", "Older", sel!(olderClicked:));
     let newer = nav_button(mtm, ">", "Newer", sel!(newerClicked:));
+    let nav_count = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
+    nav_count.setAlignment(NSTextAlignment::Center);
+    nav_count.setHidden(true);
     let more = header_symbol(mtm, "ellipsis", "More", "⋯", sel!(moreClicked:));
     let clear = GlassButton::pill(mtm, "Wipe", ButtonSize::Small);
     wire_button(clear.button(), sel!(clearClicked:));
@@ -680,6 +685,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&field);
     content.addSubview(pills.view());
     content.addSubview(older.view());
+    content.addSubview(&nav_count);
     content.addSubview(newer.view());
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
@@ -696,6 +702,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     PILLS.with(|slot| slot.replace(Some(pills)));
     OLDER.with(|slot| slot.replace(Some(older)));
     NEWER.with(|slot| slot.replace(Some(newer)));
+    NAV_COUNT.with(|slot| slot.replace(Some(nav_count)));
     HEADER_GROUP.with(|slot| slot.replace(Some(header_group)));
     MORE.with(|slot| slot.replace(Some(more)));
     CLEAR.with(|slot| slot.replace(Some(clear)));
@@ -762,7 +769,7 @@ fn layout(fresh_place: bool) {
         item_find,
     );
     place_window(mtm, placed.height, fresh_place);
-    let title = CARD_TITLE.with(|slot| format!("{} · {HOTKEY}", slot.borrow()));
+    let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
     let close_x = WIDTH - PAD - 24.0;
     let more_x = close_x - 6.0 - HEADER_BUTTON;
     let clear_x = more_x - 6.0 - CLEAR_BUTTON_W;
@@ -1073,26 +1080,7 @@ fn gaussian_blur() -> Option<Retained<AnyObject>> {
     if FAIL_BLUR.with(Cell::get) {
         return None;
     }
-    let _linked = unsafe { kCIInputRadiusKey };
-    let cls = AnyClass::get(c"CIFilter")?;
-    let name = NSString::from_str("CIGaussianBlur");
-    let filter = unsafe {
-        let ptr: *mut AnyObject = msg_send![cls, filterWithName: &*name];
-        Retained::retain_autoreleased(ptr)
-    }?;
-    let _: () = unsafe { msg_send![&*filter, setDefaults] };
-    let number_cls = AnyClass::get(c"NSNumber")?;
-    let radius = unsafe {
-        let ptr: *mut AnyObject = msg_send![number_cls, numberWithDouble: BLUR_RADIUS];
-        Retained::retain_autoreleased(ptr)
-    }?;
-    let key = unsafe { kCIInputRadiusKey };
-    if key.is_null() {
-        return None;
-    }
-    let key = unsafe { &*key };
-    let _: () = unsafe { msg_send![&*filter, setValue: &*radius, forKey: key] };
-    Some(filter)
+    mac_ui::blur::gaussian(BLUR_RADIUS)
 }
 
 fn set_well_blur(on: bool) {
@@ -1150,12 +1138,12 @@ fn clear_blur() {
 fn blur_both(filters: &NSArray<AnyObject>) {
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            blur_view(view, filters);
+            mac_ui::blur::set_content_filters(view, filters);
         }
     });
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            blur_view(view, filters);
+            mac_ui::blur::set_content_filters(view, filters);
         }
     });
 }
@@ -1174,12 +1162,6 @@ fn blank_masked_well() {
         }
         *slot.borrow_mut() = None;
     });
-}
-
-fn blur_view(view: &NSView, filters: &NSArray<AnyObject>) {
-    view.setWantsLayer(true);
-    view.setLayerUsesCoreImageFilters(true);
-    let _: () = unsafe { msg_send![view, setContentFilters: filters] };
 }
 
 struct CachedLink {
@@ -1744,7 +1726,7 @@ fn update_link_cache(page: &str, edit: impl FnOnce(&mut CachedLink)) {
 }
 
 fn store_link_image(page: &str, bytes: &[u8]) {
-    let image = nsimage_from_bytes(bytes);
+    let image = mac_ui::image::from_bytes(bytes);
     let failed = image.is_none();
     update_link_cache(page, |entry| {
         entry.image = image;
@@ -2200,6 +2182,7 @@ pub fn wipe_shown() {
     });
     wipe_shown_views();
     SEARCHING.set(false);
+    COPIED_AT.set(None);
 }
 
 fn wipe_string_slot(slot: &RefCell<String>) {
@@ -2330,6 +2313,34 @@ fn set_label(
     label.setStringValue(&NSString::from_str(text));
 }
 
+/// File type, the open hotkey, and when this item was copied. The date and time use the system
+/// short format (region and 12/24-hour clock from Language & Region).
+fn header_title(kind: &str) -> String {
+    let date = COPIED_AT.get().map(nsdate).unwrap_or_else(NSDate::date);
+    header_title_at(kind, &date)
+}
+
+fn nsdate(time: SystemTime) -> Retained<NSDate> {
+    let seconds = time
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64())
+        .unwrap_or(0.0);
+    NSDate::dateWithTimeIntervalSince1970(seconds)
+}
+
+fn header_title_at(kind: &str, date: &NSDate) -> String {
+    format!("{kind} · {HOTKEY} · {}", system_datetime(date))
+}
+
+fn system_datetime(date: &NSDate) -> String {
+    NSDateFormatter::localizedStringFromDate_dateStyle_timeStyle(
+        date,
+        NSDateFormatterStyle::ShortStyle,
+        NSDateFormatterStyle::ShortStyle,
+    )
+    .to_string()
+}
+
 /// Place a header button at `x` inside the header group (which is `HEADER_BUTTON` tall).
 fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) {
     let borrowed = slot.borrow();
@@ -2426,7 +2437,8 @@ type NavButton = GlassButton;
 
 fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
     let newer_x = WIDTH - PAD - commands::NAV_BUTTON;
-    let older_x = newer_x - commands::NAV_GAP - commands::NAV_BUTTON;
+    let count_x = newer_x - commands::NAV_GAP - commands::NAV_COUNT_W;
+    let older_x = count_x - commands::NAV_GAP - commands::NAV_BUTTON;
     let shown = nav.is_some();
     OLDER.with(|slot| {
         place_nav_button(
@@ -2437,6 +2449,7 @@ fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
             nav.is_some_and(|nav| nav.can_older),
         );
     });
+    place_history_count(count_x, y, shown, nav.map(|nav| nav.total).unwrap_or(0));
     NEWER.with(|slot| {
         place_nav_button(
             slot,
@@ -2445,6 +2458,29 @@ fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
             shown,
             nav.is_some_and(|nav| nav.can_newer),
         );
+    });
+}
+
+fn place_history_count(x: f64, y: f64, shown: bool, total: usize) {
+    NAV_COUNT.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(label) = borrowed.as_ref() else {
+            return;
+        };
+        label.setHidden(!shown);
+        label.setFrame(NSRect::new(
+            NSPoint::new(x, y),
+            NSSize::new(commands::NAV_COUNT_W, commands::CHIP_PILL_H),
+        ));
+        label.setStringValue(&NSString::from_str(&total.to_string()));
+        let spoken = match total {
+            1 => "1 copied item".to_string(),
+            n => format!("{n} copied items"),
+        };
+        label.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
+        if shown {
+            raise_view(label);
+        }
     });
 }
 
@@ -2469,6 +2505,11 @@ fn raise_history_nav() {
     OLDER.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             raise_view(button.view());
+        }
+    });
+    NAV_COUNT.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            raise_view(label);
         }
     });
     NEWER.with(|slot| {
@@ -2686,6 +2727,7 @@ fn wire_button(button: &NSButton, action: Sel) {
 
 #[cfg(test)]
 mod tests {
+    use mac_ui::objc2_foundation::NSDate;
     use zeroize::Zeroize;
 
     struct ForceBlurOff;
@@ -2719,6 +2761,37 @@ mod tests {
         let (bytes, caption) = super::page_preview_parts(url);
         assert!(bytes.is_empty());
         assert!(caption.is_none());
+    }
+
+    #[test]
+    fn header_title_shows_kind_hotkey_and_system_time() {
+        let date = NSDate::date();
+        let stamp = super::system_datetime(&date);
+        assert_eq!(
+            super::header_title_at("Rust", &date),
+            format!("Rust · {} · {stamp}", super::HOTKEY)
+        );
+        assert!(stamp.chars().any(|ch| ch.is_ascii_digit()), "{stamp}");
+    }
+
+    #[test]
+    fn header_title_uses_the_copy_time() {
+        use std::time::{Duration, SystemTime};
+
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                super::COPIED_AT.set(None);
+            }
+        }
+        let _reset = Reset;
+        let copied = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        super::COPIED_AT.set(Some(copied));
+        let stamp = super::system_datetime(&super::nsdate(copied));
+        assert_eq!(
+            super::header_title("Rust"),
+            format!("Rust · {} · {stamp}", super::HOTKEY)
+        );
     }
 
     #[test]
@@ -2811,6 +2884,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            copied_at: None,
         }
     }
 
@@ -2851,6 +2925,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            copied_at: None,
         }
     }
 

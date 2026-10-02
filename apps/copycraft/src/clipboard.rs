@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::SystemTime;
 
 use image::ExtendedColorType;
 use image::ImageEncoder;
@@ -174,16 +175,24 @@ impl PartialEq for SecretBytes {
 impl Eq for SecretBytes {}
 
 #[derive(Clone)]
-enum HistoryEntry {
+enum HistoryBody {
     Text(Zeroizing<String>),
     Image(SecretBytes),
 }
 
+/// One copied item. `copied_at` is when it was copied, and stays put when history steps back
+/// to it. Copying the same text or image again replaces that time.
+#[derive(Clone)]
+struct HistoryEntry {
+    copied_at: SystemTime,
+    body: HistoryBody,
+}
+
 impl Drop for HistoryEntry {
     fn drop(&mut self) {
-        match self {
-            Self::Text(text) => text.zeroize(),
-            Self::Image(bytes) => bytes.zeroize(),
+        match &mut self.body {
+            HistoryBody::Text(text) => text.zeroize(),
+            HistoryBody::Image(bytes) => bytes.zeroize(),
         }
     }
 }
@@ -200,56 +209,80 @@ pub struct ClipboardHistory {
 }
 
 impl ClipboardHistory {
-    pub fn record(&mut self, mut text: String) {
+    pub fn record(&mut self, text: String) {
+        self.record_at(text, SystemTime::now());
+    }
+
+    fn record_at(&mut self, mut text: String, copied_at: SystemTime) {
         if text.trim().is_empty() {
             text.zeroize();
             return;
         }
-        self.entries.retain(|existing| match existing {
-            HistoryEntry::Text(existing) => existing.as_str() != text,
-            HistoryEntry::Image(_) => true,
+        self.entries.retain(|existing| match &existing.body {
+            HistoryBody::Text(existing) => existing.as_str() != text,
+            HistoryBody::Image(_) => true,
         });
-        self.entries
-            .insert(0, HistoryEntry::Text(Zeroizing::new(text)));
+        self.entries.insert(
+            0,
+            HistoryEntry {
+                copied_at,
+                body: HistoryBody::Text(Zeroizing::new(text)),
+            },
+        );
         self.entries.truncate(MAX_HISTORY);
     }
 
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
         let bytes = SecretBytes::new(bytes)?;
-        self.entries.retain(|existing| match existing {
-            HistoryEntry::Image(existing) => existing != &bytes,
-            HistoryEntry::Text(_) => true,
+        self.entries.retain(|existing| match &existing.body {
+            HistoryBody::Image(existing) => existing != &bytes,
+            HistoryBody::Text(_) => true,
         });
-        self.entries.insert(0, HistoryEntry::Image(bytes.clone()));
+        self.entries.insert(
+            0,
+            HistoryEntry {
+                copied_at: SystemTime::now(),
+                body: HistoryBody::Image(bytes.clone()),
+            },
+        );
         self.entries.truncate(MAX_HISTORY);
         Some(bytes)
     }
 
+    /// When the item at `index` was copied. `None` when there is no such item.
+    pub fn copied_at(&self, index: usize) -> Option<SystemTime> {
+        self.entries.get(index).map(|entry| entry.copied_at)
+    }
+
     pub fn get(&self, index: usize) -> Option<&str> {
-        match self.entries.get(index)? {
-            HistoryEntry::Text(text) => Some(text.as_str()),
-            HistoryEntry::Image(_) => None,
+        let entry = self.entries.get(index)?;
+        match &entry.body {
+            HistoryBody::Text(text) => Some(text.as_str()),
+            HistoryBody::Image(_) => None,
         }
     }
 
     pub fn image(&self, index: usize) -> Option<SecretBytes> {
-        match self.entries.get(index)? {
-            HistoryEntry::Image(bytes) => Some(bytes.clone()),
-            HistoryEntry::Text(_) => None,
+        let entry = self.entries.get(index)?;
+        match &entry.body {
+            HistoryBody::Image(bytes) => Some(bytes.clone()),
+            HistoryBody::Text(_) => None,
         }
     }
 
     pub fn mark(&self, index: usize) -> Option<&'static str> {
-        match self.entries.get(index)? {
-            HistoryEntry::Text(text) => Some(menu_mark(text.as_str())),
-            HistoryEntry::Image(_) => Some(format::FormatKind::Image.menu_symbol()),
+        let entry = self.entries.get(index)?;
+        match &entry.body {
+            HistoryBody::Text(text) => Some(menu_mark(text.as_str())),
+            HistoryBody::Image(_) => Some(format::FormatKind::Image.menu_symbol()),
         }
     }
 
     pub fn byte_len(&self, index: usize) -> Option<usize> {
-        match self.entries.get(index)? {
-            HistoryEntry::Text(text) => Some(text.len()),
-            HistoryEntry::Image(bytes) => Some(bytes.with(<[u8]>::len)),
+        let entry = self.entries.get(index)?;
+        match &entry.body {
+            HistoryBody::Text(text) => Some(text.len()),
+            HistoryBody::Image(bytes) => Some(bytes.with(<[u8]>::len)),
         }
     }
 
@@ -261,9 +294,9 @@ impl ClipboardHistory {
         current_text: Option<&str>,
         current_image: Option<&SecretBytes>,
     ) -> bool {
-        match self.entries.get(index) {
-            Some(HistoryEntry::Text(text)) => current_text != Some(text.as_str()),
-            Some(HistoryEntry::Image(bytes)) => {
+        match self.entries.get(index).map(|entry| &entry.body) {
+            Some(HistoryBody::Text(text)) => current_text != Some(text.as_str()),
+            Some(HistoryBody::Image(bytes)) => {
                 !current_image.is_some_and(|current| current.same_allocation(bytes))
             }
             None => false,
@@ -275,9 +308,9 @@ impl ClipboardHistory {
             .iter()
             .enumerate()
             .map(|(i, entry)| {
-                let label = match entry {
-                    HistoryEntry::Text(text) => one_line(text.as_str()),
-                    HistoryEntry::Image(_) => format::FormatKind::Image.menu_symbol().to_string(),
+                let label = match &entry.body {
+                    HistoryBody::Text(text) => one_line(text.as_str()),
+                    HistoryBody::Image(_) => format::FormatKind::Image.menu_symbol().to_string(),
                 };
                 (i, label)
             })
@@ -454,6 +487,26 @@ mod tests {
     fn one_line_is_short_symbol() {
         let label = one_line(&"a".repeat(80));
         assert_eq!(label, "Aa");
+    }
+
+    #[test]
+    fn history_keeps_each_copy_time() {
+        use std::time::{Duration, SystemTime};
+
+        let mut history = ClipboardHistory::default();
+        let earlier = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let later = earlier + Duration::from_secs(90);
+        history.record_at("one".into(), earlier);
+        history.record_at("two".into(), later);
+        assert_eq!(history.copied_at(0), Some(later));
+        assert_eq!(history.copied_at(1), Some(earlier));
+        assert_eq!(history.copied_at(2), None);
+        let again = later + Duration::from_secs(30);
+        history.record_at("one".into(), again);
+        assert_eq!(history.get(0), Some("one"));
+        assert_eq!(history.copied_at(0), Some(again));
+        assert_eq!(history.get(1), Some("two"));
+        assert_eq!(history.copied_at(1), Some(later));
     }
 
     #[test]

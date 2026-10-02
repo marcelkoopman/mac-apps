@@ -460,7 +460,16 @@ impl App {
             source_name: None,
             source_note: None,
             full: false,
+            copied_at: self.shown_copied_at(),
         }
+    }
+
+    /// Copy time of the history item on screen. An opened file is not a clipboard copy.
+    fn shown_copied_at(&self) -> Option<std::time::SystemTime> {
+        if self.opened.is_some() {
+            return None;
+        }
+        self.history.copied_at(self.history_cursor)
     }
 
     /// Text the card is showing: the chosen file, or the clipboard.

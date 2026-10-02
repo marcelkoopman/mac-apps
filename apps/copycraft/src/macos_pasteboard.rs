@@ -291,7 +291,7 @@ fn snap_from_source(change_count: isize, source: ImageSource) -> Option<CardSnap
                     thumbnail,
                 ));
             }
-            let image = crate::macos_preview_image::nsimage_from_bytes(&bytes)?;
+            let image = mac_ui::image::from_bytes(&bytes)?;
             snap_from_nsimage(change_count, &image, label, byte_len)
         }
         ImageSource::File(path) => {
@@ -343,7 +343,7 @@ fn snap_from_nsimage(
     label: &str,
     byte_len: usize,
 ) -> Option<CardSnap> {
-    let (width, height) = crate::macos_preview_image::pixel_size(image);
+    let (width, height) = mac_ui::image::pixel_size(image);
     if width == 0 || height == 0 {
         return None;
     }
