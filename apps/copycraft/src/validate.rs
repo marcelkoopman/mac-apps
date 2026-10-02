@@ -43,7 +43,8 @@ pub fn check(text: &str) -> Option<Report> {
     if json_candidate(trimmed) {
         return Some(check_json(trimmed));
     }
-    if xml_candidate(trimmed) {
+    // An HTML page is not checked as XML: void tags like `<br>` are fine there.
+    if xml_candidate(trimmed) && !crate::format::looks_like_html(trimmed) {
         return Some(check_xml(trimmed));
     }
     None

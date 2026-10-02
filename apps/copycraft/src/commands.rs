@@ -758,6 +758,7 @@ fn opens_formatted(source: &str) -> bool {
         FormatKind::Json
             | FormatKind::Yaml
             | FormatKind::Xml
+            | FormatKind::Html
             | FormatKind::Markdown
             | FormatKind::Rust
             | FormatKind::Java
@@ -2032,6 +2033,44 @@ fn main() {
         assert_eq!(
             presented_view(r#"{"a":1}"#, CardView::Original),
             CardView::Format
+        );
+    }
+
+    #[test]
+    fn html_shows_no_schema_and_an_html_title() {
+        for src in [
+            "<!DOCTYPE html>\n<html><head><title>Hi</title></head><body><p>Hello</p></body></html>",
+            "<html><body><p>Jan</p><p>Anja</p></body></html>",
+        ] {
+            let input = data(SubjectKind::Text, Some(src));
+            let shown = chips(&input);
+            assert!(
+                !shown.iter().any(|cmd| cmd.id == CommandId::Schema),
+                "{src}"
+            );
+            assert!(
+                !shown.iter().any(|cmd| cmd.id == CommandId::Sample),
+                "{src}"
+            );
+            assert!(
+                !shown.iter().any(|cmd| cmd.id == CommandId::Convert),
+                "{src}"
+            );
+            let card = work_card(&input);
+            assert_eq!(card.title, "HTML", "{src}");
+            assert_eq!(card.highlight, Some(crate::format::FormatKind::Html));
+            assert_eq!(
+                text_save_file(src, CardView::Format).unwrap().extension,
+                "html"
+            );
+        }
+        // Plain XML keeps its Schema chip.
+        let xml =
+            "<root><person><name>Jan</name></person><person><name>Anja</name></person></root>";
+        assert!(
+            chips(&data(SubjectKind::Text, Some(xml)))
+                .iter()
+                .any(|cmd| cmd.id == CommandId::Schema)
         );
     }
 

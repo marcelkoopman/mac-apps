@@ -9,6 +9,9 @@ pub enum FormatKind {
     Java,
     Url,
     Xml,
+    /// An HTML page (`<!DOCTYPE html>` or a root `<html>`): highlighted and formatted like XML,
+    /// but no XML validation title and no XSD schema.
+    Html,
     Markdown,
     Csv,
     Tsv,
@@ -27,6 +30,7 @@ impl FormatKind {
             Self::Java => "Jv",
             Self::Url => "://",
             Self::Xml => "</>",
+            Self::Html => "<>",
             Self::Markdown => "md",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
@@ -45,6 +49,7 @@ impl FormatKind {
             Self::Java => "Java",
             Self::Url => "URL",
             Self::Xml => "XML",
+            Self::Html => "HTML",
             Self::Markdown => "Markdown",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
@@ -61,6 +66,7 @@ impl FormatKind {
             Self::Rust => "Formatted Rust",
             Self::Java => "Formatted Java",
             Self::Xml => "Formatted XML",
+            Self::Html => "HTML",
             Self::Markdown => "Formatted Markdown",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
@@ -78,6 +84,7 @@ impl FormatKind {
             Self::Java => "java",
             Self::Url => "txt",
             Self::Xml => "xml",
+            Self::Html => "html",
             Self::Markdown => "md",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
@@ -130,6 +137,9 @@ fn detect_uncached(text: &str) -> FormatKind {
     if looks_like_url(text) {
         return FormatKind::Url;
     }
+    if looks_like_html(text) {
+        return FormatKind::Html;
+    }
     if looks_like_xml(text) {
         return FormatKind::Xml;
     }
@@ -150,7 +160,7 @@ pub fn format_text(text: &str) -> String {
         }
         FormatKind::Rust => format_rust(text),
         FormatKind::Java => indent_braces(text),
-        FormatKind::Xml => pretty_xml(text),
+        FormatKind::Xml | FormatKind::Html => pretty_xml(text),
         FormatKind::Markdown => format_markdown(text),
         FormatKind::Url => format_url(text),
         FormatKind::Csv
@@ -367,6 +377,40 @@ fn query_byte(byte: u8) -> bool {
 
 fn fragment_byte(byte: u8) -> bool {
     query_byte(byte) || byte == b'/' || byte == b'?'
+}
+
+/// An HTML page: `<!DOCTYPE html>` (any case) or a root `<html>` element, after leading
+/// whitespace, a byte order mark, an `<?xml …?>` declaration and comments.
+pub fn looks_like_html(text: &str) -> bool {
+    let mut rest = text.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    loop {
+        let head: String = rest
+            .chars()
+            .take(32)
+            .collect::<String>()
+            .to_ascii_lowercase();
+        let skip_to = if head.starts_with("<?xml") {
+            rest.find("?>").map(|end| end + 2)
+        } else if head.starts_with("<!--") {
+            rest.find("-->").map(|end| end + 3)
+        } else {
+            // `name` followed by `>` or whitespace, so `<htmlx>` and `<!DOCTYPE htmlx>` do not count.
+            let word = |s: &str, name: &str| {
+                s.strip_prefix(name)
+                    .and_then(|after| after.chars().next())
+                    .is_some_and(|c| c == '>' || c.is_whitespace())
+            };
+            let doctype = head
+                .strip_prefix("<!doctype")
+                .filter(|after| after.starts_with(char::is_whitespace))
+                .is_some_and(|after| word(after.trim_start(), "html"));
+            return doctype || word(&head, "<html");
+        };
+        let Some(end) = skip_to else {
+            return false;
+        };
+        rest = rest[end..].trim_start();
+    }
 }
 
 pub fn looks_like_xml(text: &str) -> bool {
@@ -1128,6 +1172,32 @@ fn count_open(line: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{FormatKind, authority_host, detect, indent_braces, looks_like_url, pretty_xml};
+
+    #[test]
+    fn html_pages_are_html_not_xml() {
+        for src in [
+            "<!DOCTYPE html>\n<html><head><title>x</title></head><body><p>Hi</p></body></html>",
+            "  \n<!doctype HTML>\n<html lang=\"nl\"><body></body></html>",
+            "\u{feff}<!DocType html><html><body><br></body></html>",
+            "<html>\n  <body><p>Hi</p></body>\n</html>",
+            "<?xml version=\"1.0\"?>\n<!-- page -->\n<html xmlns=\"http://www.w3.org/1999/xhtml\"><body/></html>",
+        ] {
+            assert_eq!(detect(src), FormatKind::Html, "{src}");
+            assert_eq!(FormatKind::Html.source_heading(), "HTML");
+        }
+    }
+
+    #[test]
+    fn xml_that_only_looks_like_html_stays_xml() {
+        for src in [
+            "<root><html>x</html></root>",
+            "<htmlish><a>1</a></htmlish>",
+            "<!DOCTYPE note><note><to>Jan</to></note>",
+            "<!DOCTYPE htmlx><htmlx><a>1</a></htmlx>",
+        ] {
+            assert_eq!(detect(src), FormatKind::Xml, "{src}");
+        }
+    }
 
     #[test]
     fn menu_symbols_are_type_marks() {

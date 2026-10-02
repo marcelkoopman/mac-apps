@@ -20,7 +20,7 @@ pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
         FormatKind::Yaml => tokenize_yaml(source),
         FormatKind::Rust => tokenize_rust(source),
         FormatKind::Java => tokenize_code(source, kind),
-        FormatKind::Xml => tokenize_xml(source),
+        FormatKind::Xml | FormatKind::Html => tokenize_xml(source),
         FormatKind::Markdown => tokenize_markdown(source),
         FormatKind::Csv => tokenize_csv(source),
         FormatKind::Tsv => tokenize_tsv(source),

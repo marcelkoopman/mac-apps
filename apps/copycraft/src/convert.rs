@@ -11,6 +11,7 @@ pub fn try_convert(text: &str) -> Option<String> {
         FormatKind::Text | FormatKind::Plain => crate::transform::yaml_to_json(text)?,
         // XML keeps its own views (Original, Schema); flattening it into CSV made no sense.
         FormatKind::Xml
+        | FormatKind::Html
         | FormatKind::Rust
         | FormatKind::Java
         | FormatKind::Markdown
