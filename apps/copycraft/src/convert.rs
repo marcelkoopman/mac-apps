@@ -14,6 +14,7 @@ pub fn try_convert(text: &str) -> Option<String> {
         | FormatKind::Html
         | FormatKind::Rust
         | FormatKind::Java
+        | FormatKind::Python
         | FormatKind::Markdown
         | FormatKind::Url
         | FormatKind::Image => {

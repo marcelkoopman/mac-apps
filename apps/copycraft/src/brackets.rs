@@ -1,7 +1,7 @@
-//! Bracket balance of copied code (Rust, Java). Brackets inside string and char literals and
-//! comments do not count. The highlighter's tokenizer only knows Rust line comments and double
-//! quoted strings, so this scanner also skips block comments, char literals, Rust raw strings
-//! and Java text blocks.
+//! Bracket balance of copied code (Rust, Java, Python). Brackets inside string and char literals
+//! and comments do not count. The highlighter's tokenizer only knows Rust line comments and double
+//! quoted strings, so this scanner also skips block comments, char literals, Rust raw strings,
+//! Java text blocks and Python's `#` comments and `'`/`"`/triple-quoted strings.
 
 use crate::format::FormatKind;
 
@@ -29,6 +29,7 @@ pub fn check(source: &str, kind: FormatKind) -> Option<Problem> {
     let nested_comments = match kind {
         FormatKind::Rust => true,
         FormatKind::Java => false,
+        FormatKind::Python => return check_python(source),
         _ => return None,
     };
     let chars: Vec<char> = source.chars().collect();
@@ -72,6 +73,60 @@ pub fn check(source: &str, kind: FormatKind) -> Option<Problem> {
         i += 1;
     }
     stack.pop().map(Problem::Missing)
+}
+
+/// Python: `#` comments and `'`, `"`, `'''`, `"""` strings (any prefix such as `f`, `r`, `b`;
+/// the letters before the quote are ordinary code). `//` is floor division, not a comment.
+fn check_python(source: &str) -> Option<Problem> {
+    let chars: Vec<char> = source.chars().collect();
+    let mut stack: Vec<char> = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let ch = chars[i];
+        match ch {
+            '#' => {
+                while i < chars.len() && chars[i] != '\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            '"' | '\'' => {
+                i = skip_python_string(&chars, i);
+                continue;
+            }
+            '(' => stack.push(')'),
+            '[' => stack.push(']'),
+            '{' => stack.push('}'),
+            // The guard pops the innermost opener; a matching closer falls through to `_`.
+            ')' | ']' | '}' if stack.pop() != Some(ch) => return Some(Problem::Unbalanced(ch)),
+            _ => {}
+        }
+        i += 1;
+    }
+    stack.pop().map(Problem::Missing)
+}
+
+/// Index after the Python string opened at `start` with `'` or `"`, triple-quoted included.
+/// A one-line string ends at the line end when its closing quote is missing.
+pub(crate) fn skip_python_string(chars: &[char], start: usize) -> usize {
+    let quote = chars[start];
+    let triple = chars.get(start + 1) == Some(&quote) && chars.get(start + 2) == Some(&quote);
+    let mut i = start + if triple { 3 } else { 1 };
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 2,
+            '\n' if !triple => return i,
+            c if c == quote && !triple => return i + 1,
+            c if c == quote
+                && chars.get(i + 1) == Some(&quote)
+                && chars.get(i + 2) == Some(&quote) =>
+            {
+                return i + 3;
+            }
+            _ => i += 1,
+        }
+    }
+    chars.len()
 }
 
 /// `true` when `chars[i]` does not continue an identifier.
@@ -238,6 +293,21 @@ public class Main {
     #[test]
     fn the_innermost_open_bracket_is_reported() {
         assert_eq!(check("fn f() { g(1,", Rust), Some(Problem::Missing(')')));
+    }
+
+    #[test]
+    fn python_strings_and_comments_do_not_count() {
+        use crate::format::FormatKind::Python;
+        let src = "def f(x):  # returns ) here\n    s = 'it\\'s ('\n    t = f\"{x} ]\"\n    doc = \"\"\"\n    { not code\n    \"\"\"\n    return x // 2, [s, t, doc]\n";
+        assert_eq!(check(src, Python), None);
+        assert_eq!(
+            check("print(\"Hello\"\n", Python),
+            Some(Problem::Missing(')'))
+        );
+        assert_eq!(
+            check("x = [1, 2)]\n", Python),
+            Some(Problem::Unbalanced(')'))
+        );
     }
 
     #[test]

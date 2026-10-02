@@ -7,6 +7,8 @@ pub enum FormatKind {
     Yaml,
     Rust,
     Java,
+    /// Python: highlighted and structure-checked, not reformatted.
+    Python,
     Url,
     Xml,
     /// An HTML page (`<!DOCTYPE html>` or a root `<html>`): highlighted and formatted like XML,
@@ -28,6 +30,7 @@ impl FormatKind {
             Self::Yaml => "---",
             Self::Rust => "fn",
             Self::Java => "Jv",
+            Self::Python => "py",
             Self::Url => "://",
             Self::Xml => "</>",
             Self::Html => "<>",
@@ -47,6 +50,7 @@ impl FormatKind {
             Self::Yaml => "YAML",
             Self::Rust => "Rust",
             Self::Java => "Java",
+            Self::Python => "Python",
             Self::Url => "URL",
             Self::Xml => "XML",
             Self::Html => "HTML",
@@ -65,6 +69,7 @@ impl FormatKind {
             Self::Yaml => "YAML",
             Self::Rust => "Formatted Rust",
             Self::Java => "Formatted Java",
+            Self::Python => "Python",
             Self::Xml => "Formatted XML",
             Self::Html => "HTML",
             Self::Markdown => "Formatted Markdown",
@@ -82,6 +87,7 @@ impl FormatKind {
             Self::Yaml => "yaml",
             Self::Rust => "rs",
             Self::Java => "java",
+            Self::Python => "py",
             Self::Url => "txt",
             Self::Xml => "xml",
             Self::Html => "html",
@@ -115,6 +121,10 @@ pub fn forget_detected() {
 fn detect_uncached(text: &str) -> FormatKind {
     if crate::clipboard::try_format_json(text).is_some() {
         return FormatKind::Json;
+    }
+    // Before Markdown: `# comment` lines would read as headings.
+    if crate::python::looks_like_python(text) {
+        return FormatKind::Python;
     }
     if looks_like_markdown(text) {
         return FormatKind::Markdown;
@@ -163,7 +173,8 @@ pub fn format_text(text: &str) -> String {
         FormatKind::Xml | FormatKind::Html => pretty_xml(text),
         FormatKind::Markdown => format_markdown(text),
         FormatKind::Url => format_url(text),
-        FormatKind::Csv
+        FormatKind::Python
+        | FormatKind::Csv
         | FormatKind::Tsv
         | FormatKind::Dataframe
         | FormatKind::Image
@@ -1172,6 +1183,41 @@ fn count_open(line: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{FormatKind, authority_host, detect, indent_braces, looks_like_url, pretty_xml};
+
+    #[test]
+    fn python_is_detected_without_stealing_other_kinds() {
+        assert_eq!(detect("f = open(\"demofile.txt\")"), FormatKind::Plain);
+        assert_eq!(
+            detect("# read it\nwith open(\"demofile.txt\") as f:\n    print(f.read())\n"),
+            FormatKind::Python
+        );
+        assert_eq!(
+            detect("import os\n\n# where am I\nprint(os.getcwd())\n"),
+            FormatKind::Python
+        );
+        assert_eq!(
+            detect("name: app\nservices:\n  web:\n    image: nginx\n"),
+            FormatKind::Yaml
+        );
+        assert_ne!(
+            detect("class Dog\n  def initialize(name)\n    @name = name\n  end\nend\n"),
+            FormatKind::Python
+        );
+        assert_ne!(
+            detect("import React from 'react';\nconst App = () => null;\n"),
+            FormatKind::Python
+        );
+        assert_eq!(
+            detect("# Notes\n\nSome text about import os and print.\n\n- item\n"),
+            FormatKind::Markdown
+        );
+        assert_eq!(
+            detect("Please import the data.\nThen print it for Jan.\n"),
+            FormatKind::Text
+        );
+        assert_eq!(FormatKind::Python.source_heading(), "Python");
+        assert_eq!(FormatKind::Python.suggested_extension(), "py");
+    }
 
     #[test]
     fn html_pages_are_html_not_xml() {

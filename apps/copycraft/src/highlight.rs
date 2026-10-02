@@ -20,6 +20,7 @@ pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
         FormatKind::Yaml => tokenize_yaml(source),
         FormatKind::Rust => tokenize_rust(source),
         FormatKind::Java => tokenize_code(source, kind),
+        FormatKind::Python => tokenize_python(source),
         FormatKind::Xml | FormatKind::Html => tokenize_xml(source),
         FormatKind::Markdown => tokenize_markdown(source),
         FormatKind::Csv => tokenize_csv(source),
@@ -287,6 +288,98 @@ fn tokenize_code(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
             out.push((TokenKind::Number, token));
             i = next;
             continue;
+        }
+        out.push((TokenKind::Text, ch.to_string()));
+        i += 1;
+    }
+    out
+}
+
+/// Python: keywords, `def` / `class` names, decorators (as macros), `#` comments, numbers and
+/// strings with any prefix (`f`, `r`, `b`, `rb`, …), triple-quoted included.
+fn tokenize_python(source: &str) -> Vec<(TokenKind, String)> {
+    const KEYWORDS: [&str; 38] = [
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield", "match", "case", "self",
+    ];
+    let mut out = Vec::new();
+    let chars: Vec<char> = source.chars().collect();
+    let mut i = 0;
+    let mut name_next = None;
+    // Only whitespace so far on this line (decorators start a line).
+    let mut line_start = true;
+    while i < chars.len() {
+        let ch = chars[i];
+        let at_line_start = line_start;
+        if ch == '\n' {
+            line_start = true;
+        } else if !ch.is_whitespace() {
+            line_start = false;
+        }
+        if ch == '#' {
+            let (token, next) = take_while(&chars, i, |c| c != '\n');
+            out.push((TokenKind::Comment, token));
+            i = next;
+            continue;
+        }
+        if ch == '@' && at_line_start {
+            let (token, next) = take_while(&chars, i + 1, |c| {
+                c.is_alphanumeric() || c == '_' || c == '.'
+            });
+            out.push((TokenKind::Macro, format!("@{token}")));
+            i = next;
+            continue;
+        }
+        if ch == '"' || ch == '\'' {
+            let end = crate::brackets::skip_python_string(&chars, i);
+            out.push((TokenKind::String, chars[i..end].iter().collect()));
+            i = end;
+            continue;
+        }
+        if ch.is_alphabetic() || ch == '_' {
+            let (token, next) = take_while(&chars, i, |c| c.is_alphanumeric() || c == '_');
+            // A string prefix: f"…", rb'…'.
+            let prefix = token.len() <= 2
+                && token
+                    .chars()
+                    .all(|c| matches!(c.to_ascii_lowercase(), 'f' | 'r' | 'b' | 'u'))
+                && matches!(chars.get(next), Some('"' | '\''));
+            if prefix {
+                let end = crate::brackets::skip_python_string(&chars, next);
+                out.push((TokenKind::String, chars[i..end].iter().collect()));
+                i = end;
+                continue;
+            }
+            let kind = if let Some(kind) = name_next.take() {
+                kind
+            } else if KEYWORDS.contains(&token.as_str()) {
+                name_next = match token.as_str() {
+                    "def" => Some(TokenKind::Function),
+                    "class" => Some(TokenKind::Type),
+                    _ => None,
+                };
+                TokenKind::Keyword
+            } else if token.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                TokenKind::Type
+            } else {
+                TokenKind::Text
+            };
+            out.push((kind, token));
+            i = next;
+            continue;
+        }
+        if ch.is_ascii_digit() {
+            let (token, next) = take_while(&chars, i, |c| {
+                c.is_ascii_alphanumeric() || c == '_' || c == '.'
+            });
+            out.push((TokenKind::Number, token));
+            i = next;
+            continue;
+        }
+        if !ch.is_whitespace() {
+            name_next = None;
         }
         out.push((TokenKind::Text, ch.to_string()));
         i += 1;
@@ -699,6 +792,26 @@ include!("highlight_extra.rs");
 mod tests {
     use super::{TokenKind, tokens};
     use crate::format::FormatKind;
+
+    #[test]
+    fn python_marks_keywords_strings_comments_decorators_and_numbers() {
+        let src = "@app.route(\"/\")\ndef index(n=0x1F):  # home\n    msg = f\"hi {n}\"\n    doc = \"\"\"a\n# not a comment\"\"\"\n    return None if n else 1_000.5\nclass Page(Base):\n    pass\n";
+        let toks = tokens(src, FormatKind::Python);
+        let has = |kind: TokenKind, text: &str| toks.iter().any(|(k, t)| *k == kind && t == text);
+        assert!(has(TokenKind::Macro, "@app.route"));
+        assert!(has(TokenKind::Keyword, "def"));
+        assert!(has(TokenKind::Function, "index"));
+        assert!(has(TokenKind::Number, "0x1F"));
+        assert!(has(TokenKind::Comment, "# home"));
+        assert!(has(TokenKind::String, "f\"hi {n}\""));
+        assert!(has(TokenKind::String, "\"\"\"a\n# not a comment\"\"\""));
+        assert!(has(TokenKind::Keyword, "None"));
+        assert!(has(TokenKind::Number, "1_000.5"));
+        assert!(has(TokenKind::Type, "Page"));
+        assert!(has(TokenKind::Keyword, "pass"));
+        let painted: String = toks.into_iter().map(|(_, text)| text).collect();
+        assert_eq!(painted, src);
+    }
 
     #[test]
     fn json_marks_keys_and_numbers() {

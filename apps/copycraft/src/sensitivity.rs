@@ -114,7 +114,10 @@ fn labels_uncached(text: &str) -> Vec<Label> {
 }
 
 fn is_code(kind: FormatKind) -> bool {
-    matches!(kind, FormatKind::Rust | FormatKind::Java)
+    matches!(
+        kind,
+        FormatKind::Rust | FormatKind::Java | FormatKind::Python
+    )
 }
 
 /// `std::io` is hex letters around `::`, which is the shape of a compressed

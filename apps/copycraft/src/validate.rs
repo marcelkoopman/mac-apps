@@ -16,12 +16,17 @@ pub fn title(text: &str) -> Option<String> {
     ))
 }
 
-/// Title for Rust or Java whose brackets do not balance, e.g. `Java · missing }`. `None` for
-/// balanced code and other text, which keep their usual title.
+/// Title for Rust or Java whose brackets do not balance (`Java · missing }`), or Python with a
+/// structural problem (`Python · expected indent`). `None` for sound code and other text, which
+/// keep their usual title.
 pub fn code_title(text: &str) -> Option<String> {
     let kind = crate::format::detect(text);
-    let problem = crate::brackets::check(text, kind)?;
-    Some(format!("{} · {}", kind.source_heading(), problem.label()))
+    let label = if kind == crate::format::FormatKind::Python {
+        crate::python::check(text)?.label()
+    } else {
+        crate::brackets::check(text, kind)?.label()
+    };
+    Some(format!("{} · {label}", kind.source_heading()))
 }
 
 impl Report {

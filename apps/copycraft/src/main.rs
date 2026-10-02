@@ -16,6 +16,7 @@ mod memo;
 mod menubar;
 mod open_file;
 mod page_preview;
+mod python;
 mod redact;
 mod sensitivity;
 mod toolbar_visibility;

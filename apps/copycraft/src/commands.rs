@@ -762,6 +762,7 @@ fn opens_formatted(source: &str) -> bool {
             | FormatKind::Markdown
             | FormatKind::Rust
             | FormatKind::Java
+            | FormatKind::Python
     )
 }
 
@@ -2033,6 +2034,41 @@ fn main() {
         assert_eq!(
             presented_view(r#"{"a":1}"#, CardView::Original),
             CardView::Format
+        );
+    }
+
+    #[test]
+    fn python_cards_are_highlighted_and_checked() {
+        let sound = "def greet(name):\n    print(f\"Hello {name}\")\n";
+        let input = data(SubjectKind::Text, Some(sound));
+        let card = work_card(&input);
+        assert_eq!(card.title, "Python");
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Python));
+        assert_eq!(card.excerpt, sound, "no formatter: shown as copied");
+        let shown = chips(&input);
+        assert!(!shown.iter().any(|cmd| matches!(
+            cmd.id,
+            CommandId::Format | CommandId::Convert | CommandId::Schema
+        )));
+
+        let missing = "def greet(name):\n    print(f\"Hello {name}\"\n";
+        assert_eq!(
+            work_card(&data(SubjectKind::Text, Some(missing))).title,
+            "Python · missing )"
+        );
+        let no_body = "import os\n\ndef main():\nprint(os.getcwd())\n";
+        assert_eq!(
+            work_card(&data(SubjectKind::Text, Some(no_body))).title,
+            "Python · expected indent"
+        );
+        let mixed = "def main():\n    x = 1\n\tprint(x)\n";
+        assert_eq!(
+            work_card(&data(SubjectKind::Text, Some(mixed))).title,
+            "Python · mixed tabs and spaces"
+        );
+        assert_eq!(
+            work_card(&data(SubjectKind::Text, Some("f = open(\"demofile.txt\")"))).title,
+            "Content"
         );
     }
 
