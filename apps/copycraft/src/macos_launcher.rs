@@ -101,7 +101,7 @@ thread_local! {
     static META: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static WELL: RefCell<Option<Retained<NSBox>>> = const { RefCell::new(None) };
     static PREVIEW_TEXT: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
-    static PREVIEW_SCROLL: RefCell<Option<Retained<PreviewScroll>>> = const { RefCell::new(None) };
+    static PREVIEW_SCROLL: RefCell<Option<Retained<NSScrollView>>> = const { RefCell::new(None) };
     static PREVIEW_IMAGE: RefCell<Option<Retained<NSImageView>>> = const { RefCell::new(None) };
     /// Chip row: a glass group holding one GlassButton per shown command.
     static PILLS: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
@@ -195,20 +195,6 @@ define_class!(
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
             }
-        }
-    }
-);
-
-define_class!(
-    #[unsafe(super(NSScrollView))]
-    #[thread_kind = MainThreadOnly]
-    #[name = "CopycraftPreviewScroll"]
-    struct PreviewScroll;
-
-    impl PreviewScroll {
-        #[unsafe(method(acceptsFirstResponder))]
-        fn accepts_first_responder(&self) -> bool {
-            false
         }
     }
 );
@@ -1283,17 +1269,7 @@ fn focus_item_field() {
 }
 
 fn is_item_find_chord(event: &NSEvent) -> bool {
-    let flags = event.modifierFlags();
-    if !flags.contains(NSEventModifierFlags::Command)
-        || flags.contains(NSEventModifierFlags::Shift)
-        || flags.contains(NSEventModifierFlags::Control)
-        || flags.contains(NSEventModifierFlags::Option)
-    {
-        return false;
-    }
-    event
-        .charactersIgnoringModifiers()
-        .is_some_and(|text| text.to_string().eq_ignore_ascii_case("f"))
+    mac_ui::keys::is_command_chord(event, "f")
 }
 
 fn note_is_item_field(note: &NSNotification) -> bool {
@@ -1323,7 +1299,7 @@ fn control_is_item_field(control: &NSControl) -> bool {
 
 fn item_field_command(command: Sel) -> bool {
     if command == sel!(insertNewline:) || command == sel!(insertNewlineIgnoringFieldEditor:) {
-        step_item_match(!event_shift());
+        step_item_match(!mac_ui::keys::shift_held());
         true
     } else if command == sel!(cancelOperation:) {
         if item_query().is_empty() {
@@ -1339,15 +1315,6 @@ fn item_field_command(command: Sel) -> bool {
     } else {
         false
     }
-}
-
-fn event_shift() -> bool {
-    let Some(mtm) = MainThreadMarker::new() else {
-        return false;
-    };
-    let app = mac_ui::objc2_app_kit::NSApplication::sharedApplication(mtm);
-    app.currentEvent()
-        .is_some_and(|event| event.modifierFlags().contains(NSEventModifierFlags::Shift))
 }
 
 fn search_body(shows_image: bool, linked: bool, excerpt: &str, placeholder: &str) -> String {
@@ -2297,9 +2264,10 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
     field.setAccessibilityLabel(Some(&NSString::from_str("Search commands")));
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            unsafe {
-                let _: () = msg_send![&*field, setDelegate: &**delegate];
-            }
+            // SAFETY: LauncherDelegate implements controlTextDidChange: and
+            // control:textView:doCommandBySelector: with their protocol signatures; DELEGATE keeps
+            // it alive for the app's lifetime.
+            unsafe { widgets::set_text_delegate(&field, delegate) };
         }
     });
     field
@@ -2311,9 +2279,10 @@ fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
     field.setHidden(true);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            unsafe {
-                let _: () = msg_send![&*field, setDelegate: &**delegate];
-            }
+            // SAFETY: LauncherDelegate implements controlTextDidChange: and
+            // control:textView:doCommandBySelector: with their protocol signatures; DELEGATE keeps
+            // it alive for the app's lifetime.
+            unsafe { widgets::set_text_delegate(&field, delegate) };
         }
     });
     field
@@ -2349,11 +2318,8 @@ fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
     text
 }
 
-fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<PreviewScroll> {
-    let allocated = PreviewScroll::alloc(mtm);
-    let scroll: Retained<PreviewScroll> =
-        unsafe { msg_send![allocated, initWithFrame: NSRect::ZERO] };
-    widgets::configure_text_scroll(&scroll, text);
+fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<NSScrollView> {
+    let scroll = widgets::passive_text_scroll(mtm, text);
     scroll.setHidden(true);
     scroll.setAlphaValue(0.0);
     scroll
@@ -2622,10 +2588,9 @@ fn header_symbol(
 fn wire_button(button: &NSButton, action: Sel) {
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            unsafe {
-                button.setTarget(Some(delegate));
-                button.setAction(Some(action));
-            }
+            // SAFETY: every action wired here is a LauncherDelegate method taking the sender;
+            // DELEGATE keeps it alive for the app's lifetime.
+            unsafe { widgets::set_target_action(button, delegate, action) };
         }
     });
 }

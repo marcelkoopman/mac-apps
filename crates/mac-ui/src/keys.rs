@@ -4,6 +4,9 @@
 //! objc2-app-kit does not bind. A key code names a physical key, the same on every keyboard
 //! layout and whatever the modifiers, so matching on it behaves exactly like matching the raw
 //! numbers. Pure data, available on every platform.
+//!
+//! With the `widgets` feature on macOS, [`is_command_chord`] and [`shift_held`] read the
+//! modifiers of an `NSEvent`.
 
 /// Virtual key codes, as returned by `NSEvent::keyCode`.
 pub mod code {
@@ -59,9 +62,61 @@ impl Key {
     }
 }
 
+/// Modifier checks on `NSEvent`s.
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+mod event {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags};
+
+    /// Command held without Shift, Control or Option.
+    pub(super) fn command_only(flags: NSEventModifierFlags) -> bool {
+        flags.contains(NSEventModifierFlags::Command)
+            && !flags.contains(NSEventModifierFlags::Shift)
+            && !flags.contains(NSEventModifierFlags::Control)
+            && !flags.contains(NSEventModifierFlags::Option)
+    }
+
+    /// `event` is ⌘ plus `key` (case-insensitive, e.g. `"f"` for ⌘F) without Shift, Control or
+    /// Option.
+    pub fn is_command_chord(event: &NSEvent, key: &str) -> bool {
+        if !command_only(event.modifierFlags()) {
+            return false;
+        }
+        event
+            .charactersIgnoringModifiers()
+            .is_some_and(|text| text.to_string().eq_ignore_ascii_case(key))
+    }
+
+    /// Shift is held in the event the application is handling now; `false` off the main
+    /// thread or without a current event.
+    pub fn shift_held() -> bool {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        let app = NSApplication::sharedApplication(mtm);
+        app.currentEvent()
+            .is_some_and(|event| event.modifierFlags().contains(NSEventModifierFlags::Shift))
+    }
+}
+
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub use event::{is_command_chord, shift_held};
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(target_os = "macos", feature = "widgets"))]
+    #[test]
+    fn command_chords_need_command_alone() {
+        use objc2_app_kit::NSEventModifierFlags as F;
+        assert!(event::command_only(F::Command));
+        assert!(event::command_only(F::Command | F::CapsLock));
+        assert!(!event::command_only(F::Command | F::Shift));
+        assert!(!event::command_only(F::Command | F::Control));
+        assert!(!event::command_only(F::Command | F::Option));
+        assert!(!event::command_only(F::empty()));
+    }
 
     #[test]
     fn codes_match_the_carbon_values() {

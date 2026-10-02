@@ -12,15 +12,18 @@ theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-fou
 # `mac_ui::widgets`, `mac_ui::button`, `mac_ui::fonts` and `mac_ui::text`: AppKit control
 # constructors, the glass push button (NSBezelStyle in NSButtonCell, NSControlBorderShape in
 # NSControl, NSTintProminence, accessibility labels in NSAccessibilityProtocols), font lookup and
-# attributed strings (NSAttributedString, already on in the workspace entry).
+# attributed strings (NSAttributedString, already on in the workspace entry). NSEvent and
+# NSApplication are for the modifier checks in `mac_ui::keys`.
 widgets = [
     "objc2-app-kit/NSAccessibilityProtocols",
+    "objc2-app-kit/NSApplication",
     "objc2-app-kit/NSBox",
     "objc2-app-kit/NSButton",
     "objc2-app-kit/NSButtonCell",
     "objc2-app-kit/NSCell",
     "objc2-app-kit/NSClipView",
     "objc2-app-kit/NSControl",
+    "objc2-app-kit/NSEvent",
     "objc2-app-kit/NSFont",
     "objc2-app-kit/NSFontDescriptor",
     "objc2-app-kit/NSImageCell",

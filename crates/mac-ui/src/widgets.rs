@@ -2,16 +2,19 @@
 //!
 //! The helpers only configure the view. Callers set frames, visibility, targets and delegates.
 //! Text views also get sizing ([`fit_text_view`]), find marks ([`mark_matches`]) and wiping
-//! ([`wipe_text_view`], [`wipe_text_field`], [`wipe_field_editor`]).
+//! ([`wipe_text_view`], [`wipe_text_field`], [`wipe_field_editor`]). [`set_target_action`] and
+//! [`set_text_delegate`] wire controls to an app's delegate object.
 
 use std::ops::Range;
 
 use objc2::rc::Retained;
-use objc2::{MainThreadMarker, MainThreadOnly, Message};
+use objc2::runtime::{AnyObject, Sel};
+use objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
-    NSColor, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling, NSImageView,
-    NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView, NSTitlePosition, NSView,
+    NSColor, NSControl, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling,
+    NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView,
+    NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
@@ -197,6 +200,57 @@ pub fn configure_text_scroll(scroll: &NSScrollView, text: &NSTextView) {
     scroll.setAutomaticallyAdjustsContentInsets(false);
     scroll.contentView().setDrawsBackground(false);
     scroll.setDocumentView(Some(text));
+}
+
+define_class!(
+    /// Scroll view that never takes keyboard focus, so Tab skips it.
+    #[unsafe(super(NSScrollView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "MacUiPassiveTextScroll"]
+    struct PassiveTextScroll;
+
+    impl PassiveTextScroll {
+        #[unsafe(method(acceptsFirstResponder))]
+        fn accepts_first_responder(&self) -> bool {
+            false
+        }
+    }
+);
+
+/// A [`configure_text_scroll`] scroller for `text` that never becomes first responder, for
+/// previews the keyboard should pass over.
+pub fn passive_text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<NSScrollView> {
+    let allocated = PassiveTextScroll::alloc(mtm);
+    let scroll: Retained<PassiveTextScroll> =
+        unsafe { msg_send![allocated, initWithFrame: NSRect::ZERO] };
+    let scroll = scroll.into_super();
+    configure_text_scroll(&scroll, text);
+    scroll
+}
+
+/// Send `action` to `target` when `control` is clicked.
+///
+/// # Safety
+///
+/// `target` must implement `action` as a method taking the sender (`-action:(id)sender`). The
+/// control holds `target` weakly, so keep it alive for as long as clicks should reach it.
+pub unsafe fn set_target_action(control: &NSControl, target: &AnyObject, action: Sel) {
+    unsafe {
+        control.setTarget(Some(target));
+        control.setAction(Some(action));
+    }
+}
+
+/// Make `delegate` the delegate of `field` (text changes, editing commands).
+///
+/// # Safety
+///
+/// Every `NSTextFieldDelegate` / `NSControlTextEditingDelegate` method `delegate` implements must
+/// have the protocol's signature. The field holds `delegate` weakly, so keep it alive.
+pub unsafe fn set_text_delegate(field: &NSTextField, delegate: &AnyObject) {
+    unsafe {
+        let _: () = msg_send![field, setDelegate: delegate];
+    }
 }
 
 /// Let `text` grow in both directions without wrapping, so long lines scroll sideways in its
