@@ -4,7 +4,8 @@
 //! content view (or another container) and build the content inside it. AppKit offers a drag to
 //! the deepest registered view under the pointer, so plain views, buttons, glass and read-only
 //! text and image views inside it leave the drag to the target. Editable text (a field being
-//! edited, an editable text view) registers itself and keeps taking its own text drops.
+//! edited, an editable text view) registers itself and keeps taking its own text drops; give the
+//! window [`field_editor_without_drops`] when the whole window should take them instead.
 //!
 //! While the drag moves it is judged by [`judge`] on what the drag pasteboard declares, without
 //! reading any text or file: one file whose type conforms to one of [`Accept::file_types`], or
@@ -73,7 +74,7 @@ pub fn judge(files: &[FileKind], has_text: bool, accept: Accept) -> Option<Offer
 }
 
 #[cfg(target_os = "macos")]
-pub use appkit::target;
+pub use appkit::{field_editor_without_drops, target};
 
 #[cfg(target_os = "macos")]
 mod appkit {
@@ -86,9 +87,9 @@ mod appkit {
         ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
     };
     use objc2_app_kit::{
-        NSDragOperation, NSDraggingDestination, NSDraggingInfo, NSPasteboard,
+        NSDragOperation, NSDraggingDestination, NSDraggingInfo, NSPasteboard, NSPasteboardType,
         NSPasteboardTypeFileURL, NSPasteboardTypeString, NSPasteboardURLReadingFileURLsOnlyKey,
-        NSView,
+        NSText, NSTextView, NSView,
     };
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSRect, NSString, NSURL};
     use objc2_uniform_type_identifiers::UTType;
@@ -177,6 +178,39 @@ mod appkit {
             }
         }
     );
+
+    define_class!(
+        // SAFETY: NSTextView has no subclassing requirements. The overrides keep NSTextView's
+        // signatures, and there are no ivars.
+        #[unsafe(super(NSTextView, NSText, NSView))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "MacUiFieldEditorWithoutDrops"]
+        struct FieldEditorWithoutDrops;
+
+        impl FieldEditorWithoutDrops {
+            #[unsafe(method_id(acceptableDragTypes))]
+            fn acceptable_drag_types(&self) -> Retained<NSArray<NSPasteboardType>> {
+                NSArray::new()
+            }
+
+            #[unsafe(method(updateDragTypeRegistration))]
+            fn update_drag_type_registration(&self) {
+                self.unregisterDraggedTypes();
+            }
+        }
+    );
+
+    /// A field editor (the text view a window lends the text field being edited) that never
+    /// takes drops, so a drag over a field being edited goes on to the [`target`] around it.
+    /// Return it, the same one every time, from the window delegate's
+    /// `windowWillReturnFieldEditor:toObject:`.
+    pub fn field_editor_without_drops(mtm: MainThreadMarker) -> Retained<NSTextView> {
+        // SAFETY: NSTextView's `initWithFrame:` initialiser, with a matching argument type.
+        let editor: Retained<FieldEditorWithoutDrops> =
+            unsafe { msg_send![FieldEditorWithoutDrops::alloc(mtm), initWithFrame: NSRect::ZERO] };
+        editor.setFieldEditor(true);
+        editor.into_super()
+    }
 
     impl DropView {
         fn judge_drag(&self, sender: &ProtocolObject<dyn NSDraggingInfo>) -> Option<Offer> {
@@ -301,7 +335,7 @@ mod appkit {
     mod tests {
         use objc2::{ClassType, sel};
 
-        use super::DropView;
+        use super::{DropView, FieldEditorWithoutDrops};
 
         #[test]
         fn the_class_registers_with_the_drag_methods() {
@@ -317,6 +351,17 @@ mod appkit {
             ] {
                 assert!(class.instance_method(method).is_some(), "{method:?}");
             }
+        }
+
+        #[test]
+        fn the_field_editor_overrides_its_drag_registration() {
+            let class = FieldEditorWithoutDrops::class();
+            assert!(class.instance_method(sel!(acceptableDragTypes)).is_some());
+            assert!(
+                class
+                    .instance_method(sel!(updateDragTypeRegistration))
+                    .is_some()
+            );
         }
     }
 }

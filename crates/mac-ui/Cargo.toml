@@ -75,11 +75,14 @@ file_panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSURL",
 ]
-# `mac_ui::drop`: a view that takes one dropped file (by uniform type) or dropped text.
+# `mac_ui::drop`: a view that takes one dropped file (by uniform type) or dropped text, and a
+# field editor (NSText, NSTextView) that leaves drops to it.
 drop = [
     "dep:objc2-uniform-type-identifiers",
     "objc2-app-kit/NSDragging",
     "objc2-app-kit/NSPasteboard",
+    "objc2-app-kit/NSText",
+    "objc2-app-kit/NSTextView",
     "objc2-foundation/NSArray",
     "objc2-foundation/NSDictionary",
     "objc2-foundation/NSURL",

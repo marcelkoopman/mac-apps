@@ -154,6 +154,9 @@ thread_local! {
     static MASKS: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
+    /// The window's one field editor, made on first use. It takes no drops (see
+    /// `windowWillReturnFieldEditor:toObject:`).
+    static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
 }
 
 #[cfg(test)]
@@ -219,6 +222,24 @@ define_class!(
                 return;
             }
             hide();
+        }
+
+        /// Both search fields edit in a field editor that takes no drops, so text dragged over
+        /// a field being edited is dropped on the card like anywhere else.
+        #[unsafe(method_id(windowWillReturnFieldEditor:toObject:))]
+        fn window_will_return_field_editor(
+            &self,
+            _sender: &NSWindow,
+            _client: Option<&AnyObject>,
+        ) -> Option<Retained<NSTextView>> {
+            let mtm = self.mtm();
+            FIELD_EDITOR.with(|slot| {
+                Some(
+                    slot.borrow_mut()
+                        .get_or_insert_with(|| mac_ui::drop::field_editor_without_drops(mtm))
+                        .clone(),
+                )
+            })
         }
 
         #[unsafe(method(controlTextDidChange:))]
