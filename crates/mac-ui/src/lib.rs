@@ -19,6 +19,8 @@
 //! - `file_panel`: `file_panel`, modal `NSOpenPanel` (choose a file) and `NSSavePanel`
 //!   (choose a save path).
 //! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
+//! - `drop`: `drop`, a view that takes one dropped file or dropped text, judged by type while
+//!   the drag moves. Its accept rules (`drop::judge`) build on every platform.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
@@ -42,6 +44,8 @@ pub mod button;
 pub mod corners;
 #[cfg(all(target_os = "macos", feature = "dialog"))]
 pub mod dialog;
+#[cfg(feature = "drop")]
+pub mod drop;
 #[cfg(all(target_os = "macos", feature = "file_panel"))]
 pub mod file_panel;
 pub mod find;

@@ -75,6 +75,16 @@ file_panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSURL",
 ]
+# `mac_ui::drop`: a view that takes one dropped file (by uniform type) or dropped text.
+drop = [
+    "dep:objc2-uniform-type-identifiers",
+    "objc2-app-kit/NSDragging",
+    "objc2-app-kit/NSPasteboard",
+    "objc2-foundation/NSArray",
+    "objc2-foundation/NSDictionary",
+    "objc2-foundation/NSURL",
+    "objc2-foundation/NSValue",
+]
 # `mac_ui::progress`: indeterminate spinning NSProgressIndicator (busy wheel).
 progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
@@ -102,5 +112,5 @@ objc2-app-kit = { workspace = true, features = [
 # `notify` only.
 block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }
-# `file_panel` only.
+# `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
