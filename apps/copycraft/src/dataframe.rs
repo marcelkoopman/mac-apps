@@ -48,11 +48,6 @@ pub fn try_parquet_bytes(text: &str) -> Option<Vec<u8>> {
     write_parquet(&mut df)
 }
 
-/// Tabular XML can still become CSV. It is not a dataframe.
-pub fn try_xml_csv_text(text: &str) -> Option<String> {
-    try_xml(text.trim()).and_then(write_csv)
-}
-
 pub fn try_json_text(text: &str) -> Option<String> {
     parse(text).and_then(write_json)
 }

@@ -157,13 +157,13 @@ Id;Naam;Salaris
 1;Jan;3450
 2;Anja;2900"
         ));
-        assert!(shows_convert(
+        assert!(!shows_convert(
             "<root><person><name>Jan</name><age>30</age></person><person><name>Anja</name><age>40</age></person></root>"
         ));
     }
 
     #[test]
-    fn convert_hides_for_code_prose_and_non_table_xml() {
+    fn convert_hides_for_code_prose_and_xml() {
         assert!(!shows_convert("hello world"));
         assert!(!shows_convert("line one\nline two"));
         assert!(!shows_convert("https://example.com/path"));

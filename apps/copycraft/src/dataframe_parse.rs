@@ -114,20 +114,4 @@ fn series_from_json_values(name: &str, items: &[serde_json::Value]) -> Option<Se
     Some(Series::new(name.into(), values))
 }
 
-fn try_xml(text: &str) -> Option<DataFrame> {
-    if !crate::format::looks_like_xml(text) {
-        return None;
-    }
-    let rows = xml_rows(text)?;
-    if rows.len() < 2 {
-        return None;
-    }
-    let headers = rows[0].clone();
-    if headers.len() < 2 {
-        return None;
-    }
-    let csv = rows_to_csv(&rows);
-    try_csv(&csv)
-}
-
-include!("dataframe_xml.rs");
+include!("dataframe_util.rs");

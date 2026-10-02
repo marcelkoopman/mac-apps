@@ -1658,13 +1658,10 @@ mod tests {
     }
 
     #[test]
-    fn tabular_xml_keeps_convert_beside_schema() {
+    fn tabular_xml_shows_schema_without_convert() {
         let src = "<root><person><name>Jan</name><age>30</age></person><person><name>Anja</name><age>40</age></person></root>";
         let shown = chips(&data(SubjectKind::Text, Some(src)));
-        assert_eq!(
-            ids(&shown),
-            vec![CommandId::Original, CommandId::Schema, CommandId::Convert]
-        );
+        assert_eq!(ids(&shown), vec![CommandId::Original, CommandId::Schema]);
         assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
         assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Dataframe));
     }

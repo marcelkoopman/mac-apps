@@ -5,12 +5,13 @@ pub fn try_convert(text: &str) -> Option<String> {
         FormatKind::Json => crate::transform::json_to_yaml(text)?,
         FormatKind::Yaml => crate::transform::yaml_to_json(text)?,
         FormatKind::Csv => crate::dataframe::try_json_text(text)?,
-        FormatKind::Xml => crate::dataframe::try_xml_csv_text(text)?,
         FormatKind::Tsv | FormatKind::Dataframe => crate::dataframe::try_csv_text(text)?,
         // Flat YAML mappings are detected as text so they are not pretty-printed
         // as YAML (Dutch labeled records). Convert still maps them to JSON.
         FormatKind::Text | FormatKind::Plain => crate::transform::yaml_to_json(text)?,
-        FormatKind::Rust
+        // XML keeps its own views (Original, Schema); flattening it into CSV made no sense.
+        FormatKind::Xml
+        | FormatKind::Rust
         | FormatKind::Java
         | FormatKind::Markdown
         | FormatKind::Url
@@ -104,20 +105,6 @@ Id;Naam;Salaris
     }
 
     #[test]
-    fn xml_rows_convert_to_csv() {
-        let src = r#"
-<root>
-  <person><name>Jan</name><salary>3450</salary></person>
-  <person><name>Anja</name><salary>2900</salary></person>
-</root>"#;
-        let out = try_convert(src).expect("csv");
-        assert!(out.contains("name"));
-        assert!(out.contains("Jan"));
-        assert!(out.contains(','));
-        assert_eq!(crate::format::detect(&out), crate::format::FormatKind::Csv);
-    }
-
-    #[test]
     fn quoted_csv_converts_address_cells() {
         let src = "\
 Id,Naam,Adres
@@ -134,6 +121,12 @@ Id,Naam,Adres
         assert!(try_convert("fn main() {}").is_none());
         assert!(try_convert("https://example.com/x").is_none());
         assert!(try_convert("<root><item/></root>").is_none());
+        let tabular_xml = "\
+<root>
+  <person><name>Jan</name><salary>3450</salary></person>
+  <person><name>Anja</name><salary>2900</salary></person>
+</root>";
+        assert!(try_convert(tabular_xml).is_none());
         assert!(try_convert("mod appearance;\nmod clipboard;\nmod compress;").is_none());
     }
 

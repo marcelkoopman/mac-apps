@@ -8,7 +8,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 - **Detection**: JSON, YAML, XML, Markdown, Rust, Java, URLs, CSV/TSV, plain text and images. JSON and XML get a *Valid* / *Invalid* title.
 - **Format**: pretty-print with syntax highlighting. JSON, YAML, XML, Markdown, Rust and Java open already formatted.
-- **Convert**: JSON ↔ YAML, CSV → JSON, TSV → CSV, tabular XML → CSV, flat `key: value` text → JSON.
+- **Convert**: JSON ↔ YAML, CSV → JSON, TSV → CSV, flat `key: value` text → JSON.
 - **Decode**: JWT, Base64, `data:` URIs, percent-encoding.
 - **Dataframe**: CSV, TSV or JSON as a table (Polars). Saving from this view writes Parquet.
 - **Schema / Sample**: JSON → Avro schema (`.avsc`), XML → XSD, XSD → sample XML.
