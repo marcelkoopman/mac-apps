@@ -72,6 +72,13 @@ const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
     file_types: &["public.text"],
     text: true,
 };
+/// The drop outline sits this far inside the panel edge, concentric with it.
+const DROP_INSET: f64 = 4.0;
+const DROP_HIGHLIGHT: mac_ui::drop::Highlight = mac_ui::drop::Highlight {
+    inset: DROP_INSET,
+    corner_radius: corners::concentric_radius(PANEL_RADIUS, DROP_INSET),
+    announcement: "Drop to open",
+};
 
 #[link(name = "CoreImage", kind = "framework")]
 unsafe extern "C" {
@@ -582,7 +589,7 @@ fn ensure_window(mtm: MainThreadMarker) {
 
     // The content view takes drops (mac_ui::drop). Everything on the card is inside it, so a
     // drag anywhere over the card reaches it unless an editable text view takes it first.
-    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, |dropped| {
+    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(DROP_HIGHLIGHT), |dropped| {
         launcher::emit(match dropped {
             mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
             mac_ui::drop::Dropped::Text(text) => {

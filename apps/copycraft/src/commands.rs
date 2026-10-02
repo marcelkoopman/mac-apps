@@ -27,6 +27,8 @@ const CODE_CAP: usize = 80_000;
 pub const PREVIEW_ROWS: usize = 200;
 /// Characters a card shows before "Show all", for text with very long lines.
 pub const PREVIEW_CHARS: usize = 20_000;
+/// Second line of an empty card: a file or text can be dropped on it instead.
+const DROP_HINT: &str = "Drop a text file here to open it";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SubjectKind {
@@ -389,7 +391,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             title: "Clipboard".to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: "Nothing copied".to_string(),
+            placeholder: format!("Nothing copied\n{DROP_HINT}"),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -401,7 +403,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             title: "Clipboard".to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: "No text on the clipboard".to_string(),
+            placeholder: format!("No text on the clipboard\n{DROP_HINT}"),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -2544,11 +2546,24 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
     }
 
     #[test]
+    fn a_clipboard_without_text_points_to_dropping_a_file() {
+        let card = work_card(&data(SubjectKind::NoText, None));
+        assert_eq!(
+            card.placeholder,
+            "No text on the clipboard\nDrop a text file here to open it"
+        );
+        assert!(card.excerpt.is_empty());
+    }
+
+    #[test]
     fn empty_clipboard_has_no_chips_and_keeps_quit_in_the_menu() {
         let input = data(SubjectKind::Empty, None);
         assert!(chips(&input).is_empty());
         let card = work_card(&input);
-        assert_eq!(card.placeholder, "Nothing copied");
+        assert_eq!(
+            card.placeholder,
+            "Nothing copied\nDrop a text file here to open it"
+        );
         assert!(card.excerpt.is_empty());
         assert_eq!(
             content_actions(&input),

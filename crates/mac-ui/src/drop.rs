@@ -14,6 +14,10 @@
 //! cannot drop there. A file whose name maps to no known type is let through: only its contents
 //! can tell, so the caller judges it after the drop. The drop itself is read once, on the main
 //! thread, and handed to the callback as [`Dropped`].
+//!
+//! With a [`Highlight`], a drag that can be dropped outlines the target in the accent colour
+//! (system colours only, so it follows the appearance and the user's accent) and VoiceOver
+//! announces it.
 
 use std::path::PathBuf;
 
@@ -36,6 +40,19 @@ pub struct Accept {
     pub file_types: &'static [&'static str],
     /// Take dropped plain text (`NSPasteboardTypeString`) when the drag has no files.
     pub text: bool,
+}
+
+/// How a [`target`] shows that the drag over it can be dropped: an outline in the accent colour
+/// over a faint selection tint, on top of the target's content, and a VoiceOver announcement.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Highlight {
+    /// Distance from the target's edges to the outline.
+    pub inset: f64,
+    /// Corner radius of the outline. Inside a rounded target, use
+    /// [`concentric_radius`](crate::corners::concentric_radius)`(outer, inset)`.
+    pub corner_radius: f64,
+    /// What VoiceOver says when a drag that can be dropped enters, such as `"Drop to open"`.
+    pub announcement: &'static str,
 }
 
 /// One file in a drag, as far as its URL tells before the drop.
@@ -78,7 +95,7 @@ pub use appkit::{field_editor_without_drops, target};
 
 #[cfg(target_os = "macos")]
 mod appkit {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::path::PathBuf;
 
     use objc2::rc::{Retained, autoreleasepool};
@@ -87,14 +104,26 @@ mod appkit {
         ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
     };
     use objc2_app_kit::{
-        NSDragOperation, NSDraggingDestination, NSDraggingInfo, NSPasteboard, NSPasteboardType,
+        NSAccessibility, NSAccessibilityAnnouncementKey,
+        NSAccessibilityAnnouncementRequestedNotification,
+        NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
+        NSAccessibilityPriorityLevel, NSBox, NSBoxType, NSColor, NSDragOperation,
+        NSDraggingDestination, NSDraggingInfo, NSPasteboard, NSPasteboardType,
         NSPasteboardTypeFileURL, NSPasteboardTypeString, NSPasteboardURLReadingFileURLsOnlyKey,
-        NSText, NSTextView, NSView,
+        NSText, NSTextView, NSTitlePosition, NSView,
     };
-    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSRect, NSString, NSURL};
+    use objc2_foundation::{
+        NSArray, NSDictionary, NSNumber, NSPoint, NSRect, NSSize, NSString, NSURL,
+    };
     use objc2_uniform_type_identifiers::UTType;
 
-    use super::{Accept, Dropped, FileKind, Offer, judge};
+    use super::{Accept, Dropped, FileKind, Highlight, Offer, judge};
+
+    /// Width of the [`Highlight`] outline, in points.
+    const OUTLINE_WIDTH: f64 = 2.0;
+    /// Opacity of the selection tint inside the outline: enough to see, light enough to read
+    /// the content through.
+    const TINT_ALPHA: f64 = 0.12;
 
     struct Ivars {
         accept: Accept,
@@ -103,6 +132,9 @@ mod appkit {
         on_drop: Box<dyn Fn(Dropped)>,
         /// What the drag over the view offers, judged when it entered.
         offer: Cell<Option<Offer>>,
+        highlight: Option<Highlight>,
+        /// The outline, made on the first drag that can be dropped.
+        outline: RefCell<Option<Retained<NSBox>>>,
     }
 
     define_class!(
@@ -125,7 +157,11 @@ mod appkit {
             ) -> NSDragOperation {
                 let offer = self.judge_drag(sender);
                 self.ivars().offer.set(offer);
-                operation(offer, sender)
+                let op = operation(offer, sender);
+                if op != NSDragOperation::None {
+                    self.show_highlight(true);
+                }
+                op
             }
 
             #[unsafe(method(draggingUpdated:))]
@@ -134,12 +170,19 @@ mod appkit {
                 sender: &ProtocolObject<dyn NSDraggingInfo>,
             ) -> NSDragOperation {
                 // The modifier keys can change the source's mask while the drag moves.
-                operation(self.ivars().offer.get(), sender)
+                let op = operation(self.ivars().offer.get(), sender);
+                if op == NSDragOperation::None {
+                    self.hide_highlight();
+                } else if !self.highlight_shown() {
+                    self.show_highlight(false);
+                }
+                op
             }
 
             #[unsafe(method(draggingExited:))]
             fn dragging_exited(&self, _sender: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
                 self.ivars().offer.set(None);
+                self.hide_highlight();
             }
 
             #[unsafe(method(prepareForDragOperation:))]
@@ -153,6 +196,7 @@ mod appkit {
             #[unsafe(method(performDragOperation:))]
             fn perform_drag_operation(&self, sender: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
                 let offer = self.ivars().offer.take();
+                self.hide_highlight();
                 let pasteboard = sender.draggingPasteboard();
                 let dropped = autoreleasepool(|_| match offer? {
                     Offer::File => single_file_path(&pasteboard).map(Dropped::File),
@@ -175,6 +219,14 @@ mod appkit {
                 _sender: Option<&ProtocolObject<dyn NSDraggingInfo>>,
             ) {
                 self.ivars().offer.set(None);
+                self.hide_highlight();
+            }
+
+            #[unsafe(method(draggingEnded:))]
+            fn dragging_ended(&self, _sender: &ProtocolObject<dyn NSDraggingInfo>) {
+                // Also when the drag was cancelled or dropped elsewhere.
+                self.ivars().offer.set(None);
+                self.hide_highlight();
             }
         }
     );
@@ -213,6 +265,45 @@ mod appkit {
     }
 
     impl DropView {
+        /// Outline the view over its content when it has a [`Highlight`], and tell VoiceOver
+        /// when `speak` (once per drag that enters).
+        fn show_highlight(&self, speak: bool) {
+            let Some(highlight) = self.ivars().highlight else {
+                return;
+            };
+            let mut slot = self.ivars().outline.borrow_mut();
+            let outline = slot.get_or_insert_with(|| outline_box(self.mtm(), &highlight));
+            let bounds = self.bounds();
+            let inset = highlight.inset;
+            outline.setFrame(NSRect::new(
+                NSPoint::new(bounds.origin.x + inset, bounds.origin.y + inset),
+                NSSize::new(
+                    (bounds.size.width - inset * 2.0).max(0.0),
+                    (bounds.size.height - inset * 2.0).max(0.0),
+                ),
+            ));
+            // Added last, so it is above everything the app put in the view.
+            self.addSubview(outline);
+            outline.setHidden(false);
+            if speak {
+                announce(self, highlight.announcement);
+            }
+        }
+
+        fn highlight_shown(&self) -> bool {
+            self.ivars()
+                .outline
+                .borrow()
+                .as_ref()
+                .is_some_and(|outline| !outline.isHidden())
+        }
+
+        fn hide_highlight(&self) {
+            if let Some(outline) = self.ivars().outline.borrow().as_ref() {
+                outline.setHidden(true);
+            }
+        }
+
         fn judge_drag(&self, sender: &ProtocolObject<dyn NSDraggingInfo>) -> Option<Offer> {
             let ivars = self.ivars();
             let pasteboard = sender.draggingPasteboard();
@@ -227,11 +318,13 @@ mod appkit {
         }
     }
 
-    /// A view that takes drops as described in the [module docs](super). `on_drop` runs on the
-    /// main thread, once per accepted drop.
+    /// A view that takes drops as described in the [module docs](super), outlined while a drag
+    /// that can be dropped is over it when `highlight` is given. `on_drop` runs on the main
+    /// thread, once per accepted drop.
     pub fn target(
         mtm: MainThreadMarker,
         accept: Accept,
+        highlight: Option<Highlight>,
         on_drop: impl Fn(Dropped) + 'static,
     ) -> Retained<NSView> {
         let types = accept
@@ -244,6 +337,8 @@ mod appkit {
             types,
             on_drop: Box::new(on_drop),
             offer: Cell::new(None),
+            highlight,
+            outline: RefCell::new(None),
         });
         // SAFETY: NSView's designated initialiser, with a matching argument type.
         let view: Retained<DropView> =
@@ -257,6 +352,47 @@ mod appkit {
         }
         view.registerForDraggedTypes(&NSArray::from_slice(&registered));
         view.into_super()
+    }
+
+    /// The [`Highlight`] outline: accent border, faint selection tint, no title, hidden from
+    /// accessibility (the announcement speaks for it).
+    fn outline_box(mtm: MainThreadMarker, highlight: &Highlight) -> Retained<NSBox> {
+        let outline = NSBox::initWithFrame(NSBox::alloc(mtm), NSRect::ZERO);
+        outline.setBoxType(NSBoxType::Custom);
+        outline.setTitlePosition(NSTitlePosition::NoTitle);
+        outline.setContentViewMargins(NSSize::new(0.0, 0.0));
+        outline.setCornerRadius(highlight.corner_radius);
+        outline.setBorderWidth(OUTLINE_WIDTH);
+        outline.setBorderColor(&NSColor::controlAccentColor());
+        outline.setFillColor(
+            &NSColor::selectedContentBackgroundColor().colorWithAlphaComponent(TINT_ALPHA),
+        );
+        outline.setAccessibilityElement(false);
+        outline.setHidden(true);
+        outline
+    }
+
+    /// Have VoiceOver say `text` right away.
+    fn announce(element: &NSView, text: &str) {
+        let text = NSString::from_str(text);
+        let priority = NSNumber::numberWithInteger(NSAccessibilityPriorityLevel::High.0);
+        let text: &AnyObject = &text;
+        let priority: &AnyObject = &priority;
+        let info = NSDictionary::from_slices(
+            &[unsafe { NSAccessibilityAnnouncementKey }, unsafe {
+                NSAccessibilityPriorityKey
+            }],
+            &[text, priority],
+        );
+        // SAFETY: an announcement request takes a view and a dictionary of NSString keys with
+        // an NSString announcement and an NSNumber priority.
+        unsafe {
+            NSAccessibilityPostNotificationWithUserInfo(
+                element,
+                NSAccessibilityAnnouncementRequestedNotification,
+                Some(&info),
+            );
+        }
     }
 
     /// The operation to show for `offer`: copy, or generic while ⌘ narrows the source's mask
@@ -348,6 +484,7 @@ mod appkit {
                 sel!(prepareForDragOperation:),
                 sel!(performDragOperation:),
                 sel!(concludeDragOperation:),
+                sel!(draggingEnded:),
             ] {
                 assert!(class.instance_method(method).is_some(), "{method:?}");
             }
