@@ -12,13 +12,15 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSBox, NSButton, NSColor, NSControl, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage,
-    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment,
-    NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
+    NSAccessibility, NSApplicationDidResignActiveNotification, NSBox, NSButton, NSColor, NSControl,
+    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType,
+    NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField,
+    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
+    NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSNotification, NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize,
+    NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
@@ -87,7 +89,8 @@ unsafe extern "C" {
 
 thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
-    static SUPPRESS_RESIGN: Cell<bool> = const { Cell::new(false) };
+    /// Set while the menu bar icon opens the card, which then opens under it.
+    static ICON_FRAME: Cell<Option<NSRect>> = const { Cell::new(None) };
     static SEARCHING: Cell<bool> = const { Cell::new(false) };
     static SELECTION: Cell<usize> = const { Cell::new(0) };
     static THEME: Cell<Theme> = const { Cell::new(Theme::System) };
@@ -223,12 +226,11 @@ define_class!(
     struct LauncherDelegate;
 
     impl LauncherDelegate {
-        #[unsafe(method(windowDidResignKey:))]
-        fn window_did_resign_key(&self, _note: &NSNotification) {
-            if SUPPRESS_RESIGN.with(Cell::get) {
-                return;
-            }
-            hide();
+        /// The card stays open when another app becomes active (it is the drop target while
+        /// you drag from there), but revealed content is masked again.
+        #[unsafe(method(applicationDidResignActive:))]
+        fn application_did_resign_active(&self, _note: &NSNotification) {
+            mask_again();
         }
 
         /// Both search fields edit in a field editor that takes no drops, so text dragged over
@@ -392,10 +394,6 @@ pub fn is_open() -> bool {
     OPEN.with(Cell::get)
 }
 
-pub fn set_suppress_resign(suppress: bool) {
-    SUPPRESS_RESIGN.set(suppress);
-}
-
 /// Spin a busy wheel centered over the well (on top of the preview), or take it away.
 pub fn set_busy(busy: bool) {
     if !busy {
@@ -453,6 +451,21 @@ pub fn summon(data: LaunchData) {
         return;
     }
     reveal(data);
+}
+
+/// Close an open card, or open it under the menu bar icon of `tray` (at the pointer when the
+/// icon has no frame).
+pub fn toggle_under_icon(data: LaunchData, tray: &mac_ui::tray_icon::TrayIcon) {
+    if is_open() {
+        hide();
+        return;
+    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
+    reveal(data);
+    ICON_FRAME.set(None);
 }
 
 pub fn reveal(data: LaunchData) {
@@ -553,13 +566,11 @@ fn hide() {
     if !is_open() && !window_is_visible() {
         return;
     }
-    SUPPRESS_RESIGN.with(|flag| flag.set(true));
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
             window.orderOut(None);
         }
     });
-    SUPPRESS_RESIGN.with(|flag| flag.set(false));
     OPEN.set(false);
 }
 
@@ -577,6 +588,9 @@ fn ensure_window(mtm: MainThreadMarker) {
     }
     let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(WIDTH, 420.0));
     panel::configure_floating(&window);
+    // The card stays open, floating over other apps' windows, until ✕, Esc, the hotkey or the
+    // menu bar icon closes it. (NSWindow's default; said here because the card relies on it.)
+    window.setHidesOnDeactivate(false);
     // Chips, header buttons and the find bar are added, removed and hidden on every layout.
     // Recalculating the key-view loop keeps Tab and Shift-Tab in on-screen order (top left to
     // bottom right) over the views that are actually shown.
@@ -585,6 +599,16 @@ fn ensure_window(mtm: MainThreadMarker) {
     let delegate = LauncherDelegate::new(mtm);
     // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like WINDOW.
     unsafe { panel::set_delegate(&window, &*delegate) };
+    // SAFETY: the selector is the delegate's `applicationDidResignActive:`, which takes the
+    // notification. DELEGATE keeps the observer alive for the rest of the process.
+    unsafe {
+        NSNotificationCenter::defaultCenter().addObserver_selector_name_object(
+            &delegate,
+            sel!(applicationDidResignActive:),
+            Some(NSApplicationDidResignActiveNotification),
+            None,
+        );
+    }
     DELEGATE.with(|slot| slot.replace(Some(delegate)));
 
     // The content view takes drops (mac_ui::drop). Everything on the card is inside it, so a
@@ -916,6 +940,11 @@ const NEAR_CURSOR: panel::NearCursor = panel::NearCursor {
     lead_x: 36.0,
     gap_y: 12.0,
 };
+/// Opened from the menu bar icon, it opens under the icon instead, like a menu.
+const UNDER_ICON: panel::UnderIcon = panel::UnderIcon {
+    margin: 8.0,
+    gap_y: 6.0,
+};
 
 fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
     WINDOW.with(|slot| {
@@ -925,7 +954,10 @@ fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
         };
         let size = NSSize::new(WIDTH, height);
         let frame = if fresh {
-            panel::near_cursor(mtm, size, &NEAR_CURSOR)
+            match ICON_FRAME.get() {
+                Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),
+                None => panel::near_cursor(mtm, size, &NEAR_CURSOR),
+            }
         } else {
             panel::keep_top_left(window.frame(), size)
         };
@@ -1017,6 +1049,19 @@ fn show_reveal_cover(shown: bool) {
             raise_view(&cover.root);
         }
     });
+}
+
+/// Blur revealed content again (the app is no longer active). The next click reveals it.
+fn mask_again() {
+    if !is_open() || !MASKS.with(Cell::get) || !REVEALED.with(Cell::get) {
+        return;
+    }
+    REVEALED.set(false);
+    layout(false);
+    // As in `present`: the blur, then `<` `>` and the well icons, on top.
+    show_reveal_cover(true);
+    raise_history_nav();
+    raise_content_actions();
 }
 
 fn well_is_masked() -> bool {
@@ -2049,9 +2094,7 @@ fn pop_overflow() {
     let Some(button) = button else {
         return;
     };
-    SUPPRESS_RESIGN.set(true);
     menu.popUpMenuPositioningItem_atLocation_inView(None, NSPoint::new(0.0, 0.0), Some(&*button));
-    SUPPRESS_RESIGN.set(false);
     focus_card();
 }
 

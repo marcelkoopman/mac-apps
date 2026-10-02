@@ -16,7 +16,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Links**: *Visit* opens the URL in your browser. The card loads the page title and preview image, or for YouTube the thumbnail and title. Only the link on the card shown is fetched, never history entries around it. No preview is fetched for a URL with `user:password@`, for local or LAN hosts (`localhost`, `*.local`, private and loopback addresses, single-label names) or for token-like query parameters (`token=`, `code=`, signatures, keys, JWTs); the page's preview image gets the same checks. Only 2xx responses up to 5 MB are used. *Visit* opens only `http`/`https` links (through `NSWorkspace`), with `user:password@` stripped.
 - **Copy / Save**: copy the current view back to the clipboard, or save it through a save panel. The file extension follows the content.
 - **Choose file**: show a local text file (up to 8 MB) on the card instead of the clipboard.
-- **Drop**: drop one text file, or text, on the card to show it the same way (up to 8 MB, never added to history). The card closes when another app becomes active, so drag with ⌘ held from a background Finder window, or press the hotkey while dragging.
+- **Drop**: drop one text file, or text, on the card to show it the same way (up to 8 MB, never added to history). The card stays open while you work in another app, so open it, then drag from Finder, Safari or Notes onto it.
 - **History**: the last 20 copies (text and images), kept in memory only. Step through them with `<` / `>`, or use the menu bar *History* submenu.
 
 ## Privacy
@@ -24,15 +24,15 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Masked content**: the card blurs copied content until you click it.
 - **Sensitivity labels**: the meta line flags **credential**, **PII** and **financial** content, using [leakguard](https://crates.io/crates/leakguard) (tokens, keys, email, IBAN, cards, and more) and [redact-core](https://crates.io/crates/redact-core) with Dutch field recognizers (labeled or tabular fields such as names and salaries, NL phone numbers, BSN). Copycraft only labels content. It never rewrites it.
 - **Wipe**: the *Wipe* button clears history, caches, the card and the pasteboard. Copied text and image buffers are zeroized when they are dropped (`zeroize`).
-- **Card closes on focus loss**: the card hides as soon as it loses focus.
+- **Masked again on focus loss**: the card stays open (floating) when another app becomes active, but content you revealed is blurred again. It closes with ✕, Esc, the hotkey or a click on the menu bar icon.
 
 ## Usage
 
 | Input | Action |
 | --- | --- |
-| ⌃⌥⌘C | Open the card at the cursor |
-| Left-click the menu bar icon | Open the card |
-| Menu bar menu | Hotkey hint, *History*, version, *Quit* |
+| ⌃⌥⌘C | Open the card at the cursor, or close it |
+| Click the menu bar icon | Open the card under the icon, or close it |
+| Right-click the menu bar icon | Hotkey hint, *History*, version, *Quit* |
 | Type any text, or `/` | Search actions, history and appearance |
 | ← → ↑ ↓, Return | Move the selection, run the selected action |
 | ⌘F | Find in the revealed content. Return / ⇧Return jump to the next / previous match |

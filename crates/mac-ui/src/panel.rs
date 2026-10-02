@@ -139,6 +139,47 @@ pub fn frame_near(point: NSPoint, visible: NSRect, size: NSSize, place: &NearCur
     NSRect::new(NSPoint::new(x, y), size)
 }
 
+/// How [`under_icon`] places a panel under a menu bar icon.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UnderIcon {
+    /// Minimum distance to the edges of the visible screen area.
+    pub margin: f64,
+    /// Vertical gap between the menu bar and the panel.
+    pub gap_y: f64,
+}
+
+/// Screen frame of the menu bar icon of `tray` (the status item button's window), if it is on
+/// screen.
+pub fn tray_icon_frame(mtm: MainThreadMarker, tray: &tray_icon::TrayIcon) -> Option<NSRect> {
+    let button = tray.ns_status_item()?.button(mtm)?;
+    Some(button.window()?.frame())
+}
+
+/// Frame of `size` under `icon` (screen coordinates, see [`tray_icon_frame`]) on the screen
+/// that shows it (see [`frame_under`]).
+pub fn under_icon(mtm: MainThreadMarker, icon: NSRect, size: NSSize, place: &UnderIcon) -> NSRect {
+    let middle = NSPoint::new(
+        icon.origin.x + icon.size.width / 2.0,
+        icon.origin.y + icon.size.height / 2.0,
+    );
+    let visible = screen_at(mtm, middle)
+        .map(|screen| screen.visibleFrame())
+        .unwrap_or_else(|| NSRect::new(NSPoint::new(0.0, 0.0), FALLBACK_SCREEN));
+    frame_under(icon, visible, size, place)
+}
+
+/// Frame of `size` with its left edge at `icon`'s and its top `place.gap_y` under the menu bar
+/// (the lower of the icon's bottom and the top of `visible`), kept inside `visible` with
+/// `place.margin` to spare where it fits.
+pub fn frame_under(icon: NSRect, visible: NSRect, size: NSSize, place: &UnderIcon) -> NSRect {
+    let min_x = visible.origin.x + place.margin;
+    let max_x = visible.origin.x + visible.size.width - size.width - place.margin;
+    let x = clamp_axis(icon.origin.x, min_x, max_x);
+    let top = icon.origin.y.min(visible.origin.y + visible.size.height) - place.gap_y;
+    let y = (top - size.height).max(visible.origin.y + place.margin);
+    NSRect::new(NSPoint::new(x, y), size)
+}
+
 /// `current` resized to `size` with its left and top edges kept in place.
 pub fn keep_top_left(current: NSRect, size: NSSize) -> NSRect {
     let top = current.origin.y + current.size.height;
@@ -187,6 +228,51 @@ mod tests {
         assert_eq!(left.origin.x, 8.0);
         let right = frame_near(NSPoint::new(1440.0, 100.0), screen(), SIZE, &PLACE);
         assert_eq!(right.origin.x, 1440.0 - 440.0 - 8.0);
+    }
+
+    const UNDER: UnderIcon = UnderIcon {
+        margin: 8.0,
+        gap_y: 6.0,
+    };
+
+    /// The visible frame under a 24 pt menu bar on a 1440x900 screen.
+    fn below_menu_bar() -> NSRect {
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 876.0))
+    }
+
+    fn icon_at(x: f64) -> NSRect {
+        NSRect::new(NSPoint::new(x, 876.0), NSSize::new(30.0, 24.0))
+    }
+
+    #[test]
+    fn opens_under_the_icon_left_aligned() {
+        let frame = frame_under(icon_at(600.0), below_menu_bar(), SIZE, &UNDER);
+        assert_eq!(frame.origin, NSPoint::new(600.0, 876.0 - 6.0 - 300.0));
+        assert_eq!(frame.size, SIZE);
+    }
+
+    #[test]
+    fn under_an_icon_near_the_right_edge_stays_on_screen() {
+        let frame = frame_under(icon_at(1400.0), below_menu_bar(), SIZE, &UNDER);
+        assert_eq!(frame.origin.x, 1440.0 - 440.0 - 8.0);
+    }
+
+    #[test]
+    fn under_a_hidden_menu_bar_starts_at_the_screen_top() {
+        // With an auto-hidden menu bar the visible frame reaches the top of the screen and the
+        // icon's window can sit above it.
+        let visible = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 900.0));
+        let icon = NSRect::new(NSPoint::new(600.0, 900.0), NSSize::new(30.0, 24.0));
+        let frame = frame_under(icon, visible, SIZE, &UNDER);
+        assert_eq!(frame.origin.y, 900.0 - 6.0 - 300.0);
+    }
+
+    #[test]
+    fn under_the_icon_on_a_short_screen_keeps_the_bottom_margin() {
+        let visible = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1440.0, 200.0));
+        let icon = NSRect::new(NSPoint::new(600.0, 200.0), NSSize::new(30.0, 24.0));
+        let frame = frame_under(icon, visible, SIZE, &UNDER);
+        assert_eq!(frame.origin.y, 8.0);
     }
 
     #[test]

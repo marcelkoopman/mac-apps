@@ -52,6 +52,16 @@ pub fn summon(data: LaunchData) {
     }
 }
 
+/// The menu bar icon's click: close an open card, or open it under the icon.
+pub fn toggle_under_icon(data: LaunchData, tray: &mac_ui::tray_icon::TrayIcon) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::toggle_under_icon(data, tray);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (data, tray);
+    }
+}
+
 pub fn reveal(data: LaunchData) {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::reveal(data);
@@ -78,13 +88,6 @@ pub fn sync_with_card(data: LaunchData, card: crate::commands::WorkCard) {
     {
         let _ = (data, card);
     }
-}
-
-pub fn set_suppress_resign(suppress: bool) {
-    #[cfg(target_os = "macos")]
-    crate::macos_launcher::set_suppress_resign(suppress);
-    #[cfg(not(target_os = "macos"))]
-    let _ = suppress;
 }
 
 /// Show (or hide) the busy spinner over the card while a save runs.

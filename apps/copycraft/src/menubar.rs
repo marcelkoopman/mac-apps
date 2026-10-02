@@ -181,7 +181,7 @@ impl ApplicationHandler<UserEvent> for App {
                 ..
             } = event
             {
-                self.reveal_popup();
+                self.toggle_popup_under_icon();
             }
         }
 
@@ -263,13 +263,13 @@ impl App {
         launcher::summon(self.launch_for_popup());
     }
 
-    fn reveal_popup(&mut self) {
+    fn toggle_popup_under_icon(&mut self) {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
             self.opened = None;
             self.full_card = None;
         }
-        launcher::reveal(self.launch_for_popup());
+        launcher::toggle_under_icon(self.launch_for_popup(), &self.tray);
     }
 
     fn refresh_popup(&mut self) {
@@ -375,10 +375,7 @@ impl App {
     fn choose_file(&mut self) {
         #[cfg(target_os = "macos")]
         {
-            launcher::set_suppress_resign(true);
-            let path = crate::macos_open::choose_path();
-            launcher::set_suppress_resign(false);
-            if let Some(path) = path {
+            if let Some(path) = crate::macos_open::choose_path() {
                 self.show_source(crate::open_file::load(&path));
             }
             launcher::order_front();
@@ -558,9 +555,7 @@ impl App {
             if self.saving.is_some() {
                 return;
             }
-            launcher::set_suppress_resign(true);
             let started = self.start_save();
-            launcher::set_suppress_resign(false);
             launcher::order_front();
             if let Err(e) = started {
                 log_save_failure(&format!("{e:#}"));
