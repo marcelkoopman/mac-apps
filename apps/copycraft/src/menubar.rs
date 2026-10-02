@@ -31,6 +31,8 @@ const SPINNER_DELAY: Duration = Duration::from_millis(180);
 /// Copies at least this long are classified on a background thread right after the copy, so the
 /// card opens without scanning them first.
 const PREWARM_LEN: usize = 64 * 1024;
+/// Card title for text dropped on it (a dropped file shows its name).
+const DROPPED_TEXT: &str = "Dropped text";
 
 struct App {
     tray: TrayIcon,
@@ -133,6 +135,14 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
+            UserEvent::DroppedFile(path) => {
+                self.show_source(crate::open_file::load(&path));
+                launcher::order_front();
+            }
+            UserEvent::DroppedText(text) => {
+                self.show_source(crate::open_file::from_text(DROPPED_TEXT, text));
+                launcher::order_front();
+            }
         }
     }
 

@@ -8,6 +8,8 @@ pub const MAX_FILE_BYTES: u64 = 8_000_000;
 const NOT_TEXT: &str = "This file is not text";
 const TOO_LARGE: &str = "File is larger than 8 MB";
 const UNREADABLE: &str = "Can't read this file";
+const TEXT_TOO_LARGE: &str = "Text is larger than 8 MB";
+const EMPTY_TEXT: &str = "The dropped text is empty";
 
 /// A file the card is showing instead of the clipboard.
 #[derive(Clone)]
@@ -45,6 +47,22 @@ pub fn load(path: &Path) -> OpenedFile {
         },
         Classified::NotText => noted(name, NOT_TEXT),
         Classified::TooLarge => noted(name, TOO_LARGE),
+    }
+}
+
+/// Dropped text, shown on the card like a file called `name`. It has the file size limit.
+pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
+    let name = name.to_string();
+    if text.len() as u64 > MAX_FILE_BYTES {
+        return noted(name, TEXT_TOO_LARGE);
+    }
+    if text.trim().is_empty() {
+        return noted(name, EMPTY_TEXT);
+    }
+    OpenedFile {
+        name,
+        text: Some(text),
+        note: None,
     }
 }
 
@@ -135,7 +153,9 @@ pub fn save_name(name: &str, extension: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Classified, classify, decode, load, save_name};
+    use zeroize::Zeroizing;
+
+    use super::{Classified, MAX_FILE_BYTES, classify, decode, from_text, load, save_name};
 
     #[test]
     fn reads_utf8_and_a_bom() {
@@ -188,6 +208,28 @@ mod tests {
         assert_eq!(opened.name, path.file_name().unwrap().to_str().unwrap());
         assert_eq!(opened.text.unwrap().as_str(), "hello file\n");
         assert!(opened.note.is_none());
+    }
+
+    #[test]
+    fn dropped_text_is_shown_up_to_the_file_limit() {
+        let opened = from_text("Dropped text", Zeroizing::new("{\"a\": 1}".to_string()));
+        assert_eq!(opened.name, "Dropped text");
+        assert_eq!(opened.text.unwrap().as_str(), "{\"a\": 1}");
+        assert!(opened.note.is_none());
+
+        let limit = usize::try_from(MAX_FILE_BYTES).unwrap();
+        let at_limit = from_text("Dropped text", Zeroizing::new("a".repeat(limit)));
+        assert!(at_limit.text.is_some());
+        let over = from_text("Dropped text", Zeroizing::new("a".repeat(limit + 1)));
+        assert!(over.text.is_none());
+        assert_eq!(over.note.as_deref(), Some("Text is larger than 8 MB"));
+    }
+
+    #[test]
+    fn blank_dropped_text_gets_a_note() {
+        let opened = from_text("Dropped text", Zeroizing::new(" \n\t".to_string()));
+        assert!(opened.text.is_none());
+        assert_eq!(opened.note.as_deref(), Some("The dropped text is empty"));
     }
 
     #[test]

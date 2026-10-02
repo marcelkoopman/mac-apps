@@ -16,6 +16,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Links**: *Visit* opens the URL in your browser. The card loads the page title and preview image, or for YouTube the thumbnail and title. Only the link on the card shown is fetched, never history entries around it. No preview is fetched for a URL with `user:password@`, for local or LAN hosts (`localhost`, `*.local`, private and loopback addresses, single-label names) or for token-like query parameters (`token=`, `code=`, signatures, keys, JWTs); the page's preview image gets the same checks. Only 2xx responses up to 5 MB are used. *Visit* opens only `http`/`https` links (through `NSWorkspace`), with `user:password@` stripped.
 - **Copy / Save**: copy the current view back to the clipboard, or save it through a save panel. The file extension follows the content.
 - **Choose file**: show a local text file (up to 8 MB) on the card instead of the clipboard.
+- **Drop**: drop one text file, or text, on the card to show it the same way (up to 8 MB, never added to history). The card closes when another app becomes active, so drag with ⌘ held from a background Finder window, or press the hotkey while dragging.
 - **History**: the last 20 copies (text and images), kept in memory only. Step through them with `<` / `>`, or use the menu bar *History* submenu.
 
 ## Privacy

@@ -65,6 +65,13 @@ const PANEL_RADIUS: f64 = 16.0;
 /// corners are concentric with the panel's: `PANEL_RADIUS - PAD`, clamped at
 /// [`corners::MIN_RADIUS`].
 const WELL_RADIUS: f64 = corners::concentric_radius(PANEL_RADIUS, PAD);
+/// What the card takes when it is dropped on it: one text file of any kind (plain, source code,
+/// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`), or dropped text. No pictures:
+/// those come from the clipboard only.
+const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
+    file_types: &["public.text"],
+    text: true,
+};
 
 #[link(name = "CoreImage", kind = "framework")]
 unsafe extern "C" {
@@ -552,6 +559,17 @@ fn ensure_window(mtm: MainThreadMarker) {
     unsafe { panel::set_delegate(&window, &*delegate) };
     DELEGATE.with(|slot| slot.replace(Some(delegate)));
 
+    // The content view takes drops (mac_ui::drop). Everything on the card is inside it, so a
+    // drag anywhere over the card reaches it unless an editable text view takes it first.
+    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, |dropped| {
+        launcher::emit(match dropped {
+            mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
+            mac_ui::drop::Dropped::Text(text) => {
+                UserEvent::DroppedText(zeroize::Zeroizing::new(text))
+            }
+        });
+    });
+    window.setContentView(Some(&drop_target));
     let window_view = window.contentView().expect("content view");
     window_view.setWantsLayer(true);
     window_view.setLayerUsesCoreImageFilters(true);

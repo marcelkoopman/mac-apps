@@ -15,6 +15,10 @@ pub enum UserEvent {
     SaveFinished(Result<(), String>),
     /// The "Show all" thread built the whole-text card.
     FullCardReady(Box<FullCard>),
+    /// A file was dropped on the card.
+    DroppedFile(std::path::PathBuf),
+    /// Text was dropped on the card. Zeroized when the event is dropped.
+    DroppedText(zeroize::Zeroizing<String>),
 }
 
 /// The whole-text ("Show all") card for one copied item and view.
