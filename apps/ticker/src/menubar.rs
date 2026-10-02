@@ -5,7 +5,7 @@ use mac_ui::tray_icon::{
 use mac_ui::winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
 };
 use polars::prelude::*;
 use std::cell::RefCell;
@@ -69,8 +69,8 @@ struct App {
     /// keep it, so rows stay clickable while a poll refreshes the open menu.
     rows_generation: u64,
     next_check: SystemTime,
-    normal_icon: Icon,
-    alert_icon: Icon,
+    /// Normal template icon and the coloured alert icon.
+    glyphs: mac_ui::tray::Glyphs,
     config_loaded: bool,
     config_error: Option<String>,
 }
@@ -135,13 +135,7 @@ impl ApplicationHandler<UserEvent> for App {
             .duration_since(SystemTime::now())
             .ok()
             .map(|d| Instant::now() + d);
-        match (retry_at, poll_at) {
-            (Some(a), Some(b)) => event_loop.set_control_flow(ControlFlow::WaitUntil(a.min(b))),
-            (Some(t), None) | (None, Some(t)) => {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(t))
-            }
-            (None, None) => event_loop.set_control_flow(ControlFlow::Wait),
-        }
+        event_loop.set_control_flow(mac_ui::wake::control_flow([retry_at, poll_at]));
     }
 }
 
@@ -588,12 +582,12 @@ impl App {
             tray.set_menu(Some(Box::new(menu)));
             // The normal icon is a template that follows the menu bar colours. The alert icon
             // keeps its own colours (red badge), so an alert still stands out.
-            let (icon, template) = if self.has_alert() {
-                (self.alert_icon.clone(), false)
+            let glyph = if self.has_alert() {
+                mac_ui::tray::Glyph::Alert
             } else {
-                (self.normal_icon.clone(), true)
+                mac_ui::tray::Glyph::Normal
             };
-            if let Err(e) = mac_ui::tray::set_icon(&tray, icon, template) {
+            if let Err(e) = self.glyphs.show(&tray, glyph) {
                 log_message(&format!("menu: setting the menubar icon failed: {e}"));
             }
             tray.set_title(Some(&title));
@@ -733,35 +727,23 @@ fn bundle_assets_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")
 }
 
-fn load_icon(name: &str) -> Result<Icon, Box<dyn std::error::Error>> {
-    let path = bundle_assets_dir().join(name);
-    Ok(mac_ui::icon::from_image_file(&path)?)
-}
-
-fn fallback_icon(r: u8, g: u8, b: u8) -> Result<Icon, mac_ui::icon::IconError> {
-    Ok(mac_ui::icon::Canvas::filled(16, 16, [r, g, b, 255])?.into_icon()?)
+fn log_icon_fallback(name: &str, e: &mac_ui::icon::IconError) {
+    log_message(&format!(
+        "menubar: icon {name} not loaded ({e}); using a plain one"
+    ));
 }
 
 /// The bundled icon `name` as a template glyph (its light parts, see
 /// `mac_ui::icon::template_mask`), or a plain square when it cannot be loaded.
 fn load_template_icon_or(name: &str) -> Result<Icon, mac_ui::icon::IconError> {
     let path = bundle_assets_dir().join(name);
-    mac_ui::icon::template_from_image_file(&path).or_else(|e| {
-        log_message(&format!(
-            "menubar: icon {name} not loaded ({e}); using a plain one"
-        ));
-        fallback_icon(0, 0, 0)
-    })
+    mac_ui::icon::template_from_image_file_or_plain(&path, |e| log_icon_fallback(name, e))
 }
 
 /// The bundled icon `name`, or a plain square in the given color when it cannot be loaded.
-fn load_icon_or(name: &str, [r, g, b]: [u8; 3]) -> Result<Icon, mac_ui::icon::IconError> {
-    load_icon(name).or_else(|e| {
-        log_message(&format!(
-            "menubar: icon {name} not loaded ({e}); using a plain one"
-        ));
-        fallback_icon(r, g, b)
-    })
+fn load_icon_or(name: &str, rgb: [u8; 3]) -> Result<Icon, mac_ui::icon::IconError> {
+    let path = bundle_assets_dir().join(name);
+    mac_ui::icon::from_image_file_or_plain(&path, rgb, |e| log_icon_fallback(name, e))
 }
 
 pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
@@ -806,8 +788,11 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         watch_save_blocked: false,
         rows_generation: 0,
         next_check: SystemTime::now(),
-        normal_icon,
-        alert_icon,
+        glyphs: mac_ui::tray::Glyphs {
+            normal: normal_icon,
+            flash: None,
+            alert: Some(alert_icon),
+        },
         config_loaded: false,
         config_error: None,
     };

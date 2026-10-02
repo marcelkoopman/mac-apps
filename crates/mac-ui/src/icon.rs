@@ -281,6 +281,36 @@ pub fn template_rgba_from_image_file(path: &Path) -> Result<(Vec<u8>, u32, u32),
     Ok(trim_clear(template_mask(img.as_raw()), w, h, pad))
 }
 
+/// A 16×16 square in `rgb`, for when an icon file cannot be loaded.
+pub fn plain_square([r, g, b]: [u8; 3]) -> Result<Icon, IconError> {
+    Ok(Canvas::filled(16, 16, [r, g, b, 255])?.into_icon()?)
+}
+
+/// [`template_from_image_file`], or a black [`plain_square`] (also usable as a template) when
+/// the file cannot be loaded. `on_fallback` gets the load error first, e.g. to log it.
+pub fn template_from_image_file_or_plain(
+    path: &Path,
+    on_fallback: impl FnOnce(&IconError),
+) -> Result<Icon, IconError> {
+    template_from_image_file(path).or_else(|e| {
+        on_fallback(&e);
+        plain_square([0, 0, 0])
+    })
+}
+
+/// [`from_image_file`], or a [`plain_square`] in `rgb` when the file cannot be loaded.
+/// `on_fallback` gets the load error first.
+pub fn from_image_file_or_plain(
+    path: &Path,
+    rgb: [u8; 3],
+    on_fallback: impl FnOnce(&IconError),
+) -> Result<Icon, IconError> {
+    from_image_file(path).or_else(|e| {
+        on_fallback(&e);
+        plain_square(rgb)
+    })
+}
+
 /// SF Symbol by name, or `None` before macOS 11 or for an unknown symbol.
 #[cfg(target_os = "macos")]
 pub fn system_symbol(
@@ -304,9 +334,19 @@ pub fn system_symbol(
 #[cfg(test)]
 mod tests {
     use super::{
-        Canvas, IconError, TEMPLATE_DARK, TEMPLATE_LIGHT, from_image_file, pixel_count,
-        template_from_image_file, template_mask, trim_clear,
+        Canvas, IconError, TEMPLATE_DARK, TEMPLATE_LIGHT, from_image_file,
+        from_image_file_or_plain, pixel_count, template_from_image_file,
+        template_from_image_file_or_plain, template_mask, trim_clear,
     };
+
+    #[test]
+    fn missing_icon_files_fall_back_to_a_plain_square_and_report_why() {
+        let missing = std::path::Path::new("/nonexistent/mac-ui-icon.png");
+        let mut reported = 0;
+        assert!(template_from_image_file_or_plain(missing, |_| reported += 1).is_ok());
+        assert!(from_image_file_or_plain(missing, [255, 80, 80], |_| reported += 1).is_ok());
+        assert_eq!(reported, 2);
+    }
 
     #[test]
     fn trim_clear_crops_to_the_glyph_with_padding() {

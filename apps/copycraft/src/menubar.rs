@@ -8,13 +8,13 @@ use zeroize::Zeroizing;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use mac_ui::tray;
 use mac_ui::tray_icon::{
-    Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
+    MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 use mac_ui::winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop},
 };
 
 use crate::appearance;
@@ -60,8 +60,9 @@ struct App {
     /// The card spinner is showing (some background work ran past [`SPINNER_DELAY`]).
     spinner_on: bool,
     /// The short blink of the menu bar icon after a copy, and its two template glyphs.
-    blink: icon::Blink,
-    icons: MenuIcons,
+    blink: tray::Blink,
+    /// The glyph and its blink frame, both templates, built once.
+    icons: tray::Glyphs,
     _hotkeys: GlobalHotKeyManager,
     format_hotkey_id: u32,
 }
@@ -82,12 +83,6 @@ impl Background {
     fn elapsed_ms(self) -> u128 {
         self.started.elapsed().as_millis()
     }
-}
-
-/// The menu bar glyph and its blink frame, both templates, built once.
-struct MenuIcons {
-    normal: Icon,
-    flash: Icon,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -186,11 +181,9 @@ impl ApplicationHandler<UserEvent> for App {
             let data = self.current_launch_data();
             self.sync_popup(data);
         }
-        let mut wake = self.spin_slow_work(now);
-        if let Some(blink_wake) = self.show_blink(now) {
-            wake = wake.min(blink_wake);
-        }
-        event_loop.set_control_flow(ControlFlow::WaitUntil(wake));
+        let wake = self.spin_slow_work(now);
+        let blink_wake = self.show_blink(now);
+        event_loop.set_control_flow(mac_ui::wake::control_flow([Some(wake), blink_wake]));
     }
 }
 
@@ -996,14 +989,10 @@ impl App {
     /// event loop again; `None` when it is idle.
     fn show_blink(&mut self, now: Instant) -> Option<Instant> {
         let step = self.blink.tick(now);
-        if let Some(glyph) = step.swap {
-            let icon = match glyph {
-                icon::Glyph::Normal => self.icons.normal.clone(),
-                icon::Glyph::Flash => self.icons.flash.clone(),
-            };
-            if let Err(e) = tray::set_icon(&self.tray, icon, true) {
-                eprintln!("menu bar icon blink failed: {e}");
-            }
+        if let Some(glyph) = step.swap
+            && let Err(e) = self.icons.show(&self.tray, glyph)
+        {
+            eprintln!("menu bar icon blink failed: {e}");
         }
         step.wake
     }
@@ -1155,9 +1144,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.
-    let icons = MenuIcons {
+    let icons = tray::Glyphs {
         normal: icon::menu_icon()?,
-        flash: icon::flash_icon()?,
+        flash: Some(icon::flash_icon()?),
+        alert: None,
     };
     let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icons.normal.clone(), true)
         .with_menu(Box::new(status_menu(&[])))
@@ -1188,7 +1178,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         loading_all: None,
         full_card: None,
         spinner_on: false,
-        blink: icon::Blink::default(),
+        blink: tray::Blink::default(),
         icons,
         _hotkeys: hotkeys,
         format_hotkey_id,
