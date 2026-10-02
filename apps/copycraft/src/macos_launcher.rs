@@ -436,6 +436,19 @@ fn place_spinner(well_frame: NSRect) {
     });
 }
 
+/// Hand a drop on the card or the menu bar icon to the app, which shows it on the card.
+fn emit_dropped(dropped: mac_ui::drop::Dropped) {
+    launcher::emit(match dropped {
+        mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
+        mac_ui::drop::Dropped::Text(text) => UserEvent::DroppedText(zeroize::Zeroizing::new(text)),
+    });
+}
+
+/// The menu bar icon takes the same drops as the card, and opens the card with them.
+pub fn take_tray_drops(tray: &mac_ui::tray_icon::TrayIcon) {
+    mac_ui::drop::onto_tray(tray, DROP_ACCEPT, DROP_HIGHLIGHT.announcement, emit_dropped);
+}
+
 pub fn order_front() {
     if !is_open() {
         return;
@@ -589,14 +602,7 @@ fn ensure_window(mtm: MainThreadMarker) {
 
     // The content view takes drops (mac_ui::drop). Everything on the card is inside it, so a
     // drag anywhere over the card reaches it unless an editable text view takes it first.
-    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(DROP_HIGHLIGHT), |dropped| {
-        launcher::emit(match dropped {
-            mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
-            mac_ui::drop::Dropped::Text(text) => {
-                UserEvent::DroppedText(zeroize::Zeroizing::new(text))
-            }
-        });
-    });
+    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(DROP_HIGHLIGHT), emit_dropped);
     window.setContentView(Some(&drop_target));
     let window_view = window.contentView().expect("content view");
     window_view.setWantsLayer(true);

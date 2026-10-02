@@ -10,9 +10,10 @@
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).
   Not needed: NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),
   Vision OCR, NSUserDefaults, opening a URL in the browser, and drag and drop. A file
-  dropped on the card is read like a chosen file: mac_ui::drop reads its URL from the
-  drag pasteboard (readObjectsForClasses), which extends the sandbox to that one file
-  for the rest of the launch. No security scope to start or stop.
+  dropped on the card or the menu bar icon is read like a chosen file: mac_ui::drop
+  reads its URL from the drag pasteboard (readObjectsForClasses), which extends the
+  sandbox to that one file for the rest of the launch. No security scope to start or
+  stop.
 -->
 <plist version="1.0">
 <dict>
