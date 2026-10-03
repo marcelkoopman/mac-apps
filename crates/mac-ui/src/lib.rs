@@ -24,9 +24,6 @@
 //!   on every platform.
 //! - `blur`: `blur`, a `CIGaussianBlur` content filter on a view.
 //! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
-//! - `link`: `link`, link previews with LinkPresentation: an `LPMetadataProvider` fetch of an
-//!   `http(s)` URL with a timeout and cancel, and an `LPLinkView` labelled for VoiceOver. Its URL
-//!   check (`link::fetchable`) builds on every platform.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
@@ -67,8 +64,6 @@ pub mod image;
 pub mod keys;
 #[cfg(target_os = "macos")]
 pub mod layer;
-#[cfg(feature = "link")]
-pub mod link;
 #[cfg(all(target_os = "macos", feature = "notify"))]
 pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]

@@ -40,15 +40,6 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNNotificationTrigger",
     "UNUserNotificationCenter",
 ] }
-# mac-ui `link` only: link previews (LPMetadataProvider fetches the metadata, LPLinkView shows it).
-objc2-link-presentation = { version = "0.3", default-features = false, features = [
-    "std",
-    "block2",
-    "objc2-app-kit",
-    "LPLinkMetadata",
-    "LPLinkView",
-    "LPMetadataProvider",
-] }
 # mac-ui `file_panel` only: `UTType`s for `NSSavePanel::setAllowedContentTypes`.
 objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTType"] }
 tray-icon = "0.26"
