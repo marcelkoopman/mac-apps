@@ -6,7 +6,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 ## Features
 
-- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. Each URL is fetched once per poll (assets that share a URL, like petrol and diesel, share the request) and tried up to 3 times; until a fetch succeeds the menu keeps the last known price. Failed attempts are written to the debug log. Redirects are followed at most 3 times and only to `https://` URLs.
+- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. No polls run while the Mac sleeps; 5 seconds after it wakes up a poll runs right away (instead of waiting out the rest of the interval). Each URL is fetched once per poll (assets that share a URL, like petrol and diesel, share the request) and tried up to 3 times; until a fetch succeeds the menu keeps the last known price. Failed attempts are written to the debug log. Redirects are followed at most 3 times and only to `https://` URLs.
 - **Freshness**: each row's second line says when its price was last fetched (`updated 14:05`). A price that failed 2 polls in a row or is older than 15 minutes is stale: its row turns grey with `⚠︎` in front, and so does the menu bar title when it shows that asset.
 - **Day change**: each menu row shows the price with its unit and the change since the day's first price, e.g. `▲ €217,00 · +0.33% · updated 14:05`. That first price is stored per local calendar day. A move under 0.05% of the earlier price counts as flat and shows no arrow.
 - **Menu bar asset**: click a price row to show that asset in the menu bar. The choice is remembered.

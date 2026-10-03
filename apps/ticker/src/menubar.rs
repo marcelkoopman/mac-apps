@@ -32,6 +32,8 @@ use crate::prices::{self, PriceRow};
 use crate::watch_ui::{self, WatchUIBuilder};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// After the Mac wakes, the next poll comes this soon (Wi-Fi needs a moment to reconnect).
+const POLL_AFTER_WAKE: Duration = Duration::from_secs(5);
 /// A dialog item clicked while the menu is still tracking is retried this often ...
 const MENU_RETRY: Duration = Duration::from_millis(50);
 /// ... and opened anyway after this long.
@@ -55,6 +57,9 @@ enum UserEvent {
         /// One row per asset (NaN price where the fetch failed).
         rows: Vec<PriceRow>,
     },
+    /// The Mac goes to sleep (`true`) or woke up (`false`). Only sent on macOS.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Sleep(bool),
 }
 
 struct App {
@@ -87,6 +92,8 @@ struct App {
     glyphs: mac_ui::tray::Glyphs,
     config_loaded: bool,
     config_error: Option<String>,
+    /// Between the will-sleep and did-wake notifications: no polls.
+    asleep: bool,
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -107,6 +114,18 @@ impl ApplicationHandler<UserEvent> for App {
                     self.spawn_fetch(next);
                 }
             }
+            UserEvent::Sleep(true) => {
+                log_message("power: going to sleep; polling paused");
+                self.asleep = true;
+            }
+            UserEvent::Sleep(false) => {
+                log_message(&format!(
+                    "power: woke up; polling in {}s",
+                    POLL_AFTER_WAKE.as_secs()
+                ));
+                self.asleep = false;
+                self.next_check = SystemTime::now() + POLL_AFTER_WAKE;
+            }
         }
     }
 
@@ -126,14 +145,16 @@ impl ApplicationHandler<UserEvent> for App {
 
         let retry_at = self.handle_pending_menu(event_loop);
 
-        if self.config.is_some() && SystemTime::now() >= self.next_check {
+        if self.config.is_some() && !self.asleep && SystemTime::now() >= self.next_check {
             self.poll_prices();
             self.schedule_next_poll();
         }
+        // Asleep: no timer; the did-wake event schedules the next poll.
         let poll_at = self
             .next_check
             .duration_since(SystemTime::now())
             .ok()
+            .filter(|_| !self.asleep)
             .map(|d| Instant::now() + d);
         event_loop.set_control_flow(mac_ui::wake::control_flow([retry_at, poll_at]));
     }
@@ -919,6 +940,16 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         },
         config_loaded: false,
         config_error: None,
+        asleep: false,
+    };
+    #[cfg(target_os = "macos")]
+    let _sleep_wake = {
+        let proxy = event_loop.create_proxy();
+        mac_ui::wake::observe_sleep_wake(move |power| {
+            let asleep = power == mac_ui::wake::Power::WillSleep;
+            // Fails only when the event loop has already exited (app quitting).
+            let _ = proxy.send_event(UserEvent::Sleep(asleep));
+        })
     };
     log_message("menubar: event loop starting");
     event_loop.run_app(&mut app)?;

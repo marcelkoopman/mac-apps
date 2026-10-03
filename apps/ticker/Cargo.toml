@@ -30,7 +30,8 @@ dirs = "7.0"
 dhat = { version = "0.3", optional = true }
 # `dialog`: native NSAlert prompts and pickers (mac_ui::dialog). `notify`: native notifications
 # (mac_ui::notify; without the app bundle ticker falls back on osascript itself, in watch_ui.rs).
-mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify"] }
+# `wake`: no polls while the Mac sleeps, and one right after it wakes (mac_ui::wake).
+mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify", "wake"] }
 arboard = { workspace = true }
 
 [features]

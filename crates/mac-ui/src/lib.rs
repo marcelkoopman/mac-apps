@@ -24,6 +24,7 @@
 //!   on every platform.
 //! - `blur`: `blur`, a `CIGaussianBlur` content filter on a view.
 //! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
+//! - `wake`: `wake::observe_sleep_wake`, a callback when the Mac goes to sleep and wakes up.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
