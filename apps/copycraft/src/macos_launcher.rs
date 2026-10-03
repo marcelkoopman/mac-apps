@@ -12,7 +12,7 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplicationDidResignActiveNotification, NSBox, NSButton,
+    NSAccessibility, NSApplicationDidResignActiveNotification, NSBeep, NSBox, NSButton,
     NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
     NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode,
     NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
@@ -227,6 +227,11 @@ define_class!(
                     focus_item_field();
                 }
                 true
+            } else if let Some(key) = command_arrow(event) {
+                // ⌘← / ⌘→ step through history from anywhere on the card, also from a field
+                // with text (key equivalents reach the window before the field editor).
+                on_arrow(key, true, commands::ArrowFocus::Card);
+                true
             } else {
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
@@ -294,18 +299,15 @@ define_class!(
         ) -> bool {
             if control_is_item_field(control) {
                 item_field_command(command)
-            } else if command == sel!(moveDown:) {
-                nudge(0, 1);
-                true
-            } else if command == sel!(moveUp:) {
-                nudge(0, -1);
-                true
-            } else if command == sel!(moveLeft:) {
-                nudge(-1, 0);
-                true
-            } else if command == sel!(moveRight:) {
-                nudge(1, 0);
-                true
+            } else if let Some(key) = arrow_command(command) {
+                // The search field has the focus while the card is open. Typed text keeps
+                // ← → for its caret.
+                let focus = if current_query().is_empty() {
+                    commands::ArrowFocus::Card
+                } else {
+                    commands::ArrowFocus::TextWithContent
+                };
+                on_arrow(key, false, focus)
             } else if command == sel!(insertNewline:) {
                 activate_selected();
                 true
@@ -1378,6 +1380,10 @@ fn item_field_command(command: Sel) -> bool {
     if command == sel!(insertNewline:) || command == sel!(insertNewlineIgnoringFieldEditor:) {
         step_item_match(!mac_ui::keys::shift_held());
         true
+    } else if (command == sel!(moveLeft:) || command == sel!(moveRight:)) && item_query().is_empty()
+    {
+        // An empty find field has no caret to move: ← → step through history.
+        arrow_command(command).is_some_and(|key| on_arrow(key, false, commands::ArrowFocus::Card))
     } else if command == sel!(cancelOperation:) {
         if item_query().is_empty() {
             if SEARCHING.with(Cell::get) {
@@ -1888,6 +1894,56 @@ fn nudge(dx: isize, dy: isize) {
     paint_pills();
 }
 
+/// The arrow key of a field editor's move command (`moveLeft:` …).
+fn arrow_command(command: Sel) -> Option<Key> {
+    if command == sel!(moveLeft:) {
+        Some(Key::Left)
+    } else if command == sel!(moveRight:) {
+        Some(Key::Right)
+    } else if command == sel!(moveUp:) {
+        Some(Key::Up)
+    } else if command == sel!(moveDown:) {
+        Some(Key::Down)
+    } else {
+        None
+    }
+}
+
+/// ⌘← or ⌘→ (Shift, Control and Option up: ⇧⌘← still selects to the line start in a field).
+fn command_arrow(event: &NSEvent) -> Option<Key> {
+    let key = Key::from_key_code(event.keyCode())?;
+    let flags = event.modifierFlags();
+    let command = flags.contains(NSEventModifierFlags::Command)
+        && !flags.intersects(
+            NSEventModifierFlags::Shift
+                | NSEventModifierFlags::Control
+                | NSEventModifierFlags::Option,
+        );
+    (command && matches!(key, Key::Left | Key::Right)).then_some(key)
+}
+
+/// Do what an arrow key does on the card ([`commands::arrow_action`]). Returns `false` when
+/// the key is left to the text field, so its caret moves.
+fn on_arrow(key: Key, command: bool, focus: commands::ArrowFocus) -> bool {
+    let nav = HISTORY_NAV.with(|slot| *slot.borrow());
+    match commands::arrow_action(key, command, focus, nav.is_some()) {
+        None | Some(commands::ArrowAction::Text) => false,
+        Some(commands::ArrowAction::Chip { dx, dy }) => {
+            nudge(dx, dy);
+            true
+        }
+        Some(commands::ArrowAction::History(chevron)) => {
+            // Same as clicking the chevron. At 1 (‹) or N (›), or without history: a beep.
+            if nav.is_some_and(|nav| chevron.enabled(&nav)) {
+                launcher::emit(UserEvent::Run(chevron.command()));
+            } else {
+                NSBeep();
+            }
+            true
+        }
+    }
+}
+
 fn activate_selected() {
     let cmd = SHOWN.with(|slot| slot.borrow().get(SELECTION.with(Cell::get)).cloned());
     let Some(cmd) = cmd else {
@@ -2009,10 +2065,13 @@ fn on_key(event: &NSEvent) {
         return;
     }
     match Key::from_key_code(event.keyCode()) {
-        Some(Key::Left) => nudge(-1, 0),
-        Some(Key::Right) => nudge(1, 0),
-        Some(Key::Up) => nudge(0, -1),
-        Some(Key::Down) => nudge(0, 1),
+        // A button or the reveal cover has the focus: no text caret to keep.
+        Some(key @ (Key::Left | Key::Right | Key::Up | Key::Down)) => {
+            let command = event
+                .modifierFlags()
+                .contains(NSEventModifierFlags::Command);
+            on_arrow(key, command, commands::ArrowFocus::Card);
+        }
         Some(Key::Return) => activate_selected(),
         Some(Key::Escape) => {
             // Esc empties the in-item field. A second Esc closes the popup.
@@ -2543,7 +2602,8 @@ fn well_action(
 }
 
 /// Borderless chevron inside the history capsule: the SF Symbol only (or just the fallback
-/// glyph), centred in its slot. The name ("Previous", "Next") is the VoiceOver label and tooltip.
+/// glyph), centred in its slot. The name ("Previous", "Next") is the VoiceOver label; the tooltip
+/// and the VoiceOver hint name its arrow keys.
 fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
     let button = GlassButton::symbol(mtm, chevron.symbol, chevron.name, chevron.glyph, NAV_SYMBOL);
     let ns = button.button();
@@ -2557,9 +2617,10 @@ fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
         ns.setImagePosition(NSCellImagePosition::ImageOnly);
     }
     ns.setAlignment(NSTextAlignment::Center);
-    let name = NSString::from_str(chevron.name);
-    ns.setAccessibilityLabel(Some(&name));
-    ns.setToolTip(Some(&name));
+    ns.setAccessibilityLabel(Some(&NSString::from_str(chevron.name)));
+    // The keys: "Previous (← or ⌘←)", and VoiceOver's hint "Left Arrow, or Command-Left Arrow".
+    ns.setToolTip(Some(&NSString::from_str(&chevron.tooltip())));
+    ns.setAccessibilityHelp(Some(&NSString::from_str(&chevron.spoken_shortcut())));
     // Older counts up (`›`, next); newer counts down (`‹`, previous).
     let action = if chevron.command() == CommandId::HistoryOlder {
         sel!(olderClicked:)

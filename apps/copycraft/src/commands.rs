@@ -7,6 +7,7 @@ use crate::dataframe;
 use crate::decode;
 use crate::format::{self, FormatKind};
 use crate::toolbar_visibility;
+use mac_ui::keys::Key;
 
 pub const MAX_VISIBLE: usize = 8;
 pub const CHIP_PITCH: f64 = 34.0;
@@ -30,6 +31,9 @@ pub struct Chevron {
     pub name: &'static str,
     /// Steps to an older copy (the position number goes up).
     pub older: bool,
+    /// Its arrow key ([`arrow_action`]), drawn (`←`) and spoken (`Left Arrow`).
+    pub arrow: &'static str,
+    pub spoken_arrow: &'static str,
 }
 
 /// `‹` on the left: the previous number, toward 1 (the newest copy).
@@ -38,6 +42,8 @@ pub const PREVIOUS_CHEVRON: Chevron = Chevron {
     glyph: "‹",
     name: "Previous",
     older: false,
+    arrow: "←",
+    spoken_arrow: "Left Arrow",
 };
 
 /// `›` on the right: the next number, toward N (the oldest copy).
@@ -46,6 +52,8 @@ pub const NEXT_CHEVRON: Chevron = Chevron {
     glyph: "›",
     name: "Next",
     older: true,
+    arrow: "→",
+    spoken_arrow: "Right Arrow",
 };
 
 impl Chevron {
@@ -72,6 +80,71 @@ impl Chevron {
     pub fn title(&self, has_image: bool) -> &'static str {
         if has_image { "" } else { self.glyph }
     }
+
+    /// Tooltip: the name and its keys, `Previous (← or ⌘←)`.
+    pub fn tooltip(&self) -> String {
+        format!("{} ({} or ⌘{})", self.name, self.arrow, self.arrow)
+    }
+
+    /// VoiceOver hint: `Left Arrow, or Command-Left Arrow`.
+    pub fn spoken_shortcut(&self) -> String {
+        format!("{0}, or Command-{0}", self.spoken_arrow)
+    }
+}
+
+/// Where the keyboard focus is when an arrow key reaches the card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowFocus {
+    /// The card itself: the search field while it is empty (also before a search), the empty
+    /// find field, a button or the reveal cover.
+    Card,
+    /// The search or find field with text in it: plain ← → move its caret.
+    TextWithContent,
+}
+
+/// What an arrow key does on the card ([`arrow_action`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowAction {
+    /// Step through history like this chevron. At an end (or without history) nothing moves
+    /// and the card beeps.
+    History(Chevron),
+    /// Move the chip selection ([`step_chip`]).
+    Chip { dx: isize, dy: isize },
+    /// Leave the key to the text field (its caret moves).
+    Text,
+}
+
+/// The arrow-key rule:
+/// - ⌘← / ⌘→ always step through history (Previous / Next), also from a field with text.
+/// - ← / → move the caret in a search or find field that has text. Otherwise they step through
+///   history while the history capsule is shown, and move between the chips when it is not.
+/// - ↑ / ↓ move between the chips: to the row above or below, or to the previous or next chip
+///   when there is no row that way (so every chip stays reachable when ← → step history).
+///
+/// The read-only text in the well handles its own arrows when it has the focus (a click in it
+/// puts a caret or selection there), so it never gets here for plain arrows.
+pub fn arrow_action(
+    key: Key,
+    command: bool,
+    focus: ArrowFocus,
+    has_history: bool,
+) -> Option<ArrowAction> {
+    let (chevron, dx) = match key {
+        Key::Left => (PREVIOUS_CHEVRON, -1),
+        Key::Right => (NEXT_CHEVRON, 1),
+        Key::Up => return Some(ArrowAction::Chip { dx: 0, dy: -1 }),
+        Key::Down => return Some(ArrowAction::Chip { dx: 0, dy: 1 }),
+        _ => return None,
+    };
+    Some(if command {
+        ArrowAction::History(chevron)
+    } else if focus == ArrowFocus::TextWithContent {
+        ArrowAction::Text
+    } else if has_history {
+        ArrowAction::History(chevron)
+    } else {
+        ArrowAction::Chip { dx, dy: 0 }
+    })
 }
 
 /// Empty space kept on the right of the first chip row so the capsule fits.
@@ -1194,21 +1267,23 @@ pub fn step_chip(frames: &[ChipFrame], index: usize, dx: isize, dy: isize) -> us
     }
     let current = frames[index];
     let target = current.row as isize + dy;
-    if target < 0 {
-        return index;
-    }
     let center = current.x + current.width / 2.0;
-    frames
-        .iter()
-        .enumerate()
-        .filter(|(_, frame)| frame.row == target as usize)
-        .min_by(|(_, a), (_, b)| {
-            let da = (a.x + a.width / 2.0 - center).abs();
-            let db = (b.x + b.width / 2.0 - center).abs();
-            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+    let in_row = (target >= 0)
+        .then(|| {
+            frames
+                .iter()
+                .enumerate()
+                .filter(|(_, frame)| frame.row == target as usize)
+                .min_by(|(_, a), (_, b)| {
+                    let da = (a.x + a.width / 2.0 - center).abs();
+                    let db = (b.x + b.width / 2.0 - center).abs();
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(next, _)| next)
         })
-        .map(|(next, _)| next)
-        .unwrap_or(index)
+        .flatten();
+    // No row that way: the previous or next chip in order instead.
+    in_row.unwrap_or_else(|| (index as isize + dy).clamp(0, frames.len() as isize - 1) as usize)
 }
 
 pub fn keeps_card_open(id: &CommandId) -> bool {
@@ -1539,6 +1614,7 @@ fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command 
 
 #[cfg(test)]
 mod tests {
+    use super::{ArrowAction, ArrowFocus, arrow_action};
     use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
@@ -1549,6 +1625,7 @@ mod tests {
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use crate::appearance::Theme;
+    use mac_ui::keys::Key;
 
     fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         LaunchData {
@@ -2903,6 +2980,89 @@ Kleinste opdracht die de change dekt.
         assert_ne!(frames[down].row, frames[0].row);
         assert_eq!(step_chip(&frames, down, 0, -1), 0);
         assert_eq!(step_chip(&[], 0, 1, 0), 0);
+        // No row that way: ↑ / ↓ go to the previous / next chip, and stop at the ends.
+        let last = frames.len() - 1;
+        assert_eq!(step_chip(&frames, last, 0, 1), last);
+        assert_eq!(step_chip(&frames, 0, 0, -1), 0);
+        let one_row = layout_chips(&[60.0, 60.0, 60.0], 400.0, 0.0);
+        assert!(one_row.iter().all(|frame| frame.row == 0));
+        assert_eq!(step_chip(&one_row, 0, 0, 1), 1);
+        assert_eq!(step_chip(&one_row, 1, 0, 1), 2);
+        assert_eq!(step_chip(&one_row, 2, 0, 1), 2);
+        assert_eq!(step_chip(&one_row, 2, 0, -1), 1);
+    }
+
+    #[test]
+    fn left_and_right_step_history_like_the_chevrons() {
+        use ArrowAction::{Chip, History, Text};
+        use ArrowFocus::{Card, TextWithContent};
+        // ← is ‹ Previous (toward 1, the newest), → is › Next (toward the oldest).
+        assert_eq!(
+            arrow_action(Key::Left, false, Card, true),
+            Some(History(PREVIOUS_CHEVRON))
+        );
+        assert_eq!(
+            arrow_action(Key::Right, false, Card, true),
+            Some(History(NEXT_CHEVRON))
+        );
+        assert_eq!(PREVIOUS_CHEVRON.command(), CommandId::HistoryNewer);
+        assert_eq!(NEXT_CHEVRON.command(), CommandId::HistoryOlder);
+        // Text in the search or find field: plain ← → move the caret.
+        assert_eq!(
+            arrow_action(Key::Left, false, TextWithContent, true),
+            Some(Text)
+        );
+        assert_eq!(
+            arrow_action(Key::Right, false, TextWithContent, false),
+            Some(Text)
+        );
+        // ⌘← / ⌘→ always step history.
+        for focus in [Card, TextWithContent] {
+            for has_history in [true, false] {
+                assert_eq!(
+                    arrow_action(Key::Left, true, focus, has_history),
+                    Some(History(PREVIOUS_CHEVRON))
+                );
+                assert_eq!(
+                    arrow_action(Key::Right, true, focus, has_history),
+                    Some(History(NEXT_CHEVRON))
+                );
+            }
+        }
+        // No history capsule: ← → move between the chips, as before.
+        assert_eq!(
+            arrow_action(Key::Left, false, Card, false),
+            Some(Chip { dx: -1, dy: 0 })
+        );
+        assert_eq!(
+            arrow_action(Key::Right, false, Card, false),
+            Some(Chip { dx: 1, dy: 0 })
+        );
+        // ↑ ↓ move between the chips; other keys are not arrows.
+        for (key, dy) in [(Key::Up, -1), (Key::Down, 1)] {
+            for focus in [Card, TextWithContent] {
+                assert_eq!(
+                    arrow_action(key, false, focus, true),
+                    Some(Chip { dx: 0, dy })
+                );
+            }
+        }
+        assert_eq!(arrow_action(Key::Return, false, Card, true), None);
+        assert_eq!(arrow_action(Key::Escape, true, Card, true), None);
+    }
+
+    #[test]
+    fn chevrons_name_their_keys() {
+        assert_eq!(PREVIOUS_CHEVRON.tooltip(), "Previous (← or ⌘←)");
+        assert_eq!(NEXT_CHEVRON.tooltip(), "Next (→ or ⌘→)");
+        assert_eq!(
+            PREVIOUS_CHEVRON.spoken_shortcut(),
+            "Left Arrow, or Command-Left Arrow"
+        );
+        assert_eq!(
+            NEXT_CHEVRON.spoken_shortcut(),
+            "Right Arrow, or Command-Right Arrow"
+        );
     }
 
     #[test]

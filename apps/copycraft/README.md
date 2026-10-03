@@ -17,7 +17,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Copy / Save**: copy the current view back to the clipboard, or save it through a save panel. The file extension follows the content.
 - **Choose file**: show a local text file (up to 8 MB) on the card instead of the clipboard.
 - **Drop**: drop one text file or text (up to 8 MB), or one picture (up to 32 MB), on the card to show it the same way. A picture can be an image file from Finder (PNG, JPEG, HEIC, GIF, WebP, TIFF, BMP, … anything macOS can draw), an image dragged from Safari or Preview, or a photo from Photos (a promised file, written to a temporary folder that is deleted once read). It gets the image card with *Info*, *Text* and *QR*, blurred like a copied image, and *Save* writes it in its own format. A drop goes into history like a copy, without changing the clipboard. Several files, folders, PDFs and other files are refused. The card stays open while you work in another app, so open it, then drag from Finder, Safari, Preview, Photos or Notes onto it.
-- **History**: the last 20 copies and drops (text and images), kept in memory only. Step through them with the ‹ / › chevrons in the glass capsule at the right of the chip row, which shows where you are (*1 / 5*; 1 is the newest copy, as in the *History* submenu; › *Next* counts up to older copies, ‹ *Previous* counts back down toward 1), or use the menu bar *History* submenu. The capsule appears once history holds two copies.
+- **History**: the last 20 copies and drops (text and images), kept in memory only. Step through them with the ‹ / › chevrons in the glass capsule at the right of the chip row, which shows where you are (*1 / 5*; 1 is the newest copy, as in the *History* submenu; › *Next* counts up to older copies, ‹ *Previous* counts back down toward 1), with ← / → (or ⌘← / ⌘→, see *Usage*), or use the menu bar *History* submenu. The capsule appears once history holds two copies.
 
 ## Privacy
 
@@ -34,7 +34,9 @@ Part of the [mac-apps](../../README.md) monorepo.
 | Click the menu bar icon | Open the card under the icon, or close it |
 | Right-click the menu bar icon | Hotkey hint, *History*, version, *Quit* |
 | Type any text, or `/` | Search actions, history and appearance |
-| ← → ↑ ↓, Return | Move the selection, run the selected action |
+| ← → | ‹ *Previous* / › *Next* in history (like the chevrons; a beep at 1 or at the oldest). Without history they move the selection. In the search or find field with text they move the caret |
+| ⌘← ⌘→ | ‹ *Previous* / › *Next* in history, always, also while typing |
+| ↑ ↓, Return | Move the selection (to the row above or below, else the previous or next action), run the selected action |
 | ⌘F | Find in the revealed content. Return / ⇧Return jump to the next / previous match |
 | Esc | Clear the find or search field, then close the card |
 | `⋯` | Choose file, Clipboard, Empty pasteboard, history, Clear history, Appearance (System / Light / Dark), Quit |
