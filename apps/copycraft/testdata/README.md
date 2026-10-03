@@ -51,7 +51,10 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json |
 | `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Original, Schema | kind=Xml |
 | `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | — | kind=Xml |
-| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>` | html | HTML | — | — | kind=Html |
+| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>`, opens formatted (void `<meta>`/`<br>` do not indent) | html | HTML | — | — | kind=Html; pretty=detect/html_page.pretty.html |
+| `detect/html_page.pretty.html` | Format: the expected pretty form of `html_page.html` (formats to itself) | html | HTML | — | — | kind=Html; pretty=detect/html_page.pretty.html |
+| `detect/html_one_line.html` | Format: a whole HTML page on one line (void elements, style, pre, textarea, script, inline text in `<p>`) | html | HTML | — | — | kind=Html; pretty=detect/html_one_line.pretty.html |
+| `detect/html_one_line.pretty.html` | Format: the expected pretty form of `html_one_line.html` (formats to itself) | html | HTML | — | — | kind=Html; pretty=detect/html_one_line.pretty.html |
 | `detect/markdown.md` | Detection: Markdown | markdown | Markdown | — | — | kind=Markdown |
 | `detect/rust_balanced.rs` | Detection: Rust, balanced | rust | Rust | — | — | kind=Rust |
 | `detect/rust_unbalanced.rs` | Detection: Rust, extra `)` | rust | Rust · unbalanced ) | — | — | kind=Rust |
@@ -124,6 +127,7 @@ Columns (fixed; the test parses this table between the markers):
 | `visit=U` | Visit opens `U` (userinfo stripped, as `menubar::visit_current`) |
 | `convert=K` / `convert~S` | the Convert result is detected as `K` / contains `S` |
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
+| `pretty=FILE` | the Format view (what the card opens with) is exactly the testdata file `FILE` (without its final newline) |
 | `decode~S`, `schema~S`, `sample~S` | the Decode, Schema or Sample view contains `S` |
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |

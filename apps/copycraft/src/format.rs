@@ -124,6 +124,11 @@ fn detect_uncached(text: &str) -> FormatKind {
     {
         return FormatKind::Json;
     }
+    // A document that starts `<!DOCTYPE html>` or `<html` is HTML, also on one line where
+    // `color: teal` in a style would make the whole line a YAML mapping.
+    if looks_like_html(text) {
+        return FormatKind::Html;
+    }
     // Before Markdown: `# comment` lines would read as headings.
     if crate::python::looks_like_python(text) {
         return FormatKind::Python;
@@ -149,9 +154,6 @@ fn detect_uncached(text: &str) -> FormatKind {
     if looks_like_url(text) {
         return FormatKind::Url;
     }
-    if looks_like_html(text) {
-        return FormatKind::Html;
-    }
     if looks_like_xml(text) {
         return FormatKind::Xml;
     }
@@ -161,6 +163,9 @@ fn detect_uncached(text: &str) -> FormatKind {
         FormatKind::Plain
     }
 }
+
+#[path = "format_html.rs"]
+mod html;
 
 pub fn format_text(text: &str) -> String {
     match detect(text) {
@@ -172,7 +177,8 @@ pub fn format_text(text: &str) -> String {
         }
         // Built in: copied code is never handed to an outside program (rustfmt, …).
         FormatKind::Rust | FormatKind::Java => indent_braces(text),
-        FormatKind::Xml | FormatKind::Html => pretty_xml(text),
+        FormatKind::Xml => pretty_xml(text),
+        FormatKind::Html => html::pretty_html(text),
         FormatKind::Markdown => format_markdown(text),
         FormatKind::Url => format_url(text),
         FormatKind::Python
@@ -1306,6 +1312,7 @@ mod tests {
             "<!DOCTYPE html>\n<html><head><title>x</title></head><body><p>Hi</p></body></html>",
             "  \n<!doctype HTML>\n<html lang=\"nl\"><body></body></html>",
             "\u{feff}<!DocType html><html><body><br></body></html>",
+            "<!DOCTYPE html><html><head><style>p { color: teal; }</style></head><body></body></html>",
             "<html>\n  <body><p>Hi</p></body>\n</html>",
             "<?xml version=\"1.0\"?>\n<!-- page -->\n<html xmlns=\"http://www.w3.org/1999/xhtml\"><body/></html>",
         ] {

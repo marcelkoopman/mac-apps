@@ -227,6 +227,13 @@ fn check(text: &str, check: &str) -> Result<(), String> {
                 serde_json::from_str(want).map_err(|e| format!("{check}: {e}"))?;
             return if got == expected { Ok(()) } else { fail(&got) };
         }
+        // The Format view (what the card opens with) equals another testdata file.
+        "pretty" => {
+            let expected = std::fs::read_to_string(root().join(want)).map_err(|e| e.to_string())?;
+            let got = view_text(text, CardView::Format);
+            let expected = expected.strip_suffix('\n').unwrap_or(&expected);
+            return if got == expected { Ok(()) } else { fail(&got) };
+        }
         "decode" => view_text(text, CardView::Decode),
         "schema" => view_text(text, CardView::Schema),
         "sample" => view_text(text, CardView::Sample),
