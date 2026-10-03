@@ -236,6 +236,8 @@ pub struct TableShown {
     pub options: dataframe::ReadOptions,
     /// What reading it found, once it was read.
     pub notes: Option<dataframe::ReadNotes>,
+    /// Show a wide table as its grid, not its column overview.
+    pub grid: bool,
 }
 
 impl TableShown {
@@ -260,6 +262,7 @@ impl PartialEq for TableShown {
             && self.describe.is_some() == other.describe.is_some()
             && self.options == other.options
             && self.notes == other.notes
+            && self.grid == other.grid
     }
 }
 
@@ -424,6 +427,8 @@ pub enum CommandId {
     TableHeaderLine(usize),
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
+    /// Show a wide table as its grid (`true`) or its column overview.
+    TableGrid(bool),
     Quit,
 }
 
@@ -787,7 +792,7 @@ fn apply_text_view(
             {
                 show_table_version(card, table, full)
             }
-            _ => show_dataframe(card, source, full),
+            _ => show_dataframe(card, source, full, table.is_some_and(|table| table.grid)),
         }
         if let Some(error) = table.and_then(|table| table.error.as_deref()) {
             add_meta_note(card, error);
@@ -859,6 +864,11 @@ fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
     add_table_note(card, start);
 }
 
+/// "40 rows × 20 columns" for the column overview, which shows no rows.
+fn overview_note(preview: &dataframe::DataframePreview) -> String {
+    format!("{} rows × {} columns", preview.rows, preview.columns)
+}
+
 /// "Header on line N" in the meta line, after the size, when lines above a table's header
 /// were skipped ([`dataframe::TableStart::note`]).
 fn add_table_note(card: &mut WorkCard, start: Option<dataframe::TableStart>) {
@@ -886,7 +896,7 @@ const META_SEPARATOR: &str = "  ·  ";
 /// and says where the header is and which date order was read when either is a guess.
 /// The grid no longer has the table's delimiters, so a Salaris column would lose its financial
 /// mark: the meta classifies the copied table.
-fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
+fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, grid: bool) {
     let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
     let Some(preview) = dataframe::try_format_preview(source, max_rows) else {
         return;
@@ -894,7 +904,12 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
     card.title = "Dataframe".to_string();
     card.highlight = Some(FormatKind::Dataframe);
     card.selectable = true;
-    if preview.rows > preview.shown_rows {
+    if let Some(overview) = preview.overview.as_ref().filter(|_| !grid) {
+        card.meta = text_meta(source);
+        card.excerpt = overview.clone();
+        card.preview_note = None;
+        add_meta_note(card, &overview_note(&preview));
+    } else if preview.rows > preview.shown_rows {
         card.meta = text_meta(source);
         card.preview_note = Some(showing_note(preview.shown_rows, preview.rows, "rows"));
         card.excerpt = preview.grid;
@@ -958,7 +973,10 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     card.selectable = true;
     card.meta = text_meta_from(&csv, &csv);
-    if preview.rows > preview.shown_rows {
+    if let Some(overview) = preview.overview.as_ref().filter(|_| !table.grid) {
+        card.excerpt = overview.clone();
+        add_meta_note(card, &overview_note(&preview));
+    } else if preview.rows > preview.shown_rows {
         card.preview_note = Some(showing_note(preview.shown_rows, preview.rows, "rows"));
         card.excerpt = preview.grid;
     } else if full {
@@ -1345,6 +1363,9 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         SubjectKind::Image => image_chips(data.image_scan.as_ref()),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
+            if let Some(toggle) = grid_command(data) {
+                chips.push(toggle);
+            }
             // The date question, in the Dataframe view while dates fit both orders.
             if data.view == CardView::Dataframe
                 && let Some(question) = data
@@ -1454,6 +1475,34 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::TableHeaderLine(_) => Some("Header on line"),
         _ => None,
     }
+}
+
+/// "Show table" on a wide table's column overview, "Show columns" on its grid (Dataframe view).
+fn grid_command(data: &LaunchData) -> Option<Command> {
+    let table = data.table.as_ref()?;
+    let wide = table
+        .frame
+        .as_ref()
+        .is_some_and(|frame| frame.width() >= dataframe::OVERVIEW_MIN_COLUMNS);
+    let text = data.subject_text.as_deref()?;
+    if !wide || table.describe.is_some() || presented_view(text, data.view) != CardView::Dataframe {
+        return None;
+    }
+    Some(if table.grid {
+        command(
+            CommandId::TableGrid(false),
+            "Show columns",
+            "Column overview",
+            "columns overview table",
+        )
+    } else {
+        command(
+            CommandId::TableGrid(true),
+            "Show table",
+            "Every row",
+            "table grid rows",
+        )
+    })
 }
 
 /// The date question: when a date column fits both orders, a command to read it the other
@@ -1881,6 +1930,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableDescribe
             | CommandId::TableHeaderLine(_)
             | CommandId::TableDateOrder(_)
+            | CommandId::TableGrid(_)
     )
 }
 
@@ -3253,10 +3303,45 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(second.starts_with("Date"), "{:?}", second.get(..12));
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = CardView::Dataframe;
+        // 20 columns: the column overview first, with the shared product prefix shortened.
+        let overview = work_card(&input);
+        assert_eq!(overview.title, "Dataframe");
+        assert!(
+            overview.excerpt.contains("shape: (20, 3)"),
+            "{}",
+            overview.excerpt
+        );
+        // (Tests run without the app's row limit lifted: the middle rows are elided.)
+        assert!(
+            overview.excerpt.contains("│ … PV4 Generation (kWh)"),
+            "{}",
+            overview.excerpt
+        );
+        assert!(!overview.excerpt.contains("Sunbox"), "{}", overview.excerpt);
+        assert!(
+            overview.meta.contains("40 rows × 20 columns"),
+            "{}",
+            overview.meta
+        );
+        assert!(
+            overview.meta.contains("Header on line 2"),
+            "{}",
+            overview.meta
+        );
+        assert!(overview.preview_note.is_none());
+        // "Show table": the grid, shortened names too; Copy keeps the real ones.
+        let mut table = read(src, crate::dataframe::ReadOptions::default());
+        input.table = Some(table.clone());
+        assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(true)));
+        table.grid = true;
+        input.table = Some(table);
         let grid = work_card(&input);
-        assert_eq!(grid.title, "Dataframe");
         assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
+        assert!(grid.excerpt.contains("┆ … PV3"), "{}", grid.excerpt);
         assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
+        assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(false)));
+        let copied = transformed_text(src, CardView::Dataframe).expect("copy");
+        assert!(copied.contains("Sunbox 7"), "{copied}");
         assert!(
             ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::Dataframe)
         );
@@ -3281,6 +3366,7 @@ Id,Naam,Telefoonnummer,Salaris
             describe: None,
             options: versions.options(),
             notes: versions.notes(),
+            grid: false,
         }
     }
 
@@ -3483,6 +3569,7 @@ Id,Naam,Telefoonnummer,Salaris
             describe: None,
             options: versions.options(),
             notes: versions.notes(),
+            grid: false,
         }
     }
 

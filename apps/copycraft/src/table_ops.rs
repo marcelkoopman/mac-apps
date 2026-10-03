@@ -6,6 +6,8 @@ use std::collections::HashMap;
 
 use polars::prelude::*;
 
+use crate::dataframe::cell_text;
+
 /// Most rows Transpose takes (each row becomes a column).
 pub const TRANSPOSE_MAX_ROWS: usize = 200;
 
@@ -184,16 +186,6 @@ pub fn fix_types(df: &DataFrame) -> Result<DataFrame, String> {
         return Err("No column to change".to_string());
     }
     Ok(out)
-}
-
-/// A cell as text for a transposed table; `None` for an empty cell.
-fn cell_text(value: AnyValue) -> Option<String> {
-    match value {
-        AnyValue::Null => None,
-        AnyValue::String(text) => Some(text.to_string()),
-        AnyValue::StringOwned(text) => Some(text.to_string()),
-        other => Some(other.to_string()),
-    }
 }
 
 /// Transpose: each row becomes a column, named by the row's first value when those are all

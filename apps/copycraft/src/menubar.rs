@@ -107,6 +107,8 @@ struct App {
     describe_for: Option<u64>,
     /// The last description, for the frame with this id ([`TableVersions::frame_id`]).
     describe_cache: Option<(u64, polars::prelude::DataFrame)>,
+    /// The wide table with this text ([`text_hash`]) shows its grid, not its column overview.
+    grid_for: Option<u64>,
 }
 
 /// A copy's hash, to tell which table the Describe view is for (kept in memory only).
@@ -359,6 +361,12 @@ impl App {
             // The card pops the menu itself.
             CommandId::TableMenu => {}
             CommandId::TableDescribe => self.toggle_describe(),
+            CommandId::TableGrid(grid) => {
+                self.grid_for = grid
+                    .then(|| self.table_source().map(|(text, _)| text_hash(&text)))
+                    .flatten();
+                self.refresh_popup();
+            }
             CommandId::TableHeaderLine(line) => self.table_reread(|options| {
                 options.header_line = Some(line);
             }),
@@ -561,6 +569,7 @@ impl App {
         let running = self.table_job.as_ref().map(|run| run.generation);
         let error = self.table_error.clone();
         let describing = dataframe_view && self.describe_for == Some(text_hash(&text));
+        let grid = self.grid_for == Some(text_hash(&text));
         let cached = self.describe_cache.take();
         let Some(table) = self.table_at(home) else {
             return;
@@ -592,6 +601,7 @@ impl App {
             describe: describe.clone(),
             options: table.options(),
             notes: table.notes(),
+            grid,
         };
         self.describe_cache = describe.map(|description| (frame_id, description));
         data.table = Some(shown);
@@ -1334,6 +1344,7 @@ impl App {
         self.table_error = None;
         self.describe_for = None;
         self.describe_cache = None;
+        self.grid_for = None;
         self.history.clear();
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1392,6 +1403,7 @@ impl App {
         self.table_error = None;
         self.describe_for = None;
         self.describe_cache = None;
+        self.grid_for = None;
         self.full_card = None;
         self.history.clear();
         self.current_image = None;
@@ -2053,6 +2065,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         table_error: None,
         describe_for: None,
         describe_cache: None,
+        grid_for: None,
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));

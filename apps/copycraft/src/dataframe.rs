@@ -26,26 +26,21 @@ pub struct DataframePreview {
     pub shown_rows: usize,
     /// Text columns read as dates.
     pub dates: Vec<DateColumn>,
+    /// The column overview of a wide table ([`overview`]).
+    pub overview: Option<String>,
+    /// Columns in the table.
+    pub columns: usize,
 }
 
 /// Like [`try_format`], but renders at most `max_rows` rows. Parsing is quick; rendering every
 /// row of a large table is what takes time.
+/// The card shows it: long shared prefixes of column names are shortened ([`display_names`]).
 pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePreview> {
     let mut df = parse(text)?;
     let dates = read_dates(&mut df, DateOrder::DayFirst);
-    let rows = df.height();
-    let shown = if rows > max_rows {
-        df.head(Some(max_rows))
-    } else {
-        df
-    };
-    let shown_rows = shown.height();
-    Some(DataframePreview {
-        grid: render(shown)?,
-        rows,
-        shown_rows,
-        dates,
-    })
+    let mut preview = frame_preview(&df, max_rows)?;
+    preview.dates = dates;
+    Some(preview)
 }
 
 /// [`try_format_preview`] for a table version worked out already.
@@ -54,10 +49,12 @@ pub fn frame_preview(df: &DataFrame, max_rows: usize) -> Option<DataframePreview
     let shown = df.head(Some(max_rows));
     let shown_rows = shown.height();
     Some(DataframePreview {
-        grid: render(shown)?,
+        grid: render(display_frame(shown))?,
         rows,
         shown_rows,
         dates: Vec::new(),
+        overview: overview(df),
+        columns: df.width(),
     })
 }
 
@@ -241,5 +238,6 @@ fn render(df: DataFrame) -> Option<String> {
 }
 
 include!("dataframe_dates.rs");
+include!("dataframe_display.rs");
 include!("dataframe_header.rs");
 include!("dataframe_parse.rs");

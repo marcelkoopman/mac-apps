@@ -102,6 +102,64 @@ pub(crate) mod tests {
     use polars::prelude::{ParquetReader, SerReader};
 
     #[test]
+    fn display_names_shorten_a_long_prefix_shared_per_group() {
+        let names: Vec<String> = [
+            "Date",
+            "Sunbox 7 X1500 Max - PV1",
+            "Sunbox 7 X1500 Max - PV2",
+            "Sunbox 7 X1500 Max - PV3",
+            "Heat pump unit: inlet",
+            "Heat pump unit: outlet",
+            "Heat pump unit: power",
+            "Short - a",
+            "Short - b",
+            "Short - c",
+            "Lone product name - X",
+        ]
+        .map(String::from)
+        .to_vec();
+        let shown = super::display_names(&names);
+        assert_eq!(
+            shown,
+            [
+                "Date",
+                "… PV1",
+                "… PV2",
+                "… PV3",
+                "… inlet",
+                "… outlet",
+                "… power",
+                // Too short a prefix to shorten; one column alone is not a group.
+                "Short - a",
+                "Short - b",
+                "Short - c",
+                "Lone product name - X",
+            ]
+        );
+        // Shortening that would make two names the same leaves them all as they are.
+        let clash: Vec<String> = [
+            "Product one long - Total",
+            "Product one long - Peak",
+            "Product one long - Low",
+            "… Total",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(super::display_names(&clash), clash);
+    }
+
+    #[test]
+    fn a_wide_table_has_a_column_overview() {
+        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
+        let overview = super::overview(&df).expect("overview");
+        assert!(overview.contains("shape: (20, 3)"), "{overview}");
+        assert!(overview.contains("┆ date"), "{overview}");
+        assert!(overview.contains("│ … PV4 Generation (kWh)"), "{overview}");
+        let narrow = super::parse_table("a,b\n1,2").expect("table");
+        assert!(super::overview(&narrow).is_none());
+    }
+
+    #[test]
     fn a_table_version_renders_writes_and_saves_from_its_frame() {
         let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
         let preview = super::frame_preview(&df, 2).expect("preview");
