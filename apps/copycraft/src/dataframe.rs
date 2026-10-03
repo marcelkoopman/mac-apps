@@ -124,9 +124,80 @@ fn parse(text: &str) -> Option<DataFrame> {
 /// as dates ([`read_dates`]; day first where both orders fit). Conversions (CSV → JSON, TSV →
 /// CSV) keep the text as copied and use [`parse`].
 pub fn parse_table(text: &str) -> Option<DataFrame> {
-    let mut df = parse(text)?;
-    read_dates(&mut df, DateOrder::DayFirst);
-    Some(df)
+    parse_table_with(text, ReadOptions::default()).map(|(df, _)| df)
+}
+
+/// How to read a copied table when the card was told: the header's line and the order of dates
+/// that fit both orders. The default finds the header and reads such dates day first.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct ReadOptions {
+    /// The header's line (0-based in the trimmed text, blank lines counted).
+    pub header_line: Option<usize>,
+    /// Dates that fit both orders are `mm/dd/yyyy`.
+    pub month_first: bool,
+}
+
+/// What reading a table found, for the meta line and the Table ▾ menu.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ReadNotes {
+    /// Where the delimited table starts (`None` for JSON).
+    pub start: Option<TableStart>,
+    /// A date column fits both orders.
+    pub ambiguous_dates: bool,
+    /// Those dates were read `mm/dd/yyyy`.
+    pub month_first: bool,
+    /// Lines the header could be on (the first lines of the trimmed text).
+    pub header_lines: usize,
+}
+
+impl ReadNotes {
+    /// "Header on line N" and "Dates read as dd/mm/yyyy", when either was a choice.
+    pub fn meta_notes(&self) -> Vec<String> {
+        let mut notes: Vec<String> = self
+            .start
+            .and_then(|start| start.note())
+            .into_iter()
+            .collect();
+        if self.ambiguous_dates {
+            notes.push(if self.month_first {
+                "Dates read as mm/dd/yyyy".to_string()
+            } else {
+                "Dates read as dd/mm/yyyy".to_string()
+            });
+        }
+        notes
+    }
+}
+
+/// [`parse_table`] read as `options` says, with what reading found.
+pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, ReadNotes)> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || crate::format::looks_like_xml(trimmed) {
+        return None;
+    }
+    let (start, mut df) = match options.header_line {
+        Some(line) => {
+            let start = table_start_at(trimmed, line)?;
+            (Some(start), csv_at(trimmed, start)?)
+        }
+        None => match try_csv(trimmed) {
+            Some((start, df)) => (Some(start), df),
+            None => (None, try_json(trimmed)?),
+        },
+    };
+    let order = if options.month_first {
+        DateOrder::MonthFirst
+    } else {
+        DateOrder::DayFirst
+    };
+    let dates = read_dates(&mut df, order);
+    let notes = ReadNotes {
+        start,
+        ambiguous_dates: dates.iter().any(|column| column.ambiguous),
+        month_first: options.month_first,
+        header_lines: trimmed.split('\n').take(MAX_PREAMBLE_LINES + 2).count(),
+    };
+    Some((df, notes))
 }
 
 fn write_parquet(df: &mut DataFrame) -> Option<Vec<u8>> {

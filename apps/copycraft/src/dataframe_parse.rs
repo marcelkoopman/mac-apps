@@ -1,6 +1,11 @@
 /// The delimited table in `text` (see [`table_start`]), read from its header down.
 fn try_csv(text: &str) -> Option<(TableStart, DataFrame)> {
     let start = table_start(text)?;
+    csv_at(text, start).map(|df| (start, df))
+}
+
+/// The delimited table in `text` from the header at `start` down.
+fn csv_at(text: &str, start: TableStart) -> Option<DataFrame> {
     let mut cursor = Cursor::new(start.body(text).as_bytes());
     let parse = CsvParseOptions::default().with_separator(start.separator);
     CsvReadOptions::default()
@@ -10,7 +15,6 @@ fn try_csv(text: &str) -> Option<(TableStart, DataFrame)> {
         .finish()
         .ok()
         .filter(|df| df.width() >= 2 && df.height() >= 1)
-        .map(|df| (start, df))
 }
 
 fn try_json(text: &str) -> Option<DataFrame> {

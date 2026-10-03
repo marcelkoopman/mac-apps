@@ -359,6 +359,12 @@ impl App {
             // The card pops the menu itself.
             CommandId::TableMenu => {}
             CommandId::TableDescribe => self.toggle_describe(),
+            CommandId::TableHeaderLine(line) => self.table_reread(|options| {
+                options.header_line = Some(line);
+            }),
+            CommandId::TableDateOrder(month_first) => self.table_reread(|options| {
+                options.month_first = month_first;
+            }),
             CommandId::Quit => event_loop.exit(),
         }
     }
@@ -397,6 +403,26 @@ impl App {
             self.card_view = CardView::Dataframe;
         }
         self.refresh_popup();
+    }
+
+    /// Read the table another way ("Header on line N", the date order): it starts over from
+    /// the original.
+    fn table_reread(&mut self, change: impl FnOnce(&mut crate::dataframe::ReadOptions)) {
+        let Some((text, home)) = self.table_source() else {
+            return;
+        };
+        let Some(table) = self.table_at(home) else {
+            return;
+        };
+        let mut options = table.options();
+        change(&mut options);
+        if let Some(job) = table.reread(options, &text) {
+            self.table_error = None;
+            self.describe_for = None;
+            self.card_view = CardView::Dataframe;
+            self.run_table_job(job, false);
+            self.refresh_popup();
+        }
     }
 
     /// Run `op` on the version shown; the card shows the new version when it is done.
@@ -564,6 +590,8 @@ impl App {
             working,
             error,
             describe: describe.clone(),
+            options: table.options(),
+            notes: table.notes(),
         };
         self.describe_cache = describe.map(|description| (frame_id, description));
         data.table = Some(shown);
@@ -581,7 +609,8 @@ impl App {
             TableHome::History(index) => self.history.table(index)?,
             TableHome::Opened => &self.opened_table,
         };
-        (table.cursor() > 0)
+        let reread = table.options() != crate::dataframe::ReadOptions::default();
+        (table.cursor() > 0 || reread)
             .then(|| table.frame().cloned())
             .flatten()
     }

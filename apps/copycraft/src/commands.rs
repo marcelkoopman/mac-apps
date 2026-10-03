@@ -232,6 +232,10 @@ pub struct TableShown {
     pub error: Option<String>,
     /// The Describe view of the version shown ([`crate::table_ops::describe`]), when asked for.
     pub describe: Option<polars::prelude::DataFrame>,
+    /// How the copied text is read ("Header on line N", the date order).
+    pub options: dataframe::ReadOptions,
+    /// What reading it found, once it was read.
+    pub notes: Option<dataframe::ReadNotes>,
 }
 
 impl TableShown {
@@ -254,6 +258,8 @@ impl PartialEq for TableShown {
             && self.working == other.working
             && self.error == other.error
             && self.describe.is_some() == other.describe.is_some()
+            && self.options == other.options
+            && self.notes == other.notes
     }
 }
 
@@ -414,6 +420,10 @@ pub enum CommandId {
     TableMenu,
     /// Describe the table version shown, or go back from that view to the table.
     TableDescribe,
+    /// Read the table with its header on this line (0-based in the trimmed text).
+    TableHeaderLine(usize),
+    /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
+    TableDateOrder(bool),
     Quit,
 }
 
@@ -574,14 +584,15 @@ pub fn content_key(data: &LaunchData) -> u64 {
         picture.allocation_id().hash(&mut hasher);
     }
     // Another table version is other content: masked again, its labels checked again.
-    if let Some(table) = data
-        .table
-        .as_ref()
-        .filter(|table| table.labels.len() > 1 || table.describe.is_some())
-    {
+    if let Some(table) = data.table.as_ref().filter(|table| {
+        table.labels.len() > 1
+            || table.describe.is_some()
+            || table.options != dataframe::ReadOptions::default()
+    }) {
         table.version.hash(&mut hasher);
         table.labels.hash(&mut hasher);
         table.describe.is_some().hash(&mut hasher);
+        table.options.hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -771,7 +782,11 @@ fn apply_text_view(
     if view == CardView::Dataframe {
         match table {
             Some(table) if table.describe.is_some() => show_description(card, table),
-            Some(table) if table.version > 0 => show_table_version(card, table, full),
+            Some(table)
+                if table.version > 0 || table.options != dataframe::ReadOptions::default() =>
+            {
+                show_table_version(card, table, full)
+            }
             _ => show_dataframe(card, source, full),
         }
         if let Some(error) = table.and_then(|table| table.error.as_deref()) {
@@ -950,6 +965,13 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
         card.excerpt = preview.grid;
     } else {
         card.excerpt = shown_body(&preview.grid);
+    }
+    for note in table
+        .notes
+        .iter()
+        .flat_map(dataframe::ReadNotes::meta_notes)
+    {
+        add_meta_note(card, &note);
     }
 }
 
@@ -1321,7 +1343,20 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
 pub fn chips(data: &LaunchData) -> Vec<Command> {
     match data.subject_kind {
         SubjectKind::Image => image_chips(data.image_scan.as_ref()),
-        SubjectKind::Text => copied_text_chips(data.subject_text.as_deref().unwrap_or("")),
+        SubjectKind::Text => {
+            let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
+            // The date question, in the Dataframe view while dates fit both orders.
+            if data.view == CardView::Dataframe
+                && let Some(question) = data
+                    .table
+                    .as_ref()
+                    .and_then(|table| table.notes)
+                    .and_then(|notes| date_order_command(&notes))
+            {
+                chips.push(question);
+            }
+            chips
+        }
         SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => Vec::new(),
     }
 }
@@ -1416,8 +1451,55 @@ fn table_step_command(op: &crate::table::TableOp) -> Command {
 pub fn menu_group(id: &CommandId) -> Option<&'static str> {
     match id {
         CommandId::TableStep(op) => op.group(),
+        CommandId::TableHeaderLine(_) => Some("Header on line"),
         _ => None,
     }
+}
+
+/// The date question: when a date column fits both orders, a command to read it the other
+/// way ("Dates are mm/dd/yyyy").
+fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command> {
+    if !notes.ambiguous_dates {
+        return None;
+    }
+    let (title, month_first) = if notes.month_first {
+        ("Dates are dd/mm/yyyy", false)
+    } else {
+        ("Dates are mm/dd/yyyy", true)
+    };
+    Some(command(
+        CommandId::TableDateOrder(month_first),
+        title,
+        "Dates fit both orders",
+        "dates order day month us european ambiguous",
+    ))
+}
+
+/// The "Table ▾" menu with check marks: [`table_menu`], the header line the table is read
+/// from checked.
+pub fn table_menu_items(table: Option<&TableShown>) -> Vec<(Command, bool)> {
+    let mut items: Vec<(Command, bool)> = table_menu(table)
+        .into_iter()
+        .map(|command| (command, false))
+        .collect();
+    let Some(notes) = table.and_then(|table| table.notes) else {
+        return items;
+    };
+    let Some(start) = notes.start else {
+        return items;
+    };
+    for line in 0..notes.header_lines {
+        items.push((
+            command(
+                CommandId::TableHeaderLine(line),
+                &format!("Line {}", line + 1),
+                "Header on line",
+                "header line row",
+            ),
+            line == start.header_line,
+        ));
+    }
+    items
 }
 
 /// The "Table ▾" menu: Describe (or back to the table), the steps, then undo and redo when
@@ -1425,6 +1507,12 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
 pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
     let describing = table.is_some_and(|table| table.describe.is_some());
     let mut commands = vec![describe_command(describing)];
+    if let Some(question) = table
+        .and_then(|table| table.notes)
+        .and_then(|notes| date_order_command(&notes))
+    {
+        commands.push(question);
+    }
     match table {
         Some(table) => commands.extend(table_commands(table)),
         None => commands.extend(table_steps()),
@@ -1791,6 +1879,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableVersion(_)
             | CommandId::TableMenu
             | CommandId::TableDescribe
+            | CommandId::TableHeaderLine(_)
+            | CommandId::TableDateOrder(_)
     )
 }
 
@@ -2126,7 +2216,8 @@ mod tests {
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use super::{
-        TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_commands, table_menu, undo_key,
+        TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_commands, table_menu,
+        table_menu_items, undo_key,
     };
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
@@ -3188,6 +3279,8 @@ Id,Naam,Telefoonnummer,Salaris
             working: false,
             error: None,
             describe: None,
+            options: versions.options(),
+            notes: versions.notes(),
         }
     }
 
@@ -3366,6 +3459,91 @@ Id,Naam,Telefoonnummer,Salaris
                 .iter()
                 .all(|c| menu_group(&c.id).is_none())
         );
+    }
+
+    /// `src` read as `options`, as the card gets it.
+    fn read(src: &str, options: crate::dataframe::ReadOptions) -> TableShown {
+        use crate::table::TableVersions;
+        let mut versions = TableVersions::default();
+        let job = match versions.reread(options, src) {
+            Some(job) => job,
+            None => versions.load(src).expect("load"),
+        };
+        let done = job
+            .run(&std::sync::atomic::AtomicBool::new(false))
+            .expect("job");
+        assert!(versions.finish(done));
+        TableShown {
+            frame: versions.frame().cloned(),
+            frame_id: versions.frame_id(),
+            version: versions.cursor(),
+            labels: versions.labels(),
+            working: false,
+            error: None,
+            describe: None,
+            options: versions.options(),
+            notes: versions.notes(),
+        }
+    }
+
+    #[test]
+    fn dates_in_either_order_ask_with_a_chip_and_the_header_line_can_be_set() {
+        use crate::dataframe::ReadOptions;
+        let src = "Export\nwhen,n\n01/02/2026,1\n03/04/2026,2";
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        input.table = Some(read(src, ReadOptions::default()));
+        let question = chips(&input)
+            .into_iter()
+            .find(|c| c.id == CommandId::TableDateOrder(true))
+            .expect("question");
+        assert_eq!(question.title, "Dates are mm/dd/yyyy");
+        // The Original view does not ask.
+        input.view = CardView::Original;
+        assert!(
+            !chips(&input)
+                .iter()
+                .any(|c| matches!(c.id, CommandId::TableDateOrder(_)))
+        );
+        // The header lines, the one read checked.
+        let items = table_menu_items(input.table.as_ref());
+        let lines: Vec<(&str, bool)> = items
+            .iter()
+            .filter(|(c, _)| menu_group(&c.id) == Some("Header on line"))
+            .map(|(c, checked)| (c.title.as_str(), *checked))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("Line 1", false),
+                ("Line 2", true),
+                ("Line 3", false),
+                ("Line 4", false)
+            ]
+        );
+        // Read month first: the card renders the frame and says so; the chip asks back.
+        let month_first = ReadOptions {
+            month_first: true,
+            ..ReadOptions::default()
+        };
+        input.view = CardView::Dataframe;
+        let plain_key = content_key(&input);
+        input.table = Some(read(src, month_first));
+        let card = work_card(&input);
+        assert!(card.meta.contains("Header on line 2"), "{}", card.meta);
+        assert!(
+            card.meta.contains("Dates read as mm/dd/yyyy"),
+            "{}",
+            card.meta
+        );
+        assert!(card.excerpt.contains("2026-01-02"), "{}", card.excerpt);
+        assert_ne!(content_key(&input), plain_key);
+        assert!(
+            chips(&input)
+                .iter()
+                .any(|c| c.id == CommandId::TableDateOrder(false))
+        );
+        assert!(keeps_card_open(&CommandId::TableHeaderLine(0)));
     }
 
     #[test]

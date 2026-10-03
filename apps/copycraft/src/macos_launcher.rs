@@ -205,6 +205,8 @@ thread_local! {
     static VERSION_ROW: RefCell<Option<VersionRow>> = const { RefCell::new(None) };
     /// The "Table ▾" menu's commands ([`commands::table_menu`]).
     static TABLE_MENU: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
+    /// Which of [`TABLE_MENU`]'s items have a check mark.
+    static TABLE_MENU_CHECKS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
     /// The commands of the menu popped last (table steps or versions), by item tag.
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The window's one field editor, made on first use. It takes no drops (see
@@ -653,7 +655,11 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
-    TABLE_MENU.with(|slot| set_commands(slot, commands::table_menu(data.table.as_ref())));
+    let (menu, checks): (Vec<Command>, Vec<bool>) = commands::table_menu_items(data.table.as_ref())
+        .into_iter()
+        .unzip();
+    TABLE_MENU.with(|slot| set_commands(slot, menu));
+    TABLE_MENU_CHECKS.with(|slot| slot.replace(checks));
 }
 
 fn hide() {
@@ -2883,10 +2889,12 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
 
 /// The "Table ▾" chip's menu: the steps, undo and redo.
 fn pop_table_menu() {
+    let checks = TABLE_MENU_CHECKS.with(|slot| slot.borrow().clone());
     let items: Vec<(Command, bool)> = TABLE_MENU.with(|slot| {
         slot.borrow()
             .iter()
-            .map(|cmd| (cmd.clone(), false))
+            .enumerate()
+            .map(|(index, cmd)| (cmd.clone(), checks.get(index).copied().unwrap_or(false)))
             .collect()
     });
     let index = SHOWN.with(|slot| {

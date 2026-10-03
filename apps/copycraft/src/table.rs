@@ -221,6 +221,8 @@ enum JobBase {
 pub struct Job {
     pub generation: u64,
     base: JobBase,
+    /// How the copied text is read, when the job starts from it.
+    options: crate::dataframe::ReadOptions,
     ops: Vec<TableOp>,
     /// The version shown when done.
     target: usize,
@@ -236,6 +238,8 @@ pub struct JobDone {
     new_step: Option<TableOp>,
     original: Option<DataFrame>,
     frame: DataFrame,
+    /// What reading the copied text found (a job from the text).
+    notes: Option<crate::dataframe::ReadNotes>,
 }
 
 impl JobDone {
@@ -247,10 +251,13 @@ impl JobDone {
 impl Job {
     /// Replay the steps. `cancel` is checked before each one.
     pub fn run(self, cancel: &AtomicBool) -> Result<JobDone, TableError> {
+        let mut read = None;
         let (original, mut frame) = match self.base {
             JobBase::Frame(frame) => (None, frame),
             JobBase::Source(text) => {
-                let frame = crate::dataframe::parse_table(&text).ok_or(TableError::NotATable)?;
+                let (frame, notes) = crate::dataframe::parse_table_with(&text, self.options)
+                    .ok_or(TableError::NotATable)?;
+                read = Some(notes);
                 (Some(frame.clone()), frame)
             }
         };
@@ -268,6 +275,7 @@ impl Job {
             new_step: self.new_step,
             original,
             frame,
+            notes: read,
         })
     }
 }
@@ -288,6 +296,8 @@ pub struct TableVersions {
     cursor: usize,
     generation: u64,
     frames: Option<Frames>,
+    options: crate::dataframe::ReadOptions,
+    notes: Option<crate::dataframe::ReadNotes>,
 }
 
 impl Clone for TableVersions {
@@ -298,6 +308,8 @@ impl Clone for TableVersions {
             cursor: self.cursor,
             generation: self.generation,
             frames: None,
+            options: self.options,
+            notes: self.notes,
         }
     }
 }
@@ -390,6 +402,7 @@ impl TableVersions {
         self.generation = next_generation();
         Job {
             generation: self.generation,
+            options: self.options,
             base,
             ops,
             target,
@@ -413,6 +426,9 @@ impl TableVersions {
             self.steps.push(op);
         }
         self.cursor = done.target.min(self.steps.len());
+        if done.notes.is_some() {
+            self.notes = done.notes;
+        }
         self.frames = Some(Frames {
             generation: done.generation,
             original,
@@ -427,6 +443,30 @@ impl TableVersions {
         self.generation = next_generation();
     }
 
+    /// How the copied text is read.
+    pub fn options(&self) -> crate::dataframe::ReadOptions {
+        self.options
+    }
+
+    /// What reading the copied text found, once it was read.
+    pub fn notes(&self) -> Option<crate::dataframe::ReadNotes> {
+        self.notes
+    }
+
+    /// Read the copied text as `options` says: the table starts over from the original (its
+    /// columns can change, so the steps go). `None` when it is read that way already.
+    pub fn reread(&mut self, options: crate::dataframe::ReadOptions, source: &str) -> Option<Job> {
+        if options == self.options {
+            return None;
+        }
+        self.options = options;
+        self.steps.clear();
+        self.cursor = 0;
+        self.frames = None;
+        self.notes = None;
+        self.load(source)
+    }
+
     /// `generation` is this table's newest job.
     pub fn awaits(&self, generation: u64) -> bool {
         self.generation == generation
@@ -436,6 +476,7 @@ impl TableVersions {
 #[cfg(test)]
 mod tests {
     use super::{MAX_VERSIONS, TableError, TableOp, TableVersions};
+    use crate::dataframe::ReadOptions;
     use std::sync::atomic::AtomicBool;
 
     const SRC: &str = "name,n\na,1\na,1\nb,2";
@@ -542,5 +583,37 @@ mod tests {
             job.run(&AtomicBool::new(false)).err(),
             Some(TableError::NotATable)
         );
+    }
+
+    #[test]
+    fn reading_the_text_another_way_starts_over() {
+        let src = "Export of 2026\nwhen,n\n01/02/2026,1\n01/02/2026,1\n03/04/2026,2";
+        let mut versions = TableVersions::default();
+        let job = versions.push(TableOp::Dedupe, src).expect("push");
+        assert!(run(&mut versions, job));
+        let notes = versions.notes().expect("notes");
+        assert_eq!(notes.start.map(|start| start.header_line), Some(1));
+        assert!(notes.ambiguous_dates && !notes.month_first);
+        // Dates the other way round: the steps go, the original is read again.
+        let options = ReadOptions {
+            month_first: true,
+            ..ReadOptions::default()
+        };
+        let job = versions.reread(options, src).expect("reread");
+        assert_eq!((versions.len(), versions.cursor()), (1, 0));
+        assert!(run(&mut versions, job));
+        assert!(versions.notes().is_some_and(|notes| notes.month_first));
+        assert!(versions.reread(options, src).is_none());
+        // The header on the first line instead: one column, "Export of 2026", is no table.
+        let first_line = ReadOptions {
+            header_line: Some(0),
+            ..options
+        };
+        let job = versions.reread(first_line, src).expect("reread");
+        assert_eq!(
+            job.run(&AtomicBool::new(false)).err(),
+            Some(TableError::NotATable)
+        );
+        assert_eq!(versions.clone().options(), first_line);
     }
 }
