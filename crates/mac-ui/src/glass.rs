@@ -173,22 +173,15 @@ fn merge_spacing(spacing: f64) -> f64 {
     if spacing > 0.0 { spacing } else { 0.0 }
 }
 
-/// Major version of the running macOS from `sw_vers`, for tests that check the runtime fallbacks
-/// against the OS they run on (CI runs them on macOS 26 and on an older macOS). `None` when it
-/// cannot be read.
+/// Major version of the running macOS (`NSProcessInfo`), for tests that check the runtime
+/// fallbacks against the OS they run on (CI runs them on macOS 26 and on an older macOS). `None`
+/// when it cannot be read.
 #[cfg(test)]
 pub(crate) fn running_macos_major() -> Option<u32> {
-    let out = std::process::Command::new("/usr/bin/sw_vers")
-        .arg("-productVersion")
-        .output()
-        .ok()?;
-    String::from_utf8(out.stdout)
-        .ok()?
-        .trim()
-        .split('.')
-        .next()?
-        .parse()
+    let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+    u32::try_from(version.majorVersion)
         .ok()
+        .filter(|major| *major > 0)
 }
 
 #[cfg(test)]

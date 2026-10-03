@@ -29,7 +29,7 @@ dirs = "7.0"
 # Heap profiling only (`--features dhat-heap`); not built otherwise.
 dhat = { version = "0.3", optional = true }
 # `dialog`: native NSAlert prompts and pickers (mac_ui::dialog). `notify`: native notifications
-# (mac_ui::notify; osascript when not run from the app bundle).
+# (mac_ui::notify; without the app bundle ticker falls back on osascript itself, in watch_ui.rs).
 mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify"] }
 arboard = { workspace = true }
 # Minimal features: DataFrame + Display. Avoids polars-io/object_store → quick-xml 0.38 (RUSTSEC-2026-0194/0195).

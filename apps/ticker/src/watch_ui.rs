@@ -38,10 +38,32 @@ impl WatchUIBuilder {
     }
 }
 
-/// Send a native notification on macOS (osascript when not run from the app bundle).
+/// Send a native notification on macOS. Without the app bundle (`cargo run`) the
+/// UserNotifications framework cannot be used, so ticker falls back on `osascript` `display
+/// notification`. That fallback lives here, not in mac-ui: the shared layer starts no
+/// subprocesses (AGENTS.md).
 #[cfg(target_os = "macos")]
 pub fn send_macos_notification(title: &str, message: &str) {
-    mac_ui::notify::send(title, message);
+    if !mac_ui::notify::send(title, message) {
+        send_with_osascript(title, message);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn send_with_osascript(title: &str, body: &str) {
+    let script = format!(
+        "display notification \"{}\" with title \"{}\"",
+        applescript_escape(body),
+        applescript_escape(title)
+    );
+    let _ = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .status();
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn applescript_escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Ask for notification permission (first launch of the bundled app only) and show
@@ -62,6 +84,11 @@ pub fn send_macos_notification(_title: &str, _message: &str) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escapes_quotes_and_backslashes() {
+        assert_eq!(applescript_escape(r#"a "b" \c"#), r#"a \"b\" \\c"#);
+    }
 
     #[test]
     fn test_watch_status_indicator_no_watches() {

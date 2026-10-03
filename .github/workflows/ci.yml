@@ -58,8 +58,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      # No HTTP/TLS/socket crates in copycraft's dependency tree and no osascript in its sources
-      # (socket2 via polars → tokio is allowlisted, see the script).
+      # No HTTP/TLS/socket crates in copycraft's dependency tree, no osascript in its sources, and
+      # no subprocess or network code in mac-ui (socket2 via polars → tokio is allowlisted, see
+      # the script).
       - name: Copycraft offline guards
         run: scripts/check_copycraft_offline.sh
 

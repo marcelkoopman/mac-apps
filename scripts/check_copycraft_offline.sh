@@ -3,8 +3,11 @@
 #   1. copycraft's normal dependency tree for aarch64-apple-darwin holds an HTTP, TLS, WebSocket
 #      or socket crate (reqwest, hyper, ureq, curl, isahc, rustls, native-tls, openssl,
 #      tungstenite, socket2, or a crate named after one, such as hyper-util or openssl-sys);
-#   2. copycraft's sources mention osascript.
-# Subprocesses and std::net / std::os::unix::net are caught by clippy instead
+#   2. copycraft's sources mention osascript;
+#   3. the shared layer (crates/mac-ui/src) starts a subprocess or uses std::net /
+#      std::os::unix::net: with feature unification in workspace builds, whatever mac-ui holds
+#      can end up in copycraft. Ticker keeps its own subprocess code (its osascript fallback).
+# In copycraft itself, subprocesses and std::net / std::os::unix::net are caught by clippy
 # (apps/copycraft/clippy.toml).
 #
 # Allowlisted: socket2, only as a dependency of tokio, and tokio only as a dependency of polars
@@ -47,4 +50,8 @@ if grep -rn osascript apps/copycraft/src apps/copycraft/Cargo.toml; then
   die "osascript in copycraft: dialogen en panels zijn native in-process (AGENTS.md)"
 fi
 
-echo -e "${GREEN}copycraft: geen netwerk-crates (socket2 via polars → tokio toegestaan), geen osascript${NC}"
+if grep -rnE 'process::Command|Command::new|std::net|os::unix::net|TcpStream|UdpSocket|UnixStream' crates/mac-ui/src; then
+  die "Subprocess- of netwerkcode in crates/mac-ui: de gedeelde laag heeft die niet, die hoort in de app zelf (AGENTS.md)"
+fi
+
+echo -e "${GREEN}copycraft: geen netwerk-crates (socket2 via polars → tokio toegestaan), geen osascript; mac-ui: geen subprocessen of netwerk${NC}"

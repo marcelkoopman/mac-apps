@@ -1,9 +1,9 @@
-//! User notifications. From an app bundle they go through the UserNotifications framework
-//! (listed as the app under System Settings > Notifications); without a bundle identifier (for
-//! example `cargo run`) through `osascript` `display notification`, because
-//! `UNUserNotificationCenter` raises an Objective-C exception in that case.
+//! User notifications through the UserNotifications framework (listed as the app under System
+//! Settings > Notifications). Only from an app bundle: without a bundle identifier (for example
+//! `cargo run`) `UNUserNotificationCenter` raises an Objective-C exception, so [`send`] sends
+//! nothing then and says so. The shared layer starts no subprocesses (AGENTS.md); an app that
+//! wants a fallback without a bundle keeps it itself (ticker uses `osascript`).
 
-use std::process::Command;
 use std::sync::Once;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -84,11 +84,11 @@ pub fn request_authorization() {
 }
 
 /// Post a notification with `title` and `body` (no sound), shown right away. Does not wait and
-/// does not report failures, for example when the user turned notifications off.
-pub fn send(title: &str, body: &str) {
+/// does not report failures, for example when the user turned notifications off. Returns
+/// `false`, having sent nothing, when the process does not run from an app bundle.
+pub fn send(title: &str, body: &str) -> bool {
     if !is_bundled() {
-        send_with_osascript(title, body);
-        return;
+        return false;
     }
     request_authorization();
     let content = UNMutableNotificationContent::new();
@@ -101,6 +101,7 @@ pub fn send(title: &str, body: &str) {
     );
     UNUserNotificationCenter::currentNotificationCenter()
         .addNotificationRequest_withCompletionHandler(&request, None);
+    true
 }
 
 /// Unique per process and per call; requests with the same identifier replace each other.
@@ -112,27 +113,9 @@ fn unique_id() -> String {
     format!("mac-ui-{}-{nanos}-{count}", std::process::id())
 }
 
-fn send_with_osascript(title: &str, body: &str) {
-    let script = format!(
-        "display notification \"{}\" with title \"{}\"",
-        applescript_escape(body),
-        applescript_escape(title)
-    );
-    let _ = Command::new("osascript").args(["-e", &script]).status();
-}
-
-fn applescript_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn escapes_quotes_and_backslashes() {
-        assert_eq!(applescript_escape(r#"a "b" \c"#), r#"a \"b\" \\c"#);
-    }
 
     #[test]
     fn ids_differ_per_call() {

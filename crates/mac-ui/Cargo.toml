@@ -106,8 +106,9 @@ progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "o
 blur = ["objc2-foundation/NSArray"]
 # `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
 image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep"]
-# `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
-# `display notification` without one).
+# `mac_ui::notify`: user notifications through the UserNotifications framework, from an app
+# bundle only. No subprocess here: an app that wants a fallback without a bundle (ticker's
+# osascript) keeps it itself, so feature unification never pulls it into another app.
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]
 
 [dependencies]
@@ -133,3 +134,7 @@ block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }
 # `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+# Tests read the running macOS version (`glass::running_macos_major`).
+objc2-foundation = { workspace = true, features = ["NSProcessInfo"] }
