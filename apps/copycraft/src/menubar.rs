@@ -25,7 +25,10 @@ use crate::hotkey;
 use crate::icon;
 use crate::launcher::{self, UserEvent};
 
+/// How often the pasteboard is polled while the card is open.
 const REFRESH: Duration = Duration::from_millis(400);
+/// How often it is polled while the card is closed. A quiet tick reads only the change count.
+const IDLE_REFRESH: Duration = Duration::from_secs(1);
 /// A copy copycraft wrote that is labelled sensitive is cleared from the pasteboard this long
 /// after the write, when that setting is on and nothing else was copied since.
 const SENSITIVE_CLEAR_AFTER: Duration = Duration::from_secs(60);
@@ -77,6 +80,10 @@ struct App {
     format_hotkey_id: u32,
     /// The sensitive copy copycraft wrote last, to clear when its minute is up.
     sensitive_clear: Option<SensitiveClear>,
+    /// The pasteboard change count the last poll looked at.
+    polled_change: Option<isize>,
+    /// The last poll found nothing or no text: look again even without a new change count.
+    poll_again: bool,
 }
 
 /// A pasteboard write to clear at `due`, if the pasteboard still holds it (`change`).
@@ -783,7 +790,7 @@ impl App {
     /// Show the card spinner once background work (a save, "Show all") runs longer than
     /// [`SPINNER_DELAY`]. Returns when the event loop should wake up next.
     fn spin_slow_work(&mut self, now: Instant) -> Instant {
-        let wake = now + REFRESH;
+        let wake = now + poll_interval(launcher::is_open());
         if self.spinner_on {
             return wake;
         }
@@ -989,6 +996,7 @@ impl App {
             eprintln!("clear clipboard failed: {e}");
         }
         self.signature = ClipSig::default();
+        self.polled_change = None;
         let view = ClipboardView::from_os();
         self.sync_tooltip(&view);
         self.refresh_status_menu();
@@ -1245,7 +1253,22 @@ impl App {
     }
 
     fn note_clipboard(&mut self, now: Instant) -> bool {
+        // A quiet tick reads only the change count: no copy, hash or record of the text. A
+        // promised file can put its picture on the pasteboard without a new change count, so an
+        // empty or textless reading is looked at again.
+        #[cfg(target_os = "macos")]
+        {
+            let change = crate::macos_pasteboard::change_count();
+            if self.polled_change == Some(change)
+                && !self.poll_again
+                && self.signature.history_len == self.history.len()
+            {
+                return false;
+            }
+            self.polled_change = Some(change);
+        }
         let view = ClipboardView::from_os();
+        self.poll_again = matches!(view, ClipboardView::Empty | ClipboardView::NoText);
         self.record_current(&view);
         let signature = self.clip_signature(&view);
         let image_change = signature.image_change;
@@ -1360,6 +1383,11 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
 
 /// Classify a large copy on a background thread, so the card finds the format and the
 /// sensitive-data labels remembered (see [`crate::memo`]) instead of scanning on the main thread.
+/// The next poll: sooner while the card is open and follows the clipboard.
+fn poll_interval(card_open: bool) -> Duration {
+    if card_open { REFRESH } else { IDLE_REFRESH }
+}
+
 fn prewarm(text: &str) {
     if text.len() < PREWARM_LEN {
         return;
@@ -1523,6 +1551,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         _hotkeys: hotkeys,
         format_hotkey_id,
         sensitive_clear: None,
+        polled_change: None,
+        poll_again: false,
     };
     event_loop.run_app(&mut app)?;
     Ok(())

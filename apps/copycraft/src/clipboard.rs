@@ -250,8 +250,14 @@ pub struct ClipboardHistory {
 }
 
 impl ClipboardHistory {
+    /// `text` as the newest copy. Already the newest: nothing changes (`text` is zeroized), so
+    /// the entry keeps its cards. Further down: that entry is replaced by a new one in front.
     pub fn record(&mut self, mut text: String) {
-        if text.trim().is_empty() {
+        let newest = self.entries.first().is_some_and(|entry| match &entry.body {
+            HistoryBody::Text(existing) => existing.as_str() == text,
+            HistoryBody::Image(_) => false,
+        });
+        if newest || text.trim().is_empty() {
             text.zeroize();
             return;
         }
@@ -261,6 +267,15 @@ impl ClipboardHistory {
         });
         self.entries.insert(0, HistoryEntry::text(text));
         self.entries.truncate(MAX_HISTORY);
+    }
+
+    /// Move entry `index` to the front without dropping it: dropping zeroizes the entry, and a
+    /// picture's bytes are shared with the handles that point at it.
+    fn move_to_front(&mut self, index: usize) {
+        if index > 0 {
+            let entry = self.entries.remove(index);
+            self.entries.insert(0, entry);
+        }
     }
 
     /// [`record`](Self::record) `text`, and say where the entry that was at `cursor` is now:
@@ -302,19 +317,31 @@ impl ClipboardHistory {
         moved.min(self.entries.len().saturating_sub(1))
     }
 
+    /// The picture as the newest copy, and the handle history keeps for it.
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
         let bytes = SecretBytes::new(bytes)?;
-        self.insert_image(bytes.clone());
-        Some(bytes)
+        Some(self.insert_image(bytes))
     }
 
-    fn insert_image(&mut self, bytes: SecretBytes) {
+    /// Like [`record`](Self::record) for a picture. The entry that holds these very bytes (a
+    /// history entry put back) moves to the front: dropping it would zeroize the bytes it shares
+    /// with `bytes`. An equal picture in other bytes is replaced by `bytes`, as before.
+    fn insert_image(&mut self, bytes: SecretBytes) -> SecretBytes {
+        let shared = self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Image(existing) => existing.same_allocation(&bytes),
+            HistoryBody::Text(_) => false,
+        });
+        if let Some(index) = shared {
+            self.move_to_front(index);
+            return bytes;
+        }
         self.entries.retain(|existing| match &existing.body {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
         });
-        self.entries.insert(0, HistoryEntry::image(bytes));
+        self.entries.insert(0, HistoryEntry::image(bytes.clone()));
         self.entries.truncate(MAX_HISTORY);
+        bytes
     }
 
     pub fn get(&self, index: usize) -> Option<&str> {
@@ -643,6 +670,32 @@ mod tests {
         let again = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
         assert_eq!(history.record_image_tracking(again, 1), 1);
         assert_eq!(history.len(), 2);
+    }
+
+    #[test]
+    fn putting_a_history_picture_back_keeps_its_bytes() {
+        let mut history = ClipboardHistory::default();
+        let bytes = history.record_image(vec![1, 2, 3]).expect("image");
+        history.record("newer".into());
+        // Chosen from the menu: the entry's own handle goes back in front.
+        let shared = history.image(1).expect("image");
+        assert_eq!(history.record_image_tracking(shared, 0), 1);
+        assert_eq!(history.len(), 2);
+        assert!(history.image(0).expect("image").same_allocation(&bytes));
+        assert_eq!(bytes.with(<[u8]>::to_vec), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn recording_the_newest_text_again_changes_nothing() {
+        let mut history = ClipboardHistory::default();
+        history.record("older".into());
+        history.record("clip".into());
+        history.record("clip".into());
+        assert_eq!(history.len(), 2);
+        assert_eq!(history.get(0), Some("clip"));
+        history.record("older".into());
+        assert_eq!(history.get(0), Some("older"));
+        assert_eq!(history.get(1), Some("clip"));
     }
 
     #[test]

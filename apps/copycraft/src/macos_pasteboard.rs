@@ -696,8 +696,13 @@ fn read_view(pasteboard: &NSPasteboard) -> (ClipboardView, Option<PathBuf>) {
     autoreleasepool(|_| {
         let text = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeString });
         // Copying a PNG file also puts its name on the pasteboard. That name is
-        // the file, so it still counts as an image. Other text stays text.
-        let copied_file = image_file(pasteboard);
+        // the file, so it still counts as an image. Other text stays text. Only text that
+        // could be a name or path is checked against the file URL types.
+        let copied_file = text
+            .as_deref()
+            .is_none_or(could_name_a_file)
+            .then(|| image_file(pasteboard))
+            .flatten();
         match text {
             Some(text)
                 if !text.trim().is_empty()
@@ -719,6 +724,12 @@ fn read_view(pasteboard: &NSPasteboard) -> (ClipboardView, Option<PathBuf>) {
             }
         }
     })
+}
+
+/// Blank, or one short line: the text Finder puts next to a copied file.
+fn could_name_a_file(text: &str) -> bool {
+    let text = text.trim();
+    text.len() <= 4096 && !text.contains('\n')
 }
 
 fn names_copied_image(text: &str, path: Option<&std::path::Path>) -> bool {
