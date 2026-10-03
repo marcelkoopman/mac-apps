@@ -38,9 +38,7 @@ use crate::item_find;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 440.0;
-use crate::card_layout::{
-    HEADER_H, ITEM_FIND_H, META_H, PAD, PREVIEW_H, VERSION_H, place_sections,
-};
+use crate::card_layout::{HEADER_H, ITEM_FIND_H, META_H, PAD, PREVIEW_H, place_sections};
 const HEADER_BUTTON: f64 = 22.0;
 const CLEAR_BUTTON_W: f64 = 64.0;
 const WELL_ACTION: f64 = 26.0;
@@ -175,6 +173,9 @@ thread_local! {
     static SHOW_ALL: RefCell<Option<ShowAllButton>> = const { RefCell::new(None) };
     static REVEAL: RefCell<Option<RevealCover>> = const { RefCell::new(None) };
     static REVEALED: Cell<bool> = const { Cell::new(false) };
+    /// The labels the card had when it was revealed ([`commands::stays_revealed`]).
+    static REVEALED_WITH: RefCell<Vec<crate::sensitivity::Label>> =
+        const { RefCell::new(Vec::new()) };
     /// In-item search is visible only while the well is revealed.
     static FIND_ON: Cell<bool> = const { Cell::new(false) };
     /// Zero-based index of the match Enter last landed on.
@@ -199,9 +200,9 @@ thread_local! {
     static MASKS: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
-    /// The table's version bar ([`commands::VersionBar`]); `None` hides it.
+    /// The table's version capsule ([`commands::VersionBar`]); `None` hides it.
     static VERSION_BAR: RefCell<Option<commands::VersionBar>> = const { RefCell::new(None) };
-    /// The version bar's views.
+    /// The version capsule's views.
     static VERSION_ROW: RefCell<Option<VersionRow>> = const { RefCell::new(None) };
     /// The "Table ▾" menu's commands ([`commands::table_menu`]).
     static TABLE_MENU: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
@@ -422,6 +423,7 @@ define_class!(
                 return;
             }
             REVEALED.set(true);
+            REVEALED_WITH.with(|slot| slot.replace(commands::meta_labels(&card_meta())));
             layout(false);
         }
 
@@ -628,11 +630,21 @@ fn store(data: LaunchData) {
 }
 
 fn store_with_card(data: LaunchData, card: commands::WorkCard) {
+    // Another entry is masked again. The same one (a table step, undo, redo, another version
+    // or view) stays revealed unless it gained a label ([`commands::stays_revealed`]).
     let key = commands::content_key(&data);
     if CONTENT_KEY.with(Cell::get) != key {
         CONTENT_KEY.set(key);
         REVEALED.set(false);
         set_item_find(false);
+    } else if REVEALED.with(Cell::get) {
+        let checking = crate::sensitivity::meta_status(&card.meta).is_some();
+        let next = commands::meta_labels(&card.meta);
+        let stays = REVEALED_WITH
+            .with(|slot| commands::stays_revealed(true, &slot.borrow(), &next, checking));
+        if !stays {
+            REVEALED.set(false);
+        }
     }
     PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
     MASKS.set(commands::masks_content(&card, data.view));
@@ -848,11 +860,8 @@ fn layout(fresh_place: bool) {
         .collect();
     let inner = WIDTH - PAD * 2.0;
     let nav = HISTORY_NAV.with(|slot| *slot.borrow());
-    let reserve = if nav.is_some() {
-        commands::NAV_RESERVE
-    } else {
-        0.0
-    };
+    let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
+    let reserve = commands::trailing_reserve(nav.is_some(), version_bar.is_some());
     let frames = if shown.is_empty() {
         Vec::new()
     } else {
@@ -860,15 +869,13 @@ fn layout(fresh_place: bool) {
     };
     let show_empty = shown.is_empty() && searching && !query.trim().is_empty();
     let item_find = !well_is_masked();
-    let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
     let placed = place_sections(
         &meta,
         searching,
         &frames,
         show_empty,
-        nav.is_some(),
+        nav.is_some() || version_bar.is_some(),
         item_find,
-        version_bar.is_some(),
     );
     place_window(mtm, placed.height, fresh_place);
     let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
@@ -895,7 +902,6 @@ fn layout(fresh_place: bool) {
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
     place_show_all(mtm, placed.preview_y);
-    place_version_row(placed.version_y, version_bar.as_ref());
     META.with(|slot| {
         let borrowed = slot.borrow();
         let Some(label) = borrowed.as_ref() else {
@@ -948,6 +954,7 @@ fn layout(fresh_place: bool) {
     let nav_y = placed.chips_y + placed.chips_h - commands::CHIP_PITCH
         + (commands::CHIP_PITCH - commands::CHIP_PILL_H) / 2.0;
     place_history_nav(nav_y, nav);
+    place_version_row(nav_y, nav.is_some(), version_bar.as_ref());
     let selected = SELECTION.with(Cell::get);
     if shown.is_empty() {
         SELECTION.set(0);
@@ -2429,12 +2436,20 @@ fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
     });
 }
 
+/// The history and version capsules on top of the chips.
 fn raise_history_nav() {
     NAV_CAPSULE.with(|slot| {
         if let Some(capsule) = slot.borrow().as_ref()
             && !capsule.isHidden()
         {
             raise_view(capsule);
+        }
+    });
+    VERSION_ROW.with(|slot| {
+        if let Some(row) = slot.borrow().as_ref()
+            && !row.capsule.isHidden()
+        {
+            raise_view(&row.capsule);
         }
     });
 }
@@ -2724,24 +2739,24 @@ fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     })
 }
 
-/// The version bar: a glass capsule under the well with undo `↶`, the version shown (a button
-/// that pops the list of versions) and redo `↷`.
+/// The table's version capsule in the chip row, left of the history capsule: undo `↶`, the
+/// version shown (`v2/3`, a button that pops the list of versions) and redo `↷`. Built like
+/// the history capsule ([`history_capsule`]): same height, glass, font and buttons.
 struct VersionRow {
     capsule: Retained<NSView>,
     undo: GlassButton,
-    title: GlassButton,
+    title: Retained<NSButton>,
     redo: GlassButton,
 }
 
-/// Width of the undo and redo slots in the version bar.
-const VERSION_BUTTON: f64 = 32.0;
-
 fn version_row(mtm: MainThreadMarker) -> VersionRow {
-    let height = VERSION_H;
-    let width = WIDTH - PAD * 2.0;
+    let height = commands::CHIP_PILL_H;
     let capsule = NSView::initWithFrame(
         NSView::alloc(mtm),
-        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, height)),
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(commands::VERSION_SPAN, height),
+        ),
     );
     capsule.setHidden(true);
     let inside = glass::background(mtm, &capsule, height / 2.0).content;
@@ -2755,6 +2770,7 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
         if has_image {
             ns.setImagePosition(NSCellImagePosition::ImageOnly);
         }
+        ns.setAlignment(NSTextAlignment::Center);
         ns.setAccessibilityLabel(Some(&NSString::from_str(name)));
         ns.setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
         wire_button(ns, action);
@@ -2774,26 +2790,30 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
         "⇧⌘Z",
         sel!(tableRedoClicked:),
     );
-    let title = GlassButton::pill(mtm, "", ButtonSize::Small);
-    title.button().setBordered(false);
-    title
-        .button()
-        .setToolTip(Some(&NSString::from_str("Versions of the table")));
-    wire_button(title.button(), sel!(versionsClicked:));
+    // The history count's look (tabular digits, secondary colour), as a borderless button
+    // sized to its text and centred the same way.
+    let title = widgets::text_button(mtm, "v20/20", NAV_FONT);
+    title.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
+        NAV_FONT, 0.0,
+    )));
+    title.setContentTintColor(Some(&NSColor::secondaryLabelColor()));
+    title.setAlignment(NSTextAlignment::Center);
+    wire_button(&title, sel!(versionsClicked:));
+    let title_h = title.fittingSize().height.ceil();
     undo.view().setFrame(NSRect::new(
         NSPoint::new(0.0, 0.0),
-        NSSize::new(VERSION_BUTTON, height),
+        NSSize::new(commands::NAV_BUTTON, height),
     ));
-    title.view().setFrame(NSRect::new(
-        NSPoint::new(VERSION_BUTTON, 0.0),
-        NSSize::new(width - VERSION_BUTTON * 2.0, height),
+    title.setFrame(NSRect::new(
+        NSPoint::new(commands::NAV_BUTTON, ((height - title_h) / 2.0).floor()),
+        NSSize::new(commands::NAV_COUNT_W, title_h),
     ));
     redo.view().setFrame(NSRect::new(
-        NSPoint::new(width - VERSION_BUTTON, 0.0),
-        NSSize::new(VERSION_BUTTON, height),
+        NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
+        NSSize::new(commands::NAV_BUTTON, height),
     ));
     inside.addSubview(undo.view());
-    inside.addSubview(title.view());
+    inside.addSubview(&title);
     inside.addSubview(redo.view());
     VersionRow {
         capsule,
@@ -2803,8 +2823,9 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
     }
 }
 
-/// Show the version bar at `y` with `bar`, or hide it (`None`).
-fn place_version_row(y: f64, bar: Option<&commands::VersionBar>) {
+/// Show the version capsule in the chip row at `y`, left of the history capsule when there
+/// is one (`nav`), with `bar`; or hide it (`None`).
+fn place_version_row(y: f64, nav: bool, bar: Option<&commands::VersionBar>) {
     VERSION_ROW.with(|slot| {
         let borrowed = slot.borrow();
         let Some(row) = borrowed.as_ref() else {
@@ -2815,13 +2836,15 @@ fn place_version_row(y: f64, bar: Option<&commands::VersionBar>) {
             return;
         };
         row.capsule.setFrame(NSRect::new(
-            NSPoint::new(PAD, y),
-            NSSize::new(WIDTH - PAD * 2.0, VERSION_H),
+            NSPoint::new(commands::version_capsule_x(WIDTH - PAD, nav), y),
+            NSSize::new(commands::VERSION_SPAN, commands::CHIP_PILL_H),
         ));
         row.undo.button().setEnabled(bar.can_undo());
         row.redo.button().setEnabled(bar.can_redo());
-        row.title.set_title(&bar.title());
-        row.title.set_accessibility_label(&bar.spoken());
+        let spoken = NSString::from_str(&bar.spoken());
+        row.title.setTitle(&NSString::from_str(&bar.title()));
+        row.title.setAccessibilityLabel(Some(&spoken));
+        row.title.setToolTip(Some(&spoken));
     });
 }
 
@@ -2914,13 +2937,12 @@ fn pop_table_menu() {
     }
 }
 
-/// The version bar's menu: every version, the one shown checked.
+/// The version capsule's menu: every version, the one shown checked.
 fn pop_versions_menu() {
     let Some(bar) = VERSION_BAR.with(|slot| slot.borrow().clone()) else {
         return;
     };
-    let anchor =
-        VERSION_ROW.with(|slot| slot.borrow().as_ref().map(|row| row.title.view().retain()));
+    let anchor = VERSION_ROW.with(|slot| slot.borrow().as_ref().map(|row| row.title.retain()));
     if let Some(anchor) = anchor {
         pop_menu(bar.menu(), &anchor);
     }

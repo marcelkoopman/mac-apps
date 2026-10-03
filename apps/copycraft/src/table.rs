@@ -58,7 +58,7 @@ impl TableOp {
         TableOp::Transpose,
     ];
 
-    /// Name of the version this step makes, for the version bar.
+    /// Name of the version this step makes, for the version capsule.
     pub fn label(&self) -> String {
         match self {
             Self::Dedupe => "Duplicates removed",
@@ -369,7 +369,7 @@ impl TableVersions {
         Ok(self.job(base, ops, self.cursor + 1, Some(op)))
     }
 
-    /// The job that shows version `index` (undo, redo, a click on the version bar). `None` when
+    /// The job that shows version `index` (undo, redo, a pick in the version menu). `None` when
     /// it is shown already or does not exist.
     pub fn goto(&mut self, index: usize, source: &str) -> Option<Job> {
         if index >= self.len() || (index == self.cursor && self.frames.is_some()) {

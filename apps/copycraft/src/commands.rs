@@ -13,7 +13,7 @@ pub const MAX_VISIBLE: usize = 8;
 pub const CHIP_PITCH: f64 = 34.0;
 pub const CHIP_PILL_H: f64 = 28.0;
 
-const CHIP_GAP: f64 = 6.0;
+pub const CHIP_GAP: f64 = 6.0;
 /// History chevrons: square hit areas at the ends of the history capsule, as tall as a chip.
 pub const NAV_BUTTON: f64 = 28.0;
 /// The "3 / 20" position between the chevrons. Fixed and wide enough for the longest label
@@ -149,6 +149,28 @@ pub fn arrow_action(
 
 /// Empty space kept on the right of the first chip row so the capsule fits.
 pub const NAV_RESERVE: f64 = CHIP_GAP + NAV_SPAN;
+/// The table's version capsule (`↶ v2/3 ↷`), the history capsule's size.
+pub const VERSION_SPAN: f64 = NAV_SPAN;
+
+/// Room the first chip row keeps on its right for the capsules: the history capsule (`nav`)
+/// and, left of it, the version capsule (`versions`).
+pub fn trailing_reserve(nav: bool, versions: bool) -> f64 {
+    let mut reserve = 0.0;
+    if nav {
+        reserve += NAV_RESERVE;
+    }
+    if versions {
+        reserve += CHIP_GAP + VERSION_SPAN;
+    }
+    reserve
+}
+
+/// Left edge of the version capsule in a chip row ending at `right`: just left of the history
+/// capsule when there is one, else at the right end.
+pub fn version_capsule_x(right: f64, nav: bool) -> f64 {
+    let nav_room = if nav { NAV_SPAN + CHIP_GAP } else { 0.0 };
+    right - nav_room - VERSION_SPAN
+}
 const EXCERPT_LINES: usize = 6;
 const EXCERPT_LINE_CHARS: usize = 48;
 /// Formatted code stays whole so the card can color real tokens. Past this, the tail is cut.
@@ -417,7 +439,7 @@ pub enum CommandId {
     TableUndo,
     /// Show the table version after the one shown.
     TableRedo,
-    /// Show table version `n` (0 is the original), from the version bar's menu.
+    /// Show table version `n` (0 is the original), from the version capsule's menu.
     TableVersion(usize),
     /// The "Table ▾" chip: the card pops a menu of table steps ([`table_menu`]).
     TableMenu,
@@ -531,6 +553,28 @@ pub fn history_label(mark: &str, byte_len: usize) -> String {
     format!("{mark}  {}", format_bytes(byte_len))
 }
 
+/// The sensitivity labels a card's meta line shows.
+pub fn meta_labels(meta: &str) -> Vec<crate::sensitivity::Label> {
+    crate::sensitivity::warning_marks(meta)
+        .into_iter()
+        .map(|mark| mark.label)
+        .collect()
+}
+
+/// A revealed card stays revealed while it shows the same entry ([`content_key`] unchanged: a
+/// table step, undo, redo, another version or view), unless it now has a label it had not
+/// when it was revealed (`revealed_with`). While its labels are being checked (`checking`) it
+/// stays, and is decided once they are known. Another entry, focus loss, Wipe, lock and
+/// retention mask it as before.
+pub fn stays_revealed(
+    same_entry: bool,
+    revealed_with: &[crate::sensitivity::Label],
+    next: &[crate::sensitivity::Label],
+    checking: bool,
+) -> bool {
+    same_entry && (checking || next.iter().all(|label| revealed_with.contains(label)))
+}
+
 /// The well has copied content, so it stays blurred until it is clicked.
 /// Image info is dimensions and a data URL, so the Info chip stays sharp.
 pub fn masks_content(card: &WorkCard, view: CardView) -> bool {
@@ -588,17 +632,8 @@ pub fn content_key(data: &LaunchData) -> u64 {
     if let Some(picture) = &data.picture {
         picture.allocation_id().hash(&mut hasher);
     }
-    // Another table version is other content: masked again, its labels checked again.
-    if let Some(table) = data.table.as_ref().filter(|table| {
-        table.labels.len() > 1
-            || table.describe.is_some()
-            || table.options != dataframe::ReadOptions::default()
-    }) {
-        table.version.hash(&mut hasher);
-        table.labels.hash(&mut hasher);
-        table.describe.is_some().hash(&mut hasher);
-        table.options.hash(&mut hasher);
-    }
+    // Not the table's version, view or reading: those show the same entry, which stays
+    // revealed unless a version brings a new label ([`stays_revealed`]).
     hasher.finish()
 }
 
@@ -946,11 +981,22 @@ fn show_description(card: &mut WorkCard, table: &TableShown) {
     let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
     meta.replace_range(..size_end, &format!("{rows} rows × {columns} columns"));
     card.meta = meta;
+    add_version_note(card, table);
+}
+
+/// The step of the version shown ("Identifier removed") in the meta line, after the size;
+/// nothing for the original.
+fn add_version_note(card: &mut WorkCard, table: &TableShown) {
+    if table.version > 0
+        && let Some(label) = table.labels.get(table.version)
+    {
+        add_meta_note(card, label);
+    }
 }
 
 /// A table version after one or more steps, from its frame. Size, lines and sensitivity
 /// labels are the version's own (as CSV): a step can drop or keep a sensitive column. Which
-/// version it is shows in the version bar ([`VersionBar`]).
+/// version it is shows in the version capsule ([`VersionBar`]), its step in the meta line.
 fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     card.title = "Dataframe".to_string();
     card.highlight = Some(FormatKind::Dataframe);
@@ -991,6 +1037,8 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     {
         add_meta_note(card, &note);
     }
+    // Last, so it reads first after the size.
+    add_version_note(card, table);
 }
 
 /// Put `body` in the well: whole with `full`, else its preview and the note.
@@ -1623,8 +1671,8 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
     commands
 }
 
-/// The version bar under the well: shown in the Dataframe view while the table has more than
-/// one version.
+/// The version capsule in the chip row, left of the history capsule: shown in the Dataframe
+/// view while the table has more than one version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionBar {
     /// "Original", then each step's label.
@@ -1645,17 +1693,12 @@ impl VersionBar {
         )
     }
 
-    /// "2 / 3  Duplicates removed".
+    /// "v2/3", the capsule's label.
     pub fn title(&self) -> String {
-        format!(
-            "{} / {}  {}",
-            self.current + 1,
-            self.labels.len(),
-            self.labels[self.current]
-        )
+        format!("v{}/{}", self.current + 1, self.labels.len())
     }
 
-    /// "Version 2 of 3, Duplicates removed" for VoiceOver.
+    /// "Version 2 of 3, Duplicates removed": the capsule's tooltip and VoiceOver label.
     pub fn spoken(&self) -> String {
         format!(
             "Version {} of {}, {}",
@@ -1813,7 +1856,9 @@ pub fn layout_chips(widths: &[f64], width: f64, trailing: f64) -> Vec<ChipFrame>
         } else {
             width
         };
-        if x > 0.0 && x + chip > limit {
+        // A first-row chip too wide for the room left of the capsules starts the next row.
+        let first_and_crowded = row == 0 && trailing > 0.0;
+        if (x > 0.0 || first_and_crowded) && x + chip > limit {
             row += 1;
             x = 0.0;
         }
@@ -2261,8 +2306,9 @@ mod tests {
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
         deferred_save_name, history_label, history_nav, keeps_card_open, layout_chips,
-        masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
-        step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
+        masks_content, matching, meta_labels, overflow, payload_excerpt, presented_view, save_tip,
+        search_pool, stays_revealed, step_chip, step_history, text_save_file, transformed_text,
+        well_mask, work_card,
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use super::{
@@ -3349,9 +3395,14 @@ Id,Naam,Telefoonnummer,Salaris
 
     /// `src` after one Dedupe step, as the card gets it.
     fn deduped(src: &str) -> TableShown {
-        use crate::table::{TableOp, TableVersions};
+        stepped(src, crate::table::TableOp::Dedupe)
+    }
+
+    /// `src` after one `op`, as the card gets it.
+    fn stepped(src: &str, op: crate::table::TableOp) -> TableShown {
+        use crate::table::TableVersions;
         let mut versions = TableVersions::default();
-        let job = versions.push(TableOp::Dedupe, src).expect("push");
+        let job = versions.push(op, src).expect("push");
         let done = job
             .run(&std::sync::atomic::AtomicBool::new(false))
             .expect("job");
@@ -3385,12 +3436,17 @@ Id,Naam,Telefoonnummer,Salaris
         let card = work_card(&input);
         assert!(card.excerpt.contains("shape: (2, 2)"), "{}", card.excerpt);
         assert!(card.meta.starts_with("3 lines"), "{}", card.meta);
-        assert!(!card.meta.contains("Duplicates removed"), "{}", card.meta);
-        // Another version is other content: masked again until revealed.
+        // The step of the version shown, right after the size.
+        assert!(
+            card.meta.contains("KB  ·  Duplicates removed"),
+            "{}",
+            card.meta
+        );
+        // Another version is the same entry: it stays revealed ([`stays_revealed`]).
         let plain = data(SubjectKind::Text, Some(src));
         let mut versioned = plain.clone();
         versioned.table = input.table.clone();
-        assert_ne!(content_key(&plain), content_key(&versioned));
+        assert_eq!(content_key(&plain), content_key(&versioned));
         // The Original view shows the text as copied.
         versioned.view = CardView::Original;
         assert_eq!(work_card(&versioned).excerpt, work_card(&plain).excerpt);
@@ -3624,7 +3680,8 @@ Id,Naam,Telefoonnummer,Salaris
             card.meta
         );
         assert!(card.excerpt.contains("2026-01-02"), "{}", card.excerpt);
-        assert_ne!(content_key(&input), plain_key);
+        assert!(!card.meta.contains("Original"), "{}", card.meta);
+        assert_eq!(content_key(&input), plain_key);
         assert!(
             chips(&input)
                 .iter()
@@ -3651,8 +3708,13 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(card.title, "Describe");
         assert!(card.excerpt.contains("distinct"), "{}", card.excerpt);
         assert!(card.meta.starts_with("2 rows × 2 columns"), "{}", card.meta);
-        // Another view of the data: masked again.
-        assert_ne!(content_key(&input), plain_key);
+        assert!(
+            card.meta.contains("columns  ·  Duplicates removed"),
+            "{}",
+            card.meta
+        );
+        // Another view of the same entry: it stays revealed.
+        assert_eq!(content_key(&input), plain_key);
         assert_eq!(table_menu(Some(&table))[0].title, "Back to the table");
     }
 
@@ -3664,7 +3726,7 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(VersionBar::of(&input), None);
         input.view = CardView::Dataframe;
         let bar = VersionBar::of(&input).expect("bar");
-        assert_eq!(bar.title(), "2 / 2  Duplicates removed");
+        assert_eq!(bar.title(), "v2/2");
         assert_eq!(bar.spoken(), "Version 2 of 2, Duplicates removed");
         assert!(bar.can_undo() && !bar.can_redo());
         let menu = bar.menu();
@@ -3679,6 +3741,41 @@ Id,Naam,Telefoonnummer,Salaris
         original.version = 0;
         input.table = Some(original);
         assert_eq!(VersionBar::of(&input), None);
+    }
+
+    #[test]
+    fn a_revealed_table_stays_revealed_across_its_versions_unless_one_gains_a_label() {
+        use crate::sensitivity::Label;
+        use crate::table::TableOp;
+        let src = "Id;Naam;Salaris\n1;Jan;3450\n2;Anja;2900";
+        let mut original = data(SubjectKind::Text, Some(src));
+        original.view = CardView::Dataframe;
+        let revealed_with = meta_labels(&work_card(&original).meta);
+        assert_eq!(revealed_with, [Label::Pii, Label::Financial]);
+        // A step: the same entry, labels recomputed for the version (Salaris gone).
+        let mut step = original.clone();
+        step.table = Some(stepped(
+            src,
+            TableOp::DropColumns {
+                columns: vec!["Salaris".into()],
+            },
+        ));
+        let card = work_card(&step);
+        assert!(card.meta.contains("Salaris removed"), "{}", card.meta);
+        let fewer = meta_labels(&card.meta);
+        assert!(!fewer.contains(&Label::Financial), "{}", card.meta);
+        assert_eq!(content_key(&step), content_key(&original));
+        assert!(stays_revealed(true, &revealed_with, &fewer, false));
+        // Undo: back to the labels it was revealed with.
+        assert!(stays_revealed(true, &revealed_with, &revealed_with, false));
+        // Revealed at the step, then a version with a label it had not: masked.
+        assert!(!stays_revealed(true, &fewer, &revealed_with, false));
+        // Labels still being checked: decided when they are known.
+        assert!(stays_revealed(true, &fewer, &[], true));
+        // Another history entry is masked, whatever its labels.
+        let other = data(SubjectKind::Text, Some("Id;Naam\n1;Piet"));
+        assert_ne!(content_key(&other), content_key(&original));
+        assert!(!stays_revealed(false, &revealed_with, &[], false));
     }
 
     #[test]
