@@ -178,6 +178,21 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn display_env_lifts_the_row_column_and_width_limits() {
+        for name in [
+            "POLARS_FMT_MAX_ROWS",
+            "POLARS_FMT_MAX_COLS",
+            "POLARS_TABLE_WIDTH",
+        ] {
+            let value = super::DISPLAY_ENV
+                .iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| *value);
+            assert_eq!(value, Some("-1"), "{name}");
+        }
+    }
+
+    #[test]
     fn rejects_plain_text() {
         assert!(try_format("just a sentence about nothing").is_none());
         assert!(try_format("Naam: Jan de Vries\nSalaris: 3450").is_none());

@@ -49,11 +49,13 @@ mod macos_session;
 mod macos_vision;
 
 fn main() {
-    // Polars prints 10 rows of a table by default. The card limits rows itself
-    // (`commands::PREVIEW_ROWS`), and "Show all" and Copy want every row.
-    if std::env::var_os("POLARS_FMT_MAX_ROWS").is_none() {
-        // SAFETY: first thing in `main`, before any other thread exists.
-        unsafe { std::env::set_var("POLARS_FMT_MAX_ROWS", "-1") };
+    // Polars prints 10 rows and 8 columns of a table, in at most 100 characters, by default.
+    // The card limits rows itself (`commands::PREVIEW_ROWS`) and wants every column.
+    for (name, value) in dataframe::DISPLAY_ENV {
+        if std::env::var_os(name).is_none() {
+            // SAFETY: first thing in `main`, before any other thread exists.
+            unsafe { std::env::set_var(name, value) };
+        }
     }
     if let Err(e) = menubar::run() {
         eprintln!("copycraft failed: {e}");

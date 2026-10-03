@@ -2,6 +2,16 @@ use std::io::Cursor;
 
 use polars::prelude::*;
 
+/// Polars display settings `main` sets before any thread starts (polars reads them from the
+/// environment on every render): every row ([`try_format_preview`] limits rows itself), every
+/// column, and no table width limit, so a wide table is not cut to 8 columns behind a "…"
+/// column or squeezed into 100 characters with wrapped headers. The card scrolls sideways.
+pub const DISPLAY_ENV: [(&str, &str); 3] = [
+    ("POLARS_FMT_MAX_ROWS", "-1"),
+    ("POLARS_FMT_MAX_COLS", "-1"),
+    ("POLARS_TABLE_WIDTH", "-1"),
+];
+
 pub fn try_format(text: &str) -> Option<String> {
     parse(text).and_then(render)
 }

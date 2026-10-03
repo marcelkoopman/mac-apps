@@ -10,7 +10,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Format**: pretty-print with syntax highlighting. JSON, YAML, XML, HTML, Markdown, Rust and Java open already formatted. Formatting is built in and runs in the app, with no outside tools: Rust and Java are re-indented by their brackets (strings, char literals and comments ignored, multi-line strings and comments kept as they are), not run through `rustfmt` or any other program.
 - **Convert**: JSON ↔ YAML, CSV → JSON, TSV → CSV, flat `key: value` text → JSON.
 - **Decode**: JWT, Base64, `data:` URIs, percent-encoding.
-- **Dataframe**: CSV, TSV or JSON as a table (Polars). Saving from this view writes Parquet.
+- **Dataframe**: CSV, TSV or JSON as a table (Polars), with every column (a wide table scrolls sideways). Saving from this view writes Parquet.
 - **Schema / Sample**: JSON → Avro schema (`.avsc`), XML → XSD, XSD → sample XML.
 - **Images**: *Info* shows format, size and a data URL. *Text* runs OCR and *QR* reads barcode payloads, both with Apple Vision.
 - **Links**: when the clipboard (a drop or a history entry) is one `http`/`https` link and nothing else, the card is titled *Link* (*YouTube* for a video) and shows the URL as plain text, selectable; *Copy* copies it. Nothing is fetched: no page title, preview image or thumbnail. *Visit* opens only `http`/`https` links in your default browser (through `NSWorkspace`), with `user:password@` stripped; the browser loads the page, not Copycraft.
