@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
+use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::collections::HashMap;
 
 use crate::config::SkippedAsset;
@@ -69,8 +69,22 @@ impl MenuBuilder {
                 watch.asset_name,
                 Self::format_money(Self::unit_of(rows, &watch.asset_name), watch.target_price)
             );
-            let item_id = menu_ids::watch_item_id(generation, index);
-            let _ = menu.append(&MenuItem::with_id(item_id, &item_text, true, None));
+            // A submenu, so no single click deletes a watch.
+            let rearm = MenuItem::with_id(
+                menu_ids::rearm_item_id(generation, index),
+                "Re-arm",
+                watch.triggered,
+                None,
+            );
+            let remove = MenuItem::with_id(
+                menu_ids::remove_item_id(generation, index),
+                "Remove",
+                true,
+                None,
+            );
+            if let Ok(submenu) = Submenu::with_items(&item_text, true, &[&rearm, &remove]) {
+                let _ = menu.append(&submenu);
+            }
         }
 
         let _ = menu.append(&MenuItem::with_id(

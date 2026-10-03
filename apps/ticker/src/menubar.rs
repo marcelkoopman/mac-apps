@@ -39,7 +39,10 @@ const MENU_MAX_DEFER: Duration = Duration::from_secs(2);
 
 /// Menu items whose handler opens a modal dialog.
 fn opens_dialog(id: &str) -> bool {
-    matches!(id, "add_watch" | "manage_watches" | "edit_asset")
+    matches!(
+        id,
+        "add_watch" | "manage_watches" | "edit_asset" | "reset_assets"
+    )
 }
 
 /// Sent to the event loop (wakes it up): fetch results from the fetch thread, menu clicks from
@@ -216,7 +219,8 @@ impl App {
                         log_message(&format!("menu: {id:?} is from an outdated menu; ignored"));
                     } else {
                         match row {
-                            RowRef::Watch(index) => self.remove_watch_at(index),
+                            RowRef::Rearm(index) => self.rearm_watch_at(index),
+                            RowRef::Remove(index) => self.remove_watch_at(index),
                             RowRef::Asset(row) => self.pin_menubar_from_row(row),
                         }
                     }
@@ -319,6 +323,21 @@ impl App {
         self.update_menu();
     }
 
+    fn rearm_watch_at(&mut self, index: usize) {
+        let Some(watch) = self.watch_list.watches.get(index).cloned() else {
+            return;
+        };
+        if self.update_watches(|list| list.rearm_matching(&watch)) {
+            log_message(&format!(
+                "watches: re-armed {} {} {}",
+                watch.asset_name,
+                watch.direction.as_str(),
+                watch.target_price
+            ));
+        }
+        self.update_menu();
+    }
+
     fn pin_menubar_from_row(&mut self, row: usize) {
         let Some(rows) = &self.prices else {
             return;
@@ -404,6 +423,16 @@ impl App {
     }
 
     fn handle_reset_assets(&mut self) {
+        // Cancel is the default button (Return).
+        let confirmed = dialogs::buttons(
+            "Reset assets to defaults?",
+            "This deletes your edited asset settings (~/.ticker_config.toml) and goes back to the \
+             bundled assets. Price watches are kept.",
+            &["Cancel", "Reset"],
+        ) == Some(1);
+        if !confirmed {
+            return;
+        }
         match config::reset_user_config() {
             Ok(config) => {
                 self.config = Some(config);
@@ -660,10 +689,25 @@ impl App {
                 if w.triggered { " (triggered)" } else { "" }
             ));
         }
-        lines.push_str("\nClick a watch in the menu to remove it, or choose Clear All.");
+        lines.push_str(
+            "\nRe-arm or remove a single watch from its submenu in the menu, or choose Clear All.",
+        );
         // "Close" stays the default button (Return), as in the old osascript dialog.
-        if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) == Some(1) {
-            self.update_watches(|list| list.watches.clear());
+        if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) != Some(1) {
+            return;
+        }
+        let count = self.watch_list.watches.len();
+        let confirmed = dialogs::buttons(
+            "Clear all watches?",
+            &format!(
+                "This removes all {count} price watch{}.",
+                if count == 1 { "" } else { "es" }
+            ),
+            &["Cancel", "Clear All"],
+        ) == Some(1);
+        if confirmed {
+            let removed = self.update_watches(|list| std::mem::take(&mut list.watches).len());
+            log_message(&format!("watches: cleared {removed}"));
             watch_ui::send_macos_notification("Ticker", "All watches cleared.");
             self.update_menu();
         }

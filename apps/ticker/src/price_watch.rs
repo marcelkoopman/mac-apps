@@ -117,15 +117,6 @@ impl WatchList {
                 .all(|(a, b)| a.same_watch(b))
     }
 
-    /// Filter watches for a single asset (CLI / future UI).
-    #[allow(dead_code)]
-    pub fn get_watches_for_asset(&self, asset_name: &str) -> Vec<&PriceWatch> {
-        self.watches
-            .iter()
-            .filter(|w| same_asset(&w.asset_name, asset_name))
-            .collect()
-    }
-
     /// Check if current price triggers any watches.
     /// Returns triggered watches and updates their state.
     pub fn check_price(&mut self, asset_name: &str, current_price: f64) -> Vec<PriceWatch> {
@@ -148,16 +139,15 @@ impl WatchList {
         triggered
     }
 
-    /// Reset triggered state for a watch (e.g. new trading day).
-    #[allow(dead_code)]
-    pub fn reset_watch_state(&mut self, asset_name: &str, target_price: f64) {
-        for watch in &mut self.watches {
-            if same_asset(&watch.asset_name, asset_name)
-                && (watch.target_price - target_price).abs() < 0.01
-            {
-                watch.triggered = false;
-            }
+    /// Re-arm `watch` (see [`WatchList::remove_matching`] for how it is found) so it can fire
+    /// again; `false` when it is gone or was not triggered.
+    pub fn rearm_matching(&mut self, watch: &PriceWatch) -> bool {
+        let mut rearmed = false;
+        for w in self.watches.iter_mut().filter(|w| w.same_watch(watch)) {
+            rearmed |= w.triggered;
+            w.triggered = false;
         }
+        rearmed
     }
 
     /// Reset all triggered states.
@@ -560,17 +550,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_watches_for_asset() {
-        let mut list = WatchList::new();
-        list.add_watch("Bitcoin".to_string(), 70000.0, WatchDirection::Above);
-        list.add_watch("Bitcoin".to_string(), 65000.0, WatchDirection::Below);
-        list.add_watch("Gold".to_string(), 2000.0, WatchDirection::Above);
-
-        let btc_watches = list.get_watches_for_asset("Bitcoin");
-        assert_eq!(btc_watches.len(), 2);
-    }
-
-    #[test]
     fn test_check_price_above() {
         let mut list = WatchList::new();
         list.add_watch("Bitcoin".to_string(), 70000.0, WatchDirection::Above);
@@ -595,14 +574,22 @@ mod tests {
     }
 
     #[test]
-    fn test_reset_watch_state() {
+    fn rearm_matching_rearms_only_that_watch() {
         let mut list = WatchList::new();
         list.add_watch("Bitcoin".to_string(), 70000.0, WatchDirection::Above);
+        list.add_watch("Gold".to_string(), 2000.0, WatchDirection::Above);
         list.check_price("Bitcoin", 71000.0);
+        list.check_price("Gold", 2100.0);
+        let btc = list.watches[0].clone();
 
-        assert!(list.watches[0].triggered);
-        list.reset_watch_state("Bitcoin", 70000.0);
-        assert!(!list.watches[0].triggered);
+        // Found by identity, also after the list was reordered (reloaded from disk).
+        list.watches.reverse();
+        assert!(list.rearm_matching(&btc));
+        assert!(!list.watches[1].triggered, "Bitcoin re-armed");
+        assert!(list.watches[0].triggered, "Gold untouched");
+        assert!(!list.rearm_matching(&btc), "already armed");
+        list.remove_matching(&btc);
+        assert!(!list.rearm_matching(&btc), "gone");
     }
 
     #[test]

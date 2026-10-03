@@ -8,14 +8,17 @@
 /// Fixed ids ("poll", "add_watch", ...) never contain this separator.
 const SEP: char = '#';
 const ASSET: &str = "asset";
-const WATCH: &str = "watch";
+const REARM: &str = "rearm";
+const REMOVE: &str = "remove";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowRef {
-    /// Row of the prices DataFrame.
+    /// Row of the price rows.
     Asset(usize),
-    /// Index into `WatchList::watches`.
-    Watch(usize),
+    /// *Re-arm* in the submenu of the watch at this index into `WatchList::watches`.
+    Rearm(usize),
+    /// *Remove* in the submenu of that watch.
+    Remove(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,8 +33,12 @@ pub fn asset_item_id(generation: u64, row: usize) -> String {
     format!("{ASSET}{SEP}{generation}{SEP}{row}")
 }
 
-pub fn watch_item_id(generation: u64, index: usize) -> String {
-    format!("{WATCH}{SEP}{generation}{SEP}{index}")
+pub fn rearm_item_id(generation: u64, index: usize) -> String {
+    format!("{REARM}{SEP}{generation}{SEP}{index}")
+}
+
+pub fn remove_item_id(generation: u64, index: usize) -> String {
+    format!("{REMOVE}{SEP}{generation}{SEP}{index}")
 }
 
 pub fn parse(id: &str) -> Parsed {
@@ -46,7 +53,8 @@ pub fn parse(id: &str) -> Parsed {
     };
     let row = match kind {
         ASSET => RowRef::Asset(index),
-        WATCH => RowRef::Watch(index),
+        REARM => RowRef::Rearm(index),
+        REMOVE => RowRef::Remove(index),
         _ => return Parsed::Fixed,
     };
     Parsed::Row { generation, row }
@@ -77,24 +85,23 @@ mod tests {
     fn row_ids_round_trip_and_never_equal_fixed_ids() {
         for generation in [0, 1, u64::MAX] {
             for i in [0, 1, 7, 10_000] {
-                let a = asset_item_id(generation, i);
-                let w = watch_item_id(generation, i);
-                assert!(!FIXED.contains(&a.as_str()) && !FIXED.contains(&w.as_str()));
-                assert_ne!(a, w);
-                assert_eq!(
-                    parse(&a),
-                    Parsed::Row {
-                        generation,
-                        row: RowRef::Asset(i)
-                    }
-                );
-                assert_eq!(
-                    parse(&w),
-                    Parsed::Row {
-                        generation,
-                        row: RowRef::Watch(i)
-                    }
-                );
+                let ids = [
+                    (asset_item_id(generation, i), RowRef::Asset(i)),
+                    (rearm_item_id(generation, i), RowRef::Rearm(i)),
+                    (remove_item_id(generation, i), RowRef::Remove(i)),
+                ];
+                for (id, row) in &ids {
+                    assert!(!FIXED.contains(&id.as_str()), "{id}");
+                    assert_eq!(
+                        parse(id),
+                        Parsed::Row {
+                            generation,
+                            row: *row
+                        }
+                    );
+                }
+                assert_ne!(ids[0].0, ids[1].0);
+                assert_ne!(ids[1].0, ids[2].0);
             }
         }
     }
@@ -111,6 +118,7 @@ mod tests {
             "asset#1#2#3",
             "other#1#2",
             "watch_ttf_gas_30",
+            "watch#1#2",
             "ölpreis",
         ] {
             assert_eq!(parse(id), Parsed::Fixed, "{id}");
