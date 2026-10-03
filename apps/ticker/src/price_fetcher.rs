@@ -2,6 +2,7 @@ use crate::config::Asset;
 use crate::prices::{PriceRow, attach_changes};
 use chrono::{DateTime, TimeDelta, Utc};
 use reqwest::blocking::Client;
+use reqwest::redirect::Policy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
@@ -11,13 +12,15 @@ use std::time::Duration;
 
 const MAX_FETCH_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_millis(500);
-/// Whole request (connect + headers + body). Bounds one attempt, so `fetch_price` on one asset
-/// takes at most 3 × 10 s + 2 × 0.5 s = 31 s, and a poll (assets fetched one after another, on the
-/// fetch thread) at most `assets.len()` times that.
+/// Whole request (connect + headers + body). Bounds one attempt, so fetching one URL takes at
+/// most 3 × 10 s + 2 × 0.5 s = 31 s, and a poll (URLs fetched one after another, on the fetch
+/// thread) at most the number of distinct URLs times that.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Price APIs answer with a few KB; anything above this is refused instead of buffered.
 const MAX_BODY_BYTES: u64 = 1024 * 1024;
+/// Redirects followed per request; each must stay on https.
+const MAX_REDIRECTS: usize = 3;
 /// Path part that picks, from an array of `{"time": <RFC 3339>, …}` entries, the one whose period
 /// contains the current time (see [`select_now`]).
 const NOW_SELECTOR: &str = "@now";
@@ -31,73 +34,89 @@ pub struct PriceFetcher {
     client: Client,
 }
 
+/// Follows at most [`MAX_REDIRECTS`] redirects, and only to https URLs: config URLs are
+/// https-only (checked at load), and a redirect must not downgrade that.
+fn redirect_policy() -> Policy {
+    Policy::custom(|attempt| {
+        if attempt.previous().len() > MAX_REDIRECTS {
+            attempt.error(format!("more than {MAX_REDIRECTS} redirects"))
+        } else if attempt.url().scheme() != "https" {
+            let msg = format!("redirect to a non-https URL ({})", attempt.url());
+            attempt.error(msg)
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
 impl PriceFetcher {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let client = Client::builder()
             .user_agent("rust-price-fetcher/1.0")
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)
+            .redirect(redirect_policy())
             .build()?;
         Ok(PriceFetcher { client })
     }
 
-    /// Up to [`MAX_FETCH_ATTEMPTS`] tries; NaN when all fail. Failures go to the debug log.
-    pub fn fetch_price(&self, asset: &Asset) -> f64 {
+    /// The JSON at `url`, with up to [`MAX_FETCH_ATTEMPTS`] tries. `label` (the asset names that
+    /// use this URL) is only for the debug log, where every failure goes.
+    pub fn fetch_json(&self, url: &str, label: &str) -> Result<Value, String> {
+        let mut last_error = String::new();
         for attempt in 1..=MAX_FETCH_ATTEMPTS {
-            match self.fetch_price_once(asset, attempt) {
-                Ok(price) => return price,
+            eprintln!("🔍 Fetching {label} from {url} (attempt {attempt}/{MAX_FETCH_ATTEMPTS})");
+            match self.fetch_json_once(url) {
+                Ok(json) => return Ok(json),
                 Err(e) => {
                     crate::log_message(&format!(
-                        "fetch: {} attempt {attempt}/{MAX_FETCH_ATTEMPTS} failed: {e}",
-                        asset.name
+                        "fetch: {label} attempt {attempt}/{MAX_FETCH_ATTEMPTS} failed: {e}"
                     ));
+                    last_error = e;
                 }
             }
             if attempt < MAX_FETCH_ATTEMPTS {
                 thread::sleep(RETRY_DELAY);
             }
         }
-
         crate::log_message(&format!(
-            "fetch: giving up on {} after {MAX_FETCH_ATTEMPTS} attempts ({})",
-            asset.name, asset.url
+            "fetch: giving up on {label} after {MAX_FETCH_ATTEMPTS} attempts ({url})"
         ));
-        f64::NAN
+        Err(last_error)
     }
 
-    fn fetch_price_once(&self, asset: &Asset, attempt: u32) -> Result<f64, String> {
-        eprintln!(
-            "🔍 Fetching {} from {} (attempt {}/{})",
-            asset.name, asset.url, attempt, MAX_FETCH_ATTEMPTS
-        );
+    fn fetch_json_once(&self, url: &str) -> Result<Value, String> {
         let response = self
             .client
-            .get(&asset.url)
+            .get(url)
             .send()
             .map_err(|e| format!("network error: {e}"))?;
         let response = response
             .error_for_status()
             .map_err(|e| format!("HTTP error: {e}"))?;
-        let json =
-            read_json_capped(response, MAX_BODY_BYTES).map_err(|e| format!("bad response: {e}"))?;
-        let value = self
-            .get_value_by_path(&json, &asset.price_path)
-            .ok_or_else(|| format!("path {:?} not found in the JSON", asset.price_path))?;
-        let price = match &value {
-            Value::Number(n) => n.as_f64(),
-            Value::String(s) => s.trim().parse().ok(),
-            _ => None,
-        };
-        price
-            .filter(|p: &f64| p.is_finite())
-            .ok_or_else(|| format!("value at {:?} is not a number: {value}", asset.price_path))
+        read_json_capped(response, MAX_BODY_BYTES).map_err(|e| format!("bad response: {e}"))
     }
 
-    /// One row per asset, in config order; NaN for an asset whose fetch failed.
+    /// One row per asset, in config order; NaN for an asset whose fetch failed. Each distinct URL
+    /// is fetched once per call (petrol and diesel share one), and a bad path or value in the
+    /// answer is not retried: it would not change on a second request.
     pub fn fetch_all(&self, assets: &[Asset]) -> Vec<PriceRow> {
+        let mut answers: HashMap<&str, Result<Value, String>> = HashMap::new();
         assets
             .iter()
-            .map(|asset| PriceRow::new(asset, self.fetch_price(asset)))
+            .map(|asset| {
+                let json = answers.entry(asset.url.as_str()).or_insert_with(|| {
+                    self.fetch_json(&asset.url, &names_using(assets, &asset.url))
+                });
+                let price = match json {
+                    Ok(json) => price_in(json, &asset.price_path, Utc::now()).unwrap_or_else(|e| {
+                        crate::log_message(&format!("fetch: {}: {e}", asset.name));
+                        f64::NAN
+                    }),
+                    Err(_) => f64::NAN,
+                };
+                PriceRow::new(asset, price)
+            })
             .collect()
     }
 
@@ -114,10 +133,30 @@ impl PriceFetcher {
         attach_changes(&mut rows, prev.as_ref(), day_opens);
         rows
     }
+}
 
-    fn get_value_by_path(&self, value: &Value, path: &str) -> Option<Value> {
-        value_at_path(value, path, Utc::now())
-    }
+/// Names of the assets fetched from `url`, for log lines ("Petrol Euro95 + Diesel").
+fn names_using(assets: &[Asset], url: &str) -> String {
+    assets
+        .iter()
+        .filter(|a| a.url == url)
+        .map(|a| a.name.as_str())
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// The finite number at `path` in `json` (a JSON number or a numeric string).
+fn price_in(json: &Value, path: &str, now: DateTime<Utc>) -> Result<f64, String> {
+    let value = value_at_path(json, path, now)
+        .ok_or_else(|| format!("path {path:?} not found in the JSON"))?;
+    let price = match &value {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    };
+    price
+        .filter(|p: &f64| p.is_finite())
+        .ok_or_else(|| format!("value at {path:?} is not a number: {value}"))
 }
 
 /// `path` resolved in `value` at time `now` (only `@now` parts depend on it). Parts are split on
@@ -259,15 +298,13 @@ mod tests {
 
     #[test]
     fn simple_object_path() {
-        let f = fetcher();
         let data = json!({"price": 42000.5});
-        let v = f.get_value_by_path(&data, "price").unwrap();
+        let v = value_at_path(&data, "price", Utc::now()).unwrap();
         assert_eq!(v.as_f64(), Some(42000.5));
     }
 
     #[test]
     fn nested_object_path() {
-        let f = fetcher();
         let data = json!({
             "data": {
                 "quote": {
@@ -277,46 +314,78 @@ mod tests {
                 }
             }
         });
-        let v = f.get_value_by_path(&data, "data.quote.EUR.price").unwrap();
+        let v = value_at_path(&data, "data.quote.EUR.price", Utc::now()).unwrap();
         assert_eq!(v.as_f64(), Some(91.23));
     }
 
     #[test]
     fn array_index_path() {
-        let f = fetcher();
         let data = json!([{"price": 10.0}, {"price": 20.0}]);
-        let v = f.get_value_by_path(&data, "1.price").unwrap();
+        let v = value_at_path(&data, "1.price", Utc::now()).unwrap();
         assert_eq!(v.as_f64(), Some(20.0));
     }
 
     #[test]
     fn array_filter_by_field() {
-        let f = fetcher();
         let data = json!({
             "items": [
                 {"symbol": "BTC", "price": 50000.0},
                 {"symbol": "ETH", "price": 3000.0}
             ]
         });
-        let v = f
-            .get_value_by_path(&data, "items.symbol=ETH.price")
-            .unwrap();
+        let v = value_at_path(&data, "items.symbol=ETH.price", Utc::now()).unwrap();
         assert_eq!(v.as_f64(), Some(3000.0));
     }
 
     #[test]
     fn missing_key_returns_none() {
-        let f = fetcher();
         let data = json!({"price": 1.0});
-        assert!(f.get_value_by_path(&data, "missing").is_none());
+        assert!(value_at_path(&data, "missing", Utc::now()).is_none());
     }
 
     #[test]
     fn get_value_by_path_string_number() {
-        let f = fetcher();
         let data = json!({"price": "42.5"});
-        let v = f.get_value_by_path(&data, "price").unwrap();
+        let v = value_at_path(&data, "price", Utc::now()).unwrap();
         assert_eq!(v.as_str(), Some("42.5"));
+    }
+
+    #[test]
+    fn price_in_accepts_numbers_and_numeric_strings_only() {
+        let now = Utc::now();
+        let data = json!({"a": 1.5, "b": " -2.25 ", "c": "n/a", "d": null, "e": [1]});
+        assert_eq!(price_in(&data, "a", now), Ok(1.5));
+        assert_eq!(price_in(&data, "b", now), Ok(-2.25));
+        for path in ["c", "d", "e"] {
+            assert!(
+                price_in(&data, path, now)
+                    .unwrap_err()
+                    .contains("not a number")
+            );
+        }
+        assert!(
+            price_in(&data, "zz", now)
+                .unwrap_err()
+                .contains("not found")
+        );
+        let inf = json!({"p": "inf"});
+        assert!(price_in(&inf, "p", now).is_err());
+    }
+
+    #[test]
+    fn names_using_joins_assets_sharing_a_url() {
+        let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
+        let fuel = config
+            .assets
+            .iter()
+            .find(|a| a.name.to_lowercase().contains("diesel"))
+            .expect("default config has diesel");
+        let names = names_using(&config.assets, &fuel.url);
+        assert!(
+            names.contains(" + "),
+            "petrol and diesel share a URL: {names}"
+        );
+        assert_eq!(names_using(&config.assets, "https://nowhere.invalid"), "");
     }
 
     /// `dap.xadi.eu/api/nl/today` shape: `data` entries with a UTC `time`, `localTime`, `price`.
