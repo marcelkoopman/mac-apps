@@ -669,6 +669,7 @@ impl App {
                 commands::image_view_text(image.scan.as_ref(), self.card_view).map(Zeroizing::new)
             {
                 clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+                self.record_own_copy(text.as_str());
             }
             return Ok(());
         }
@@ -688,6 +689,7 @@ impl App {
             return Ok(());
         }
         clipboard::write_clipboard(body.as_str()).map_err(anyhow::Error::msg)?;
+        self.record_own_copy(body.as_str());
         if from_file {
             return Ok(());
         }
@@ -704,6 +706,7 @@ impl App {
         };
         self.card_view = CardView::Original;
         clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+        self.record_own_copy(text.as_str());
         self.refresh_popup();
         Ok(())
     }
@@ -900,6 +903,7 @@ impl App {
             } else if let Err(e) = clipboard::write_clipboard(&formatted) {
                 eprintln!("format link failed: {e}");
             } else {
+                self.record_own_copy(&formatted);
                 self.refresh_popup();
             }
         }
@@ -1046,14 +1050,10 @@ impl App {
         else {
             return Ok(false);
         };
-        // Recording would move this entry to the front, so the other arrow
-        // could no longer walk back through the list.
+        // The write carries copycraft's own pasteboard type, so it is not recorded: that would
+        // move this entry to the front, and the other arrow could no longer walk back.
         self.card_view = CardView::Original;
-        self.skip_record = Some(text.clone());
-        if let Err(e) = clipboard::write_clipboard(text.as_str()) {
-            self.skip_record = None;
-            return Err(anyhow::Error::msg(e));
-        }
+        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
         self.opened = None;
         if launcher::is_open() {
             self.refresh_popup();
@@ -1072,9 +1072,7 @@ impl App {
                 .map_err(anyhow::Error::msg)
                 .context("image")?;
             self.card_view = CardView::Original;
-            self.skip_record = None;
             self.opened = None;
-            self.skip_image_change = Some(crate::macos_pasteboard::change_count());
             if launcher::is_open() {
                 self.refresh_popup();
             }
@@ -1101,9 +1099,17 @@ impl App {
                 let _ = bytes;
                 return Ok(());
             }
-            self.opened = None;
-            self.show_restored();
-            return Ok(());
+            // Chosen from the menu: the entry moves to the front, as a new copy of it would.
+            #[cfg(target_os = "macos")]
+            {
+                self.history.record_image_tracking(bytes.clone(), 0);
+                self.current_image = Some(bytes);
+                self.history_cursor = 0;
+                self.refresh_status_menu();
+                self.opened = None;
+                self.show_restored();
+                return Ok(());
+            }
         }
         let Some(text) = self
             .history
@@ -1113,9 +1119,20 @@ impl App {
             return Ok(());
         };
         clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+        self.record_own_copy(text.as_str());
         self.opened = None;
         self.show_restored();
         Ok(())
+    }
+
+    /// Text copycraft put on the clipboard (Copy, Format in place, a history entry chosen from
+    /// the menu): the newest copy in history. The poller skips copycraft's own writes, so this
+    /// is where they are recorded.
+    fn record_own_copy(&mut self, text: &str) {
+        self.history.record(text.to_string());
+        self.history_cursor = 0;
+        self.clipboard_cursor = None;
+        self.refresh_status_menu();
     }
 
     /// The history row stays a type mark. The card shows the copy that was chosen.
@@ -1130,6 +1147,12 @@ impl App {
     }
 
     fn record_current(&mut self, view: &ClipboardView) {
+        // Copycraft's own write: what belongs in history was recorded when it was written (see
+        // `record_own_copy`), and a history step stays where it is.
+        #[cfg(target_os = "macos")]
+        if crate::macos_pasteboard::current_marks().own {
+            return;
+        }
         #[cfg(target_os = "macos")]
         if view.is_image() {
             let change = crate::macos_pasteboard::change_count();
@@ -1164,9 +1187,14 @@ impl App {
         if signature == self.signature {
             return false;
         }
-        if self
-            .signature
-            .is_new_copy(&signature, matches!(view, ClipboardView::Empty))
+        #[cfg(target_os = "macos")]
+        let own = crate::macos_pasteboard::current_marks().own;
+        #[cfg(not(target_os = "macos"))]
+        let own = false;
+        if !own
+            && self
+                .signature
+                .is_new_copy(&signature, matches!(view, ClipboardView::Empty))
         {
             self.blink.start(now);
         }
@@ -1383,6 +1411,9 @@ fn register_format_hotkey() -> Result<(GlobalHotKeyManager, u32), Box<dyn std::e
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     appearance::apply(appearance::load());
+    // History pictures used to go back on the pasteboard through temporary files.
+    #[cfg(target_os = "macos")]
+    crate::macos_pasteboard::remove_stale_history_files();
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.

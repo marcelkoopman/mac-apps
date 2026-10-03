@@ -25,6 +25,7 @@ const IMAGE_EXTS: &[&str] = &[
 struct CachedView {
     change_count: isize,
     view: ClipboardView,
+    marks: PasteMarks,
     image_path: Option<PathBuf>,
 }
 
@@ -61,11 +62,13 @@ pub(crate) fn current_view() -> ClipboardView {
     {
         return view;
     }
+    let marks = read_marks(&pasteboard);
     let (view, image_path) = read_view(&pasteboard);
     if let Ok(mut guard) = CACHE.lock() {
         *guard = Some(CachedView {
             change_count,
             view: view.clone(),
+            marks,
             image_path,
         });
     }
@@ -209,35 +212,143 @@ fn read_image_file(path: &std::path::Path) -> Option<DecodedPreview> {
     decode_bytes(bytes, false)
 }
 
-pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
-    if infer::image::is_png(bytes) {
-        return write_png(bytes);
-    }
-    let extension = detect_bytes(bytes)
-        .map(|kind| kind.extension)
-        .unwrap_or("tiff");
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos())
-        .unwrap_or(0);
-    let path = std::env::temp_dir().join(format!("copycraft-history-{nanos}.{extension}"));
-    std::fs::write(&path, bytes).map_err(|err| err.to_string())?;
-    set_file_url(&path)
+/// Pasteboard type on everything copycraft writes itself (a history step, Copy, Format). The
+/// poller sees it and does not take the write for a new copy; copycraft records what it wants
+/// in history when it writes. Its data is empty.
+pub(crate) const SELF_TYPE: &str = "nl.marcelkoopman.copycraft.self";
+
+/// What the marker types on the pasteboard say about the current copy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PasteMarks {
+    /// Copycraft wrote it ([`SELF_TYPE`]).
+    pub own: bool,
 }
 
-pub(crate) fn write_png(bytes: &[u8]) -> Result<(), String> {
-    let pasteboard = NSPasteboard::generalPasteboard();
-    let data = NSData::with_bytes(bytes);
-    let ok = unsafe {
-        pasteboard.clearContents();
-        pasteboard.setData_forType(Some(&data), NSPasteboardTypePNG)
+fn read_marks(pasteboard: &NSPasteboard) -> PasteMarks {
+    let Some(types) = pasteboard.types() else {
+        return PasteMarks::default();
     };
+    let mut marks = PasteMarks::default();
+    for kind in types.iter() {
+        if kind.to_string() == SELF_TYPE {
+            marks.own = true;
+        }
+    }
+    marks
+}
+
+/// Marks of the current pasteboard contents, read once per change count with the view.
+pub(crate) fn current_marks() -> PasteMarks {
+    let change_count = change_count();
+    let cached = CACHE.lock().ok().and_then(|guard| {
+        guard
+            .as_ref()
+            .and_then(|cached| (cached.change_count == change_count).then_some(cached.marks))
+    });
+    cached.unwrap_or_else(|| read_marks(&NSPasteboard::generalPasteboard()))
+}
+
+/// Put `text` on the pasteboard as plain text, marked as copycraft's own write.
+pub(crate) fn write_text(text: &str) -> Result<(), String> {
+    let pasteboard = NSPasteboard::generalPasteboard();
+    let ok = autoreleasepool(|_| {
+        pasteboard.clearContents();
+        pasteboard.setString_forType(&NSString::from_str(text), unsafe { NSPasteboardTypeString })
+            && mark_own(&pasteboard)
+    });
+    invalidate_caches();
+    if ok {
+        Ok(())
+    } else {
+        Err("could not write text".into())
+    }
+}
+
+/// Put a history picture back on the pasteboard as data: its own type (JPEG stays JPEG) and,
+/// for apps that only paste PNG, a PNG copy; TIFF when that conversion fails. Never a file:
+/// a picture in a temporary file outlived the history entry and the app.
+pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
+    let pasteboard = NSPasteboard::generalPasteboard();
+    let ok = autoreleasepool(|_| {
+        let data = NSData::with_bytes(bytes);
+        let original = image_uti(bytes);
+        pasteboard.clearContents();
+        let mut ok = pasteboard.setData_forType(Some(&data), &NSString::from_str(original));
+        if original != "public.png" && original != "public.tiff" {
+            match png_fallback(&data) {
+                Some(png) => {
+                    ok &= pasteboard.setData_forType(Some(&png), unsafe { NSPasteboardTypePNG });
+                }
+                None => {
+                    if let Some(tiff) = tiff_fallback(&data) {
+                        ok &= pasteboard
+                            .setData_forType(Some(&tiff), unsafe { NSPasteboardTypeTIFF });
+                    }
+                }
+            }
+        }
+        ok && mark_own(&pasteboard)
+    });
     invalidate_caches();
     if ok {
         Ok(())
     } else {
         Err("could not write image".into())
     }
+}
+
+fn mark_own(pasteboard: &NSPasteboard) -> bool {
+    pasteboard.setData_forType(Some(&NSData::new()), &NSString::from_str(SELF_TYPE))
+}
+
+/// Uniform type of encoded image bytes, for the pasteboard. Unknown bytes go out as TIFF,
+/// the type AppKit falls back to.
+fn image_uti(bytes: &[u8]) -> &'static str {
+    let extension = detect_bytes(bytes).map(|kind| kind.extension);
+    uti_for_extension(extension.unwrap_or("tiff"))
+}
+
+fn uti_for_extension(extension: &str) -> &'static str {
+    match extension {
+        "png" => "public.png",
+        "jpg" | "jpeg" => "public.jpeg",
+        "heic" | "heif" => "public.heic",
+        "gif" => "com.compuserve.gif",
+        "webp" => "org.webmproject.webp",
+        "bmp" => "com.microsoft.bmp",
+        "avif" => "public.avif",
+        _ => "public.tiff",
+    }
+}
+
+fn png_fallback(data: &NSData) -> Option<Retained<NSData>> {
+    use mac_ui::objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
+    use mac_ui::objc2_foundation::NSDictionary;
+    let rep = NSBitmapImageRep::imageRepWithData(data)?;
+    // SAFETY: an empty dictionary is a valid property list for any file type.
+    unsafe {
+        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
+    }
+}
+
+fn tiff_fallback(data: &NSData) -> Option<Retained<NSData>> {
+    NSImage::initWithData(NSImage::alloc(), data)?.TIFFRepresentation()
+}
+
+/// Remove pictures an older copycraft left in the temporary folder for history steps.
+pub(crate) fn remove_stale_history_files() {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if is_stale_history_file(&entry.file_name().to_string_lossy()) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+fn is_stale_history_file(name: &str) -> bool {
+    name.starts_with("copycraft-history-")
 }
 
 pub(crate) fn image_facts() -> Option<ImageFacts> {
@@ -407,26 +518,6 @@ fn export_image() -> Option<ImageExport> {
                 mime: detected.mime,
             })
         }
-    }
-}
-
-fn set_file_url(path: &std::path::Path) -> Result<(), String> {
-    let text = path.to_str().ok_or_else(|| "path".to_string())?;
-    let url = NSURL::fileURLWithPath(&NSString::from_str(text));
-    let absolute = url
-        .absoluteString()
-        .ok_or_else(|| "url".to_string())?
-        .to_string();
-    let pasteboard = NSPasteboard::generalPasteboard();
-    pasteboard.clearContents();
-    let ok = pasteboard.setString_forType(&NSString::from_str(&absolute), unsafe {
-        NSPasteboardTypeFileURL
-    });
-    invalidate_caches();
-    if ok {
-        Ok(())
-    } else {
-        Err("could not copy file".into())
     }
 }
 
@@ -796,9 +887,28 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        detect_image_bytes, extension_kind, is_image_file, names_copied_image, remember_cached_view,
+        detect_image_bytes, extension_kind, image_uti, is_image_file, is_stale_history_file,
+        names_copied_image, remember_cached_view,
     };
     use crate::clipboard::ClipboardView;
+
+    #[test]
+    fn history_pictures_keep_their_own_type() {
+        assert_eq!(image_uti(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR"), "public.png");
+        assert_eq!(
+            image_uti(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F']),
+            "public.jpeg"
+        );
+        assert_eq!(image_uti(b"GIF89a\x01\0\x01\0"), "com.compuserve.gif");
+        assert_eq!(image_uti(b"not an image"), "public.tiff");
+    }
+
+    #[test]
+    fn only_old_history_files_are_stale() {
+        assert!(is_stale_history_file("copycraft-history-1712345678.jpeg"));
+        assert!(!is_stale_history_file("copycraft-drop-1.png"));
+        assert!(!is_stale_history_file("other-copycraft-history-1.png"));
+    }
     use zeroize::Zeroizing;
 
     struct RemoveOnDrop(PathBuf);

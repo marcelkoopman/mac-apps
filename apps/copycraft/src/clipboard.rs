@@ -423,9 +423,18 @@ impl ClipboardHistory {
     }
 }
 
+/// Put `text` on the clipboard. On macOS the write carries copycraft's own pasteboard type, so
+/// the poller does not take it for a new copy (see [`crate::macos_pasteboard::SELF_TYPE`]).
 pub fn write_clipboard(text: &str) -> Result<(), String> {
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_text(text.to_string()).map_err(|e| e.to_string())
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_pasteboard::write_text(text)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        cb.set_text(text.to_string()).map_err(|e| e.to_string())
+    }
 }
 
 pub fn clear_clipboard() -> Result<(), String> {
