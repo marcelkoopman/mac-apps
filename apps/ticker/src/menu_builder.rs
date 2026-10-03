@@ -2,10 +2,10 @@ use chrono::{DateTime, Local};
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::collections::HashMap;
 
-use crate::config::SkippedAsset;
+use crate::config::{Asset, SkippedAsset};
 use crate::freshness::{AssetStatus, STALE_MARK};
 use crate::menu_ids;
-use crate::price_watch::WatchList;
+use crate::price_watch::{PriceWatch, WatchList};
 use crate::prices::{Change, Direction, PriceRow};
 use crate::watch_ui::WatchUIBuilder;
 
@@ -31,6 +31,7 @@ impl MenuBuilder {
         generation: u64,
         freshness: &Freshness<'_>,
         skipped: &[SkippedAsset],
+        sources: Option<&str>,
     ) -> Menu {
         let menu = Menu::new();
 
@@ -61,14 +62,7 @@ impl MenuBuilder {
         ));
 
         for (index, watch) in watch_list.watches.iter().enumerate() {
-            let mark = if watch.triggered { "✓" } else { " " };
-            let item_text = format!(
-                "{} {} {}  {}",
-                mark,
-                watch.direction.emoji(),
-                watch.asset_name,
-                Self::format_money(Self::unit_of(rows, &watch.asset_name), watch.target_price)
-            );
+            let item_text = Self::watch_row_text(watch, Self::unit_of(rows, &watch.asset_name));
             // A submenu, so no single click deletes a watch.
             let rearm = MenuItem::with_id(
                 menu_ids::rearm_item_id(generation, index),
@@ -89,37 +83,30 @@ impl MenuBuilder {
 
         let _ = menu.append(&MenuItem::with_id(
             "add_watch",
-            "➕ Add Price Watch",
+            "Add Price Watch…",
             true,
             None,
         ));
         let _ = menu.append(&MenuItem::with_id(
             "manage_watches",
-            "⚙️ Manage Watches",
+            "Manage Watches…",
             true,
             None,
         ));
         let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&MenuItem::with_id("poll", "🔄  Poll now", true, None));
-        let _ = menu.append(&MenuItem::with_id(
-            "copy",
-            "📋  Copy to clipboard",
-            true,
-            None,
-        ));
-        let _ = menu.append(&MenuItem::with_id(
-            "edit_asset",
-            "✏️ Edit asset…",
-            true,
-            None,
-        ));
+        let _ = menu.append(&MenuItem::with_id("poll", "Poll now", true, None));
+        let _ = menu.append(&MenuItem::with_id("copy", "Copy to clipboard", true, None));
+        let _ = menu.append(&MenuItem::with_id("edit_asset", "Edit asset…", true, None));
         let _ = menu.append(&MenuItem::with_id(
             "reset_assets",
-            "↩️ Reset assets to defaults",
+            "Reset assets to defaults…",
             true,
             None,
         ));
         let _ = menu.append(&PredefinedMenuItem::separator());
+        if let Some(sources) = sources {
+            let _ = menu.append(&mac_ui::tray::info_item(sources));
+        }
         let _ = menu.append(&Self::version_item());
         let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
         menu
@@ -130,20 +117,86 @@ impl MenuBuilder {
         format!("{STALE_MARK} {} skipped: {}", asset.name, asset.reason)
     }
 
-    /// VoiceOver label of the menu bar button: the app name, the price shown in the title (not
-    /// the "Ticker" placeholder) and whether a price watch went off. The red alert icon is
-    /// otherwise the only sign of an alert.
-    pub fn tray_accessibility_label(title: &str, alert: bool) -> String {
+    /// Watch row (a submenu title): `✓ Bitcoin above €70.000,00` for a watch that went off, the
+    /// direction as a word rather than an emoji, so VoiceOver reads it as written.
+    fn watch_row_text(watch: &PriceWatch, unit: &str) -> String {
+        format!(
+            "{}{} {} {}",
+            if watch.triggered { "✓ " } else { "" },
+            watch.asset_name,
+            watch.direction.as_str(),
+            Self::format_money(unit, watch.target_price)
+        )
+    }
+
+    /// `Data: CoinGecko, xaus.com, …`: the hosts the polled assets come from, in config order,
+    /// each once (`api.` / `www.` dropped). `None` without assets.
+    pub fn source_attribution(assets: &[Asset]) -> Option<String> {
+        let mut names: Vec<String> = Vec::new();
+        for asset in assets {
+            let Some(host) = reqwest::Url::parse(&asset.url)
+                .ok()
+                .and_then(|u| u.host_str().map(str::to_string))
+            else {
+                continue;
+            };
+            let host = host
+                .strip_prefix("api.")
+                .or_else(|| host.strip_prefix("www."))
+                .unwrap_or(&host);
+            let name = if host == "coingecko.com" {
+                "CoinGecko".to_string()
+            } else {
+                host.to_string()
+            };
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        (!names.is_empty()).then(|| format!("Data: {}", names.join(", ")))
+    }
+
+    /// VoiceOver label of the menu bar button: the app name, the shown asset's name and price
+    /// without its emoji symbol (`spoken`, see [`MenuBuilder::menubar_spoken`]) and whether a
+    /// price watch went off. The red alert icon is otherwise the only sign of an alert.
+    pub fn tray_accessibility_label(spoken: Option<&str>, alert: bool) -> String {
         let mut label = String::from("Price Ticker");
-        let title = title.trim();
-        if !title.is_empty() && title != "Ticker" {
+        if let Some(spoken) = spoken.map(str::trim).filter(|s| !s.is_empty()) {
             label.push_str(": ");
-            label.push_str(title);
+            label.push_str(spoken);
         }
         if alert {
             label.push_str(", price alert");
         }
         label
+    }
+
+    /// The asset in the menu bar: the preferred one if it has a price, else the first with one.
+    fn shown_row<'a>(rows: &'a [PriceRow], preferred: Option<&str>) -> Option<&'a PriceRow> {
+        preferred
+            .and_then(|want| rows.iter().find(|r| r.name == want && r.has_price()))
+            .or_else(|| rows.iter().find(|r| r.has_price()))
+    }
+
+    /// What VoiceOver says for the menu bar title: `Bitcoin €66.553` (name instead of the emoji
+    /// symbol), with `, out of date` when stale. `None` while no asset has a price.
+    pub fn menubar_spoken(
+        rows: &[PriceRow],
+        preferred: Option<&str>,
+        freshness: &Freshness<'_>,
+    ) -> Option<String> {
+        let row = Self::shown_row(rows, preferred)?;
+        let stale = if freshness.of(&row.name).is_stale(freshness.now) {
+            ", out of date"
+        } else {
+            ""
+        };
+        Some(format!(
+            "{} {}{}{stale}",
+            row.name,
+            Self::unit_to_currency(&row.unit),
+            Self::format_menubar_price(row.price)
+        ))
     }
 
     /// Menu bar title: the preferred asset (else the first with a price), with [`STALE_MARK`] in
@@ -153,10 +206,7 @@ impl MenuBuilder {
         preferred: Option<&str>,
         freshness: &Freshness<'_>,
     ) -> String {
-        let shown = preferred
-            .and_then(|want| rows.iter().find(|r| r.name == want && r.has_price()))
-            .or_else(|| rows.iter().find(|r| r.has_price()));
-        let Some(row) = shown else {
+        let Some(row) = Self::shown_row(rows, preferred) else {
             return "Ticker".to_string();
         };
         let currency = Self::unit_to_currency(&row.unit);
@@ -540,25 +590,93 @@ mod tests {
     #[test]
     fn tray_label_names_the_app_price_and_alert() {
         assert_eq!(
-            MenuBuilder::tray_accessibility_label("Ticker", false),
+            MenuBuilder::tray_accessibility_label(None, false),
             "Price Ticker"
         );
         assert_eq!(
-            MenuBuilder::tray_accessibility_label(" ", false),
+            MenuBuilder::tray_accessibility_label(Some(" "), false),
             "Price Ticker"
         );
+        let spoken = MenuBuilder::menubar_spoken(
+            &sample(),
+            Some("Bitcoin"),
+            &Freshness {
+                status: &fresh(),
+                now: now(),
+            },
+        );
+        assert_eq!(spoken.as_deref(), Some("Bitcoin €66.553"));
         assert_eq!(
-            MenuBuilder::tray_accessibility_label("💰 €66.553", false),
-            "Price Ticker: 💰 €66.553"
+            MenuBuilder::tray_accessibility_label(spoken.as_deref(), true),
+            "Price Ticker: Bitcoin €66.553, price alert"
         );
         assert_eq!(
-            MenuBuilder::tray_accessibility_label("💰 €66.553", true),
-            "Price Ticker: 💰 €66.553, price alert"
-        );
-        assert_eq!(
-            MenuBuilder::tray_accessibility_label("Ticker", true),
+            MenuBuilder::tray_accessibility_label(None, true),
             "Price Ticker, price alert"
         );
+        let empty = MenuBuilder::menubar_spoken(
+            &[],
+            None,
+            &Freshness {
+                status: &fresh(),
+                now: now(),
+            },
+        );
+        assert_eq!(empty, None);
+    }
+
+    #[test]
+    fn spoken_title_says_out_of_date_instead_of_the_mark() {
+        let mut status = HashMap::new();
+        let mut s = AssetStatus::default();
+        s.record(false, now());
+        s.record(false, now());
+        status.insert("Bitcoin".to_string(), s);
+        let spoken = MenuBuilder::menubar_spoken(
+            &sample(),
+            None,
+            &Freshness {
+                status: &status,
+                now: now(),
+            },
+        )
+        .unwrap();
+        assert_eq!(spoken, "Bitcoin €66.553, out of date");
+        assert!(!spoken.contains(STALE_MARK));
+    }
+
+    #[test]
+    fn watch_rows_use_words_not_emoji() {
+        let mut list = WatchList::new();
+        list.add_watch(
+            "Bitcoin".into(),
+            70000.0,
+            crate::price_watch::WatchDirection::Above,
+        );
+        list.add_watch(
+            "Gold".into(),
+            2000.0,
+            crate::price_watch::WatchDirection::Below,
+        );
+        list.check_price("Bitcoin", 71000.0);
+        assert_eq!(
+            MenuBuilder::watch_row_text(&list.watches[0], "EUR"),
+            "✓ Bitcoin above €70.000,00"
+        );
+        assert_eq!(
+            MenuBuilder::watch_row_text(&list.watches[1], "USD"),
+            "Gold below $2.000,00"
+        );
+    }
+
+    #[test]
+    fn source_attribution_lists_each_host_once() {
+        let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
+        assert_eq!(
+            MenuBuilder::source_attribution(&config.assets).as_deref(),
+            Some("Data: CoinGecko, xaus.com, eurooilwatch.com, dap.xadi.eu")
+        );
+        assert_eq!(MenuBuilder::source_attribution(&[]), None);
     }
 
     #[test]

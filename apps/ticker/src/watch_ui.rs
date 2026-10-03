@@ -37,12 +37,13 @@ impl WatchUIBuilder {
             .filter(|watch| watch.triggered)
             .count();
 
+        let watches = if total == 1 { "watch" } else { "watches" };
         if total == 0 {
             "No watches".to_string()
         } else if triggered > 0 {
-            format!("🔔 {triggered}/{total} triggered")
+            format!("{triggered} of {total} {watches} triggered")
         } else {
-            format!("📊 {total} watches")
+            format!("{total} {watches}")
         }
     }
 }

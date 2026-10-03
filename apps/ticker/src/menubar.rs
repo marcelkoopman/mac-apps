@@ -777,12 +777,17 @@ impl App {
             .as_ref()
             .map(config::Config::skipped_assets)
             .unwrap_or_default();
+        let sources = self
+            .config
+            .as_ref()
+            .and_then(|c| MenuBuilder::source_attribution(&c.fetchable_assets()));
         let menu = MenuBuilder::build(
             rows,
             &self.watch_list,
             self.rows_generation,
             &freshness,
             &skipped,
+            sources.as_deref(),
         );
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
         let title = MenuBuilder::menubar_title(rows, pin, &freshness);
@@ -801,7 +806,10 @@ impl App {
             tray.set_title(Some(&title));
             mac_ui::tray::set_accessibility_label(
                 &tray,
-                &MenuBuilder::tray_accessibility_label(&title, self.has_alert()),
+                &MenuBuilder::tray_accessibility_label(
+                    MenuBuilder::menubar_spoken(rows, pin, &freshness).as_deref(),
+                    self.has_alert(),
+                ),
             );
         }
     }
@@ -809,9 +817,9 @@ impl App {
     fn update_error_menu(&self) {
         let menu = Menu::new();
         if let Some(e) = &self.config_error {
-            let _ = menu.append(&MenuItem::new(format!("❌ {e}"), false, None));
+            let _ = menu.append(&MenuItem::new(e, false, None));
         }
-        let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));
+        let _ = menu.append(&MenuItem::with_id("poll", "Retry", true, None));
         let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
         if let Ok(tray) = self.tray.try_borrow_mut() {
             tray.set_menu(Some(Box::new(menu)));
@@ -894,8 +902,8 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
     let normal_icon = load_template_icon_or("normal.png")?;
     let alert_icon = load_icon_or("update.png", [255, 80, 80])?;
     let menu = Menu::new();
-    let _ = menu.append(&MenuItem::new("⏳ Loading...", false, None));
-    let _ = menu.append(&MenuItem::with_id("poll", "🔄 Retry", true, None));
+    let _ = menu.append(&MenuItem::new("Loading…", false, None));
+    let _ = menu.append(&MenuItem::with_id("poll", "Retry", true, None));
     let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
     let tray_icon = mac_ui::tray::with_icon(TrayIconBuilder::new(), normal_icon.clone(), true)
         .with_menu(Box::new(menu))
@@ -904,7 +912,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     mac_ui::tray::set_accessibility_label(
         &tray_icon,
-        &MenuBuilder::tray_accessibility_label("Ticker", false),
+        &MenuBuilder::tray_accessibility_label(None, false),
     );
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     // Menu clicks go through the event loop proxy instead of `MenuEvent::receiver()`: sending a

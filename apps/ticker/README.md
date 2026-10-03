@@ -15,6 +15,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Edit asset…**: change an asset's URL (`https://` only), currency/unit and JSON price path through dialogs. Edits are saved to the user config. Responses over 1 MB are refused.
 - **Reset assets to defaults**: after a confirmation, deletes the user config and goes back to the bundled `config.toml` (watches are kept).
 - Prices use Dutch number formatting (`1.234,56`). The menu bar value is rounded for prices ≥ 100.
+- **Sources and accessibility**: a grey line at the bottom of the menu names the data sources of the polled assets (`Data: CoinGecko, xaus.com, eurooilwatch.com, dap.xadi.eu`). VoiceOver reads the menu bar button as `Price Ticker: Bitcoin €66.553` (asset name instead of its emoji, `, out of date` when stale, `, price alert` after an alert). Action items and watch rows carry no emoji (`✓ Bitcoin above €70.000,00`). The price rows themselves still show the asset's `symbol`: muda offers no per-item accessibility label, so VoiceOver reads them as shown.
 
 ## Configuration
 
