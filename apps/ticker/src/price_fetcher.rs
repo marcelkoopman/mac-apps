@@ -11,10 +11,15 @@ use std::thread;
 use std::time::Duration;
 
 const MAX_FETCH_ATTEMPTS: u32 = 3;
+/// Wait before the second attempt; doubled before each further one (exponential backoff).
 const RETRY_DELAY: Duration = Duration::from_millis(500);
+/// A `Retry-After` (on 429 or 5xx) up to this long is waited for; a longer one ends the retries
+/// for this poll (the next poll tries again), so one slow API cannot hold up the others.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(10);
 /// Whole request (connect + headers + body). Bounds one attempt, so fetching one URL takes at
-/// most 3 × 10 s + 2 × 0.5 s = 31 s, and a poll (URLs fetched one after another, on the fetch
-/// thread) at most the number of distinct URLs times that.
+/// most 3 × 10 s + 0.5 s + 1 s = 31.5 s without `Retry-After` (up to 2 × 10 s more with it),
+/// and a poll (URLs fetched one after another, on the fetch thread) at most the number of
+/// distinct URLs times that.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Price APIs answer with a few KB; anything above this is refused instead of buffered.
@@ -32,6 +37,60 @@ const DEFAULT_PERIOD: TimeDelta = TimeDelta::hours(1);
 #[derive(Clone)]
 pub struct PriceFetcher {
     client: Client,
+    /// [`RETRY_DELAY`] and [`MAX_RETRY_AFTER`]; shorter in the HTTP tests.
+    retry_delay: Duration,
+    max_retry_after: Duration,
+}
+
+/// Why one attempt failed, and whether another attempt makes sense.
+#[derive(Debug)]
+enum AttemptError {
+    /// Network error, timeout, 429 or 5xx (with the server's `Retry-After`, if any), or a body
+    /// that is not JSON.
+    Retry {
+        message: String,
+        retry_after: Option<Duration>,
+    },
+    /// Another 4xx, a body over the size limit or a refused redirect: the same request would
+    /// fail the same way.
+    Final(String),
+}
+
+impl AttemptError {
+    fn message(&self) -> &str {
+        match self {
+            AttemptError::Retry { message, .. } | AttemptError::Final(message) => message,
+        }
+    }
+}
+
+/// Wait before attempt `attempt + 1`: [`RETRY_DELAY`] doubled per earlier retry, or the
+/// server's `Retry-After` when that is longer. `None` when `Retry-After` exceeds
+/// `max_retry_after` (give up for this poll).
+fn retry_wait(
+    attempt: u32,
+    base: Duration,
+    retry_after: Option<Duration>,
+    max_retry_after: Duration,
+) -> Option<Duration> {
+    let backoff = base * 2u32.saturating_pow(attempt.saturating_sub(1));
+    match retry_after {
+        Some(after) if after > max_retry_after => None,
+        Some(after) => Some(after.max(backoff)),
+        None => Some(backoff),
+    }
+}
+
+/// `Retry-After` as seconds or as an HTTP date (time left until then; 0 when past).
+fn parse_retry_after(value: &str, now: DateTime<Utc>) -> Option<Duration> {
+    let value = value.trim();
+    if let Ok(secs) = value.parse::<u64>() {
+        return Some(Duration::from_secs(secs));
+    }
+    let at = DateTime::parse_from_rfc2822(value)
+        .ok()?
+        .with_timezone(&Utc);
+    Some((at - now).to_std().unwrap_or(Duration::ZERO))
 }
 
 /// Follows at most [`MAX_REDIRECTS`] redirects, and only to https URLs: config URLs are
@@ -57,44 +116,98 @@ impl PriceFetcher {
             .connect_timeout(CONNECT_TIMEOUT)
             .redirect(redirect_policy())
             .build()?;
-        Ok(PriceFetcher { client })
+        Ok(PriceFetcher {
+            client,
+            retry_delay: RETRY_DELAY,
+            max_retry_after: MAX_RETRY_AFTER,
+        })
     }
 
     /// The JSON at `url`, with up to [`MAX_FETCH_ATTEMPTS`] tries. `label` (the asset names that
     /// use this URL) is only for the debug log, where every failure goes.
     pub fn fetch_json(&self, url: &str, label: &str) -> Result<Value, String> {
-        let mut last_error = String::new();
         for attempt in 1..=MAX_FETCH_ATTEMPTS {
             eprintln!("🔍 Fetching {label} from {url} (attempt {attempt}/{MAX_FETCH_ATTEMPTS})");
-            match self.fetch_json_once(url) {
+            let error = match self.fetch_json_once(url) {
                 Ok(json) => return Ok(json),
-                Err(e) => {
+                Err(e) => e,
+            };
+            crate::log_message(&format!(
+                "fetch: {label} attempt {attempt}/{MAX_FETCH_ATTEMPTS} failed: {}",
+                error.message()
+            ));
+            let wait = match &error {
+                AttemptError::Final(_) => None,
+                AttemptError::Retry { .. } if attempt == MAX_FETCH_ATTEMPTS => None,
+                AttemptError::Retry { retry_after, .. } => {
+                    let wait = retry_wait(
+                        attempt,
+                        self.retry_delay,
+                        *retry_after,
+                        self.max_retry_after,
+                    );
+                    if wait.is_none() {
+                        crate::log_message(&format!(
+                            "fetch: {label}: Retry-After {retry_after:?} is over {:?}; trying \
+                             again at the next poll",
+                            self.max_retry_after
+                        ));
+                    }
+                    wait
+                }
+            };
+            match wait {
+                Some(wait) => thread::sleep(wait),
+                None => {
                     crate::log_message(&format!(
-                        "fetch: {label} attempt {attempt}/{MAX_FETCH_ATTEMPTS} failed: {e}"
+                        "fetch: giving up on {label} after {attempt} attempt(s) ({url})"
                     ));
-                    last_error = e;
+                    return Err(error.message().to_string());
                 }
             }
-            if attempt < MAX_FETCH_ATTEMPTS {
-                thread::sleep(RETRY_DELAY);
-            }
         }
-        crate::log_message(&format!(
-            "fetch: giving up on {label} after {MAX_FETCH_ATTEMPTS} attempts ({url})"
-        ));
-        Err(last_error)
+        unreachable!("the last attempt returns")
     }
 
-    fn fetch_json_once(&self, url: &str) -> Result<Value, String> {
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .map_err(|e| format!("network error: {e}"))?;
-        let response = response
-            .error_for_status()
-            .map_err(|e| format!("HTTP error: {e}"))?;
-        read_json_capped(response, MAX_BODY_BYTES).map_err(|e| format!("bad response: {e}"))
+    fn fetch_json_once(&self, url: &str) -> Result<Value, AttemptError> {
+        let response = self.client.get(url).send().map_err(|e| {
+            let message = format!("network error: {e}");
+            if e.is_redirect() {
+                AttemptError::Final(message)
+            } else {
+                AttemptError::Retry {
+                    message,
+                    retry_after: None,
+                }
+            }
+        })?;
+        let status = response.status();
+        if !status.is_success() {
+            let message = format!("HTTP error: {status} for {url}");
+            if status.as_u16() == 429 || status.is_server_error() {
+                let retry_after = response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| parse_retry_after(v, Utc::now()));
+                return Err(AttemptError::Retry {
+                    message,
+                    retry_after,
+                });
+            }
+            return Err(AttemptError::Final(message));
+        }
+        read_json_capped(response, MAX_BODY_BYTES).map_err(|e| {
+            let message = format!("bad response: {e}");
+            if e.starts_with("response too large") {
+                AttemptError::Final(message)
+            } else {
+                AttemptError::Retry {
+                    message,
+                    retry_after: None,
+                }
+            }
+        })
     }
 
     /// One row per asset, in config order; NaN for an asset whose fetch failed. Each distinct URL
@@ -282,11 +395,24 @@ mod tests {
     #[test]
     fn worst_case_fetch_time_is_bounded() {
         assert!(CONNECT_TIMEOUT <= REQUEST_TIMEOUT);
-        let per_asset =
-            REQUEST_TIMEOUT * MAX_FETCH_ATTEMPTS + RETRY_DELAY * (MAX_FETCH_ATTEMPTS - 1);
-        assert_eq!(per_asset, Duration::from_secs(31));
-        // Default config (7 assets) finishes within one poll interval (5 min) even if all time out.
-        assert!(per_asset * 7 < Duration::from_secs(5 * 60));
+        let backoff = (1..MAX_FETCH_ATTEMPTS)
+            .map(|a| retry_wait(a, RETRY_DELAY, None, MAX_RETRY_AFTER).unwrap())
+            .sum::<Duration>();
+        assert_eq!(
+            REQUEST_TIMEOUT * MAX_FETCH_ATTEMPTS + backoff,
+            Duration::from_millis(31_500)
+        );
+        // With the longest Retry-After waited for before both retries.
+        let per_url =
+            REQUEST_TIMEOUT * MAX_FETCH_ATTEMPTS + MAX_RETRY_AFTER * (MAX_FETCH_ATTEMPTS - 1);
+        assert_eq!(per_url, Duration::from_secs(50));
+        // The default config (5 distinct URLs) finishes within one default poll interval (5 min)
+        // even if every request times out.
+        let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
+        let mut urls: Vec<&str> = config.assets.iter().map(|a| a.url.as_str()).collect();
+        urls.sort();
+        urls.dedup();
+        assert!(per_url * urls.len() as u32 <= Duration::from_secs(5 * 60));
     }
 
     #[test]
@@ -514,5 +640,248 @@ mod tests {
         let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
         let power = config.assets.iter().find(|a| a.name == "Power NL").unwrap();
         assert_eq!(power.price_path, "data.@now.price");
+    }
+
+    #[test]
+    fn retry_wait_backs_off_exponentially_and_honours_retry_after() {
+        let base = Duration::from_millis(500);
+        let max = Duration::from_secs(10);
+        assert_eq!(retry_wait(1, base, None, max), Some(base));
+        assert_eq!(retry_wait(2, base, None, max), Some(base * 2));
+        assert_eq!(retry_wait(3, base, None, max), Some(base * 4));
+        let three = Duration::from_secs(3);
+        assert_eq!(retry_wait(1, base, Some(three), max), Some(three));
+        assert_eq!(
+            retry_wait(1, base, Some(Duration::ZERO), max),
+            Some(base),
+            "never sooner than the backoff"
+        );
+        assert_eq!(
+            retry_wait(1, base, Some(Duration::from_secs(11)), max),
+            None
+        );
+    }
+
+    #[test]
+    fn retry_after_as_seconds_or_http_date() {
+        let now = DateTime::parse_from_rfc3339("2026-10-03T17:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(parse_retry_after(" 7 ", now), Some(Duration::from_secs(7)));
+        assert_eq!(
+            parse_retry_after("Sat, 03 Oct 2026 17:00:30 GMT", now),
+            Some(Duration::from_secs(30))
+        );
+        assert_eq!(
+            parse_retry_after("Sat, 03 Oct 2026 16:00:00 GMT", now),
+            Some(Duration::ZERO)
+        );
+        assert_eq!(parse_retry_after("soon", now), None);
+        assert_eq!(parse_retry_after("-1", now), None);
+    }
+
+    /// HTTP tests against a local server on `std::net::TcpListener` (tests only; ticker may use
+    /// the network, copycraft's guards are not involved).
+    mod http {
+        use super::super::*;
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::{TcpListener, TcpStream};
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::Instant;
+
+        /// What the server does with one request.
+        enum Reply {
+            /// Raw status line + headers (without the blank line) and a body.
+            Respond(&'static str, String),
+            /// Read the request and answer nothing for this long.
+            Stall(Duration),
+        }
+
+        struct Server {
+            url: String,
+            requests: Arc<AtomicUsize>,
+        }
+
+        /// Serves `replies` in order, one per connection, then stops.
+        fn serve(replies: Vec<Reply>) -> Server {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/price", listener.local_addr().unwrap());
+            let requests = Arc::new(AtomicUsize::new(0));
+            let count = Arc::clone(&requests);
+            thread::spawn(move || {
+                for reply in replies {
+                    let Ok((stream, _)) = listener.accept() else {
+                        return;
+                    };
+                    count.fetch_add(1, Ordering::SeqCst);
+                    answer(stream, reply);
+                }
+            });
+            Server { url, requests }
+        }
+
+        fn answer(mut stream: TcpStream, reply: Reply) {
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            // Request line and headers, up to the blank line (GET has no body).
+            while reader.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if line == "\r\n" {
+                    break;
+                }
+                line.clear();
+            }
+            match reply {
+                Reply::Respond(head, body) => {
+                    let _ = write!(
+                        stream,
+                        "{head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                }
+                Reply::Stall(d) => thread::sleep(d),
+            }
+        }
+
+        fn ok(body: &str) -> Reply {
+            Reply::Respond(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json",
+                body.to_string(),
+            )
+        }
+
+        fn status(head: &'static str) -> Reply {
+            Reply::Respond(head, String::new())
+        }
+
+        /// Short timeouts and delays; no proxy, so the requests stay on 127.0.0.1.
+        fn fetcher(timeout: Duration) -> PriceFetcher {
+            let client = Client::builder()
+                .timeout(timeout)
+                .connect_timeout(timeout)
+                .redirect(redirect_policy())
+                .no_proxy()
+                .build()
+                .unwrap();
+            PriceFetcher {
+                client,
+                retry_delay: Duration::from_millis(20),
+                max_retry_after: Duration::from_secs(2),
+            }
+        }
+
+        fn quick() -> PriceFetcher {
+            fetcher(Duration::from_secs(5))
+        }
+
+        #[test]
+        fn retries_a_server_error_then_succeeds() {
+            let server = serve(vec![
+                status("HTTP/1.1 503 Service Unavailable"),
+                status("HTTP/1.1 500 Internal Server Error"),
+                ok(r#"{"p": 1.5}"#),
+            ]);
+            let json = quick().fetch_json(&server.url, "test").unwrap();
+            assert_eq!(json["p"], 1.5);
+            assert_eq!(server.requests.load(Ordering::SeqCst), 3);
+        }
+
+        #[test]
+        fn gives_up_after_three_attempts() {
+            let server = serve((0..3).map(|_| status("HTTP/1.1 502 Bad Gateway")).collect());
+            let err = quick().fetch_json(&server.url, "test").unwrap_err();
+            assert!(err.contains("502"), "{err}");
+            assert_eq!(server.requests.load(Ordering::SeqCst), 3);
+        }
+
+        #[test]
+        fn a_client_error_is_not_retried() {
+            let server = serve(vec![status("HTTP/1.1 404 Not Found"), ok("{}")]);
+            let err = quick().fetch_json(&server.url, "test").unwrap_err();
+            assert!(err.contains("404"), "{err}");
+            assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        }
+
+        #[test]
+        fn waits_for_retry_after_on_429() {
+            let server = serve(vec![
+                status("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1"),
+                ok(r#"{"p": 2}"#),
+            ]);
+            let start = Instant::now();
+            let json = quick().fetch_json(&server.url, "test").unwrap();
+            assert_eq!(json["p"], 2);
+            assert!(
+                start.elapsed() >= Duration::from_secs(1),
+                "{:?}",
+                start.elapsed()
+            );
+            assert_eq!(server.requests.load(Ordering::SeqCst), 2);
+        }
+
+        #[test]
+        fn a_long_retry_after_ends_the_retries_for_this_poll() {
+            let server = serve(vec![
+                status("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 3600"),
+                ok("{}"),
+            ]);
+            let start = Instant::now();
+            assert!(quick().fetch_json(&server.url, "test").is_err());
+            assert!(start.elapsed() < Duration::from_secs(2));
+            assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        }
+
+        #[test]
+        fn a_stalled_server_times_out() {
+            let stall = Duration::from_millis(1500);
+            let server = serve((0..3).map(|_| Reply::Stall(stall)).collect());
+            let start = Instant::now();
+            let err = fetcher(Duration::from_millis(300))
+                .fetch_json(&server.url, "test")
+                .unwrap_err();
+            assert!(err.contains("network error"), "{err}");
+            // Three timed-out attempts, not three full stalls.
+            assert!(start.elapsed() < stall * 3, "{:?}", start.elapsed());
+        }
+
+        #[test]
+        fn a_body_over_one_megabyte_is_refused_without_retry() {
+            let big = format!(r#"{{"p": "{}"}}"#, "x".repeat(MAX_BODY_BYTES as usize));
+            let server = serve(vec![ok(&big), ok("{}")]);
+            let err = quick().fetch_json(&server.url, "test").unwrap_err();
+            assert!(err.contains("too large"), "{err}");
+            assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        }
+
+        #[test]
+        fn a_redirect_to_plain_http_is_refused() {
+            let server = serve(vec![
+                status("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:9/elsewhere"),
+                ok("{}"),
+            ]);
+            let err = quick().fetch_json(&server.url, "test").unwrap_err();
+            assert!(err.contains("network error"), "{err}");
+            assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        }
+
+        #[test]
+        fn fetch_all_requests_a_shared_url_once() {
+            let server = serve(vec![ok(r#"{"a": 1.0, "b": 2.0}"#), ok("{}")]);
+            let asset = |name: &str, path: &str| Asset {
+                name: name.into(),
+                url: server.url.clone(),
+                price_path: path.into(),
+                unit: "EUR".into(),
+                unit_hint: String::new(),
+                symbol: String::new(),
+                allow_negative: None,
+                max_jump_pct: None,
+            };
+            let rows = quick().fetch_all(&[asset("A", "a"), asset("B", "b"), asset("C", "zz")]);
+            assert_eq!(rows[0].price, 1.0);
+            assert_eq!(rows[1].price, 2.0);
+            assert!(rows[2].price.is_nan(), "missing path is not retried");
+            assert_eq!(server.requests.load(Ordering::SeqCst), 1);
+        }
     }
 }
