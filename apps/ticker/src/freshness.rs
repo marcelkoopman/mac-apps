@@ -11,6 +11,13 @@ pub const STALE_AFTER: TimeDelta = TimeDelta::minutes(15);
 /// renders as a plain glyph, not an emoji.
 pub const STALE_MARK: &str = "\u{26A0}\u{FE0E}";
 
+/// Age after which a price is stale with polls every `interval`: [`STALE_AFTER`] (three polls at
+/// the default 5 minutes), or three intervals when that is longer.
+pub fn stale_after(interval: std::time::Duration) -> TimeDelta {
+    let three = TimeDelta::from_std(interval * 3).unwrap_or(TimeDelta::MAX);
+    three.max(STALE_AFTER)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct AssetStatus {
     /// Last poll that fetched a price for the asset.
@@ -30,9 +37,16 @@ impl AssetStatus {
         }
     }
 
+    /// Stale with the default age limit [`STALE_AFTER`] (5-minute polls).
+    #[cfg(test)]
     pub fn is_stale(&self, now: DateTime<Local>) -> bool {
+        self.is_stale_after(now, STALE_AFTER)
+    }
+
+    /// [`AssetStatus::is_stale`] with another age limit (see [`stale_after`]).
+    pub fn is_stale_after(&self, now: DateTime<Local>, max_age: TimeDelta) -> bool {
         self.failed_polls >= STALE_AFTER_FAILED_POLLS
-            || self.last_ok.is_some_and(|t| now - t > STALE_AFTER)
+            || self.last_ok.is_some_and(|t| now - t > max_age)
     }
 
     /// Second menu line text: `updated 14:05` (with the date when not today), or `no data yet`.
@@ -54,6 +68,21 @@ mod tests {
 
     fn at(h: u32, m: u32) -> DateTime<Local> {
         Local.with_ymd_and_hms(2026, 10, 3, h, m, 0).unwrap()
+    }
+
+    #[test]
+    fn stale_age_follows_a_longer_interval() {
+        use std::time::Duration;
+        assert_eq!(stale_after(Duration::from_secs(60)), STALE_AFTER);
+        assert_eq!(stale_after(Duration::from_secs(300)), STALE_AFTER);
+        assert_eq!(
+            stale_after(Duration::from_secs(1800)),
+            TimeDelta::minutes(90)
+        );
+        let mut s = AssetStatus::default();
+        s.record(true, at(14, 0));
+        assert!(!s.is_stale_after(at(15, 0), TimeDelta::minutes(90)));
+        assert!(s.is_stale_after(at(15, 31), TimeDelta::minutes(90)));
     }
 
     #[test]

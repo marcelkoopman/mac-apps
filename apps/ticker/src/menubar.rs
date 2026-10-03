@@ -32,7 +32,6 @@ use crate::price_watch::{
 use crate::prices::{self, PriceRow};
 use crate::watch_ui::{self, WatchUIBuilder};
 
-const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// After the Mac wakes, the next poll comes this soon (Wi-Fi needs a moment to reconnect).
 const POLL_AFTER_WAKE: Duration = Duration::from_secs(5);
 /// A dialog item clicked while the menu is still tracking is retried this often ...
@@ -44,7 +43,7 @@ const MENU_MAX_DEFER: Duration = Duration::from_secs(2);
 fn opens_dialog(id: &str) -> bool {
     matches!(
         id,
-        "add_watch" | "manage_watches" | "edit_asset" | "reset_assets"
+        "add_watch" | "manage_watches" | "edit_asset" | "reset_assets" | "poll_interval"
     )
 }
 
@@ -97,6 +96,8 @@ struct App {
     config_error: Option<String>,
     /// Between the will-sleep and did-wake notifications: no polls.
     asleep: bool,
+    /// Minutes between polls (*Poll interval…*, at least 1).
+    poll_minutes: u64,
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -237,6 +238,7 @@ impl App {
             "manage_watches" => self.handle_manage_watches(),
             "edit_asset" => self.handle_edit_asset(),
             "reset_assets" => self.handle_reset_assets(),
+            "poll_interval" => self.handle_poll_interval(),
             id => match menu_ids::parse(id) {
                 menu_ids::Parsed::Row { generation, row } => {
                     if generation != self.rows_generation {
@@ -760,8 +762,42 @@ impl App {
         }
     }
 
+    fn handle_poll_interval(&mut self) {
+        let Some(input) = prompt_text(
+            &format!(
+                "Minutes between polls ({} to {}):",
+                price_input::MIN_POLL_MINUTES,
+                price_input::MAX_POLL_MINUTES
+            ),
+            &self.poll_minutes.to_string(),
+        ) else {
+            return;
+        };
+        let minutes = match price_input::parse_interval_minutes(&input) {
+            Ok(minutes) => minutes,
+            Err(e) => {
+                log_message(&format!("poll_interval: {e}"));
+                watch_ui::send_macos_notification("Ticker", &e);
+                return;
+            }
+        };
+        self.poll_minutes = minutes;
+        if let Err(e) = config::save_poll_minutes(minutes) {
+            log_message(&format!(
+                "poll_interval: not saved ({e}); used until Ticker quits"
+            ));
+        }
+        log_message(&format!("poll_interval: now every {minutes} min"));
+        self.schedule_next_poll();
+        self.update_menu();
+    }
+
+    fn poll_interval(&self) -> Duration {
+        Duration::from_secs(self.poll_minutes * 60)
+    }
+
     fn schedule_next_poll(&mut self) {
-        self.next_check = SystemTime::now() + POLL_INTERVAL;
+        self.next_check = SystemTime::now() + self.poll_interval();
     }
 
     /// Before the NaN prices are filled in from the last poll: which assets this poll fetched.
@@ -797,6 +833,7 @@ impl App {
         let freshness = Freshness {
             status: &self.asset_status,
             now: chrono::Local::now(),
+            max_age: crate::freshness::stale_after(self.poll_interval()),
         };
         let skipped = self
             .config
@@ -814,6 +851,7 @@ impl App {
             &freshness,
             &skipped,
             sources.as_deref(),
+            self.poll_minutes,
         );
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
         let title = MenuBuilder::menubar_title(rows, pin, &freshness);
@@ -976,6 +1014,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         config_loaded: false,
         config_error: None,
         asleep: false,
+        poll_minutes: config::load_poll_minutes(),
     };
     #[cfg(target_os = "macos")]
     let _sleep_wake = {

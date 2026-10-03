@@ -257,6 +257,28 @@ pub fn validate_asset_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Poll interval when none was set: 5 minutes.
+pub const DEFAULT_POLL_MINUTES: u64 = 5;
+
+fn poll_interval_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".ticker_poll_interval"))
+}
+
+/// Minutes between polls set with *Poll interval…*, or [`DEFAULT_POLL_MINUTES`]. A file that
+/// does not hold a valid value (see `price_input::parse_interval_minutes`) is ignored.
+pub fn load_poll_minutes() -> u64 {
+    poll_interval_path()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .and_then(|raw| crate::price_input::parse_interval_minutes(&raw).ok())
+        .unwrap_or(DEFAULT_POLL_MINUTES)
+}
+
+pub fn save_poll_minutes(minutes: u64) -> Result<(), Box<dyn Error>> {
+    let path = poll_interval_path().ok_or("Cannot find home directory")?;
+    write_atomic(&path, format!("{minutes}\n").as_bytes())?;
+    Ok(())
+}
+
 fn menubar_pin_path() -> Result<PathBuf, Box<dyn Error>> {
     if let Ok(path) = std::env::var("TICKER_MENUBAR_PIN_PATH")
         && !path.is_empty()

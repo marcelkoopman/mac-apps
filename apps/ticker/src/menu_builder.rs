@@ -1,8 +1,10 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, TimeDelta};
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use std::collections::HashMap;
 
 use crate::config::{Asset, SkippedAsset};
+#[cfg(test)]
+use crate::freshness::STALE_AFTER;
 use crate::freshness::{AssetStatus, STALE_MARK};
 use crate::menu_ids;
 use crate::price_watch::{PriceWatch, WatchList};
@@ -15,11 +17,17 @@ pub struct MenuBuilder;
 pub struct Freshness<'a> {
     pub status: &'a HashMap<String, AssetStatus>,
     pub now: DateTime<Local>,
+    /// Age after which a price counts as stale (`freshness::stale_after` of the poll interval).
+    pub max_age: TimeDelta,
 }
 
 impl Freshness<'_> {
     fn of(&self, name: &str) -> AssetStatus {
         self.status.get(name).copied().unwrap_or_default()
+    }
+
+    fn is_stale(&self, name: &str) -> bool {
+        self.of(name).is_stale_after(self.now, self.max_age)
     }
 }
 
@@ -32,6 +40,7 @@ impl MenuBuilder {
         freshness: &Freshness<'_>,
         skipped: &[SkippedAsset],
         sources: Option<&str>,
+        poll_minutes: u64,
     ) -> Menu {
         let menu = Menu::new();
 
@@ -40,7 +49,7 @@ impl MenuBuilder {
         }
         for (i, row) in rows.iter().enumerate() {
             let status = freshness.of(&row.name);
-            let stale = status.is_stale(freshness.now);
+            let stale = freshness.is_stale(&row.name);
             let text = Self::format_price_row(row, &status.updated_label(freshness.now), stale);
             let id = menu_ids::asset_item_id(generation, i);
             let item = MenuItem::with_id(id, &text, true, None);
@@ -95,6 +104,12 @@ impl MenuBuilder {
         ));
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&MenuItem::with_id("poll", "Poll now", true, None));
+        let _ = menu.append(&MenuItem::with_id(
+            "poll_interval",
+            format!("Poll interval: {poll_minutes} min…"),
+            true,
+            None,
+        ));
         let _ = menu.append(&MenuItem::with_id("copy", "Copy to clipboard", true, None));
         let _ = menu.append(&MenuItem::with_id("edit_asset", "Edit asset…", true, None));
         let _ = menu.append(&MenuItem::with_id(
@@ -186,7 +201,7 @@ impl MenuBuilder {
         freshness: &Freshness<'_>,
     ) -> Option<String> {
         let row = Self::shown_row(rows, preferred)?;
-        let stale = if freshness.of(&row.name).is_stale(freshness.now) {
+        let stale = if freshness.is_stale(&row.name) {
             ", out of date"
         } else {
             ""
@@ -211,7 +226,7 @@ impl MenuBuilder {
         };
         let currency = Self::unit_to_currency(&row.unit);
         let price_txt = Self::format_menubar_price(row.price);
-        let mark = if freshness.of(&row.name).is_stale(freshness.now) {
+        let mark = if freshness.is_stale(&row.name) {
             format!("{STALE_MARK} ")
         } else {
             String::new()
@@ -443,6 +458,7 @@ mod tests {
             &Freshness {
                 status: &fresh(),
                 now: now(),
+                max_age: STALE_AFTER,
             },
         )
     }
@@ -502,6 +518,7 @@ mod tests {
         let f = Freshness {
             status: &status,
             now: now(),
+            max_age: STALE_AFTER,
         };
         let title = MenuBuilder::menubar_title(&rows, Some("Bitcoin"), &f);
         assert!(title.starts_with(STALE_MARK), "{title}");
@@ -635,6 +652,7 @@ mod tests {
             &Freshness {
                 status: &fresh(),
                 now: now(),
+                max_age: STALE_AFTER,
             },
         );
         assert_eq!(spoken.as_deref(), Some("Bitcoin €66.553"));
@@ -652,6 +670,7 @@ mod tests {
             &Freshness {
                 status: &fresh(),
                 now: now(),
+                max_age: STALE_AFTER,
             },
         );
         assert_eq!(empty, None);
@@ -670,6 +689,7 @@ mod tests {
             &Freshness {
                 status: &status,
                 now: now(),
+                max_age: STALE_AFTER,
             },
         )
         .unwrap();

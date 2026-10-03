@@ -6,8 +6,8 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 ## Features
 
-- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. No polls run while the Mac sleeps; 5 seconds after it wakes up a poll runs right away (instead of waiting out the rest of the interval). Each URL is fetched once per poll (assets that share a URL, like petrol and diesel, share the request) and tried up to 3 times; until a fetch succeeds the menu keeps the last known price. Failed attempts are written to the debug log. Redirects are followed at most 3 times and only to `https://` URLs.
-- **Freshness**: each row's second line says when its price was last fetched (`updated 14:05`). A price that failed 2 polls in a row or is older than 15 minutes is stale: its row turns grey with `⚠︎` in front, and so does the menu bar title when it shows that asset.
+- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. *Poll interval…* sets another interval in whole minutes (1 to 1440); it is remembered. A poll that would start while the previous one still runs is skipped. No polls run while the Mac sleeps; 5 seconds after it wakes up a poll runs right away (instead of waiting out the rest of the interval). Each URL is fetched once per poll (assets that share a URL, like petrol and diesel, share the request) and tried up to 3 times; until a fetch succeeds the menu keeps the last known price. Failed attempts are written to the debug log. Redirects are followed at most 3 times and only to `https://` URLs.
+- **Freshness**: each row's second line says when its price was last fetched (`updated 14:05`). A price that failed 2 polls in a row or is older than 15 minutes (three intervals when the poll interval is longer than 5 minutes) is stale: its row turns grey with `⚠︎` in front, and so does the menu bar title when it shows that asset.
 - **Day change**: each menu row shows the price with its unit and the change since the day's first price, e.g. `▲ €217,00 · +0.33% · updated 14:05`. That first price is stored per local calendar day. A move under 0.05% of the earlier price counts as flat and shows no arrow.
 - **24h trend**: once there is history, a third line shows a sparkline of the last 24 hours (one bar per hour, `▁` = the day's low, `█` = its high) and the change against the price 24 hours ago, e.g. `▁▂▃▅▆▇ · 24h +1.23%` (the change needs at least 23 hours of history). Only plausible prices (see *Price watches*) are recorded: up to 7 days at one point per poll, about 2000 points per asset.
 - **Menu bar asset**: click a price row to show that asset in the menu bar. The choice is remembered.
@@ -54,6 +54,7 @@ State files in your home directory (without one, Ticker uses the bundled config,
 | --- | --- |
 | `~/.ticker_config.toml` | User config (written by *Edit asset…*) |
 | `~/.ticker_menubar_asset` | Menu bar asset picked from the menu |
+| `~/.ticker_poll_interval` | Poll interval in minutes set with *Poll interval…* (default 5) |
 | `~/.ticker_watches.json` | Price watches. If it cannot be parsed at start, the menu bar app moves it to `.ticker_watches.json.bak` (`.1.bak`, … if that exists), starts with no watches and shows a notification |
 | `~/.ticker_price_history.json` | Day-open and last-poll prices. A file that cannot be parsed is moved to `.ticker_price_history.json.bak` (logged) and the history starts over |
 | `~/.ticker_price_series.json` | Up to 7 days of prices per asset for the sparkline and 24h change. A file that cannot be parsed is moved to `.bak` (logged) |
@@ -61,7 +62,7 @@ State files in your home directory (without one, Ticker uses the bundled config,
 | `~/.ticker_debug.log` | Log of the menu bar app, recreated at every start once it holds the instance lock (CLI commands never touch it) |
 | `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |
 
-Config, pin, history, price series and watches are saved atomically: written to a temporary file in the same directory, fsynced, then renamed over the old one, so a crash or full disk never leaves half a file. A symlinked file (for example from a dotfiles repo) stays a symlink; its target is replaced.
+Config, pin, poll interval, history, price series and watches are saved atomically: written to a temporary file in the same directory, fsynced, then renamed over the old one, so a crash or full disk never leaves half a file. A symlinked file (for example from a dotfiles repo) stays a symlink; its target is replaced.
 
 ## Watch CLI
 

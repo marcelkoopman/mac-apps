@@ -112,12 +112,48 @@ pub fn parse_watch_target(input: &str, allow_negative: bool) -> Result<f64, Stri
     Ok(value)
 }
 
+/// Shortest poll interval: more often would only load the free price APIs.
+pub const MIN_POLL_MINUTES: u64 = 1;
+/// Longest poll interval: a day.
+pub const MAX_POLL_MINUTES: u64 = 24 * 60;
+
+/// Poll interval typed in *Poll interval…*: whole minutes, optionally followed by `min`,
+/// from [`MIN_POLL_MINUTES`] to [`MAX_POLL_MINUTES`].
+pub fn parse_interval_minutes(input: &str) -> Result<u64, String> {
+    let trimmed = input.trim();
+    let digits = trimmed
+        .strip_suffix("minutes")
+        .or_else(|| trimmed.strip_suffix("min"))
+        .unwrap_or(trimmed)
+        .trim();
+    let minutes: u64 = digits
+        .parse()
+        .map_err(|_| format!("Not a whole number of minutes: {trimmed:?}"))?;
+    if !(MIN_POLL_MINUTES..=MAX_POLL_MINUTES).contains(&minutes) {
+        return Err(format!(
+            "The interval must be {MIN_POLL_MINUTES} to {MAX_POLL_MINUTES} minutes (got {minutes})"
+        ));
+    }
+    Ok(minutes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn ok(s: &str) -> f64 {
         parse_price(s).unwrap_or_else(|e| panic!("{s}: {e}"))
+    }
+
+    #[test]
+    fn interval_is_whole_minutes_from_one_to_a_day() {
+        assert_eq!(parse_interval_minutes("5"), Ok(5));
+        assert_eq!(parse_interval_minutes(" 1 min "), Ok(1));
+        assert_eq!(parse_interval_minutes("30 minutes"), Ok(30));
+        assert_eq!(parse_interval_minutes("1440\n"), Ok(1440));
+        for bad in ["0", "1441", "-1", "0.5", "1,5", "", "abc", "5 sec"] {
+            assert!(parse_interval_minutes(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]
