@@ -1,10 +1,15 @@
+use crate::menu_builder::MenuBuilder;
 use crate::price_watch::{PriceWatch, WatchDirection, WatchList};
 
 pub struct WatchUIBuilder;
 
 impl WatchUIBuilder {
-    /// Format watch trigger notification.
-    pub fn format_trigger_notification(watch: &PriceWatch, current_price: f64) -> String {
+    /// Watch trigger notification; prices in the asset's `unit`.
+    pub fn format_trigger_notification(
+        watch: &PriceWatch,
+        current_price: f64,
+        unit: &str,
+    ) -> String {
         let direction_text = match watch.direction {
             WatchDirection::Above => "rose above",
             WatchDirection::Below => "dropped below",
@@ -12,9 +17,13 @@ impl WatchUIBuilder {
 
         format!(
             "🔔 {} Price Alert!\n\n\
-             {} has {} your watch price of €{:.2}\n\n\
-             Current Price: €{:.2}",
-            watch.asset_name, watch.asset_name, direction_text, watch.target_price, current_price
+             {} has {} your watch price of {}\n\n\
+             Current Price: {}",
+            watch.asset_name,
+            watch.asset_name,
+            direction_text,
+            MenuBuilder::format_money(unit, watch.target_price),
+            MenuBuilder::format_money(unit, current_price)
         )
     }
 
@@ -121,11 +130,11 @@ mod tests {
             triggered: true,
         };
 
-        let notification = WatchUIBuilder::format_trigger_notification(&watch, 71000.0);
+        let notification = WatchUIBuilder::format_trigger_notification(&watch, 71000.0, "EUR");
 
         assert!(notification.contains("rose above"));
-        assert!(notification.contains("70000"));
-        assert!(notification.contains("71000"));
+        assert!(notification.contains("€70.000,00"));
+        assert!(notification.contains("€71.000,00"));
     }
 
     #[test]
@@ -138,10 +147,11 @@ mod tests {
             triggered: true,
         };
 
-        let notification = WatchUIBuilder::format_trigger_notification(&watch, 1950.0);
+        let notification = WatchUIBuilder::format_trigger_notification(&watch, 1950.0, "USD");
 
         assert!(notification.contains("dropped below"));
-        assert!(notification.contains("2000"));
-        assert!(notification.contains("1950"));
+        assert!(notification.contains("$2.000,00"));
+        assert!(notification.contains("$1.950,00"));
+        assert!(!notification.contains('€'));
     }
 }

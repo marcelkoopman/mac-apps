@@ -8,13 +8,16 @@
 ///   three digits follow and 1–3 digits (not starting with 0) precede it (`68.000` = 68000),
 ///   otherwise the decimal point (`68000.5`, `0.125`). Write `2,479` for 2.479.
 ///
-/// Thousands groups must have three digits. Spaces and a leading or trailing `€` are ignored.
+/// Thousands groups must have three digits. Spaces and a leading or trailing `€`, `$`, `£` or
+/// `¥` are ignored.
 /// Letters (so also `inf`, `NaN` and exponents) are refused, as is anything not finite.
+/// Currency signs the menu shows (and so may be pasted back with a price).
+const CURRENCY_SIGNS: [char; 4] = ['€', '$', '£', '¥'];
+
 pub fn parse_price(input: &str) -> Result<f64, String> {
     let cleaned: String = input
         .trim()
-        .trim_start_matches('€')
-        .trim_end_matches('€')
+        .trim_matches(CURRENCY_SIGNS)
         .chars()
         .filter(|c| !c.is_whitespace())
         .collect();
@@ -125,6 +128,8 @@ mod tests {
         assert_eq!(ok("1.234.567"), 1234567.0);
         assert_eq!(ok("1.234.567,89"), 1234567.89);
         assert_eq!(ok("€ 1.234,56"), 1234.56);
+        assert_eq!(ok("$1.50"), 1.5);
+        assert_eq!(ok("£2,479"), 2.479);
         assert_eq!(ok("0,19"), 0.19);
         assert_eq!(ok("2,479"), 2.479);
         assert_eq!(ok(" 66.553,00 "), 66553.0);

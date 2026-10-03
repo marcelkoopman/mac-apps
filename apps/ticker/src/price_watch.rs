@@ -42,6 +42,21 @@ impl WatchDirection {
         }
     }
 
+    /// The direction a watch on `target` needs, seen from the `current` price: up to a higher
+    /// target, down to a lower one. `None` when they are equal (or `current` is unknown): such a
+    /// watch would go off at once either way.
+    pub fn toward(target: f64, current: f64) -> Option<WatchDirection> {
+        if !current.is_finite() || !target.is_finite() {
+            None
+        } else if target > current {
+            Some(WatchDirection::Above)
+        } else if target < current {
+            Some(WatchDirection::Below)
+        } else {
+            None
+        }
+    }
+
     pub fn emoji(&self) -> &str {
         match self {
             WatchDirection::Above => "📈",
@@ -341,6 +356,20 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn direction_toward_target() {
+        assert_eq!(
+            WatchDirection::toward(70000.0, 66000.0),
+            Some(WatchDirection::Above)
+        );
+        assert_eq!(
+            WatchDirection::toward(-0.01, 0.12),
+            Some(WatchDirection::Below)
+        );
+        assert_eq!(WatchDirection::toward(5.0, 5.0), None);
+        assert_eq!(WatchDirection::toward(5.0, f64::NAN), None);
     }
 
     #[test]

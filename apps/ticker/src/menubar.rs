@@ -485,7 +485,8 @@ impl App {
         // Only take the lock and touch the file when a watch actually goes off.
         if !fired_watches(&mut self.watch_list.clone(), &current).is_empty() {
             for (w, p) in self.update_watches(|list| fired_watches(list, &current)) {
-                let msg = WatchUIBuilder::format_trigger_notification(&w, p);
+                let unit = self.unit_of(&w.asset_name);
+                let msg = WatchUIBuilder::format_trigger_notification(&w, p, &unit);
                 watch_ui::send_macos_notification("Ticker Price Alert", &msg);
             }
         }
@@ -544,20 +545,19 @@ impl App {
         else {
             return;
         };
-        let default_price = self
+        let current = self
             .prices
             .as_ref()
             .and_then(|rows| prices::price_of(rows, &asset))
-            .unwrap_or(0.0);
+            .filter(|p| p.is_finite());
+        let unit = self.unit_of(&asset);
         let allow_negative = self
-            .config
-            .as_ref()
-            .and_then(|c| c.assets.iter().find(|a| a.name == asset))
+            .asset_config(&asset)
             .is_some_and(config::Asset::allows_negative);
         // Prefilled in the menu's Dutch notation, which parse_watch_target reads back.
         let target_price: f64 = match prompt_text(
-            &format!("Target price for {asset} (€):"),
-            &MenuBuilder::format_price(default_price),
+            &format!("Target price for {asset} ({}):", self.unit_label(&asset)),
+            &MenuBuilder::format_price(current.unwrap_or(0.0)),
         ) {
             Some(s) => match price_input::parse_watch_target(&s, allow_negative) {
                 Ok(v) => v,
@@ -569,10 +569,15 @@ impl App {
             },
             None => return,
         };
-        let direction = match dialogs::choose("Trigger when price goes:", &["above", "below"]) {
-            Some(0) => WatchDirection::Above,
-            Some(1) => WatchDirection::Below,
-            _ => return,
+        // Up to a higher target, down to a lower one; only asked when the target is the current
+        // price or there is none.
+        let direction = match current.and_then(|now| WatchDirection::toward(target_price, now)) {
+            Some(direction) => direction,
+            None => match dialogs::choose("Trigger when price goes:", &["above", "below"]) {
+                Some(0) => WatchDirection::Above,
+                Some(1) => WatchDirection::Below,
+                _ => return,
+            },
         };
         let added = self.update_watches(|list| {
             if list
@@ -588,20 +593,53 @@ impl App {
         if !added {
             watch_ui::send_macos_notification(
                 "Ticker",
-                &format!("Watch already exists for {} at €{:.2}", asset, target_price),
+                &format!(
+                    "Watch already exists for {asset} at {}",
+                    MenuBuilder::format_money(&unit, target_price)
+                ),
             );
             return;
         }
         watch_ui::send_macos_notification(
             "Ticker",
             &format!(
-                "Watch set: {} {} €{:.2}",
-                direction.emoji(),
-                asset,
-                target_price
+                "Watch set: {asset} {} {}{}",
+                direction.as_str(),
+                MenuBuilder::format_money(&unit, target_price),
+                current
+                    .map(|now| format!(" (now {})", MenuBuilder::format_money(&unit, now)))
+                    .unwrap_or_default()
             ),
         );
         self.update_menu();
+    }
+
+    /// The configured unit of `asset` (case-insensitive, like watches), or "" when unknown.
+    fn unit_of(&self, asset: &str) -> String {
+        self.asset_config(asset)
+            .map(|a| a.unit.clone())
+            .unwrap_or_default()
+    }
+
+    /// Unit and hint for a prompt: `EUR/kWh`, `EUR / troy oz`.
+    fn unit_label(&self, asset: &str) -> String {
+        match self.asset_config(asset) {
+            Some(a) if a.unit_hint.trim().is_empty() => a.unit.clone(),
+            Some(a) if a.unit_hint.trim().starts_with('/') => {
+                format!("{}{}", a.unit, a.unit_hint.trim())
+            }
+            Some(a) => format!("{} / {}", a.unit, a.unit_hint.trim()),
+            None => "price".to_string(),
+        }
+    }
+
+    fn asset_config(&self, asset: &str) -> Option<&config::Asset> {
+        let wanted = asset.to_lowercase();
+        self.config
+            .as_ref()?
+            .assets
+            .iter()
+            .find(|a| a.name == asset || a.name.to_lowercase() == wanted)
     }
 
     fn handle_manage_watches(&mut self) {
@@ -614,12 +652,12 @@ impl App {
         let mut lines = String::new();
         for (i, w) in self.watch_list.watches.iter().enumerate() {
             lines.push_str(&format!(
-                "{}. {} {} €{:.2}{}\n",
+                "{}. {} {} {}{}\n",
                 i + 1,
-                w.direction.emoji(),
                 w.asset_name,
-                w.target_price,
-                if w.triggered { " ✓" } else { "" }
+                w.direction.as_str(),
+                MenuBuilder::format_money(&self.unit_of(&w.asset_name), w.target_price),
+                if w.triggered { " (triggered)" } else { "" }
             ));
         }
         lines.push_str("\nClick a watch in the menu to remove it, or choose Clear All.");

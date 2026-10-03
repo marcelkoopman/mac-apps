@@ -1,4 +1,5 @@
 use crate::config::{Asset, Config};
+use crate::menu_builder::MenuBuilder;
 use crate::price_input::{parse_price, parse_watch_target};
 use crate::price_watch::{WatchDirection, update_watch_list};
 use std::error::Error;
@@ -25,7 +26,9 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     }
 
     let asset_name = args[0].clone();
-    let allow_negative = configured_asset(&asset_name).is_some_and(|a| a.allows_negative());
+    let asset = configured_asset(&asset_name);
+    let allow_negative = asset.as_ref().is_some_and(Asset::allows_negative);
+    let money = |value: f64| money_in(asset.as_ref(), value);
     let target_price = parse_watch_target(&args[1], allow_negative)?;
     let direction = match args[2].to_lowercase().as_str() {
         "above" => WatchDirection::Above,
@@ -48,23 +51,28 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     })?;
     if !added {
         return Err(format!(
-            "Watch already exists for {} at €{:.2}",
-            asset_name, target_price
+            "Watch already exists for {asset_name} at {}",
+            money(target_price)
         )
         .into());
     }
 
     Ok(format!(
-        "✅ Added watch: {} {} €{:.2}",
+        "✅ Added watch: {} {asset_name} {} {}",
         direction.emoji(),
-        asset_name,
-        target_price
+        direction.as_str(),
+        money(target_price)
     ))
 }
 
 /// The asset `name` (case-insensitive) in the config the menu bar app uses, if it is there.
 fn configured_asset(name: &str) -> Option<Asset> {
     find_asset(crate::config::load_config().ok()?, name)
+}
+
+/// `value` in the asset's unit (no currency for an asset that is not in the config).
+fn money_in(asset: Option<&Asset>, value: f64) -> String {
+    MenuBuilder::format_money(asset.map_or("", |a| a.unit.as_str()), value)
 }
 
 fn find_asset(config: Config, name: &str) -> Option<Asset> {
@@ -82,18 +90,12 @@ fn remove_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
 
     let asset_name = &args[0];
     let target_price = parse_price(&args[1])?;
+    let money = money_in(configured_asset(asset_name).as_ref(), target_price);
 
     if update_watch_list(|watch_list| watch_list.remove_watch(asset_name, target_price))? {
-        Ok(format!(
-            "✅ Removed watch for {} at €{:.2}",
-            asset_name, target_price
-        ))
+        Ok(format!("✅ Removed watch for {asset_name} at {money}"))
     } else {
-        Err(format!(
-            "❌ Watch not found for {} at €{:.2}",
-            asset_name, target_price
-        )
-        .into())
+        Err(format!("❌ Watch not found for {asset_name} at {money}").into())
     }
 }
 
@@ -105,18 +107,22 @@ fn list_watches() -> Result<String, Box<dyn Error>> {
     }
 
     let mut output = String::from("📋 Price Watches:\n\n");
+    let config = crate::config::load_config().ok();
 
     for (i, watch) in watch_list.watches.iter().enumerate() {
         let status = if watch.triggered { "✓" } else { " " };
         let direction_emoji = watch.direction.emoji();
         let direction_text = watch.direction.as_str();
+        let asset = config
+            .clone()
+            .and_then(|config| find_asset(config, &watch.asset_name));
         output.push_str(&format!(
-            "{}. [{}] {} {} - €{:.2} ({})\n",
+            "{}. [{}] {} {} - {} ({})\n",
             i + 1,
             status,
             direction_emoji,
             watch.asset_name,
-            watch.target_price,
+            money_in(asset.as_ref(), watch.target_price),
             direction_text
         ));
     }
@@ -174,10 +180,10 @@ Commands:
     Show this help message
 
 Examples:
-  # Add a watch for BTC above €68,000
+  # Add a watch for BTC above 68.000 (in the asset's unit)
   ticker add Bitcoin 68000 above
 
-  # Add a watch for Gold below €2,000
+  # Add a watch for Gold below 2.000
   ticker add Gold 2000 below
 
   # List all watches
@@ -271,7 +277,7 @@ mod tests {
 
             let listed = handle_watch_command(&["list".into()]).unwrap();
             assert!(listed.contains("Bitcoin"));
-            assert!(listed.contains("68000"));
+            assert!(listed.contains("68.000,00"), "{listed}");
 
             let dup = handle_watch_command(&[
                 "add".into(),
@@ -315,7 +321,7 @@ mod tests {
             ])
             .unwrap();
             let listed = handle_watch_command(&["list".into()]).unwrap();
-            assert!(listed.contains("68000.00"), "{listed}");
+            assert!(listed.contains("68.000,00"), "{listed}");
             for bad in ["inf", "NaN", "0", "-1", "abc"] {
                 let err = handle_watch_command(&[
                     "add".into(),

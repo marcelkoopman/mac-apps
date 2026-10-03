@@ -63,11 +63,11 @@ impl MenuBuilder {
         for (index, watch) in watch_list.watches.iter().enumerate() {
             let mark = if watch.triggered { "✓" } else { " " };
             let item_text = format!(
-                "{} {} {}  €{}",
+                "{} {} {}  {}",
                 mark,
                 watch.direction.emoji(),
                 watch.asset_name,
-                Self::format_price(watch.target_price)
+                Self::format_money(Self::unit_of(rows, &watch.asset_name), watch.target_price)
             );
             let item_id = menu_ids::watch_item_id(generation, index);
             let _ = menu.append(&MenuItem::with_id(item_id, &item_text, true, None));
@@ -293,14 +293,35 @@ impl MenuBuilder {
         }
     }
 
-    fn unit_to_currency(unit: &str) -> String {
-        match unit {
+    /// What goes in front of a price in `unit`: the sign for EUR, USD, GBP and JPY, otherwise
+    /// the code and a space (`XAU 1,00`), nothing without a unit.
+    pub fn unit_to_currency(unit: &str) -> String {
+        match unit.trim() {
             "EUR" => "€".to_string(),
             "USD" => "$".to_string(),
             "GBP" => "£".to_string(),
             "JPY" => "¥".to_string(),
-            _ => unit.to_string(),
+            "" => String::new(),
+            code => format!("{code} "),
         }
+    }
+
+    /// A price in `unit`, Dutch notation: `€68.000,00`, `$1,50`, `XAU 1,00`.
+    pub fn format_money(unit: &str, value: f64) -> String {
+        format!(
+            "{}{}",
+            Self::unit_to_currency(unit),
+            Self::format_price(value)
+        )
+    }
+
+    /// Unit of the asset `name` (case-insensitive, like watches match assets), if it is listed.
+    pub fn unit_of<'a>(rows: &'a [PriceRow], name: &str) -> &'a str {
+        let wanted = name.to_lowercase();
+        rows.iter()
+            .find(|r| r.name == name || r.name.to_lowercase() == wanted)
+            .map(|r| r.unit.as_str())
+            .unwrap_or("")
     }
 }
 
@@ -346,6 +367,17 @@ mod tests {
                 now: now(),
             },
         )
+    }
+
+    #[test]
+    fn money_uses_the_asset_unit() {
+        assert_eq!(MenuBuilder::format_money("EUR", 68000.0), "€68.000,00");
+        assert_eq!(MenuBuilder::format_money("USD", 1.5), "$1,50");
+        assert_eq!(MenuBuilder::format_money("XAU", 1.0), "XAU 1,00");
+        assert_eq!(MenuBuilder::format_money("", 2.0), "2,00");
+        let rows = sample();
+        assert_eq!(MenuBuilder::unit_of(&rows, "bitcoin"), "EUR");
+        assert_eq!(MenuBuilder::unit_of(&rows, "Platinum"), "");
     }
 
     #[test]
