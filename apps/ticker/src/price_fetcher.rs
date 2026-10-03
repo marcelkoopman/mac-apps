@@ -20,6 +20,8 @@ const MAX_BODY_BYTES: u64 = 1024 * 1024;
 /// Path part that picks, from an array of `{"time": <RFC 3339>, …}` entries, the one whose period
 /// contains the current time (see [`select_now`]).
 const NOW_SELECTOR: &str = "@now";
+/// Moves smaller than this (in percent of the earlier price) count as "flat".
+const FLAT_PCT: f64 = 0.05;
 /// Period of the last entry when an `@now` array has a single entry (no step to derive it from).
 const DEFAULT_PERIOD: TimeDelta = TimeDelta::hours(1);
 
@@ -184,7 +186,7 @@ impl PriceFetcher {
                     let pct = (change / p.abs()) * 100.0;
                     change_col.push(Some(change));
                     pct_col.push(Some(pct));
-                    direction_col.push(Self::direction_label(change));
+                    direction_col.push(Self::direction_label(pct));
                 }
             } else {
                 change_col.push(None);
@@ -215,7 +217,7 @@ impl PriceFetcher {
                     let pct = (change / o.abs()) * 100.0;
                     change_day_col.push(Some(change));
                     pct_day_col.push(Some(pct));
-                    direction_day_col.push(Self::direction_label(change));
+                    direction_day_col.push(Self::direction_label(pct));
                 }
             } else {
                 change_day_col.push(None);
@@ -237,10 +239,12 @@ impl PriceFetcher {
         Ok(df)
     }
 
-    fn direction_label(change: f64) -> String {
-        if change > 0.01 {
+    /// "up" / "down" for a move of at least [`FLAT_PCT`] percent either way, else "flat".
+    /// Relative, so a cent on €0,20/kWh power counts and a cent on €66.000 bitcoin does not.
+    fn direction_label(pct: f64) -> String {
+        if pct >= FLAT_PCT {
             "up".to_string()
-        } else if change < -0.01 {
+        } else if pct <= -FLAT_PCT {
             "down".to_string()
         } else {
             "flat".to_string()
@@ -448,10 +452,30 @@ mod tests {
     #[test]
     fn direction_label_thresholds() {
         assert_eq!(PriceFetcher::direction_label(0.0), "flat");
-        assert_eq!(PriceFetcher::direction_label(0.01), "flat");
-        assert_eq!(PriceFetcher::direction_label(-0.01), "flat");
-        assert_eq!(PriceFetcher::direction_label(0.011), "up");
-        assert_eq!(PriceFetcher::direction_label(-0.011), "down");
+        assert_eq!(PriceFetcher::direction_label(0.049), "flat");
+        assert_eq!(PriceFetcher::direction_label(-0.049), "flat");
+        assert_eq!(PriceFetcher::direction_label(0.05), "up");
+        assert_eq!(PriceFetcher::direction_label(-0.05), "down");
+    }
+
+    #[test]
+    fn small_prices_move_and_big_prices_stay_flat_on_the_same_cent() {
+        // One cent on 0,20 €/kWh is 5%: a move.
+        let df = base_df("Power NL", 0.21);
+        let opens = HashMap::from([("Power NL".to_string(), 0.20)]);
+        let df = PriceFetcher::attach_change_columns(df, None, &opens).unwrap();
+        assert_eq!(
+            df.column("direction_day").unwrap().str().unwrap().get(0),
+            Some("up")
+        );
+        // Ten euro on 66.000 € bitcoin is 0,015%: flat.
+        let df = base_df("Bitcoin", 66010.0);
+        let opens = HashMap::from([("Bitcoin".to_string(), 66000.0)]);
+        let df = PriceFetcher::attach_change_columns(df, None, &opens).unwrap();
+        assert_eq!(
+            df.column("direction_day").unwrap().str().unwrap().get(0),
+            Some("flat")
+        );
     }
 
     fn base_df(name: &str, price: f64) -> DataFrame {
