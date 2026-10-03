@@ -3334,6 +3334,30 @@ Id,Naam,Telefoonnummer,Salaris
             "Sorted by Price ↓"
         );
         assert_eq!(menu_group(&CommandId::TableUndo), None);
+        let removes: Vec<&str> = menu
+            .iter()
+            .filter(|c| menu_group(&c.id) == Some("Remove column"))
+            .map(|c| c.title.as_str())
+            .collect();
+        assert_eq!(removes, ["name", "n"]);
+        let to_front: Vec<&CommandId> = menu
+            .iter()
+            .filter(|c| menu_group(&c.id) == Some("Move column to front"))
+            .map(|c| &c.id)
+            .collect();
+        assert_eq!(
+            to_front,
+            [&CommandId::TableStep(TableOp::SelectColumns {
+                columns: vec!["n".into(), "name".into()]
+            })]
+        );
+        assert_eq!(
+            TableOp::DropColumns {
+                columns: vec!["Salary".into()]
+            }
+            .label(),
+            "Salary removed"
+        );
         // Without a frame there are no columns to offer yet.
         let mut loading = table.clone();
         loading.frame = None;

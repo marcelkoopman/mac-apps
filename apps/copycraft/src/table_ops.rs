@@ -301,6 +301,32 @@ pub fn describe(df: &DataFrame) -> Result<DataFrame, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Select columns: `columns`, in that order. At least one.
+pub fn select_columns(df: &DataFrame, columns: &[String]) -> Result<DataFrame, String> {
+    if columns.is_empty() {
+        return Err("Choose at least one column".to_string());
+    }
+    df.select(columns.iter().map(String::as_str))
+        .map_err(|e| e.to_string())
+}
+
+/// Drop columns: every column but `columns`. At least one stays.
+pub fn drop_columns(df: &DataFrame, columns: &[String]) -> Result<DataFrame, String> {
+    for column in columns {
+        df.column(column).map_err(|e| e.to_string())?;
+    }
+    let kept: Vec<String> = df
+        .get_column_names()
+        .into_iter()
+        .map(|name| name.to_string())
+        .filter(|name| !columns.contains(name))
+        .collect();
+    if kept.is_empty() {
+        return Err("At least one column stays".to_string());
+    }
+    select_columns(df, &kept)
+}
+
 /// Sort by `column`: empty cells last, equal values in table order.
 pub fn sort(df: &DataFrame, column: &str, descending: bool) -> Result<DataFrame, String> {
     let options = SortMultipleOptions::default()
@@ -338,7 +364,10 @@ pub fn value_counts(df: &DataFrame, column: &str) -> Result<DataFrame, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{describe, drop_constant, drop_empty, fix_types, sort, transpose, value_counts};
+    use super::{
+        describe, drop_columns, drop_constant, drop_empty, fix_types, select_columns, sort,
+        transpose, value_counts,
+    };
     use crate::dataframe::parse_table;
     use crate::dataframe::tests::ENERGY_FIXTURE;
     use polars::prelude::*;
@@ -501,5 +530,23 @@ mod tests {
         let numbers = value_counts(&df, "n").expect("step");
         assert_eq!(numbers.column("n").unwrap().dtype(), &DataType::Int64);
         assert_eq!(numbers.height(), 6);
+    }
+
+    #[test]
+    fn select_and_drop_columns_keep_at_least_one() {
+        let df = table("a,b,c\n1,2,3");
+        let picked = select_columns(&df, &["c".into(), "a".into()]).expect("step");
+        assert_eq!(names(&picked), ["c", "a"]);
+        assert!(select_columns(&df, &[]).is_err());
+        assert!(select_columns(&df, &["x".into()]).is_err());
+        let dropped = drop_columns(&df, &["b".into()]).expect("step");
+        assert_eq!(names(&dropped), ["a", "c"]);
+        assert_eq!(
+            drop_columns(&df, &["a".into(), "b".into(), "c".into()])
+                .err()
+                .as_deref(),
+            Some("At least one column stays")
+        );
+        assert!(drop_columns(&df, &["x".into()]).is_err());
     }
 }
