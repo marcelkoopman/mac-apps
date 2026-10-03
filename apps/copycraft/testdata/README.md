@@ -89,6 +89,7 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column, constant column | plain text | CSV | — | Original, Dataframe, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropConstant=8x4; step:DropEmpty>Dedupe>DropConstant=4x3 |
 | `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
 | `tables/small_table.csv` | Table: Transpose and Value counts | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Transpose=2x5; step:ValueCounts(color)=3x2; step:ValueCounts(color)~red |
+| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company |
 | `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
@@ -128,6 +129,7 @@ Columns (fixed; the test parses this table between the markers):
 | `convert=K` / `convert~S` | the Convert result is detected as `K` / contains `S` |
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
 | `pretty=FILE` | the Format view (what the card opens with) is exactly the testdata file `FILE` (without its final newline) |
+| `frozen~S` | the frozen first column of the Dataframe grid (one line per grid line) contains `S` |
 | `decode~S`, `schema~S`, `sample~S` | the Decode, Schema or Sample view contains `S` |
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |

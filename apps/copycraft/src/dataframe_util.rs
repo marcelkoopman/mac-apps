@@ -480,6 +480,33 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn the_frozen_column_is_the_first_column_of_every_grid_line() {
+        let preview = super::try_format_preview("fruit,color\napple,red\nbanana,yellow", 10, None)
+            .expect("preview");
+        let grid = &preview.grid;
+        let lines = super::frozen_column(grid).expect("frozen");
+        let utf16: Vec<u16> = grid.encode_utf16().collect();
+        let part = |line: &super::FrozenLine| String::from_utf16(&utf16[line.start..line.end]).unwrap();
+        let parts: Vec<String> = lines.iter().map(part).collect();
+        assert_eq!(parts.len(), grid.lines().count());
+        assert_eq!(parts[0], "", "the shape line scrolls");
+        assert!(parts[1].starts_with('┌') && parts[1].ends_with('┬'), "{parts:?}");
+        assert!(parts.iter().any(|p| p == "│ fruit  ┆"), "{parts:?}");
+        assert!(parts.iter().any(|p| p == "│ banana ┆"), "{parts:?}");
+        assert!(parts.last().unwrap().ends_with('┴'));
+        // Every line but the last has its newline right after it.
+        for line in &lines[..lines.len() - 1] {
+            assert_eq!(utf16[line.newline.expect("newline")], u16::from(b'\n'));
+        }
+        assert_eq!(lines.last().unwrap().newline, None);
+        // One column has nothing to keep in view; neither has text that is no grid.
+        let one = polars::prelude::df!("fruit" => ["apple", "banana"]).expect("frame");
+        let one = super::frame_preview(&one, 10, None).expect("preview");
+        assert_eq!(super::frozen_column(&one.grid), None);
+        assert_eq!(super::frozen_column("just words"), None);
+    }
+
+    #[test]
     fn reads_day_first_dates_as_dates() {
         use polars::prelude::DataType;
         let preview = super::try_format_preview(ENERGY_FIXTURE, 200, None).expect("preview");

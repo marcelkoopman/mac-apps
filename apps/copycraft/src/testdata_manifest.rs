@@ -240,6 +240,17 @@ fn check(text: &str, check: &str) -> Result<(), String> {
         "dataframe" => view_text(text, CardView::Dataframe),
         "dfcard" => work_card(&data(text, CardView::Dataframe)).excerpt,
         "dfmeta" => work_card(&data(text, CardView::Dataframe)).meta,
+        // The frozen first column of the Dataframe grid, one line per grid line.
+        "frozen" => {
+            let grid = work_card(&data(text, CardView::Dataframe)).excerpt;
+            let utf16: Vec<u16> = grid.encode_utf16().collect();
+            crate::dataframe::frozen_column(&grid)
+                .unwrap_or_default()
+                .iter()
+                .map(|line| String::from_utf16_lossy(&utf16[line.start..line.end]))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
         "read" => table().map(|(df, _)| shape(&df)).unwrap_or_default(),
         "dtypes" => table().map(|(df, _)| dtypes(&df)).unwrap_or_default(),
         "notes" => match table() {

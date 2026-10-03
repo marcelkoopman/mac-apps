@@ -299,3 +299,54 @@ fn overview_list(head: &str, names: &[String], types: &[String], values: &[Strin
     }
     out.join("\n")
 }
+
+/// Where a column ends on a line of a polars grid: the first column separator after the left
+/// border (`┬` in the top border, `┆` in the rows, `╪` under the header, `┴` at the bottom).
+const COLUMN_SEPARATORS: [char; 4] = ['┬', '┆', '╪', '┴'];
+
+/// One line of the frozen first column ([`frozen_column`]), in UTF-16 units of the grid text
+/// (what AppKit counts in): the part shown up to and including the first column separator,
+/// and the line's newline, when it has one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrozenLine {
+    pub start: usize,
+    pub end: usize,
+    pub newline: Option<usize>,
+}
+
+/// The first column of a polars grid (the card's table view), line by line, so the card can
+/// keep it in view while the grid scrolls sideways. Lines outside the box ("shape: (4, 3)")
+/// keep nothing: they scroll like any text. `None` when `grid` has no box with at least two
+/// columns (one column has nothing to scroll past).
+pub fn frozen_column(grid: &str) -> Option<Vec<FrozenLine>> {
+    let top = grid.lines().find(|line| line.starts_with('┌'))?;
+    if !top.contains(COLUMN_SEPARATORS) {
+        return None;
+    }
+    let total = grid.encode_utf16().count();
+    let mut lines = Vec::new();
+    let mut offset = 0;
+    for line in grid.split('\n') {
+        let text = line.strip_suffix('\r').unwrap_or(line);
+        let boxed = text.starts_with(['┌', '│', '╞', '├', '└']);
+        let cut = if boxed {
+            text.char_indices()
+                .find(|(_, c)| COLUMN_SEPARATORS.contains(c))
+                .map_or(text.len(), |(at, c)| at + c.len_utf8())
+        } else {
+            0
+        };
+        let utf16 = |s: &str| s.encode_utf16().count();
+        let end = offset + utf16(&text[..cut]);
+        let line_len = utf16(line);
+        let newline = (offset + line_len < total).then_some(offset + line_len);
+        lines.push(FrozenLine {
+            start: offset,
+            end,
+            newline,
+        });
+        offset += line_len + 1;
+    }
+    Some(lines)
+}
+

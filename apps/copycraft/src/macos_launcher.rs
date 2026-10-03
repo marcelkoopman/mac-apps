@@ -1236,6 +1236,7 @@ fn blur_both(text: &NSArray<AnyObject>, image: &NSArray<AnyObject>) {
             mac_ui::blur::set_content_filters(view, text);
         }
     });
+    blur_frozen_column(text);
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             mac_ui::blur::set_content_filters(view, image);
@@ -1250,6 +1251,7 @@ fn blank_masked_well() {
             view.setSelectable(false);
         }
     });
+    hide_frozen_column();
     set_preview_image_hidden(true);
     PAINTED.with(|slot| {
         if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
@@ -1649,6 +1651,7 @@ fn clear_preview_text() {
             widgets::wipe_text_view(view);
         }
     });
+    hide_frozen_column();
     PAINTED.with(|slot| {
         if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
             text.zeroize();
@@ -1762,6 +1765,7 @@ fn paint_preview_text(body: &str, payload: bool) {
             length: 0,
         });
     });
+    refresh_frozen_column(body, highlight, payload);
     PAINTED.with(|slot| {
         if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
             text.zeroize();
@@ -3384,3 +3388,4 @@ mod tests {
 }
 
 include!("macos_column_picker.rs");
+include!("macos_frozen_column.rs");
