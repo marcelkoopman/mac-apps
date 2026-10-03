@@ -452,6 +452,8 @@ pub enum CommandId {
     TableDateOrder(bool),
     /// Show the table as its grid (`true`) or its column overview, for every version of the entry.
     TableGrid(bool),
+    /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.
+    TableChooseColumns,
     Quit,
 }
 
@@ -1640,6 +1642,14 @@ fn describe_command(describing: bool) -> Command {
 /// Steps on a table, and undo and redo when there is a version to go to.
 pub fn table_commands(table: &TableShown) -> Vec<Command> {
     let mut commands = table_steps();
+    if table.frame.as_ref().is_some_and(|frame| frame.width() > 1) {
+        commands.push(command(
+            CommandId::TableChooseColumns,
+            CHOOSE_COLUMNS_TITLE,
+            "Keep some columns, as one step",
+            "choose pick select keep remove columns table",
+        ));
+    }
     if let Some(frame) = &table.frame {
         let columns: Vec<String> = frame
             .get_column_names()
@@ -1671,6 +1681,36 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
         ));
     }
     commands
+}
+
+/// The Table ▾ item that opens the column picker.
+pub const CHOOSE_COLUMNS_TITLE: &str = "Choose columns…";
+
+/// The columns of the version shown, for the column picker: real and shown names (a long
+/// shared prefix shortened, as on the card) and friendly types. No cell values.
+pub fn picker_columns(table: &TableShown) -> Option<Vec<crate::column_picker::PickerColumn>> {
+    let frame = table.frame.as_ref()?;
+    let names: Vec<String> = frame
+        .get_column_names()
+        .into_iter()
+        .map(|name| name.to_string())
+        .collect();
+    let shown = dataframe::display_names(&names);
+    Some(
+        frame
+            .columns()
+            .iter()
+            .zip(names)
+            .zip(shown)
+            .map(
+                |((column, name), shown)| crate::column_picker::PickerColumn {
+                    name,
+                    shown,
+                    kind: dataframe::friendly_type(column.dtype()),
+                },
+            )
+            .collect(),
+    )
 }
 
 /// The version capsule in the chip row, left of the history capsule: shown in the Dataframe
@@ -1978,6 +2018,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableHeaderLine(_)
             | CommandId::TableDateOrder(_)
             | CommandId::TableGrid(_)
+            | CommandId::TableChooseColumns
     )
 }
 
@@ -2302,6 +2343,7 @@ fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command 
 
 #[cfg(test)]
 mod tests {
+    use super::picker_columns;
     use super::{ArrowAction, ArrowFocus, arrow_action};
     use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
     use super::{
@@ -3500,10 +3542,12 @@ Id,Naam,Telefoonnummer,Salaris
                 .map(CommandId::TableStep)
         };
         let mut expected: Vec<CommandId> = steps().collect();
+        expected.push(CommandId::TableChooseColumns);
         expected.push(CommandId::TableUndo);
         assert_eq!(ids(&table), expected);
         table.version = 0;
         let mut expected: Vec<CommandId> = steps().collect();
+        expected.push(CommandId::TableChooseColumns);
         expected.push(CommandId::TableRedo);
         assert_eq!(ids(&table), expected);
         assert!(keeps_card_open(&CommandId::TableUndo));
@@ -3587,7 +3631,8 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(
             to_front,
             [&CommandId::TableStep(TableOp::SelectColumns {
-                columns: vec!["n".into(), "name".into()]
+                columns: vec!["n".into(), "name".into()],
+                kept_of: None,
             })]
         );
         assert_eq!(
@@ -3748,6 +3793,74 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn choose_columns_lists_the_version_shown_and_applies_as_one_step() {
+        use crate::column_picker::ColumnPicker;
+        let src = crate::dataframe::tests::ENERGY_FIXTURE;
+        let table = read(src, crate::dataframe::ReadOptions::default());
+        let items = table_menu(Some(&table));
+        let choose = items
+            .iter()
+            .find(|c| c.id == CommandId::TableChooseColumns)
+            .expect("Choose columns…");
+        assert_eq!(choose.title, "Choose columns…");
+        assert_eq!(menu_group(&choose.id), None);
+        assert!(keeps_card_open(&CommandId::TableChooseColumns));
+        // Column steps are still there one at a time.
+        assert!(
+            items
+                .iter()
+                .any(|c| menu_group(&c.id) == Some("Remove column"))
+        );
+        assert!(
+            items
+                .iter()
+                .any(|c| menu_group(&c.id) == Some("Move column to front"))
+        );
+        let columns = picker_columns(&table).expect("columns");
+        assert_eq!(columns.len(), 20);
+        assert_eq!(columns[0].kind, "date");
+        let pv1 = &columns[14];
+        assert_eq!(pv1.name, "Sunbox 7 X1500 Max - PV1 Generation (kWh)");
+        assert_eq!(pv1.shown, "… PV1 Generation (kWh)");
+        assert_eq!(pv1.kind, "number");
+        // Untick 12: one step, the 8 kept in the table's order.
+        let mut picker = ColumnPicker::new(columns);
+        for index in (1..20).step_by(2).chain([2, 4]) {
+            picker.set_kept(index, false);
+        }
+        assert_eq!(picker.count_line(), "Keeping 8 of 20");
+        let step = picker.step().expect("step");
+        assert_eq!(step.label(), "Kept 8 of 20 columns");
+        let frame = table.frame.as_ref().expect("frame");
+        let kept = step.apply(frame).expect("apply");
+        let names: Vec<String> = kept
+            .get_column_names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect();
+        assert_eq!(names.len(), 8);
+        assert_eq!(names[0], "Date");
+        let order: Vec<usize> = names
+            .iter()
+            .map(|name| frame.get_column_index(name).expect("column"))
+            .collect();
+        assert!(order.windows(2).all(|pair| pair[0] < pair[1]), "{order:?}");
+        // A one-column table has nothing to choose.
+        let one = stepped(
+            src,
+            crate::table::TableOp::SelectColumns {
+                columns: vec!["Date".into()],
+                kept_of: None,
+            },
+        );
+        assert!(
+            !table_menu(Some(&one))
+                .iter()
+                .any(|c| c.id == CommandId::TableChooseColumns)
+        );
+    }
+
+    #[test]
     fn show_columns_and_show_table_are_there_for_any_table_and_the_choice_holds() {
         use crate::table::TableOp;
         let src = crate::dataframe::tests::ENERGY_FIXTURE;
@@ -3760,7 +3873,13 @@ Id,Naam,Telefoonnummer,Salaris
             .collect();
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = CardView::Dataframe;
-        let mut table = stepped(src, TableOp::SelectColumns { columns: names });
+        let mut table = stepped(
+            src,
+            TableOp::SelectColumns {
+                columns: names,
+                kept_of: None,
+            },
+        );
         // Chosen (or picked) when the 20 columns were first shown: 6 columns keep the overview.
         table.overview = Some(true);
         input.table = Some(table.clone());

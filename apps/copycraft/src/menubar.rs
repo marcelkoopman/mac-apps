@@ -357,7 +357,7 @@ impl App {
             CommandId::TableRedo => self.table_goto(|cursor| Some(cursor + 1)),
             CommandId::TableVersion(index) => self.table_goto(|_| Some(index)),
             // The card pops the menu itself.
-            CommandId::TableMenu => {}
+            CommandId::TableMenu | CommandId::TableChooseColumns => {}
             CommandId::TableDescribe => self.toggle_describe(),
             CommandId::TableGrid(grid) => {
                 if let Some((_, home)) = self.table_source()

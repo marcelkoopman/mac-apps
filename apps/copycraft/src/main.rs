@@ -4,6 +4,7 @@ mod brackets;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod card_layout;
 mod clipboard;
+mod column_picker;
 mod commands;
 mod convert;
 mod dataframe;

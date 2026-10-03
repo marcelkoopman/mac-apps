@@ -43,7 +43,12 @@ pub enum TableOp {
     /// Each value of one column once, with how many rows have it, the most common first.
     ValueCounts { column: String },
     /// These columns, in this order (the others dropped).
-    SelectColumns { columns: Vec<String> },
+    /// `kept_of`: chosen in the column picker from that many columns ("Kept 8 of 20 columns"),
+    /// in the table's order; `None` for Move column to front.
+    SelectColumns {
+        columns: Vec<String>,
+        kept_of: Option<usize>,
+    },
     /// These columns dropped.
     DropColumns { columns: Vec<String> },
 }
@@ -71,7 +76,11 @@ impl TableOp {
                 return format!("Sorted by {column} {arrow}");
             }
             Self::ValueCounts { column } => return format!("Value counts of {column}"),
-            Self::SelectColumns { columns } => {
+            Self::SelectColumns {
+                columns,
+                kept_of: Some(total),
+            } => return format!("Kept {} of {total} columns", columns.len()),
+            Self::SelectColumns { columns, .. } => {
                 return match columns.as_slice() {
                     [one] => format!("Only {one}"),
                     _ => format!("{} columns chosen", columns.len()),
@@ -93,7 +102,13 @@ impl TableOp {
         match self {
             Self::Sort { column, .. } | Self::ValueCounts { column } => return column.clone(),
             Self::DropColumns { columns } if columns.len() == 1 => return columns[0].clone(),
-            Self::SelectColumns { columns } => return columns.first().cloned().unwrap_or_default(),
+            Self::SelectColumns {
+                columns,
+                kept_of: Some(_),
+            } => return format!("Keep {} columns", columns.len()),
+            Self::SelectColumns { columns, .. } => {
+                return columns.first().cloned().unwrap_or_default();
+            }
             _ => {}
         }
         match self {
@@ -121,7 +136,7 @@ impl TableOp {
             } => Some("Sort descending"),
             Self::ValueCounts { .. } => Some("Value counts"),
             Self::DropColumns { columns } if columns.len() == 1 => Some("Remove column"),
-            Self::SelectColumns { .. } => Some("Move column to front"),
+            Self::SelectColumns { kept_of: None, .. } => Some("Move column to front"),
             _ => None,
         }
     }
@@ -149,6 +164,7 @@ impl TableOp {
                         .chain(columns.iter().filter(|other| *other != column))
                         .cloned()
                         .collect(),
+                    kept_of: None,
                 }
             }))
             .collect()
@@ -181,7 +197,7 @@ impl TableOp {
             Self::Transpose => table_ops::transpose(df),
             Self::Sort { column, descending } => table_ops::sort(df, column, *descending),
             Self::ValueCounts { column } => table_ops::value_counts(df, column),
-            Self::SelectColumns { columns } => table_ops::select_columns(df, columns),
+            Self::SelectColumns { columns, .. } => table_ops::select_columns(df, columns),
             Self::DropColumns { columns } => table_ops::drop_columns(df, columns),
         }
     }

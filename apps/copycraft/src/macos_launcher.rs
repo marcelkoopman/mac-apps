@@ -251,7 +251,15 @@ define_class!(
 
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
-            if is_item_find_chord(event) {
+            if let Some(handled) = picker_key(event) {
+                // The column picker: ⌘A, Return and Esc are its own while it is open.
+                handled
+            } else if picker_open() {
+                // The card's chords (history, versions, find) wait until it is closed.
+                let handled: bool =
+                    unsafe { msg_send![super(self), performKeyEquivalent: event] };
+                handled
+            } else if is_item_find_chord(event) {
                 if item_find_on() {
                     focus_item_field();
                 }
@@ -308,6 +316,10 @@ define_class!(
 
         #[unsafe(method(controlTextDidChange:))]
         fn control_text_did_change(&self, note: &NSNotification) {
+            if note_is_picker_field(note) {
+                picker_query_changed();
+                return;
+            }
             if note_is_item_field(note) {
                 item_query_changed(self);
                 return;
@@ -330,7 +342,9 @@ define_class!(
             _text_view: &NSTextView,
             command: Sel,
         ) -> bool {
-            if control_is_item_field(control) {
+            if control_is_picker_field(control) {
+                picker_field_command(command)
+            } else if control_is_item_field(control) {
                 item_field_command(command)
             } else if let Some(key) = arrow_command(command) {
                 // The search field has the focus while the card is open. Typed text keeps
@@ -460,6 +474,39 @@ define_class!(
             if let Some(cmd) = cmd {
                 run_command(cmd);
             }
+        }
+
+        #[unsafe(method(pickerToggled:))]
+        fn picker_toggled(&self, sender: Option<&NSButton>) {
+            let Some(check) = sender else {
+                return;
+            };
+            let index = check.tag();
+            if index < 0 {
+                return;
+            }
+            let kept = check.state() == NSControlStateValueOn;
+            picker_update(|picker| picker.set_kept(index as usize, kept));
+        }
+
+        #[unsafe(method(pickerAllClicked:))]
+        fn picker_all_clicked(&self, _sender: Option<&NSButton>) {
+            picker_update(ColumnPicker::keep_all);
+        }
+
+        #[unsafe(method(pickerNoneClicked:))]
+        fn picker_none_clicked(&self, _sender: Option<&NSButton>) {
+            picker_update(ColumnPicker::keep_none);
+        }
+
+        #[unsafe(method(pickerCancelClicked:))]
+        fn picker_cancel_clicked(&self, _sender: Option<&NSButton>) {
+            close_picker();
+        }
+
+        #[unsafe(method(pickerApplyClicked:))]
+        fn picker_apply_clicked(&self, _sender: Option<&NSButton>) {
+            apply_picker();
         }
 
         #[unsafe(method(overflowClicked:))]
@@ -633,6 +680,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     // Another entry is masked again. The same one (a table step, undo, redo, another version
     // or view) stays revealed unless it gained a label ([`commands::stays_revealed`]).
     let key = commands::content_key(&data);
+    store_picker_source(&data, key);
     if CONTENT_KEY.with(Cell::get) != key {
         CONTENT_KEY.set(key);
         REVEALED.set(false);
@@ -675,6 +723,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
 }
 
 fn hide() {
+    dismiss_picker(false);
     set_item_find(false);
     if !is_open() && !window_is_visible() {
         return;
@@ -1008,6 +1057,7 @@ fn place_well(y: f64) {
         }
     });
     place_spinner(frame);
+    place_picker(y);
 }
 
 struct RevealCover {
@@ -1081,10 +1131,13 @@ fn show_reveal_cover(shown: bool) {
             raise_view(&cover.root);
         }
     });
+    raise_picker();
 }
 
 /// Blur revealed content again (the app is no longer active). The next click reveals it.
 fn mask_again() {
+    // Focus loss closes the column picker.
+    close_picker();
     if !is_open() || !MASKS.with(Cell::get) || !REVEALED.with(Cell::get) {
         return;
     }
@@ -1981,6 +2034,10 @@ fn run_command(cmd: Command) {
         pop_table_menu();
         return;
     }
+    if cmd.id == CommandId::TableChooseColumns {
+        open_picker();
+        return;
+    }
     let formatting_link =
         cmd.id == CommandId::Format && LINK_PAGE.with(|slot| slot.borrow().is_some());
     if !commands::keeps_card_open(&cmd.id) && !formatting_link {
@@ -2080,6 +2137,11 @@ fn pop_overflow() {
 }
 
 fn on_key(event: &NSEvent) {
+    // While the column picker is open, the card's keys (search, history) wait.
+    if picker_open() {
+        let _ = picker_key(event);
+        return;
+    }
     if is_item_find_chord(event) {
         if item_find_on() {
             focus_item_field();
@@ -2155,6 +2217,7 @@ fn close_search() {
 }
 
 pub fn wipe_shown() {
+    dismiss_picker(false);
     set_item_find(false);
     PREVIEW_NOTE.with(|slot| slot.borrow_mut().clear());
     CARD_TITLE.with(wipe_string_slot);
@@ -2242,7 +2305,11 @@ fn set_query(text: &str) {
 }
 
 fn focus_card() {
-    focus_field();
+    if picker_open() {
+        focus_picker_field();
+    } else {
+        focus_field();
+    }
 }
 
 fn focus_field() {
@@ -2494,6 +2561,8 @@ fn place_well_action(slot: &RefCell<Option<WellAction>>, x: f64, y: f64, shown: 
     let Some(button) = borrowed.as_ref() else {
         return;
     };
+    // Under the column picker they are out of reach (Tab, VoiceOver) too.
+    let shown = shown && !picker_open();
     button.view().setHidden(!shown);
     button.view().setFrame(NSRect::new(
         NSPoint::new(x, y),
@@ -2515,6 +2584,8 @@ fn raise_content_actions() {
             }
         });
     }
+    // The column picker covers the well and its buttons while it is open.
+    raise_picker();
     SHOW_ALL.with(|slot| {
         if let Some(pill) = slot.borrow().as_ref()
             && !pill.button.view().isHidden()
@@ -3252,3 +3323,5 @@ mod tests {
         assert!(super::find_matches(&super::current_item_text(), "example").is_empty());
     }
 }
+
+include!("macos_column_picker.rs");
