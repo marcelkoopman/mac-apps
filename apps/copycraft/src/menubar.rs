@@ -1602,7 +1602,8 @@ impl App {
     }
 
     /// Save job for the picture version shown (an Image ▾ step's): the shown scan text, else
-    /// its PNG. Named after the dropped or chosen file.
+    /// the picture as PNG, JPEG or HEIC (the Format popup, the source's format first). Named
+    /// after the dropped or chosen file.
     #[cfg(target_os = "macos")]
     fn image_version_save_job(
         &self,
@@ -1620,11 +1621,15 @@ impl App {
                 content: SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
             };
         }
-        SaveJob {
-            filename: crate::open_file::save_name(name, "png"),
-            extension: "png",
-            content: SaveContent::Bytes(Zeroizing::new(version.picture.with(<[u8]>::to_vec))),
-        }
+        let source = self
+            .image_source()
+            .map(|bytes| bytes.with(crate::macos_pasteboard::image_kind));
+        SaveJob::image(
+            name,
+            Zeroizing::new(version.picture.with(<[u8]>::to_vec)),
+            true,
+            crate::image_edit::image_files(source, false),
+        )
     }
 
     /// Save job for the chosen file's text, or a dropped picture, named after the file.
@@ -1651,8 +1656,9 @@ impl App {
         crate::macos_save::SaveJob::text(source, commands::presented_view(source, self.card_view))
     }
 
-    /// Save job for the image card: the shown scan text, else the pasteboard image as PNG or
-    /// JPEG, else the decoded preview encoded as PNG (on the save thread).
+    /// Save job for the image card: the shown scan text, else the history entry's picture (as
+    /// it is, or as PNG, JPEG or HEIC), else the pasteboard image as PNG or JPEG, else the
+    /// decoded preview encoded as PNG (on the save thread).
     #[cfg(target_os = "macos")]
     fn image_save_job(&self) -> crate::macos_save::SaveJob {
         use crate::macos_save::{SaveContent, SaveJob};
@@ -1664,6 +1670,13 @@ impl App {
         if let Some(text) = commands::image_view_text(self.image_scan.as_ref(), self.card_view) {
             let bytes = Zeroizing::new(text.into_bytes());
             return job("clipboard.txt", "txt", SaveContent::Bytes(bytes));
+        }
+        // The history entry's picture: as it is, or another format from the Format popup.
+        if let Some(original) = self.image_source() {
+            let source = original.with(crate::macos_pasteboard::image_kind);
+            let bytes = Zeroizing::new(original.with(<[u8]>::to_vec));
+            let files = crate::image_edit::image_files(Some(source), true);
+            return SaveJob::image("clipboard", bytes, false, files);
         }
         if let Some(bytes) = crate::macos_pasteboard::current_image_bytes().map(Zeroizing::new) {
             if bytes.starts_with(b"\x89PNG") {
@@ -2322,15 +2335,15 @@ fn dropped_image_save_job(
             content: SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
         };
     }
+    // As it is (its own format, the default), or as PNG, JPEG or HEIC.
+    let source = image.bytes.with(crate::macos_pasteboard::image_kind);
     let bytes = Zeroizing::new(image.bytes.with(<[u8]>::to_vec));
-    let extension = infer::get(&bytes)
-        .filter(|kind| kind.matcher_type() == infer::MatcherType::Image)
-        .map_or("tiff", |kind| kind.extension());
-    SaveJob {
-        filename: crate::open_file::save_name(name, extension),
-        extension,
-        content: SaveContent::Bytes(bytes),
-    }
+    SaveJob::image(
+        name,
+        bytes,
+        false,
+        crate::image_edit::image_files(Some(source), true),
+    )
 }
 
 fn history_title(history: &ClipboardHistory, index: usize) -> String {

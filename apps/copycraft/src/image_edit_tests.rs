@@ -328,6 +328,47 @@ fn an_unreadable_picture_fails_the_job() {
 }
 
 #[test]
+fn save_offers_the_source_format_first() {
+    let titles =
+        |files: &[ImageFile]| -> Vec<String> { files.iter().map(ImageFile::title).collect() };
+    // The original: as it is (its bytes), then the re-encodings.
+    let (files, picked) = image_files(Some(("JPEG", "jpg")), true);
+    assert_eq!(
+        titles(&files),
+        [
+            "JPEG (as it is)",
+            "PNG",
+            "JPEG — high (0.9)",
+            "JPEG — medium (0.7)",
+            "HEIC"
+        ]
+    );
+    assert_eq!((picked, files[picked].extension()), (0, "jpg"));
+    let (files, picked) = image_files(Some(("GIF", "gif")), true);
+    assert_eq!(
+        (files[picked].title(), files[picked].extension()),
+        ("GIF (as it is)".to_string(), "gif")
+    );
+    // A step's version: the source's format among PNG, JPEG and HEIC, else PNG.
+    let (files, picked) = image_files(Some(("JPEG", "jpg")), false);
+    assert_eq!(
+        titles(&files),
+        ["PNG", "JPEG — high (0.9)", "JPEG — medium (0.7)", "HEIC"]
+    );
+    assert_eq!(files[picked], JPEG_HIGH);
+    let (files, picked) = image_files(Some(("HEIC", "heic")), false);
+    assert_eq!(
+        (files[picked], files[picked].extension()),
+        (ImageFile::Heic, "heic")
+    );
+    let (files, picked) = image_files(Some(("GIF", "gif")), false);
+    assert_eq!(files[picked], ImageFile::Png);
+    let (files, picked) = image_files(None, true);
+    assert_eq!((files.len(), files[picked]), (4, ImageFile::Png));
+    assert_eq!(JPEG_MEDIUM.extension(), "jpg");
+}
+
+#[test]
 fn a_scan_is_kept_with_its_version() {
     let original = original(40, 20);
     let mut versions = ImageVersions::default();

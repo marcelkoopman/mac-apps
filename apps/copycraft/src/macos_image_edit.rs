@@ -1,5 +1,6 @@
 //! The ImageIO side of Image ▾ ([`crate::image_edit`]): pictures decoded upright (their EXIF
-//! orientation applied) to straight RGBA, and versions written as PNG without metadata. Built on objc2-image-io / objc2-core-graphics (approved for this).
+//! orientation applied) to straight RGBA, and versions written as PNG, JPEG or HEIC without
+//! metadata. Built on objc2-image-io / objc2-core-graphics (approved for this).
 
 use std::ffi::c_void;
 
@@ -12,9 +13,10 @@ use objc2_core_graphics::{
     kCGColorSpaceSRGB,
 };
 use objc2_image_io::{
-    CGImageDestination, CGImageSource, kCGImagePropertyOrientation, kCGImagePropertyPixelHeight,
-    kCGImagePropertyPixelWidth, kCGImageSourceCreateThumbnailFromImageAlways,
-    kCGImageSourceCreateThumbnailWithTransform, kCGImageSourceThumbnailMaxPixelSize,
+    CGImageDestination, CGImageSource, kCGImageDestinationLossyCompressionQuality,
+    kCGImagePropertyOrientation, kCGImagePropertyPixelHeight, kCGImagePropertyPixelWidth,
+    kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceCreateThumbnailWithTransform,
+    kCGImageSourceThumbnailMaxPixelSize,
 };
 use zeroize::Zeroizing;
 
@@ -22,6 +24,8 @@ use crate::image_edit::{Codec, Rgba};
 
 /// kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big: R, G, B, A in memory.
 const RGBA_PREMULTIPLIED: u32 = (4 << 12) | 1;
+/// kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big: R, G, B, unused.
+const RGBX: u32 = (4 << 12) | 5;
 /// Larger pictures are not edited (a 4-byte-per-pixel copy of each would be several GB).
 pub const MAX_PIXELS: usize = 100_000_000;
 
@@ -29,12 +33,28 @@ pub const MAX_PIXELS: usize = 100_000_000;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Encoding {
     Png,
+    /// Quality 0.0 (smallest) to 1.0 (best).
+    Jpeg(f64),
+    Heic(f64),
 }
 
 impl Encoding {
+    /// How `file` is encoded; `None` for the original as it is.
+    pub fn of(file: crate::image_edit::ImageFile) -> Option<Self> {
+        use crate::image_edit::{HEIC_QUALITY, ImageFile};
+        match file {
+            ImageFile::AsIs { .. } => None,
+            ImageFile::Png => Some(Self::Png),
+            ImageFile::Jpeg(quality) => Some(Self::Jpeg(f64::from(quality) / 100.0)),
+            ImageFile::Heic => Some(Self::Heic(HEIC_QUALITY)),
+        }
+    }
+
     pub fn uti(self) -> &'static str {
         match self {
             Self::Png => "public.png",
+            Self::Jpeg(_) => "public.jpeg",
+            Self::Heic(_) => "public.heic",
         }
     }
 }
@@ -113,11 +133,19 @@ fn upright_size(source: &CGImageSource) -> Option<(usize, usize)> {
     .filter(|(width, height)| *width > 0 && *height > 0)
 }
 
-/// `image` as `encoding`, without metadata.
+/// `image` as `encoding`, without metadata. Transparent pixels become white in a JPEG.
 pub fn encode(image: &Rgba, encoding: Encoding) -> Option<Vec<u8>> {
     let mut pixels = Zeroizing::new(image.pixels.to_vec());
-    premultiply(&mut pixels);
-    let info = RGBA_PREMULTIPLIED;
+    let info = match encoding {
+        Encoding::Png | Encoding::Heic(_) => {
+            premultiply(&mut pixels);
+            RGBA_PREMULTIPLIED
+        }
+        Encoding::Jpeg(_) => {
+            onto_white(&mut pixels);
+            RGBX
+        }
+    };
     let picture = {
         let context = bitmap(&mut pixels, image.width, image.height, info)?;
         CGBitmapContextCreateImage(Some(&context))?
@@ -125,8 +153,17 @@ pub fn encode(image: &Rgba, encoding: Encoding) -> Option<Vec<u8>> {
     let out = CFMutableData::new(None, 0)?;
     let uti = CFString::from_static_str(encoding.uti());
     let destination = unsafe { CGImageDestination::with_data(&out, &uti, 1, None) }?;
+    let properties = match encoding {
+        Encoding::Png => None,
+        Encoding::Jpeg(quality) | Encoding::Heic(quality) => {
+            let quality = CFNumber::new_f64(quality.clamp(0.0, 1.0));
+            let keys: [&CFString; 1] = [unsafe { kCGImageDestinationLossyCompressionQuality }];
+            let values: [&CFType; 1] = [&quality];
+            Some(CFDictionary::from_slices(&keys, &values))
+        }
+    };
     let finished = unsafe {
-        destination.add_image(&picture, None);
+        destination.add_image(&picture, properties.as_deref().map(|dict| dict.as_opaque()));
         destination.finalize()
     };
     drop(destination);
@@ -191,6 +228,17 @@ fn unpremultiply(pixels: &mut [u8]) {
                 *channel = ((u32::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8;
             }
         }
+    }
+}
+
+/// Composite onto white and make opaque (JPEG has no transparency).
+fn onto_white(pixels: &mut [u8]) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
+        let alpha = u32::from(pixel[3]);
+        for channel in &mut pixel[..3] {
+            *channel = ((u32::from(*channel) * alpha + 255 * (255 - alpha) + 127) / 255) as u8;
+        }
+        pixel[3] = 255;
     }
 }
 

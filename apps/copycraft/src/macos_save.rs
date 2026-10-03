@@ -9,6 +9,7 @@ use zeroize::Zeroizing;
 
 use crate::commands::{self, CardView};
 use crate::dataframe::TableFile;
+use crate::image_edit::ImageFile;
 
 /// What the save icon writes: the name the panel suggests, and the bytes or the work that
 /// builds them once a path is chosen.
@@ -32,6 +33,14 @@ pub enum SaveContent {
     ClipboardPng,
     /// The table of the Dataframe view, as `format` (CSV unless Parquet is picked in the panel).
     Table { table: TableData, format: TableFile },
+    /// A picture (the original or an Image ▾ version), as `file` (one of `files`, the Format
+    /// popup). `png` says `bytes` are already a version's PNG, written as they are for PNG.
+    Image {
+        bytes: Zeroizing<Vec<u8>>,
+        png: bool,
+        files: Vec<ImageFile>,
+        file: ImageFile,
+    },
 }
 
 /// The table to save: the version shown, or the copied text when its frame is not there yet
@@ -85,7 +94,39 @@ impl SaveJob {
 
     /// Ask where to save it (a table also asks CSV or Parquet). `Ok(None)` when the panel is
     /// cancelled.
+    /// A picture to save as `files[picked]` (or another of `files`, from the Format popup).
+    /// `png`: `bytes` are a version's PNG.
+    pub fn image(
+        name: &str,
+        bytes: Zeroizing<Vec<u8>>,
+        png: bool,
+        (files, picked): (Vec<ImageFile>, usize),
+    ) -> Self {
+        let file = files
+            .get(picked)
+            .or(files.first())
+            .copied()
+            .unwrap_or(ImageFile::Png);
+        Self {
+            filename: crate::open_file::save_name(name, file.extension()),
+            extension: file.extension(),
+            content: SaveContent::Image {
+                bytes,
+                png,
+                files,
+                file,
+            },
+        }
+    }
+
     pub fn choose_path(&mut self) -> anyhow::Result<Option<PathBuf>> {
+        if let SaveContent::Image { files, file, .. } = &mut self.content {
+            let Some((path, chosen)) = choose_image_path(&self.filename, files, *file)? else {
+                return Ok(None);
+            };
+            *file = chosen;
+            return Ok(Some(path));
+        }
         let SaveContent::Table { format, .. } = &mut self.content else {
             return choose_path(&self.filename, self.extension);
         };
@@ -116,6 +157,22 @@ impl SaveContent {
                 };
                 Zeroizing::new(format.bytes(&frame).context("the table is empty")?)
             }
+            Self::Image {
+                bytes, png, file, ..
+            } => match crate::macos_image_edit::Encoding::of(file) {
+                None => bytes,
+                Some(crate::macos_image_edit::Encoding::Png) if png => bytes,
+                Some(encoding) => {
+                    let image = crate::macos_image_edit::decode(&bytes)
+                        .context("cannot read the picture")?;
+                    drop(bytes);
+                    Zeroizing::new(
+                        crate::macos_image_edit::encode(&image, encoding).with_context(|| {
+                            format!("cannot write the picture as {}", file.title())
+                        })?,
+                    )
+                }
+            },
             Self::ClipboardPng => {
                 let decoded = crate::macos_pasteboard::decode_preview()
                     .context("no image on the clipboard")?;
@@ -139,6 +196,30 @@ pub fn choose_path(filename: &str, extension: &str) -> anyhow::Result<Option<Pat
         &name,
         &[extension],
     )?)
+}
+
+/// Ask where to save a picture, with the Format popup (PNG / JPEG / HEIC, and the original as
+/// it is) under the panel, `file` picked first. Switching it switches the name's extension.
+fn choose_image_path(
+    filename: &str,
+    files: &[ImageFile],
+    file: ImageFile,
+) -> anyhow::Result<Option<(PathBuf, ImageFile)>> {
+    let mtm = MainThreadMarker::new().context("the save panel needs the main thread")?;
+    let name = crate::open_file::save_name(filename, file.extension());
+    let titles: Vec<String> = files.iter().map(ImageFile::title).collect();
+    let formats: Vec<file_panel::SaveFormat> = files
+        .iter()
+        .zip(&titles)
+        .map(|(file, title)| file_panel::SaveFormat {
+            title,
+            extension: file.extension(),
+        })
+        .collect();
+    let selected = files.iter().position(|item| *item == file).unwrap_or(0);
+    let chosen =
+        file_panel::choose_save_path_with_format(mtm, "Save picture", &name, &formats, selected)?;
+    Ok(chosen.map(|(path, index)| (path, files.get(index).copied().unwrap_or(file))))
 }
 
 /// Ask where to save a table, with a CSV / Parquet popup under the panel (`format` picked

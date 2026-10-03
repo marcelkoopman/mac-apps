@@ -327,6 +327,69 @@ fn unpremultiply(pixels: &mut [u8]) {
     }
 }
 
+/// What Save writes a picture as: the Format popup under the save panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageFile {
+    /// The original as it came, byte for byte (metadata too): only for the original version.
+    AsIs {
+        label: &'static str,
+        extension: &'static str,
+    },
+    Png,
+    /// JPEG at this quality, in percent.
+    Jpeg(u8),
+    Heic,
+}
+
+/// The JPEG choices: quality 0.9 and 0.7.
+pub const JPEG_HIGH: ImageFile = ImageFile::Jpeg(90);
+pub const JPEG_MEDIUM: ImageFile = ImageFile::Jpeg(70);
+/// HEIC quality.
+pub const HEIC_QUALITY: f64 = 0.8;
+
+impl ImageFile {
+    /// The popup item.
+    pub fn title(&self) -> String {
+        match self {
+            Self::AsIs { label, .. } => format!("{label} (as it is)"),
+            Self::Png => "PNG".to_string(),
+            Self::Jpeg(90) => "JPEG — high (0.9)".to_string(),
+            Self::Jpeg(70) => "JPEG — medium (0.7)".to_string(),
+            Self::Jpeg(quality) => format!("JPEG ({:.2})", f64::from(*quality) / 100.0),
+            Self::Heic => "HEIC".to_string(),
+        }
+    }
+
+    pub fn extension(&self) -> &'static str {
+        match self {
+            Self::AsIs { extension, .. } => extension,
+            Self::Png => "png",
+            Self::Jpeg(_) => "jpg",
+            Self::Heic => "heic",
+        }
+    }
+}
+
+/// The Format popup for a picture whose original is `source` (its label and extension, "JPEG"
+/// and "jpg"), and the item picked first: the source's format. For the original version
+/// (`original`), that is the original as it is; for a step's version, PNG, JPEG (high) or HEIC
+/// as the source was, else PNG.
+pub fn image_files(
+    source: Option<(&'static str, &'static str)>,
+    original: bool,
+) -> (Vec<ImageFile>, usize) {
+    let mut files = vec![ImageFile::Png, JPEG_HIGH, JPEG_MEDIUM, ImageFile::Heic];
+    match source {
+        Some((label, extension)) if original => {
+            files.insert(0, ImageFile::AsIs { label, extension });
+            (files, 0)
+        }
+        Some(("JPEG", _)) => (files, 1),
+        Some(("HEIC", _)) => (files, 3),
+        _ => (files, 0),
+    }
+}
+
 /// Decoding and encoding for versions: ImageIO on macOS ([`crate::macos_image_edit`]).
 pub trait Codec {
     /// The picture upright (its EXIF orientation applied), at full size.

@@ -584,6 +584,12 @@ fn invalidate_caches() {
     zeroize_caches();
 }
 
+/// The format of encoded picture bytes: its label ("JPEG") and file extension ("jpg").
+pub(crate) fn image_kind(bytes: &[u8]) -> (&'static str, &'static str) {
+    let kind = detect_image_bytes(bytes, infer::image::is_png(bytes));
+    (kind.label, kind.extension)
+}
+
 struct ContentKind {
     label: &'static str,
     mime: &'static str,
