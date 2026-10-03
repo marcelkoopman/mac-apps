@@ -26,6 +26,8 @@ pub enum UserEvent {
     DroppedText(zeroize::Zeroizing<String>),
     /// The background checker has the sensitivity labels of a long copy.
     LabelsChecked,
+    /// The screen locked, the Mac is going to sleep, or the user switched away.
+    SessionEnded,
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,

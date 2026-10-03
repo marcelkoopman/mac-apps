@@ -327,6 +327,8 @@ pub enum CommandId {
     Appearance(Theme),
     /// Turn the minute timer on copycraft's sensitive copies on or off.
     ClearSensitive,
+    /// Forget history this many minutes after the last copy; 0: no time limit.
+    KeepHistory(u32),
     Quit,
 }
 
@@ -1177,6 +1179,15 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     commands
 }
 
+/// The `⋯` row of a [`CommandId::KeepHistory`] choice.
+pub fn keep_history_title(minutes: u32) -> String {
+    if minutes == 0 {
+        "Keep history until cleared".to_string()
+    } else {
+        format!("Keep history {minutes} min after the last copy")
+    }
+}
+
 pub fn matching(commands: &[Command], query: &str) -> Vec<Command> {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
@@ -1221,6 +1232,14 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
         "clear sensitive pasteboard timer",
     ));
+    for minutes in crate::settings::HISTORY_MINUTES {
+        commands.push(command(
+            CommandId::KeepHistory(minutes),
+            &keep_history_title(minutes),
+            "History is always forgotten when the screen locks, the Mac sleeps or you switch users",
+            "keep history forget minutes",
+        ));
+    }
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         commands.push(command(
             CommandId::Appearance(theme),
@@ -1354,6 +1373,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
             | CommandId::ClearSensitive
+            | CommandId::KeepHistory(_)
             | CommandId::ClearClipboard
             | CommandId::ClearHistory
             | CommandId::Clear

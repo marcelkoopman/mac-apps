@@ -110,6 +110,7 @@ thread_local! {
     static THEME: Cell<Theme> = const { Cell::new(Theme::System) };
     /// The `⋯` menu's check marks for settings.
     static CLEAR_SENSITIVE: Cell<bool> = const { Cell::new(true) };
+    static HISTORY_MINUTES: Cell<u32> = const { Cell::new(15) };
     static SHOWS_IMAGE: Cell<bool> = const { Cell::new(false) };
     static THUMB_TOKEN: Cell<isize> = const { Cell::new(-1) };
     /// The dropped picture the card shows instead of the clipboard's (`LaunchData::picture`).
@@ -602,6 +603,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     publish_search_text();
     THEME.set(data.theme);
     CLEAR_SENSITIVE.set(data.settings.clear_sensitive);
+    HISTORY_MINUTES.set(data.settings.history_minutes);
     ACTIONS.with(|slot| set_commands(slot, commands::chips(&data)));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
@@ -1946,6 +1948,7 @@ fn pop_overflow() {
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
     menu.setAutoenablesItems(false);
     let mut saw_appearance = false;
+    let mut saw_keep_history = false;
     let mut saw_quit = false;
     let mut history_menu: Option<Retained<NSMenu>> = None;
     for (index, cmd) in items.iter().enumerate() {
@@ -1974,6 +1977,10 @@ fn pop_overflow() {
         if matches!(cmd.id, CommandId::ClearSensitive) {
             menu.addItem(&NSMenuItem::separatorItem(mtm));
         }
+        if !saw_keep_history && matches!(cmd.id, CommandId::KeepHistory(_)) {
+            menu.addItem(&NSMenuItem::separatorItem(mtm));
+            saw_keep_history = true;
+        }
         if !saw_appearance && matches!(cmd.id, CommandId::Appearance(_)) {
             menu.addItem(&NSMenuItem::separatorItem(mtm));
             saw_appearance = true;
@@ -1990,6 +1997,13 @@ fn pop_overflow() {
                 NSControlStateValueOff
             };
             item.setState(state);
+        }
+        if let CommandId::KeepHistory(minutes) = cmd.id {
+            item.setState(if HISTORY_MINUTES.with(Cell::get) == minutes {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
         }
         if cmd.id == CommandId::ClearSensitive {
             item.setState(if CLEAR_SENSITIVE.with(Cell::get) {

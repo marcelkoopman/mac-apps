@@ -86,6 +86,10 @@ struct App {
     polled_change: Option<isize>,
     /// The last poll found nothing or no text: look again even without a new change count.
     poll_again: bool,
+    /// When history last got a new entry (copy, drop, copycraft's own write).
+    last_copy: Option<Instant>,
+    /// [`crate::settings::Settings::history_minutes`], read once and kept in step with the menu.
+    history_minutes: u32,
 }
 
 /// A pasteboard write to clear at `due`, if the pasteboard still holds it (`change`).
@@ -179,6 +183,7 @@ impl ApplicationHandler<UserEvent> for App {
                 self.finish_dropped_scan(&image, scan);
             }
             UserEvent::LabelsChecked => self.labels_checked(),
+            UserEvent::SessionEnded => self.session_ended(),
         }
     }
 
@@ -230,10 +235,12 @@ impl ApplicationHandler<UserEvent> for App {
         let wake = self.spin_slow_work(now);
         let blink_wake = self.show_blink(now);
         let clear_wake = self.clear_sensitive_when_due(now);
+        let forget_wake = self.forget_history_when_due(now);
         event_loop.set_control_flow(mac_ui::wake::control_flow([
             Some(wake),
             blink_wake,
             clear_wake,
+            forget_wake,
         ]));
     }
 }
@@ -297,6 +304,11 @@ impl App {
                 if !on {
                     self.sensitive_clear = None;
                 }
+                self.refresh_popup();
+            }
+            CommandId::KeepHistory(minutes) => {
+                crate::settings::set_history_minutes(minutes);
+                self.history_minutes = minutes;
                 self.refresh_popup();
             }
             CommandId::Quit => event_loop.exit(),
@@ -475,6 +487,7 @@ impl App {
             None
         };
         if let Some(clipboard_at) = clipboard_at {
+            self.last_copy = Some(Instant::now());
             // The clipboard is not recorded again (back to the front) until it changes. A
             // copied picture is recorded once per pasteboard change anyway.
             if let Some(current) = ClipboardView::from_os().text() {
@@ -968,6 +981,37 @@ impl App {
         }
     }
 
+    /// Forget history once [`Self::history_minutes`] have passed since the last copy. Returns
+    /// when the event loop should look again.
+    fn forget_history_when_due(&mut self, now: Instant) -> Option<Instant> {
+        let due = history_due(
+            self.last_copy,
+            self.history_minutes,
+            self.history.is_empty(),
+        )?;
+        if now < due {
+            return Some(due);
+        }
+        self.last_copy = None;
+        self.clear_history();
+        eprintln!(
+            "copycraft: history forgotten {} min after the last copy",
+            self.history_minutes
+        );
+        None
+    }
+
+    /// The screen locked, the Mac is going to sleep or another user took over: forget history
+    /// whatever the setting says.
+    fn session_ended(&mut self) {
+        self.last_copy = None;
+        self.full_card = None;
+        if !self.history.is_empty() {
+            self.clear_history();
+            eprintln!("copycraft: history forgotten (lock, sleep or user switch)");
+        }
+    }
+
     /// Empty the OS pasteboard. History and the open card stay.
     fn clear_clipboard(&mut self) -> anyhow::Result<()> {
         clipboard::clear_clipboard().map_err(anyhow::Error::msg)?;
@@ -1253,6 +1297,7 @@ impl App {
     /// the menu): the newest copy in history. The poller skips copycraft's own writes, so this
     /// is where they are recorded.
     fn record_own_copy(&mut self, text: &str) {
+        self.last_copy = Some(Instant::now());
         self.history.record(text.to_string());
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1286,6 +1331,7 @@ impl App {
             }
             self.recorded_image_change = Some(change);
             if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
+                self.last_copy = Some(Instant::now());
                 self.current_image = self.history.record_image(bytes);
                 self.history_cursor = 0;
                 self.clipboard_cursor = None;
@@ -1297,6 +1343,7 @@ impl App {
             && self.should_record(text)
         {
             self.skip_record = None;
+            self.last_copy = Some(Instant::now());
             self.history.record(text.to_string());
             self.history_cursor = 0;
             self.clipboard_cursor = None;
@@ -1432,13 +1479,22 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     }
 }
 
-/// Classify a large copy on a background thread, so the card finds the format and the
-/// sensitive-data labels remembered (see [`crate::memo`]) instead of scanning on the main thread.
+/// When history is due to be forgotten: `minutes` after the last copy. `None` with no time
+/// limit (0) or nothing to forget.
+fn history_due(last_copy: Option<Instant>, minutes: u32, empty: bool) -> Option<Instant> {
+    if minutes == 0 || empty {
+        return None;
+    }
+    Some(last_copy? + Duration::from_secs(u64::from(minutes) * 60))
+}
+
 /// The next poll: sooner while the card is open and follows the clipboard.
 fn poll_interval(card_open: bool) -> Duration {
     if card_open { REFRESH } else { IDLE_REFRESH }
 }
 
+/// Classify a large copy on a background thread, so the card finds the format and the
+/// sensitive-data labels remembered (see [`crate::memo`]) instead of scanning on the main thread.
 fn prewarm(text: &str) {
     if text.len() < PREWARM_LEN {
         return;
@@ -1608,18 +1664,36 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         conceal_when_checked: None,
         polled_change: None,
         poll_again: false,
+        last_copy: None,
+        history_minutes: crate::settings::load().history_minutes,
     };
+    #[cfg(target_os = "macos")]
+    crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));
     event_loop.run_app(&mut app)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ClipSig, icon_tip, status_labels, status_rows, tray_label, version_label};
+    use super::{
+        ClipSig, history_due, icon_tip, status_labels, status_rows, tray_label, version_label,
+    };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use crate::hotkey;
     use zeroize::Zeroizing;
+
+    #[test]
+    fn history_is_forgotten_minutes_after_the_last_copy() {
+        let copied = std::time::Instant::now();
+        assert_eq!(
+            history_due(Some(copied), 15, false),
+            Some(copied + std::time::Duration::from_secs(15 * 60))
+        );
+        assert_eq!(history_due(Some(copied), 0, false), None);
+        assert_eq!(history_due(Some(copied), 5, true), None);
+        assert_eq!(history_due(None, 5, false), None);
+    }
 
     #[test]
     fn version_label_includes_package_version() {

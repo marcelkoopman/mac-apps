@@ -44,6 +44,8 @@ mod macos_preview_image;
 #[cfg(target_os = "macos")]
 mod macos_save;
 #[cfg(target_os = "macos")]
+mod macos_session;
+#[cfg(target_os = "macos")]
 mod macos_vision;
 
 fn main() {
