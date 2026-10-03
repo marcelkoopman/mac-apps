@@ -534,6 +534,10 @@ impl App {
                 }
             }
             Err(crate::table::TableError::Cancelled) => return,
+            // A step that changes nothing ("Types already fine"): a meta-line note, no version.
+            Err(crate::table::TableError::Unchanged(note)) => {
+                self.table_error = Some(note.to_string());
+            }
             Err(e) => self.table_error = Some(e.to_string()),
         }
         if launcher::is_open() {

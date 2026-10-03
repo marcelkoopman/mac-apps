@@ -185,20 +185,33 @@ impl TableOp {
         }
     }
 
-    pub fn apply(&self, df: &DataFrame) -> Result<DataFrame, String> {
+    /// The version after this step. `Ok(None)` when it would be the same (Fix types with every
+    /// column typed already): no version is made, and the card says [`unchanged_note`].
+    ///
+    /// [`unchanged_note`]: Self::unchanged_note
+    pub fn apply(&self, df: &DataFrame) -> Result<Option<DataFrame>, String> {
         use crate::table_ops;
-        match self {
+        let next = match self {
             Self::Dedupe => df
                 .unique_stable(None, UniqueKeepStrategy::First, None)
                 .map_err(|e| e.to_string()),
             Self::DropEmpty => table_ops::drop_empty(df),
             Self::DropConstant => table_ops::drop_constant(df),
-            Self::FixTypes => table_ops::fix_types(df),
+            Self::FixTypes => return table_ops::fix_types(df),
             Self::Transpose => table_ops::transpose(df),
             Self::Sort { column, descending } => table_ops::sort(df, column, *descending),
             Self::ValueCounts { column } => table_ops::value_counts(df, column),
             Self::SelectColumns { columns, .. } => table_ops::select_columns(df, columns),
             Self::DropColumns { columns } => table_ops::drop_columns(df, columns),
+        };
+        next.map(Some)
+    }
+
+    /// The meta-line note when this step would change nothing ([`apply`](Self::apply)).
+    pub fn unchanged_note(&self) -> &'static str {
+        match self {
+            Self::FixTypes => "Types already fine",
+            _ => "Nothing to change",
         }
     }
 }
@@ -213,6 +226,9 @@ pub enum TableError {
     Cancelled,
     /// Polars refused the step (message for the card).
     Failed(String),
+    /// The step would change nothing, so it makes no version (a note for the card, not an
+    /// error): [`TableOp::unchanged_note`].
+    Unchanged(&'static str),
 }
 
 impl std::fmt::Display for TableError {
@@ -222,6 +238,7 @@ impl std::fmt::Display for TableError {
             Self::NotATable => write!(f, "Not a table"),
             Self::Cancelled => write!(f, "Cancelled"),
             Self::Failed(message) => write!(f, "{message}"),
+            Self::Unchanged(note) => write!(f, "{note}"),
         }
     }
 }
@@ -277,13 +294,18 @@ impl Job {
                 (Some(frame.clone()), frame)
             }
         };
-        for op in self.ops.iter().chain(self.new_step.iter()) {
+        let steps = self.ops.iter().map(|op| (op, false));
+        for (op, new) in steps.chain(self.new_step.iter().map(|op| (op, true))) {
             if cancel.load(Ordering::Relaxed) {
                 return Err(TableError::Cancelled);
             }
-            frame = op
-                .apply(&frame)
-                .map_err(|e| TableError::Failed(e.to_string()))?;
+            match op.apply(&frame).map_err(TableError::Failed)? {
+                Some(next) => frame = next,
+                // A new step that changes nothing makes no version.
+                None if new => return Err(TableError::Unchanged(op.unchanged_note())),
+                // A step replayed on the same frame as before changes it the same way.
+                None => {}
+            }
         }
         Ok(JobDone {
             generation: self.generation,
@@ -587,6 +609,22 @@ mod tests {
         assert!(run(&mut versions, job));
         assert_eq!((versions.len(), versions.cursor()), (3, 2));
         assert_eq!(versions.cursor() + 1, versions.len());
+    }
+
+    #[test]
+    fn fix_types_with_every_column_typed_makes_no_version() {
+        // The reader types the energy export already: its dates (day first) and its decimals.
+        let src = crate::dataframe::tests::ENERGY_FIXTURE;
+        let mut versions = TableVersions::default();
+        let load = versions.load(src).expect("load");
+        assert!(run(&mut versions, load));
+        let job = versions.push(TableOp::FixTypes, src).expect("push");
+        assert_eq!(
+            job.run(&AtomicBool::new(false)).err(),
+            Some(TableError::Unchanged("Types already fine"))
+        );
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions.cursor(), 0);
     }
 
     #[test]

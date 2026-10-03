@@ -164,8 +164,10 @@ fn convert(text: &StringChunked, kind: TextKind) -> Option<Column> {
 }
 
 /// Fix types: a text column becomes numbers or dates when every value (empty ones aside)
-/// converts; `a/b/yyyy` dates are read day first ([`crate::dataframe::read_dates`]).
-pub fn fix_types(df: &DataFrame) -> Result<DataFrame, String> {
+/// converts; `a/b/yyyy` dates are read day first ([`crate::dataframe::read_dates`]). `None`
+/// when no column changes: the reader typed them already (numbers, dates), or a text column
+/// has values that are not numbers or dates.
+pub fn fix_types(df: &DataFrame) -> Result<Option<DataFrame>, String> {
     let mut out = df.clone();
     let mut changed = 0;
     for column in df.columns() {
@@ -182,10 +184,7 @@ pub fn fix_types(df: &DataFrame) -> Result<DataFrame, String> {
         }
     }
     changed += crate::dataframe::read_dates_day_first(&mut out);
-    if changed == 0 {
-        return Err("No column to change".to_string());
-    }
-    Ok(out)
+    Ok((changed > 0).then_some(out))
 }
 
 /// Transpose: each row becomes a column, named by the row's first value when those are all
@@ -418,17 +417,15 @@ mod tests {
             vec![text("id"), text("price"), text("mixed"), text("day")],
         )
         .unwrap();
-        let out = fix_types(&df).expect("step");
+        let out = fix_types(&df).expect("step").expect("changed");
         assert_eq!(out.column("id").unwrap().dtype(), &DataType::Int64);
         assert_eq!(out.column("price").unwrap().dtype(), &DataType::Float64);
         assert_eq!(out.column("mixed").unwrap().dtype(), &DataType::String);
         assert_eq!(out.column("day").unwrap().dtype(), &DataType::Date);
         let prices: Vec<Option<f64>> = out.column("price").unwrap().f64().unwrap().iter().collect();
         assert_eq!(prices, [Some(1.5), Some(2.25)]);
-        assert_eq!(
-            fix_types(&out).err().as_deref(),
-            Some("No column to change")
-        );
+        // Typed already: nothing to change, and no error.
+        assert!(fix_types(&out).expect("step").is_none());
     }
 
     #[test]
@@ -441,7 +438,7 @@ mod tests {
             ],
         )
         .unwrap();
-        let out = fix_types(&df).expect("step");
+        let out = fix_types(&df).expect("step").expect("changed");
         assert_eq!(out.column("when").unwrap().dtype(), &DataType::Date);
     }
 

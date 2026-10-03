@@ -3820,7 +3820,7 @@ Id,Naam,Telefoonnummer,Salaris
         let step = picker.step().expect("step");
         assert_eq!(step.label(), "Kept 8 of 20 columns");
         let frame = table.frame.as_ref().expect("frame");
-        let kept = step.apply(frame).expect("apply");
+        let kept = step.apply(frame).expect("apply").expect("changed");
         let names: Vec<String> = kept
             .get_column_names()
             .iter()
