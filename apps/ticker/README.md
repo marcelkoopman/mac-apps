@@ -6,8 +6,9 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 ## Features
 
-- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. Each fetch is tried up to 3 times, and until a fetch succeeds the menu keeps the last known price.
-- **Day change**: each menu row shows the price with its unit and the change since the day's first price, e.g. `▲ €217,00 · +0.33%`. That first price is stored per local calendar day.
+- **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. Each fetch is tried up to 3 times, and until a fetch succeeds the menu keeps the last known price. Failed attempts are written to the debug log.
+- **Freshness**: each row's second line says when its price was last fetched (`updated 14:05`). A price that failed 2 polls in a row or is older than 15 minutes is stale: its row turns grey with `⚠︎` in front, and so does the menu bar title when it shows that asset.
+- **Day change**: each menu row shows the price with its unit and the change since the day's first price, e.g. `▲ €217,00 · +0.33% · updated 14:05`. That first price is stored per local calendar day.
 - **Menu bar asset**: click a price row to show that asset in the menu bar. The choice is remembered.
 - **Price watches**: *Add Price Watch* takes an asset, a target price and *above* / *below*. The price may be typed in Dutch or English notation (`68.000`, `68.000,00`, `68000.5`, `68,5`; a single `.` followed by exactly three digits groups thousands, so write `2,479` for 2.479) and must be a finite number above 0. When the target is reached you get a macOS notification and the menu bar icon switches from its monochrome template (which follows the menu bar) to the coloured alert icon. A watch fires once, until you reset it (`ticker reset`) or remove it. Click a watch in the menu to remove it. *Manage Watches* lists them and can clear all. Watch prices are always shown in €.
 - **Copy to clipboard**: copies all current prices as TSV (symbol, name, price, unit, unit_hint, day_open, change_day, pct_day, direction_day).

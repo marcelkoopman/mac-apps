@@ -40,65 +40,56 @@ impl PriceFetcher {
         Ok(PriceFetcher { client })
     }
 
+    /// Up to [`MAX_FETCH_ATTEMPTS`] tries; NaN when all fail. Failures go to the debug log.
     pub fn fetch_price(&self, asset: &Asset) -> f64 {
         for attempt in 1..=MAX_FETCH_ATTEMPTS {
-            let price = self.fetch_price_once(asset, attempt);
-            if !price.is_nan() {
-                return price;
+            match self.fetch_price_once(asset, attempt) {
+                Ok(price) => return price,
+                Err(e) => {
+                    crate::log_message(&format!(
+                        "fetch: {} attempt {attempt}/{MAX_FETCH_ATTEMPTS} failed: {e}",
+                        asset.name
+                    ));
+                }
             }
-
             if attempt < MAX_FETCH_ATTEMPTS {
-                eprintln!(
-                    "⚠️  {} failed (attempt {}/{}), retrying in {:?}...",
-                    asset.name, attempt, MAX_FETCH_ATTEMPTS, RETRY_DELAY
-                );
                 thread::sleep(RETRY_DELAY);
             }
         }
 
-        eprintln!(
-            "✗ Giving up on {} after {} attempts",
-            asset.name, MAX_FETCH_ATTEMPTS
-        );
+        crate::log_message(&format!(
+            "fetch: giving up on {} after {MAX_FETCH_ATTEMPTS} attempts ({})",
+            asset.name, asset.url
+        ));
         f64::NAN
     }
 
-    fn fetch_price_once(&self, asset: &Asset, attempt: u32) -> f64 {
+    fn fetch_price_once(&self, asset: &Asset, attempt: u32) -> Result<f64, String> {
         eprintln!(
             "🔍 Fetching {} from {} (attempt {}/{})",
             asset.name, asset.url, attempt, MAX_FETCH_ATTEMPTS
         );
-        match self.client.get(&asset.url).send() {
-            Ok(response) => match response.error_for_status() {
-                Ok(resp) => match read_json_capped(resp, MAX_BODY_BYTES) {
-                    Ok(json) => {
-                        if let Some(price_value) = self.get_value_by_path(&json, &asset.price_path)
-                        {
-                            match price_value {
-                                Value::Number(n) => n.as_f64().unwrap_or(f64::NAN),
-                                Value::String(s) => s.parse().unwrap_or(f64::NAN),
-                                _ => f64::NAN,
-                            }
-                        } else {
-                            eprintln!("✗ Path '{}' not found in JSON!", asset.price_path);
-                            f64::NAN
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("✗ JSON parse error: {}", e);
-                        f64::NAN
-                    }
-                },
-                Err(e) => {
-                    eprintln!("✗ HTTP error: {}", e);
-                    f64::NAN
-                }
-            },
-            Err(e) => {
-                eprintln!("✗ Network error: {}", e);
-                f64::NAN
-            }
-        }
+        let response = self
+            .client
+            .get(&asset.url)
+            .send()
+            .map_err(|e| format!("network error: {e}"))?;
+        let response = response
+            .error_for_status()
+            .map_err(|e| format!("HTTP error: {e}"))?;
+        let json =
+            read_json_capped(response, MAX_BODY_BYTES).map_err(|e| format!("bad response: {e}"))?;
+        let value = self
+            .get_value_by_path(&json, &asset.price_path)
+            .ok_or_else(|| format!("path {:?} not found in the JSON", asset.price_path))?;
+        let price = match &value {
+            Value::Number(n) => n.as_f64(),
+            Value::String(s) => s.trim().parse().ok(),
+            _ => None,
+        };
+        price
+            .filter(|p: &f64| p.is_finite())
+            .ok_or_else(|| format!("value at {:?} is not a number: {value}", asset.price_path))
     }
 
     pub fn fetch_all(&self, assets: &[Asset]) -> Result<DataFrame, Box<dyn Error>> {

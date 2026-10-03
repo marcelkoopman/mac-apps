@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 mod config;
 mod dialogs;
+mod freshness;
 mod instance_lock;
 mod menu_builder;
 mod menu_ids;

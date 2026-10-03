@@ -1,6 +1,9 @@
+use chrono::{DateTime, Local};
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 use polars::prelude::*;
+use std::collections::HashMap;
 
+use crate::freshness::{AssetStatus, STALE_MARK};
 use crate::menu_ids;
 use crate::price_watch::WatchList;
 use crate::watch_ui::WatchUIBuilder;
@@ -18,11 +21,31 @@ struct PriceRow<'a> {
     change: Option<f64>,
     pct: Option<f64>,
     direction: Option<&'a str>,
+    /// "updated 14:05" / "no data yet".
+    updated: String,
+    stale: bool,
+}
+
+/// Fetch status of every asset (by name) and the time it is judged at.
+pub struct Freshness<'a> {
+    pub status: &'a HashMap<String, AssetStatus>,
+    pub now: DateTime<Local>,
+}
+
+impl Freshness<'_> {
+    fn of(&self, name: &str) -> AssetStatus {
+        self.status.get(name).copied().unwrap_or_default()
+    }
 }
 
 impl MenuBuilder {
     /// `generation` goes into the row ids (see `menu_ids`); bump it for every rebuilt menu.
-    pub fn build(df: &DataFrame, watch_list: &WatchList, generation: u64) -> Menu {
+    pub fn build(
+        df: &DataFrame,
+        watch_list: &WatchList,
+        generation: u64,
+        freshness: &Freshness<'_>,
+    ) -> Menu {
         let menu = Menu::new();
 
         if df.height() == 0 {
@@ -42,6 +65,8 @@ impl MenuBuilder {
             {
                 for i in 0..df.height() {
                     let name = names.get(i).unwrap_or("?");
+                    let status = freshness.of(name);
+                    let stale = status.is_stale(freshness.now);
                     let row = Self::format_price_row(&PriceRow {
                         symbol: symbols.get(i).unwrap_or(""),
                         name,
@@ -51,9 +76,16 @@ impl MenuBuilder {
                         change: changes.as_ref().and_then(|c| c.get(i)),
                         pct: pcts.as_ref().and_then(|c| c.get(i)),
                         direction: directions.as_ref().and_then(|c| c.get(i)),
+                        updated: status.updated_label(freshness.now),
+                        stale,
                     });
                     let id = menu_ids::asset_item_id(generation, i);
-                    let _ = menu.append(&MenuItem::with_id(id, &row, true, None));
+                    let item = MenuItem::with_id(id, &row, true, None);
+                    if stale {
+                        // Grey but still clickable (pins the asset in the menu bar).
+                        mac_ui::tray::set_secondary_title(&item, &row);
+                    }
+                    let _ = menu.append(&item);
                 }
             } else {
                 let _ = menu.append(&MenuItem::new("Invalid price data", false, None));
@@ -134,7 +166,13 @@ impl MenuBuilder {
         label
     }
 
-    pub fn menubar_title(df: &DataFrame, preferred: Option<&str>) -> String {
+    /// Menu bar title: the preferred asset (else the first with a price), with [`STALE_MARK`] in
+    /// front when its price is stale.
+    pub fn menubar_title(
+        df: &DataFrame,
+        preferred: Option<&str>,
+        freshness: &Freshness<'_>,
+    ) -> String {
         if df.height() == 0 {
             return "Ticker".to_string();
         }
@@ -173,10 +211,14 @@ impl MenuBuilder {
         let symbol = symbols.and_then(|c| c.get(i)).unwrap_or("");
         let currency = Self::unit_to_currency(unit);
         let price_txt = Self::format_menubar_price(price);
+        let mark = match names.get(i) {
+            Some(name) if freshness.of(name).is_stale(freshness.now) => format!("{STALE_MARK} "),
+            _ => String::new(),
+        };
         if symbol.is_empty() {
-            format!("{currency}{price_txt}")
+            format!("{mark}{currency}{price_txt}")
         } else {
-            format!("{symbol} {currency}{price_txt}")
+            format!("{mark}{symbol} {currency}{price_txt}")
         }
     }
 
@@ -213,14 +255,19 @@ impl MenuBuilder {
         } else {
             format!("{} {}", row.symbol, row.name)
         };
-        let line1 = format!("{}  {}{}{}", label, currency, price_txt, unit_part);
-        let line2 = match (row.change, row.pct, row.direction) {
+        let mark = if row.stale {
+            format!("{STALE_MARK} ")
+        } else {
+            String::new()
+        };
+        let line1 = format!("{mark}{label}  {currency}{price_txt}{unit_part}");
+        let change = match (row.change, row.pct, row.direction) {
             (Some(c), Some(p), Some("up")) => {
-                format!("  ▲ {}{} · +{:.2}%", currency, Self::format_price(c), p)
+                format!("▲ {}{} · +{:.2}% · ", currency, Self::format_price(c), p)
             }
             (Some(c), Some(p), Some("down")) => {
                 format!(
-                    "  ▼ {}{} · {:.2}%",
+                    "▼ {}{} · {:.2}% · ",
                     currency,
                     Self::format_price(c.abs()),
                     p
@@ -228,11 +275,7 @@ impl MenuBuilder {
             }
             _ => String::new(),
         };
-        if line2.is_empty() {
-            line1
-        } else {
-            format!("{line1}\n{line2}")
-        }
+        format!("{line1}\n  {change}{}", row.updated)
     }
 
     pub fn dataframe_as_tsv(df: &DataFrame) -> String {
@@ -364,6 +407,35 @@ mod tests {
         .expect("sample df")
     }
 
+    fn fresh() -> HashMap<String, AssetStatus> {
+        HashMap::new()
+    }
+
+    fn now() -> DateTime<Local> {
+        Local::now()
+    }
+
+    #[test]
+    fn menubar_title_marks_a_stale_price() {
+        let df = sample_df();
+        let mut status = HashMap::new();
+        status.insert(
+            "Bitcoin".to_string(),
+            AssetStatus {
+                last_ok: None,
+                failed_polls: 2,
+            },
+        );
+        let f = Freshness {
+            status: &status,
+            now: now(),
+        };
+        let title = MenuBuilder::menubar_title(&df, Some("Bitcoin"), &f);
+        assert!(title.starts_with(STALE_MARK), "{title}");
+        let title = MenuBuilder::menubar_title(&df, Some("Benzine"), &f);
+        assert!(!title.contains(STALE_MARK), "{title}");
+    }
+
     #[test]
     fn version_includes_app_and_polars() {
         assert!(!env!("CARGO_PKG_VERSION").is_empty());
@@ -412,14 +484,17 @@ mod tests {
             change: Some(217.0),
             pct: Some(0.33),
             direction: Some("up"),
+            updated: "updated 14:05".into(),
+            stale: false,
         });
-        assert!(row.contains('\n'));
         let lines: Vec<_> = row.lines().collect();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("Bitcoin"));
         assert!(lines[0].contains("66.672"));
         assert!(lines[1].contains("▲"));
         assert!(lines[1].contains("+0.33%"));
+        assert!(lines[1].ends_with("updated 14:05"));
+        assert!(!row.contains(STALE_MARK));
     }
 
     #[test]
@@ -433,10 +508,13 @@ mod tests {
             change: Some(0.0),
             pct: Some(0.0),
             direction: Some("flat"),
+            updated: "updated 14:05".into(),
+            stale: false,
         });
-        assert!(!row.contains('\n'));
-        assert!(row.contains("Benzine"));
-        assert!(row.contains("2,47"));
+        let lines: Vec<_> = row.lines().collect();
+        assert!(lines[0].contains("Benzine"));
+        assert!(lines[0].contains("2,47"));
+        assert_eq!(lines[1], "  updated 14:05");
     }
 
     #[test]
@@ -450,9 +528,13 @@ mod tests {
             change: None,
             pct: None,
             direction: None,
+            updated: "updated 13:40".into(),
+            stale: true,
         });
-        assert!(!row.contains('\n'));
-        assert!(row.contains("Power NL"));
+        let lines: Vec<_> = row.lines().collect();
+        assert!(lines[0].starts_with(STALE_MARK));
+        assert!(lines[0].contains("Power NL"));
+        assert_eq!(lines[1], "  updated 13:40");
     }
 
     #[test]
@@ -501,7 +583,14 @@ mod tests {
     #[test]
     fn menubar_title_prefers_named_asset() {
         let df = sample_df();
-        let title = MenuBuilder::menubar_title(&df, Some("Bitcoin"));
+        let title = MenuBuilder::menubar_title(
+            &df,
+            Some("Bitcoin"),
+            &Freshness {
+                status: &fresh(),
+                now: now(),
+            },
+        );
         assert!(title.contains("💰"));
         assert!(title.contains("€"));
         assert!(title.contains("66.553"));
@@ -510,13 +599,33 @@ mod tests {
     #[test]
     fn menubar_title_falls_back_to_first_price() {
         let df = sample_df();
-        assert!(MenuBuilder::menubar_title(&df, Some("Missing")).contains("66.553"));
+        assert!(
+            MenuBuilder::menubar_title(
+                &df,
+                Some("Missing"),
+                &Freshness {
+                    status: &fresh(),
+                    now: now()
+                }
+            )
+            .contains("66.553")
+        );
     }
 
     #[test]
     fn menubar_title_keeps_decimals_for_small_prices() {
         let df = sample_df();
-        assert!(MenuBuilder::menubar_title(&df, Some("Benzine")).contains("2,47"));
+        assert!(
+            MenuBuilder::menubar_title(
+                &df,
+                Some("Benzine"),
+                &Freshness {
+                    status: &fresh(),
+                    now: now()
+                }
+            )
+            .contains("2,47")
+        );
     }
 
     #[test]
@@ -526,6 +635,16 @@ mod tests {
             Series::new("price".into(), Vec::<f64>::new()).into(),
         ])
         .expect("empty");
-        assert_eq!(MenuBuilder::menubar_title(&df, None), "Ticker");
+        assert_eq!(
+            MenuBuilder::menubar_title(
+                &df,
+                None,
+                &Freshness {
+                    status: &fresh(),
+                    now: now()
+                }
+            ),
+            "Ticker"
+        );
     }
 }

@@ -16,8 +16,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::config::{self, load_config};
 use crate::dialogs::{self, prompt_text};
+use crate::freshness::AssetStatus;
 use crate::log_message;
-use crate::menu_builder::MenuBuilder;
+use crate::menu_builder::{Freshness, MenuBuilder};
 use crate::menu_ids::{self, RowRef};
 use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
@@ -64,6 +65,8 @@ struct App {
     config: Option<crate::config::Config>,
     prices_df: Option<DataFrame>,
     watch_list: WatchList,
+    /// Per asset name: last successful fetch and failed polls since (stale marker in the menu).
+    asset_status: HashMap<String, AssetStatus>,
     /// The watch file exists but could not be read or moved aside: never overwrite it.
     watch_save_blocked: bool,
     /// Watch file stamp after our last load or save; a different stamp at a poll means the CLI
@@ -476,6 +479,7 @@ impl App {
                 return;
             }
         };
+        self.record_fetch_status(&df);
         if let Some(prev) = &self.prices_df
             && let Err(e) = fill_nan_from_prev(&mut df, prev)
         {
@@ -625,6 +629,34 @@ impl App {
         self.next_check = SystemTime::now() + POLL_INTERVAL;
     }
 
+    /// Before the NaN prices are filled in from the last poll: which assets this poll fetched.
+    fn record_fetch_status(&mut self, df: &DataFrame) {
+        let now = chrono::Local::now();
+        let (Ok(names), Ok(prices)) = (df.column("name"), df.column("price")) else {
+            return;
+        };
+        let (Ok(ns), Ok(ps)) = (names.str(), prices.f64()) else {
+            return;
+        };
+        let mut seen = HashMap::new();
+        for i in 0..df.height() {
+            if let Some(name) = ns.get(i) {
+                let fetched = ps.get(i).is_some_and(|p| !p.is_nan());
+                let mut status = self.asset_status.get(name).copied().unwrap_or_default();
+                status.record(fetched, now);
+                if !fetched {
+                    log_message(&format!(
+                        "poll: no price for {name} ({} failed poll(s) in a row)",
+                        status.failed_polls
+                    ));
+                }
+                seen.insert(name.to_string(), status);
+            }
+        }
+        // Assets that were edited away or reset drop out.
+        self.asset_status = seen;
+    }
+
     fn has_alert(&self) -> bool {
         self.watch_list.watches.iter().any(|w| w.triggered)
     }
@@ -632,9 +664,13 @@ impl App {
     fn update_menu(&self) {
         let empty = Self::empty_df();
         let df = self.prices_df.clone().unwrap_or(empty);
-        let menu = MenuBuilder::build(&df, &self.watch_list, self.rows_generation);
+        let freshness = Freshness {
+            status: &self.asset_status,
+            now: chrono::Local::now(),
+        };
+        let menu = MenuBuilder::build(&df, &self.watch_list, self.rows_generation, &freshness);
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
-        let title = MenuBuilder::menubar_title(&df, pin);
+        let title = MenuBuilder::menubar_title(&df, pin, &freshness);
         if let Ok(tray) = self.tray.try_borrow_mut() {
             tray.set_menu(Some(Box::new(menu)));
             // The normal icon is a template that follows the menu bar colours. The alert icon
@@ -856,6 +892,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         config: None,
         prices_df: None,
         watch_list: WatchList::new(),
+        asset_status: HashMap::new(),
         watch_save_blocked: false,
         watch_stamp: None,
         rows_generation: 0,

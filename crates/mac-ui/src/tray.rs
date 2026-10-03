@@ -14,6 +14,15 @@ pub const QUIT_ID: &str = "quit";
 /// On macOS the title is drawn in `secondaryLabelColor`.
 pub fn info_item(label: &str) -> MenuItem {
     let item = MenuItem::new(label, false, None);
+    set_secondary_title(&item, label);
+    item
+}
+
+/// Show `label` as the title of `item` in `secondaryLabelColor` (grey), keeping the item
+/// enabled, e.g. for a row whose data is out of date but can still be clicked.
+///
+/// macOS only; elsewhere the title is set as plain text.
+pub fn set_secondary_title(item: &MenuItem, label: &str) {
     #[cfg(target_os = "macos")]
     {
         use objc2::AnyThread;
@@ -35,7 +44,8 @@ pub fn info_item(label: &str) -> MenuItem {
         let title: &NSAttributedString = &attr;
         item.set_attributed_title(Some(title));
     }
-    item
+    #[cfg(not(target_os = "macos"))]
+    item.set_text(label);
 }
 
 /// Version row text: `"{app} {version}"`.
