@@ -1,0 +1,9 @@
+service:
+  app: copycraft-demo
+  replicas: 2
+  ports:
+    - 8080
+    - 8443
+  env:
+    LOG_LEVEL: info
+    REGION: eu-west-1

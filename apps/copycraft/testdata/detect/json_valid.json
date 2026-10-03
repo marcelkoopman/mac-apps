@@ -1,0 +1,10 @@
+{
+  "id": 42,
+  "title": "Copycraft demo",
+  "tags": ["clipboard", "offline", "mac"],
+  "settings": {
+    "theme": "system",
+    "history": 20,
+    "clear_sensitive": true
+  }
+}

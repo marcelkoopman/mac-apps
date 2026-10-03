@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="order">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="customer" type="xs:string"/>
+        <xs:element name="total" type="xs:decimal"/>
+        <xs:element name="item" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="sku" type="xs:string" use="required"/>
+            <xs:attribute name="qty" type="xs:integer" use="required"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:integer" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

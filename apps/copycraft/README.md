@@ -57,6 +57,11 @@ cargo test -p copycraft
 cargo clippy -p copycraft --all-targets -- -D warnings
 ```
 
+Test data: [`testdata/`](testdata/README.md) has a synthetic input for every scenario
+(detection, convert and decode, tables, sensitivity labels, edge cases, images) with a manifest
+of what the card should show. `cargo test -p copycraft testdata_manifest` checks the manifest
+against the app; `testdata/generate_large.sh` writes the 1 MB and over-8 MB files.
+
 Local app bundle (needs `cargo-bundle`):
 
 ```bash

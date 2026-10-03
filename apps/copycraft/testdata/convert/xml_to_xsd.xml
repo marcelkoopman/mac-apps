@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<order id="1001">
+  <customer>demo-customer</customer>
+  <total>59.90</total>
+  <item sku="A-1" qty="2"/>
+  <item sku="B-7" qty="1"/>
+</order>

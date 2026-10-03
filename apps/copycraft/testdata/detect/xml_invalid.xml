@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<library>
+  <book id="b1">
+    <title>The Demo Book</author>
+    <year>2024</year>
+  </book>
+</library>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<library>
+  <book id="b1">
+    <title>The Demo Book</title>
+    <author>A. Writer</author>
+    <year>2024</year>
+  </book>
+  <book id="b2">
+    <title>Another Demo</title>
+    <author>B. Author</author>
+    <year>2025</year>
+  </book>
+</library>

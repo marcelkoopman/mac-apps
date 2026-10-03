@@ -1,0 +1,9 @@
+id,item,empty_col,region,score
+1,Alpha,,EU,10
+2,Bravo,,EU,20
+,,,,
+2,Bravo,,EU,20
+3,Charlie,,EU,30
+1,Alpha,,EU,10
+,,,,
+4,Delta,,EU,40

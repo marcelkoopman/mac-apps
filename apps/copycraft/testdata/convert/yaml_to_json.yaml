@@ -1,0 +1,9 @@
+app: copycraft-demo
+version: 3
+features:
+  - format
+  - convert
+  - decode
+owner:
+  team: demo
+  active: true

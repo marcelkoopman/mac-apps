@@ -1,0 +1,4 @@
+# Copycraft test data: the exact bytes are the test (tabs in TSV, a tab and spaces in one
+# Python file, straight quotes, final newlines). Git never converts line endings there and
+# `git diff --check` does not flag the deliberate whitespace.
+apps/copycraft/testdata/** -text -whitespace

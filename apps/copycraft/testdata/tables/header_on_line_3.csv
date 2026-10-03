@@ -1,0 +1,7 @@
+Monthly demo export
+Definition: usage per meter in kWh, synthetic values
+Month,Meter,Usage (kWh),Cost
+Jan,M-01,312.5,78.13
+Feb,M-01,298.0,74.50
+Mar,M-01,276.4,69.10
+Apr,M-01,240.9,60.23

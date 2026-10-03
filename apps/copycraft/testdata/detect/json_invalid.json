@@ -1,0 +1,8 @@
+{
+  "id": 42,
+  "title": "Copycraft demo",
+  "tags": ["clipboard", "offline"]
+  "settings": {
+    "theme": "system"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "order_id": 1001,
+  "customer": "demo-customer",
+  "total": 59.90,
+  "paid": true,
+  "items": [
+    {"sku": "A-1", "qty": 2},
+    {"sku": "B-7", "qty": 1}
+  ]
+}

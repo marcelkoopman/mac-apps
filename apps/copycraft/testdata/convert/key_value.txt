@@ -1,0 +1,4 @@
+project: Copycraft
+status: beta
+platform: macOS
+offline: true
