@@ -145,7 +145,6 @@ impl WatchList {
     }
 
     /// Reset all triggered states.
-    #[allow(dead_code)]
     pub fn reset_all_states(&mut self) {
         for watch in &mut self.watches {
             watch.triggered = false;

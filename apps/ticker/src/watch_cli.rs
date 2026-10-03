@@ -115,17 +115,17 @@ fn clear_watches() -> Result<String, Box<dyn Error>> {
     Ok(format!("✅ All price watches cleared ({removed} removed)"))
 }
 
+/// Re-arm triggered watches; reports how many were triggered (and so are re-armed now).
 fn reset_triggered() -> Result<String, Box<dyn Error>> {
-    let watch_list = update_watch_list(|watch_list| {
+    let (reset, total) = update_watch_list(|watch_list| {
+        let reset = watch_list.watches.iter().filter(|w| w.triggered).count();
         watch_list.reset_all_states();
-        watch_list.clone()
+        (reset, watch_list.watches.len())
     })?;
 
-    let triggered_count = watch_list.watches.iter().filter(|w| !w.triggered).count();
-
     Ok(format!(
-        "✅ Reset triggered state for {} watches",
-        triggered_count
+        "✅ Re-armed {reset} triggered watch{} ({total} in total)",
+        if reset == 1 { "" } else { "es" }
     ))
 }
 
@@ -144,7 +144,7 @@ Commands:
     Example: ticker remove Bitcoin 68000
 
   list
-    List all active price watches
+    List all price watches ([✓] = triggered, waiting for a reset)
     Example: ticker list
 
   clear
@@ -152,7 +152,7 @@ Commands:
     Example: ticker clear
 
   reset
-    Reset triggered state for all watches
+    Re-arm all triggered watches so they can fire again
     Example: ticker reset
 
   help, --help, -h
@@ -174,7 +174,10 @@ Examples:
 Notes:
   - Watches are persisted in ~/.ticker_watches.json
   - When a price reaches the watch threshold, a notification will be sent
-  - Each watch will only trigger once per day
+  - A watch fires once, then stays triggered until you run `ticker reset`
+    (there is no automatic daily reset)
+  - Prices may be written as 68000, 68.000 or 68.000,00
+  - Commands may run while the menubar app runs; it picks up changes at its next poll
   - Running without arguments starts the menubar app
 "#
     .to_string()
@@ -309,6 +312,37 @@ mod tests {
             }
             handle_watch_command(&["remove".into(), "Bitcoin".into(), "68.000,00".into()]).unwrap();
         });
+    }
+
+    #[test]
+    fn reset_counts_only_triggered_watches() {
+        with_temp_watch_file(|| {
+            for (asset, price) in [("Bitcoin", "1"), ("Gold", "2"), ("ETH", "3")] {
+                handle_watch_command(&["add".into(), asset.into(), price.into(), "above".into()])
+                    .unwrap();
+            }
+            // Two of the three go off.
+            update_watch_list(|l| {
+                l.check_price("Bitcoin", 10.0);
+                l.check_price("Gold", 10.0);
+            })
+            .unwrap();
+            let out = handle_watch_command(&["reset".into()]).unwrap();
+            assert!(out.contains("Re-armed 2 triggered watches"), "{out}");
+            assert!(out.contains("3 in total"), "{out}");
+            let listed = handle_watch_command(&["list".into()]).unwrap();
+            assert!(!listed.contains('✓'), "{listed}");
+            let again = handle_watch_command(&["reset".into()]).unwrap();
+            assert!(again.contains("Re-armed 0 triggered watches"), "{again}");
+        });
+    }
+
+    #[test]
+    fn help_text_matches_the_behaviour() {
+        let help = get_help_text();
+        assert!(!help.contains("once per day"));
+        assert!(!help.contains("active price watches"));
+        assert!(help.contains("until you run `ticker reset`"));
     }
 
     #[test]
