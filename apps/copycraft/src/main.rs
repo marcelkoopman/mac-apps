@@ -12,6 +12,8 @@ mod hotkey;
 mod icon;
 mod image_ops;
 mod launcher;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod link_preview;
 mod memo;
 mod menubar;
 mod open_file;
@@ -29,8 +31,6 @@ mod youtube;
 
 #[cfg(target_os = "macos")]
 mod macos_card_text;
-#[cfg(target_os = "macos")]
-mod macos_fetch;
 #[cfg(target_os = "macos")]
 mod macos_image_io;
 #[cfg(target_os = "macos")]

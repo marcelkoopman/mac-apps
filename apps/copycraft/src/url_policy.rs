@@ -1,6 +1,6 @@
-//! Which URLs copycraft may fetch on its own (link preview prefetch) or hand to the browser
-//! (Visit). Pure string checks, no DNS: a public name that resolves to a LAN address is not
-//! caught here.
+//! Which URLs copycraft may fetch on its own (link previews, after the card is revealed) or hand
+//! to the browser (Visit). Pure string checks, no DNS: a public name that resolves to a LAN
+//! address is not caught here.
 
 use std::net::Ipv4Addr;
 

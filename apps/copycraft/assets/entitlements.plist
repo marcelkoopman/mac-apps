@@ -4,8 +4,10 @@
   Copycraft App Sandbox entitlements. Applied by `codesign ... entitlements` in
   .github/workflows/release-copycraft.yml and scripts/sign_app.sh.
   - app-sandbox: required for the Mac App Store.
-  - network.client: link / YouTube previews via NSURLConnection (macos_fetch::get and
-    friends, called from the link and video cards in src/macos_launcher.rs).
+  - network.client: link previews (pages and YouTube) via LinkPresentation's
+    LPMetadataProvider (mac_ui::link::fetch, started from the link card in
+    src/macos_launcher.rs only after the user reveals the card). LinkPresentation needs
+    this entitlement to fetch remote URLs in the sandbox.
   - files.user-selected.read-write: "Choose file" NSOpenPanel (macos_open::choose_path)
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).
   Not needed: NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),

@@ -31,14 +31,6 @@ pub fn video_id(text: &str) -> Option<&str> {
     }
 }
 
-pub fn wide_thumbnail_url(id: &str) -> String {
-    format!("https://i.ytimg.com/vi/{id}/hq720.jpg")
-}
-
-pub fn thumbnail_url(id: &str) -> String {
-    format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg")
-}
-
 fn strip_http(text: &str) -> &str {
     let Some((scheme, rest)) = text.split_once("://") else {
         return text;
@@ -47,31 +39,6 @@ fn strip_http(text: &str) -> &str {
         rest
     } else {
         text
-    }
-}
-
-pub fn oembed_endpoint(page: &str) -> String {
-    format!(
-        "https://www.youtube.com/oembed?format=json&url={}",
-        encode_query(page.trim())
-    )
-}
-
-pub fn caption_from_oembed(bytes: &[u8]) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
-    let title = value.get("title")?.as_str()?.trim();
-    if title.is_empty() {
-        return None;
-    }
-    let author = value
-        .get("author_name")
-        .and_then(|item| item.as_str())
-        .unwrap_or("")
-        .trim();
-    if author.is_empty() {
-        Some(title.to_string())
-    } else {
-        Some(format!("{title} · {author}"))
     }
 }
 
@@ -95,22 +62,9 @@ fn is_video_id(id: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
-fn encode_query(text: &str) -> String {
-    let mut out = String::new();
-    for byte in text.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{caption_from_oembed, oembed_endpoint, thumbnail_url, video_id};
+    use super::video_id;
 
     const WATCH: &str = "https://www.youtube.com/watch?v=bEN9Dyg48b0";
 
@@ -155,28 +109,5 @@ mod tests {
         assert_eq!(video_id("see https://youtu.be/bEN9Dyg48b0"), None);
         assert_eq!(video_id("https://youtu.be/short"), None);
         assert_eq!(video_id(""), None);
-    }
-
-    #[test]
-    fn thumbnail_and_caption_use_the_video() {
-        assert_eq!(
-            thumbnail_url("bEN9Dyg48b0"),
-            "https://i.ytimg.com/vi/bEN9Dyg48b0/hqdefault.jpg"
-        );
-        assert_eq!(
-            super::wide_thumbnail_url("bEN9Dyg48b0"),
-            "https://i.ytimg.com/vi/bEN9Dyg48b0/hq720.jpg"
-        );
-        assert_eq!(
-            oembed_endpoint(WATCH),
-            "https://www.youtube.com/oembed?format=json&url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DbEN9Dyg48b0"
-        );
-        let bytes = br#"{"title":"A talk","author_name":"Ada","thumbnail_url":"https://i.ytimg.com/vi/x/hqdefault.jpg"}"#;
-        assert_eq!(caption_from_oembed(bytes).as_deref(), Some("A talk · Ada"));
-        assert_eq!(
-            caption_from_oembed(br#"{"title":"A talk"}"#).as_deref(),
-            Some("A talk")
-        );
-        assert_eq!(caption_from_oembed(br"{}"), None);
     }
 }

@@ -284,9 +284,9 @@ pub struct WorkCard {
     pub highlight: Option<FormatKind>,
     /// The well text can be selected, so part of a data URL can be copied on its own.
     pub selectable: bool,
-    /// YouTube page, when the card should load a video thumbnail.
+    /// The link (a page or a YouTube video) when the card shows a link preview
+    /// (`link_preview`, LinkPresentation) above the URL once it is revealed.
     pub link_page: Option<String>,
-    pub link_thumb: Option<String>,
     /// Set when the excerpt is a preview of a longer text, for example
     /// "Showing 200 of 23,220 rows". "Show all" renders the rest.
     pub preview_note: Option<String>,
@@ -427,7 +427,6 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             highlight: None,
             selectable: false,
             link_page: None,
-            link_thumb: None,
             preview_note: None,
         };
     }
@@ -463,7 +462,6 @@ fn compose_card(data: &LaunchData) -> WorkCard {
                 highlight: None,
                 selectable: false,
                 link_page: None,
-                link_thumb: None,
                 preview_note,
             };
             apply_text_view(&mut card, text, presented_view(text, data.view), data.full);
@@ -478,7 +476,6 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             highlight: None,
             selectable: false,
             link_page: None,
-            link_thumb: None,
             preview_note: None,
         },
         SubjectKind::NoText => WorkCard {
@@ -490,7 +487,6 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             highlight: None,
             selectable: false,
             link_page: None,
-            link_thumb: None,
             preview_note: None,
         },
     }
@@ -522,7 +518,6 @@ fn image_card(data: &LaunchData) -> WorkCard {
             highlight: None,
             selectable: true,
             link_page: None,
-            link_thumb: None,
             preview_note: None,
         };
     }
@@ -535,7 +530,6 @@ fn image_card(data: &LaunchData) -> WorkCard {
         highlight: None,
         selectable: false,
         link_page: None,
-        link_thumb: None,
         preview_note: None,
     }
 }
@@ -973,25 +967,25 @@ pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     })
 }
 
+/// A page link. The site shows in the preview, so the title is the kind: "Link".
 fn page_card(text: &str) -> Option<WorkCard> {
     let page = crate::page_preview::page_url(text)?;
-    let host = crate::page_preview::host(page).unwrap_or("Page");
     Some(WorkCard {
-        title: host.to_string(),
+        title: "Link".to_string(),
         meta: text_meta(text),
         excerpt: payload_excerpt(text),
         placeholder: String::new(),
         shows_image: false,
         highlight: None,
-        selectable: false,
+        // The URL under the preview can be selected and copied.
+        selectable: true,
         link_page: Some(page.to_string()),
-        link_thumb: None,
         preview_note: None,
     })
 }
 
 fn youtube_card(text: &str) -> Option<WorkCard> {
-    let id = crate::youtube::video_id(text)?;
+    crate::youtube::video_id(text)?;
     Some(WorkCard {
         title: "YouTube".to_string(),
         meta: text_meta(text),
@@ -999,9 +993,8 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
         placeholder: String::new(),
         shows_image: false,
         highlight: None,
-        selectable: false,
+        selectable: true,
         link_page: Some(text.trim().to_string()),
-        link_thumb: Some(crate::youtube::thumbnail_url(id)),
         preview_note: None,
     })
 }
@@ -1406,8 +1399,9 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
             if crate::youtube::video_id(text).is_some()
                 || crate::page_preview::page_url(text).is_some()
             {
+                // Copy the URL shown under the preview. Nothing to save.
                 ContentActions {
-                    copy: false,
+                    copy: true,
                     save: false,
                 }
             } else {
@@ -2018,7 +2012,7 @@ fn main() {
         let input = data(SubjectKind::Text, Some(url));
         let card = work_card(&input);
         assert!(card.link_page.is_some());
-        assert_eq!(card.title, "github.com");
+        assert_eq!(card.title, "Link");
         assert!(!card.title.contains("deploy"));
         assert!(!card.title.contains("s3cr3t"));
         assert!(card.meta.contains("credential"));
@@ -2423,23 +2417,20 @@ fn main() {
     }
 
     #[test]
-    fn youtube_url_previews_as_a_thumbnail() {
+    fn youtube_url_is_a_link_card() {
         let url = "https://www.youtube.com/watch?v=bEN9Dyg48b0";
         let card = work_card(&data(SubjectKind::Text, Some(url)));
         assert_eq!(card.title, "YouTube");
         assert_eq!(card.link_page.as_deref(), Some(url));
-        assert_eq!(
-            card.link_thumb.as_deref(),
-            Some("https://i.ytimg.com/vi/bEN9Dyg48b0/hqdefault.jpg")
-        );
         assert_eq!(card.excerpt, url);
+        assert!(card.selectable);
         assert!(!card.shows_image);
         let input = data(SubjectKind::Text, Some(url));
         assert_eq!(titles(&chips(&input)), vec!["Visit"]);
         assert_eq!(
             content_actions(&input),
             ContentActions {
-                copy: false,
+                copy: true,
                 save: false
             }
         );
@@ -2450,15 +2441,17 @@ fn main() {
         let url = "https://www.example.com/news/story";
         let input = data(SubjectKind::Text, Some(url));
         let card = work_card(&input);
-        assert_eq!(card.title, "example.com");
+        assert_eq!(card.title, "Link");
         assert_eq!(card.link_page.as_deref(), Some(url));
-        assert!(card.link_thumb.is_none());
         assert_eq!(card.excerpt, url);
+        assert!(card.selectable);
+        // Blurred until revealed: the preview is fetched only after that.
+        assert!(masks_content(&card, CardView::Original));
         assert_eq!(titles(&chips(&input)), vec!["Visit"]);
         assert_eq!(
             content_actions(&input),
             ContentActions {
-                copy: false,
+                copy: true,
                 save: false
             }
         );
@@ -2468,7 +2461,7 @@ fn main() {
     fn bare_host_previews_as_a_page() {
         let input = data(SubjectKind::Text, Some("grok.com"));
         let card = work_card(&input);
-        assert_eq!(card.title, "grok.com");
+        assert_eq!(card.title, "Link");
         assert_eq!(card.link_page.as_deref(), Some("grok.com"));
         assert_eq!(titles(&chips(&input)), vec!["Visit", "Format"]);
     }
