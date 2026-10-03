@@ -22,6 +22,36 @@ pub const NAV_BUTTON: f64 = 28.0;
 pub const NAV_COUNT_W: f64 = 44.0;
 /// The whole history capsule: chevron, position, chevron, with no gaps.
 pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_COUNT_W + NAV_BUTTON;
+
+/// A history chevron: its SF Symbol, the glyph drawn without SF Symbols, and its name (the
+/// VoiceOver label and tooltip, never drawn).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Chevron {
+    pub symbol: &'static str,
+    pub glyph: &'static str,
+    pub name: &'static str,
+}
+
+pub const OLDER_CHEVRON: Chevron = Chevron {
+    symbol: "chevron.left",
+    glyph: "‹",
+    name: "Older",
+};
+
+pub const NEWER_CHEVRON: Chevron = Chevron {
+    symbol: "chevron.right",
+    glyph: "›",
+    name: "Newer",
+};
+
+impl Chevron {
+    /// The button title: empty when the symbol image shows (image only, so no name is drawn
+    /// beside or under it), else just the fallback glyph.
+    pub fn title(&self, has_image: bool) -> &'static str {
+        if has_image { "" } else { self.glyph }
+    }
+}
+
 /// Empty space kept on the right of the first chip row so the capsule fits.
 pub const NAV_RESERVE: f64 = CHIP_GAP + NAV_SPAN;
 const EXCERPT_LINES: usize = 6;
@@ -1488,7 +1518,7 @@ fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command 
 
 #[cfg(test)]
 mod tests {
-    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W};
+    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEWER_CHEVRON, OLDER_CHEVRON};
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
@@ -2862,6 +2892,18 @@ Kleinste opdracht die de change dekt.
         // A cursor past the end shows the oldest copy.
         assert_eq!(history_nav(3, 9).unwrap().label(), "3 / 3");
         assert_eq!(history_nav(20, 19).unwrap().label(), "20 / 20");
+    }
+
+    #[test]
+    fn chevrons_draw_only_their_image_or_glyph() {
+        for chevron in [OLDER_CHEVRON, NEWER_CHEVRON] {
+            assert_eq!(chevron.title(true), "", "{chevron:?}: image only");
+            assert_eq!(chevron.title(false), chevron.glyph);
+            assert_eq!(chevron.glyph.chars().count(), 1);
+            assert!(!chevron.title(false).contains(chevron.name));
+        }
+        assert_eq!(OLDER_CHEVRON.name, "Older");
+        assert_eq!(NEWER_CHEVRON.name, "Newer");
     }
 
     #[test]

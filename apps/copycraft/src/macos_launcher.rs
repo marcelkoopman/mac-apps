@@ -13,11 +13,11 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplicationDidResignActiveNotification, NSBox, NSButton, NSColor, NSControl,
-    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType,
-    NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField,
-    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
-    NSWindowOrderingMode,
+    NSAccessibility, NSApplicationDidResignActiveNotification, NSBox, NSButton,
+    NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
+    NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode,
+    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
+    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSDate, NSDateFormatter, NSDateFormatterStyle, NSEdgeInsets, NSNotification,
@@ -2658,19 +2658,25 @@ fn well_action(
     button
 }
 
-/// Borderless chevron inside the history capsule; `label` ("Older", "Newer") is what VoiceOver
-/// reads, `fallback` shows without SF Symbols.
-fn nav_button(
-    mtm: MainThreadMarker,
-    symbol: &str,
-    label: &str,
-    fallback: &str,
-    action: Sel,
-) -> NavButton {
-    let button = GlassButton::symbol(mtm, symbol, label, fallback, NAV_SYMBOL);
+/// Borderless chevron inside the history capsule: the SF Symbol only (or just the fallback
+/// glyph), centred in its slot. The name ("Older", "Newer") is the VoiceOver label and tooltip.
+fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron, action: Sel) -> NavButton {
+    let button = GlassButton::symbol(mtm, chevron.symbol, chevron.name, chevron.glyph, NAV_SYMBOL);
+    let ns = button.button();
     // The capsule is the glass; a second glass bezel inside it would stack glass on glass.
-    button.button().setBordered(false);
-    wire_button(button.button(), action);
+    ns.setBordered(false);
+    // `GlassButton::symbol` keeps the name as a hidden title. A borderless button draws it next
+    // to the image, so the title must be empty (or only the fallback glyph).
+    let has_image = ns.image().is_some();
+    ns.setTitle(&NSString::from_str(chevron.title(has_image)));
+    if has_image {
+        ns.setImagePosition(NSCellImagePosition::ImageOnly);
+    }
+    ns.setAlignment(NSTextAlignment::Center);
+    let name = NSString::from_str(chevron.name);
+    ns.setAccessibilityLabel(Some(&name));
+    ns.setToolTip(Some(&name));
+    wire_button(ns, action);
     button
 }
 
@@ -2695,8 +2701,8 @@ fn history_capsule(
     );
     capsule.setHidden(true);
     let inside = glass::background(mtm, &capsule, height / 2.0).content;
-    let older = nav_button(mtm, "chevron.left", "Older", "‹", sel!(olderClicked:));
-    let newer = nav_button(mtm, "chevron.right", "Newer", "›", sel!(newerClicked:));
+    let older = nav_button(mtm, commands::OLDER_CHEVRON, sel!(olderClicked:));
+    let newer = nav_button(mtm, commands::NEWER_CHEVRON, sel!(newerClicked:));
     let count = widgets::label(mtm, NAV_FONT, &NSColor::secondaryLabelColor());
     // Tabular digits: "1 / 9" and "2 / 9" are the same width. 0.0 is NSFontWeightRegular.
     count.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
