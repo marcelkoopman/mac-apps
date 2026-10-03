@@ -34,20 +34,28 @@ impl Key {
 pub struct Memo<V> {
     slots: Mutex<VecDeque<(Key, V)>>,
     capacity: usize,
+    min_len: usize,
 }
 
 impl<V: Clone> Memo<V> {
     pub const fn new(capacity: usize) -> Self {
+        Self::with_min_len(capacity, MIN_LEN)
+    }
+
+    /// Like [`new`](Self::new), also remembering texts shorter than [`MIN_LEN`] bytes (from
+    /// `min_len` up), for a function that is slow whatever the length.
+    pub const fn with_min_len(capacity: usize, min_len: usize) -> Self {
         Self {
             slots: Mutex::new(VecDeque::new()),
             capacity,
+            min_len,
         }
     }
 
     /// The remembered result for `text`, else `compute(text)` (run without holding the lock,
     /// so another thread can compute meanwhile), remembered for next time.
     pub fn get_or_compute(&self, text: &str, compute: impl FnOnce(&str) -> V) -> V {
-        if text.len() < MIN_LEN {
+        if text.len() < self.min_len {
             return compute(text);
         }
         let key = Key::of(text);
@@ -88,6 +96,7 @@ impl<V: Clone> Memo<V> {
 pub fn forget_all() {
     crate::format::forget_detected();
     crate::sensitivity::forget_labels();
+    crate::commands::forget_chips();
 }
 
 #[cfg(test)]
@@ -154,6 +163,16 @@ mod tests {
         let b = big('b');
         assert!(memo.get_or_compute(&a, |t| t.starts_with('a')));
         assert!(!memo.get_or_compute(&b, |t| t.starts_with('a')));
+    }
+
+    #[test]
+    fn a_lower_min_len_remembers_short_text() {
+        let memo = Memo::with_min_len(2, 0);
+        let calls = Cell::new(0);
+        for _ in 0..2 {
+            memo.get_or_compute("short", |_| calls.set(calls.get() + 1));
+        }
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]

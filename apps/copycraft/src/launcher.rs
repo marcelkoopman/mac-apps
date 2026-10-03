@@ -90,7 +90,8 @@ pub fn sync(data: LaunchData) {
     }
 }
 
-/// Like [`sync`], with the card already built (off the main thread).
+/// Like [`sync`], with the card already built (off the main thread, or earlier for the same
+/// history entry).
 pub fn sync_with_card(data: LaunchData, card: crate::commands::WorkCard) {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::sync_with_card(data, card);

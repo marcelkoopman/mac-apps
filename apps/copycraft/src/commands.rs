@@ -365,6 +365,23 @@ pub struct WorkCard {
     pub preview_note: Option<String>,
 }
 
+impl WorkCard {
+    /// Overwrite the copied text the card holds (the excerpt, the link, and the title and meta,
+    /// which can quote it).
+    pub fn wipe(&mut self) {
+        self.title.zeroize();
+        self.meta.zeroize();
+        self.excerpt.zeroize();
+        self.placeholder.zeroize();
+        if let Some(link) = self.link_page.as_mut() {
+            link.zeroize();
+        }
+        if let Some(note) = self.preview_note.as_mut() {
+            note.zeroize();
+        }
+    }
+}
+
 impl Drop for LaunchData {
     fn drop(&mut self) {
         if let Some(text) = self.subject_text.as_mut() {
@@ -1078,16 +1095,31 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         SubjectKind::Image => image_chips(data.image_scan.as_ref()),
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
-            if crate::youtube::video_id(text).is_some()
-                || crate::page_preview::page_url(text).is_some()
-            {
-                link_chips(text)
-            } else {
-                text_chips(text)
-            }
+            TEXT_CHIPS.get_or_compute(text, |text| {
+                if crate::youtube::video_id(text).is_some()
+                    || crate::page_preview::page_url(text).is_some()
+                {
+                    link_chips(text)
+                } else {
+                    text_chips(text)
+                }
+            })
         }
         SubjectKind::Empty | SubjectKind::NoText => Vec::new(),
     }
+}
+
+/// The chips of a copied text, which follow from the text alone. Working them out tries the
+/// formatter, the converters and the table parser, and every card update (each step through
+/// history, twice through [`search_pool`]) asks again, so they are remembered for the last
+/// copies, whatever their length. Only the text's hash is kept with them; the chips are fixed
+/// labels. [`forget_chips`] drops them (Wipe).
+static TEXT_CHIPS: crate::memo::Memo<Vec<Command>> =
+    crate::memo::Memo::with_min_len(crate::clipboard::MAX_HISTORY + 4, 0);
+
+/// Drop the remembered chips (Wipe).
+pub fn forget_chips() {
+    TEXT_CHIPS.clear();
 }
 
 /// Chips, earlier copies, and appearance. Quit stays out.
@@ -1645,6 +1677,31 @@ mod tests {
             full: false,
             picture: None,
         }
+    }
+
+    #[test]
+    fn remembered_chips_match_the_text() {
+        let texts = [
+            "{\"a\": [1, 2]}",
+            "fn main() { let x = 1; }",
+            "name,age\nalice,30\nbob,40",
+            "a: 1\nb: [2, 3]\n",
+            "aGVsbG8gd29ybGQ=",
+            "https://example.com/page",
+            "plain words",
+        ];
+        for text in texts {
+            let input = data(SubjectKind::Text, Some(text));
+            let first = ids(&super::chips(&input));
+            assert_eq!(ids(&super::chips(&input)), first, "{text}");
+            super::forget_chips();
+            assert_eq!(ids(&super::chips(&input)), first, "{text}");
+        }
+        // Each text has its own chips, also when they are short and the same length.
+        let json = ids(&super::chips(&data(SubjectKind::Text, Some("{\"a\":1}"))));
+        let rust = ids(&super::chips(&data(SubjectKind::Text, Some("fn a() {}"))));
+        assert!(json.contains(&CommandId::Schema));
+        assert!(!rust.contains(&CommandId::Schema));
     }
 
     fn titles(commands: &[super::Command]) -> Vec<String> {

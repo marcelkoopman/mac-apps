@@ -515,8 +515,8 @@ pub fn sync(data: LaunchData) {
     layout(false);
 }
 
-/// [`sync`] with `card` already built from `data` (the "Show all" card, built off the main
-/// thread).
+/// [`sync`] with `card` already built from `data`: the "Show all" card (built off the main
+/// thread), or a history entry's card built earlier.
 pub fn sync_with_card(data: LaunchData, card: commands::WorkCard) {
     if !is_open() {
         return;

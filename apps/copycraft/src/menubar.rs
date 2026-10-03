@@ -314,9 +314,35 @@ impl App {
             }
             None => {
                 self.full_card = None;
-                launcher::sync(data);
+                let card = self.history_card(&data);
+                launcher::sync_with_card(data, card);
             }
         }
+    }
+
+    /// The card for `data`. A copied text's preview card is built once per history entry and
+    /// view, and kept with that entry (dropped and zeroized with it), so stepping back and
+    /// forth through history does not detect, format and lay out the same copies again.
+    fn history_card(&mut self, data: &LaunchData) -> commands::WorkCard {
+        let entry = data
+            .subject_text
+            .as_deref()
+            .filter(|_| {
+                self.opened.is_none()
+                    && !data.full
+                    && data.subject_kind == SubjectKind::Text
+                    && data.source_name.is_none()
+            })
+            .and_then(|text| self.history.text_index(text, self.history_cursor));
+        let Some(index) = entry else {
+            return commands::work_card(data);
+        };
+        if let Some(card) = self.history.card(index, data.view) {
+            return card.clone();
+        }
+        let card = commands::work_card(data);
+        self.history.remember_card(index, data.view, card.clone());
+        card
     }
 
     /// Build the whole-text card on a background thread; the spinner shows if it is slow.

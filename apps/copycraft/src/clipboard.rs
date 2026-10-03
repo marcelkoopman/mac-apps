@@ -5,9 +5,10 @@ use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::commands::{CardView, WorkCard};
 use crate::format;
 
-const MAX_HISTORY: usize = 20;
+pub const MAX_HISTORY: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClipboardImage {
@@ -191,10 +192,34 @@ enum HistoryBody {
     Image(SecretBytes),
 }
 
-/// One copied item.
+/// One copied item, and what was worked out from it once: its format, and the cards built for
+/// it (one per view). Stepping through history shows the same entries again and again, so they
+/// are not detected, formatted (rustfmt is a separate process) and laid out anew each time.
+/// The cards go with the entry: falling off the end or Wipe drops and zeroizes them with it.
 #[derive(Clone)]
 struct HistoryEntry {
     body: HistoryBody,
+    kind: format::FormatKind,
+    cards: Vec<(CardView, WorkCard)>,
+}
+
+impl HistoryEntry {
+    fn text(text: String) -> Self {
+        let kind = format::detect(&text);
+        Self {
+            body: HistoryBody::Text(Zeroizing::new(text)),
+            kind,
+            cards: Vec::new(),
+        }
+    }
+
+    fn image(bytes: SecretBytes) -> Self {
+        Self {
+            body: HistoryBody::Image(bytes),
+            kind: format::FormatKind::Image,
+            cards: Vec::new(),
+        }
+    }
 }
 
 impl Drop for HistoryEntry {
@@ -202,6 +227,9 @@ impl Drop for HistoryEntry {
         match &mut self.body {
             HistoryBody::Text(text) => text.zeroize(),
             HistoryBody::Image(bytes) => bytes.zeroize(),
+        }
+        for (_, card) in &mut self.cards {
+            card.wipe();
         }
     }
 }
@@ -227,12 +255,7 @@ impl ClipboardHistory {
             HistoryBody::Text(existing) => existing.as_str() != text,
             HistoryBody::Image(_) => true,
         });
-        self.entries.insert(
-            0,
-            HistoryEntry {
-                body: HistoryBody::Text(Zeroizing::new(text)),
-            },
-        );
+        self.entries.insert(0, HistoryEntry::text(text));
         self.entries.truncate(MAX_HISTORY);
     }
 
@@ -286,12 +309,7 @@ impl ClipboardHistory {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
         });
-        self.entries.insert(
-            0,
-            HistoryEntry {
-                body: HistoryBody::Image(bytes),
-            },
-        );
+        self.entries.insert(0, HistoryEntry::image(bytes));
         self.entries.truncate(MAX_HISTORY);
     }
 
@@ -312,10 +330,47 @@ impl ClipboardHistory {
     }
 
     pub fn mark(&self, index: usize) -> Option<&'static str> {
-        let entry = self.entries.get(index)?;
-        match &entry.body {
-            HistoryBody::Text(text) => Some(menu_mark(text.as_str())),
-            HistoryBody::Image(_) => Some(format::FormatKind::Image.menu_symbol()),
+        Some(self.entries.get(index)?.kind.menu_symbol())
+    }
+
+    /// Where the text entry `text` is, looking at `hint` (the history cursor) first.
+    pub fn text_index(&self, text: &str, hint: usize) -> Option<usize> {
+        let is_text = |entry: &HistoryEntry| match &entry.body {
+            HistoryBody::Text(existing) => existing.as_str() == text,
+            HistoryBody::Image(_) => false,
+        };
+        if self.entries.get(hint).is_some_and(is_text) {
+            return Some(hint);
+        }
+        self.entries.iter().position(is_text)
+    }
+
+    /// The card built earlier for the entry at `index` in `view` ([`remember_card`](Self::remember_card)).
+    pub fn card(&self, index: usize, view: CardView) -> Option<&WorkCard> {
+        self.entries
+            .get(index)?
+            .cards
+            .iter()
+            .find(|(shown, _)| *shown == view)
+            .map(|(_, card)| card)
+    }
+
+    /// Keep `card` (the preview card of the text entry at `index` in `view`) with that entry.
+    /// Image entries keep none: their card follows the scan, which arrives later.
+    pub fn remember_card(&mut self, index: usize, view: CardView, mut card: WorkCard) {
+        let Some(entry) = self.entries.get_mut(index) else {
+            card.wipe();
+            return;
+        };
+        if !matches!(entry.body, HistoryBody::Text(_)) {
+            card.wipe();
+            return;
+        }
+        if let Some(slot) = entry.cards.iter_mut().find(|(shown, _)| *shown == view) {
+            slot.1.wipe();
+            slot.1 = card;
+        } else {
+            entry.cards.push((view, card));
         }
     }
 
@@ -349,11 +404,8 @@ impl ClipboardHistory {
             .iter()
             .enumerate()
             .map(|(i, entry)| {
-                let label = match &entry.body {
-                    HistoryBody::Text(text) => one_line(text.as_str()),
-                    HistoryBody::Image(_) => format::FormatKind::Image.menu_symbol().to_string(),
-                };
-                (i, label)
+                // The format found when the entry was recorded (`one_line` would detect it again).
+                (i, entry.kind.menu_symbol().to_string())
             })
             .collect()
     }
@@ -674,5 +726,121 @@ mod tests {
         // capacity. `text` still owns the buffer, and `len` is inside it.
         let wiped = unsafe { std::slice::from_raw_parts(ptr, len) };
         assert!(wiped.iter().all(|byte| *byte == 0));
+    }
+
+    fn card(excerpt: &str) -> crate::commands::WorkCard {
+        crate::commands::WorkCard {
+            title: "JSON".into(),
+            meta: "1 B".into(),
+            excerpt: excerpt.into(),
+            placeholder: String::new(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+        }
+    }
+
+    #[test]
+    fn a_remembered_card_stays_with_its_entry_and_view() {
+        use crate::commands::CardView;
+        let mut history = ClipboardHistory::default();
+        history.record("{\"a\":1}".into());
+        history.record("two".into());
+        let json = history.text_index("{\"a\":1}", 0).expect("entry");
+        assert_eq!(json, 1);
+        assert!(history.card(json, CardView::Format).is_none());
+        history.remember_card(json, CardView::Format, card("{ a }"));
+        assert_eq!(
+            history
+                .card(json, CardView::Format)
+                .map(|c| c.excerpt.as_str()),
+            Some("{ a }")
+        );
+        assert!(history.card(json, CardView::Convert).is_none());
+        assert!(history.card(0, CardView::Format).is_none());
+        // Another copy in front moves the entry, and its card with it.
+        history.record("three".into());
+        assert!(history.card(2, CardView::Format).is_some());
+        history.remember_card(2, CardView::Format, card("{ b }"));
+        assert_eq!(
+            history
+                .card(2, CardView::Format)
+                .map(|c| c.excerpt.as_str()),
+            Some("{ b }")
+        );
+    }
+
+    #[test]
+    fn copying_an_entry_again_drops_its_card() {
+        use crate::commands::CardView;
+        let mut history = ClipboardHistory::default();
+        history.record("one".into());
+        history.remember_card(0, CardView::Original, card("one"));
+        history.record("two".into());
+        history.record("one".into());
+        assert_eq!(history.get(0), Some("one"));
+        assert!(history.card(0, CardView::Original).is_none());
+    }
+
+    #[test]
+    fn evicted_and_cleared_entries_take_their_cards() {
+        use crate::commands::CardView;
+        let mut history = ClipboardHistory::default();
+        history.record("oldest".into());
+        history.remember_card(0, CardView::Original, card("oldest"));
+        for i in 0..super::MAX_HISTORY - 1 {
+            history.record(format!("copy {i}"));
+        }
+        let last = super::MAX_HISTORY - 1;
+        assert!(history.card(last, CardView::Original).is_some());
+        history.record("newest".into());
+        assert_eq!(history.text_index("oldest", last), None);
+        assert!((0..history.len()).all(|index| history.card(index, CardView::Original).is_none()));
+        history.remember_card(0, CardView::Original, card("newest"));
+        history.clear();
+        assert!(history.card(0, CardView::Original).is_none());
+    }
+
+    #[test]
+    fn image_entries_keep_no_card() {
+        use crate::commands::CardView;
+        let mut history = ClipboardHistory::default();
+        history.record_image(vec![1, 2, 3]).expect("image");
+        history.remember_card(0, CardView::Original, card("x"));
+        assert!(history.card(0, CardView::Original).is_none());
+        assert_eq!(history.text_index("x", 0), None);
+    }
+
+    #[test]
+    fn marks_come_from_the_format_found_on_record() {
+        let mut history = ClipboardHistory::default();
+        for text in [
+            "{\"a\":1}",
+            "fn main() {}",
+            "plain",
+            "name,age\nalice,30\nbob,40",
+        ] {
+            history.record(text.into());
+            assert_eq!(history.mark(0), Some(super::menu_mark(text)));
+            assert_eq!(history.labels()[0].1, super::one_line(text));
+        }
+        history.record_image(vec![1]).expect("image");
+        assert_eq!(
+            history.mark(0),
+            Some(crate::format::FormatKind::Image.menu_symbol())
+        );
+    }
+
+    #[test]
+    fn a_wiped_card_holds_no_text() {
+        let mut shown = card("secret");
+        shown.link_page = Some("https://example.com/secret".into());
+        shown.preview_note = Some("Showing 1 of 2".into());
+        shown.wipe();
+        assert!(shown.title.is_empty() && shown.meta.is_empty() && shown.excerpt.is_empty());
+        assert_eq!(shown.link_page.as_deref(), Some(""));
+        assert_eq!(shown.preview_note.as_deref(), Some(""));
     }
 }
