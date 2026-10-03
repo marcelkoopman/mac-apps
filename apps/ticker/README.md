@@ -41,7 +41,7 @@ symbol = "💰"
 | `unit_hint` | Suffix after the price, e.g. `/MWh` |
 | `symbol` | Emoji/prefix in the menu |
 
-All fields are required per asset. `menubar_asset` is optional. A menu bar asset picked by clicking a row takes precedence over it.
+All fields are required per asset. `menubar_asset` is optional. A menu bar asset picked by clicking a row takes precedence over it. If the config cannot be loaded, the menu shows the error and *Retry* loads it again (after you fixed the file).
 
 State files in your home directory:
 

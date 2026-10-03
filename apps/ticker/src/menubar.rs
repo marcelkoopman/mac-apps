@@ -110,21 +110,7 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if !self.config_loaded {
-            self.config_loaded = true;
-            match load_config() {
-                Ok(config) => {
-                    self.config = Some(config);
-                    self.load_watches();
-                    if self.fetcher.is_some() {
-                        self.poll_prices();
-                        self.schedule_next_poll();
-                    }
-                }
-                Err(e) => {
-                    self.config_error = Some(format!("Config error: {e}"));
-                    self.update_error_menu();
-                }
-            }
+            self.load_config_and_start();
             return;
         }
 
@@ -144,6 +130,33 @@ impl ApplicationHandler<UserEvent> for App {
 }
 
 impl App {
+    /// First start, and *Retry* after a config error: (re)load the config, then the watches and
+    /// the first poll; on an error show the error menu (whose *Retry* comes back here).
+    fn load_config_and_start(&mut self) {
+        self.config_loaded = true;
+        match load_config() {
+            Ok(config) => {
+                let recovered = self.config_error.take().is_some();
+                self.config = Some(config);
+                self.load_watches();
+                if recovered {
+                    // Replace the error menu (the first start keeps "Loading..." until the poll).
+                    log_message("config: loaded after an earlier error");
+                    self.update_menu();
+                }
+                if self.fetcher.is_some() {
+                    self.poll_prices();
+                    self.schedule_next_poll();
+                }
+            }
+            Err(e) => {
+                log_message(&format!("config: cannot load: {e}"));
+                self.config_error = Some(format!("Config error: {e}"));
+                self.update_error_menu();
+            }
+        }
+    }
+
     /// Runs queued menu actions in click order. A dialog action waits (up to `MENU_MAX_DEFER`)
     /// until the menu has stopped tracking; returns when to look again in that case.
     fn handle_pending_menu(&mut self, event_loop: &ActiveEventLoop) -> Option<Instant> {
@@ -175,7 +188,10 @@ impl App {
                     self.poll_prices();
                     self.schedule_next_poll();
                 } else {
-                    log_message("menu: poll ignored, no config loaded");
+                    // Retry in the error menu: load the config again (it may have been fixed).
+                    log_message("menu: no config loaded; reloading it");
+                    self.config_loaded = false;
+                    self.load_config_and_start();
                 }
             }
             "copy" => {
