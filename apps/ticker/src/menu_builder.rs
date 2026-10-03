@@ -1,30 +1,14 @@
 use chrono::{DateTime, Local};
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
-use polars::prelude::*;
 use std::collections::HashMap;
 
 use crate::freshness::{AssetStatus, STALE_MARK};
 use crate::menu_ids;
 use crate::price_watch::WatchList;
+use crate::prices::{Change, Direction, PriceRow};
 use crate::watch_ui::WatchUIBuilder;
 
-const POLARS_VERSION: &str = "0.55.2";
-
 pub struct MenuBuilder;
-
-struct PriceRow<'a> {
-    symbol: &'a str,
-    name: &'a str,
-    price: f64,
-    unit: &'a str,
-    unit_hint: &'a str,
-    change: Option<f64>,
-    pct: Option<f64>,
-    direction: Option<&'a str>,
-    /// "updated 14:05" / "no data yet".
-    updated: String,
-    stale: bool,
-}
 
 /// Fetch status of every asset (by name) and the time it is judged at.
 pub struct Freshness<'a> {
@@ -41,55 +25,27 @@ impl Freshness<'_> {
 impl MenuBuilder {
     /// `generation` goes into the row ids (see `menu_ids`); bump it for every rebuilt menu.
     pub fn build(
-        df: &DataFrame,
+        rows: &[PriceRow],
         watch_list: &WatchList,
         generation: u64,
         freshness: &Freshness<'_>,
     ) -> Menu {
         let menu = Menu::new();
 
-        if df.height() == 0 {
+        if rows.is_empty() {
             let _ = menu.append(&MenuItem::new("No prices yet", false, None));
-        } else {
-            let symbols = df.column("symbol").ok().and_then(|c| c.str().ok());
-            let names = df.column("name").ok().and_then(|c| c.str().ok());
-            let prices = df.column("price").ok().and_then(|c| c.f64().ok());
-            let units = df.column("unit").ok().and_then(|c| c.str().ok());
-            let unit_hints = df.column("unit_hint").ok().and_then(|c| c.str().ok());
-            let changes = df.column("change_day").ok().and_then(|c| c.f64().ok());
-            let pcts = df.column("pct_day").ok().and_then(|c| c.f64().ok());
-            let directions = df.column("direction_day").ok().and_then(|c| c.str().ok());
-
-            if let (Some(symbols), Some(names), Some(prices), Some(units), Some(unit_hints)) =
-                (symbols, names, prices, units, unit_hints)
-            {
-                for i in 0..df.height() {
-                    let name = names.get(i).unwrap_or("?");
-                    let status = freshness.of(name);
-                    let stale = status.is_stale(freshness.now);
-                    let row = Self::format_price_row(&PriceRow {
-                        symbol: symbols.get(i).unwrap_or(""),
-                        name,
-                        price: prices.get(i).unwrap_or(f64::NAN),
-                        unit: units.get(i).unwrap_or(""),
-                        unit_hint: unit_hints.get(i).unwrap_or(""),
-                        change: changes.as_ref().and_then(|c| c.get(i)),
-                        pct: pcts.as_ref().and_then(|c| c.get(i)),
-                        direction: directions.as_ref().and_then(|c| c.get(i)),
-                        updated: status.updated_label(freshness.now),
-                        stale,
-                    });
-                    let id = menu_ids::asset_item_id(generation, i);
-                    let item = MenuItem::with_id(id, &row, true, None);
-                    if stale {
-                        // Grey but still clickable (pins the asset in the menu bar).
-                        mac_ui::tray::set_secondary_title(&item, &row);
-                    }
-                    let _ = menu.append(&item);
-                }
-            } else {
-                let _ = menu.append(&MenuItem::new("Invalid price data", false, None));
+        }
+        for (i, row) in rows.iter().enumerate() {
+            let status = freshness.of(&row.name);
+            let stale = status.is_stale(freshness.now);
+            let text = Self::format_price_row(row, &status.updated_label(freshness.now), stale);
+            let id = menu_ids::asset_item_id(generation, i);
+            let item = MenuItem::with_id(id, &text, true, None);
+            if stale {
+                // Grey but still clickable (pins the asset in the menu bar).
+                mac_ui::tray::set_secondary_title(&item, &text);
             }
+            let _ = menu.append(&item);
         }
 
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -169,56 +125,27 @@ impl MenuBuilder {
     /// Menu bar title: the preferred asset (else the first with a price), with [`STALE_MARK`] in
     /// front when its price is stale.
     pub fn menubar_title(
-        df: &DataFrame,
+        rows: &[PriceRow],
         preferred: Option<&str>,
         freshness: &Freshness<'_>,
     ) -> String {
-        if df.height() == 0 {
-            return "Ticker".to_string();
-        }
-        let names = df.column("name").ok().and_then(|c| c.str().ok());
-        let prices = df.column("price").ok().and_then(|c| c.f64().ok());
-        let units = df.column("unit").ok().and_then(|c| c.str().ok());
-        let symbols = df.column("symbol").ok().and_then(|c| c.str().ok());
-        let Some(names) = names else {
+        let shown = preferred
+            .and_then(|want| rows.iter().find(|r| r.name == want && r.has_price()))
+            .or_else(|| rows.iter().find(|r| r.has_price()));
+        let Some(row) = shown else {
             return "Ticker".to_string();
         };
-        let Some(prices) = prices else {
-            return "Ticker".to_string();
+        let currency = Self::unit_to_currency(&row.unit);
+        let price_txt = Self::format_menubar_price(row.price);
+        let mark = if freshness.of(&row.name).is_stale(freshness.now) {
+            format!("{STALE_MARK} ")
+        } else {
+            String::new()
         };
-        let mut idx = None;
-        if let Some(want) = preferred {
-            for i in 0..df.height() {
-                if names.get(i) == Some(want) && prices.get(i).is_some_and(|p| !p.is_nan()) {
-                    idx = Some(i);
-                    break;
-                }
-            }
-        }
-        if idx.is_none() {
-            for i in 0..df.height() {
-                if prices.get(i).is_some_and(|p| !p.is_nan()) {
-                    idx = Some(i);
-                    break;
-                }
-            }
-        }
-        let Some(i) = idx else {
-            return "Ticker".to_string();
-        };
-        let price = prices.get(i).unwrap_or(f64::NAN);
-        let unit = units.and_then(|c| c.get(i)).unwrap_or("EUR");
-        let symbol = symbols.and_then(|c| c.get(i)).unwrap_or("");
-        let currency = Self::unit_to_currency(unit);
-        let price_txt = Self::format_menubar_price(price);
-        let mark = match names.get(i) {
-            Some(name) if freshness.of(name).is_stale(freshness.now) => format!("{STALE_MARK} "),
-            _ => String::new(),
-        };
-        if symbol.is_empty() {
+        if row.symbol.is_empty() {
             format!("{mark}{currency}{price_txt}")
         } else {
-            format!("{mark}{symbol} {currency}{price_txt}")
+            format!("{mark}{} {currency}{price_txt}", row.symbol)
         }
     }
 
@@ -237,8 +164,10 @@ impl MenuBuilder {
         }
     }
 
-    fn format_price_row(row: &PriceRow<'_>) -> String {
-        let currency = Self::unit_to_currency(row.unit);
+    /// Two lines: `symbol name  €price /unit` and `  ▲ €change · +pct% · updated` (the change
+    /// part only for a day move up or down).
+    fn format_price_row(row: &PriceRow, updated: &str, stale: bool) -> String {
+        let currency = Self::unit_to_currency(&row.unit);
         let price_txt = Self::format_price(row.price);
         let unit_part = {
             let h = row.unit_hint.trim();
@@ -255,94 +184,75 @@ impl MenuBuilder {
         } else {
             format!("{} {}", row.symbol, row.name)
         };
-        let mark = if row.stale {
+        let mark = if stale {
             format!("{STALE_MARK} ")
         } else {
             String::new()
         };
         let line1 = format!("{mark}{label}  {currency}{price_txt}{unit_part}");
-        let change = match (row.change, row.pct, row.direction) {
-            (Some(c), Some(p), Some("up")) => {
-                format!("▲ {}{} · +{:.2}% · ", currency, Self::format_price(c), p)
-            }
-            (Some(c), Some(p), Some("down")) => {
-                format!(
-                    "▼ {}{} · {:.2}% · ",
-                    currency,
-                    Self::format_price(c.abs()),
-                    p
-                )
-            }
+        let change = match row.change_day {
+            Some(Change {
+                amount,
+                pct,
+                direction: Direction::Up,
+            }) => format!(
+                "▲ {}{} · +{:.2}% · ",
+                currency,
+                Self::format_price(amount),
+                pct
+            ),
+            Some(Change {
+                amount,
+                pct,
+                direction: Direction::Down,
+            }) => format!(
+                "▼ {}{} · {:.2}% · ",
+                currency,
+                Self::format_price(amount.abs()),
+                pct
+            ),
             _ => String::new(),
         };
-        format!("{line1}\n  {change}{}", row.updated)
+        format!("{line1}\n  {change}{updated}")
     }
 
-    pub fn dataframe_as_tsv(df: &DataFrame) -> String {
-        let cols = [
-            "symbol",
-            "name",
-            "price",
-            "unit",
-            "unit_hint",
-            "day_open",
-            "change_day",
-            "pct_day",
-            "direction_day",
-        ];
-        let mut out = String::new();
-        out.push_str(&cols.join("\t"));
-        out.push('\n');
-        if df.height() == 0 {
-            return out;
-        }
-        for i in 0..df.height() {
-            let mut cells = Vec::with_capacity(cols.len());
-            for col_name in &cols {
-                let cell = match df.column(col_name) {
-                    Ok(col) => Self::cell_at(col, i),
-                    Err(_) => String::new(),
-                };
-                cells.push(cell);
-            }
+    /// Tab-separated rows with a header (Copy to clipboard).
+    pub fn prices_as_tsv(rows: &[PriceRow]) -> String {
+        let mut out = String::from(
+            "symbol\tname\tprice\tunit\tunit_hint\tday_open\tchange_day\tpct_day\tdirection_day\n",
+        );
+        let num = |v: Option<f64>| match v {
+            Some(v) if !v.is_nan() => format!("{v:.6}"),
+            _ => String::new(),
+        };
+        for row in rows {
+            let cells = [
+                row.symbol.clone(),
+                row.name.clone(),
+                num(Some(row.price)),
+                row.unit.clone(),
+                row.unit_hint.clone(),
+                num(row.day_open),
+                num(row.change_day.map(|c| c.amount)),
+                num(row.change_day.map(|c| c.pct)),
+                row.change_day
+                    .map(|c| c.direction.as_str().to_string())
+                    .unwrap_or_default(),
+            ];
             out.push_str(&cells.join("\t"));
             out.push('\n');
         }
         out
     }
 
-    fn cell_at(col: &Column, row: usize) -> String {
-        if let Ok(ca) = col.str()
-            && let Some(s) = ca.get(row)
-        {
-            return s.to_string();
-        }
-        if let Ok(ca) = col.f64() {
-            return match ca.get(row) {
-                Some(v) if v.is_nan() => String::new(),
-                Some(v) => format!("{:.6}", v),
-                None => String::new(),
-            };
-        }
-        String::new()
-    }
-
     /// Grey, disabled version row ([`mac_ui::tray::info_item`]).
     pub fn version_item() -> MenuItem {
-        mac_ui::tray::info_item(&format!(
-            "Version {} · Polars {}",
-            env!("CARGO_PKG_VERSION"),
-            POLARS_VERSION
-        ))
+        mac_ui::tray::info_item(&format!("Version {}", env!("CARGO_PKG_VERSION")))
     }
 
-    /// Asset name in `row` of `df` (the row index of an asset menu item).
-    pub fn asset_name_at(df: &DataFrame, row: usize) -> Option<String> {
-        let names = df.column("name").ok()?.str().ok()?;
-        if row >= df.height() {
-            return None;
-        }
-        names.get(row).map(str::to_string)
+    /// Asset name in `row` of `rows` (the row index of an asset menu item).
+    pub fn asset_name_at(rows: &[PriceRow], row: usize) -> Option<String> {
+        rows.get(row).map(|r| r.name.clone())
     }
 
     /// Dutch notation with two decimals (`1.234,56`, `-0,05`); `?` for NaN.
@@ -388,23 +298,25 @@ impl MenuBuilder {
 mod tests {
     use super::*;
 
-    fn sample_df() -> DataFrame {
-        DataFrame::new_infer_height(vec![
-            Series::new("symbol".into(), vec!["💰".to_string(), "⛽".to_string()]).into(),
-            Series::new(
-                "name".into(),
-                vec!["Bitcoin".to_string(), "Benzine".to_string()],
-            )
-            .into(),
-            Series::new("price".into(), vec![66553.0_f64, 2.47]).into(),
-            Series::new("unit".into(), vec!["EUR".to_string(), "EUR".to_string()]).into(),
-            Series::new(
-                "unit_hint".into(),
-                vec!["/BTC".to_string(), "/L".to_string()],
-            )
-            .into(),
-        ])
-        .expect("sample df")
+    fn row(symbol: &str, name: &str, price: f64, unit_hint: &str) -> PriceRow {
+        PriceRow {
+            symbol: symbol.into(),
+            name: name.into(),
+            price,
+            unit: "EUR".into(),
+            unit_hint: unit_hint.into(),
+            prev_price: None,
+            change: None,
+            day_open: None,
+            change_day: None,
+        }
+    }
+
+    fn sample() -> Vec<PriceRow> {
+        vec![
+            row("💰", "Bitcoin", 66553.0, "/BTC"),
+            row("⛽", "Benzine", 2.47, "/L"),
+        ]
     }
 
     fn fresh() -> HashMap<String, AssetStatus> {
@@ -415,9 +327,20 @@ mod tests {
         Local::now()
     }
 
+    fn title(rows: &[PriceRow], preferred: Option<&str>) -> String {
+        MenuBuilder::menubar_title(
+            rows,
+            preferred,
+            &Freshness {
+                status: &fresh(),
+                now: now(),
+            },
+        )
+    }
+
     #[test]
     fn menubar_title_marks_a_stale_price() {
-        let df = sample_df();
+        let rows = sample();
         let mut status = HashMap::new();
         status.insert(
             "Bitcoin".to_string(),
@@ -430,16 +353,15 @@ mod tests {
             status: &status,
             now: now(),
         };
-        let title = MenuBuilder::menubar_title(&df, Some("Bitcoin"), &f);
+        let title = MenuBuilder::menubar_title(&rows, Some("Bitcoin"), &f);
         assert!(title.starts_with(STALE_MARK), "{title}");
-        let title = MenuBuilder::menubar_title(&df, Some("Benzine"), &f);
+        let title = MenuBuilder::menubar_title(&rows, Some("Benzine"), &f);
         assert!(!title.contains(STALE_MARK), "{title}");
     }
 
     #[test]
-    fn version_includes_app_and_polars() {
+    fn version_row_has_the_app_version() {
         assert!(!env!("CARGO_PKG_VERSION").is_empty());
-        assert!(!POLARS_VERSION.is_empty());
     }
 
     #[test]
@@ -461,99 +383,90 @@ mod tests {
 
     #[test]
     fn asset_name_at_row() {
-        let df = sample_df();
+        let rows = sample();
         assert_eq!(
-            MenuBuilder::asset_name_at(&df, 0).as_deref(),
+            MenuBuilder::asset_name_at(&rows, 0).as_deref(),
             Some("Bitcoin")
         );
         assert_eq!(
-            MenuBuilder::asset_name_at(&df, 1).as_deref(),
+            MenuBuilder::asset_name_at(&rows, 1).as_deref(),
             Some("Benzine")
         );
-        assert_eq!(MenuBuilder::asset_name_at(&df, 2), None);
+        assert_eq!(MenuBuilder::asset_name_at(&rows, 2), None);
     }
 
     #[test]
     fn format_price_row_two_lines_up() {
-        let row = MenuBuilder::format_price_row(&PriceRow {
-            symbol: "💰",
-            name: "Bitcoin",
-            price: 66672.0,
-            unit: "EUR",
-            unit_hint: "/BTC",
-            change: Some(217.0),
-            pct: Some(0.33),
-            direction: Some("up"),
-            updated: "updated 14:05".into(),
-            stale: false,
+        let mut r = row("💰", "Bitcoin", 66672.0, "/BTC");
+        r.change_day = Some(Change {
+            amount: 217.0,
+            pct: 0.33,
+            direction: Direction::Up,
         });
-        let lines: Vec<_> = row.lines().collect();
+        let text = MenuBuilder::format_price_row(&r, "updated 14:05", false);
+        let lines: Vec<_> = text.lines().collect();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("Bitcoin"));
         assert!(lines[0].contains("66.672"));
         assert!(lines[1].contains("▲"));
         assert!(lines[1].contains("+0.33%"));
         assert!(lines[1].ends_with("updated 14:05"));
-        assert!(!row.contains(STALE_MARK));
+        assert!(!text.contains(STALE_MARK));
+    }
+
+    #[test]
+    fn format_price_row_down() {
+        let mut r = row("🥇", "Gold", 3500.0, "/oz");
+        r.change_day = Some(Change {
+            amount: -12.5,
+            pct: -0.36,
+            direction: Direction::Down,
+        });
+        let text = MenuBuilder::format_price_row(&r, "updated 14:05", false);
+        assert!(text.contains("▼ €12,50 · -0.36%"), "{text}");
     }
 
     #[test]
     fn format_price_row_hides_flat_or_zero_change() {
-        let row = MenuBuilder::format_price_row(&PriceRow {
-            symbol: "⛽",
-            name: "Benzine",
-            price: 2.47,
-            unit: "EUR",
-            unit_hint: "/L",
-            change: Some(0.0),
-            pct: Some(0.0),
-            direction: Some("flat"),
-            updated: "updated 14:05".into(),
-            stale: false,
+        let mut r = row("⛽", "Benzine", 2.47, "/L");
+        r.change_day = Some(Change {
+            amount: 0.0,
+            pct: 0.0,
+            direction: Direction::Flat,
         });
-        let lines: Vec<_> = row.lines().collect();
+        let text = MenuBuilder::format_price_row(&r, "updated 14:05", false);
+        let lines: Vec<_> = text.lines().collect();
         assert!(lines[0].contains("Benzine"));
         assert!(lines[0].contains("2,47"));
         assert_eq!(lines[1], "  updated 14:05");
     }
 
     #[test]
-    fn format_price_row_hides_missing_change() {
-        let row = MenuBuilder::format_price_row(&PriceRow {
-            symbol: "⚡",
-            name: "Power NL",
-            price: 0.21,
-            unit: "EUR",
-            unit_hint: "/kWh",
-            change: None,
-            pct: None,
-            direction: None,
-            updated: "updated 13:40".into(),
-            stale: true,
-        });
-        let lines: Vec<_> = row.lines().collect();
+    fn format_price_row_marks_stale_and_hides_missing_change() {
+        let r = row("⚡", "Power NL", 0.21, "/kWh");
+        let text = MenuBuilder::format_price_row(&r, "updated 13:40", true);
+        let lines: Vec<_> = text.lines().collect();
         assert!(lines[0].starts_with(STALE_MARK));
         assert!(lines[0].contains("Power NL"));
         assert_eq!(lines[1], "  updated 13:40");
     }
 
     #[test]
-    fn dataframe_as_tsv_empty_has_header() {
-        let df = DataFrame::new_infer_height(vec![
-            Series::new("symbol".into(), Vec::<String>::new()).into(),
-            Series::new("name".into(), Vec::<String>::new()).into(),
-            Series::new("price".into(), Vec::<f64>::new()).into(),
-            Series::new("unit".into(), Vec::<String>::new()).into(),
-            Series::new("unit_hint".into(), Vec::<String>::new()).into(),
-            Series::new("day_open".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("change_day".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("pct_day".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("direction_day".into(), Vec::<String>::new()).into(),
-        ])
-        .expect("empty df");
-        let tsv = MenuBuilder::dataframe_as_tsv(&df);
-        assert!(tsv.starts_with("symbol\tname\tprice"));
-        assert_eq!(tsv.lines().count(), 1);
+    fn tsv_has_header_and_one_line_per_row() {
+        assert_eq!(MenuBuilder::prices_as_tsv(&[]).lines().count(), 1);
+        let mut rows = sample();
+        rows[1].price = f64::NAN;
+        rows[0].day_open = Some(66000.0);
+        rows[0].change_day = Change::between(66000.0, 66553.0);
+        let tsv = MenuBuilder::prices_as_tsv(&rows);
+        let lines: Vec<_> = tsv.lines().collect();
+        assert!(lines[0].starts_with("symbol\tname\tprice"));
+        assert_eq!(lines.len(), 3);
+        assert_eq!(
+            lines[1],
+            "💰\tBitcoin\t66553.000000\tEUR\t/BTC\t66000.000000\t553.000000\t0.837879\tup"
+        );
+        assert_eq!(lines[2], "⛽\tBenzine\t\tEUR\t/L\t\t\t\t");
     }
 
     #[test]
@@ -582,69 +495,27 @@ mod tests {
 
     #[test]
     fn menubar_title_prefers_named_asset() {
-        let df = sample_df();
-        let title = MenuBuilder::menubar_title(
-            &df,
-            Some("Bitcoin"),
-            &Freshness {
-                status: &fresh(),
-                now: now(),
-            },
-        );
-        assert!(title.contains("💰"));
-        assert!(title.contains("€"));
-        assert!(title.contains("66.553"));
+        let t = title(&sample(), Some("Bitcoin"));
+        assert!(t.contains("💰"));
+        assert!(t.contains("€"));
+        assert!(t.contains("66.553"));
     }
 
     #[test]
     fn menubar_title_falls_back_to_first_price() {
-        let df = sample_df();
-        assert!(
-            MenuBuilder::menubar_title(
-                &df,
-                Some("Missing"),
-                &Freshness {
-                    status: &fresh(),
-                    now: now()
-                }
-            )
-            .contains("66.553")
-        );
+        assert!(title(&sample(), Some("Missing")).contains("66.553"));
+        let mut rows = sample();
+        rows[0].price = f64::NAN;
+        assert!(title(&rows, Some("Bitcoin")).contains("2,47"));
     }
 
     #[test]
     fn menubar_title_keeps_decimals_for_small_prices() {
-        let df = sample_df();
-        assert!(
-            MenuBuilder::menubar_title(
-                &df,
-                Some("Benzine"),
-                &Freshness {
-                    status: &fresh(),
-                    now: now()
-                }
-            )
-            .contains("2,47")
-        );
+        assert!(title(&sample(), Some("Benzine")).contains("2,47"));
     }
 
     #[test]
-    fn menubar_title_empty_df() {
-        let df = DataFrame::new_infer_height(vec![
-            Series::new("name".into(), Vec::<String>::new()).into(),
-            Series::new("price".into(), Vec::<f64>::new()).into(),
-        ])
-        .expect("empty");
-        assert_eq!(
-            MenuBuilder::menubar_title(
-                &df,
-                None,
-                &Freshness {
-                    status: &fresh(),
-                    now: now()
-                }
-            ),
-            "Ticker"
-        );
+    fn menubar_title_without_prices() {
+        assert_eq!(title(&[], None), "Ticker");
     }
 }

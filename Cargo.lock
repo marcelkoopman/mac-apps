@@ -4957,7 +4957,6 @@ dependencies = [
  "dhat",
  "dirs",
  "mac-ui",
- "polars",
  "reqwest 0.13.5",
  "serde",
  "serde_json",

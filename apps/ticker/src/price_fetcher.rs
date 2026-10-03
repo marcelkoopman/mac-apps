@@ -1,8 +1,9 @@
 use crate::config::Asset;
+use crate::prices::{PriceRow, attach_changes};
 use chrono::{DateTime, TimeDelta, Utc};
-use polars::prelude::*;
 use reqwest::blocking::Client;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
 use std::thread;
@@ -20,8 +21,6 @@ const MAX_BODY_BYTES: u64 = 1024 * 1024;
 /// Path part that picks, from an array of `{"time": <RFC 3339>, …}` entries, the one whose period
 /// contains the current time (see [`select_now`]).
 const NOW_SELECTOR: &str = "@now";
-/// Moves smaller than this (in percent of the earlier price) count as "flat".
-const FLAT_PCT: f64 = 0.05;
 /// Period of the last entry when an `@now` array has a single entry (no step to derive it from).
 const DEFAULT_PERIOD: TimeDelta = TimeDelta::hours(1);
 
@@ -94,161 +93,26 @@ impl PriceFetcher {
             .ok_or_else(|| format!("value at {:?} is not a number: {value}", asset.price_path))
     }
 
-    pub fn fetch_all(&self, assets: &[Asset]) -> Result<DataFrame, Box<dyn Error>> {
-        let mut symbols: Vec<String> = Vec::with_capacity(assets.len());
-        let mut names: Vec<String> = Vec::with_capacity(assets.len());
-        let mut prices: Vec<f64> = Vec::with_capacity(assets.len());
-        let mut units: Vec<String> = Vec::with_capacity(assets.len());
-        let mut unit_hints: Vec<String> = Vec::with_capacity(assets.len());
-
-        for asset in assets {
-            let price = self.fetch_price(asset);
-            symbols.push(asset.symbol.clone());
-            names.push(asset.name.clone());
-            prices.push(price);
-            units.push(asset.unit.clone());
-            unit_hints.push(asset.unit_hint.clone());
-        }
-
-        DataFrame::new_infer_height(vec![
-            Series::new("symbol".into(), symbols).into(),
-            Series::new("name".into(), names).into(),
-            Series::new("price".into(), prices).into(),
-            Series::new("unit".into(), units).into(),
-            Series::new("unit_hint".into(), unit_hints).into(),
-        ])
-        .map_err(|e| e.into())
+    /// One row per asset, in config order; NaN for an asset whose fetch failed.
+    pub fn fetch_all(&self, assets: &[Asset]) -> Vec<PriceRow> {
+        assets
+            .iter()
+            .map(|asset| PriceRow::new(asset, self.fetch_price(asset)))
+            .collect()
     }
 
-    pub fn build_initial_dataframe(
+    /// A poll: fetch every asset and add the change since `previous` (the last poll's rows, if
+    /// any) and since the day's first price (`day_opens`).
+    pub fn poll(
         &self,
         assets: &[Asset],
-        day_opens: &std::collections::HashMap<String, f64>,
-    ) -> Result<DataFrame, Box<dyn Error>> {
-        let base = self.fetch_all(assets)?;
-        Self::attach_change_columns(base, None, day_opens)
-    }
-
-    pub fn update_dataframe(
-        &self,
-        previous: &DataFrame,
-        assets: &[Asset],
-        day_opens: &std::collections::HashMap<String, f64>,
-    ) -> Result<DataFrame, Box<dyn Error>> {
-        let fresh = self.fetch_all(assets)?;
-
-        let prev_names = previous.column("name")?.str()?;
-        let prev_prices = previous.column("price")?.f64()?;
-
-        let mut prev_by_name: std::collections::HashMap<String, f64> =
-            std::collections::HashMap::new();
-        for i in 0..previous.height() {
-            if let (Some(name), Some(price)) = (prev_names.get(i), prev_prices.get(i)) {
-                prev_by_name.insert(name.to_string(), price);
-            }
-        }
-
-        Self::attach_change_columns(fresh, Some(&prev_by_name), day_opens)
-    }
-
-    fn attach_change_columns(
-        mut df: DataFrame,
-        prev_by_name: Option<&std::collections::HashMap<String, f64>>,
-        day_opens: &std::collections::HashMap<String, f64>,
-    ) -> Result<DataFrame, Box<dyn Error>> {
-        let n = df.height();
-        let names = df.column("name")?.str()?;
-        let prices = df.column("price")?.f64()?;
-
-        let mut prev_price_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut change_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut pct_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut direction_col: Vec<String> = Vec::with_capacity(n);
-
-        let mut day_open_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut change_day_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut pct_day_col: Vec<Option<f64>> = Vec::with_capacity(n);
-        let mut direction_day_col: Vec<String> = Vec::with_capacity(n);
-
-        for i in 0..n {
-            let name = names.get(i).unwrap_or("");
-            let price = prices.get(i).unwrap_or(f64::NAN);
-
-            let prev = prev_by_name.and_then(|m| m.get(name).copied());
-            prev_price_col.push(prev);
-            if let Some(p) = prev {
-                if price.is_nan() || p.is_nan() || p == 0.0 {
-                    change_col.push(None);
-                    pct_col.push(None);
-                    direction_col.push(String::new());
-                } else {
-                    let change = price - p;
-                    let pct = (change / p.abs()) * 100.0;
-                    change_col.push(Some(change));
-                    pct_col.push(Some(pct));
-                    direction_col.push(Self::direction_label(pct));
-                }
-            } else {
-                change_col.push(None);
-                pct_col.push(None);
-                direction_col.push(String::new());
-            }
-
-            let open = day_opens
-                .get(name)
-                .copied()
-                .filter(|o| !o.is_nan() && *o != 0.0)
-                .or_else(|| {
-                    if !price.is_nan() && price != 0.0 {
-                        Some(price)
-                    } else {
-                        None
-                    }
-                });
-
-            day_open_col.push(open);
-            if let Some(o) = open {
-                if price.is_nan() {
-                    change_day_col.push(None);
-                    pct_day_col.push(None);
-                    direction_day_col.push(String::new());
-                } else {
-                    let change = price - o;
-                    let pct = (change / o.abs()) * 100.0;
-                    change_day_col.push(Some(change));
-                    pct_day_col.push(Some(pct));
-                    direction_day_col.push(Self::direction_label(pct));
-                }
-            } else {
-                change_day_col.push(None);
-                pct_day_col.push(None);
-                direction_day_col.push(String::new());
-            }
-        }
-
-        df.with_column(Series::new("prev_price".into(), prev_price_col).into())?;
-        df.with_column(Series::new("change".into(), change_col).into())?;
-        df.with_column(Series::new("pct_change".into(), pct_col).into())?;
-        df.with_column(Series::new("direction".into(), direction_col).into())?;
-        df.with_column(Series::new("day_open".into(), day_open_col).into())?;
-        df.with_column(Series::new("change_day".into(), change_day_col).into())?;
-        df.with_column(Series::new("pct_day".into(), pct_day_col).into())?;
-        df.with_column(Series::new("direction_day".into(), direction_day_col).into())?;
-
-        eprintln!("📊 DataFrame:\n{df}");
-        Ok(df)
-    }
-
-    /// "up" / "down" for a move of at least [`FLAT_PCT`] percent either way, else "flat".
-    /// Relative, so a cent on €0,20/kWh power counts and a cent on €66.000 bitcoin does not.
-    fn direction_label(pct: f64) -> String {
-        if pct >= FLAT_PCT {
-            "up".to_string()
-        } else if pct <= -FLAT_PCT {
-            "down".to_string()
-        } else {
-            "flat".to_string()
-        }
+        previous: Option<&[PriceRow]>,
+        day_opens: &HashMap<String, f64>,
+    ) -> Vec<PriceRow> {
+        let mut rows = self.fetch_all(assets);
+        let prev = previous.map(crate::prices::prices_by_name);
+        attach_changes(&mut rows, prev.as_ref(), day_opens);
+        rows
     }
 
     fn get_value_by_path(&self, value: &Value, path: &str) -> Option<Value> {
@@ -357,7 +221,6 @@ fn read_capped(reader: impl Read, cap: u64) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::collections::HashMap;
 
     fn fetcher() -> PriceFetcher {
         PriceFetcher::new().expect("client should build")
@@ -388,11 +251,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_assets_dataframe() {
+    fn empty_assets_give_no_rows() {
         let f = fetcher();
-        let df = f.fetch_all(&[]).expect("empty df");
-        assert_eq!(df.height(), 0);
-        assert_eq!(df.width(), 5);
+        assert!(f.fetch_all(&[]).is_empty());
+        assert!(f.poll(&[], None, &HashMap::new()).is_empty());
     }
 
     #[test]
@@ -447,113 +309,6 @@ mod tests {
         let f = fetcher();
         let data = json!({"price": 1.0});
         assert!(f.get_value_by_path(&data, "missing").is_none());
-    }
-
-    #[test]
-    fn direction_label_thresholds() {
-        assert_eq!(PriceFetcher::direction_label(0.0), "flat");
-        assert_eq!(PriceFetcher::direction_label(0.049), "flat");
-        assert_eq!(PriceFetcher::direction_label(-0.049), "flat");
-        assert_eq!(PriceFetcher::direction_label(0.05), "up");
-        assert_eq!(PriceFetcher::direction_label(-0.05), "down");
-    }
-
-    #[test]
-    fn small_prices_move_and_big_prices_stay_flat_on_the_same_cent() {
-        // One cent on 0,20 €/kWh is 5%: a move.
-        let df = base_df("Power NL", 0.21);
-        let opens = HashMap::from([("Power NL".to_string(), 0.20)]);
-        let df = PriceFetcher::attach_change_columns(df, None, &opens).unwrap();
-        assert_eq!(
-            df.column("direction_day").unwrap().str().unwrap().get(0),
-            Some("up")
-        );
-        // Ten euro on 66.000 € bitcoin is 0,015%: flat.
-        let df = base_df("Bitcoin", 66010.0);
-        let opens = HashMap::from([("Bitcoin".to_string(), 66000.0)]);
-        let df = PriceFetcher::attach_change_columns(df, None, &opens).unwrap();
-        assert_eq!(
-            df.column("direction_day").unwrap().str().unwrap().get(0),
-            Some("flat")
-        );
-    }
-
-    fn base_df(name: &str, price: f64) -> DataFrame {
-        DataFrame::new_infer_height(vec![
-            Series::new("symbol".into(), vec!["X".to_string()]).into(),
-            Series::new("name".into(), vec![name.to_string()]).into(),
-            Series::new("price".into(), vec![price]).into(),
-            Series::new("unit".into(), vec!["EUR".to_string()]).into(),
-            Series::new("unit_hint".into(), vec!["/u".to_string()]).into(),
-        ])
-        .expect("df")
-    }
-
-    #[test]
-    fn attach_change_columns_poll_and_day_up() {
-        let df = base_df("Bitcoin", 110.0);
-        let prev = HashMap::from([("Bitcoin".to_string(), 100.0)]);
-        let opens = HashMap::from([("Bitcoin".to_string(), 100.0)]);
-        let df = PriceFetcher::attach_change_columns(df, Some(&prev), &opens).unwrap();
-
-        let change = df.column("change").unwrap().f64().unwrap().get(0);
-        let pct = df.column("pct_change").unwrap().f64().unwrap().get(0);
-        let dir = df.column("direction").unwrap().str().unwrap().get(0);
-        let day_dir = df.column("direction_day").unwrap().str().unwrap().get(0);
-        assert_eq!(change, Some(10.0));
-        assert!((pct.unwrap() - 10.0).abs() < 1e-9);
-        assert_eq!(dir, Some("up"));
-        assert_eq!(day_dir, Some("up"));
-    }
-
-    #[test]
-    fn attach_change_columns_day_down_poll_flat() {
-        let df = base_df("Gold", 100.005);
-        let prev = HashMap::from([("Gold".to_string(), 100.0)]);
-        let opens = HashMap::from([("Gold".to_string(), 110.0)]);
-        let df = PriceFetcher::attach_change_columns(df, Some(&prev), &opens).unwrap();
-
-        assert_eq!(
-            df.column("direction").unwrap().str().unwrap().get(0),
-            Some("flat")
-        );
-        assert_eq!(
-            df.column("direction_day").unwrap().str().unwrap().get(0),
-            Some("down")
-        );
-    }
-
-    #[test]
-    fn attach_change_columns_nan_price_has_no_change() {
-        let df = base_df("Gas", f64::NAN);
-        let prev = HashMap::from([("Gas".to_string(), 40.0)]);
-        let opens = HashMap::from([("Gas".to_string(), 40.0)]);
-        let df = PriceFetcher::attach_change_columns(df, Some(&prev), &opens).unwrap();
-
-        assert!(df.column("change").unwrap().f64().unwrap().get(0).is_none());
-        assert_eq!(
-            df.column("direction").unwrap().str().unwrap().get(0),
-            Some("")
-        );
-        assert_eq!(
-            df.column("direction_day").unwrap().str().unwrap().get(0),
-            Some("")
-        );
-    }
-
-    #[test]
-    fn attach_change_columns_missing_open_uses_current_price() {
-        let df = base_df("Power", 50.0);
-        let df = PriceFetcher::attach_change_columns(df, None, &HashMap::new()).unwrap();
-        assert_eq!(
-            df.column("day_open").unwrap().f64().unwrap().get(0),
-            Some(50.0)
-        );
-        assert_eq!(
-            df.column("direction_day").unwrap().str().unwrap().get(0),
-            Some("flat")
-        );
-        assert!(df.column("change").unwrap().f64().unwrap().get(0).is_none());
     }
 
     #[test]
@@ -690,24 +445,5 @@ mod tests {
         let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
         let power = config.assets.iter().find(|a| a.name == "Power NL").unwrap();
         assert_eq!(power.price_path, "data.@now.price");
-    }
-
-    #[test]
-    fn pct_change_of_negative_price_keeps_the_sign_of_the_move() {
-        let df = base_df("Power NL", 0.05);
-        let prev = HashMap::from([("Power NL".to_string(), -0.05)]);
-        let df = PriceFetcher::attach_change_columns(df, Some(&prev), &HashMap::new()).unwrap();
-        let pct = df
-            .column("pct_change")
-            .unwrap()
-            .f64()
-            .unwrap()
-            .get(0)
-            .unwrap();
-        assert!((pct - 200.0).abs() < 1e-9, "{pct}");
-        assert_eq!(
-            df.column("direction").unwrap().str().unwrap().get(0),
-            Some("up")
-        );
     }
 }

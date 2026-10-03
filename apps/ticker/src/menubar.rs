@@ -7,7 +7,6 @@ use mac_ui::winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
 };
-use polars::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -28,6 +27,7 @@ use crate::price_watch::{
     AppUpdate, FileStamp, PriceWatch, WatchDirection, WatchList, update_watch_list_for_app,
     watch_file_stamp,
 };
+use crate::prices::{self, PriceRow};
 use crate::watch_ui::{self, WatchUIBuilder};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -48,8 +48,8 @@ enum UserEvent {
     Menu(String),
     PricesFetched {
         generation: Generation,
-        /// `Box<dyn Error>` is not `Send`; the error is only logged anyway.
-        result: Result<DataFrame, String>,
+        /// One row per asset (NaN price where the fetch failed).
+        rows: Vec<PriceRow>,
     },
 }
 
@@ -63,7 +63,7 @@ struct App {
     /// When the first pending item started waiting for the menu to close.
     menu_deferred_since: Option<Instant>,
     config: Option<crate::config::Config>,
-    prices_df: Option<DataFrame>,
+    prices: Option<Vec<PriceRow>>,
     watch_list: WatchList,
     /// Per asset name: last successful fetch and failed polls since (stale marker in the menu).
     asset_status: HashMap<String, AssetStatus>,
@@ -92,10 +92,10 @@ impl ApplicationHandler<UserEvent> for App {
                 log_message(&format!("menu: queued {id:?}"));
                 self.pending_menu.push_back(id);
             }
-            UserEvent::PricesFetched { generation, result } => {
+            UserEvent::PricesFetched { generation, rows } => {
                 let finished = self.poll_gate.finish(generation);
                 if finished.apply {
-                    self.apply_poll_result(result);
+                    self.apply_poll_result(rows);
                 }
                 if let Some(next) = finished.restart {
                     self.spawn_fetch(next);
@@ -317,10 +317,10 @@ impl App {
     }
 
     fn pin_menubar_from_row(&mut self, row: usize) {
-        let Some(df) = &self.prices_df else {
+        let Some(rows) = &self.prices else {
             return;
         };
-        let Some(name) = MenuBuilder::asset_name_at(df, row) else {
+        let Some(name) = MenuBuilder::asset_name_at(rows, row) else {
             return;
         };
         if let Some(config) = &mut self.config {
@@ -390,7 +390,7 @@ impl App {
                     "Ticker",
                     &format!("{asset_name} saved ({unit})"),
                 );
-                self.prices_df = None;
+                self.prices = None;
                 self.rows_changed();
                 self.repoll_after_config_change();
             }
@@ -402,7 +402,7 @@ impl App {
         match config::reset_user_config() {
             Ok(config) => {
                 self.config = Some(config);
-                self.prices_df = None;
+                self.prices = None;
                 self.rows_changed();
                 watch_ui::send_macos_notification("Ticker", "Assets reset to defaults.");
                 self.repoll_after_config_change();
@@ -412,9 +412,7 @@ impl App {
     }
 
     fn copy_prices_to_clipboard(&self) -> Result<(), arboard::Error> {
-        let empty = Self::empty_df();
-        let df = self.prices_df.as_ref().unwrap_or(&empty);
-        let tsv = MenuBuilder::dataframe_as_tsv(df);
+        let tsv = MenuBuilder::prices_as_tsv(self.prices.as_deref().unwrap_or_default());
         arboard::Clipboard::new()?.set_text(tsv)
     }
 
@@ -429,7 +427,7 @@ impl App {
         }
     }
 
-    /// Assets were edited or reset (`prices_df` already cleared): a fetch still running for the old
+    /// Assets were edited or reset (`prices` already cleared): a fetch still running for the old
     /// assets is discarded and a fresh one starts (now, or as soon as the running one returns).
     fn repoll_after_config_change(&mut self) {
         if self.config.is_none() || self.fetcher.is_none() {
@@ -449,19 +447,15 @@ impl App {
         };
         let fetcher = fetcher.clone();
         let assets = config.assets.clone();
-        let previous = self.prices_df.clone();
+        let previous = self.prices.clone();
         let proxy = self.proxy.clone();
         let spawned = std::thread::Builder::new()
             .name("ticker-fetch".into())
             .spawn(move || {
                 let day_opens = price_history::load_day_opens();
-                let result = match &previous {
-                    None => fetcher.build_initial_dataframe(&assets, &day_opens),
-                    Some(prev) => fetcher.update_dataframe(prev, &assets, &day_opens),
-                }
-                .map_err(|e| e.to_string());
+                let rows = fetcher.poll(&assets, previous.as_deref(), &day_opens);
                 // Fails only when the event loop has already exited (app quitting).
-                let _ = proxy.send_event(UserEvent::PricesFetched { generation, result });
+                let _ = proxy.send_event(UserEvent::PricesFetched { generation, rows });
             });
         if let Err(e) = spawned {
             log_message(&format!("Poll failed: cannot start fetch thread: {e}"));
@@ -471,38 +465,20 @@ impl App {
 
     /// Main thread: merge a finished fetch into state, save history, fire watch alerts and
     /// refresh the menu (unchanged from the former synchronous poll).
-    fn apply_poll_result(&mut self, result: Result<DataFrame, String>) {
-        let mut df = match result {
-            Ok(df) => df,
-            Err(e) => {
-                log_message(&format!("Poll failed: {e}"));
-                return;
-            }
-        };
-        self.record_fetch_status(&df);
-        if let Some(prev) = &self.prices_df
-            && let Err(e) = fill_nan_from_prev(&mut df, prev)
-        {
-            log_message(&format!(
-                "Poll: cannot fill missing prices from the last poll: {e}"
-            ));
+    fn apply_poll_result(&mut self, mut rows: Vec<PriceRow>) {
+        self.record_fetch_status(&rows);
+        if let Some(prev) = &self.prices {
+            prices::fill_nan_from_prev(&mut rows, prev);
         }
-        if let Err(e) = save_poll_history(&df) {
+        if let Err(e) = save_poll_history(&rows) {
             log_message(&format!("Poll: saving price history failed: {e}"));
         }
         self.reload_watches_if_changed();
-        let mut current: Vec<(String, f64)> = Vec::new();
-        if let (Ok(names), Ok(prices)) = (df.column("name"), df.column("price"))
-            && let (Ok(ns), Ok(ps)) = (names.str(), prices.f64())
-        {
-            for i in 0..df.height() {
-                if let (Some(n), Some(p)) = (ns.get(i), ps.get(i))
-                    && !p.is_nan()
-                {
-                    current.push((n.to_string(), p));
-                }
-            }
-        }
+        let current: Vec<(String, f64)> = rows
+            .iter()
+            .filter(|r| r.has_price())
+            .map(|r| (r.name.clone(), r.price))
+            .collect();
         // Only take the lock and touch the file when a watch actually goes off.
         if !fired_watches(&mut self.watch_list.clone(), &current).is_empty() {
             for (w, p) in self.update_watches(|list| fired_watches(list, &current)) {
@@ -510,24 +486,17 @@ impl App {
                 watch_ui::send_macos_notification("Ticker Price Alert", &msg);
             }
         }
-        self.prices_df = Some(df);
+        self.prices = Some(rows);
         self.update_menu();
     }
 
     fn handle_add_watch(&mut self) {
-        let asset_names: Vec<String> = if let Some(df) = &self.prices_df {
-            df.column("name")
-                .ok()
-                .and_then(|c| c.str().ok())
-                .map(|ca| {
-                    (0..df.height())
-                        .filter_map(|i| ca.get(i).map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        let asset_names: Vec<String> = self
+            .prices
+            .iter()
+            .flatten()
+            .map(|r| r.name.clone())
+            .collect();
         if asset_names.is_empty() {
             log_message("add_watch: no prices loaded yet, nothing to pick");
             watch_ui::send_macos_notification(
@@ -544,9 +513,9 @@ impl App {
             return;
         };
         let default_price = self
-            .prices_df
+            .prices
             .as_ref()
-            .and_then(|df| current_price_for(df, &asset))
+            .and_then(|rows| prices::price_of(rows, &asset))
             .unwrap_or(0.0);
         // Prefilled in the menu's Dutch notation, which parse_watch_target reads back.
         let target_price: f64 = match prompt_text(
@@ -630,28 +599,24 @@ impl App {
     }
 
     /// Before the NaN prices are filled in from the last poll: which assets this poll fetched.
-    fn record_fetch_status(&mut self, df: &DataFrame) {
+    fn record_fetch_status(&mut self, rows: &[PriceRow]) {
         let now = chrono::Local::now();
-        let (Ok(names), Ok(prices)) = (df.column("name"), df.column("price")) else {
-            return;
-        };
-        let (Ok(ns), Ok(ps)) = (names.str(), prices.f64()) else {
-            return;
-        };
         let mut seen = HashMap::new();
-        for i in 0..df.height() {
-            if let Some(name) = ns.get(i) {
-                let fetched = ps.get(i).is_some_and(|p| !p.is_nan());
-                let mut status = self.asset_status.get(name).copied().unwrap_or_default();
-                status.record(fetched, now);
-                if !fetched {
-                    log_message(&format!(
-                        "poll: no price for {name} ({} failed poll(s) in a row)",
-                        status.failed_polls
-                    ));
-                }
-                seen.insert(name.to_string(), status);
+        for row in rows {
+            let fetched = row.has_price();
+            let mut status = self
+                .asset_status
+                .get(&row.name)
+                .copied()
+                .unwrap_or_default();
+            status.record(fetched, now);
+            if !fetched {
+                log_message(&format!(
+                    "poll: no price for {} ({} failed poll(s) in a row)",
+                    row.name, status.failed_polls
+                ));
             }
+            seen.insert(row.name.clone(), status);
         }
         // Assets that were edited away or reset drop out.
         self.asset_status = seen;
@@ -662,15 +627,14 @@ impl App {
     }
 
     fn update_menu(&self) {
-        let empty = Self::empty_df();
-        let df = self.prices_df.clone().unwrap_or(empty);
+        let rows = self.prices.as_deref().unwrap_or_default();
         let freshness = Freshness {
             status: &self.asset_status,
             now: chrono::Local::now(),
         };
-        let menu = MenuBuilder::build(&df, &self.watch_list, self.rows_generation, &freshness);
+        let menu = MenuBuilder::build(rows, &self.watch_list, self.rows_generation, &freshness);
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
-        let title = MenuBuilder::menubar_title(&df, pin, &freshness);
+        let title = MenuBuilder::menubar_title(rows, pin, &freshness);
         if let Ok(tray) = self.tray.try_borrow_mut() {
             tray.set_menu(Some(Box::new(menu)));
             // The normal icon is a template that follows the menu bar colours. The alert icon
@@ -702,26 +666,6 @@ impl App {
             tray.set_menu(Some(Box::new(menu)));
         }
     }
-
-    fn empty_df() -> DataFrame {
-        DataFrame::new_infer_height(vec![
-            Series::new("symbol".into(), Vec::<String>::new()).into(),
-            Series::new("name".into(), Vec::<String>::new()).into(),
-            Series::new("price".into(), Vec::<f64>::new()).into(),
-            Series::new("unit".into(), Vec::<String>::new()).into(),
-            Series::new("unit_hint".into(), Vec::<String>::new()).into(),
-            Series::new("prev_price".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("change".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("pct_change".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("direction".into(), Vec::<String>::new()).into(),
-            Series::new("day_open".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("change_day".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("pct_day".into(), Vec::<Option<f64>>::new()).into(),
-            Series::new("direction_day".into(), Vec::<String>::new()).into(),
-        ])
-        // Invariant: every column is empty and the names are unique, so this cannot fail.
-        .expect("empty")
-    }
 }
 
 /// Checks every `(asset, price)` against `list` (marking the watches that go off) and returns
@@ -738,40 +682,14 @@ fn fired_watches(list: &mut WatchList, prices: &[(String, f64)]) -> Vec<(PriceWa
         .collect()
 }
 
-fn current_price_for(df: &DataFrame, asset: &str) -> Option<f64> {
-    let names = df.column("name").ok()?.str().ok()?;
-    let prices = df.column("price").ok()?.f64().ok()?;
-    for i in 0..df.height() {
-        if names.get(i) == Some(asset) {
-            let p = prices.get(i)?;
-            if !p.is_nan() {
-                return Some(p);
-            }
-        }
-    }
-    None
-}
-
 /// Saves each asset's price and day open from a finished poll to the price history file.
 /// Both saves are tried; the first error is returned.
-fn save_poll_history(df: &DataFrame) -> Result<(), Box<dyn std::error::Error>> {
-    let ns = df.column("name")?.str()?;
-    let ps = df.column("price")?.f64()?;
-    let os = df.column("day_open")?.f64()?;
-    let mut history = HashMap::new();
-    let mut opens = HashMap::new();
-    for i in 0..df.height() {
-        if let (Some(n), Some(p)) = (ns.get(i), ps.get(i))
-            && !p.is_nan()
-        {
-            history.insert(n.to_string(), p);
-        }
-        if let (Some(n), Some(o)) = (ns.get(i), os.get(i))
-            && !o.is_nan()
-        {
-            opens.insert(n.to_string(), o);
-        }
-    }
+fn save_poll_history(rows: &[PriceRow]) -> Result<(), Box<dyn std::error::Error>> {
+    let history = prices::prices_by_name(rows);
+    let opens: HashMap<String, f64> = rows
+        .iter()
+        .filter_map(|r| Some((r.name.clone(), r.day_open.filter(|o| !o.is_nan())?)))
+        .collect();
     let history_saved = if history.is_empty() {
         Ok(())
     } else {
@@ -781,40 +699,6 @@ fn save_poll_history(df: &DataFrame) -> Result<(), Box<dyn std::error::Error>> {
         price_history::save_day_opens(&opens)?;
     }
     history_saved
-}
-
-fn fill_nan_from_prev(
-    df: &mut DataFrame,
-    prev: &DataFrame,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let pn = prev.column("name")?.str()?;
-    let pp = prev.column("price")?.f64()?;
-    let mut map = HashMap::new();
-    for i in 0..prev.height() {
-        if let (Some(n), Some(p)) = (pn.get(i), pp.get(i))
-            && !p.is_nan()
-        {
-            map.insert(n.to_string(), p);
-        }
-    }
-    let name_ca = df.column("name")?.str()?;
-    let height = df.height();
-    let mut names: Vec<String> = Vec::with_capacity(height);
-    for i in 0..height {
-        names.push(name_ca.get(i).unwrap_or("").to_string());
-    }
-    let prices = df.column("price")?.f64()?;
-    let mut out = Vec::with_capacity(height);
-    for (i, name) in names.iter().enumerate() {
-        let p = prices.get(i).unwrap_or(f64::NAN);
-        out.push(if p.is_nan() {
-            map.get(name).copied().unwrap_or(f64::NAN)
-        } else {
-            p
-        });
-    }
-    df.with_column(Series::new("price".into(), out).into())?;
-    Ok(())
 }
 
 fn bundle_assets_dir() -> PathBuf {
@@ -890,7 +774,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         pending_menu: VecDeque::new(),
         menu_deferred_since: None,
         config: None,
-        prices_df: None,
+        prices: None,
         watch_list: WatchList::new(),
         asset_status: HashMap::new(),
         watch_save_blocked: false,

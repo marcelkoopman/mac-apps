@@ -32,8 +32,6 @@ dhat = { version = "0.3", optional = true }
 # (mac_ui::notify; without the app bundle ticker falls back on osascript itself, in watch_ui.rs).
 mac-ui = { path = "../../crates/mac-ui", features = ["dialog", "notify"] }
 arboard = { workspace = true }
-# Minimal features: DataFrame + Display. Avoids polars-io/object_store → quick-xml 0.38 (RUSTSEC-2026-0194/0195).
-polars = { workspace = true, features = ["fmt"] }
 
 [features]
 dhat-heap = ["dep:dhat"]

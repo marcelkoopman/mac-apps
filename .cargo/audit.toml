@@ -5,9 +5,9 @@
 ignore = [
     # RUSTSEC-2026-0194 / 0195: quick-xml <0.41 quadratic attribute checks and
     # unbounded NsReader namespace allocation. Pulled transitively by the unused
-    # optional object_store (polars cloud I/O). Neither copycraft nor ticker parses
-    # untrusted XML. Drop when Cargo.lock only has quick-xml >= 0.41
-    # (polars on object_store >= 0.14.1).
+    # optional object_store (polars cloud I/O) of copycraft's polars; ticker no longer
+    # uses polars. Neither app parses untrusted XML. Drop when Cargo.lock only has
+    # quick-xml >= 0.41 (polars on object_store >= 0.14.1, or polars gone).
     "RUSTSEC-2026-0194",
     "RUSTSEC-2026-0195",
 ]
