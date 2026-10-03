@@ -43,7 +43,7 @@ fn main() {
     let cli_mode = args.len() > 1;
 
     // Menubar mode only: a second instance exits before touching the running one's log file.
-    // CLI subcommands (watch_cli) never take the lock.
+    // CLI subcommands (watch_cli) never take the lock (the watch file has its own lock).
     let instance_guard = if cli_mode {
         None
     } else {
@@ -65,18 +65,11 @@ fn main() {
         }
     };
 
-    let log_path = log_file_path();
-    let _ = std::fs::remove_file(&log_path);
-
-    log_message("=== TICKER APP STARTED ===");
-    log_message(&format!("Log file: {:?}", log_path));
-    log_message(&format!("Working dir: {:?}", std::env::current_dir()));
-    log_message(&format!("Executable: {:?}", std::env::current_exe()));
-
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
 
-    // Check for CLI arguments for watch management
+    // CLI subcommands print to the terminal and leave the menu bar app's log alone (they run
+    // while the app does, without its instance lock).
     if cli_mode {
         match watch_cli::handle_watch_command(&args[1..]) {
             Ok(output) => {
@@ -89,6 +82,18 @@ fn main() {
             }
         }
     }
+
+    // Menu bar app only, and only once it holds the instance lock: start a fresh log. Without
+    // the lock another instance may be writing to it, so append instead.
+    let log_path = log_file_path();
+    if instance_guard.is_some() {
+        let _ = std::fs::remove_file(&log_path);
+    }
+
+    log_message("=== TICKER APP STARTED ===");
+    log_message(&format!("Log file: {:?}", log_path));
+    log_message(&format!("Working dir: {:?}", std::env::current_dir()));
+    log_message(&format!("Executable: {:?}", std::env::current_exe()));
 
     if let Some(lock) = &instance_guard {
         log_message(&format!("Instance lock: {:?}", lock.path()));

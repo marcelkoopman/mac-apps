@@ -1,4 +1,4 @@
-use crate::price_watch::{WatchDirection, WatchList, load_watch_list, save_watch_list};
+use crate::price_watch::{WatchDirection, update_watch_list};
 use std::error::Error;
 
 pub fn handle_watch_command(args: &[String]) -> Result<String, Box<dyn Error>> {
@@ -30,22 +30,26 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
         _ => return Err("Direction must be 'above' or 'below'".into()),
     };
 
-    let mut watch_list = load_watch_list()?;
-
-    if watch_list
-        .watches
-        .iter()
-        .any(|w| w.asset_name == asset_name && (w.target_price - target_price).abs() < 0.01)
-    {
+    // Load, check, add and save under the watch-file lock: a running menu bar app cannot
+    // overwrite this change, and picks it up on its next poll.
+    let added = update_watch_list(|watch_list| {
+        if watch_list
+            .watches
+            .iter()
+            .any(|w| w.asset_name == asset_name && (w.target_price - target_price).abs() < 0.01)
+        {
+            return false;
+        }
+        watch_list.add_watch(asset_name.clone(), target_price, direction.clone());
+        true
+    })?;
+    if !added {
         return Err(format!(
             "Watch already exists for {} at €{:.2}",
             asset_name, target_price
         )
         .into());
     }
-
-    watch_list.add_watch(asset_name.clone(), target_price, direction.clone());
-    save_watch_list(&watch_list)?;
 
     Ok(format!(
         "✅ Added watch: {} {} €{:.2}",
@@ -63,10 +67,7 @@ fn remove_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     let asset_name = &args[0];
     let target_price: f64 = args[1].parse()?;
 
-    let mut watch_list = load_watch_list()?;
-
-    if watch_list.remove_watch(asset_name, target_price) {
-        save_watch_list(&watch_list)?;
+    if update_watch_list(|watch_list| watch_list.remove_watch(asset_name, target_price))? {
         Ok(format!(
             "✅ Removed watch for {} at €{:.2}",
             asset_name, target_price
@@ -81,7 +82,7 @@ fn remove_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
 }
 
 fn list_watches() -> Result<String, Box<dyn Error>> {
-    let watch_list = load_watch_list()?;
+    let watch_list = update_watch_list(|watch_list| watch_list.clone())?;
 
     if watch_list.watches.is_empty() {
         return Ok("📭 No price watches configured".to_string());
@@ -107,16 +108,17 @@ fn list_watches() -> Result<String, Box<dyn Error>> {
     Ok(output)
 }
 
+/// Loads first (under the lock), so a corrupt watch file is reported instead of overwritten.
 fn clear_watches() -> Result<String, Box<dyn Error>> {
-    let watch_list = WatchList::new();
-    save_watch_list(&watch_list)?;
-    Ok("✅ All price watches cleared".to_string())
+    let removed = update_watch_list(|watch_list| std::mem::take(&mut watch_list.watches).len())?;
+    Ok(format!("✅ All price watches cleared ({removed} removed)"))
 }
 
 fn reset_triggered() -> Result<String, Box<dyn Error>> {
-    let mut watch_list = load_watch_list()?;
-    watch_list.reset_all_states();
-    save_watch_list(&watch_list)?;
+    let watch_list = update_watch_list(|watch_list| {
+        watch_list.reset_all_states();
+        watch_list.clone()
+    })?;
 
     let triggered_count = watch_list.watches.iter().filter(|w| !w.triggered).count();
 
@@ -287,6 +289,16 @@ mod tests {
     fn add_requires_three_args() {
         let err = handle_watch_command(&["add".into(), "Bitcoin".into()]).unwrap_err();
         assert!(err.to_string().contains("Usage"));
+    }
+
+    #[test]
+    fn clear_refuses_a_corrupt_watch_file() {
+        with_temp_watch_file(|| {
+            let path = std::env::var("TICKER_WATCHES_PATH").unwrap();
+            std::fs::write(&path, "{ not json").unwrap();
+            assert!(handle_watch_command(&["clear".into()]).is_err());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json");
+        });
     }
 
     #[test]

@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PriceWatch {
@@ -13,6 +14,15 @@ pub struct PriceWatch {
     pub created_at: i64,
     /// Track if we've already triggered this watch to avoid spam
     pub triggered: bool,
+}
+
+impl PriceWatch {
+    fn same_watch(&self, other: &PriceWatch) -> bool {
+        self.asset_name == other.asset_name
+            && self.target_price == other.target_price
+            && self.direction == other.direction
+            && self.created_at == other.created_at
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -39,7 +49,7 @@ impl WatchDirection {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct WatchList {
     pub watches: Vec<PriceWatch>,
 }
@@ -72,9 +82,23 @@ impl WatchList {
         self.watches.len() < initial_len
     }
 
-    /// Remove the watch at `index` (menu row).
-    pub fn remove_at(&mut self, index: usize) -> Option<PriceWatch> {
-        (index < self.watches.len()).then(|| self.watches.remove(index))
+    /// Remove `watch` (same asset, target, direction and creation time), wherever it is now: the
+    /// list may have been reloaded since the menu row was built.
+    pub fn remove_matching(&mut self, watch: &PriceWatch) -> bool {
+        let before = self.watches.len();
+        self.watches.retain(|w| !w.same_watch(watch));
+        self.watches.len() < before
+    }
+
+    /// Same watches in the same order (ignoring `triggered`): menu rows still point at the
+    /// same watches.
+    pub fn same_rows(&self, other: &WatchList) -> bool {
+        self.watches.len() == other.watches.len()
+            && self
+                .watches
+                .iter()
+                .zip(&other.watches)
+                .all(|(a, b)| a.same_watch(b))
     }
 
     /// Filter watches for a single asset (CLI / future UI).
@@ -144,24 +168,133 @@ fn watch_list_path() -> Result<PathBuf, Box<dyn Error>> {
     Ok(home.join(".ticker_watches.json"))
 }
 
-/// Strict load (CLI): a missing file is an empty list, an unreadable or corrupt file is an error
-/// (and nothing is written).
-pub fn load_watch_list() -> Result<WatchList, Box<dyn Error>> {
-    let path = watch_list_path()?;
-    if !path.exists() {
-        return Ok(WatchList::new());
-    }
-    let content = fs::read_to_string(&path)?;
+/// Strict load: a missing file is an empty list, an unreadable or corrupt file is an error (and
+/// nothing is written).
+fn load_strict(path: &Path) -> Result<WatchList, Box<dyn Error>> {
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(WatchList::new()),
+        Err(e) => return Err(e.into()),
+    };
     serde_json::from_str(&content).map_err(|e| format!("{}: {e}", path.display()).into())
 }
 
-/// Result of [`load_watch_list_for_app`].
+/// `<file>.lock` next to the watch file (`~/.ticker_watches.json.lock`).
+fn lock_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "watches.json".into());
+    path.with_file_name(format!("{name}.lock"))
+}
+
+/// Exclusive lock (`File::lock`, blocks until free) on the lock file next to `path`, held while
+/// a CLI command or the menu bar app loads, changes and saves the watch list, so neither
+/// overwrites the other's change. Released when the returned file is dropped.
+fn lock_watch_file(path: &Path) -> io::Result<File> {
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(lock_path(path))?;
+    file.lock()?;
+    Ok(file)
+}
+
+/// CLI: load, change and (when the list changed) save under the watch-file lock. A corrupt file
+/// is an error and is left alone.
+pub fn update_watch_list<T>(f: impl FnOnce(&mut WatchList) -> T) -> Result<T, Box<dyn Error>> {
+    update_strict_at(&watch_list_path()?, f)
+}
+
+fn update_strict_at<T>(
+    path: &Path,
+    f: impl FnOnce(&mut WatchList) -> T,
+) -> Result<T, Box<dyn Error>> {
+    let _lock = lock_watch_file(path)?;
+    let mut list = load_strict(path)?;
+    let before = list.clone();
+    let value = f(&mut list);
+    if list != before {
+        save_to(path, &list)?;
+    }
+    Ok(value)
+}
+
+/// Modification time and length of the watch file: the menu bar app compares it on every poll
+/// to pick up changes made by the CLI.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FileStamp {
+    modified: Option<SystemTime>,
+    len: u64,
+}
+
+/// `None` when the file does not exist (or cannot be inspected).
+pub fn watch_file_stamp() -> Option<FileStamp> {
+    stamp_of(&watch_list_path().ok()?)
+}
+
+fn stamp_of(path: &Path) -> Option<FileStamp> {
+    let meta = fs::metadata(path).ok()?;
+    Some(FileStamp {
+        modified: meta.modified().ok(),
+        len: meta.len(),
+    })
+}
+
+/// Result of [`update_watch_list_for_app`].
 #[derive(Debug)]
-pub enum WatchLoad {
+pub struct AppUpdate<T> {
+    /// The list after the change (as saved).
+    pub list: WatchList,
+    /// The file did not parse: it was moved to this backup (with the parse error) and the change
+    /// was applied to an empty list.
+    pub recovered: Option<(PathBuf, String)>,
+    /// What the change returned.
+    pub value: T,
+    /// Stamp of the file after the save.
+    pub stamp: Option<FileStamp>,
+}
+
+/// Menu bar app: load, change and (when the list changed) save under the watch-file lock. Corrupt
+/// JSON is moved aside to a `.bak` file instead of being overwritten. `Err` when the file cannot
+/// be locked, read or moved: the caller must then not save.
+pub fn update_watch_list_for_app<T>(
+    f: impl FnOnce(&mut WatchList) -> T,
+) -> Result<AppUpdate<T>, Box<dyn Error>> {
+    Ok(update_app_at(&watch_list_path()?, f)?)
+}
+
+fn update_app_at<T>(path: &Path, f: impl FnOnce(&mut WatchList) -> T) -> io::Result<AppUpdate<T>> {
+    let _lock = lock_watch_file(path)?;
+    let (mut list, recovered) = match load_or_backup(path)? {
+        WatchLoad::Loaded(list) => (list, None),
+        WatchLoad::Recovered {
+            list,
+            backup,
+            error,
+        } => (list, Some((backup, error))),
+    };
+    let before = list.clone();
+    let value = f(&mut list);
+    if list != before {
+        save_to(path, &list)?;
+    }
+    Ok(AppUpdate {
+        list,
+        recovered,
+        value,
+        stamp: stamp_of(path),
+    })
+}
+
+/// Result of [`load_or_backup`].
+#[derive(Debug)]
+enum WatchLoad {
     /// File read (or missing: empty list).
     Loaded(WatchList),
-    /// The file did not parse. It was moved to `backup` and the app starts with an empty list,
-    /// so later saves cannot overwrite the user's data.
+    /// The file did not parse. It was moved to `backup` and the list starts empty, so later
+    /// saves cannot overwrite the user's data.
     Recovered {
         list: WatchList,
         backup: PathBuf,
@@ -169,12 +302,7 @@ pub enum WatchLoad {
     },
 }
 
-/// Menu bar load. Corrupt JSON is moved aside to a `.bak` file instead of being overwritten by
-/// the next save. `Err` when the file cannot be read or moved: the caller must then not save.
-pub fn load_watch_list_for_app() -> Result<WatchLoad, Box<dyn Error>> {
-    Ok(load_or_backup(&watch_list_path()?)?)
-}
-
+/// Corrupt JSON is moved aside to a `.bak` file instead of being overwritten by the next save.
 fn load_or_backup(path: &Path) -> io::Result<WatchLoad> {
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
@@ -211,10 +339,6 @@ fn backup_path(path: &Path) -> PathBuf {
         .map(|n| path.with_file_name(format!("{name}.{n}.bak")))
         .find(|p| !p.exists())
         .unwrap_or(candidate)
-}
-
-pub fn save_watch_list(watch_list: &WatchList) -> Result<(), Box<dyn Error>> {
-    Ok(save_to(&watch_list_path()?, watch_list)?)
 }
 
 /// Write to a temporary file next to `path`, then rename over it: a crash mid-write leaves the
@@ -293,14 +417,102 @@ mod tests {
     }
 
     #[test]
-    fn remove_at_index() {
+    fn strict_update_saves_only_changes_and_refuses_corrupt_files() {
+        let dir = temp_dir("strict");
+        let path = dir.join("w.json");
+        // No change: nothing is written.
+        let n = update_strict_at(&path, |l| l.watches.len()).unwrap();
+        assert_eq!(n, 0);
+        assert!(!path.exists());
+        update_strict_at(&path, |l| {
+            l.add_watch("Gold".into(), 2000.0, WatchDirection::Below)
+        })
+        .unwrap();
+        assert_eq!(load_strict(&path).unwrap().watches.len(), 1);
+        assert!(dir.join("w.json.lock").exists());
+        fs::write(&path, "{ not json").unwrap();
+        assert!(update_strict_at(&path, |l| l.watches.clear()).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn app_update_merges_with_changes_made_on_disk() {
+        let path = temp_dir("merge").join("w.json");
+        // The app has loaded an empty list ...
+        let first = update_app_at(&path, |_| ()).unwrap();
+        assert!(first.list.watches.is_empty());
+        // ... then the CLI adds a watch ...
+        update_strict_at(&path, |l| {
+            l.add_watch("Gold".into(), 2000.0, WatchDirection::Below)
+        })
+        .unwrap();
+        // ... and the app adds its own: both are kept.
+        let second = update_app_at(&path, |l| {
+            l.add_watch("Bitcoin".into(), 68000.0, WatchDirection::Above)
+        })
+        .unwrap();
+        let names: Vec<_> = second
+            .list
+            .watches
+            .iter()
+            .map(|w| w.asset_name.as_str())
+            .collect();
+        assert_eq!(names, ["Gold", "Bitcoin"]);
+        assert_eq!(load_strict(&path).unwrap(), second.list);
+        assert_eq!(second.stamp, stamp_of(&path));
+    }
+
+    #[test]
+    fn app_update_recovers_a_corrupt_file() {
+        let dir = temp_dir("app-corrupt");
+        let path = dir.join("w.json");
+        fs::write(&path, "[").unwrap();
+        let update = update_app_at(&path, |l| {
+            l.add_watch("Gold".into(), 1.0, WatchDirection::Above)
+        })
+        .unwrap();
+        let (backup, _) = update.recovered.unwrap();
+        assert_eq!(fs::read_to_string(backup).unwrap(), "[");
+        assert_eq!(load_strict(&path).unwrap().watches.len(), 1);
+    }
+
+    #[test]
+    fn lock_is_exclusive_across_handles() {
+        let path = temp_dir("lock").join("w.json");
+        let held = lock_watch_file(&path).unwrap();
+        let other = OpenOptions::new()
+            .write(true)
+            .open(lock_path(&path))
+            .unwrap();
+        assert!(other.try_lock().is_err());
+        drop(held);
+        assert!(other.try_lock().is_ok());
+    }
+
+    #[test]
+    fn stamp_changes_when_the_file_changes() {
+        let path = temp_dir("stamp").join("w.json");
+        assert_eq!(stamp_of(&path), None);
+        fs::write(&path, "{}").unwrap();
+        let a = stamp_of(&path).unwrap();
+        fs::write(&path, "{\"watches\": []}").unwrap();
+        assert_ne!(stamp_of(&path), Some(a));
+    }
+
+    #[test]
+    fn remove_matching_and_same_rows() {
         let mut list = WatchList::new();
-        list.add_watch("TTF_Gas".into(), 30.0, WatchDirection::Above);
         list.add_watch("Gold".into(), 2000.0, WatchDirection::Below);
-        assert_eq!(list.remove_at(5), None);
-        assert_eq!(list.remove_at(0).unwrap().asset_name, "TTF_Gas");
-        assert_eq!(list.watches.len(), 1);
-        assert_eq!(list.watches[0].asset_name, "Gold");
+        list.add_watch("Bitcoin".into(), 1.0, WatchDirection::Above);
+        let mut other = list.clone();
+        other.watches[0].triggered = true;
+        assert!(list.same_rows(&other));
+        let gold = list.watches[0].clone();
+        other.watches.reverse();
+        assert!(!list.same_rows(&other));
+        assert!(other.remove_matching(&gold));
+        assert!(!other.remove_matching(&gold));
+        assert_eq!(other.watches.len(), 1);
     }
 
     #[test]

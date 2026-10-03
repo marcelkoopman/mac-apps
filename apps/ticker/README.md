@@ -51,12 +51,13 @@ State files in your home directory:
 | `~/.ticker_menubar_asset` | Menu bar asset picked from the menu |
 | `~/.ticker_watches.json` | Price watches. If it cannot be parsed at start, the menu bar app moves it to `.ticker_watches.json.bak` (`.1.bak`, … if that exists), starts with no watches and shows a notification |
 | `~/.ticker_price_history.json` | Day-open and last-poll prices |
-| `~/.ticker_debug.log` | Log, recreated at every start |
+| `~/.ticker_watches.json.lock` | Lock held while the CLI or the menu bar app loads, changes and saves the watches, so neither overwrites the other's change |
+| `~/.ticker_debug.log` | Log of the menu bar app, recreated at every start once it holds the instance lock (CLI commands never touch it) |
 | `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |
 
 ## Watch CLI
 
-Run the binary with arguments to manage watches without starting the menu bar app:
+Run the binary with arguments to manage watches without starting the menu bar app. Commands may run while the app runs: each one loads, changes and saves the watch file under its lock, and the app reloads the file at its next poll when it changed. `clear` loads the file first, so a corrupt file is reported instead of overwritten.
 
 ```bash
 ticker add Bitcoin 68000 above

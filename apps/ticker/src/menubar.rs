@@ -23,7 +23,8 @@ use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
 use crate::price_watch::{
-    WatchDirection, WatchList, WatchLoad, load_watch_list_for_app, save_watch_list,
+    AppUpdate, FileStamp, PriceWatch, WatchDirection, WatchList, update_watch_list_for_app,
+    watch_file_stamp,
 };
 use crate::watch_ui::{self, WatchUIBuilder};
 
@@ -64,6 +65,9 @@ struct App {
     watch_list: WatchList,
     /// The watch file exists but could not be read or moved aside: never overwrite it.
     watch_save_blocked: bool,
+    /// Watch file stamp after our last load or save; a different stamp at a poll means the CLI
+    /// changed the file, so it is reloaded.
+    watch_stamp: Option<FileStamp>,
     /// Part of the row ids (`menu_ids`). Bumped whenever watch or asset rows are added, removed
     /// or reordered, so a click on a row of a menu built before that is ignored. Price updates
     /// keep it, so rows stay clickable while a poll refreshes the open menu.
@@ -201,46 +205,75 @@ impl App {
     }
 
     fn load_watches(&mut self) {
-        match load_watch_list_for_app() {
-            Ok(WatchLoad::Loaded(list)) => self.watch_list = list,
-            Ok(WatchLoad::Recovered {
-                list,
-                backup,
-                error,
-            }) => {
-                self.watch_list = list;
-                log_message(&format!(
-                    "watches: file unreadable ({error}); moved to {}",
-                    backup.display()
-                ));
-                watch_ui::send_macos_notification(
-                    "Ticker",
-                    &format!(
-                        "Watch list was unreadable and has been reset. Old file kept as {}",
-                        backup.display()
-                    ),
-                );
-            }
-            Err(e) => {
-                self.watch_save_blocked = true;
-                log_message(&format!(
-                    "watches: cannot load ({e}); changes will not be saved"
-                ));
-                watch_ui::send_macos_notification(
-                    "Ticker",
-                    &format!("Cannot read the watch list ({e}). Watch changes will not be saved."),
-                );
-            }
+        self.update_watches(|_| ());
+    }
+
+    /// Reload the watch list when the file changed on disk since our last load or save (the CLI
+    /// adds, removes and resets watches while the app runs). Checked at every poll.
+    fn reload_watches_if_changed(&mut self) {
+        let stamp = watch_file_stamp();
+        if stamp != self.watch_stamp {
+            log_message("watches: file changed on disk; reloading");
+            self.update_watches(|_| ());
         }
     }
 
-    fn save_watches(&self) {
-        if self.watch_save_blocked {
-            log_message("watches: not saved (watch file could not be loaded)");
-            return;
-        }
-        if let Err(e) = save_watch_list(&self.watch_list) {
-            log_message(&format!("watches: save failed: {e}"));
+    /// Load the watch file, apply `change` and save, all under the watch-file lock, then adopt
+    /// the result: a change made by the CLI in the meantime is kept, not overwritten. When the
+    /// file cannot be locked, read or saved, `change` is applied to the list in memory instead
+    /// (not saved), hence `FnMut`.
+    fn update_watches<T>(&mut self, mut change: impl FnMut(&mut WatchList) -> T) -> T {
+        match update_watch_list_for_app(&mut change) {
+            Ok(AppUpdate {
+                list,
+                recovered,
+                value,
+                stamp,
+            }) => {
+                if let Some((backup, error)) = recovered {
+                    log_message(&format!(
+                        "watches: file unreadable ({error}); moved to {}",
+                        backup.display()
+                    ));
+                    watch_ui::send_macos_notification(
+                        "Ticker",
+                        &format!(
+                            "Watch list was unreadable and has been reset. Old file kept as {}",
+                            backup.display()
+                        ),
+                    );
+                }
+                if !list.same_rows(&self.watch_list) {
+                    self.rows_changed();
+                }
+                self.watch_list = list;
+                self.watch_stamp = stamp;
+                self.watch_save_blocked = false;
+                value
+            }
+            Err(e) => {
+                if !self.watch_save_blocked {
+                    log_message(&format!(
+                        "watches: cannot load ({e}); changes will not be saved"
+                    ));
+                    watch_ui::send_macos_notification(
+                        "Ticker",
+                        &format!(
+                            "Cannot read the watch list ({e}). Watch changes will not be saved."
+                        ),
+                    );
+                }
+                self.watch_save_blocked = true;
+                // Remember the stamp so a broken file is not retried (and reported) every poll;
+                // any later change to it is picked up again.
+                self.watch_stamp = watch_file_stamp();
+                let before = self.watch_list.clone();
+                let value = change(&mut self.watch_list);
+                if !before.same_rows(&self.watch_list) {
+                    self.rows_changed();
+                }
+                value
+            }
         }
     }
 
@@ -249,15 +282,18 @@ impl App {
     }
 
     fn remove_watch_at(&mut self, index: usize) {
-        if let Some(w) = self.watch_list.remove_at(index) {
-            self.rows_changed();
+        // The row index belongs to the list the menu was built from; remove that watch wherever
+        // it is in the file now.
+        let Some(watch) = self.watch_list.watches.get(index).cloned() else {
+            return;
+        };
+        if self.update_watches(|list| list.remove_matching(&watch)) {
             log_message(&format!(
                 "watches: removed {} {:.2}",
-                w.asset_name, w.target_price
+                watch.asset_name, watch.target_price
             ));
-            self.save_watches();
-            self.update_menu();
         }
+        self.update_menu();
     }
 
     fn pin_menubar_from_row(&mut self, row: usize) {
@@ -433,23 +469,24 @@ impl App {
         if let Err(e) = save_poll_history(&df) {
             log_message(&format!("Poll: saving price history failed: {e}"));
         }
+        self.reload_watches_if_changed();
+        let mut current: Vec<(String, f64)> = Vec::new();
         if let (Ok(names), Ok(prices)) = (df.column("name"), df.column("price"))
             && let (Ok(ns), Ok(ps)) = (names.str(), prices.f64())
         {
-            let mut any = false;
             for i in 0..df.height() {
                 if let (Some(n), Some(p)) = (ns.get(i), ps.get(i))
                     && !p.is_nan()
                 {
-                    for w in self.watch_list.check_price(n, p) {
-                        let msg = WatchUIBuilder::format_trigger_notification(&w, p);
-                        watch_ui::send_macos_notification("Ticker Price Alert", &msg);
-                        any = true;
-                    }
+                    current.push((n.to_string(), p));
                 }
             }
-            if any {
-                self.save_watches();
+        }
+        // Only take the lock and touch the file when a watch actually goes off.
+        if !fired_watches(&mut self.watch_list.clone(), &current).is_empty() {
+            for (w, p) in self.update_watches(|list| fired_watches(list, &current)) {
+                let msg = WatchUIBuilder::format_trigger_notification(&w, p);
+                watch_ui::send_macos_notification("Ticker Price Alert", &msg);
             }
         }
         self.prices_df = Some(df);
@@ -508,22 +545,24 @@ impl App {
             Some(1) => WatchDirection::Below,
             _ => return,
         };
-        if self
-            .watch_list
-            .watches
-            .iter()
-            .any(|w| w.asset_name == asset && (w.target_price - target_price).abs() < 0.01)
-        {
+        let added = self.update_watches(|list| {
+            if list
+                .watches
+                .iter()
+                .any(|w| w.asset_name == asset && (w.target_price - target_price).abs() < 0.01)
+            {
+                return false;
+            }
+            list.add_watch(asset.clone(), target_price, direction.clone());
+            true
+        });
+        if !added {
             watch_ui::send_macos_notification(
                 "Ticker",
                 &format!("Watch already exists for {} at €{:.2}", asset, target_price),
             );
             return;
         }
-        self.watch_list
-            .add_watch(asset.clone(), target_price, direction.clone());
-        self.rows_changed();
-        self.save_watches();
         watch_ui::send_macos_notification(
             "Ticker",
             &format!(
@@ -537,6 +576,7 @@ impl App {
     }
 
     fn handle_manage_watches(&mut self) {
+        self.reload_watches_if_changed();
         if self.watch_list.watches.is_empty() {
             log_message("manage_watches: no watches configured");
             watch_ui::send_macos_notification("Ticker", "No watches configured.");
@@ -556,9 +596,7 @@ impl App {
         lines.push_str("\nClick a watch in the menu to remove it, or choose Clear All.");
         // "Close" stays the default button (Return), as in the old osascript dialog.
         if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) == Some(1) {
-            self.watch_list = WatchList::new();
-            self.rows_changed();
-            self.save_watches();
+            self.update_watches(|list| list.watches.clear());
             watch_ui::send_macos_notification("Ticker", "All watches cleared.");
             self.update_menu();
         }
@@ -629,6 +667,20 @@ impl App {
         // Invariant: every column is empty and the names are unique, so this cannot fail.
         .expect("empty")
     }
+}
+
+/// Checks every `(asset, price)` against `list` (marking the watches that go off) and returns
+/// those watches with the price that set them off.
+fn fired_watches(list: &mut WatchList, prices: &[(String, f64)]) -> Vec<(PriceWatch, f64)> {
+    prices
+        .iter()
+        .flat_map(|(name, price)| {
+            list.check_price(name, *price)
+                .into_iter()
+                .map(move |w| (w, *price))
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn current_price_for(df: &DataFrame, asset: &str) -> Option<f64> {
@@ -786,6 +838,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         prices_df: None,
         watch_list: WatchList::new(),
         watch_save_blocked: false,
+        watch_stamp: None,
         rows_generation: 0,
         next_check: SystemTime::now(),
         glyphs: mac_ui::tray::Glyphs {
