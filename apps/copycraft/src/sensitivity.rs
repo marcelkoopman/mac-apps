@@ -152,41 +152,96 @@ pub fn forget_labels() {
 }
 
 /// Scan `text`. `None` when `cancelled` said so between two stages (a newer copy came in).
+///
+/// First copycraft's own recognizers ([`crate::recognize`]); then leakguard, only for the
+/// classes they did not find; then redact-core's analyzer for personal and financial fields,
+/// only when those are still missing and the copy is at most [`FULL_LIMIT`] long.
 fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
     let partial = text.len() > FULL_LIMIT;
     let code = is_code(crate::format::detect(text));
     if cancelled() {
         return None;
     }
-    let mut found: Vec<Label> = guard()
-        .find(text)
-        .into_iter()
-        .filter(|hit| counts(text, hit))
-        .map(|hit| label_for(&hit.kind))
-        .filter(|label| !(code && *label == Label::Pii))
-        .collect();
-    if !code {
+    let mut classes = crate::recognize::classes(text, code);
+    if !classes.all() {
+        if cancelled() {
+            return None;
+        }
+        for hit in guard_for(classes).find(text) {
+            let label = label_for(&hit.kind);
+            if counts(text, &hit) && !(code && label == Label::Pii) {
+                classes = with(classes, label);
+            }
+        }
+    }
+    let fields_missing = !(classes.pii && classes.financial);
+    if !code && fields_missing && !partial {
         if cancelled() {
             return None;
         }
         // The analyzer is far from linear on large tables (seconds per megabyte).
-        if !partial {
-            for class in crate::redact::field_classes(text) {
-                found.push(match class {
+        for class in crate::redact::field_classes(text) {
+            classes = with(
+                classes,
+                match class {
                     crate::redact::FieldClass::Pii => Label::Pii,
                     crate::redact::FieldClass::Financial => Label::Financial,
-                });
-            }
-        }
-        if crate::redact::has_bare_bsn(text) {
-            found.push(Label::Pii);
+                },
+            );
         }
     }
-    found.sort_unstable();
-    found.dedup();
     Some(Found {
-        labels: found,
-        partial,
+        labels: classes.labels(),
+        partial: partial && fields_missing && !code,
+    })
+}
+
+fn with(mut classes: crate::recognize::Classes, label: Label) -> crate::recognize::Classes {
+    match label {
+        Label::Credential => classes.credential = true,
+        Label::Pii => classes.pii = true,
+        Label::Financial => classes.financial = true,
+    }
+    classes
+}
+
+/// Leakguard with only the detectors of the classes not found yet, built once per combination.
+fn guard_for(found: crate::recognize::Classes) -> &'static Redactor {
+    static GUARDS: [OnceLock<Redactor>; 8] = [const { OnceLock::new() }; 8];
+    let missing = usize::from(!found.credential)
+        | usize::from(!found.pii) << 1
+        | usize::from(!found.financial) << 2;
+    GUARDS[missing].get_or_init(|| {
+        let mut kinds = Vec::new();
+        if !found.credential {
+            kinds.extend([
+                Kind::PrivateKey,
+                Kind::AzureConnectionString,
+                Kind::TelegramToken,
+                Kind::DiscordToken,
+                Kind::Jwt,
+                Kind::GitHubToken,
+                Kind::SlackToken,
+                Kind::StripeKey,
+                Kind::OpenAiKey,
+                Kind::GoogleApiKey,
+                Kind::AwsAccessKey,
+                Kind::UrlCredentials,
+            ]);
+        }
+        if !found.pii {
+            kinds.extend([
+                Kind::Email,
+                Kind::IpV6,
+                Kind::IpV4,
+                Kind::MacAddress,
+                Kind::UsSsn,
+            ]);
+        }
+        if !found.financial {
+            kinds.extend([Kind::Iban, Kind::CreditCard]);
+        }
+        Redactor::only(&kinds)
     })
 }
 
@@ -314,12 +369,6 @@ fn counts(text: &str, hit: &Match) -> bool {
         || text[hit.start..hit.end]
             .bytes()
             .any(|byte| byte.is_ascii_digit())
-}
-
-/// `Redactor::new` leaves phone numbers and high-entropy tokens off.
-fn guard() -> &'static Redactor {
-    static GUARD: OnceLock<Redactor> = OnceLock::new();
-    GUARD.get_or_init(Redactor::new)
 }
 
 fn label_for(kind: &Kind) -> Label {

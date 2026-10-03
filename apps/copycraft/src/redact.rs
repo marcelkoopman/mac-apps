@@ -97,14 +97,6 @@ fn build_engine() -> AnalyzerEngine {
     engine
 }
 
-/// A standalone 8- or 9-digit run that passes the elfproef.
-///
-/// A longer run, such as the ten account digits in an IBAN, is not a BSN.
-/// Digits glued to a letter or `_` stay part of that token.
-pub fn has_bare_bsn(text: &str) -> bool {
-    !bare_bsn_spans(text).is_empty()
-}
-
 fn bare_bsn_spans(text: &str) -> Vec<(usize, usize)> {
     let bytes = text.as_bytes();
     let mut spans = Vec::new();
@@ -476,15 +468,6 @@ Id;Naam;Salaris
         assert!(classes.contains(&FieldClass::Financial));
         assert!(super::field_classes("BSN: 123456789").contains(&FieldClass::Pii));
         assert!(super::field_classes("Sofinummer: 12345678").contains(&FieldClass::Pii));
-    }
-
-    #[test]
-    fn bare_bsn_follows_the_elfproef() {
-        assert!(super::has_bare_bsn("klant 111222333 bevestigd"));
-        assert!(super::has_bare_bsn("oud nummer 12345672"));
-        assert!(!super::has_bare_bsn("id x111222333 en 1112223330"));
-        assert!(!super::has_bare_bsn("ref 123456789 en 12345678"));
-        assert!(!super::has_bare_bsn("pay to NL91ABNA0417164300"));
     }
 
     #[test]

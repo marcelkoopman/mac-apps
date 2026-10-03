@@ -18,6 +18,7 @@ mod menubar;
 mod open_file;
 mod page_preview;
 mod python;
+mod recognize;
 mod redact;
 mod sensitivity;
 mod settings;

@@ -33,6 +33,9 @@ memchr = "2.8"
 # mac_ui::progress, mac_ui::theme and mac_ui::widgets modules. No feature with network code:
 # copycraft works offline (README, Privacy).
 mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "drop", "file_panel", "image", "panel", "progress", "theme", "widgets"] }
+# One RegexSet for the first layer of the sensitivity check (src/recognize.rs). Already in
+# the tree through polars.
+regex = "1.13"
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
 redact-core = "0.12"
 serde_json = { workspace = true, features = ["preserve_order"] }
