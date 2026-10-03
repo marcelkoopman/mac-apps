@@ -48,31 +48,39 @@ impl WatchUIBuilder {
 }
 
 /// Send a native notification on macOS. Without the app bundle (`cargo run`) the
-/// UserNotifications framework cannot be used, so ticker falls back on `osascript` `display
-/// notification`. That fallback lives here, not in mac-ui: the shared layer starts no
-/// subprocesses (AGENTS.md).
+/// UserNotifications framework cannot be used; a debug build then falls back on `osascript`
+/// `display notification`, a release build only logs it (a release always runs from the bundle).
+/// That fallback lives here, not in mac-ui: the shared layer starts no subprocesses (AGENTS.md).
 #[cfg(target_os = "macos")]
 pub fn send_macos_notification(title: &str, message: &str) {
-    if !mac_ui::notify::send(title, message) {
-        send_with_osascript(title, message);
+    if mac_ui::notify::send(title, message) {
+        return;
     }
+    #[cfg(debug_assertions)]
+    send_with_osascript(title, message);
+    #[cfg(not(debug_assertions))]
+    crate::log_message(&format!(
+        "notification not shown (no app bundle): {title}: {message}"
+    ));
 }
 
-#[cfg(target_os = "macos")]
+/// AppleScript for the debug fallback. Title and body arrive as `argv` of the run handler, so
+/// they are never parsed as AppleScript (no escaping to get wrong).
+#[cfg(any(test, all(target_os = "macos", debug_assertions)))]
+const NOTIFY_SCRIPT: &str =
+    "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run";
+
+/// Arguments for `osascript`: the script, then title and body as its `argv`.
+#[cfg(any(test, all(target_os = "macos", debug_assertions)))]
+fn osascript_args<'a>(title: &'a str, body: &'a str) -> [&'a str; 4] {
+    ["-e", NOTIFY_SCRIPT, title, body]
+}
+
+#[cfg(all(target_os = "macos", debug_assertions))]
 fn send_with_osascript(title: &str, body: &str) {
-    let script = format!(
-        "display notification \"{}\" with title \"{}\"",
-        applescript_escape(body),
-        applescript_escape(title)
-    );
     let _ = std::process::Command::new("osascript")
-        .args(["-e", &script])
+        .args(osascript_args(title, body))
         .status();
-}
-
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn applescript_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Ask for notification permission (first launch of the bundled app only) and show
@@ -95,8 +103,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn escapes_quotes_and_backslashes() {
-        assert_eq!(applescript_escape(r#"a "b" \c"#), r#"a \"b\" \\c"#);
+    fn osascript_gets_text_as_arguments_not_as_script() {
+        let body = r#"BTC "rose" \ end tell"#;
+        let args = osascript_args("Ticker", body);
+        assert_eq!(args, ["-e", NOTIFY_SCRIPT, "Ticker", body]);
+        assert!(NOTIFY_SCRIPT.starts_with("on run argv"));
+        assert!(!NOTIFY_SCRIPT.contains(body));
     }
 
     #[test]
