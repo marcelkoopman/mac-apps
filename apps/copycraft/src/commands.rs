@@ -235,6 +235,35 @@ pub struct LaunchData {
     /// The table version the Dataframe view shows, when the text is a table the card has
     /// worked on ([`crate::table`]). Absent: the copied table as it is.
     pub table: Option<TableShown>,
+    /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
+    /// have them. Absent: no Image ▾.
+    pub image_edit: Option<ImageShown>,
+}
+
+/// The versions of a picture for the card. When a step's version is shown, [`LaunchData`]'s
+/// `image`, `picture` and `image_scan` are that version's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageShown {
+    /// The entry: the original picture's allocation, so every version is the same item.
+    pub entry: u64,
+    /// "Original", then each step's label.
+    pub labels: Vec<String>,
+    /// The version shown: 0 is the original.
+    pub version: usize,
+    /// A step or another version is being worked out.
+    pub working: bool,
+    /// Why the last step did nothing or failed, for the meta line.
+    pub note: Option<String>,
+}
+
+impl ImageShown {
+    pub fn can_undo(&self) -> bool {
+        self.version > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.version + 1 < self.labels.len()
+    }
 }
 
 /// A table version for the card: its frame, which version it is, and what the versions are.
@@ -444,6 +473,13 @@ pub enum CommandId {
     TableVersion(usize),
     /// The "Table ▾" chip: the card pops a menu of table steps ([`table_menu`]).
     TableMenu,
+    /// The "Image ▾" chip: the card pops a menu of picture steps ([`image_menu_items`]).
+    ImageMenu,
+    /// A step on the picture: a new version after the one shown ([`crate::image_edit`]).
+    /// Undo, redo and the version capsule use the table's commands.
+    ImageStep(crate::image_edit::ImageOp),
+    /// Resize › Custom…: asks for a width or a height.
+    ImageResizeCustom,
     /// Describe the table version shown, or go back from that view to the table.
     TableDescribe,
     /// Read the table with its header on this line (0-based in the trimmed text).
@@ -613,15 +649,20 @@ pub fn content_key(data: &LaunchData) -> u64 {
     data.subject_kind.hash(&mut hasher);
     data.subject_text.hash(&mut hasher);
     data.source_name.hash(&mut hasher);
-    if let Some(image) = &data.image {
-        image.format.hash(&mut hasher);
-        image.width.hash(&mut hasher);
-        image.height.hash(&mut hasher);
-        image.byte_len.hash(&mut hasher);
-    }
-    // Two dropped pictures alike in name, format and size are still different items.
-    if let Some(picture) = &data.picture {
-        picture.allocation_id().hash(&mut hasher);
+    if let Some(edit) = &data.image_edit {
+        // Each version of a picture is the same entry, which stays revealed.
+        edit.entry.hash(&mut hasher);
+    } else {
+        if let Some(image) = &data.image {
+            image.format.hash(&mut hasher);
+            image.width.hash(&mut hasher);
+            image.height.hash(&mut hasher);
+            image.byte_len.hash(&mut hasher);
+        }
+        // Two dropped pictures alike in name, format and size are still different items.
+        if let Some(picture) = &data.picture {
+            picture.allocation_id().hash(&mut hasher);
+        }
     }
     // Not the table's version, view, reading or labels: those show the same entry, which stays
     // revealed ([`stays_revealed`]).
@@ -745,7 +786,24 @@ fn compose_card(data: &LaunchData) -> WorkCard {
 }
 
 fn image_card(data: &LaunchData) -> WorkCard {
-    let facts = data.image.as_ref().map(image_meta).unwrap_or_default();
+    let mut facts = data.image.as_ref().map(image_meta).unwrap_or_default();
+    if let Some(edit) = &data.image_edit {
+        let mut parts: Vec<&str> = Vec::new();
+        if !facts.is_empty() {
+            parts.push(&facts);
+        }
+        if edit.version > 0
+            && let Some(label) = edit.labels.get(edit.version)
+        {
+            parts.push(label);
+        }
+        if edit.working {
+            parts.push("Working…");
+        } else if let Some(note) = &edit.note {
+            parts.push(note);
+        }
+        facts = parts.join("  ·  ");
+    }
     let text = match data.view {
         CardView::Info => Some(image_info_text(data)),
         CardView::Ocr | CardView::Qr => image_view_text(data.image_scan.as_ref(), data.view),
@@ -1400,7 +1458,7 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
 /// Actions for the thing on the clipboard. Housekeeping stays in [`overflow`].
 pub fn chips(data: &LaunchData) -> Vec<Command> {
     match data.subject_kind {
-        SubjectKind::Image => image_chips(data.image_scan.as_ref()),
+        SubjectKind::Image => image_chips(data.image_scan.as_ref(), data.image_edit.is_some()),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
             if let Some(toggle) = grid_command(data) {
@@ -1458,6 +1516,13 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     if offers_table || data.table.is_some() {
         commands.extend(table_menu(data.table.as_ref()));
     }
+    if let Some(edit) = &data.image_edit {
+        commands.extend(
+            image_menu_items(edit)
+                .into_iter()
+                .map(|(command, _)| command),
+        );
+    }
     for item in &data.history {
         commands.push(command(
             CommandId::History(item.index),
@@ -1512,6 +1577,8 @@ fn table_step_command(op: &crate::table::TableOp) -> Command {
 pub fn menu_group(id: &CommandId) -> Option<&'static str> {
     match id {
         CommandId::TableStep(op) => op.group(),
+        CommandId::ImageStep(op) => op.group(),
+        CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
         CommandId::TableHeaderLine(_) => Some("Header on line"),
         _ => None,
     }
@@ -1563,6 +1630,67 @@ fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command> {
         "Dates fit both orders",
         "dates order day month us european ambiguous",
     ))
+}
+
+/// The "Image ▾" chip.
+pub const IMAGE_MENU_TITLE: &str = "Image ▾";
+/// Resize › Custom….
+pub const CUSTOM_RESIZE_TITLE: &str = "Custom…";
+
+/// The "Image ▾" menu: Resize (a submenu), the other steps, then undo and redo when there is
+/// a version to go to. No check marks.
+pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
+    use crate::image_edit::ImageOp;
+    let step = |op: &ImageOp| {
+        let detail = op.group().unwrap_or("Image");
+        command(
+            CommandId::ImageStep(*op),
+            &op.title(),
+            detail,
+            image_keywords(op),
+        )
+    };
+    let (resizes, others): (Vec<ImageOp>, Vec<ImageOp>) =
+        ImageOp::MENU.iter().partition(|op| op.group().is_some());
+    let mut commands: Vec<Command> = resizes.iter().map(step).collect();
+    commands.push(command(
+        CommandId::ImageResizeCustom,
+        CUSTOM_RESIZE_TITLE,
+        crate::image_edit::RESIZE_GROUP,
+        "resize custom width height size image",
+    ));
+    commands.extend(others.iter().map(step));
+    if edit.can_undo() {
+        commands.push(command(
+            CommandId::TableUndo,
+            "Undo image step",
+            &edit.labels[edit.version],
+            "undo image version back",
+        ));
+    }
+    if edit.can_redo() {
+        commands.push(command(
+            CommandId::TableRedo,
+            "Redo image step",
+            &edit.labels[edit.version + 1],
+            "redo image version forward",
+        ));
+    }
+    commands
+        .into_iter()
+        .map(|command| (command, false))
+        .collect()
+}
+
+fn image_keywords(op: &crate::image_edit::ImageOp) -> &'static str {
+    use crate::image_edit::ImageOp;
+    match op {
+        ImageOp::Resize(_) => "resize smaller scale size image",
+        ImageOp::RotateLeft | ImageOp::RotateRight => "rotate turn image",
+        ImageOp::FlipHorizontal | ImageOp::FlipVertical => "flip mirror image",
+        ImageOp::RemoveMetadata => "remove metadata exif gps strip image",
+        ImageOp::Grayscale => "grayscale black white gray image",
+    }
 }
 
 /// The "Table ▾" menu with check marks: [`table_menu`], the header line the table is read
@@ -1714,6 +1842,13 @@ pub struct VersionBar {
 
 impl VersionBar {
     pub fn of(data: &LaunchData) -> Option<Self> {
+        if data.subject_kind == SubjectKind::Image {
+            let edit = data.image_edit.as_ref()?;
+            return (data.view == CardView::Original && edit.labels.len() > 1).then(|| Self {
+                labels: edit.labels.clone(),
+                current: edit.version.min(edit.labels.len() - 1),
+            });
+        }
         let table = data.table.as_ref()?;
         let text = data.subject_text.as_deref()?;
         (presented_view(text, data.view) == CardView::Dataframe && table.labels.len() > 1).then(
@@ -2003,6 +2138,9 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableRedo
             | CommandId::TableVersion(_)
             | CommandId::TableMenu
+            | CommandId::ImageMenu
+            | CommandId::ImageStep(_)
+            | CommandId::ImageResizeCustom
             | CommandId::TableDescribe
             | CommandId::TableHeaderLine(_)
             | CommandId::TableDateOrder(_)
@@ -2117,7 +2255,7 @@ fn text_chips(text: &str) -> Vec<Command> {
     finish_modes(commands)
 }
 
-fn image_chips(scan: Option<&ImageScan>) -> Vec<Command> {
+fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command> {
     let mut modes = vec![command(
         CommandId::Info,
         "Info",
@@ -2141,6 +2279,14 @@ fn image_chips(scan: Option<&ImageScan>) -> Vec<Command> {
                 "qr barcode",
             ));
         }
+    }
+    if edits {
+        modes.push(command(
+            CommandId::ImageMenu,
+            IMAGE_MENU_TITLE,
+            "Steps on the picture",
+            "image picture resize rotate flip grayscale metadata undo redo",
+        ));
     }
     let mut commands = vec![original_command()];
     commands.extend(modes);
@@ -2368,6 +2514,7 @@ mod tests {
             full: false,
             picture: None,
             table: None,
+            image_edit: None,
         }
     }
 
@@ -3087,6 +3234,129 @@ fn main() {
         assert!(!info.shows_image);
         assert!(info.selectable);
         assert!(info.excerpt.contains("1280×720"));
+    }
+
+    fn edited_picture(version: usize, labels: &[&str]) -> LaunchData {
+        let mut input = data(SubjectKind::Image, None);
+        input.image = Some(ImageFacts {
+            format: "PNG".into(),
+            width: 1024,
+            height: 768,
+            byte_len: 184_000,
+        });
+        input.image_edit = Some(super::ImageShown {
+            entry: 7,
+            labels: labels.iter().map(|label| label.to_string()).collect(),
+            version,
+            working: false,
+            note: None,
+        });
+        input
+    }
+
+    #[test]
+    fn a_picture_with_versions_has_image_menu_and_version_bar() {
+        use crate::image_edit::{ImageOp, Resize};
+        let plain = edited_picture(0, &["Original"]);
+        assert_eq!(titles(&chips(&plain)), vec!["Original", "Info", "Image ▾"]);
+        assert_eq!(VersionBar::of(&plain), None, "one version: no capsule");
+        assert!(keeps_card_open(&CommandId::ImageMenu));
+        assert!(keeps_card_open(&CommandId::ImageResizeCustom));
+        assert!(keeps_card_open(&CommandId::ImageStep(ImageOp::Grayscale)));
+
+        let menu = super::image_menu_items(plain.image_edit.as_ref().unwrap());
+        let menu_titles: Vec<&str> = menu.iter().map(|(cmd, _)| cmd.title.as_str()).collect();
+        assert_eq!(
+            menu_titles,
+            [
+                "50%",
+                "25%",
+                "Longest side 2048",
+                "Longest side 1024",
+                "Longest side 512",
+                "Custom…",
+                "Rotate 90° left",
+                "Rotate 90° right",
+                "Flip horizontal",
+                "Flip vertical",
+                "Remove metadata",
+                "Grayscale",
+            ]
+        );
+        let grouped: Vec<Option<&str>> = menu.iter().map(|(cmd, _)| menu_group(&cmd.id)).collect();
+        assert_eq!(grouped[..6], [Some("Resize"); 6]);
+        assert!(grouped[6..].iter().all(Option::is_none));
+        assert_eq!(
+            menu[3].0.id,
+            CommandId::ImageStep(ImageOp::Resize(Resize::Longest(1024)))
+        );
+
+        let edited = edited_picture(1, &["Original", "Resized to 1024×768", "Grayscale"]);
+        let bar = VersionBar::of(&edited).expect("capsule");
+        assert_eq!(bar.title(), "v2/3");
+        assert_eq!(
+            undo_key("z", true, false, false, Some(&bar)),
+            Some(CommandId::TableUndo)
+        );
+        let menu = super::image_menu_items(edited.image_edit.as_ref().unwrap());
+        let tail: Vec<(&str, &str)> = menu[12..]
+            .iter()
+            .map(|(cmd, _)| (cmd.title.as_str(), cmd.detail.as_str()))
+            .collect();
+        assert_eq!(
+            tail,
+            [
+                ("Undo image step", "Resized to 1024×768"),
+                ("Redo image step", "Grayscale")
+            ]
+        );
+        // The steps are found by search too.
+        assert!(
+            search_pool(&edited)
+                .iter()
+                .any(|cmd| cmd.id == CommandId::ImageStep(ImageOp::FlipVertical))
+        );
+        // Only in the picture view.
+        let mut info = edited.clone();
+        info.view = CardView::Info;
+        assert_eq!(VersionBar::of(&info), None);
+        // A picture without versions (the clipboard's, not in history) has no Image ▾.
+        let mut bare = edited_picture(0, &["Original"]);
+        bare.image_edit = None;
+        assert_eq!(titles(&chips(&bare)), vec!["Original", "Info"]);
+    }
+
+    #[test]
+    fn a_picture_version_shows_its_label_and_stays_the_same_entry() {
+        let original = edited_picture(0, &["Original", "Resized to 512×384"]);
+        assert_eq!(work_card(&original).meta, "PNG  1024×768  0.18 MB");
+        let mut resized = edited_picture(1, &["Original", "Resized to 512×384"]);
+        resized.image = Some(ImageFacts {
+            format: "PNG".into(),
+            width: 512,
+            height: 384,
+            byte_len: 52_000,
+        });
+        resized.picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]);
+        assert_eq!(
+            work_card(&resized).meta,
+            "PNG  512×384  0.05 MB  ·  Resized to 512×384"
+        );
+        // Every version is the same entry: the reveal stays.
+        assert_eq!(content_key(&original), content_key(&resized));
+        let mut other = resized.clone();
+        other.image_edit.as_mut().unwrap().entry = 8;
+        assert_ne!(content_key(&other), content_key(&resized));
+
+        let mut working = resized.clone();
+        working.image_edit.as_mut().unwrap().working = true;
+        assert!(work_card(&working).meta.ends_with("  ·  Working…"));
+        let mut noted = original.clone();
+        noted.image_edit.as_mut().unwrap().note = Some("Already that size or smaller".into());
+        assert_eq!(
+            work_card(&noted).meta,
+            "PNG  1024×768  0.18 MB  ·  Already that size or smaller"
+        );
     }
 
     #[test]

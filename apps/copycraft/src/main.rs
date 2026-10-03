@@ -13,6 +13,7 @@ mod format;
 mod highlight;
 mod hotkey;
 mod icon;
+mod image_edit;
 mod image_ops;
 mod item_find;
 mod launcher;
@@ -42,6 +43,8 @@ static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 
 #[cfg(target_os = "macos")]
 mod macos_card_text;
+#[cfg(target_os = "macos")]
+mod macos_image_edit;
 #[cfg(target_os = "macos")]
 mod macos_image_io;
 #[cfg(target_os = "macos")]

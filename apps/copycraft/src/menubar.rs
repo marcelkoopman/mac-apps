@@ -25,6 +25,7 @@ use crate::commands::{self, CardView, CommandId, Hist, LaunchData, SubjectKind};
 use crate::format;
 use crate::hotkey;
 use crate::icon;
+use crate::image_edit::{ImageOp, ImageVersions};
 use crate::launcher::{self, UserEvent};
 use crate::table::{TableOp, TableVersions};
 
@@ -107,6 +108,21 @@ struct App {
     describe_for: Option<u64>,
     /// The last description, for the frame with this id ([`TableVersions::frame_id`]).
     describe_cache: Option<(u64, polars::prelude::DataFrame)>,
+    /// The picture versions of a chosen file, which is not in history (a history entry,
+    /// a dropped picture's too, keeps its own). Dropped with the file.
+    opened_image: ImageVersions,
+    /// The Image ▾ job on its thread. One at a time: a new one cancels it.
+    image_job: Option<ImageRun>,
+    /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
+    /// shown on that picture's card until the next step.
+    image_note: Option<(usize, String)>,
+}
+
+/// An Image ▾ job running on its thread ([`crate::image_edit::Job`]).
+struct ImageRun {
+    started: Background,
+    generation: u64,
+    cancel: Arc<AtomicBool>,
 }
 
 /// A copy's hash, to tell which table the Describe view is for (kept in memory only).
@@ -225,6 +241,10 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::LabelsChecked => self.labels_checked(),
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),
+            UserEvent::ImageDone(done) => self.finish_image_job(*done),
+            UserEvent::VersionScanned { picture, scan } => {
+                self.finish_version_scan(&picture, scan);
+            }
         }
     }
 
@@ -353,11 +373,23 @@ impl App {
                 self.refresh_popup();
             }
             CommandId::TableStep(op) => self.table_step(op),
+            // On a picture card, undo, redo and the version capsule are the picture's.
+            CommandId::TableUndo if self.shows_image() => {
+                self.image_goto(|cursor| cursor.checked_sub(1));
+            }
+            CommandId::TableRedo if self.shows_image() => {
+                self.image_goto(|cursor| Some(cursor + 1))
+            }
+            CommandId::TableVersion(index) if self.shows_image() => {
+                self.image_goto(|_| Some(index))
+            }
             CommandId::TableUndo => self.table_goto(|cursor| cursor.checked_sub(1)),
             CommandId::TableRedo => self.table_goto(|cursor| Some(cursor + 1)),
             CommandId::TableVersion(index) => self.table_goto(|_| Some(index)),
+            CommandId::ImageStep(op) => self.image_step(op),
+            CommandId::ImageResizeCustom => self.custom_resize(),
             // The card pops the menu itself.
-            CommandId::TableMenu | CommandId::TableChooseColumns => {}
+            CommandId::TableMenu | CommandId::ImageMenu | CommandId::TableChooseColumns => {}
             CommandId::TableDescribe => self.toggle_describe(),
             CommandId::TableGrid(grid) => {
                 if let Some((_, home)) = self.table_source()
@@ -633,6 +665,281 @@ impl App {
             .flatten()
     }
 
+    /// The card shows a picture (copied or dropped).
+    fn shows_image(&self) -> bool {
+        match &self.opened {
+            Some(opened) => opened.image.is_some(),
+            None => ClipboardView::from_os().is_image(),
+        }
+    }
+
+    /// The picture on the card, as it came (its versions are worked out from it): the dropped
+    /// or chosen picture, or the clipboard's when history holds it.
+    fn image_source(&self) -> Option<SecretBytes> {
+        if let Some(opened) = &self.opened {
+            return opened.image.as_ref().map(|image| image.bytes.clone());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if !ClipboardView::from_os().is_image() {
+                return None;
+            }
+            self.history_image_on_pasteboard(crate::macos_pasteboard::change_count())
+        }
+        #[cfg(not(target_os = "macos"))]
+        None
+    }
+
+    /// The versions of the picture `bytes`: its history entry's, else the chosen file's.
+    fn image_versions(&mut self, bytes: &SecretBytes) -> Option<&mut ImageVersions> {
+        if self.history.holds_image(bytes) {
+            return self.history.image_versions_mut(bytes);
+        }
+        let opened = self
+            .opened
+            .as_ref()
+            .and_then(|file| file.image.as_ref())
+            .is_some_and(|image| image.bytes.same_allocation(bytes));
+        opened.then_some(&mut self.opened_image)
+    }
+
+    /// The versions whose newest job is `generation`.
+    fn image_awaiting(&mut self, generation: u64) -> Option<&mut ImageVersions> {
+        if self.opened_image.awaits(generation) {
+            return Some(&mut self.opened_image);
+        }
+        self.history.image_awaiting(generation)
+    }
+
+    /// Run `op` on the version shown; the card shows the new version when it is done.
+    fn image_step(&mut self, op: ImageOp) {
+        let Some(bytes) = self.image_source() else {
+            return;
+        };
+        let Some(versions) = self.image_versions(&bytes) else {
+            return;
+        };
+        match versions.push(op, &bytes) {
+            Ok(job) => {
+                self.image_note = None;
+                self.card_view = CardView::Original;
+                self.run_image_job(job);
+            }
+            Err(e) => self.image_note = Some((bytes.allocation_id(), e.to_string())),
+        }
+        self.refresh_popup();
+    }
+
+    /// Resize › Custom…: ask for a width or a height, then resize to it.
+    fn custom_resize(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let mut message = "A width (1200 or w 1200) or a height (h 800), in pixels. \
+                               The picture keeps its proportions and never gets larger."
+                .to_string();
+            loop {
+                let answer = mac_ui::dialog::prompt_text(mtm, "Resize to", &message, "");
+                launcher::order_front();
+                let Some(answer) = answer.map(Zeroizing::new) else {
+                    return;
+                };
+                if answer.trim().is_empty() {
+                    return;
+                }
+                match crate::image_edit::parse_custom_resize(&answer) {
+                    Some(to) => {
+                        self.image_step(ImageOp::Resize(to));
+                        return;
+                    }
+                    None => {
+                        message = "That is not a size. Type a width like 1200 or w 1200, or a \
+                                   height like h 800."
+                            .to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Show the version `to` picks from the one shown (undo, redo, a version from the menu).
+    fn image_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
+        let Some(bytes) = self.image_source() else {
+            return;
+        };
+        let Some(versions) = self.image_versions(&bytes) else {
+            return;
+        };
+        let Some(index) = to(versions.cursor()) else {
+            return;
+        };
+        let job = versions.goto(index, &bytes);
+        self.image_note = None;
+        self.card_view = CardView::Original;
+        if let Some(job) = job {
+            self.run_image_job(job);
+        } else {
+            // Shown at once (the original, or a version kept): a job still running is stale.
+            self.cancel_image_job();
+        }
+        self.refresh_popup();
+    }
+
+    /// Start `job` on a thread, cancelling the one running. The version is scanned (info,
+    /// text, barcodes) after it is shown ([`UserEvent::VersionScanned`]).
+    fn run_image_job(&mut self, job: crate::image_edit::Job) {
+        self.cancel_image_job();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancel);
+        let generation = job.generation;
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-image".into())
+            .spawn(move || {
+                #[cfg(target_os = "macos")]
+                let result = job.run(&flag, &crate::macos_image_edit::ImageIoCodec);
+                #[cfg(not(target_os = "macos"))]
+                let result: Result<crate::image_edit::JobDone, _> = {
+                    drop((job, &flag));
+                    Err(crate::image_edit::ImageError::Failed(
+                        "Needs macOS".to_string(),
+                    ))
+                };
+                let picture = result
+                    .as_ref()
+                    .ok()
+                    .map(crate::image_edit::JobDone::picture);
+                launcher::emit(UserEvent::ImageDone(Box::new(launcher::ImageDone {
+                    generation,
+                    result,
+                })));
+                #[cfg(target_os = "macos")]
+                if let Some(picture) = picture
+                    && !flag.load(Ordering::Relaxed)
+                {
+                    let bytes = Zeroizing::new(picture.with(<[u8]>::to_vec));
+                    let scan = crate::macos_pasteboard::scan_image_bytes(&bytes);
+                    launcher::emit(UserEvent::VersionScanned { picture, scan });
+                }
+                #[cfg(not(target_os = "macos"))]
+                let _ = picture;
+            });
+        match spawned {
+            Ok(_) => {
+                self.image_job = Some(ImageRun {
+                    started: Background::now(),
+                    generation,
+                    cancel,
+                });
+            }
+            Err(e) => eprintln!("image job failed to start: {e}"),
+        }
+    }
+
+    fn cancel_image_job(&mut self) {
+        if let Some(run) = self.image_job.take() {
+            run.cancel.store(true, Ordering::Relaxed);
+        }
+        self.stop_spinner_when_idle();
+    }
+
+    /// Take a finished Image ▾ job into the versions it was made for (if they still wait for
+    /// it), and show it.
+    fn finish_image_job(&mut self, done: launcher::ImageDone) {
+        if let Some(run) = self
+            .image_job
+            .take_if(|run| run.generation == done.generation)
+        {
+            eprintln!(
+                "copycraft: image job done in {} ms",
+                run.started.elapsed_ms()
+            );
+        }
+        self.stop_spinner_when_idle();
+        match done.result {
+            Ok(finished) => {
+                if let Some(versions) = self.image_awaiting(finished.generation()) {
+                    versions.finish(finished);
+                }
+            }
+            Err(crate::image_edit::ImageError::Cancelled) => return,
+            // A step that changes nothing ("Already that size or smaller"): a note, no version.
+            Err(e) => {
+                if self.image_awaiting(done.generation).is_none() {
+                    return;
+                }
+                if let Some(bytes) = self.image_source() {
+                    self.image_note = Some((bytes.allocation_id(), e.to_string()));
+                }
+            }
+        }
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    /// Keep a version's scan with it, and show it when the card shows that version.
+    fn finish_version_scan(&mut self, picture: &SecretBytes, scan: Option<commands::ImageScan>) {
+        let Some(scan) = scan else {
+            return;
+        };
+        let kept = self.opened_image.remember_scan(picture, &scan)
+            || self.history.remember_version_scan(picture, &scan);
+        if kept && launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    /// The picture versions for the card: `data` is the card for the picture they are of. A
+    /// step's version shown replaces the picture, its facts and its scan; one not worked out
+    /// (after Wipe of the far entries' pictures) is worked out again.
+    fn attach_image(&mut self, data: &mut LaunchData) {
+        if data.subject_kind != SubjectKind::Image {
+            return;
+        }
+        let Some(bytes) = self.image_source() else {
+            return;
+        };
+        let running = self.image_job.as_ref().map(|run| run.generation);
+        let note = self
+            .image_note
+            .as_ref()
+            .filter(|(entry, _)| *entry == bytes.allocation_id())
+            .map(|(_, note)| note.clone());
+        let Some(versions) = self.image_versions(&bytes) else {
+            return;
+        };
+        let running_here = running.is_some_and(|generation| versions.awaits(generation));
+        let load = if running_here {
+            None
+        } else {
+            versions.load(&bytes)
+        };
+        let working = load.is_some() || running_here;
+        data.image_edit = Some(commands::ImageShown {
+            entry: bytes.allocation_id() as u64,
+            labels: versions.labels(),
+            version: versions.cursor(),
+            working,
+            note,
+        });
+        if let Some(shown) = versions.shown() {
+            data.picture = Some(shown.picture.clone());
+            data.image = Some(shown.facts.clone());
+            data.image_scan = shown.scan.clone();
+        }
+        if let Some(job) = load {
+            self.run_image_job(job);
+        }
+    }
+
+    /// The version of the picture on the card when it is a step's and worked out.
+    fn shown_image_version(&mut self) -> Option<crate::image_edit::VersionPicture> {
+        let bytes = self.image_source()?;
+        self.image_versions(&bytes)?.shown().cloned()
+    }
+
     fn summon_popup(&mut self) {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
@@ -786,6 +1093,7 @@ impl App {
             self.launch_data(&view)
         };
         self.attach_table(&mut data);
+        self.attach_image(&mut data);
         data
     }
 
@@ -898,6 +1206,7 @@ impl App {
     fn leave_opened(&mut self) {
         self.opened = None;
         self.opened_table = TableVersions::default();
+        self.opened_image = ImageVersions::default();
         if let Some(cursor) = self.clipboard_cursor.take() {
             self.history_cursor = cursor;
         }
@@ -909,6 +1218,7 @@ impl App {
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
         self.opened = Some(opened);
         self.opened_table = TableVersions::default();
+        self.opened_image = ImageVersions::default();
         self.card_view = CardView::Original;
         self.refresh_popup();
     }
@@ -993,6 +1303,7 @@ impl App {
             full: false,
             picture: None,
             table: None,
+            image_edit: None,
         }
     }
 
@@ -1066,10 +1377,19 @@ impl App {
 
     fn copy_current(&mut self) -> anyhow::Result<()> {
         let from_file = self.opened.is_some();
+        let version = self.shown_image_version();
+        if let Some(version) = version.as_ref()
+            && self.card_view == CardView::Original
+        {
+            return self.copy_image_version(version);
+        }
         if let Some(image) = self.opened.as_ref().and_then(|file| file.image.as_ref()) {
             // The dropped picture stays on the card; only the view's text is copied.
-            if let Some(text) =
-                commands::image_view_text(image.scan.as_ref(), self.card_view).map(Zeroizing::new)
+            let scan = match &version {
+                Some(version) => version.scan.as_ref(),
+                None => image.scan.as_ref(),
+            };
+            if let Some(text) = commands::image_view_text(scan, self.card_view).map(Zeroizing::new)
             {
                 self.write_own(text.as_str())?;
                 self.record_own_copy(text.as_str());
@@ -1108,15 +1428,54 @@ impl App {
     }
 
     fn copy_image_view(&mut self) -> anyhow::Result<()> {
-        let Some(text) =
-            commands::image_view_text(self.image_scan.as_ref(), self.card_view).map(Zeroizing::new)
-        else {
+        let version = self.shown_image_version();
+        let scan = match &version {
+            Some(version) => version.scan.as_ref(),
+            None => self.image_scan.as_ref(),
+        };
+        let Some(text) = commands::image_view_text(scan, self.card_view).map(Zeroizing::new) else {
             return Ok(());
         };
         self.card_view = CardView::Original;
         self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());
         self.refresh_popup();
+        Ok(())
+    }
+
+    /// Copy the picture version shown: its PNG goes on the pasteboard (as `public.png`) and
+    /// into history as a new copy, with the version's scan.
+    fn copy_image_version(
+        &mut self,
+        version: &crate::image_edit::VersionPicture,
+    ) -> anyhow::Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            let png = Zeroizing::new(version.picture.with(<[u8]>::to_vec));
+            crate::macos_pasteboard::write_history_image(&png)
+                .map_err(anyhow::Error::msg)
+                .context("image")?;
+            self.sensitive_clear = None;
+            self.conceal_when_checked = None;
+            let change = crate::macos_pasteboard::change_count();
+            // A copy of its own: the version's bytes go when it is no longer kept.
+            let recorded = self.history.record_image(png.to_vec());
+            if let (Some(bytes), Some(scan)) = (recorded.as_ref(), version.scan.as_ref()) {
+                self.history.remember_image_scan(bytes, scan);
+                self.image_scan = Some(scan.clone());
+                self.image_scan_change = Some(change);
+            }
+            self.recorded_image_change = Some(change);
+            self.image_on_pasteboard = recorded.clone().map(|bytes| (change, bytes));
+            self.current_image = recorded;
+            self.last_copy = Some(Instant::now());
+            self.history_cursor = 0;
+            self.clipboard_cursor = None;
+            self.refresh_status_menu();
+            self.refresh_popup();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = version;
         Ok(())
     }
 
@@ -1142,6 +1501,7 @@ impl App {
         let version = (self.card_view == CardView::Dataframe)
             .then(|| self.shown_table_version())
             .flatten();
+        let image_version = self.shown_image_version();
         let job = match version {
             Some(frame) => {
                 let mut job = crate::macos_save::SaveJob::table(frame);
@@ -1150,6 +1510,9 @@ impl App {
                 }
                 Some(job)
             }
+            None if image_version.is_some() => image_version
+                .as_ref()
+                .map(|version| self.image_version_save_job(version)),
             None if self.opened.is_some() => self.opened_save_job(),
             None => self.clipboard_save_job(),
         };
@@ -1183,7 +1546,8 @@ impl App {
             .as_ref()
             .filter(|run| !run.quiet)
             .map(|run| run.started);
-        let Some(started) = [self.saving, self.loading_all, table]
+        let image = self.image_job.as_ref().map(|run| run.started);
+        let Some(started) = [self.saving, self.loading_all, table, image]
             .into_iter()
             .flatten()
             .map(|run| run.started)
@@ -1211,6 +1575,7 @@ impl App {
             && self.saving.is_none()
             && self.loading_all.is_none()
             && self.table_job.as_ref().is_none_or(|run| run.quiet)
+            && self.image_job.is_none()
         {
             self.spinner_on = false;
             launcher::set_busy(false);
@@ -1233,6 +1598,32 @@ impl App {
         self.stop_spinner_when_idle();
         if let Err(message) = result {
             log_save_failure(&message);
+        }
+    }
+
+    /// Save job for the picture version shown (an Image ▾ step's): the shown scan text, else
+    /// its PNG. Named after the dropped or chosen file.
+    #[cfg(target_os = "macos")]
+    fn image_version_save_job(
+        &self,
+        version: &crate::image_edit::VersionPicture,
+    ) -> crate::macos_save::SaveJob {
+        use crate::macos_save::{SaveContent, SaveJob};
+        let name = self
+            .opened
+            .as_ref()
+            .map_or("clipboard", |opened| opened.name.as_str());
+        if let Some(text) = commands::image_view_text(version.scan.as_ref(), self.card_view) {
+            return SaveJob {
+                filename: crate::open_file::save_name(name, "txt"),
+                extension: "txt",
+                content: SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
+            };
+        }
+        SaveJob {
+            filename: crate::open_file::save_name(name, "png"),
+            extension: "png",
+            content: SaveContent::Bytes(Zeroizing::new(version.picture.with(<[u8]>::to_vec))),
         }
     }
 
@@ -1348,6 +1739,8 @@ impl App {
         }
         self.current_image = None;
         self.image_on_pasteboard = None;
+        self.cancel_image_job();
+        self.image_note = None;
         self.cancel_table_job();
         self.table_error = None;
         self.describe_for = None;
@@ -1406,6 +1799,9 @@ impl App {
     fn clear_secrets(&mut self) {
         self.opened = None;
         self.opened_table = TableVersions::default();
+        self.opened_image = ImageVersions::default();
+        self.cancel_image_job();
+        self.image_note = None;
         self.cancel_table_job();
         self.table_error = None;
         self.describe_for = None;
@@ -1697,10 +2093,12 @@ impl App {
     fn show_restored(&mut self) {
         let view = ClipboardView::from_os();
         self.record_current(&view);
+        let mut data = self.launch_data(&view);
+        self.attach_image(&mut data);
         if launcher::is_open() {
-            launcher::sync(self.launch_data(&view));
+            launcher::sync(data);
         } else {
-            launcher::reveal(self.launch_data(&view));
+            launcher::reveal(data);
         }
     }
 
@@ -2071,6 +2469,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         table_error: None,
         describe_for: None,
         describe_cache: None,
+        opened_image: ImageVersions::default(),
+        image_job: None,
+        image_note: None,
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));

@@ -30,6 +30,13 @@ pub enum UserEvent {
     SessionEnded,
     /// A table job ([`crate::table::Job`]) is done, or failed.
     TableDone(Box<TableDone>),
+    /// An Image ▾ job ([`crate::image_edit::Job`]) is done, or failed.
+    ImageDone(Box<ImageDone>),
+    /// The scan of the picture version `picture` (an Image ▾ step's) is done.
+    VersionScanned {
+        picture: crate::clipboard::SecretBytes,
+        scan: Option<crate::commands::ImageScan>,
+    },
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,
@@ -47,6 +54,22 @@ pub struct TableDone {
 impl std::fmt::Debug for TableDone {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TableDone")
+            .field("generation", &self.generation)
+            .field("ok", &self.result.is_ok())
+            .finish()
+    }
+}
+
+/// What an Image ▾ job left: the generation it ran for and its version, or why it stopped.
+#[derive(Clone)]
+pub struct ImageDone {
+    pub generation: u64,
+    pub result: Result<crate::image_edit::JobDone, crate::image_edit::ImageError>,
+}
+
+impl std::fmt::Debug for ImageDone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageDone")
             .field("generation", &self.generation)
             .field("ok", &self.result.is_ok())
             .finish()

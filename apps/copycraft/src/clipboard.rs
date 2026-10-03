@@ -7,6 +7,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::commands::{CardView, ImageScan, WorkCard};
 use crate::format;
+use crate::image_edit::ImageVersions;
 use crate::table::TableVersions;
 
 pub const MAX_HISTORY: usize = 20;
@@ -216,6 +217,9 @@ struct HistoryEntry {
     /// A table's versions (the steps taken on the card), once the card worked on it. Its
     /// frames are derived data like the cards; its steps stay with the entry.
     table: Option<TableVersions>,
+    /// A picture's versions (the Image ▾ steps), once the card worked on it. Like a table's,
+    /// its pictures are derived data; its steps stay with the entry.
+    images: Option<ImageVersions>,
 }
 
 impl HistoryEntry {
@@ -227,6 +231,7 @@ impl HistoryEntry {
             cards: Vec::new(),
             scan: None,
             table: None,
+            images: None,
         }
     }
 
@@ -237,6 +242,7 @@ impl HistoryEntry {
             cards: Vec::new(),
             scan: None,
             table: None,
+            images: None,
         }
     }
 
@@ -251,6 +257,9 @@ impl HistoryEntry {
         self.scan = None;
         if let Some(table) = self.table.as_mut() {
             table.forget_frames();
+        }
+        if let Some(images) = self.images.as_mut() {
+            images.forget_pictures();
         }
     }
 }
@@ -458,6 +467,39 @@ impl ClipboardHistory {
             .iter_mut()
             .filter_map(|entry| entry.table.as_mut())
             .find(|table| table.awaits(generation))
+    }
+
+    /// The versions of the picture entry holding these very bytes, made when needed. Entries
+    /// further than [`DERIVED_NEAR`] from it forget their derived data.
+    pub fn image_versions_mut(&mut self, bytes: &SecretBytes) -> Option<&mut ImageVersions> {
+        let index = self.image_entry(bytes)?;
+        self.forget_derived_beyond(index);
+        Some(
+            self.entries[index]
+                .images
+                .get_or_insert_with(ImageVersions::default),
+        )
+    }
+
+    /// History holds the picture with these very bytes.
+    pub fn holds_image(&self, bytes: &SecretBytes) -> bool {
+        self.image_entry(bytes).is_some()
+    }
+
+    /// Keep `scan` with the picture version `picture` ([`ImageVersions::remember_scan`]).
+    pub fn remember_version_scan(&mut self, picture: &SecretBytes, scan: &ImageScan) -> bool {
+        self.entries
+            .iter_mut()
+            .filter_map(|entry| entry.images.as_mut())
+            .any(|images| images.remember_scan(picture, scan))
+    }
+
+    /// The picture whose newest job is `generation` ([`ImageVersions::awaits`]).
+    pub fn image_awaiting(&mut self, generation: u64) -> Option<&mut ImageVersions> {
+        self.entries
+            .iter_mut()
+            .filter_map(|entry| entry.images.as_mut())
+            .find(|images| images.awaits(generation))
     }
 
     /// The scan kept with the picture entry holding these very bytes.

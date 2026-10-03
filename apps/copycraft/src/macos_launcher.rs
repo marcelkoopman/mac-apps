@@ -708,9 +708,14 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
-    let (menu, checks): (Vec<Command>, Vec<bool>) = commands::table_menu_items(data.table.as_ref())
-        .into_iter()
-        .unzip();
+    // A picture's card has Image ▾ in the table menu's place.
+    let items = match data.image_edit.as_ref() {
+        Some(edit) if data.subject_kind == commands::SubjectKind::Image => {
+            commands::image_menu_items(edit)
+        }
+        _ => commands::table_menu_items(data.table.as_ref()),
+    };
+    let (menu, checks): (Vec<Command>, Vec<bool>) = items.into_iter().unzip();
     TABLE_MENU.with(|slot| set_commands(slot, menu));
     TABLE_MENU_CHECKS.with(|slot| slot.replace(checks));
 }
@@ -2023,7 +2028,7 @@ fn activate_overflow(index: usize) {
 }
 
 fn run_command(cmd: Command) {
-    if cmd.id == CommandId::TableMenu {
+    if matches!(cmd.id, CommandId::TableMenu | CommandId::ImageMenu) {
         pop_table_menu();
         return;
     }
@@ -2974,7 +2979,7 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
     focus_card();
 }
 
-/// The "Table ▾" chip's menu: the steps, undo and redo.
+/// The "Table ▾" (or "Image ▾") chip's menu: the steps, undo and redo.
 fn pop_table_menu() {
     let checks = TABLE_MENU_CHECKS.with(|slot| slot.borrow().clone());
     let items: Vec<(Command, bool)> = TABLE_MENU.with(|slot| {
@@ -2987,7 +2992,7 @@ fn pop_table_menu() {
     let index = SHOWN.with(|slot| {
         slot.borrow()
             .iter()
-            .position(|cmd| cmd.id == CommandId::TableMenu)
+            .position(|cmd| matches!(cmd.id, CommandId::TableMenu | CommandId::ImageMenu))
     });
     let chip = index.and_then(|index| CHIPS.with(|slot| slot.borrow().get(index).cloned()));
     match chip {
@@ -3162,6 +3167,7 @@ mod tests {
             full: false,
             picture: None,
             table: None,
+            image_edit: None,
         }
     }
 
@@ -3205,6 +3211,7 @@ mod tests {
             full: false,
             picture: None,
             table: None,
+            image_edit: None,
         }
     }
 
