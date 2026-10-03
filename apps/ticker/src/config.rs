@@ -15,6 +15,47 @@ impl Config {
     pub fn menubar_asset_name(&self) -> Option<&str> {
         self.menubar_asset.as_deref().filter(|s| !s.is_empty())
     }
+
+    /// The assets that are polled: those without an [`asset_problem`].
+    pub fn fetchable_assets(&self) -> Vec<Asset> {
+        self.assets
+            .iter()
+            .filter(|a| asset_problem(a).is_none())
+            .cloned()
+            .collect()
+    }
+
+    /// Assets left out of polling, with the reason (one error line each in the menu). They stay
+    /// in the config, so *Edit asset…* can fix them.
+    pub fn skipped_assets(&self) -> Vec<SkippedAsset> {
+        self.assets
+            .iter()
+            .filter_map(|a| {
+                Some(SkippedAsset {
+                    name: a.name.clone(),
+                    reason: asset_problem(a)?,
+                })
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SkippedAsset {
+    pub name: String,
+    pub reason: String,
+}
+
+/// Why `asset` cannot be polled, if it cannot: a URL that fails [`validate_asset_url`] (https
+/// only) or an empty price path. One bad asset is skipped instead of failing the whole config.
+pub fn asset_problem(asset: &Asset) -> Option<String> {
+    if let Err(e) = validate_asset_url(&asset.url) {
+        return Some(e);
+    }
+    if asset.price_path.trim().is_empty() {
+        return Some("Price path cannot be empty".into());
+    }
+    None
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -61,6 +102,12 @@ pub fn load_config_from(path: &Path) -> Result<Config, Box<dyn Error>> {
         fs::read_to_string(path).map_err(|e| format!("Failed to read {:?}: {}", path, e))?;
     let mut config = parse_config(&config_str)?;
     migrate_power_path(&mut config);
+    for skipped in config.skipped_assets() {
+        crate::log_message(&format!(
+            "config: {:?} skipped: {}",
+            skipped.name, skipped.reason
+        ));
+    }
     Ok(config)
 }
 
@@ -145,7 +192,7 @@ pub fn apply_asset_edit(
 /// Longest URL accepted by *Edit asset…*.
 const MAX_URL_LEN: usize = 2048;
 
-/// URL check for *Edit asset…*: `https://` with a host, no credentials, no whitespace. The
+/// URL check for *Edit asset…* and at config load: `https://` with a host, no credentials, no whitespace. The
 /// bundled config only uses https; plain http would let anyone on the network change prices
 /// (and, through watches, trigger alerts).
 pub fn validate_asset_url(url: &str) -> Result<(), String> {
@@ -388,11 +435,39 @@ url = "https://example.com"
     }
 
     #[test]
+    fn invalid_assets_are_skipped_not_fatal() {
+        let toml = sample_toml()
+            .replace("https://example.com/gold", "http://example.com/gold")
+            .replace("bitcoin.eur", " ");
+        let config = parse_config(&toml).expect("still a valid config");
+        assert_eq!(config.assets.len(), 2, "kept for Edit asset");
+        assert!(config.fetchable_assets().is_empty());
+        let skipped = config.skipped_assets();
+        assert_eq!(
+            skipped,
+            vec![
+                SkippedAsset {
+                    name: "Bitcoin".into(),
+                    reason: "Price path cannot be empty".into()
+                },
+                SkippedAsset {
+                    name: "Gold".into(),
+                    reason: "URL must start with https://".into()
+                },
+            ]
+        );
+        let good = parse_config(sample_toml()).unwrap();
+        assert_eq!(good.fetchable_assets().len(), 2);
+        assert!(good.skipped_assets().is_empty());
+    }
+
+    #[test]
     fn bundled_config_urls_pass_validation() {
         let config = parse_config(include_str!("../config.toml")).unwrap();
         for asset in &config.assets {
             assert!(validate_asset_url(&asset.url).is_ok(), "{}", asset.url);
         }
+        assert!(config.skipped_assets().is_empty());
     }
 
     #[test]

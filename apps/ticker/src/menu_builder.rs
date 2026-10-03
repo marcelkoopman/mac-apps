@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use mac_ui::tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 use std::collections::HashMap;
 
+use crate::config::SkippedAsset;
 use crate::freshness::{AssetStatus, STALE_MARK};
 use crate::menu_ids;
 use crate::price_watch::WatchList;
@@ -29,6 +30,7 @@ impl MenuBuilder {
         watch_list: &WatchList,
         generation: u64,
         freshness: &Freshness<'_>,
+        skipped: &[SkippedAsset],
     ) -> Menu {
         let menu = Menu::new();
 
@@ -46,6 +48,9 @@ impl MenuBuilder {
                 mac_ui::tray::set_secondary_title(&item, &text);
             }
             let _ = menu.append(&item);
+        }
+        for asset in skipped {
+            let _ = menu.append(&mac_ui::tray::info_item(&Self::skipped_line(asset)));
         }
 
         let _ = menu.append(&PredefinedMenuItem::separator());
@@ -104,6 +109,11 @@ impl MenuBuilder {
         let _ = menu.append(&Self::version_item());
         let _ = menu.append(&mac_ui::tray::quit_item("Quit"));
         menu
+    }
+
+    /// Error line for an asset that is not polled (bad URL or price path in the config).
+    fn skipped_line(asset: &SkippedAsset) -> String {
+        format!("{STALE_MARK} {} skipped: {}", asset.name, asset.reason)
     }
 
     /// VoiceOver label of the menu bar button: the app name, the price shown in the title (not
@@ -336,6 +346,18 @@ mod tests {
                 now: now(),
             },
         )
+    }
+
+    #[test]
+    fn skipped_line_names_asset_and_reason() {
+        let line = MenuBuilder::skipped_line(&SkippedAsset {
+            name: "Gold".into(),
+            reason: "URL must start with https://".into(),
+        });
+        assert_eq!(
+            line,
+            "\u{26A0}\u{FE0E} Gold skipped: URL must start with https://"
+        );
     }
 
     #[test]

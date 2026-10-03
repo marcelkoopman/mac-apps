@@ -42,7 +42,7 @@ symbol = "💰"
 | `unit_hint` | Suffix after the price, e.g. `/MWh` |
 | `symbol` | Emoji/prefix in the menu |
 
-All fields are required per asset. `menubar_asset` is optional. A menu bar asset picked by clicking a row takes precedence over it. If the config cannot be loaded, the menu shows the error and *Retry* loads it again (after you fixed the file).
+All fields are required per asset. `menubar_asset` is optional. A menu bar asset picked by clicking a row takes precedence over it. If the config cannot be loaded, the menu shows the error and *Retry* loads it again (after you fixed the file). An asset with an unusable URL (not `https://`, no host, credentials in it) or an empty price path is skipped instead: it gets a ⚠︎ error line in the menu, the other assets keep working, and *Edit asset…* can fix it.
 
 State files in your home directory (without one, Ticker uses the bundled config, logs to stderr only and keeps the price history and watches in memory):
 

@@ -446,7 +446,7 @@ impl App {
             return;
         };
         let fetcher = fetcher.clone();
-        let assets = config.assets.clone();
+        let assets = config.fetchable_assets();
         let previous = self.prices.clone();
         let proxy = self.proxy.clone();
         let spawned = std::thread::Builder::new()
@@ -632,7 +632,18 @@ impl App {
             status: &self.asset_status,
             now: chrono::Local::now(),
         };
-        let menu = MenuBuilder::build(rows, &self.watch_list, self.rows_generation, &freshness);
+        let skipped = self
+            .config
+            .as_ref()
+            .map(config::Config::skipped_assets)
+            .unwrap_or_default();
+        let menu = MenuBuilder::build(
+            rows,
+            &self.watch_list,
+            self.rows_generation,
+            &freshness,
+            &skipped,
+        );
         let pin = self.config.as_ref().and_then(|c| c.menubar_asset_name());
         let title = MenuBuilder::menubar_title(rows, pin, &freshness);
         if let Ok(tray) = self.tray.try_borrow_mut() {
