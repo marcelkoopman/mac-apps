@@ -125,8 +125,9 @@ thread_local! {
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
     /// The history capsule: a glass (or frosted) capsule holding the chevrons and the position.
     static NAV_CAPSULE: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
-    static OLDER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
-    static NEWER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
+    /// `‹` previous (toward 1, the newest) and `›` next (toward the oldest).
+    static PREVIOUS: RefCell<Option<NavButton>> = const { RefCell::new(None) };
+    static NEXT: RefCell<Option<NavButton>> = const { RefCell::new(None) };
     /// The position ("1 / 3") between the chevrons.
     static NAV_COUNT: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Wipe, More and Close in one glass group at the right of the header.
@@ -652,7 +653,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_image = image_view(mtm);
     let pills = glass::group(mtm, GLASS_MERGE);
-    let (nav_capsule, older, nav_count, newer) = history_capsule(mtm);
+    let (nav_capsule, previous, nav_count, next) = history_capsule(mtm);
     let more = header_symbol(mtm, "ellipsis", "More", "⋯", sel!(moreClicked:));
     let clear = GlassButton::pill(mtm, "Wipe", ButtonSize::Small);
     wire_button(clear.button(), sel!(clearClicked:));
@@ -700,8 +701,8 @@ fn ensure_window(mtm: MainThreadMarker) {
     PREVIEW_IMAGE.with(|slot| slot.replace(Some(preview_image)));
     PILLS.with(|slot| slot.replace(Some(pills)));
     NAV_CAPSULE.with(|slot| slot.replace(Some(nav_capsule)));
-    OLDER.with(|slot| slot.replace(Some(older)));
-    NEWER.with(|slot| slot.replace(Some(newer)));
+    PREVIOUS.with(|slot| slot.replace(Some(previous)));
+    NEXT.with(|slot| slot.replace(Some(next)));
     NAV_COUNT.with(|slot| slot.replace(Some(nav_count)));
     HEADER_GROUP.with(|slot| slot.replace(Some(header_group)));
     MORE.with(|slot| slot.replace(Some(more)));
@@ -2455,15 +2456,19 @@ fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
     let Some(nav) = nav else {
         return;
     };
-    OLDER.with(|slot| {
+    PREVIOUS.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             // A real NSButton draws its own disabled state and leaves the key-view loop.
-            button.button().setEnabled(nav.can_older);
+            button
+                .button()
+                .setEnabled(commands::PREVIOUS_CHEVRON.enabled(&nav));
         }
     });
-    NEWER.with(|slot| {
+    NEXT.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            button.button().setEnabled(nav.can_newer);
+            button
+                .button()
+                .setEnabled(commands::NEXT_CHEVRON.enabled(&nav));
         }
     });
     NAV_COUNT.with(|slot| {
@@ -2659,8 +2664,8 @@ fn well_action(
 }
 
 /// Borderless chevron inside the history capsule: the SF Symbol only (or just the fallback
-/// glyph), centred in its slot. The name ("Older", "Newer") is the VoiceOver label and tooltip.
-fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron, action: Sel) -> NavButton {
+/// glyph), centred in its slot. The name ("Previous", "Next") is the VoiceOver label and tooltip.
+fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
     let button = GlassButton::symbol(mtm, chevron.symbol, chevron.name, chevron.glyph, NAV_SYMBOL);
     let ns = button.button();
     // The capsule is the glass; a second glass bezel inside it would stack glass on glass.
@@ -2676,12 +2681,18 @@ fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron, action: Sel) ->
     let name = NSString::from_str(chevron.name);
     ns.setAccessibilityLabel(Some(&name));
     ns.setToolTip(Some(&name));
+    // Older counts up (`›`, next); newer counts down (`‹`, previous).
+    let action = if chevron.command() == CommandId::HistoryOlder {
+        sel!(olderClicked:)
+    } else {
+        sel!(newerClicked:)
+    };
     wire_button(ns, action);
     button
 }
 
 /// The history capsule, hidden until there are two copies: Liquid Glass on macOS 26+ (frosted
-/// before), fully rounded, with `‹` Older and `›` Newer chevrons around the position label in
+/// before), fully rounded, with `‹` Previous and `›` Next chevrons around the position label in
 /// tabular digits. Fixed size ([`commands::NAV_SPAN`]), so it never jumps while stepping.
 fn history_capsule(
     mtm: MainThreadMarker,
@@ -2701,8 +2712,8 @@ fn history_capsule(
     );
     capsule.setHidden(true);
     let inside = glass::background(mtm, &capsule, height / 2.0).content;
-    let older = nav_button(mtm, commands::OLDER_CHEVRON, sel!(olderClicked:));
-    let newer = nav_button(mtm, commands::NEWER_CHEVRON, sel!(newerClicked:));
+    let previous = nav_button(mtm, commands::PREVIOUS_CHEVRON);
+    let next = nav_button(mtm, commands::NEXT_CHEVRON);
     let count = widgets::label(mtm, NAV_FONT, &NSColor::secondaryLabelColor());
     // Tabular digits: "1 / 9" and "2 / 9" are the same width. 0.0 is NSFontWeightRegular.
     count.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
@@ -2711,7 +2722,7 @@ fn history_capsule(
     count.setAlignment(NSTextAlignment::Center);
     count.setStringValue(&NSString::from_str("20 / 20"));
     let count_h = count.fittingSize().height.ceil();
-    older.view().setFrame(NSRect::new(
+    previous.view().setFrame(NSRect::new(
         NSPoint::new(0.0, 0.0),
         NSSize::new(commands::NAV_BUTTON, height),
     ));
@@ -2719,14 +2730,14 @@ fn history_capsule(
         NSPoint::new(commands::NAV_BUTTON, ((height - count_h) / 2.0).floor()),
         NSSize::new(commands::NAV_COUNT_W, count_h),
     ));
-    newer.view().setFrame(NSRect::new(
+    next.view().setFrame(NSRect::new(
         NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
         NSSize::new(commands::NAV_BUTTON, height),
     ));
-    inside.addSubview(older.view());
+    inside.addSubview(previous.view());
     inside.addSubview(&count);
-    inside.addSubview(newer.view());
-    (capsule, older, count, newer)
+    inside.addSubview(next.view());
+    (capsule, previous, count, next)
 }
 
 /// Header symbol button (More, Close); `label` is what VoiceOver reads.

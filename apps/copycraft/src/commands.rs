@@ -23,28 +23,52 @@ pub const NAV_COUNT_W: f64 = 44.0;
 /// The whole history capsule: chevron, position, chevron, with no gaps.
 pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_COUNT_W + NAV_BUTTON;
 
-/// A history chevron: its SF Symbol, the glyph drawn without SF Symbols, and its name (the
-/// VoiceOver label and tooltip, never drawn).
+/// A history chevron: its SF Symbol, the glyph drawn without SF Symbols, its name (the
+/// VoiceOver label and tooltip, never drawn) and which way it steps through history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Chevron {
     pub symbol: &'static str,
     pub glyph: &'static str,
     pub name: &'static str,
+    /// Steps to an older copy (the position number goes up).
+    pub older: bool,
 }
 
-pub const OLDER_CHEVRON: Chevron = Chevron {
+/// `‹` on the left: the previous number, toward 1 (the newest copy).
+pub const PREVIOUS_CHEVRON: Chevron = Chevron {
     symbol: "chevron.left",
     glyph: "‹",
-    name: "Older",
+    name: "Previous",
+    older: false,
 };
 
-pub const NEWER_CHEVRON: Chevron = Chevron {
+/// `›` on the right: the next number, toward N (the oldest copy).
+pub const NEXT_CHEVRON: Chevron = Chevron {
     symbol: "chevron.right",
     glyph: "›",
-    name: "Newer",
+    name: "Next",
+    older: true,
 };
 
 impl Chevron {
+    /// The command a click runs.
+    pub fn command(&self) -> CommandId {
+        if self.older {
+            CommandId::HistoryOlder
+        } else {
+            CommandId::HistoryNewer
+        }
+    }
+
+    /// Whether there is somewhere to go: `‹` is off at 1, `›` at N.
+    pub fn enabled(&self, nav: &HistoryNav) -> bool {
+        if self.older {
+            nav.can_older
+        } else {
+            nav.can_newer
+        }
+    }
+
     /// The button title: empty when the symbol image shows (image only, so no name is drawn
     /// beside or under it), else just the fallback glyph.
     pub fn title(&self, has_image: bool) -> &'static str {
@@ -175,7 +199,7 @@ pub struct HistoryNav {
     pub can_older: bool,
     pub can_newer: bool,
     /// 1-based place of the copy on screen, counted from the newest (1) like the History menu.
-    /// The older chevron counts up, the newer one counts down.
+    /// `‹` (previous) counts down toward 1, `›` (next) counts up toward the oldest.
     pub position: usize,
     /// Copies in history, including the one on screen.
     pub total: usize,
@@ -1518,7 +1542,7 @@ fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command 
 
 #[cfg(test)]
 mod tests {
-    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEWER_CHEVRON, OLDER_CHEVRON};
+    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
@@ -2884,11 +2908,11 @@ Kleinste opdracht die de change dekt.
         let oldest = history_nav(2, 1).unwrap();
         assert_eq!(oldest.label(), "2 / 2");
         assert_eq!(oldest.spoken(), "Item 2 of 2");
-        // Older counts up, newer counts down.
-        let older = step_history(5, 0, true).unwrap();
-        assert_eq!(history_nav(5, older).unwrap().label(), "2 / 5");
-        let newer = step_history(5, older, false).unwrap();
-        assert_eq!(history_nav(5, newer).unwrap().label(), "1 / 5");
+        // › (next) counts up, ‹ (previous) counts down.
+        let next = step_history(5, 0, NEXT_CHEVRON.older).unwrap();
+        assert_eq!(history_nav(5, next).unwrap().label(), "2 / 5");
+        let previous = step_history(5, next, PREVIOUS_CHEVRON.older).unwrap();
+        assert_eq!(history_nav(5, previous).unwrap().label(), "1 / 5");
         // A cursor past the end shows the oldest copy.
         assert_eq!(history_nav(3, 9).unwrap().label(), "3 / 3");
         assert_eq!(history_nav(20, 19).unwrap().label(), "20 / 20");
@@ -2896,14 +2920,41 @@ Kleinste opdracht die de change dekt.
 
     #[test]
     fn chevrons_draw_only_their_image_or_glyph() {
-        for chevron in [OLDER_CHEVRON, NEWER_CHEVRON] {
+        for chevron in [PREVIOUS_CHEVRON, NEXT_CHEVRON] {
             assert_eq!(chevron.title(true), "", "{chevron:?}: image only");
             assert_eq!(chevron.title(false), chevron.glyph);
             assert_eq!(chevron.glyph.chars().count(), 1);
             assert!(!chevron.title(false).contains(chevron.name));
         }
-        assert_eq!(OLDER_CHEVRON.name, "Older");
-        assert_eq!(NEWER_CHEVRON.name, "Newer");
+        assert_eq!(PREVIOUS_CHEVRON.name, "Previous");
+        assert_eq!(NEXT_CHEVRON.name, "Next");
+        assert_eq!(PREVIOUS_CHEVRON.symbol, "chevron.left");
+        assert_eq!(NEXT_CHEVRON.symbol, "chevron.right");
+    }
+
+    #[test]
+    fn chevrons_follow_the_numbers() {
+        assert_eq!(PREVIOUS_CHEVRON.command(), CommandId::HistoryNewer);
+        assert_eq!(NEXT_CHEVRON.command(), CommandId::HistoryOlder);
+        // At 1 / 3 only › works, at 3 / 3 only ‹, in between both.
+        let first = history_nav(3, 0).unwrap();
+        assert!(!PREVIOUS_CHEVRON.enabled(&first) && NEXT_CHEVRON.enabled(&first));
+        let middle = history_nav(3, 1).unwrap();
+        assert!(PREVIOUS_CHEVRON.enabled(&middle) && NEXT_CHEVRON.enabled(&middle));
+        let last = history_nav(3, 2).unwrap();
+        assert!(PREVIOUS_CHEVRON.enabled(&last) && !NEXT_CHEVRON.enabled(&last));
+        // Walking with › from 1 reaches N, then stops; ‹ walks back to 1.
+        let mut cursor = 0;
+        let mut seen = vec![history_nav(3, cursor).unwrap().position];
+        while let Some(next) = step_history(3, cursor, NEXT_CHEVRON.older) {
+            cursor = next;
+            seen.push(history_nav(3, cursor).unwrap().position);
+        }
+        assert_eq!(seen, vec![1, 2, 3]);
+        while let Some(previous) = step_history(3, cursor, PREVIOUS_CHEVRON.older) {
+            cursor = previous;
+        }
+        assert_eq!(history_nav(3, cursor).unwrap().position, 1);
     }
 
     #[test]
