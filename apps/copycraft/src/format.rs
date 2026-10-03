@@ -1,6 +1,3 @@
-use std::io::Write;
-use std::process::{Command, Stdio};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatKind {
     Json,
@@ -168,8 +165,8 @@ pub fn format_text(text: &str) -> String {
         FormatKind::Yaml => {
             crate::transform::pretty_yaml(text).unwrap_or_else(|_| text.to_string())
         }
-        FormatKind::Rust => format_rust(text),
-        FormatKind::Java => indent_braces(text),
+        // Built in: copied code is never handed to an outside program (rustfmt, …).
+        FormatKind::Rust | FormatKind::Java => indent_braces(text),
         FormatKind::Xml | FormatKind::Html => pretty_xml(text),
         FormatKind::Markdown => format_markdown(text),
         FormatKind::Url => format_url(text),
@@ -1106,54 +1103,46 @@ fn score(text: &str, needles: &[&str]) -> usize {
     needles.iter().filter(|n| text.contains(*n)).count()
 }
 
-fn format_rust(text: &str) -> String {
-    rustfmt(text).unwrap_or_else(|| indent_braces(text))
-}
-
-fn rustfmt(text: &str) -> Option<String> {
-    let mut child = Command::new("rustfmt")
-        .args(["--emit", "stdout", "--edition", "2024", "--quiet"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    child.stdin.as_mut()?.write_all(text.as_bytes()).ok()?;
-    let output = child.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let formatted = String::from_utf8(output.stdout).ok()?;
-    if formatted.trim().is_empty() {
-        None
-    } else {
-        Some(formatted)
-    }
-}
-
+/// Re-indent brace code (Rust, Java) by its brackets, four spaces a level: `{` `[` `(` open one,
+/// their closers close it, and a line starting with closers is dedented by them. A line that
+/// starts with `.` (a method chain) goes one level deeper. Brackets in strings, char literals
+/// and comments do not count, and lines inside a multi-line string or block comment are kept
+/// exactly as they are. Not a full formatter: spacing within a line is left alone.
 pub fn indent_braces(src: &str) -> String {
     let mut indent: i32 = 0;
+    let mut state = Scan::Code;
     let mut out = String::new();
     for raw in src.lines() {
+        if state != Scan::Code {
+            // Inside a string or comment that started on an earlier line.
+            out.push_str(raw);
+            out.push('\n');
+            let (_, next) = scan_line(raw, state);
+            state = next;
+            continue;
+        }
         let trimmed = raw.trim();
         if trimmed.is_empty() {
             out.push('\n');
             continue;
         }
-        let leading_close = trimmed.starts_with('}')
-            || trimmed.starts_with(']')
-            || trimmed.starts_with(");")
-            || trimmed.starts_with(')');
-        if leading_close {
-            indent = (indent - 1).max(0);
+        let closers = trimmed
+            .chars()
+            .take_while(|ch| matches!(ch, '}' | ']' | ')'))
+            .count();
+        let closers = i32::try_from(closers).unwrap_or(i32::MAX);
+        let mut level = (indent - closers).max(0);
+        if trimmed.starts_with('.') && !trimmed.starts_with("..") {
+            level += 1;
         }
-        for _ in 0..indent {
+        for _ in 0..level {
             out.push_str("    ");
         }
         out.push_str(trimmed);
         out.push('\n');
-        let opens = count_open(trimmed);
-        indent = (indent + opens).max(0);
+        let (depth, next) = scan_line(trimmed, state);
+        indent = (indent + depth).max(0);
+        state = next;
     }
     if out.ends_with('\n') {
         out.pop();
@@ -1161,23 +1150,110 @@ pub fn indent_braces(src: &str) -> String {
     out
 }
 
-fn count_open(line: &str) -> i32 {
+/// Where [`scan_line`] is at the end of a line.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Scan {
+    Code,
+    /// In a `"…"` string.
+    Str,
+    /// In a Rust raw string `r#"…"#` closed by `"` and this many `#`.
+    RawStr(usize),
+    /// In a `/* … */` comment, this deep (Rust nests them).
+    BlockComment(usize),
+}
+
+/// The bracket depth change over `line` (`{` `[` `(` up, closers down), counting only code,
+/// and the state the next line starts in.
+fn scan_line(line: &str, mut state: Scan) -> (i32, Scan) {
+    let chars: Vec<char> = line.chars().collect();
     let mut depth = 0i32;
-    let mut in_string = false;
-    let mut prev = '\0';
-    for ch in line.chars() {
-        if ch == '"' && prev != '\\' {
-            in_string = !in_string;
-        } else if !in_string {
-            match ch {
-                '{' | '[' => depth += 1,
-                '}' | ']' => depth -= 1,
+    let mut i = 0;
+    while i < chars.len() {
+        let ch = chars[i];
+        let next = chars.get(i + 1).copied();
+        match state {
+            Scan::Str => match ch {
+                '\\' => i += 1,
+                '"' => state = Scan::Code,
                 _ => {}
+            },
+            Scan::RawStr(hashes) => {
+                if ch == '"'
+                    && chars[i + 1..]
+                        .iter()
+                        .take(hashes)
+                        .filter(|c| **c == '#')
+                        .count()
+                        == hashes
+                {
+                    state = Scan::Code;
+                    i += hashes;
+                }
             }
+            Scan::BlockComment(level) => {
+                if ch == '*' && next == Some('/') {
+                    state = if level > 1 {
+                        Scan::BlockComment(level - 1)
+                    } else {
+                        Scan::Code
+                    };
+                    i += 1;
+                } else if ch == '/' && next == Some('*') {
+                    state = Scan::BlockComment(level + 1);
+                    i += 1;
+                }
+            }
+            Scan::Code => match ch {
+                '/' if next == Some('/') => break,
+                '/' if next == Some('*') => {
+                    state = Scan::BlockComment(1);
+                    i += 1;
+                }
+                '"' => state = Scan::Str,
+                'r' if starts_raw_string(&chars, i).is_some() => {
+                    let hashes = starts_raw_string(&chars, i).unwrap_or(0);
+                    state = Scan::RawStr(hashes);
+                    i += hashes + 1;
+                }
+                '\'' => i += char_literal_len(&chars[i..]).saturating_sub(1),
+                '{' | '[' | '(' => depth += 1,
+                '}' | ']' | ')' => depth -= 1,
+                _ => {}
+            },
         }
-        prev = ch;
+        i += 1;
     }
-    depth
+    (depth, state)
+}
+
+/// `r"`, `r#"`, `br##"`, … at `i` (not the end of a name such as `bar"`): the number of `#`.
+fn starts_raw_string(chars: &[char], i: usize) -> Option<usize> {
+    let before = i.checked_sub(1).map(|at| chars[at]);
+    let name_before = before.is_some_and(|ch| ch.is_alphanumeric() || ch == '_');
+    if name_before && before != Some('b') {
+        return None;
+    }
+    if before == Some('b') && i >= 2 && (chars[i - 2].is_alphanumeric() || chars[i - 2] == '_') {
+        return None;
+    }
+    let hashes = chars[i + 1..].iter().take_while(|ch| **ch == '#').count();
+    (chars.get(i + 1 + hashes) == Some(&'"')).then_some(hashes)
+}
+
+/// Length of the char literal (`'{'`, `'\''`, `'\u{7b}'`) that starts `rest`, or 1 for a quote
+/// that starts none (a Rust lifetime such as `'a`).
+fn char_literal_len(rest: &[char]) -> usize {
+    match rest.get(1) {
+        // The escaped character is taken as is, then the closing quote.
+        Some('\\') => rest
+            .iter()
+            .skip(3)
+            .take(10)
+            .position(|ch| *ch == '\'')
+            .map_or(1, |at| at + 4),
+        Some(_) if rest.get(2) == Some(&'\'') => 3,
+        _ => 1,
+    }
 }
 
 #[cfg(test)]
@@ -1521,6 +1597,68 @@ fn main() {
         let out = indent_braces(src);
         assert!(out.contains("    let x=1;"));
         assert!(out.lines().last().unwrap().starts_with('}'));
+    }
+
+    #[test]
+    fn rust_is_formatted_in_process_by_brackets() {
+        let messy = "fn a(x: u8) -> u8 {\nif x > 1 {\nlet v = f(\nx,\n);\nreturn v;\n}\nlet items = list\n.iter()\n.count();\nmatch x {\n0 => 1,\n_ => 2,\n}\n}";
+        let tidy = "fn a(x: u8) -> u8 {
+    if x > 1 {
+        let v = f(
+            x,
+        );
+        return v;
+    }
+    let items = list
+        .iter()
+        .count();
+    match x {
+        0 => 1,
+        _ => 2,
+    }
+}";
+        assert_eq!(detect(messy), FormatKind::Rust);
+        assert_eq!(super::format_text(messy), tidy);
+        // Already tidy code stays as it is.
+        assert_eq!(super::format_text(tidy), tidy);
+    }
+
+    #[test]
+    fn brackets_in_strings_chars_and_comments_do_not_indent() {
+        let src = "fn a() {\nlet s = \"{ ( [\";\nlet c = '{';\nlet q = '\\'';\nlet u = '\\u{7b}';\n// a { comment\n/* and { another */\nlet r = r#\"raw {\"#;\nfn b<'a>(x: &'a str) {}\nlet z = 1;\n}";
+        let out = indent_braces(src);
+        for line in out.lines().skip(1).take(9) {
+            assert!(
+                line.starts_with("    ") && !line.starts_with("     "),
+                "{line:?}"
+            );
+        }
+        assert_eq!(out.lines().last(), Some("}"));
+    }
+
+    #[test]
+    fn multi_line_strings_and_comments_are_kept_as_they_are() {
+        let src = "fn a() {\nlet s = \"first\n  { kept\n last\";\n/*\n   { note\n*/\nlet r = r#\"\n}\"#;\nok();\n}";
+        let out = indent_braces(src);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[1], "    let s = \"first");
+        assert_eq!(lines[2], "  { kept");
+        assert_eq!(lines[3], " last\";");
+        assert_eq!(lines[5], "   { note");
+        assert_eq!(lines[6], "*/");
+        assert_eq!(lines[8], "}\"#;");
+        assert_eq!(lines[9], "    ok();");
+        assert_eq!(lines[10], "}");
+    }
+
+    #[test]
+    fn java_is_formatted_by_the_same_indenter() {
+        let src = "public class A {\nprivate void f() {\nif (x) {\ny();\n}\nz();\n}\n}";
+        assert_eq!(detect(src), FormatKind::Java);
+        assert_eq!(
+            super::format_text(src),
+            "public class A {\n    private void f() {\n        if (x) {\n            y();\n        }\n        z();\n    }\n}"
+        );
     }
 
     #[test]

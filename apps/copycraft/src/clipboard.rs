@@ -194,7 +194,7 @@ enum HistoryBody {
 
 /// One copied item, and what was worked out from it once: its format, and the cards built for
 /// it (one per view). Stepping through history shows the same entries again and again, so they
-/// are not detected, formatted (rustfmt is a separate process) and laid out anew each time.
+/// are not detected, formatted and laid out anew each time.
 /// The cards go with the entry: falling off the end or Wipe drops and zeroizes them with it.
 #[derive(Clone)]
 struct HistoryEntry {
