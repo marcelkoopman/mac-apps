@@ -2227,7 +2227,7 @@ fn text_chips(text: &str) -> Vec<Command> {
             CommandId::Convert,
             "Convert",
             "Another format",
-            "convert yaml json csv",
+            "convert json key value",
         ));
     }
     if toolbar_visibility::shows_decode(kind) && decode::try_decode(text).is_some() {

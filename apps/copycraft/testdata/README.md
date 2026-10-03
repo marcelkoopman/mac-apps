@@ -19,7 +19,7 @@ shows for each file today.
 
 ## Rules for the files
 
-- Exact bytes matter: tabs in `convert/tsv_to_csv.tsv`, a tab and spaces in
+- Exact bytes matter: tabs in `tables/tsv_table.tsv`, a tab and spaces in
   `detect/python_mixed_tabs.py`, straight quotes everywhere. `.gitattributes` marks this
   folder `-text` so Git never converts line endings; do not let an editor reformat these files.
   When mirroring to Notion, paste the bytes as they are (no smart quotes, tabs kept).
@@ -59,10 +59,7 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Visit | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
 | `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it) | plain text | Link | credential | Visit | kind=Url; visit=https://example.com/private/report?id=7 |
 | `detect/plain_text.txt` | Plain text | plain text | Content | — | — | kind=Text |
-| `convert/json_to_yaml.json` | Convert JSON → YAML | json | Valid JSON | — | Original, Schema | convert=Yaml; convert~app: copycraft-demo |
 | `convert/yaml_to_json.yaml` | Convert YAML → JSON | yaml | YAML | — | — | convert=Json; convert~"app": "copycraft-demo" |
-| `convert/csv_to_json.csv` | Convert CSV → JSON | plain text | CSV | — | Original, Dataframe, Table ▾ | kind=Csv; convert=Json; convert~"product": "Desk lamp" |
-| `convert/tsv_to_csv.tsv` | Convert TSV → CSV | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; convert=Csv; convert~1,Desk lamp,black,12 |
 | `convert/key_value.txt` | Convert `key: value` → JSON | plain text | Content | — | Original, Convert | kind=Text; convert=Json; convert~"project": "Copycraft" |
 | `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Original, Decode | decode~"name": "John Doe"; decode~"alg": "HS256" |
 | `convert/base64.txt` | Decode Base64 | plain text | Content | — | Original, Decode | decode~Hello from Copycraft! This is synthetic test data. |
@@ -79,6 +76,7 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column, constant column | plain text | CSV | — | Original, Dataframe, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropConstant=8x4; step:DropEmpty>Dedupe>DropConstant=4x3 |
 | `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
 | `tables/small_table.csv` | Table: Transpose and Value counts | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Transpose=2x5; step:ValueCounts(color)=3x2; step:ValueCounts(color)~red |
+| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
 | `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | — | kind=Plain |

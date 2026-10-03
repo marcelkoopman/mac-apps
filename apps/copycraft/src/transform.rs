@@ -6,11 +6,6 @@ pub fn pretty_yaml(text: &str) -> Result<String, String> {
     serde_yaml::to_string(&value).map_err(|e| e.to_string())
 }
 
-pub fn json_to_yaml(text: &str) -> Option<String> {
-    let value = parse_json(text).ok()?;
-    serde_yaml::to_string(&value).ok()
-}
-
 pub fn yaml_to_json(text: &str) -> Option<String> {
     let value = parse_yaml(text).ok()?;
     serde_json::to_string_pretty(&yaml_value_to_json(value)?).ok()
@@ -126,7 +121,7 @@ fn parse_yaml(text: &str) -> Result<YamlValue, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{json_to_yaml, looks_like_yaml, pretty_yaml, yaml_to_json};
+    use super::{looks_like_yaml, pretty_yaml, yaml_to_json};
 
     #[test]
     fn detects_yaml_not_json() {
@@ -150,13 +145,6 @@ Telefoonnummer: [PHONE_NUMBER]
 Geboortedatum: [DATE_TIME]
 Salaris: [MONEY]";
         assert!(!looks_like_yaml(src));
-    }
-
-    #[test]
-    fn json_to_yaml_uses_block_keys() {
-        let out = json_to_yaml(r#"{"name":"copycraft"}"#).unwrap();
-        assert!(out.contains("name:"));
-        assert!(out.contains("copycraft"));
     }
 
     #[test]

@@ -419,7 +419,7 @@ fn notion_languages_are_known() {
 #[test]
 fn exact_bytes_survive() {
     let read = |name: &str| std::fs::read(root().join(name)).expect(name);
-    let tsv = read("convert/tsv_to_csv.tsv");
+    let tsv = read("tables/tsv_table.tsv");
     assert_eq!(tsv.iter().filter(|&&b| b == b'\t').count(), 12);
     let mixed = read("detect/python_mixed_tabs.py");
     assert!(mixed.windows(2).any(|w| w == b"\n\t") && mixed.windows(5).any(|w| w == b"\n    "));

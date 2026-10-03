@@ -393,7 +393,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
             .count();
         assert_eq!(floats, 19);
         assert!(super::try_parquet_bytes(ENERGY_FIXTURE).is_some());
-        let csv = super::try_csv_text(ENERGY_FIXTURE).expect("csv");
+        let csv = super::frame_csv(&df).expect("csv");
         assert!(csv.starts_with("Date,"), "{}", &csv[..20]);
     }
 
@@ -469,9 +469,6 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
             .finish()
             .expect("read");
         assert_eq!(df.columns()[0].dtype(), &DataType::Date);
-        // Conversions keep the dates as copied.
-        let json = super::try_json_text(ENERGY_FIXTURE).expect("json");
-        assert!(json.contains("09/03/2026"));
     }
 
     #[test]
@@ -508,13 +505,6 @@ mod dataframe;";
         assert!(try_format(src).is_none());
     }
 
-    #[test]
-    fn exports_csv_as_json_rows() {
-        let out = super::try_json_text("name,age\nalice,30\nbob,40").expect("json");
-        assert!(out.contains("alice"));
-        assert!(out.contains("name"));
-        assert!(out.trim_start().starts_with('['));
-    }
 
     #[test]
     fn exports_semicolon_csv() {
@@ -522,7 +512,7 @@ mod dataframe;";
 Id;Naam;Salaris
 1;Jan;3450
 2;Anja;2900";
-        let out = super::try_csv_text(src).expect("csv");
+        let out = super::frame_csv(&super::parse(src).expect("df")).expect("csv");
         assert!(out.contains("Naam"));
         assert!(out.contains("Jan"));
         assert!(out.contains(',') || out.contains(';'));

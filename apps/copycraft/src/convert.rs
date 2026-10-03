@@ -1,16 +1,18 @@
 use crate::format::FormatKind;
 
+/// The Convert chip's result: flat `key: value` text (and YAML) as pretty JSON. JSON, CSV and
+/// TSV have no conversion: they open formatted, or as a table (Dataframe; Save writes CSV).
 pub fn try_convert(text: &str) -> Option<String> {
     let converted = match crate::format::detect(text) {
-        FormatKind::Json => crate::transform::json_to_yaml(text)?,
         FormatKind::Yaml => crate::transform::yaml_to_json(text)?,
-        FormatKind::Csv => crate::dataframe::try_json_text(text)?,
-        FormatKind::Tsv | FormatKind::Dataframe => crate::dataframe::try_csv_text(text)?,
         // Flat YAML mappings are detected as text so they are not pretty-printed
         // as YAML (Dutch labeled records). Convert still maps them to JSON.
         FormatKind::Text | FormatKind::Plain => crate::transform::yaml_to_json(text)?,
-        // XML keeps its own views (Original, Schema); flattening it into CSV made no sense.
-        FormatKind::Xml
+        FormatKind::Json
+        | FormatKind::Csv
+        | FormatKind::Tsv
+        | FormatKind::Dataframe
+        | FormatKind::Xml
         | FormatKind::Html
         | FormatKind::Rust
         | FormatKind::Java
@@ -34,26 +36,6 @@ mod tests {
     use serde_json::Value as JsonValue;
 
     #[test]
-    fn json_object_converts_to_yaml() {
-        let out = try_convert(r#"{"name":"copycraft","n":3}"#).expect("yaml");
-        assert!(out.contains("name:"));
-        assert!(out.contains("copycraft"));
-        assert!(!out.trim_start().starts_with('{'));
-        let back = try_convert(&out).expect("json");
-        let value: JsonValue = serde_json::from_str(&back).expect("parse json");
-        assert_eq!(value["name"], "copycraft");
-        assert_eq!(value["n"], 3);
-    }
-
-    #[test]
-    fn json_array_converts_to_yaml() {
-        let out = try_convert(r#"[{"name":"a"},{"name":"b"}]"#).expect("yaml");
-        assert!(out.contains("name:"));
-        assert!(out.contains('a'));
-        assert_eq!(crate::format::detect(&out), crate::format::FormatKind::Yaml);
-    }
-
-    #[test]
     fn yaml_converts_to_pretty_json() {
         let src = "name: copycraft\nitems:\n  - one\n  - two\n";
         let out = try_convert(src).expect("json");
@@ -65,56 +47,12 @@ mod tests {
     }
 
     #[test]
-    fn json_yaml_roundtrip_preserves_object() {
-        let src = r#"{"name":"copycraft","ok":true,"n":3}"#;
-        let yaml = try_convert(src).expect("yaml");
-        let json = try_convert(&yaml).expect("json");
-        let a: JsonValue = serde_json::from_str(src).unwrap();
-        let b: JsonValue = serde_json::from_str(&json).unwrap();
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn csv_converts_to_json_rows() {
-        let out = try_convert("name,age\nalice,30\nbob,40").expect("json");
-        let value: JsonValue = serde_json::from_str(&out).expect("parse json");
-        let rows = value.as_array().expect("array");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0]["name"], "alice");
-        assert_eq!(crate::format::detect(&out), crate::format::FormatKind::Json);
-    }
-
-    #[test]
-    fn semicolon_csv_converts_to_json_rows() {
-        let src = "\
-Id;Naam;Salaris
-1;Jan;3450
-2;Anja;2900";
-        let out = try_convert(src).expect("json");
-        let value: JsonValue = serde_json::from_str(&out).expect("parse json");
-        assert_eq!(value[0]["Naam"], "Jan");
-        assert_eq!(value[1]["Salaris"], 2900);
-    }
-
-    #[test]
-    fn tsv_converts_to_csv() {
-        let out = try_convert("name\tage\nalice\t30\nbob\t40").expect("csv");
-        assert!(out.contains("name"));
-        assert!(out.contains("alice"));
-        assert!(out.contains(','));
-        assert!(!out.contains('\t'));
-        assert_eq!(crate::format::detect(&out), crate::format::FormatKind::Csv);
-    }
-
-    #[test]
-    fn quoted_csv_converts_address_cells() {
-        let src = "\
-Id,Naam,Adres
-1,Jan de Vries,\"Hoofdstraat 45, Groningen\"";
-        let out = try_convert(src).expect("json");
-        let value: JsonValue = serde_json::from_str(&out).expect("parse json");
-        assert_eq!(value[0]["Naam"], "Jan de Vries");
-        assert_eq!(value[0]["Adres"], "Hoofdstraat 45, Groningen");
+    fn json_csv_and_tsv_do_not_convert() {
+        assert!(try_convert(r#"{"name":"copycraft","n":3}"#).is_none());
+        assert!(try_convert(r#"[{"name":"a"},{"name":"b"}]"#).is_none());
+        assert!(try_convert("name,age\nalice,30\nbob,40").is_none());
+        assert!(try_convert("Id;Naam;Salaris\n1;Jan;3450\n2;Anja;2900").is_none());
+        assert!(try_convert("name\tage\nalice\t30\nbob\t40").is_none());
     }
 
     #[test]

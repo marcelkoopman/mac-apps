@@ -27,18 +27,11 @@ pub fn shows_decode(kind: FormatKind) -> bool {
     matches!(kind, FormatKind::Plain | FormatKind::Text | FormatKind::Url)
 }
 
-/// JSON and YAML already open formatted. A copied table stays a table:
-/// Convert would turn CSV into JSON.
+/// Convert: flat `key: value` text to JSON. JSON, CSV and TSV have no conversion
+/// ([`crate::convert::try_convert`]); YAML opens formatted.
 pub fn shows_convert(source: &str) -> bool {
-    let kind = crate::format::detect(source);
-    !matches!(
-        kind,
-        FormatKind::Json
-            | FormatKind::Yaml
-            | FormatKind::Csv
-            | FormatKind::Tsv
-            | FormatKind::Dataframe
-    ) && crate::convert::try_convert(source).is_some()
+    crate::format::detect(source) != FormatKind::Yaml
+        && crate::convert::try_convert(source).is_some()
 }
 
 #[cfg(test)]
