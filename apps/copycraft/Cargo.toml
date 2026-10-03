@@ -48,4 +48,10 @@ zeroize = "1.9.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch2 = "0.3"
+# Image ▾ (src/image_edit*.rs): decoding with EXIF orientation, resizing, rotating, flipping,
+# grayscale, and encoding PNG / JPEG / HEIC without metadata, in CoreGraphics and ImageIO.
+# Approved by Marcel (2026-10-03); objc2-core-foundation for the CFData/CFDictionary they take.
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFData", "CFDictionary", "CFNumber", "CFString"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage"] }
+objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "CGImageDestination", "CGImageProperties", "CGImageSource", "objc2-core-graphics"] }
 objc2-vision = { version = "0.3.2", default-features = false, features = ["std", "VNRecognizeTextRequest", "VNDetectBarcodesRequest", "VNRequestHandler", "VNObservation", "VNRequest", "VNTypes"] }
