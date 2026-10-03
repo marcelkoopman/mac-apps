@@ -121,6 +121,8 @@ struct TableRun {
     started: Background,
     generation: u64,
     cancel: Arc<AtomicBool>,
+    /// Loading a frame the card does not show yet: no spinner.
+    quiet: bool,
 }
 
 /// Where the table on the card keeps its versions.
@@ -410,7 +412,7 @@ impl App {
                 self.table_error = None;
                 self.describe_for = None;
                 self.card_view = CardView::Dataframe;
-                self.run_table_job(job);
+                self.run_table_job(job, false);
             }
             Err(e) => self.table_error = Some(e.to_string()),
         }
@@ -432,13 +434,13 @@ impl App {
             self.table_error = None;
             self.describe_for = None;
             self.card_view = CardView::Dataframe;
-            self.run_table_job(job);
+            self.run_table_job(job, false);
             self.refresh_popup();
         }
     }
 
-    /// Start `job` on a thread, cancelling the one running.
-    fn run_table_job(&mut self, job: crate::table::Job) {
+    /// Start `job` on a thread, cancelling the one running. A `quiet` job shows no spinner.
+    fn run_table_job(&mut self, job: crate::table::Job, quiet: bool) {
         self.cancel_table_job();
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&cancel);
@@ -458,6 +460,7 @@ impl App {
                     started: Background::now(),
                     generation,
                     cancel,
+                    quiet,
                 });
             }
             Err(e) => eprintln!("table job failed to start: {e}"),
@@ -521,18 +524,14 @@ impl App {
             None => return,
         };
         let dataframe_view = data.view == CardView::Dataframe;
-        let worked_on = match home {
-            TableHome::History(index) => self.history.table(index).is_some_and(|t| t.len() > 1),
-            TableHome::Opened => self.opened_table.len() > 1,
-        };
-        // Cheap checks first: most cards are not tables the card worked on.
-        if !worked_on && !dataframe_view {
+        // The chips are remembered per text, so this is cheap: a table has "Table ▾".
+        if !commands::chips(data)
+            .iter()
+            .any(|chip| chip.id == CommandId::TableMenu)
+        {
             return;
         }
         let text = Zeroizing::new(text.to_string());
-        if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text) {
-            return;
-        }
         let running = self.table_job.as_ref().map(|run| run.generation);
         let error = self.table_error.clone();
         let describing = dataframe_view && self.describe_for == Some(text_hash(&text));
@@ -540,12 +539,15 @@ impl App {
         let Some(table) = self.table_at(home) else {
             return;
         };
-        let load = if dataframe_view || table.cursor() > 0 {
-            table.load(&text)
-        } else {
+        // The frame is worked out for every table on the card (its columns fill the Table ▾
+        // menu), but not over a job already running for it.
+        let running_here = running.is_some_and(|generation| table.awaits(generation));
+        let load = if running_here {
             None
+        } else {
+            table.load(&text)
         };
-        let working = load.is_some() || running.is_some_and(|generation| table.awaits(generation));
+        let working = load.is_some() || running_here;
         let frame_id = table.frame_id();
         let describe = match table.frame() {
             Some(frame) if describing => match cached {
@@ -566,7 +568,8 @@ impl App {
         self.describe_cache = describe.map(|description| (frame_id, description));
         data.table = Some(shown);
         if let Some(job) = load {
-            self.run_table_job(job);
+            // Outside the Dataframe view the card does not wait for it: no spinner.
+            self.run_table_job(job, !dataframe_view);
         }
     }
 
@@ -1128,7 +1131,11 @@ impl App {
         if self.spinner_on {
             return wake;
         }
-        let table = self.table_job.as_ref().map(|run| run.started);
+        let table = self
+            .table_job
+            .as_ref()
+            .filter(|run| !run.quiet)
+            .map(|run| run.started);
         let Some(started) = [self.saving, self.loading_all, table]
             .into_iter()
             .flatten()
@@ -1156,7 +1163,7 @@ impl App {
         if self.spinner_on
             && self.saving.is_none()
             && self.loading_all.is_none()
-            && self.table_job.is_none()
+            && self.table_job.as_ref().is_none_or(|run| run.quiet)
         {
             self.spinner_on = false;
             launcher::set_busy(false);

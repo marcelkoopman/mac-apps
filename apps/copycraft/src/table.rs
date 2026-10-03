@@ -38,6 +38,10 @@ pub enum TableOp {
     FixTypes,
     /// Rows become columns (at most [`crate::table_ops::TRANSPOSE_MAX_ROWS`] rows).
     Transpose,
+    /// Rows in the order of one column (empty cells last; equal values keep their order).
+    Sort { column: String, descending: bool },
+    /// Each value of one column once, with how many rows have it, the most common first.
+    ValueCounts { column: String },
 }
 
 impl TableOp {
@@ -58,19 +62,61 @@ impl TableOp {
             Self::DropConstant => "Constant columns removed",
             Self::FixTypes => "Types fixed",
             Self::Transpose => "Transposed",
+            Self::Sort { column, descending } => {
+                let arrow = if *descending { "↓" } else { "↑" };
+                return format!("Sorted by {column} {arrow}");
+            }
+            Self::ValueCounts { column } => return format!("Value counts of {column}"),
         }
         .to_string()
     }
 
-    /// The menu item and search title that takes this step.
-    pub fn title(&self) -> &'static str {
+    /// The menu item and search title that takes this step. A step on a column is titled with
+    /// the column's name (it sits in that step's submenu, [`group`](Self::group)).
+    pub fn title(&self) -> String {
+        match self {
+            Self::Sort { column, .. } | Self::ValueCounts { column } => return column.clone(),
+            _ => {}
+        }
         match self {
             Self::Dedupe => "Remove duplicate rows",
             Self::DropEmpty => "Remove empty rows and columns",
             Self::DropConstant => "Remove constant columns",
             Self::FixTypes => "Fix types",
             Self::Transpose => "Transpose",
+            Self::Sort { .. } | Self::ValueCounts { .. } => unreachable!("titled above"),
         }
+        .to_string()
+    }
+
+    /// The submenu of a step on a column: "Sort ascending", "Sort descending", "Value counts".
+    pub fn group(&self) -> Option<&'static str> {
+        match self {
+            Self::Sort {
+                descending: false, ..
+            } => Some("Sort ascending"),
+            Self::Sort {
+                descending: true, ..
+            } => Some("Sort descending"),
+            Self::ValueCounts { .. } => Some("Value counts"),
+            _ => None,
+        }
+    }
+
+    /// The steps on a column of a table with `columns`, by submenu.
+    pub fn column_steps(columns: &[String]) -> Vec<TableOp> {
+        let sort = |descending| {
+            columns.iter().map(move |column| TableOp::Sort {
+                column: column.clone(),
+                descending,
+            })
+        };
+        sort(false)
+            .chain(sort(true))
+            .chain(columns.iter().map(|column| TableOp::ValueCounts {
+                column: column.clone(),
+            }))
+            .collect()
     }
 
     /// Search words for [`title`](Self::title).
@@ -81,6 +127,8 @@ impl TableOp {
             Self::DropConstant => "drop constant columns same value table",
             Self::FixTypes => "fix types numbers dates cast table",
             Self::Transpose => "transpose pivot rows columns swap table",
+            Self::Sort { .. } => "sort order column table",
+            Self::ValueCounts { .. } => "value counts frequency count column table",
         }
     }
 
@@ -94,6 +142,8 @@ impl TableOp {
             Self::DropConstant => table_ops::drop_constant(df),
             Self::FixTypes => table_ops::fix_types(df),
             Self::Transpose => table_ops::transpose(df),
+            Self::Sort { column, descending } => table_ops::sort(df, column, *descending),
+            Self::ValueCounts { column } => table_ops::value_counts(df, column),
         }
     }
 }

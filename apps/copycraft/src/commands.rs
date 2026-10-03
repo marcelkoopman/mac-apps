@@ -1399,15 +1399,25 @@ pub const TABLE_MENU_TITLE: &str = "Table ▾";
 pub fn table_steps() -> Vec<Command> {
     crate::table::TableOp::ONE_CLICK
         .iter()
-        .map(|op| {
-            command(
-                CommandId::TableStep(op.clone()),
-                op.title(),
-                "Table",
-                op.keywords(),
-            )
-        })
+        .map(table_step_command)
         .collect()
+}
+
+fn table_step_command(op: &crate::table::TableOp) -> Command {
+    command(
+        CommandId::TableStep(op.clone()),
+        &op.title(),
+        op.group().unwrap_or("Table"),
+        op.keywords(),
+    )
+}
+
+/// The submenu a table menu item sits in ([`crate::table::TableOp::group`]).
+pub fn menu_group(id: &CommandId) -> Option<&'static str> {
+    match id {
+        CommandId::TableStep(op) => op.group(),
+        _ => None,
+    }
 }
 
 /// The "Table ▾" menu: Describe (or back to the table), the steps, then undo and redo when
@@ -1443,6 +1453,18 @@ fn describe_command(describing: bool) -> Command {
 /// Steps on a table, and undo and redo when there is a version to go to.
 pub fn table_commands(table: &TableShown) -> Vec<Command> {
     let mut commands = table_steps();
+    if let Some(frame) = &table.frame {
+        let columns: Vec<String> = frame
+            .get_column_names()
+            .into_iter()
+            .map(|name| name.to_string())
+            .collect();
+        commands.extend(
+            crate::table::TableOp::column_steps(&columns)
+                .iter()
+                .map(table_step_command),
+        );
+    }
     if table.can_undo() {
         let label = &table.labels[table.version];
         commands.push(command(
@@ -2103,7 +2125,9 @@ mod tests {
         step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
-    use super::{TABLE_MENU_TITLE, TableShown, VersionBar, table_commands, table_menu, undo_key};
+    use super::{
+        TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_commands, table_menu, undo_key,
+    };
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
 
@@ -3222,8 +3246,13 @@ Id,Naam,Telefoonnummer,Salaris
     #[test]
     fn table_commands_offer_undo_and_redo_when_there_is_a_version_to_go_to() {
         let mut table = deduped("name,n\na,1\na,1");
+        // The one-click steps and undo or redo (the column steps sit in submenus).
         let ids = |table: &TableShown| -> Vec<CommandId> {
-            table_commands(table).into_iter().map(|c| c.id).collect()
+            table_commands(table)
+                .into_iter()
+                .map(|c| c.id)
+                .filter(|id| menu_group(id).is_none())
+                .collect()
         };
         let steps = || {
             crate::table::TableOp::ONE_CLICK
@@ -3272,6 +3301,47 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(menu[0].title, "Describe");
         assert_eq!(menu.len(), 1 + crate::table::TableOp::ONE_CLICK.len());
         assert!(keeps_card_open(&CommandId::TableDescribe));
+    }
+
+    #[test]
+    fn the_table_menu_sorts_and_counts_by_each_column_in_submenus() {
+        use crate::table::TableOp;
+        let table = deduped("name,n\na,1\na,1");
+        let menu = table_menu(Some(&table));
+        let sort_up: Vec<&str> = menu
+            .iter()
+            .filter(|c| menu_group(&c.id) == Some("Sort ascending"))
+            .map(|c| c.title.as_str())
+            .collect();
+        assert_eq!(sort_up, ["name", "n"]);
+        let counts = menu
+            .iter()
+            .find(|c| menu_group(&c.id) == Some("Value counts"))
+            .expect("value counts");
+        assert_eq!(
+            counts.id,
+            CommandId::TableStep(TableOp::ValueCounts {
+                column: "name".into()
+            })
+        );
+        assert_eq!(counts.detail, "Value counts");
+        assert_eq!(
+            TableOp::Sort {
+                column: "Price".into(),
+                descending: true
+            }
+            .label(),
+            "Sorted by Price ↓"
+        );
+        assert_eq!(menu_group(&CommandId::TableUndo), None);
+        // Without a frame there are no columns to offer yet.
+        let mut loading = table.clone();
+        loading.frame = None;
+        assert!(
+            table_menu(Some(&loading))
+                .iter()
+                .all(|c| menu_group(&c.id).is_none())
+        );
     }
 
     #[test]

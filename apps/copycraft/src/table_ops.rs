@@ -2,6 +2,8 @@
 //! only the features Copycraft has (no `lazy`, `rows`, `strings` or `dtype-full`): where polars
 //! needs one of those, the step is written out here.
 
+use std::collections::HashMap;
+
 use polars::prelude::*;
 
 /// Most rows Transpose takes (each row becomes a column).
@@ -299,9 +301,44 @@ pub fn describe(df: &DataFrame) -> Result<DataFrame, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Sort by `column`: empty cells last, equal values in table order.
+pub fn sort(df: &DataFrame, column: &str, descending: bool) -> Result<DataFrame, String> {
+    let options = SortMultipleOptions::default()
+        .with_order_descending(descending)
+        .with_nulls_last(true)
+        .with_maintain_order(true);
+    df.sort([column], options).map_err(|e| e.to_string())
+}
+
+/// Value counts of `column`: each value once, with the number of rows that have it, the most
+/// common first (ties in table order). Empty cells count as one value.
+pub fn value_counts(df: &DataFrame, column: &str) -> Result<DataFrame, String> {
+    let values = df.column(column).map_err(|e| e.to_string())?;
+    let mut order: Vec<(IdxSize, u64)> = Vec::new();
+    let mut index: HashMap<Option<String>, usize> = HashMap::new();
+    for row in 0..values.len() {
+        let key = values.get(row).ok().and_then(cell_text);
+        match index.get(&key) {
+            Some(&at) => order[at].1 += 1,
+            None => {
+                index.insert(key, order.len());
+                order.push((row as IdxSize, 1));
+            }
+        }
+    }
+    order.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+    let rows = IdxCa::from_vec(
+        PlSmallStr::EMPTY,
+        order.iter().map(|(row, _)| *row).collect(),
+    );
+    let picked = values.take(&rows).map_err(|e| e.to_string())?;
+    let counts = UInt64Chunked::from_vec("count".into(), order.iter().map(|(_, n)| *n).collect());
+    DataFrame::new(order.len(), vec![picked, counts.into_column()]).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{describe, drop_constant, drop_empty, fix_types, transpose};
+    use super::{describe, drop_constant, drop_empty, fix_types, sort, transpose, value_counts};
     use crate::dataframe::parse_table;
     use crate::dataframe::tests::ENERGY_FIXTURE;
     use polars::prelude::*;
@@ -437,5 +474,32 @@ mod tests {
         let means = out.column("mean").unwrap().str().unwrap();
         assert_eq!(means.get(0), None);
         assert!(means.get(zero).is_some());
+    }
+
+    #[test]
+    fn sort_puts_empty_cells_last_and_keeps_equal_rows_in_order() {
+        let df = table("name,n\na,2\nb,\nc,1\nd,2");
+        let up = sort(&df, "n", false).expect("step");
+        let names: Vec<Option<&str>> = up.column("name").unwrap().str().unwrap().iter().collect();
+        assert_eq!(names, [Some("c"), Some("a"), Some("d"), Some("b")]);
+        let down = sort(&df, "n", true).expect("step");
+        let names: Vec<Option<&str>> = down.column("name").unwrap().str().unwrap().iter().collect();
+        assert_eq!(names, [Some("a"), Some("d"), Some("c"), Some("b")]);
+        assert!(sort(&df, "missing", false).is_err());
+    }
+
+    #[test]
+    fn value_counts_lists_each_value_once_most_common_first() {
+        let df = table("city,n\nDelft,1\nUtrecht,2\nDelft,3\n,4\nUtrecht,5\nDelft,6");
+        let out = value_counts(&df, "city").expect("step");
+        assert_eq!(names(&out), ["city", "count"]);
+        let cities: Vec<Option<&str>> = out.column("city").unwrap().str().unwrap().iter().collect();
+        assert_eq!(cities, [Some("Delft"), Some("Utrecht"), None]);
+        let counts: Vec<Option<u64>> = out.column("count").unwrap().u64().unwrap().iter().collect();
+        assert_eq!(counts, [Some(3), Some(2), Some(1)]);
+        // The values keep their type.
+        let numbers = value_counts(&df, "n").expect("step");
+        assert_eq!(numbers.column("n").unwrap().dtype(), &DataType::Int64);
+        assert_eq!(numbers.height(), 6);
     }
 }

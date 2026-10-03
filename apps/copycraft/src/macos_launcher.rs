@@ -2827,7 +2827,35 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
     };
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
     menu.setAutoenablesItems(false);
+    // Items of one group ([`commands::menu_group`]) go into a submenu under its name.
+    let mut group: Option<(&str, Retained<NSMenu>)> = None;
     for (index, (cmd, checked)) in items.iter().enumerate() {
+        let target = match commands::menu_group(&cmd.id) {
+            None => {
+                group = None;
+                menu.clone()
+            }
+            Some(name) => match &group {
+                Some((shown, submenu)) if *shown == name => submenu.clone(),
+                _ => {
+                    let parent = unsafe {
+                        NSMenuItem::initWithTitle_action_keyEquivalent(
+                            NSMenuItem::alloc(mtm),
+                            &NSString::from_str(name),
+                            None,
+                            &NSString::from_str(""),
+                        )
+                    };
+                    let submenu =
+                        NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
+                    submenu.setAutoenablesItems(false);
+                    parent.setSubmenu(Some(&submenu));
+                    menu.addItem(&parent);
+                    group = Some((name, submenu.clone()));
+                    submenu
+                }
+            },
+        };
         let item = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),
@@ -2845,7 +2873,7 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 unsafe { item.setTarget(Some(delegate)) };
             }
         });
-        menu.addItem(&item);
+        target.addItem(&item);
     }
     POPPED.with(|slot| set_commands(slot, items.into_iter().map(|(cmd, _)| cmd).collect()));
     let below = NSPoint::new(0.0, anchor.frame().size.height + 4.0);
