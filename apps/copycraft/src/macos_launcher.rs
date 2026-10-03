@@ -189,6 +189,9 @@ thread_local! {
     /// Text the field searches. Image and link wells keep this empty.
     static ITEM_TEXT: RefCell<String> = const { RefCell::new(String::new()) };
     static BLUR_ON: Cell<bool> = const { Cell::new(false) };
+    /// The text and picture blurs ([`gaussian_blurs`]), built the first time the well is masked.
+    static BLUR_FILTERS: RefCell<Option<(Retained<AnyObject>, Retained<AnyObject>)>> =
+        const { RefCell::new(None) };
     static SHADE_ON: Cell<bool> = const { Cell::new(false) };
     static MASKS: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
@@ -1119,15 +1122,21 @@ fn well_is_masked() -> bool {
 }
 
 /// The blurs for the well's text and its picture, or `None` when Core Image cannot build them.
+/// Built once and reused: every card update (each step through history) masks the well again.
 fn gaussian_blurs() -> Option<(Retained<AnyObject>, Retained<AnyObject>)> {
     #[cfg(test)]
     if FAIL_BLUR.with(Cell::get) {
         return None;
     }
-    Some((
+    if let Some(built) = BLUR_FILTERS.with(|slot| slot.borrow().clone()) {
+        return Some(built);
+    }
+    let built = (
         mac_ui::blur::gaussian(TEXT_BLUR_RADIUS)?,
         mac_ui::blur::gaussian(IMAGE_BLUR_RADIUS)?,
-    ))
+    );
+    BLUR_FILTERS.with(|slot| slot.replace(Some(built.clone())));
+    Some(built)
 }
 
 fn set_well_blur(on: bool) {
@@ -2798,6 +2807,16 @@ mod tests {
         assert_eq!(super::TEXT_BLUR_RADIUS, 6.0);
         assert_eq!(super::IMAGE_BLUR_RADIUS, 10.0);
         assert!(super::gaussian_blurs().is_some());
+    }
+
+    #[test]
+    fn blur_filters_are_built_once() {
+        let (text, image) = super::gaussian_blurs().expect("blurs");
+        let (again_text, again_image) = super::gaussian_blurs().expect("blurs");
+        let ptr = super::Retained::as_ptr;
+        assert_eq!(ptr(&text), ptr(&again_text));
+        assert_eq!(ptr(&image), ptr(&again_image));
+        assert_ne!(ptr(&text), ptr(&image));
     }
 
     #[test]

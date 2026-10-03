@@ -952,6 +952,8 @@ impl App {
         else {
             return;
         };
+        #[cfg(debug_assertions)]
+        let started = Instant::now();
         let previous = self.history_cursor;
         self.history_cursor = next;
         let presented = self.present_history(next).unwrap_or_else(|e| {
@@ -961,8 +963,47 @@ impl App {
         if presented {
             // The entry is on the clipboard now, so the card follows the clipboard there.
             self.clipboard_cursor = None;
+            self.note_own_write();
         } else {
             self.history_cursor = previous;
+        }
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "copycraft: history step to {} in {} µs",
+            self.history_cursor,
+            started.elapsed().as_micros()
+        );
+    }
+
+    /// A step put a history entry on the pasteboard, and the card already shows it. Note the
+    /// pasteboard as seen, so the next pass of the event loop does not take that change for a
+    /// new copy: that rebuilt the whole card a second time, rebuilt the menu bar menu (history
+    /// did not change) and blinked the icon. Only the tooltip follows the entry.
+    fn note_own_write(&mut self) {
+        let view = ClipboardView::from_os();
+        self.record_current(&view);
+        self.signature = self.clip_signature(&view);
+        // As `note_clipboard` does for a change: a scan of another picture no longer applies.
+        if self
+            .image_scan_change
+            .is_some_and(|seen| seen != self.signature.image_change)
+        {
+            self.image_scan_change = None;
+            self.image_scan = None;
+        }
+        self.sync_tooltip(&view);
+    }
+
+    fn clip_signature(&self, view: &ClipboardView) -> ClipSig {
+        #[cfg(target_os = "macos")]
+        let image_change = crate::macos_pasteboard::change_count();
+        #[cfg(not(target_os = "macos"))]
+        let image_change = 0;
+        ClipSig {
+            text_hash: hash_text(view.text().unwrap_or("")),
+            image: view.is_image(),
+            image_change,
+            history_len: self.history.len(),
         }
     }
 
@@ -1092,16 +1133,8 @@ impl App {
     fn note_clipboard(&mut self, now: Instant) -> bool {
         let view = ClipboardView::from_os();
         self.record_current(&view);
-        #[cfg(target_os = "macos")]
-        let image_change = crate::macos_pasteboard::change_count();
-        #[cfg(not(target_os = "macos"))]
-        let image_change = 0;
-        let signature = ClipSig {
-            text_hash: hash_text(view.text().unwrap_or("")),
-            image: view.is_image(),
-            image_change,
-            history_len: self.history.labels().len(),
-        };
+        let signature = self.clip_signature(&view);
+        let image_change = signature.image_change;
         if signature == self.signature {
             return false;
         }

@@ -1353,7 +1353,9 @@ fn link_chips(text: &str) -> Vec<Command> {
 fn text_chips(text: &str) -> Vec<Command> {
     let kind = format::detect(text);
     let mut commands = Vec::new();
-    if toolbar_visibility::shows_format(text) && !opens_formatted(text) {
+    // The cheap check first: kinds that open formatted never get the chip, so they skip the
+    // formatter (rustfmt runs as a separate process).
+    if !opens_formatted(text) && toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,
             "Format",
