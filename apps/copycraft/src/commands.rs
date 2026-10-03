@@ -255,6 +255,19 @@ pub struct ImageScan {
     pub qr: Option<String>,
 }
 
+impl ImageScan {
+    /// Overwrite the recognized text, the data URL and the info line.
+    pub fn wipe(&mut self) {
+        self.info.zeroize();
+        for text in [&mut self.data_url, &mut self.ocr, &mut self.qr]
+            .into_iter()
+            .flatten()
+        {
+            text.zeroize();
+        }
+    }
+}
+
 /// Bytes the save icon writes.
 pub struct SaveFile {
     pub filename: String,

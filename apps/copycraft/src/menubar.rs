@@ -86,6 +86,9 @@ struct App {
     polled_change: Option<isize>,
     /// The last poll found nothing or no text: look again even without a new change count.
     poll_again: bool,
+    /// The history picture the pasteboard holds at that change count (a copy recorded, or an
+    /// entry put back), so its scan can be kept with the entry and found there again.
+    image_on_pasteboard: Option<(isize, SecretBytes)>,
     /// When history last got a new entry (copy, drop, copycraft's own write).
     last_copy: Option<Instant>,
     /// [`crate::settings::Settings::history_minutes`], read once and kept in step with the menu.
@@ -689,6 +692,14 @@ impl App {
             }
             self.image_scan = None;
             self.image_scan_change = None;
+            if let Some(scan) = self
+                .history_image_on_pasteboard(change)
+                .and_then(|bytes| self.history.image_scan(&bytes))
+            {
+                self.image_scan_change = Some(change);
+                self.image_scan = Some(scan);
+                return;
+            }
             self.image_scan_for = Some(change);
             std::thread::spawn(move || {
                 let scan = crate::macos_pasteboard::scan_card_image();
@@ -707,10 +718,22 @@ impl App {
         }
         self.image_scan_for = None;
         self.image_scan_change = Some(change);
+        if let (Some(bytes), Some(scan)) = (self.history_image_on_pasteboard(change), scan.as_ref())
+        {
+            self.history.remember_image_scan(&bytes, scan);
+        }
         self.image_scan = scan;
         if launcher::is_open() {
             self.refresh_popup();
         }
+    }
+
+    /// The history picture on the pasteboard at `change`, if copycraft knows which one it is.
+    fn history_image_on_pasteboard(&self, change: isize) -> Option<SecretBytes> {
+        self.image_on_pasteboard
+            .as_ref()
+            .filter(|(at, _)| *at == change)
+            .map(|(_, bytes)| bytes.clone())
     }
 
     fn copy_current(&mut self) -> anyhow::Result<()> {
@@ -972,6 +995,7 @@ impl App {
             }
         }
         self.current_image = None;
+        self.image_on_pasteboard = None;
         self.history.clear();
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1028,6 +1052,7 @@ impl App {
         self.full_card = None;
         self.history.clear();
         self.current_image = None;
+        self.image_on_pasteboard = None;
         self.history_cursor = 0;
         self.clipboard_cursor = None;
         self.recorded_image_change = None;
@@ -1155,6 +1180,7 @@ impl App {
                 .with(crate::macos_pasteboard::write_history_image)
                 .map_err(anyhow::Error::msg)
                 .context("image")?;
+            self.image_on_pasteboard = Some((crate::macos_pasteboard::change_count(), bytes));
             self.card_view = CardView::Original;
             self.opened = None;
             if launcher::is_open() {
@@ -1187,6 +1213,8 @@ impl App {
             #[cfg(target_os = "macos")]
             {
                 self.history.record_image_tracking(bytes.clone(), 0);
+                self.image_on_pasteboard =
+                    Some((crate::macos_pasteboard::change_count(), bytes.clone()));
                 self.current_image = Some(bytes);
                 self.history_cursor = 0;
                 self.refresh_status_menu();
@@ -1333,6 +1361,7 @@ impl App {
             if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
                 self.last_copy = Some(Instant::now());
                 self.current_image = self.history.record_image(bytes);
+                self.image_on_pasteboard = self.current_image.clone().map(|bytes| (change, bytes));
                 self.history_cursor = 0;
                 self.clipboard_cursor = None;
             }
@@ -1664,6 +1693,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         conceal_when_checked: None,
         polled_change: None,
         poll_again: false,
+        image_on_pasteboard: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,
     };

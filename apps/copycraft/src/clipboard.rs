@@ -5,10 +5,14 @@ use image::ImageEncoder;
 use image::codecs::png::PngEncoder;
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::commands::{CardView, WorkCard};
+use crate::commands::{CardView, ImageScan, WorkCard};
 use crate::format;
 
 pub const MAX_HISTORY: usize = 20;
+
+/// Derived data (cards, image scans) is kept for the entry being shown and this many entries on
+/// either side; further away it is zeroized and worked out again when needed.
+const DERIVED_NEAR: usize = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClipboardImage {
@@ -200,11 +204,14 @@ enum HistoryBody {
 /// it (one per view). Stepping through history shows the same entries again and again, so they
 /// are not detected, formatted and laid out anew each time.
 /// The cards go with the entry: falling off the end or Wipe drops and zeroizes them with it.
+/// Only the entries near the one shown keep them ([`DERIVED_NEAR`]).
 #[derive(Clone)]
 struct HistoryEntry {
     body: HistoryBody,
     kind: format::FormatKind,
     cards: Vec<(CardView, WorkCard)>,
+    /// A picture's info, OCR text, QR payload and data URL, once scanned.
+    scan: Option<ImageScan>,
 }
 
 impl HistoryEntry {
@@ -214,6 +221,7 @@ impl HistoryEntry {
             body: HistoryBody::Text(Zeroizing::new(text)),
             kind,
             cards: Vec::new(),
+            scan: None,
         }
     }
 
@@ -222,7 +230,19 @@ impl HistoryEntry {
             body: HistoryBody::Image(bytes),
             kind: format::FormatKind::Image,
             cards: Vec::new(),
+            scan: None,
         }
+    }
+
+    fn forget_derived(&mut self) {
+        for (_, card) in &mut self.cards {
+            card.wipe();
+        }
+        self.cards.clear();
+        if let Some(scan) = self.scan.as_mut() {
+            scan.wipe();
+        }
+        self.scan = None;
     }
 }
 
@@ -232,9 +252,7 @@ impl Drop for HistoryEntry {
             HistoryBody::Text(text) => text.zeroize(),
             HistoryBody::Image(bytes) => bytes.zeroize(),
         }
-        for (_, card) in &mut self.cards {
-            card.wipe();
-        }
+        self.forget_derived();
     }
 }
 
@@ -402,6 +420,41 @@ impl ClipboardHistory {
             slot.1 = card;
         } else {
             entry.cards.push((view, card));
+        }
+        self.forget_derived_beyond(index);
+    }
+
+    /// The scan kept with the picture entry holding these very bytes.
+    pub fn image_scan(&self, bytes: &SecretBytes) -> Option<ImageScan> {
+        self.image_entry(bytes)
+            .and_then(|index| self.entries[index].scan.clone())
+    }
+
+    /// Keep `scan` with the picture entry holding these very bytes.
+    pub fn remember_image_scan(&mut self, bytes: &SecretBytes, scan: &ImageScan) {
+        let Some(index) = self.image_entry(bytes) else {
+            return;
+        };
+        if let Some(old) = self.entries[index].scan.as_mut() {
+            old.wipe();
+        }
+        self.entries[index].scan = Some(scan.clone());
+        self.forget_derived_beyond(index);
+    }
+
+    fn image_entry(&self, bytes: &SecretBytes) -> Option<usize> {
+        self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Image(existing) => existing.same_allocation(bytes),
+            HistoryBody::Text(_) => false,
+        })
+    }
+
+    /// Zeroize the cards and scans of entries more than [`DERIVED_NEAR`] away from `index`.
+    fn forget_derived_beyond(&mut self, index: usize) {
+        for (at, entry) in self.entries.iter_mut().enumerate() {
+            if at.abs_diff(index) > DERIVED_NEAR {
+                entry.forget_derived();
+            }
         }
     }
 
@@ -872,6 +925,33 @@ mod tests {
         history.remember_card(0, CardView::Original, card("newest"));
         history.clear();
         assert!(history.card(0, CardView::Original).is_none());
+    }
+
+    #[test]
+    fn only_entries_near_the_one_shown_keep_derived_data() {
+        use crate::commands::{CardView, ImageScan};
+        let mut history = ClipboardHistory::default();
+        let image = history.record_image(vec![9, 9]).expect("image");
+        for text in ["a", "b", "c", "d"] {
+            history.record(text.into());
+        }
+        // d c b a image
+        let scan = ImageScan {
+            info: "PNG".into(),
+            data_url: None,
+            ocr: Some("text".into()),
+            qr: None,
+        };
+        history.remember_image_scan(&image, &scan);
+        assert_eq!(history.image_scan(&image), Some(scan));
+        history.remember_card(3, CardView::Original, card("a"));
+        assert!(history.image_scan(&image).is_some());
+        history.remember_card(0, CardView::Original, card("d"));
+        assert!(history.image_scan(&image).is_none());
+        assert!(history.card(3, CardView::Original).is_none());
+        history.remember_card(1, CardView::Original, card("c"));
+        assert!(history.card(0, CardView::Original).is_some());
+        assert!(history.card(1, CardView::Original).is_some());
     }
 
     #[test]
