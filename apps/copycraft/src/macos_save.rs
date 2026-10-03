@@ -93,10 +93,12 @@ impl SaveContent {
 /// cannot be shown.
 pub fn choose_path(filename: &str, extension: &str) -> anyhow::Result<Option<PathBuf>> {
     let mtm = MainThreadMarker::new().context("the save panel needs the main thread")?;
+    // Every save path comes here: the stem and exactly one extension ([`save_name`]).
+    let name = crate::open_file::save_name(filename, extension);
     Ok(file_panel::choose_save_path(
         mtm,
         "Save clipboard",
-        filename,
+        &name,
         &[extension],
     )?)
 }

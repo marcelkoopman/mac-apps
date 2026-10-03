@@ -57,7 +57,8 @@ pub fn choose_file(
 }
 
 /// Ask where to save a file in a save panel titled `title`, with `suggested_name` in the name
-/// field. The panel can create directories and shows the extension. Returns `Ok(None)` when the
+/// field (give it with its extension). Only extensions with a declared content type restrict the
+/// panel. The panel can create directories and shows the extension. Returns `Ok(None)` when the
 /// panel is cancelled. AppKit has already asked to confirm overwriting an existing file.
 ///
 /// # Errors
@@ -74,8 +75,21 @@ pub fn choose_save_path(
     panel.setExtensionHidden(false);
     panel.setNameFieldStringValue(&NSString::from_str(suggested_name));
     panel.setTitle(Some(&NSString::from_str(title)));
-    set_allowed_extensions(&panel, allowed_extensions);
+    // Only declared types: for a type the system made up from the extension (dynamic, such as
+    // `parquet`), the panel adds the extension again to a name that has it ("x.parquet.parquet").
+    // Without a restriction it keeps the name as suggested or typed.
+    set_allowed_types(&panel, declared_types(allowed_extensions));
     run(&panel)
+}
+
+/// The declared content types of `extensions` (after [`normalize_extensions`]); dynamic ones
+/// are left out.
+fn declared_types(extensions: &[&str]) -> Vec<Retained<UTType>> {
+    normalize_extensions(extensions)
+        .into_iter()
+        .filter_map(|ext| UTType::typeWithFilenameExtension(&NSString::from_str(ext)))
+        .filter(|kind| !kind.isDynamic())
+        .collect()
 }
 
 /// Run `panel` modally: `Ok(None)` unless it is confirmed, then the chosen file path.
@@ -98,6 +112,11 @@ fn set_allowed_extensions(panel: &NSSavePanel, extensions: &[&str]) {
         .into_iter()
         .filter_map(|ext| UTType::typeWithFilenameExtension(&NSString::from_str(ext)))
         .collect();
+    set_allowed_types(panel, types);
+}
+
+/// Restrict `panel` to `types`; no restriction when there are none.
+fn set_allowed_types(panel: &NSSavePanel, types: Vec<Retained<UTType>>) {
     if types.is_empty() {
         return;
     }

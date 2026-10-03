@@ -229,16 +229,38 @@ fn decode_utf16(bytes: &[u8]) -> Option<Zeroizing<String>> {
     Some(text)
 }
 
-/// Save panel name. The extension matches the card view, the stem the chosen file.
+/// Save panel name: the stem of `name` (its own extension dropped: `people.csv`,
+/// `a.b.CSV`) and exactly one `extension`, lower case (`people.parquet`). A name without an
+/// extension keeps all of it; so does a last part that is no extension (`Report v1.2`).
+/// Empty `extension`: the stem alone.
 pub fn save_name(name: &str, extension: &str) -> String {
-    let stem = Path::new(name)
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or(name);
+    let name = name.trim();
+    let stem = name_stem(name).trim_end_matches('.');
+    let extension = extension
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase();
+    let stem = if stem.is_empty() { "clipboard" } else { stem };
     if extension.is_empty() {
         stem.to_string()
     } else {
         format!("{stem}.{extension}")
+    }
+}
+
+/// `name` without its file extension: the part after the last dot when it looks like one
+/// (1 to 10 letters or digits, at least one letter) and something is left before it.
+fn name_stem(name: &str) -> &str {
+    match name.rsplit_once('.') {
+        Some((stem, extension))
+            if !stem.is_empty()
+                && (1..=10).contains(&extension.len())
+                && extension.chars().all(|c| c.is_ascii_alphanumeric())
+                && extension.chars().any(|c| c.is_ascii_alphabetic()) =>
+        {
+            stem
+        }
+        _ => name,
     }
 }
 
@@ -379,5 +401,28 @@ mod tests {
     fn save_name_keeps_the_stem() {
         assert_eq!(save_name("people.tsv", "txt"), "people.txt");
         assert_eq!(save_name("people.tsv", "tsv"), "people.tsv");
+        let anker = "Thuis_Energiegegevens_2_Oct_2025_to_2_Oct_2026";
+        assert_eq!(
+            save_name(&format!("{anker}.csv"), "parquet"),
+            format!("{anker}.parquet")
+        );
+        // No extension; a dotted name loses only its last extension.
+        assert_eq!(save_name("people", "csv"), "people.csv");
+        assert_eq!(save_name("a.b.csv", "parquet"), "a.b.parquet");
+        // Already the target extension, in any case: still one.
+        assert_eq!(save_name("t.parquet", "parquet"), "t.parquet");
+        assert_eq!(save_name("t.PARQUET", "parquet"), "t.parquet");
+        assert_eq!(save_name("T.CSV", "parquet"), "T.parquet");
+        assert_eq!(save_name("t.csv", "CSV"), "t.csv");
+        assert_eq!(save_name("t.csv", ".parquet"), "t.parquet");
+        // Saving twice through the helper adds nothing.
+        let once = save_name("t.csv", "parquet");
+        assert_eq!(save_name(&once, "parquet"), once);
+        // Not extensions: a version number, a dot file. A trailing dot goes.
+        assert_eq!(save_name("Report v1.2", "txt"), "Report v1.2.txt");
+        assert_eq!(save_name("notes.", "txt"), "notes.txt");
+        assert_eq!(save_name(".csv", "parquet"), ".csv.parquet");
+        assert_eq!(save_name("", "png"), "clipboard.png");
+        assert_eq!(save_name("people.tsv", ""), "people");
     }
 }
