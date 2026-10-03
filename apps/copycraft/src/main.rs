@@ -11,6 +11,7 @@ mod highlight;
 mod hotkey;
 mod icon;
 mod image_ops;
+mod item_find;
 mod launcher;
 mod memo;
 mod menubar;

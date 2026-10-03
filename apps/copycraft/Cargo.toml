@@ -26,6 +26,7 @@ global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
 leakguard = "0.9.1"
+memchr = "2.8"
 # `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
 # `blur`, `drop`, `file_panel`, `image`, `panel`, `progress`, `theme`, `widgets`: the
 # mac_ui::blur, mac_ui::drop, mac_ui::file_panel, mac_ui::image, mac_ui::panel,

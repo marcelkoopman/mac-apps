@@ -742,6 +742,7 @@ dependencies = [
  "infer",
  "leakguard",
  "mac-ui",
+ "memchr",
  "objc2-vision",
  "polars",
  "redact-core",

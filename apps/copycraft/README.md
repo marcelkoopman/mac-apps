@@ -40,7 +40,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 | ← → | ‹ *Previous* / › *Next* in history (like the chevrons; a beep at 1 or at the oldest). Without history they move the selection. In the search or find field with text they move the caret |
 | ⌘← ⌘→ | ‹ *Previous* / › *Next* in history, always, also while typing |
 | ↑ ↓, Return | Move the selection (to the row above or below, else the previous or next action), run the selected action |
-| ⌘F | Find in the revealed content. Return / ⇧Return jump to the next / previous match |
+| ⌘F | Find in the revealed content (case-insensitive). Return / ⇧Return jump to the next / previous match. The counter counts every match; at most 1000 around the current one are highlighted. In content over 200 KB the search runs once typing pauses (150 ms) |
 | Esc | Clear the find or search field, then close the card |
 | `⋯` | Choose file, Clipboard, Empty pasteboard, history, Clear history, Clear sensitive copies after 60 s (on/off), Appearance (System / Light / Dark), Quit |
 

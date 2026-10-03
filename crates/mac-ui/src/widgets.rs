@@ -1,11 +1,9 @@
 //! AppKit control constructors with the shared look: borderless, native focus rings, system fonts.
 //!
 //! The helpers only configure the view. Callers set frames, visibility, targets and delegates.
-//! Text views also get sizing ([`fit_text_view`]), find marks ([`mark_matches`]) and wiping
+//! Text views also get sizing ([`fit_text_view`]), find marks ([`mark_ranges`]) and wiping
 //! ([`wipe_text_view`], [`wipe_text_field`], [`wipe_field_editor`]). [`set_target_action`] and
 //! [`set_text_delegate`] wire controls to an app's delegate object.
-
-use std::ops::Range;
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
@@ -17,8 +15,6 @@ use objc2_app_kit::{
     NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
-
-use crate::text::utf16_range;
 
 use crate::button::{ButtonSize, GlassButton};
 
@@ -306,27 +302,24 @@ pub fn fit_text_view(text: &NSTextView, wrap_width: Option<f64>) {
     text.setFrameSize(NSSize::new(width.max(1.0), height.max(1.0)));
 }
 
-/// Paint `matches` (byte ranges in `text`) in `view` as temporary highlights in the system find
-/// colours: the `current` one like the find indicator, the others as a light wash. Old marks
-/// are removed first; nothing is painted unless `view` shows exactly `text`. With `scroll` the
-/// current match is scrolled into view.
-pub fn mark_matches(
+/// Paint find matches in `view`: `ranges` are UTF-16 `(location, length)` pairs in its text
+/// (see `find`), `current` the one drawn like the find indicator and scrolled to with `scroll`.
+/// Earlier marks are removed first; no ranges just clears them. The view's text is not copied.
+pub fn mark_ranges(
     view: &NSTextView,
-    text: &str,
-    matches: &[Range<usize>],
-    current: usize,
+    ranges: &[(usize, usize)],
+    current: Option<usize>,
     scroll: bool,
 ) {
-    let shown = view.string();
-    let shown_text = shown.to_string();
     // SAFETY: the layout manager is used right away, while the text view keeps it alive.
     let Some(manager) = (unsafe { view.layoutManager() }) else {
         return;
     };
-    if !shown_text.is_empty() {
+    let length = view.string().length();
+    if length > 0 {
         let all = NSRange {
             location: 0,
-            length: shown.length(),
+            length,
         };
         // SAFETY: removing attributes takes no value.
         unsafe {
@@ -334,7 +327,7 @@ pub fn mark_matches(
             manager.removeTemporaryAttribute_forCharacterRange(NSForegroundColorAttributeName, all);
         }
     }
-    if shown_text != text || matches.is_empty() {
+    if ranges.is_empty() {
         return;
     }
     // The system find colours. The current match is drawn like the find indicator, with dark
@@ -343,9 +336,16 @@ pub fn mark_matches(
     let hot = NSColor::findHighlightColor();
     let hot_text = NSColor::blackColor();
     let wash = hot.colorWithAlphaComponent(0.35);
-    for (index, range) in matches.iter().enumerate() {
-        let range = utf16_range(text, range);
-        let color = if index == current { &hot } else { &wash };
+    for (index, &(location, len)) in ranges.iter().enumerate() {
+        if location + len > length {
+            break;
+        }
+        let range = NSRange {
+            location,
+            length: len,
+        };
+        let is_current = current == Some(index);
+        let color = if is_current { &hot } else { &wash };
         // SAFETY: both background and foreground colour attributes take an NSColor value.
         unsafe {
             manager.addTemporaryAttribute_value_forCharacterRange(
@@ -353,7 +353,7 @@ pub fn mark_matches(
                 color,
                 range,
             );
-            if index == current {
+            if is_current {
                 manager.addTemporaryAttribute_value_forCharacterRange(
                     NSForegroundColorAttributeName,
                     &hot_text,
@@ -362,8 +362,14 @@ pub fn mark_matches(
             }
         }
     }
-    if scroll && let Some(range) = matches.get(current) {
-        view.scrollRangeToVisible(utf16_range(text, range));
+    if scroll
+        && let Some(&(location, len)) = current.and_then(|index| ranges.get(index))
+        && location + len <= length
+    {
+        view.scrollRangeToVisible(NSRange {
+            location,
+            length: len,
+        });
     }
 }
 

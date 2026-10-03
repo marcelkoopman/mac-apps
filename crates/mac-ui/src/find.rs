@@ -1,5 +1,5 @@
 //! Find in text: case-insensitive, non-overlapping matches (byte ranges), a "3/12" counter and
-//! wrapping steps between matches. Plain Rust; `widgets::mark_matches` (feature `widgets`) paints
+//! wrapping steps between matches. Plain Rust; `widgets::mark_ranges` (feature `widgets`) paints
 //! them in a text view.
 
 use std::ops::Range;

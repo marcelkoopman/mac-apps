@@ -1,11 +1,12 @@
 #![cfg(target_os = "macos")]
 
 use std::cell::{Cell, RefCell};
-use std::ops::Range;
 
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::corners;
-use mac_ui::find::{find_matches, match_label, step_match};
+#[cfg(test)]
+use mac_ui::find::find_matches;
+use mac_ui::find::{match_label, step_match};
 use mac_ui::glass;
 use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
@@ -19,19 +20,20 @@ use mac_ui::objc2_app_kit::{
     NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize,
-    NSString,
+    NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
+    NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
 use mac_ui::text::AttrText;
 use mac_ui::widgets::{self, filled_box, raise_view};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::appearance::Theme;
 use crate::clipboard::SecretBytes;
 use crate::commands::{self, ChipFrame, Command, CommandId, LaunchData};
 use crate::format::FormatKind;
+use crate::item_find;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 440.0;
@@ -180,6 +182,13 @@ thread_local! {
     static ITEM_QUERY: RefCell<String> = const { RefCell::new(String::new()) };
     /// Text the field searches. Image and link wells keep this empty.
     static ITEM_TEXT: RefCell<String> = const { RefCell::new(String::new()) };
+    /// Counts changes of [`ITEM_TEXT`], so find compares a number instead of the texts.
+    static ITEM_GEN: Cell<u64> = const { Cell::new(0) };
+    /// The [`ITEM_GEN`] the well's text view shows. `None` while it shows something else
+    /// (a placeholder, a blanked mask); find marks are only painted on the item itself.
+    static PAINTED_ITEM: Cell<Option<u64>> = const { Cell::new(None) };
+    /// The item folded for find and the current query's matches, dropped (zeroized) with the item.
+    static FIND_CACHE: RefCell<Option<FindCache>> = const { RefCell::new(None) };
     static BLUR_ON: Cell<bool> = const { Cell::new(false) };
     /// The text and picture blurs ([`gaussian_blurs`]), built the first time the well is masked.
     static BLUR_FILTERS: RefCell<Option<(Retained<AnyObject>, Retained<AnyObject>)>> =
@@ -283,7 +292,7 @@ define_class!(
         #[unsafe(method(controlTextDidChange:))]
         fn control_text_did_change(&self, note: &NSNotification) {
             if note_is_item_field(note) {
-                take_item_query_from_field();
+                item_query_changed(self);
                 return;
             }
             let query = current_query();
@@ -393,6 +402,11 @@ define_class!(
             }
             REVEALED.set(true);
             layout(false);
+        }
+
+        #[unsafe(method(findAfterPause:))]
+        fn find_after_pause(&self, _sender: Option<&AnyObject>) {
+            take_item_query_from_field();
         }
 
         #[unsafe(method(overflowClicked:))]
@@ -1203,6 +1217,7 @@ fn blank_masked_well() {
         }
         *slot.borrow_mut() = None;
     });
+    PAINTED_ITEM.set(None);
 }
 
 fn card_meta() -> String {
@@ -1383,16 +1398,59 @@ fn publish_search_text() {
     set_item_text(text);
 }
 
-fn set_item_text(next: String) {
-    ITEM_TEXT.with(|slot| {
+fn set_item_text(mut next: String) {
+    let changed = ITEM_TEXT.with(|slot| {
         let mut text = slot.borrow_mut();
+        if *text == next {
+            next.zeroize();
+            return false;
+        }
         text.zeroize();
         *text = next;
+        true
     });
+    if changed {
+        ITEM_GEN.set(ITEM_GEN.get().wrapping_add(1));
+        FIND_CACHE.with(|slot| slot.borrow_mut().take());
+    }
 }
 
+#[cfg(test)]
 fn current_item_text() -> String {
     ITEM_TEXT.with(|slot| slot.borrow().clone())
+}
+
+/// [`ITEM_TEXT`] folded for find ([`item_find::fold`]) and the matches of `query` in it.
+struct FindCache {
+    item_gen: u64,
+    folded: Zeroizing<Vec<u8>>,
+    query: Zeroizing<String>,
+    matches: item_find::Matches,
+}
+
+/// The matches of `query` in the current item, folding the item only when it changed and
+/// searching only when the query did. The item's text is borrowed, not copied.
+fn with_item_matches<R>(query: &str, f: impl FnOnce(&FindCache) -> R) -> R {
+    FIND_CACHE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let item_gen = ITEM_GEN.get();
+        if slot.as_ref().is_none_or(|cache| cache.item_gen != item_gen) {
+            let folded = ITEM_TEXT.with(|text| item_find::fold(&text.borrow()));
+            *slot = Some(FindCache {
+                item_gen,
+                folded,
+                query: Zeroizing::new(String::new()),
+                matches: item_find::Matches::default(),
+            });
+        }
+        let cache = slot.as_mut().expect("find cache was just filled");
+        if cache.query.as_str() != query {
+            cache.matches = item_find::find(&cache.folded, query);
+            cache.query.zeroize();
+            cache.query.push_str(query);
+        }
+        f(cache)
+    })
 }
 
 fn item_query() -> String {
@@ -1440,10 +1498,12 @@ fn take_item_query_from_field() {
 }
 
 fn step_item_match(forward: bool) {
-    let mut text = current_item_text();
     let mut query = item_query();
-    let total = find_matches(&text, &query).len();
-    text.zeroize();
+    let total = if query.is_empty() {
+        0
+    } else {
+        with_item_matches(&query, |cache| cache.matches.total())
+    };
     query.zeroize();
     if total == 0 {
         return;
@@ -1454,21 +1514,62 @@ fn step_item_match(forward: bool) {
 }
 
 fn refresh_item_marks(scroll: bool) {
-    let mut text = current_item_text();
     let mut query = item_query();
-    let matches = find_matches(&text, &query);
-    let total = matches.len();
-    if total == 0 || FIND_INDEX.get() >= total {
+    if query.is_empty() {
+        // Nothing to find: no fold of the item, no scan, just clear the marks.
         FIND_INDEX.set(0);
+        if MainThreadMarker::new().is_some() {
+            paint_match_marks(&[], None, false);
+            set_match_label("");
+        }
+        return;
     }
+    let shown = PAINTED_ITEM.get() == Some(ITEM_GEN.get());
+    let (total, painted) = with_item_matches(&query, |cache| {
+        let total = cache.matches.total();
+        if total == 0 || FIND_INDEX.get() >= total {
+            FIND_INDEX.set(0);
+        }
+        let painted =
+            shown.then(|| item_find::painted(&cache.folded, &cache.matches, FIND_INDEX.get()));
+        (total, painted)
+    });
     let index = FIND_INDEX.get();
     let label = match_label(&query, index, total);
+    query.zeroize();
     if MainThreadMarker::new().is_some() {
-        paint_match_marks(&text, &matches, index, scroll && total > 0);
+        match painted {
+            Some((ranges, current)) => {
+                paint_match_marks(&ranges, Some(current), scroll && total > 0);
+            }
+            None => paint_match_marks(&[], None, false),
+        }
         set_match_label(&label);
     }
-    text.zeroize();
-    query.zeroize();
+}
+
+/// The item field changed. A long item is searched once typing pauses for
+/// [`item_find::DEBOUNCE`]; a short one right away.
+fn item_query_changed(delegate: &LauncherDelegate) {
+    let long = ITEM_TEXT.with(|text| text.borrow().len() >= item_find::DEBOUNCE_FROM);
+    if !long {
+        take_item_query_from_field();
+        return;
+    }
+    let target: &AnyObject = delegate.as_ref();
+    // SAFETY: `findAfterPause:` is a method of the delegate that takes an optional sender.
+    unsafe {
+        NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(
+            target,
+            sel!(findAfterPause:),
+            None,
+        );
+        delegate.performSelector_withObject_afterDelay(
+            sel!(findAfterPause:),
+            None,
+            item_find::DEBOUNCE.as_secs_f64(),
+        );
+    }
 }
 
 fn set_match_label(label: &str) {
@@ -1479,12 +1580,12 @@ fn set_match_label(label: &str) {
     });
 }
 
-fn paint_match_marks(text: &str, matches: &[Range<usize>], current: usize, scroll: bool) {
+fn paint_match_marks(ranges: &[(usize, usize)], current: Option<usize>, scroll: bool) {
     let view = PREVIEW_TEXT.with(|slot| slot.borrow().clone());
     let Some(view) = view else {
         return;
     };
-    widgets::mark_matches(&view, text, matches, current, scroll);
+    widgets::mark_ranges(&view, ranges, current, scroll);
 }
 
 fn wipe_item_field() {
@@ -1514,6 +1615,7 @@ fn clear_preview_text() {
         }
         *slot.borrow_mut() = None;
     });
+    PAINTED_ITEM.set(None);
 }
 
 fn set_preview_image_hidden(hidden: bool) {
@@ -1602,6 +1704,7 @@ fn paint_preview_text(body: &str, payload: bool) {
             })
     });
     if unchanged {
+        PAINTED_ITEM.set(Some(ITEM_GEN.get()));
         return;
     }
     PREVIEW_TEXT.with(|slot| {
@@ -1624,6 +1727,8 @@ fn paint_preview_text(body: &str, payload: bool) {
         }
         slot.replace(Some((body.to_string(), highlight, payload)));
     });
+    // `set_item_text(body)` above: the view shows the item.
+    PAINTED_ITEM.set(Some(ITEM_GEN.get()));
 }
 
 fn load_thumbnail() {
@@ -1997,6 +2102,7 @@ pub fn wipe_shown() {
         }
         *slot.borrow_mut() = None;
     });
+    PAINTED_ITEM.set(None);
     wipe_shown_views();
     SEARCHING.set(false);
 }
@@ -2023,6 +2129,7 @@ fn set_commands(slot: &RefCell<Vec<Command>>, next: Vec<Command>) {
 }
 
 fn wipe_shown_views() {
+    FIND_CACHE.with(|slot| slot.borrow_mut().take());
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             widgets::wipe_text_view(view);
