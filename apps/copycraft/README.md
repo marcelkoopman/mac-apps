@@ -21,7 +21,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 
 ## Privacy
 
-- **Masked content**: the card blurs copied content until you click it.
+- **Masked content**: the card blurs copied content until you click it. The blur is light enough to recognise the shape (lines, indentation, a picture's outline) but keeps text unreadable; pictures get a stronger blur than text, since text in a picture can be large.
 - **Sensitivity labels**: the meta line flags **credential**, **PII** and **financial** content, using [leakguard](https://crates.io/crates/leakguard) (tokens, keys, email, IBAN, cards, and more) and [redact-core](https://crates.io/crates/redact-core) with Dutch field recognizers (labeled or tabular fields such as names and salaries, NL phone numbers, BSN). Copycraft only labels content. It never rewrites it.
 - **Wipe**: the *Wipe* button clears history, caches, the card and the pasteboard. Copied text and image buffers are zeroized when they are dropped (`zeroize`).
 - **Masked again on focus loss**: the card stays open (floating) when another app becomes active, but content you revealed is blurred again. It closes with ✕, Esc, the hotkey or a click on the menu bar icon.

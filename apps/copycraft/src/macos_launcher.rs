@@ -56,8 +56,20 @@ const ITEM_FIND_H: f64 = 28.0;
 const ITEM_COUNT_W: f64 = 56.0;
 const GAP: f64 = 8.0;
 const HOTKEY: &str = crate::hotkey::LABEL;
-/// Strong enough that 12pt text in the well cannot be read.
-const BLUR_RADIUS: f64 = 22.0;
+/// Gaussian blur (`CIGaussianBlur` radius, in points) over masked text in the well. The privacy
+/// tradeoff: the blur should show the shape of what was copied (how many lines, their indentation
+/// and length, where code blocks are) so you recognise it, but never the text. At 6 pt each glyph
+/// of the 12 pt monospace payload (7 pt wide, 15 pt lines) is spread over about ±12 pt, so letters
+/// and words run together into one grey band per line: unreadable, also for digits and short
+/// words, while lines and indentation still show. Below about 4 pt short words and numbers start
+/// to come through.
+const TEXT_BLUR_RADIUS: f64 = 6.0;
+/// The blur over a masked picture. Stronger than [`TEXT_BLUR_RADIUS`]: a picture is scaled to the
+/// well, so text inside it (a screenshot, a photographed card or document) can be much larger
+/// than 12 pt. At 10 pt the outline, the main shapes and colours stay recognisable, large text
+/// does not.
+const IMAGE_BLUR_RADIUS: f64 = 10.0;
+const _: () = assert!(TEXT_BLUR_RADIUS >= 5.0 && TEXT_BLUR_RADIUS < IMAGE_BLUR_RADIUS);
 /// Glass controls this close merge on macOS 26+ (`glass::group`). Below the 6 pt gaps between
 /// chips and header buttons, so they only merge while they morph closer together.
 const GLASS_MERGE: f64 = 4.0;
@@ -1106,12 +1118,16 @@ fn well_is_masked() -> bool {
     MASKS.with(Cell::get) && !REVEALED.with(Cell::get)
 }
 
-fn gaussian_blur() -> Option<Retained<AnyObject>> {
+/// The blurs for the well's text and its picture, or `None` when Core Image cannot build them.
+fn gaussian_blurs() -> Option<(Retained<AnyObject>, Retained<AnyObject>)> {
     #[cfg(test)]
     if FAIL_BLUR.with(Cell::get) {
         return None;
     }
-    mac_ui::blur::gaussian(BLUR_RADIUS)
+    Some((
+        mac_ui::blur::gaussian(TEXT_BLUR_RADIUS)?,
+        mac_ui::blur::gaussian(IMAGE_BLUR_RADIUS)?,
+    ))
 }
 
 fn set_well_blur(on: bool) {
@@ -1124,13 +1140,16 @@ fn set_well_blur(on: bool) {
         clear_blur();
         return;
     }
-    let filter = gaussian_blur();
-    let plan = commands::well_mask(true, filter.is_some());
+    let filters = gaussian_blurs();
+    let plan = commands::well_mask(true, filters.is_some());
     SHADE_ON.set(plan.shade);
     show_mask_shade(plan.shade);
-    if let Some(filter) = filter {
+    if let Some((text, image)) = filters {
         if !BLUR_ON.get() {
-            blur_both(&NSArray::from_slice(&[&*filter]));
+            blur_both(
+                &NSArray::from_slice(&[&*text]),
+                &NSArray::from_slice(&[&*image]),
+            );
             BLUR_ON.set(true);
         }
         return;
@@ -1162,19 +1181,20 @@ fn clear_blur() {
     if !BLUR_ON.get() {
         return;
     }
-    blur_both(&NSArray::from_slice(&[]));
+    blur_both(&NSArray::from_slice(&[]), &NSArray::from_slice(&[]));
     BLUR_ON.set(false);
 }
 
-fn blur_both(filters: &NSArray<AnyObject>) {
+/// Install `text` on the well's text and `image` on its picture (empty arrays clear them).
+fn blur_both(text: &NSArray<AnyObject>, image: &NSArray<AnyObject>) {
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            mac_ui::blur::set_content_filters(view, filters);
+            mac_ui::blur::set_content_filters(view, text);
         }
     });
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            mac_ui::blur::set_content_filters(view, filters);
+            mac_ui::blur::set_content_filters(view, image);
         }
     });
 }
@@ -2773,9 +2793,17 @@ mod tests {
     }
 
     #[test]
+    fn text_and_pictures_get_their_own_blur() {
+        // Light enough to show the shape, the picture's blur stronger than the text's.
+        assert_eq!(super::TEXT_BLUR_RADIUS, 6.0);
+        assert_eq!(super::IMAGE_BLUR_RADIUS, 10.0);
+        assert!(super::gaussian_blurs().is_some());
+    }
+
+    #[test]
     fn blur_hook_fails_closed() {
         let _force = ForceBlurOff::arm();
-        assert!(super::gaussian_blur().is_none());
+        assert!(super::gaussian_blurs().is_none());
         let masked = crate::commands::well_mask(true, false);
         assert!(masked.shade);
         assert!(!masked.show_body);
