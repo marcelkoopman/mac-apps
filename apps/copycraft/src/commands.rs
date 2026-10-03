@@ -1018,7 +1018,7 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, overview: Optio
         card.preview_note = None;
     }
     add_table_note(card, dataframe::table_start(source.trim()));
-    if let Some(note) = dataframe::ambiguous_dates_note(&preview.dates) {
+    if let Some(note) = dataframe::dates_note(&preview.dates) {
         add_meta_note(card, &note);
     }
 }

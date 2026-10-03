@@ -257,10 +257,21 @@ fn days_from_civil(year: i32, month: u32, day: u32) -> i32 {
     era * 146_097 + day_of_era - 719_468
 }
 
+impl DateColumn {
+    /// Read `mm/dd/yyyy` because a value only fits that order (its second part is over 12).
+    pub fn forced_month_first(&self) -> bool {
+        !self.ambiguous && self.order == DateOrder::MonthFirst
+    }
+}
+
 /// "Dates read as dd/mm/yyyy" when a column's dates fit both orders, so the card says which one
-/// it chose.
-pub fn ambiguous_dates_note(dates: &[DateColumn]) -> Option<String> {
-    let column = dates.iter().find(|column| column.ambiguous)?;
+/// it chose; else "Dates read as mm/dd/yyyy" when a value forced month first (day first, the
+/// default, goes unsaid).
+pub fn dates_note(dates: &[DateColumn]) -> Option<String> {
+    let column = dates
+        .iter()
+        .find(|column| column.ambiguous)
+        .or_else(|| dates.iter().find(|column| column.forced_month_first()))?;
     Some(match column.order {
         DateOrder::DayFirst => "Dates read as dd/mm/yyyy".to_string(),
         DateOrder::MonthFirst => "Dates read as mm/dd/yyyy".to_string(),

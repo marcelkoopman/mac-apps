@@ -232,6 +232,7 @@ fn check(text: &str, check: &str) -> Result<(), String> {
         "sample" => view_text(text, CardView::Sample),
         "dataframe" => view_text(text, CardView::Dataframe),
         "dfcard" => work_card(&data(text, CardView::Dataframe)).excerpt,
+        "dfmeta" => work_card(&data(text, CardView::Dataframe)).meta,
         "read" => table().map(|(df, _)| shape(&df)).unwrap_or_default(),
         "dtypes" => table().map(|(df, _)| dtypes(&df)).unwrap_or_default(),
         "notes" => match table() {

@@ -186,12 +186,15 @@ pub struct ReadNotes {
     pub ambiguous_dates: bool,
     /// Those dates were read `mm/dd/yyyy`.
     pub month_first: bool,
+    /// A date column had to be read `mm/dd/yyyy`: a value's second part is over 12.
+    pub forced_month_first: bool,
     /// Lines the header could be on (the first lines of the trimmed text).
     pub header_lines: usize,
 }
 
 impl ReadNotes {
-    /// "Header on line N" and "Dates read as dd/mm/yyyy", when either was a choice.
+    /// "Header on line N", and "Dates read as dd/mm/yyyy" (or mm/dd) when the date order was a
+    /// choice, or "Dates read as mm/dd/yyyy" when a value forced that order.
     pub fn meta_notes(&self) -> Vec<String> {
         let mut notes: Vec<String> = self
             .start
@@ -204,6 +207,10 @@ impl ReadNotes {
             } else {
                 "Dates read as dd/mm/yyyy".to_string()
             });
+        }
+        let forced = "Dates read as mm/dd/yyyy".to_string();
+        if self.forced_month_first && !notes.contains(&forced) {
+            notes.push(forced);
         }
         notes
     }
@@ -236,6 +243,7 @@ pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, 
         start,
         ambiguous_dates: dates.iter().any(|column| column.ambiguous),
         month_first: options.month_first,
+        forced_month_first: dates.iter().any(DateColumn::forced_month_first),
         header_lines: trimmed.split('\n').take(MAX_PREAMBLE_LINES + 2).count(),
     };
     Some((df, notes))

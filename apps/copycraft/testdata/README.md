@@ -78,8 +78,9 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |
 | `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Original, Dataframe, Table ▾ | meta~Header on line 3; read=4x4; notes=Header on line 3 |
-| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01 |
-| `tables/dates_day_over_12.csv` | Table: a date part over 12 (read as mm/dd) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=none; dtypes=date,i64; dataframe~2026-01-13 |
+| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
+| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
+| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
 | `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
 | `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, for Fix types | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,str,i64; step:FixTypes:dtypes=date,str,f64,i64; step:FixTypes~24.95 |
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column, constant column | plain text | CSV | — | Original, Dataframe, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropConstant=8x4; step:DropEmpty>Dedupe>DropConstant=4x3 |
@@ -127,7 +128,7 @@ Columns (fixed; the test parses this table between the markers):
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |
 | `dtypes=…` | the table's column types, in order |
-| `dataframe~S` / `dfcard~S` | the Dataframe text / the Dataframe card contains `S` |
+| `dataframe~S` / `dfcard~S` / `dfmeta~S` | the Dataframe text / the Dataframe card / its meta line contains `S` |
 | `columns~S` | one shown column name (shared prefix shortened) is `S` |
 | `step:OPS=RxC`, `step:OPS~S`, `step:OPS:dtypes=…` | after the Table ▾ steps `OPS` (joined by `>`): the shape, the frame contains `S`, the types |
 | `mac-only` | Title, Labels and Chips are what macOS should show; Linux checks only the rest |

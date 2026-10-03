@@ -456,6 +456,30 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn a_value_that_forces_month_first_is_said_so_and_a_mixed_column_stays_text() {
+        use polars::prelude::DataType;
+        let src = "when,amount\n01/13/2026,1\n02/03/2026,2";
+        let preview = super::try_format_preview(src, 200, None).expect("preview");
+        assert!(preview.dates[0].forced_month_first());
+        assert!(preview.grid.contains("2026-02-03"), "{}", preview.grid);
+        assert_eq!(
+            super::dates_note(&preview.dates).as_deref(),
+            Some("Dates read as mm/dd/yyyy")
+        );
+        let (_, notes) = super::parse_table_with(src, Default::default()).expect("table");
+        assert!(notes.forced_month_first && !notes.ambiguous_dates);
+        assert_eq!(notes.meta_notes(), ["Dates read as mm/dd/yyyy"]);
+        // Day first, forced or not, goes unsaid.
+        let day_first = super::parse_table_with("when,n\n13/01/2026,1\n02/03/2026,2", Default::default());
+        assert!(day_first.expect("table").1.meta_notes().is_empty());
+        // One value only fits dd/mm, another only mm/dd: the column stays text.
+        let mixed = "when,amount\n13/01/2026,1\n01/14/2026,2\n02/03/2026,3";
+        let (df, notes) = super::parse_table_with(mixed, Default::default()).expect("table");
+        assert_eq!(df.column("when").expect("when").dtype(), &DataType::String);
+        assert!(notes.meta_notes().is_empty());
+    }
+
+    #[test]
     fn reads_day_first_dates_as_dates() {
         use polars::prelude::DataType;
         let preview = super::try_format_preview(ENERGY_FIXTURE, 200, None).expect("preview");
@@ -463,7 +487,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
         assert!(!preview.dates[0].ambiguous);
         assert_eq!(preview.dates[0].order, super::DateOrder::DayFirst);
         assert!(preview.grid.contains("2026-03-09"), "{}", preview.grid);
-        assert_eq!(super::ambiguous_dates_note(&preview.dates), None);
+        assert_eq!(super::dates_note(&preview.dates), None);
         let bytes = super::try_parquet_bytes(ENERGY_FIXTURE).expect("parquet");
         let df = ParquetReader::new(std::io::Cursor::new(bytes))
             .finish()
@@ -478,7 +502,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
         assert!(preview.dates[0].ambiguous);
         assert!(preview.grid.contains("2024-02-01"), "{}", preview.grid);
         assert_eq!(
-            super::ambiguous_dates_note(&preview.dates).as_deref(),
+            super::dates_note(&preview.dates).as_deref(),
             Some("Dates read as dd/mm/yyyy")
         );
         // 31 February is no date: the column stays text.
