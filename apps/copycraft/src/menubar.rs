@@ -1643,9 +1643,18 @@ fn register_format_hotkey() -> Result<(GlobalHotKeyManager, u32), Box<dyn std::e
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     appearance::apply(appearance::load());
-    // History pictures used to go back on the pasteboard through temporary files.
-    #[cfg(target_os = "macos")]
-    crate::macos_pasteboard::remove_stale_history_files();
+    // Nothing heavy on the main thread at launch: the sensitivity recognizers are built, and
+    // the temporary files older versions left for history pictures removed, in the background.
+    if let Err(e) = std::thread::Builder::new()
+        .name("copycraft-warm".into())
+        .spawn(|| {
+            #[cfg(target_os = "macos")]
+            crate::macos_pasteboard::remove_stale_history_files();
+            crate::sensitivity::warm();
+        })
+    {
+        eprintln!("background start-up skipped: {e}");
+    }
     let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.

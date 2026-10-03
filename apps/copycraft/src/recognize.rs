@@ -159,6 +159,11 @@ fn compiled() -> &'static Compiled {
     })
 }
 
+/// Compile the patterns now, so the first card does not wait for them.
+pub fn warm() {
+    compiled();
+}
+
 /// The classes the first layer finds in `text`. `code` (Rust, Java, Python source) skips
 /// personal data: there a path or a field name is not a person.
 pub fn classes(text: &str, code: bool) -> Classes {

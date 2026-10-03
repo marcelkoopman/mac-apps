@@ -179,6 +179,13 @@ fn with(mut classes: crate::recognize::Classes, label: Label) -> crate::recogniz
     classes
 }
 
+/// Build the recognizers and the full leakguard set now (on a background thread at launch),
+/// so the first card does not wait for them.
+pub fn warm() {
+    crate::recognize::warm();
+    guard_for(crate::recognize::Classes::default());
+}
+
 /// Leakguard with only the detectors of the classes not found yet, built once per combination.
 fn guard_for(found: crate::recognize::Classes) -> &'static Redactor {
     static GUARDS: [OnceLock<Redactor>; 8] = [const { OnceLock::new() }; 8];
