@@ -1096,7 +1096,7 @@ pub fn showing_note(shown: usize, total: usize, unit: &str) -> String {
     )
 }
 
-fn group_thousands(n: usize) -> String {
+pub(crate) fn group_thousands(n: usize) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (index, digit) in digits.chars().enumerate() {
@@ -3353,13 +3353,15 @@ Id,Naam,Telefoonnummer,Salaris
         let overview = work_card(&input);
         assert_eq!(overview.title, "Dataframe");
         assert!(
-            overview.excerpt.contains("shape: (20, 3)"),
+            overview
+                .excerpt
+                .starts_with("20 columns · 40 rows\n\ncolumn "),
             "{}",
             overview.excerpt
         );
-        // (Tests run without the app's row limit lifted: the middle rows are elided.)
+        assert!(!overview.excerpt.contains("shape:"), "{}", overview.excerpt);
         assert!(
-            overview.excerpt.contains("│ … PV4 Generation (kWh)"),
+            overview.excerpt.contains("\n… PV4 Generation (kWh) "),
             "{}",
             overview.excerpt
         );

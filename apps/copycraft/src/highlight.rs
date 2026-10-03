@@ -961,6 +961,24 @@ mod tests {
     }
 
     #[test]
+    fn the_column_overview_is_a_list_not_a_grid() {
+        let src = "20 columns · 1,192 rows\n\ncolumn   type     values\nDate     date     2026-03-09 – 2026-04-22\nPrijs €  number   always 0.0 · 2 empty";
+        let toks = tokens(src, FormatKind::Dataframe);
+        let joined: String = toks.iter().map(|(_, text)| text.as_str()).collect();
+        assert_eq!(joined, src);
+        let has =
+            |kind: TokenKind, text: &str| toks.iter().any(|(k, v)| *k == kind && v.trim() == text);
+        assert!(has(TokenKind::Number, "1,192"));
+        assert!(has(TokenKind::Keyword, "column   type     values"));
+        assert!(has(TokenKind::Key, "Prijs €"));
+        assert!(has(TokenKind::Type, "number"));
+        assert!(has(TokenKind::Number, "2026-03-09"));
+        assert!(has(TokenKind::Text, "always"));
+        // A polars grid is not taken for one.
+        assert!(super::tokenize_overview("shape: (2, 2)\n│ a │\n").is_none());
+    }
+
+    #[test]
     fn markdown_marks_heading_code_and_link() {
         let src = "# Title\n\nSee [docs](https://example.com) and `code` plus **bold**.\n";
         let toks = tokens(src, FormatKind::Markdown);

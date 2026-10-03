@@ -88,6 +88,9 @@ fn tokenize_yaml(source: &str) -> Vec<(TokenKind, String)> {
 }
 
 fn tokenize_dataframe(source: &str) -> Vec<(TokenKind, String)> {
+    if let Some(out) = tokenize_overview(source) {
+        return out;
+    }
     let mut out = Vec::new();
     for (idx, line) in source.split_inclusive('\n').enumerate() {
         tokenize_df_line(&mut out, line, idx == 0);
@@ -150,6 +153,63 @@ fn tokenize_df_line(out: &mut Vec<(TokenKind, String)>, line: &str, first: bool)
         out.push((TokenKind::Text, ch.to_string()));
         i += 1;
     }
+}
+
+/// The column overview ([`crate::dataframe::overview`]): "20 columns · 192 rows", a blank
+/// line, the headings, then a name, a type and the values on each line. `None` for a grid.
+fn tokenize_overview(source: &str) -> Option<Vec<(TokenKind, String)>> {
+    let mut lines = source.split_inclusive('\n');
+    let head = lines.next()?;
+    let (columns, rows) = head.trim_end().split_once(" columns · ")?;
+    let count = |text: &str| !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || c == ',');
+    let rows = rows.strip_suffix(" rows").or_else(|| rows.strip_suffix(" row"))?;
+    if !count(columns) || !count(rows) {
+        return None;
+    }
+    let blank = lines.next()?;
+    let headings = lines.next()?;
+    if !headings.starts_with("column ") {
+        return None;
+    }
+    let type_at = headings.find("type")?;
+    let values_at = headings.find("values")?;
+    let mut out = Vec::new();
+    for part in head.split_inclusive(' ') {
+        let kind = if count(part.trim()) {
+            TokenKind::Number
+        } else {
+            TokenKind::Text
+        };
+        out.push((kind, part.to_string()));
+    }
+    out.push((TokenKind::Text, blank.to_string()));
+    out.push((TokenKind::Keyword, headings.to_string()));
+    for line in lines {
+        // The cells start at the headings' character columns.
+        let chars: Vec<char> = line.chars().collect();
+        let cut = |at: usize| chars.iter().take(at).map(|c| c.len_utf8()).sum::<usize>();
+        let (name, rest) = line.split_at(cut(type_at).min(line.len()));
+        let rest_at = cut(values_at).saturating_sub(name.len()).min(rest.len());
+        let (kind, values) = rest.split_at(rest_at);
+        out.push((TokenKind::Key, name.to_string()));
+        out.push((TokenKind::Type, kind.to_string()));
+        let chars: Vec<char> = values.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i].is_ascii_digit() {
+                let (token, next) = take_while(&chars, i, |c| {
+                    c.is_ascii_digit() || matches!(c, '.' | '-' | ':' | 'e')
+                });
+                out.push((TokenKind::Number, token));
+                i = next;
+            } else {
+                let (token, next) = take_while(&chars, i, |c| !c.is_ascii_digit());
+                out.push((TokenKind::Text, token));
+                i = next;
+            }
+        }
+    }
+    Some(out)
 }
 
 fn is_box(ch: char) -> bool {

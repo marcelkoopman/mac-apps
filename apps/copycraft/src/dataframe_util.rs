@@ -152,11 +152,98 @@ pub(crate) mod tests {
     fn a_wide_table_has_a_column_overview() {
         let df = super::parse_table(ENERGY_FIXTURE).expect("table");
         let overview = super::overview(&df).expect("overview");
-        assert!(overview.contains("shape: (20, 3)"), "{overview}");
-        assert!(overview.contains("┆ date"), "{overview}");
-        assert!(overview.contains("│ … PV4 Generation (kWh)"), "{overview}");
+        // A list, not a polars grid: a count line, plain headings, aligned lines.
+        let lines: Vec<&str> = overview.lines().collect();
+        assert_eq!(lines[0], "20 columns · 40 rows");
+        assert_eq!(lines[1], "");
+        assert!(!overview.contains("shape:"), "{overview}");
+        assert!(!overview.contains("---"), "{overview}");
+        assert!(!overview.contains("str"), "{overview}");
+        assert!(!overview.contains('│'), "{overview}");
+        let headings = lines[2];
+        assert!(headings.starts_with("column "), "{headings}");
+        let type_at = headings.find("type").expect("type");
+        let values_at = headings.find("values").expect("values");
+        assert_eq!(lines.len(), 3 + 20);
+        let date = lines[3];
+        assert!(date.starts_with("Date "), "{date}");
+        assert_eq!(&date[type_at..type_at + 4], "date");
+        assert_eq!(&date[values_at..], "2026-03-09 – 2026-04-22");
+        let pv4 = lines
+            .iter()
+            .find(|line| line.starts_with("… PV4 Generation (kWh)"))
+            .expect("PV4");
+        let chars: Vec<char> = pv4.chars().collect();
+        let cell = |from: usize| chars[from..].iter().collect::<String>();
+        assert!(cell(type_at).starts_with("number "), "{pv4}");
+        assert_eq!(cell(values_at), "always 0.0");
         let narrow = super::parse_table("a,b\n1,2").expect("table");
         assert!(super::overview(&narrow).is_none());
+    }
+
+    #[test]
+    fn the_overview_sums_up_each_column_by_type() {
+        use polars::prelude::{AnyValue, Column, DataType, TimeUnit};
+        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
+        let summary = |name: &str| super::values_summary(df.column(name).expect("column"));
+        let kind = |name: &str| super::friendly_type(df.column(name).expect("column").dtype());
+        // Dates: first – last. Numbers: min – max, compact. All-0.00 columns: always 0.0.
+        assert_eq!(kind("Date"), "date");
+        assert_eq!(summary("Date"), "2026-03-09 – 2026-04-22");
+        assert_eq!(kind("Home Usage (kWh)"), "number");
+        assert_eq!(summary("Home Usage (kWh)"), "0.0 – 11.92");
+        assert_eq!(summary("Grid Import (kWh)"), "0.32 – 11.79");
+        assert_eq!(summary("Battery Discharge (kWh)"), "0.5 – 11.74");
+        for zero in ["Grid Export (kWh)", "Sunbox 7 X1500 Max - PV4 Generation (kWh)"] {
+            assert_eq!(summary(zero), "always 0.0", "{zero}");
+        }
+        let overview = super::overview(&df).expect("overview");
+        assert!(!overview.contains("examples"), "{overview}");
+        assert!(!overview.contains("f64"), "{overview}");
+
+        // Whole numbers, text, yes/no and empty cells.
+        let df = super::parse_table(concat!(
+            "id,name,city,active,score,note\n",
+            "1,Jan,Utrecht,true,3,x\n",
+            "2,Anja,Utrecht,false,,x\n",
+            "3,Piet,Amsterdam aan de Amstel en verder,true,5,x\n",
+            "4,Kees,Utrecht,true,,\n",
+        ))
+        .expect("table");
+        let summary = |name: &str| super::values_summary(df.column(name).expect("column"));
+        let kind = |name: &str| super::friendly_type(df.column(name).expect("column").dtype());
+        assert_eq!(kind("id"), "whole number");
+        assert_eq!(summary("id"), "1 – 4");
+        assert_eq!(summary("score"), "3 – 5 · 2 empty");
+        assert_eq!(kind("name"), "text");
+        // Every value once: no most common one.
+        assert_eq!(summary("name"), "4 distinct");
+        assert_eq!(summary("city"), "2 distinct · most common: Utrecht");
+        assert_eq!(summary("note"), "always x · 1 empty");
+        assert_eq!(kind("active"), "yes/no");
+        assert_eq!(summary("active"), "true 3 · false 1");
+        // A long most common value is cut to 20 characters, the last one "…".
+        let long = super::parse_table(
+            "k,v\n1,Amsterdam aan de Amstel en verder\n2,Amsterdam aan de Amstel en verder\n3,b",
+        )
+        .expect("table");
+        assert_eq!(
+            super::values_summary(long.column("v").expect("column")),
+            "2 distinct · most common: Amsterdam aan de Am…"
+        );
+        // Datetimes: first – last, no zero fraction.
+        let stamps = Column::new("t".into(), [1_774_000_000_000_i64, 1_774_086_400_000])
+            .cast(&DataType::Datetime(TimeUnit::Milliseconds, None))
+            .expect("cast");
+        assert_eq!(super::friendly_type(stamps.dtype()), "datetime");
+        let text = super::values_summary(&stamps);
+        assert!(text.starts_with("2026-03-20 "), "{text}");
+        assert!(text.contains(" – 2026-03-21 "), "{text}");
+        assert!(!text.contains('.'), "{text}");
+        // Small and large numbers stay short.
+        assert_eq!(super::number_text(&AnyValue::Float64(1.0 / 3.0)).as_deref(), Some("0.3333"));
+        assert_eq!(super::number_text(&AnyValue::Float64(12.0)).as_deref(), Some("12.0"));
+        assert_eq!(super::number_text(&AnyValue::Float64(2e20)).as_deref(), Some("2.000e20"));
     }
 
     #[test]
