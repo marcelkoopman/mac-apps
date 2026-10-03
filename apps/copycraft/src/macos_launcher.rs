@@ -38,23 +38,18 @@ use crate::item_find;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 440.0;
-const PAD: f64 = 14.0;
-const HEADER_H: f64 = 32.0;
+use crate::card_layout::{
+    HEADER_H, ITEM_FIND_H, META_H, PAD, PREVIEW_H, VERSION_H, place_sections,
+};
 const HEADER_BUTTON: f64 = 22.0;
 const CLEAR_BUTTON_W: f64 = 64.0;
-const PREVIEW_H: f64 = 264.0;
 const WELL_ACTION: f64 = 26.0;
 const WELL_INSET: f64 = 8.0;
 const WELL_GAP: f64 = 6.0;
 /// Horizontal padding already inside the text view. The gutter is the extra
 /// space that keeps lines clear of the icons.
 const TEXT_INSET_X: f64 = 12.0;
-const META_H: f64 = 22.0;
-const SEARCH_H: f64 = 36.0;
-/// Fixed in-item field under the header. Hidden until the well is revealed.
-const ITEM_FIND_H: f64 = 28.0;
 const ITEM_COUNT_W: f64 = 56.0;
-const GAP: f64 = 8.0;
 const HOTKEY: &str = crate::hotkey::LABEL;
 /// Gaussian blur (`CIGaussianBlur` radius, in points) over masked text in the well. The privacy
 /// tradeoff: the blur should show the shape of what was copied (how many lines, their indentation
@@ -204,6 +199,14 @@ thread_local! {
     static MASKS: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
+    /// The table's version bar ([`commands::VersionBar`]); `None` hides it.
+    static VERSION_BAR: RefCell<Option<commands::VersionBar>> = const { RefCell::new(None) };
+    /// The version bar's views.
+    static VERSION_ROW: RefCell<Option<VersionRow>> = const { RefCell::new(None) };
+    /// The "Table ▾" menu's commands ([`commands::table_menu`]).
+    static TABLE_MENU: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
+    /// The commands of the menu popped last (table steps or versions), by item tag.
+    static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The window's one field editor, made on first use. It takes no drops (see
     /// `windowWillReturnFieldEditor:toObject:`).
     static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
@@ -249,6 +252,10 @@ define_class!(
                 if item_find_on() {
                     focus_item_field();
                 }
+                true
+            } else if let Some(id) = undo_chord(event) {
+                // ⌘Z / ⇧⌘Z step through the table's versions (typed search text keeps them).
+                launcher::emit(UserEvent::Run(id));
                 true
             } else if let Some(key) = command_arrow(event) {
                 // ⌘← / ⌘→ step through history from anywhere on the card, also from a field
@@ -419,6 +426,36 @@ define_class!(
         #[unsafe(method(findAfterPause:))]
         fn find_after_pause(&self, _sender: Option<&AnyObject>) {
             take_item_query_from_field();
+        }
+
+        #[unsafe(method(tableUndoClicked:))]
+        fn table_undo_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::TableUndo));
+        }
+
+        #[unsafe(method(tableRedoClicked:))]
+        fn table_redo_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::TableRedo));
+        }
+
+        #[unsafe(method(versionsClicked:))]
+        fn versions_clicked(&self, _sender: Option<&NSButton>) {
+            pop_versions_menu();
+        }
+
+        #[unsafe(method(poppedClicked:))]
+        fn popped_clicked(&self, sender: Option<&NSMenuItem>) {
+            let Some(item) = sender else {
+                return;
+            };
+            let index = item.tag();
+            if index < 0 {
+                return;
+            }
+            let cmd = POPPED.with(|slot| slot.borrow().get(index as usize).cloned());
+            if let Some(cmd) = cmd {
+                run_command(cmd);
+            }
         }
 
         #[unsafe(method(overflowClicked:))]
@@ -615,6 +652,8 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
+    VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
+    TABLE_MENU.with(|slot| set_commands(slot, commands::table_menu(data.table.as_ref())));
 }
 
 fn hide() {
@@ -728,6 +767,7 @@ fn ensure_window(mtm: MainThreadMarker) {
         sel!(saveClicked:),
     );
     let reveal = reveal_cover(mtm);
+    let version_row = version_row(mtm);
 
     content.addSubview(&header);
     content.addSubview(&item_find);
@@ -741,6 +781,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&field);
     content.addSubview(pills.view());
     content.addSubview(&nav_capsule);
+    content.addSubview(&version_row.capsule);
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
 
@@ -765,6 +806,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     COPY_BUTTON.with(|slot| slot.replace(Some(copy_button)));
     SAVE_BUTTON.with(|slot| slot.replace(Some(save_button)));
     REVEAL.with(|slot| slot.replace(Some(reveal)));
+    VERSION_ROW.with(|slot| slot.replace(Some(version_row)));
     WINDOW.with(|slot| slot.replace(Some(window)));
 }
 
@@ -812,6 +854,7 @@ fn layout(fresh_place: bool) {
     };
     let show_empty = shown.is_empty() && searching && !query.trim().is_empty();
     let item_find = !well_is_masked();
+    let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
     let placed = place_sections(
         &meta,
         searching,
@@ -819,6 +862,7 @@ fn layout(fresh_place: bool) {
         show_empty,
         nav.is_some(),
         item_find,
+        version_bar.is_some(),
     );
     place_window(mtm, placed.height, fresh_place);
     let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
@@ -845,6 +889,7 @@ fn layout(fresh_place: bool) {
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
     place_show_all(mtm, placed.preview_y);
+    place_version_row(placed.version_y, version_bar.as_ref());
     META.with(|slot| {
         let borrowed = slot.borrow();
         let Some(label) = borrowed.as_ref() else {
@@ -906,90 +951,6 @@ fn layout(fresh_place: bool) {
     SHOWN.with(|slot| set_commands(slot, shown));
     FRAMES.with(|slot| slot.replace(frames));
     paint_pills();
-}
-
-struct Sections {
-    height: f64,
-    header_y: f64,
-    find_y: f64,
-    preview_y: f64,
-    meta_y: f64,
-    search_y: f64,
-    chips_y: f64,
-    chips_h: f64,
-}
-
-fn place_sections(
-    meta: &str,
-    searching: bool,
-    frames: &[ChipFrame],
-    show_empty: bool,
-    show_nav: bool,
-    item_find: bool,
-) -> Sections {
-    let meta_h = if meta.is_empty() { 0.0 } else { META_H };
-    let search_h = if searching { SEARCH_H } else { 0.0 };
-    let find_h = if item_find { ITEM_FIND_H } else { 0.0 };
-    let gap_after_find = if find_h > 0.0 { 6.0 } else { 0.0 };
-    let mut chips_h = if show_empty {
-        28.0
-    } else {
-        commands::chips_height(frames)
-    };
-    if show_nav {
-        chips_h = chips_h.max(commands::CHIP_PITCH);
-    }
-    let gap_after_preview = if meta_h > 0.0 || search_h > 0.0 || chips_h > 0.0 {
-        GAP
-    } else {
-        0.0
-    };
-    let gap_after_meta = if meta_h > 0.0 && (search_h > 0.0 || chips_h > 0.0) {
-        GAP
-    } else {
-        0.0
-    };
-    let gap_after_search = if search_h > 0.0 && chips_h > 0.0 {
-        4.0
-    } else {
-        0.0
-    };
-    let height = PAD
-        + HEADER_H
-        + GAP
-        + find_h
-        + gap_after_find
-        + PREVIEW_H
-        + gap_after_preview
-        + meta_h
-        + gap_after_meta
-        + search_h
-        + gap_after_search
-        + chips_h
-        + PAD;
-    let mut cursor = height - PAD;
-    cursor -= HEADER_H;
-    let header_y = cursor;
-    cursor -= GAP + find_h;
-    let find_y = cursor;
-    cursor -= gap_after_find + PREVIEW_H;
-    let preview_y = cursor;
-    cursor -= gap_after_preview + meta_h;
-    let meta_y = cursor;
-    cursor -= gap_after_meta + search_h;
-    let search_y = cursor;
-    cursor -= gap_after_search + chips_h;
-    let chips_y = cursor;
-    Sections {
-        height,
-        header_y,
-        find_y,
-        preview_y,
-        meta_y,
-        search_y,
-        chips_y,
-        chips_h,
-    }
 }
 
 /// A fresh launcher opens just above (or below) the pointer, 8 pt inside the visible screen.
@@ -2003,6 +1964,10 @@ fn activate_overflow(index: usize) {
 }
 
 fn run_command(cmd: Command) {
+    if cmd.id == CommandId::TableMenu {
+        pop_table_menu();
+        return;
+    }
     let formatting_link =
         cmd.id == CommandId::Format && LINK_PAGE.with(|slot| slot.borrow().is_some());
     if !commands::keeps_card_open(&cmd.id) && !formatting_link {
@@ -2732,6 +2697,197 @@ fn header_symbol(
     let button = GlassButton::symbol(mtm, symbol, label, fallback, 13.0);
     wire_button(button.button(), action);
     button
+}
+
+/// ⌘Z or ⇧⌘Z while the table has a version to go to ([`commands::undo_key`]). Typed search
+/// text keeps the keys.
+fn undo_chord(event: &NSEvent) -> Option<CommandId> {
+    if SEARCHING.with(Cell::get) && !current_query().is_empty() {
+        return None;
+    }
+    let flags = event.modifierFlags();
+    let chars = event.charactersIgnoringModifiers()?.to_string();
+    VERSION_BAR.with(|slot| {
+        commands::undo_key(
+            &chars,
+            flags.contains(NSEventModifierFlags::Command),
+            flags.contains(NSEventModifierFlags::Shift),
+            flags.intersects(NSEventModifierFlags::Control | NSEventModifierFlags::Option),
+            slot.borrow().as_ref(),
+        )
+    })
+}
+
+/// The version bar: a glass capsule under the well with undo `↶`, the version shown (a button
+/// that pops the list of versions) and redo `↷`.
+struct VersionRow {
+    capsule: Retained<NSView>,
+    undo: GlassButton,
+    title: GlassButton,
+    redo: GlassButton,
+}
+
+/// Width of the undo and redo slots in the version bar.
+const VERSION_BUTTON: f64 = 32.0;
+
+fn version_row(mtm: MainThreadMarker) -> VersionRow {
+    let height = VERSION_H;
+    let width = WIDTH - PAD * 2.0;
+    let capsule = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, height)),
+    );
+    capsule.setHidden(true);
+    let inside = glass::background(mtm, &capsule, height / 2.0).content;
+    let step_button = |symbol: &str, name: &str, glyph: &str, keys: &str, action: Sel| {
+        let button = GlassButton::symbol(mtm, symbol, name, glyph, NAV_SYMBOL);
+        let ns = button.button();
+        // The capsule is the glass; no second bezel inside it.
+        ns.setBordered(false);
+        let has_image = ns.image().is_some();
+        ns.setTitle(&NSString::from_str(if has_image { "" } else { glyph }));
+        if has_image {
+            ns.setImagePosition(NSCellImagePosition::ImageOnly);
+        }
+        ns.setAccessibilityLabel(Some(&NSString::from_str(name)));
+        ns.setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
+        wire_button(ns, action);
+        button
+    };
+    let undo = step_button(
+        "arrow.uturn.backward",
+        "Undo table step",
+        "↶",
+        "⌘Z",
+        sel!(tableUndoClicked:),
+    );
+    let redo = step_button(
+        "arrow.uturn.forward",
+        "Redo table step",
+        "↷",
+        "⇧⌘Z",
+        sel!(tableRedoClicked:),
+    );
+    let title = GlassButton::pill(mtm, "", ButtonSize::Small);
+    title.button().setBordered(false);
+    title
+        .button()
+        .setToolTip(Some(&NSString::from_str("Versions of the table")));
+    wire_button(title.button(), sel!(versionsClicked:));
+    undo.view().setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(VERSION_BUTTON, height),
+    ));
+    title.view().setFrame(NSRect::new(
+        NSPoint::new(VERSION_BUTTON, 0.0),
+        NSSize::new(width - VERSION_BUTTON * 2.0, height),
+    ));
+    redo.view().setFrame(NSRect::new(
+        NSPoint::new(width - VERSION_BUTTON, 0.0),
+        NSSize::new(VERSION_BUTTON, height),
+    ));
+    inside.addSubview(undo.view());
+    inside.addSubview(title.view());
+    inside.addSubview(redo.view());
+    VersionRow {
+        capsule,
+        undo,
+        title,
+        redo,
+    }
+}
+
+/// Show the version bar at `y` with `bar`, or hide it (`None`).
+fn place_version_row(y: f64, bar: Option<&commands::VersionBar>) {
+    VERSION_ROW.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(row) = borrowed.as_ref() else {
+            return;
+        };
+        row.capsule.setHidden(bar.is_none());
+        let Some(bar) = bar else {
+            return;
+        };
+        row.capsule.setFrame(NSRect::new(
+            NSPoint::new(PAD, y),
+            NSSize::new(WIDTH - PAD * 2.0, VERSION_H),
+        ));
+        row.undo.button().setEnabled(bar.can_undo());
+        row.redo.button().setEnabled(bar.can_redo());
+        row.title.set_title(&bar.title());
+        row.title.set_accessibility_label(&bar.spoken());
+    });
+}
+
+/// Pop a menu of `items` (a check mark on the `true` ones) under `anchor`; a pick runs its
+/// command like a chip.
+fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
+    menu.setAutoenablesItems(false);
+    for (index, (cmd, checked)) in items.iter().enumerate() {
+        let item = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                NSMenuItem::alloc(mtm),
+                &NSString::from_str(&cmd.title),
+                Some(sel!(poppedClicked:)),
+                &NSString::from_str(""),
+            )
+        };
+        item.setTag(index as isize);
+        if *checked {
+            item.setState(NSControlStateValueOn);
+        }
+        DELEGATE.with(|slot| {
+            if let Some(delegate) = slot.borrow().as_ref() {
+                unsafe { item.setTarget(Some(delegate)) };
+            }
+        });
+        menu.addItem(&item);
+    }
+    POPPED.with(|slot| set_commands(slot, items.into_iter().map(|(cmd, _)| cmd).collect()));
+    let below = NSPoint::new(0.0, anchor.frame().size.height + 4.0);
+    menu.popUpMenuPositioningItem_atLocation_inView(None, below, Some(anchor));
+    focus_card();
+}
+
+/// The "Table ▾" chip's menu: the steps, undo and redo.
+fn pop_table_menu() {
+    let items: Vec<(Command, bool)> = TABLE_MENU.with(|slot| {
+        slot.borrow()
+            .iter()
+            .map(|cmd| (cmd.clone(), false))
+            .collect()
+    });
+    let index = SHOWN.with(|slot| {
+        slot.borrow()
+            .iter()
+            .position(|cmd| cmd.id == CommandId::TableMenu)
+    });
+    let chip = index.and_then(|index| CHIPS.with(|slot| slot.borrow().get(index).cloned()));
+    match chip {
+        Some(chip) => pop_menu(items, chip.view()),
+        None => {
+            let field = FIELD.with(|slot| slot.borrow().clone());
+            if let Some(field) = field {
+                pop_menu(items, &field);
+            }
+        }
+    }
+}
+
+/// The version bar's menu: every version, the one shown checked.
+fn pop_versions_menu() {
+    let Some(bar) = VERSION_BAR.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    let anchor =
+        VERSION_ROW.with(|slot| slot.borrow().as_ref().map(|row| row.title.view().retain()));
+    if let Some(anchor) = anchor {
+        pop_menu(bar.menu(), &anchor);
+    }
 }
 
 fn wire_button(button: &NSButton, action: Sel) {

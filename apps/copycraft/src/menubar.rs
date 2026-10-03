@@ -340,8 +340,11 @@ impl App {
                 self.refresh_popup();
             }
             CommandId::TableStep(op) => self.table_step(op),
-            CommandId::TableUndo => self.table_goto(-1),
-            CommandId::TableRedo => self.table_goto(1),
+            CommandId::TableUndo => self.table_goto(|cursor| cursor.checked_sub(1)),
+            CommandId::TableRedo => self.table_goto(|cursor| Some(cursor + 1)),
+            CommandId::TableVersion(index) => self.table_goto(|_| Some(index)),
+            // The card pops the menu itself.
+            CommandId::TableMenu => {}
             CommandId::Quit => event_loop.exit(),
         }
     }
@@ -386,15 +389,15 @@ impl App {
         self.refresh_popup();
     }
 
-    /// Show the version `delta` away from the one shown (undo -1, redo +1).
-    fn table_goto(&mut self, delta: isize) {
+    /// Show the version `to` picks from the one shown (undo, redo, a version from the menu).
+    fn table_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
         let Some((text, home)) = self.table_source() else {
             return;
         };
         let Some(table) = self.table_at(home) else {
             return;
         };
-        let Some(index) = table.cursor().checked_add_signed(delta) else {
+        let Some(index) = to(table.cursor()) else {
             return;
         };
         if let Some(job) = table.goto(index, &text) {

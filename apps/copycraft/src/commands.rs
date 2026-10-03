@@ -404,6 +404,10 @@ pub enum CommandId {
     TableUndo,
     /// Show the table version after the one shown.
     TableRedo,
+    /// Show table version `n` (0 is the original), from the version bar's menu.
+    TableVersion(usize),
+    /// The "Table ▾" chip: the card pops a menu of table steps ([`table_menu`]).
+    TableMenu,
     Quit,
 }
 
@@ -883,22 +887,17 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
 }
 
 /// A table version after one or more steps, from its frame. Size, lines and sensitivity
-/// labels are the version's own (as CSV): a step can drop or keep a sensitive column.
+/// labels are the version's own (as CSV): a step can drop or keep a sensitive column. Which
+/// version it is shows in the version bar ([`VersionBar`]).
 fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     card.title = "Dataframe".to_string();
     card.highlight = Some(FormatKind::Dataframe);
     card.preview_note = None;
-    let label = table.labels.get(table.version).cloned().unwrap_or_default();
-    let note = format!(
-        "Version {} of {}: {label}",
-        table.version + 1,
-        table.labels.len()
-    );
     let Some(frame) = &table.frame else {
         card.excerpt.clear();
         card.placeholder = "Working on the table…".to_string();
         card.selectable = false;
-        card.meta = note;
+        card.meta.clear();
         return;
     };
     let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
@@ -906,7 +905,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
         card.excerpt.clear();
         card.placeholder = "The table is empty".to_string();
         card.selectable = false;
-        card.meta = note;
+        card.meta.clear();
         return;
     };
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
@@ -920,7 +919,6 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     } else {
         card.excerpt = shown_body(&preview.grid);
     }
-    add_meta_note(card, &note);
 }
 
 /// Put `body` in the well: whole with `full`, else its preview and the note.
@@ -1328,8 +1326,11 @@ pub fn forget_chips() {
 /// Chips, earlier copies, and appearance. Quit stays out.
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let mut commands = chips(data);
-    if let Some(table) = &data.table {
-        commands.extend(table_commands(table));
+    let offers_table = commands.iter().any(|c| c.id == CommandId::TableMenu);
+    match &data.table {
+        Some(table) => commands.extend(table_commands(table)),
+        None if offers_table => commands.extend(table_steps()),
+        None => {}
     }
     for item in &data.history {
         commands.push(command(
@@ -1361,15 +1362,31 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     commands
 }
 
-/// Steps on a table, and undo and redo when there is a version to go to.
-pub fn table_commands(table: &TableShown) -> Vec<Command> {
+/// Title of the chip that opens the table's menu.
+pub const TABLE_MENU_TITLE: &str = "Table ▾";
+
+/// The steps a table can take, for the "Table ▾" menu and the search.
+pub fn table_steps() -> Vec<Command> {
     use crate::table::TableOp;
-    let mut commands = vec![command(
+    vec![command(
         CommandId::TableStep(TableOp::Dedupe),
         "Remove duplicate rows",
         "Table",
         "dedupe unique duplicates rows table",
-    )];
+    )]
+}
+
+/// The "Table ▾" menu: the steps, then undo and redo when there is a version to go to.
+pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
+    match table {
+        Some(table) => table_commands(table),
+        None => table_steps(),
+    }
+}
+
+/// Steps on a table, and undo and redo when there is a version to go to.
+pub fn table_commands(table: &TableShown) -> Vec<Command> {
+    let mut commands = table_steps();
     if table.can_undo() {
         let label = &table.labels[table.version];
         commands.push(command(
@@ -1389,6 +1406,92 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
         ));
     }
     commands
+}
+
+/// The version bar under the well: shown in the Dataframe view while the table has more than
+/// one version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionBar {
+    /// "Original", then each step's label.
+    pub labels: Vec<String>,
+    /// The version shown.
+    pub current: usize,
+}
+
+impl VersionBar {
+    pub fn of(data: &LaunchData) -> Option<Self> {
+        let table = data.table.as_ref()?;
+        let text = data.subject_text.as_deref()?;
+        (presented_view(text, data.view) == CardView::Dataframe && table.labels.len() > 1).then(
+            || Self {
+                labels: table.labels.clone(),
+                current: table.version.min(table.labels.len() - 1),
+            },
+        )
+    }
+
+    /// "2 / 3  Duplicates removed".
+    pub fn title(&self) -> String {
+        format!(
+            "{} / {}  {}",
+            self.current + 1,
+            self.labels.len(),
+            self.labels[self.current]
+        )
+    }
+
+    /// "Version 2 of 3, Duplicates removed" for VoiceOver.
+    pub fn spoken(&self) -> String {
+        format!(
+            "Version {} of {}, {}",
+            self.current + 1,
+            self.labels.len(),
+            self.labels[self.current]
+        )
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.current > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.current + 1 < self.labels.len()
+    }
+
+    /// The versions to pick from, the one shown first-class (`true`).
+    pub fn menu(&self) -> Vec<(Command, bool)> {
+        self.labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| {
+                let title = format!("{}. {label}", index + 1);
+                (
+                    command(CommandId::TableVersion(index), &title, "Version", "version"),
+                    index == self.current,
+                )
+            })
+            .collect()
+    }
+}
+
+/// What ⌘Z (`shift`: ⇧⌘Z) does on the card: undo or redo a table step when there is one, else
+/// nothing (`None`, so a text field keeps the key). `chars` is the key without modifiers.
+pub fn undo_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    bar: Option<&VersionBar>,
+) -> Option<CommandId> {
+    if !command || other_modifier || !chars.eq_ignore_ascii_case("z") {
+        return None;
+    }
+    let bar = bar?;
+    if shift {
+        bar.can_redo().then_some(CommandId::TableRedo)
+    } else {
+        bar.can_undo().then_some(CommandId::TableUndo)
+    }
 }
 
 /// The `⋯` row of a [`CommandId::KeepHistory`] choice.
@@ -1607,6 +1710,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableStep(_)
             | CommandId::TableUndo
             | CommandId::TableRedo
+            | CommandId::TableVersion(_)
+            | CommandId::TableMenu
     )
 }
 
@@ -1705,6 +1810,12 @@ fn text_chips(text: &str) -> Vec<Command> {
             "Dataframe",
             "Table",
             "dataframe table csv tsv",
+        ));
+        commands.push(command(
+            CommandId::TableMenu,
+            TABLE_MENU_TITLE,
+            "Steps on the table",
+            "table steps dedupe duplicates undo redo",
         ));
     }
     finish_modes(commands)
@@ -1935,7 +2046,7 @@ mod tests {
         step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
-    use super::{TableShown, table_commands};
+    use super::{TABLE_MENU_TITLE, TableShown, VersionBar, table_commands, table_menu, undo_key};
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
 
@@ -3013,11 +3124,7 @@ Id,Naam,Telefoonnummer,Salaris
         let card = work_card(&input);
         assert!(card.excerpt.contains("shape: (2, 2)"), "{}", card.excerpt);
         assert!(card.meta.starts_with("3 lines"), "{}", card.meta);
-        assert!(
-            card.meta.contains("Version 2 of 2: Duplicates removed"),
-            "{}",
-            card.meta
-        );
+        assert!(!card.meta.contains("Duplicates removed"), "{}", card.meta);
         // Another version is other content: masked again until revealed.
         let plain = data(SubjectKind::Text, Some(src));
         let mut versioned = plain.clone();
@@ -3088,6 +3195,72 @@ Id,Naam,Telefoonnummer,Salaris
                 .iter()
                 .any(|c| c.id == CommandId::TableRedo)
         );
+    }
+
+    #[test]
+    fn a_table_gets_the_table_menu_chip_and_its_steps_in_search() {
+        let input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
+        let titles: Vec<String> = chips(&input).into_iter().map(|c| c.title).collect();
+        assert!(titles.iter().any(|t| t == TABLE_MENU_TITLE), "{titles:?}");
+        assert!(
+            search_pool(&input)
+                .iter()
+                .any(|c| c.id == CommandId::TableStep(crate::table::TableOp::Dedupe))
+        );
+        assert!(keeps_card_open(&CommandId::TableMenu));
+        let prose = data(SubjectKind::Text, Some("just some words"));
+        assert!(!chips(&prose).iter().any(|c| c.id == CommandId::TableMenu));
+        // Without versions the menu has the steps only.
+        assert_eq!(table_menu(None).len(), 1);
+    }
+
+    #[test]
+    fn the_version_bar_shows_in_the_dataframe_view_with_two_versions_or_more() {
+        let src = "name,n\na,1\na,1";
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.table = Some(deduped(src));
+        assert_eq!(VersionBar::of(&input), None);
+        input.view = CardView::Dataframe;
+        let bar = VersionBar::of(&input).expect("bar");
+        assert_eq!(bar.title(), "2 / 2  Duplicates removed");
+        assert_eq!(bar.spoken(), "Version 2 of 2, Duplicates removed");
+        assert!(bar.can_undo() && !bar.can_redo());
+        let menu = bar.menu();
+        assert_eq!(menu.len(), 2);
+        assert_eq!(menu[0].0.title, "1. Original");
+        assert_eq!(menu[0].0.id, CommandId::TableVersion(0));
+        assert!(!menu[0].1 && menu[1].1);
+        assert!(keeps_card_open(&CommandId::TableVersion(0)));
+        // The original alone has no bar.
+        let mut original = deduped(src);
+        original.labels.truncate(1);
+        original.version = 0;
+        input.table = Some(original);
+        assert_eq!(VersionBar::of(&input), None);
+    }
+
+    #[test]
+    fn command_z_undoes_and_shift_command_z_redoes_a_table_step() {
+        let bar = VersionBar {
+            labels: vec!["Original".into(), "Duplicates removed".into()],
+            current: 1,
+        };
+        assert_eq!(
+            undo_key("z", true, false, false, Some(&bar)),
+            Some(CommandId::TableUndo)
+        );
+        // Nothing to redo at the newest version; the key is left alone.
+        assert_eq!(undo_key("Z", true, true, false, Some(&bar)), None);
+        let back = VersionBar { current: 0, ..bar };
+        assert_eq!(
+            undo_key("Z", true, true, false, Some(&back)),
+            Some(CommandId::TableRedo)
+        );
+        assert_eq!(undo_key("z", true, false, false, Some(&back)), None);
+        assert_eq!(undo_key("z", false, false, false, Some(&back)), None);
+        assert_eq!(undo_key("z", true, true, true, Some(&back)), None);
+        assert_eq!(undo_key("x", true, false, false, Some(&back)), None);
+        assert_eq!(undo_key("z", true, false, false, None), None);
     }
 
     #[test]
