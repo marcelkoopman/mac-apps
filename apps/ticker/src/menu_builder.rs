@@ -302,7 +302,8 @@ impl MenuBuilder {
         names.get(row).map(str::to_string)
     }
 
-    fn format_price(price: f64) -> String {
+    /// Dutch notation with two decimals (`1.234,56`, `-0,05`); `?` for NaN.
+    pub fn format_price(price: f64) -> String {
         if price.is_nan() {
             return "?".to_string();
         }

@@ -1,3 +1,4 @@
+use crate::price_input::{parse_price, parse_watch_target};
 use crate::price_watch::{WatchDirection, update_watch_list};
 use std::error::Error;
 
@@ -23,7 +24,7 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     }
 
     let asset_name = args[0].clone();
-    let target_price: f64 = args[1].parse()?;
+    let target_price = parse_watch_target(&args[1])?;
     let direction = match args[2].to_lowercase().as_str() {
         "above" => WatchDirection::Above,
         "below" => WatchDirection::Below,
@@ -65,7 +66,7 @@ fn remove_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     }
 
     let asset_name = &args[0];
-    let target_price: f64 = args[1].parse()?;
+    let target_price = parse_price(&args[1])?;
 
     if update_watch_list(|watch_list| watch_list.remove_watch(asset_name, target_price))? {
         Ok(format!(
@@ -282,6 +283,31 @@ mod tests {
             ])
             .unwrap_err();
             assert!(err.to_string().contains("above") || err.to_string().contains("below"));
+        });
+    }
+
+    #[test]
+    fn add_reads_dutch_notation_and_refuses_bad_targets() {
+        with_temp_watch_file(|| {
+            handle_watch_command(&[
+                "add".into(),
+                "Bitcoin".into(),
+                "68.000".into(),
+                "above".into(),
+            ])
+            .unwrap();
+            let listed = handle_watch_command(&["list".into()]).unwrap();
+            assert!(listed.contains("68000.00"), "{listed}");
+            for bad in ["inf", "NaN", "0", "-1", "abc"] {
+                let err = handle_watch_command(&[
+                    "add".into(),
+                    "Gold".into(),
+                    bad.into(),
+                    "below".into(),
+                ]);
+                assert!(err.is_err(), "{bad}");
+            }
+            handle_watch_command(&["remove".into(), "Bitcoin".into(), "68.000,00".into()]).unwrap();
         });
     }
 

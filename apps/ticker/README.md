@@ -9,7 +9,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 - **Polling**: prices refresh every 5 minutes, or on demand with *Poll now*. Each fetch is tried up to 3 times, and until a fetch succeeds the menu keeps the last known price.
 - **Day change**: each menu row shows the price with its unit and the change since the day's first price, e.g. `▲ €217,00 · +0.33%`. That first price is stored per local calendar day.
 - **Menu bar asset**: click a price row to show that asset in the menu bar. The choice is remembered.
-- **Price watches**: *Add Price Watch* takes an asset, a target price and *above* / *below*. When the target is reached you get a macOS notification and the menu bar icon switches from its monochrome template (which follows the menu bar) to the coloured alert icon. A watch fires once, until you reset it (`ticker reset`) or remove it. Click a watch in the menu to remove it. *Manage Watches* lists them and can clear all. Watch prices are always shown in €.
+- **Price watches**: *Add Price Watch* takes an asset, a target price and *above* / *below*. The price may be typed in Dutch or English notation (`68.000`, `68.000,00`, `68000.5`, `68,5`; a single `.` followed by exactly three digits groups thousands, so write `2,479` for 2.479) and must be a finite number above 0. When the target is reached you get a macOS notification and the menu bar icon switches from its monochrome template (which follows the menu bar) to the coloured alert icon. A watch fires once, until you reset it (`ticker reset`) or remove it. Click a watch in the menu to remove it. *Manage Watches* lists them and can clear all. Watch prices are always shown in €.
 - **Copy to clipboard**: copies all current prices as TSV (symbol, name, price, unit, unit_hint, day_open, change_day, pct_day, direction_day).
 - **Edit asset…**: change an asset's URL (`https://` only), currency/unit and JSON price path through dialogs. Edits are saved to the user config. Responses over 1 MB are refused.
 - **Reset assets to defaults**: deletes the user config and goes back to the bundled `config.toml`.
@@ -69,7 +69,7 @@ ticker reset          # re-arm triggered watches
 ticker help
 ```
 
-From the repo: `cargo run -p ticker -- list`. From an installed app: `/Applications/Ticker.app/Contents/MacOS/ticker list`.
+Prices are read like in the app's prompt (`ticker add Bitcoin 68.000 above` is 68000). From the repo: `cargo run -p ticker -- list`. From an installed app: `/Applications/Ticker.app/Contents/MacOS/ticker list`.
 
 ## Build and run
 

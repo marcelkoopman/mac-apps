@@ -22,6 +22,7 @@ use crate::menu_ids::{self, RowRef};
 use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
+use crate::price_input;
 use crate::price_watch::{
     AppUpdate, FileStamp, PriceWatch, WatchDirection, WatchList, update_watch_list_for_app,
     watch_file_stamp,
@@ -543,14 +544,16 @@ impl App {
             .as_ref()
             .and_then(|df| current_price_for(df, &asset))
             .unwrap_or(0.0);
+        // Prefilled in the menu's Dutch notation, which parse_watch_target reads back.
         let target_price: f64 = match prompt_text(
             &format!("Target price for {asset} (€):"),
-            &format!("{default_price:.2}"),
+            &MenuBuilder::format_price(default_price),
         ) {
-            Some(s) => match s.replace(',', ".").parse() {
+            Some(s) => match price_input::parse_watch_target(&s) {
                 Ok(v) => v,
-                Err(_) => {
-                    watch_ui::send_macos_notification("Ticker", "Invalid price entered.");
+                Err(e) => {
+                    log_message(&format!("add_watch: {e}"));
+                    watch_ui::send_macos_notification("Ticker", &format!("Invalid price: {e}"));
                     return;
                 }
             },

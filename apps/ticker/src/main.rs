@@ -11,6 +11,7 @@ mod menubar;
 mod poll_gate;
 mod price_fetcher;
 mod price_history;
+mod price_input;
 mod price_watch;
 mod watch_cli;
 mod watch_ui;
