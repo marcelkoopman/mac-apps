@@ -17,8 +17,18 @@ pub enum UserEvent {
     FullCardReady(Box<FullCard>),
     /// A file was dropped on the card.
     DroppedFile(std::path::PathBuf),
+    /// A promised file (from Photos, Mail, …) was dropped and written to a temporary folder,
+    /// which goes once it is read (`mac_ui::drop::discard_promised`).
+    DroppedPromisedFile(std::path::PathBuf),
+    /// Image data was dropped on the card. Zeroized when the event is dropped.
+    DroppedImage(zeroize::Zeroizing<Vec<u8>>),
     /// Text was dropped on the card. Zeroized when the event is dropped.
     DroppedText(zeroize::Zeroizing<String>),
+    /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
+    DroppedImageScanned {
+        image: crate::clipboard::SecretBytes,
+        scan: Option<crate::commands::ImageScan>,
+    },
 }
 
 /// The whole-text ("Show all") card for one copied item and view.

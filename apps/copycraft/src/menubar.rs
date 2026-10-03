@@ -33,6 +33,8 @@ const SPINNER_DELAY: Duration = Duration::from_millis(180);
 const PREWARM_LEN: usize = 64 * 1024;
 /// Card title for text dropped on it (a dropped file shows its name).
 const DROPPED_TEXT: &str = "Dropped text";
+/// Card name for image data dropped on it (a picture from Safari or Preview).
+const DROPPED_IMAGE: &str = "Dropped image";
 
 struct App {
     tray: TrayIcon,
@@ -138,9 +140,22 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
-            UserEvent::DroppedFile(path) => self.show_dropped(crate::open_file::load(&path)),
+            UserEvent::DroppedFile(path) => {
+                self.show_dropped(crate::open_file::load_dropped(&path));
+            }
+            UserEvent::DroppedPromisedFile(path) => {
+                let opened = crate::open_file::load_dropped(&path);
+                mac_ui::drop::discard_promised(&path);
+                self.show_dropped(opened);
+            }
+            UserEvent::DroppedImage(bytes) => {
+                self.show_dropped(crate::open_file::from_image_data(DROPPED_IMAGE, bytes));
+            }
             UserEvent::DroppedText(text) => {
                 self.show_dropped(crate::open_file::from_text(DROPPED_TEXT, text));
+            }
+            UserEvent::DroppedImageScanned { image, scan } => {
+                self.finish_dropped_scan(&image, scan);
             }
         }
     }
@@ -381,23 +396,97 @@ impl App {
         }
     }
 
-    /// A dropped file or text: into history like a copy (newest first, the same limit, zeroized
-    /// when it falls off or on Wipe), then onto the card. The clipboard is left as it is.
+    /// A dropped file, text or picture: into history like a copy (newest first, the same limit,
+    /// zeroized when it falls off or on Wipe), then onto the card. The clipboard is left as it is.
     fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
-        if let Some(text) = opened.text.as_deref() {
-            let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
-            if let Some(clipboard_at) = self.history.record_tracking(text.to_string(), base) {
-                // The clipboard is not recorded again (back to the front) until it changes.
-                if let Some(current) = ClipboardView::from_os().text() {
-                    self.skip_record = Some(Zeroizing::new(current.to_string()));
-                }
-                self.clipboard_cursor = Some(clipboard_at);
-                self.history_cursor = 0;
-                self.refresh_status_menu();
+        let opened = self.look_at_dropped_image(opened);
+        let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+        let clipboard_at = if let Some(image) = opened.image.as_ref() {
+            Some(
+                self.history
+                    .record_image_tracking(image.bytes.clone(), base),
+            )
+        } else if let Some(text) = opened.text.as_deref() {
+            self.history.record_tracking(text.to_string(), base)
+        } else {
+            None
+        };
+        if let Some(clipboard_at) = clipboard_at {
+            // The clipboard is not recorded again (back to the front) until it changes. A
+            // copied picture is recorded once per pasteboard change anyway.
+            if let Some(current) = ClipboardView::from_os().text() {
+                self.skip_record = Some(Zeroizing::new(current.to_string()));
             }
+            self.clipboard_cursor = Some(clipboard_at);
+            self.history_cursor = 0;
+            self.refresh_status_menu();
+        }
+        if let Some(image) = opened.image.as_ref() {
+            self.scan_dropped_image(image.bytes.clone());
         }
         self.show_source(opened);
         launcher::order_front();
+    }
+
+    /// The format and size of a dropped picture, which the image card shows. One the system
+    /// cannot read gets a note instead, and stays out of history.
+    fn look_at_dropped_image(
+        &self,
+        mut opened: crate::open_file::OpenedFile,
+    ) -> crate::open_file::OpenedFile {
+        let Some(image) = opened.image.as_mut() else {
+            return opened;
+        };
+        #[cfg(target_os = "macos")]
+        let facts = image.bytes.with(crate::macos_pasteboard::image_bytes_facts);
+        #[cfg(not(target_os = "macos"))]
+        let facts = None;
+        if facts.is_none() {
+            return crate::open_file::noted(
+                std::mem::take(&mut opened.name),
+                crate::open_file::UNREADABLE_IMAGE,
+            );
+        }
+        image.facts = facts;
+        opened
+    }
+
+    /// Info text, data URL, text and barcodes of a dropped picture, on a background thread
+    /// like a copied one's ([`UserEvent::DroppedImageScanned`]).
+    fn scan_dropped_image(&self, image: SecretBytes) {
+        #[cfg(target_os = "macos")]
+        {
+            let spawned = std::thread::Builder::new()
+                .name("copycraft-drop-scan".into())
+                .spawn(move || {
+                    // Copied out first: the scan (text recognition) takes a while, and the card
+                    // reads the same bytes to draw the picture.
+                    let bytes = Zeroizing::new(image.with(<[u8]>::to_vec));
+                    let scan = crate::macos_pasteboard::scan_image_bytes(&bytes);
+                    launcher::emit(UserEvent::DroppedImageScanned { image, scan });
+                });
+            if let Err(e) = spawned {
+                eprintln!("dropped image scan failed: {e}");
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = image;
+    }
+
+    fn finish_dropped_scan(&mut self, image: &SecretBytes, scan: Option<commands::ImageScan>) {
+        // The card moved on (the clipboard, another drop, Wipe) while the thread ran.
+        let Some(shown) = self
+            .opened
+            .as_mut()
+            .and_then(|file| file.image.as_mut())
+            .filter(|shown| shown.bytes.same_allocation(image))
+        else {
+            return;
+        };
+        shown.scan = scan;
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
     }
 
     /// The card follows the clipboard again. After a drop, the history position goes back to
@@ -446,6 +535,7 @@ impl App {
             .unwrap_or_else(|| "File".to_string());
         let text = self.opened_text();
         let note = self.opened.as_ref().and_then(|file| file.note.clone());
+        let image = self.opened.as_ref().and_then(|file| file.image.clone());
         if let Some(text) = text.as_deref() {
             self.card_view = commands::presented_view(text, self.card_view);
         }
@@ -453,7 +543,13 @@ impl App {
         data.source_name = Some(name);
         data.image = None;
         data.image_scan = None;
-        if let Some(text) = text {
+        if let Some(image) = image {
+            // Drawn like a copied picture, from its own bytes instead of the clipboard's.
+            data.subject_kind = SubjectKind::Image;
+            data.image = image.facts;
+            data.image_scan = image.scan;
+            data.picture = Some(image.bytes);
+        } else if let Some(text) = text {
             data.subject_kind = SubjectKind::Text;
             data.subject_text = Some(text);
         } else {
@@ -487,6 +583,7 @@ impl App {
             source_name: None,
             source_note: None,
             full: false,
+            picture: None,
         }
     }
 
@@ -540,6 +637,15 @@ impl App {
 
     fn copy_current(&mut self) -> anyhow::Result<()> {
         let from_file = self.opened.is_some();
+        if let Some(image) = self.opened.as_ref().and_then(|file| file.image.as_ref()) {
+            // The dropped picture stays on the card; only the view's text is copied.
+            if let Some(text) =
+                commands::image_view_text(image.scan.as_ref(), self.card_view).map(Zeroizing::new)
+            {
+                clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+            }
+            return Ok(());
+        }
         if !from_file && ClipboardView::from_os().is_image() {
             return self.copy_image_view();
         }
@@ -674,10 +780,13 @@ impl App {
         }
     }
 
-    /// Save job for the chosen file's text, named after the file.
+    /// Save job for the chosen file's text, or a dropped picture, named after the file.
     #[cfg(target_os = "macos")]
     fn opened_save_job(&self) -> Option<crate::macos_save::SaveJob> {
         let opened = self.opened.as_ref()?;
+        if let Some(image) = opened.image.as_ref() {
+            return Some(dropped_image_save_job(&opened.name, image, self.card_view));
+        }
         let source = opened.text.as_deref()?;
         let view = commands::presented_view(source, self.card_view);
         let mut job = crate::macos_save::SaveJob::text(source, view)?;
@@ -1117,6 +1226,33 @@ fn prewarm(text: &str) {
 /// The one place a failed save is reported, whether it failed before or on the save thread.
 fn log_save_failure(message: &str) {
     eprintln!("save failed: {message}");
+}
+
+/// Save job for a dropped picture: the shown scan text, else the picture as it was dropped
+/// (its own format, not converted), named after it.
+#[cfg(target_os = "macos")]
+fn dropped_image_save_job(
+    name: &str,
+    image: &crate::open_file::OpenedImage,
+    view: CardView,
+) -> crate::macos_save::SaveJob {
+    use crate::macos_save::{SaveContent, SaveJob};
+    if let Some(text) = commands::image_view_text(image.scan.as_ref(), view) {
+        return SaveJob {
+            filename: crate::open_file::save_name(name, "txt"),
+            extension: "txt",
+            content: SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
+        };
+    }
+    let bytes = Zeroizing::new(image.bytes.with(<[u8]>::to_vec));
+    let extension = infer::get(&bytes)
+        .filter(|kind| kind.matcher_type() == infer::MatcherType::Image)
+        .map_or("tiff", |kind| kind.extension());
+    SaveJob {
+        filename: crate::open_file::save_name(name, extension),
+        extension,
+        content: SaveContent::Bytes(bytes),
+    }
 }
 
 fn history_title(history: &ClipboardHistory, index: usize) -> String {

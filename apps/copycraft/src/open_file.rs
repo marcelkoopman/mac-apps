@@ -2,14 +2,23 @@ use std::path::Path;
 
 use zeroize::Zeroizing;
 
+use crate::clipboard::SecretBytes;
+use crate::commands::{ImageFacts, ImageScan};
+
 /// Pasted files larger than this stay off the card.
 pub const MAX_FILE_BYTES: u64 = 8_000_000;
+/// Dropped pictures larger than this stay off the card. Higher than for text: a photo is
+/// easily over 8 MB, and a picture dragged from a web page often comes as uncompressed TIFF.
+pub const MAX_IMAGE_BYTES: u64 = 32_000_000;
 
 const NOT_TEXT: &str = "This file is not text";
 const TOO_LARGE: &str = "File is larger than 8 MB";
 const UNREADABLE: &str = "Can't read this file";
 const TEXT_TOO_LARGE: &str = "Text is larger than 8 MB";
 const EMPTY_TEXT: &str = "The dropped text is empty";
+const IMAGE_TOO_LARGE: &str = "Image is larger than 32 MB";
+/// For a dropped picture the system cannot draw.
+pub const UNREADABLE_IMAGE: &str = "Can't read this image";
 
 /// A file the card is showing instead of the clipboard.
 #[derive(Clone)]
@@ -17,14 +26,93 @@ pub struct OpenedFile {
     pub name: String,
     pub text: Option<Zeroizing<String>>,
     pub note: Option<String>,
+    /// A dropped picture, shown like a copied one.
+    pub image: Option<OpenedImage>,
+}
+
+/// A dropped picture: its encoded bytes (shared with its history entry), and what the image
+/// card shows about it once the app has looked.
+#[derive(Clone)]
+pub struct OpenedImage {
+    pub bytes: SecretBytes,
+    pub facts: Option<ImageFacts>,
+    pub scan: Option<ImageScan>,
+}
+
+/// A dropped file: a picture when its contents are one (see [`is_image_file`]), else read as
+/// text like [`load`]. A binary file that is not text either is tried as a picture too: the
+/// drop only lets text and image files through, and the system draws formats the sniffer does
+/// not know (camera RAW, …). Whether it can is up to the card ([`UNREADABLE_IMAGE`]).
+pub fn load_dropped(path: &Path) -> OpenedFile {
+    if is_image_file(path) {
+        return load_image(path);
+    }
+    let opened = load(path);
+    if opened.note.as_deref() == Some(NOT_TEXT) {
+        return load_image(path);
+    }
+    opened
+}
+
+fn load_image(path: &Path) -> OpenedFile {
+    let name = file_name(path);
+    let Ok(meta) = std::fs::metadata(path) else {
+        return noted(name, UNREADABLE);
+    };
+    if !meta.is_file() {
+        return noted(name, UNREADABLE);
+    }
+    if meta.len() > MAX_IMAGE_BYTES {
+        return noted(name, IMAGE_TOO_LARGE);
+    }
+    match std::fs::read(path) {
+        Ok(bytes) => from_image_bytes(name, bytes),
+        Err(_) => noted(name, UNREADABLE),
+    }
+}
+
+/// Image data dropped on the card, shown like a file called `name`.
+pub fn from_image_data(name: &str, mut bytes: Zeroizing<Vec<u8>>) -> OpenedFile {
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return noted(name.to_string(), IMAGE_TOO_LARGE);
+    }
+    // Moved, not copied, into the zeroizing history buffer.
+    from_image_bytes(name.to_string(), std::mem::take(&mut *bytes))
+}
+
+fn from_image_bytes(name: String, bytes: Vec<u8>) -> OpenedFile {
+    match SecretBytes::new(bytes) {
+        Some(bytes) => OpenedFile {
+            name,
+            text: None,
+            note: None,
+            image: Some(OpenedImage {
+                bytes,
+                facts: None,
+                scan: None,
+            }),
+        },
+        None => noted(name, UNREADABLE_IMAGE),
+    }
+}
+
+/// The file starts like a picture (PNG, JPEG, HEIC, GIF, WebP, TIFF, BMP, …).
+fn is_image_file(path: &Path) -> bool {
+    matches!(
+        infer::get_from_path(path),
+        Ok(Some(kind)) if kind.matcher_type() == infer::MatcherType::Image
+    )
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file")
+        .to_string()
 }
 
 pub fn load(path: &Path) -> OpenedFile {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("file")
-        .to_string();
+    let name = file_name(path);
     let Ok(meta) = std::fs::metadata(path) else {
         return noted(name, UNREADABLE);
     };
@@ -44,6 +132,7 @@ pub fn load(path: &Path) -> OpenedFile {
             name,
             text: Some(text),
             note: None,
+            image: None,
         },
         Classified::NotText => noted(name, NOT_TEXT),
         Classified::TooLarge => noted(name, TOO_LARGE),
@@ -63,6 +152,7 @@ pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
         name,
         text: Some(text),
         note: None,
+        image: None,
     }
 }
 
@@ -82,11 +172,12 @@ fn classify(bytes: &[u8]) -> Classified {
     }
 }
 
-fn noted(name: String, note: &str) -> OpenedFile {
+pub fn noted(name: String, note: &str) -> OpenedFile {
     OpenedFile {
         name,
         text: None,
         note: Some(note.to_string()),
+        image: None,
     }
 }
 
@@ -155,7 +246,59 @@ pub fn save_name(name: &str, extension: &str) -> String {
 mod tests {
     use zeroize::Zeroizing;
 
-    use super::{Classified, MAX_FILE_BYTES, classify, decode, from_text, load, save_name};
+    use super::{
+        Classified, MAX_FILE_BYTES, MAX_IMAGE_BYTES, classify, decode, from_image_data, from_text,
+        load, load_dropped, save_name,
+    };
+
+    /// The 8-byte PNG signature and an IHDR chunk start: enough for the type sniffer.
+    const PNG_START: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR";
+
+    #[test]
+    fn a_dropped_picture_file_is_an_image() {
+        let path = std::env::temp_dir().join(format!("copycraft-drop-{}.png", std::process::id()));
+        std::fs::write(&path, PNG_START).unwrap();
+        let opened = load_dropped(&path);
+        let _ = std::fs::remove_file(&path);
+        let image = opened.image.expect("image");
+        assert_eq!(image.bytes.with(<[u8]>::len), PNG_START.len());
+        assert!(opened.text.is_none());
+        assert!(opened.note.is_none());
+    }
+
+    #[test]
+    fn a_dropped_text_file_is_still_text() {
+        let path = std::env::temp_dir().join(format!("copycraft-drop-{}.txt", std::process::id()));
+        std::fs::write(&path, "plain\n").unwrap();
+        let opened = load_dropped(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(opened.image.is_none());
+        assert_eq!(opened.text.unwrap().as_str(), "plain\n");
+    }
+
+    #[test]
+    fn a_dropped_binary_file_is_tried_as_a_picture() {
+        let path = std::env::temp_dir().join(format!("copycraft-drop-{}.raw", std::process::id()));
+        std::fs::write(&path, [0, 1, 2, 3]).unwrap();
+        let opened = load_dropped(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(opened.image.is_some());
+        assert!(opened.note.is_none());
+    }
+
+    #[test]
+    fn dropped_image_data_has_the_image_limit() {
+        let opened = from_image_data("Dropped image", Zeroizing::new(PNG_START.to_vec()));
+        assert_eq!(opened.name, "Dropped image");
+        assert!(opened.image.is_some());
+
+        let limit = usize::try_from(MAX_IMAGE_BYTES).unwrap();
+        let over = from_image_data("Dropped image", Zeroizing::new(vec![0; limit + 1]));
+        assert!(over.image.is_none());
+        assert_eq!(over.note.as_deref(), Some("Image is larger than 32 MB"));
+        let empty = from_image_data("Dropped image", Zeroizing::new(Vec::new()));
+        assert_eq!(empty.note.as_deref(), Some("Can't read this image"));
+    }
 
     #[test]
     fn reads_utf8_and_a_bom() {

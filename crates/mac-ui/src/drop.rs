@@ -1,25 +1,27 @@
-//! Drop target: a view that takes one dropped file or dropped text.
+//! Drop target: a view that takes one dropped file, image or text.
 //!
-//! [`target`] builds an `NSView` registered for file URLs and/or plain text. Make it the window's
-//! content view (or another container) and build the content inside it. AppKit offers a drag to
-//! the deepest registered view under the pointer, so plain views, buttons, glass and read-only
-//! text and image views inside it leave the drag to the target. Editable text (a field being
-//! edited, an editable text view) registers itself and keeps taking its own text drops; give the
-//! window [`field_editor_without_drops`] when the whole window should take them instead.
+//! [`target`] builds an `NSView` registered for file URLs, promised files, image data and/or
+//! plain text. Make it the window's content view (or another container) and build the content
+//! inside it. AppKit offers a drag to the deepest registered view under the pointer, so plain
+//! views, buttons, glass and read-only text and image views inside it leave the drag to the
+//! target. Editable text (a field being edited, an editable text view) registers itself and keeps
+//! taking its own text drops; give the window [`field_editor_without_drops`] when the whole window
+//! should take them instead.
 //!
 //! While the drag moves it is judged by [`judge`] on what the drag pasteboard declares, without
-//! reading any text or file: one file whose type conforms to one of [`Accept::file_types`], or
-//! text when [`Accept::text`] is set. Anything else, including several files, folders, a file of
-//! another type or file promises, gets `NSDragOperation::None`, so the pointer shows that it
-//! cannot drop there. A file whose name maps to no known type is let through: only its contents
-//! can tell, so the caller judges it after the drop. The drop itself is read once, on the main
-//! thread, and handed to the callback as [`Dropped`].
+//! reading any data or file: one file (or one promised file, as Photos and Mail drag them) whose
+//! type conforms to one of [`Accept::file_types`], image data when [`Accept::images`] is set, or
+//! text when [`Accept::text`] is set. Anything else, including several files, folders and a file
+//! of another type, gets `NSDragOperation::None`, so the pointer shows that it cannot drop there.
+//! A file whose name maps to no known type is let through: only its contents can tell, so the
+//! caller judges it after the drop. The drop itself is read once, on the main thread, and handed
+//! to the callback as [`Dropped`]; a promised file is handed over once the source has written it.
 //!
 //! With a [`Highlight`], a drag that can be dropped outlines the target in the accent colour
 //! (system colours only, so it follows the appearance and the user's accent) and VoiceOver
 //! announces it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// What a drop delivers to the [`target`] callback.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +29,13 @@ pub enum Dropped {
     /// One file, by path. Reading it is up to the caller; in the App Sandbox the drop has given
     /// the app access to it (no security scope to start or stop).
     File(PathBuf),
+    /// One promised file (from Photos, Mail, a picture in Safari, …), which the source wrote
+    /// into a new folder of its own in the temporary directory. Read it, then hand the path to
+    /// [`discard_promised`].
+    Promised(PathBuf),
+    /// Encoded image data as the source put it on the drag: PNG, JPEG, HEIC, GIF, WebP, BMP or
+    /// TIFF (see [`IMAGE_TYPES`]). The caller owns it, like [`Dropped::Text`].
+    Image(Vec<u8>),
     /// The dropped text. The caller owns it, and should move it into a zeroizing wrapper right
     /// away if it can be sensitive.
     Text(String),
@@ -35,12 +44,28 @@ pub enum Dropped {
 /// What a [`target`] takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Accept {
-    /// Uniform type identifiers such as `"public.text"`. A dropped file is taken when its type
-    /// conforms to one of them. Empty: no files.
+    /// Uniform type identifiers such as `"public.text"`. A dropped or promised file is taken when
+    /// its type conforms to one of them. Empty: no files.
     pub file_types: &'static [&'static str],
-    /// Take dropped plain text (`NSPasteboardTypeString`) when the drag has no files.
+    /// Take dropped image data (one of [`IMAGE_TYPES`]) when the drag has no files.
+    pub images: bool,
+    /// Take dropped plain text (`NSPasteboardTypeString`) when the drag has no files, image data
+    /// or promised files.
     pub text: bool,
 }
+
+/// The image data types [`Accept::images`] takes, in the order they are preferred: the encoded
+/// originals first, TIFF (which apps add as a lowest common format) last.
+pub const IMAGE_TYPES: &[&str] = &[
+    "public.png",
+    "public.jpeg",
+    "public.heic",
+    "public.heif",
+    "com.compuserve.gif",
+    "org.webmproject.webp",
+    "com.microsoft.bmp",
+    "public.tiff",
+];
 
 /// How a [`target`] shows that the drag over it can be dropped: an outline in the accent colour
 /// over a faint selection tint, on top of the target's content, and a VoiceOver announcement.
@@ -55,7 +80,7 @@ pub struct Highlight {
     pub announcement: &'static str,
 }
 
-/// One file in a drag, as far as its URL tells before the drop.
+/// One file in a drag, as far as its URL (or a promise's declared type) tells before the drop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileKind {
     /// A folder or package (a directory URL).
@@ -68,26 +93,92 @@ pub enum FileKind {
     Unknown,
 }
 
+/// What a drag declares, as [`judge`] sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Contents<'a> {
+    /// The drag's file URLs.
+    pub files: &'a [FileKind],
+    /// The files it promises (one per declared type of each promise).
+    pub promised: &'a [FileKind],
+    /// It has image data of one of [`IMAGE_TYPES`].
+    pub image: bool,
+    /// It has plain text.
+    pub text: bool,
+}
+
 /// What a drag will deliver if it is dropped, see [`judge`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Offer {
     File,
+    Promised,
+    Image,
     Text,
 }
 
-/// Whether a drag holding `files` (and text, when `has_text`) can be dropped under `accept`.
+/// Whether a drag declaring `drag` can be dropped under `accept`, and as what.
 ///
 /// A drag with files is judged by its files only: exactly one, not a directory, of an accepted
 /// or unknown type. Its text never stands in, because for a file drag that is just the file's
-/// name or path. A drag without files offers text when it has some and `accept.text` is set.
-pub fn judge(files: &[FileKind], has_text: bool, accept: Accept) -> Option<Offer> {
-    match files {
-        [] => (has_text && accept.text).then_some(Offer::Text),
-        [FileKind::Accepted | FileKind::Unknown] if !accept.file_types.is_empty() => {
-            Some(Offer::File)
-        }
-        _ => None,
+/// name or path. Without files, image data comes first (a picture dragged from a web page also
+/// promises its file and carries its address as text), then promised files (judged like files,
+/// and only when the target takes files), then text.
+pub fn judge(drag: &Contents<'_>, accept: Accept) -> Option<Offer> {
+    let one_file = |kinds: &[FileKind]| {
+        matches!(kinds, [FileKind::Accepted | FileKind::Unknown]) && !accept.file_types.is_empty()
+    };
+    if !drag.files.is_empty() {
+        return one_file(drag.files).then_some(Offer::File);
     }
+    if drag.image && accept.images {
+        return Some(Offer::Image);
+    }
+    // Promises are files: a target that takes no files does not look at them.
+    if !drag.promised.is_empty() && !accept.file_types.is_empty() {
+        return one_file(drag.promised).then_some(Offer::Promised);
+    }
+    (drag.text && accept.text).then_some(Offer::Text)
+}
+
+/// Start of the name of the folder a promised file is written into, in the temporary directory.
+const PROMISE_FOLDER: &str = "mac-ui-drop-";
+
+/// A new, empty folder for one promised file, in the temporary directory.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn promise_folder() -> Option<PathBuf> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    let folder =
+        std::env::temp_dir().join(format!("{PROMISE_FOLDER}{}-{nanos}", std::process::id()));
+    std::fs::create_dir(&folder).ok()?;
+    Some(folder)
+}
+
+/// Remove the folder of a [`Dropped::Promised`] file, with the file in it. Does nothing for any
+/// other path, so it is safe to call with whatever the caller has.
+pub fn discard_promised(path: &Path) {
+    let Some(folder) = path.parent() else {
+        return;
+    };
+    if is_promise_folder(folder) {
+        let _ = std::fs::remove_dir_all(folder);
+    }
+}
+
+fn is_promise_folder(folder: &Path) -> bool {
+    let named = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(PROMISE_FOLDER));
+    // Compared resolved: AppKit can hand back /private/var/… for a temporary directory of
+    // /var/….
+    let in_temp = folder
+        .parent()
+        .and_then(|parent| parent.canonicalize().ok())
+        .zip(std::env::temp_dir().canonicalize().ok())
+        .is_some_and(|(parent, temp)| parent == temp);
+    named && in_temp
 }
 
 #[cfg(target_os = "macos")]
@@ -97,27 +188,33 @@ pub use appkit::{field_editor_without_drops, target};
 mod appkit {
     use std::cell::{Cell, RefCell};
     use std::path::PathBuf;
+    use std::ptr::NonNull;
 
+    use block2::RcBlock;
     use objc2::rc::{Retained, autoreleasepool};
     use objc2::runtime::{AnyClass, AnyObject, NSObjectProtocol, ProtocolObject};
     use objc2::{
-        ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
+        ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send,
     };
     use objc2_app_kit::{
         NSAccessibility, NSAccessibilityAnnouncementKey,
         NSAccessibilityAnnouncementRequestedNotification,
         NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
         NSAccessibilityPriorityLevel, NSBox, NSBoxType, NSColor, NSDragOperation,
-        NSDraggingDestination, NSDraggingInfo, NSPasteboard, NSPasteboardType,
-        NSPasteboardTypeFileURL, NSPasteboardTypeString, NSPasteboardURLReadingFileURLsOnlyKey,
-        NSText, NSTextView, NSTitlePosition, NSView,
+        NSDraggingDestination, NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard,
+        NSPasteboardType, NSPasteboardTypeFileURL, NSPasteboardTypeString,
+        NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView, NSTitlePosition, NSView,
     };
     use objc2_foundation::{
-        NSArray, NSDictionary, NSNumber, NSPoint, NSRect, NSSize, NSString, NSURL,
+        NSArray, NSDictionary, NSError, NSNumber, NSOperationQueue, NSPoint, NSRect, NSSize,
+        NSString, NSURL,
     };
     use objc2_uniform_type_identifiers::UTType;
 
-    use super::{Accept, Dropped, FileKind, Highlight, Offer, judge};
+    use super::{
+        Accept, Contents, Dropped, FileKind, Highlight, IMAGE_TYPES, Offer, discard_promised,
+        judge, promise_folder,
+    };
 
     /// Width of the [`Highlight`] outline, in points.
     const OUTLINE_WIDTH: f64 = 2.0;
@@ -195,22 +292,7 @@ mod appkit {
 
             #[unsafe(method(performDragOperation:))]
             fn perform_drag_operation(&self, sender: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
-                let offer = self.ivars().offer.take();
-                self.hide_highlight();
-                let pasteboard = sender.draggingPasteboard();
-                let dropped = autoreleasepool(|_| match offer? {
-                    Offer::File => single_file_path(&pasteboard).map(Dropped::File),
-                    Offer::Text => pasteboard
-                        .stringForType(unsafe { NSPasteboardTypeString })
-                        .map(|text| Dropped::Text(text.to_string())),
-                });
-                match dropped {
-                    Some(dropped) => {
-                        (self.ivars().on_drop)(dropped);
-                        true
-                    }
-                    None => false,
-                }
+                self.perform(sender)
             }
 
             #[unsafe(method(concludeDragOperation:))]
@@ -312,9 +394,89 @@ mod appkit {
                     .iter()
                     .map(|url| file_kind(url, &ivars.types))
                     .collect();
-                let has_text = has_type(&pasteboard, unsafe { NSPasteboardTypeString });
-                judge(&files, has_text, ivars.accept)
+                let promised: Vec<FileKind> = if ivars.accept.file_types.is_empty() {
+                    Vec::new()
+                } else {
+                    promises(&pasteboard)
+                        .iter()
+                        .flat_map(|promise| promised_kinds(promise, &ivars.types))
+                        .collect()
+                };
+                let drag = Contents {
+                    files: &files,
+                    promised: &promised,
+                    image: ivars.accept.images && image_type(&pasteboard).is_some(),
+                    text: has_type(&pasteboard, unsafe { NSPasteboardTypeString }),
+                };
+                judge(&drag, ivars.accept)
             })
+        }
+
+        /// Read the drop it judged when the drag entered, and hand it to the callback.
+        fn perform(&self, sender: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
+            let offer = self.ivars().offer.take();
+            self.hide_highlight();
+            let pasteboard = sender.draggingPasteboard();
+            if offer == Some(Offer::Promised) {
+                // Handed over later, once the source has written the file.
+                return autoreleasepool(|_| self.receive_promise(&pasteboard));
+            }
+            let dropped = autoreleasepool(|_| match offer? {
+                Offer::File => single_file_path(&pasteboard).map(Dropped::File),
+                Offer::Image => image_data(&pasteboard).map(Dropped::Image),
+                Offer::Promised => None,
+                Offer::Text => pasteboard
+                    .stringForType(unsafe { NSPasteboardTypeString })
+                    .map(|text| Dropped::Text(text.to_string())),
+            });
+            match dropped {
+                Some(dropped) => {
+                    (self.ivars().on_drop)(dropped);
+                    true
+                }
+                None => false,
+            }
+        }
+
+        /// Have the one promise on the drag write its file into a new folder, then hand it to
+        /// the callback as [`Dropped::Promised`] (on the main queue, so on the main thread).
+        fn receive_promise(&self, pasteboard: &NSPasteboard) -> bool {
+            let receivers = promises(pasteboard);
+            let [receiver] = receivers.as_slice() else {
+                return false;
+            };
+            let Some(folder) = promise_folder() else {
+                return false;
+            };
+            let Some(folder_text) = folder.to_str() else {
+                let _ = std::fs::remove_dir(&folder);
+                return false;
+            };
+            let destination =
+                NSURL::fileURLWithPath_isDirectory(&NSString::from_str(folder_text), true);
+            let view = self.retain();
+            let reader = RcBlock::new(move |file: NonNull<NSURL>, error: *mut NSError| {
+                // SAFETY: AppKit passes the URL of the file it wrote, valid for this call.
+                let file = unsafe { file.as_ref() };
+                let path = file.path().map(|path| PathBuf::from(path.to_string()));
+                match path {
+                    Some(path) if error.is_null() => {
+                        (view.ivars().on_drop)(Dropped::Promised(path))
+                    }
+                    _ => discard_promised(&folder.join("file")),
+                }
+            });
+            // SAFETY: the options dictionary is empty, and the main queue runs the reader on the
+            // main thread, where the view and its callback live.
+            unsafe {
+                receiver.receivePromisedFilesAtDestination_options_operationQueue_reader(
+                    &destination,
+                    &NSDictionary::new(),
+                    &NSOperationQueue::mainQueue(),
+                    &reader,
+                );
+            }
+            true
         }
     }
 
@@ -343,13 +505,18 @@ mod appkit {
         // SAFETY: NSView's designated initialiser, with a matching argument type.
         let view: Retained<DropView> =
             unsafe { msg_send![super(this), initWithFrame: NSRect::ZERO] };
-        let mut registered: Vec<&NSString> = Vec::new();
+        let mut registered: Vec<Retained<NSString>> = Vec::new();
         if !accept.file_types.is_empty() {
-            registered.push(unsafe { NSPasteboardTypeFileURL });
+            registered.push(unsafe { NSPasteboardTypeFileURL }.retain());
+            registered.extend(NSFilePromiseReceiver::readableDraggedTypes().iter());
+        }
+        if accept.images {
+            registered.extend(IMAGE_TYPES.iter().map(|kind| NSString::from_str(kind)));
         }
         if accept.text {
-            registered.push(unsafe { NSPasteboardTypeString });
+            registered.push(unsafe { NSPasteboardTypeString }.retain());
         }
+        let registered: Vec<&NSString> = registered.iter().map(|kind| &**kind).collect();
         view.registerForDraggedTypes(&NSArray::from_slice(&registered));
         view.into_super()
     }
@@ -440,6 +607,62 @@ mod appkit {
             .unwrap_or_default()
     }
 
+    /// The drag's file promises.
+    fn promises(pasteboard: &NSPasteboard) -> Vec<Retained<NSFilePromiseReceiver>> {
+        let classes: Retained<NSArray<AnyClass>> =
+            NSArray::from_slice(&[NSFilePromiseReceiver::class()]);
+        // SAFETY: NSFilePromiseReceiver reads from the pasteboard; no options.
+        let objects = unsafe { pasteboard.readObjectsForClasses_options(&classes, None) };
+        objects
+            .map(|objects| {
+                objects
+                    .iter()
+                    .filter_map(|object| object.downcast::<NSFilePromiseReceiver>().ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// One [`FileKind`] per file `promise` declares, judged by its declared type.
+    fn promised_kinds(
+        promise: &NSFilePromiseReceiver,
+        types: &[Retained<UTType>],
+    ) -> Vec<FileKind> {
+        let declared = promise.fileTypes();
+        if declared.count() == 0 {
+            return vec![FileKind::Unknown];
+        }
+        declared
+            .iter()
+            .map(|id| match UTType::typeWithIdentifier(&id) {
+                Some(kind) if !kind.isDynamic() => {
+                    if types.iter().any(|accepted| kind.conformsToType(accepted)) {
+                        FileKind::Accepted
+                    } else {
+                        FileKind::Other
+                    }
+                }
+                _ => FileKind::Unknown,
+            })
+            .collect()
+    }
+
+    /// The first of [`IMAGE_TYPES`] the drag has.
+    fn image_type(pasteboard: &NSPasteboard) -> Option<Retained<NSString>> {
+        let kinds: Vec<Retained<NSString>> = IMAGE_TYPES
+            .iter()
+            .map(|kind| NSString::from_str(kind))
+            .collect();
+        let kinds: Vec<&NSString> = kinds.iter().map(|kind| &**kind).collect();
+        pasteboard.availableTypeFromArray(&NSArray::from_slice(&kinds))
+    }
+
+    fn image_data(pasteboard: &NSPasteboard) -> Option<Vec<u8>> {
+        let kind = image_type(pasteboard)?;
+        let bytes = pasteboard.dataForType(&kind)?.to_vec();
+        (!bytes.is_empty()).then_some(bytes)
+    }
+
     fn single_file_path(pasteboard: &NSPasteboard) -> Option<PathBuf> {
         let urls = file_urls(pasteboard);
         let [url] = urls.as_slice() else {
@@ -509,59 +732,168 @@ mod tests {
 
     const TEXT_FILES: Accept = Accept {
         file_types: &["public.text"],
+        images: false,
         text: true,
     };
+
+    const TEXT_AND_IMAGES: Accept = Accept {
+        file_types: &["public.text", "public.image"],
+        images: true,
+        text: true,
+    };
+
+    fn files(files: &[FileKind], text: bool) -> Contents<'_> {
+        Contents {
+            files,
+            text,
+            ..Contents::default()
+        }
+    }
 
     #[test]
     fn one_accepted_or_unknown_file_drops() {
         assert_eq!(
-            judge(&[FileKind::Accepted], false, TEXT_FILES),
+            judge(&files(&[FileKind::Accepted], false), TEXT_FILES),
             Some(Offer::File)
         );
         assert_eq!(
-            judge(&[FileKind::Unknown], true, TEXT_FILES),
+            judge(&files(&[FileKind::Unknown], true), TEXT_FILES),
             Some(Offer::File)
         );
     }
 
     #[test]
     fn folders_other_types_and_several_files_do_not() {
-        assert_eq!(judge(&[FileKind::Directory], false, TEXT_FILES), None);
-        assert_eq!(judge(&[FileKind::Other], false, TEXT_FILES), None);
         assert_eq!(
-            judge(&[FileKind::Accepted, FileKind::Accepted], false, TEXT_FILES),
+            judge(&files(&[FileKind::Directory], false), TEXT_FILES),
+            None
+        );
+        assert_eq!(judge(&files(&[FileKind::Other], false), TEXT_FILES), None);
+        assert_eq!(
+            judge(
+                &files(&[FileKind::Accepted, FileKind::Accepted], false),
+                TEXT_FILES
+            ),
             None
         );
     }
 
     #[test]
-    fn a_file_drag_never_falls_back_to_its_text() {
+    fn a_file_drag_never_falls_back_to_its_text_or_image() {
         // Finder puts the file name on the drag as text too.
-        assert_eq!(judge(&[FileKind::Other], true, TEXT_FILES), None);
+        assert_eq!(judge(&files(&[FileKind::Other], true), TEXT_FILES), None);
         assert_eq!(
-            judge(&[FileKind::Accepted, FileKind::Unknown], true, TEXT_FILES),
+            judge(
+                &files(&[FileKind::Accepted, FileKind::Unknown], true),
+                TEXT_FILES
+            ),
             None
         );
+        let with_image = Contents {
+            image: true,
+            ..files(&[FileKind::Directory], true)
+        };
+        assert_eq!(judge(&with_image, TEXT_AND_IMAGES), None);
     }
 
     #[test]
     fn text_drops_only_when_taken() {
-        assert_eq!(judge(&[], true, TEXT_FILES), Some(Offer::Text));
-        assert_eq!(judge(&[], false, TEXT_FILES), None);
+        assert_eq!(judge(&files(&[], true), TEXT_FILES), Some(Offer::Text));
+        assert_eq!(judge(&files(&[], false), TEXT_FILES), None);
         let files_only = Accept {
             text: false,
             ..TEXT_FILES
         };
-        assert_eq!(judge(&[], true, files_only), None);
+        assert_eq!(judge(&files(&[], true), files_only), None);
     }
 
     #[test]
     fn no_file_types_takes_no_files() {
         let text_only = Accept {
             file_types: &[],
+            images: false,
             text: true,
         };
-        assert_eq!(judge(&[FileKind::Accepted], true, text_only), None);
-        assert_eq!(judge(&[FileKind::Unknown], false, text_only), None);
+        assert_eq!(judge(&files(&[FileKind::Accepted], true), text_only), None);
+        assert_eq!(judge(&files(&[FileKind::Unknown], false), text_only), None);
+        let promise = Contents {
+            promised: &[FileKind::Accepted],
+            ..Contents::default()
+        };
+        assert_eq!(judge(&promise, text_only), None);
+    }
+
+    #[test]
+    fn image_data_comes_before_promises_and_text() {
+        // A picture dragged from a web page: data, a promised file and its address as text.
+        let picture = Contents {
+            promised: &[FileKind::Accepted],
+            image: true,
+            text: true,
+            ..Contents::default()
+        };
+        assert_eq!(judge(&picture, TEXT_AND_IMAGES), Some(Offer::Image));
+        assert_eq!(judge(&picture, TEXT_FILES), Some(Offer::Promised));
+        let no_images_no_files = Accept {
+            file_types: &[],
+            images: false,
+            text: true,
+        };
+        assert_eq!(judge(&picture, no_images_no_files), Some(Offer::Text));
+    }
+
+    #[test]
+    fn one_promised_file_drops_like_a_file() {
+        let one = Contents {
+            promised: &[FileKind::Accepted],
+            text: true,
+            ..Contents::default()
+        };
+        assert_eq!(judge(&one, TEXT_AND_IMAGES), Some(Offer::Promised));
+        let two = Contents {
+            promised: &[FileKind::Accepted, FileKind::Accepted],
+            text: true,
+            ..Contents::default()
+        };
+        assert_eq!(
+            judge(&two, TEXT_AND_IMAGES),
+            None,
+            "never falls back to text"
+        );
+        let other = Contents {
+            promised: &[FileKind::Other],
+            ..Contents::default()
+        };
+        assert_eq!(judge(&other, TEXT_AND_IMAGES), None);
+    }
+
+    #[test]
+    fn image_data_needs_images_taken() {
+        let data = Contents {
+            image: true,
+            ..Contents::default()
+        };
+        assert_eq!(judge(&data, TEXT_FILES), None);
+        assert_eq!(judge(&data, TEXT_AND_IMAGES), Some(Offer::Image));
+    }
+
+    #[test]
+    fn a_promise_folder_is_discarded_with_its_file() {
+        let folder = promise_folder().expect("folder");
+        let file = folder.join("photo.heic");
+        std::fs::write(&file, b"x").expect("write");
+        discard_promised(&file);
+        assert!(!folder.exists());
+    }
+
+    #[test]
+    fn discard_leaves_other_folders_alone() {
+        let folder = std::env::temp_dir().join(format!("mac-ui-not-a-drop-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).expect("folder");
+        let file = folder.join("keep.txt");
+        std::fs::write(&file, b"x").expect("write");
+        discard_promised(&file);
+        assert!(file.exists());
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }

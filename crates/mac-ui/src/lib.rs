@@ -19,8 +19,9 @@
 //! - `file_panel`: `file_panel`, modal `NSOpenPanel` (choose a file) and `NSSavePanel`
 //!   (choose a save path).
 //! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
-//! - `drop`: `drop`, a view that takes one dropped file or dropped text, judged by type while
-//!   the drag moves. Its accept rules (`drop::judge`) build on every platform.
+//! - `drop`: `drop`, a view that takes one dropped file (also a promised one), image data or
+//!   dropped text, judged by type while the drag moves. Its accept rules (`drop::judge`) build
+//!   on every platform.
 //! - `blur`: `blur`, a `CIGaussianBlur` content filter on a view.
 //! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.

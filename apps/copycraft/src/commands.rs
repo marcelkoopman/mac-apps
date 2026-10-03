@@ -85,7 +85,7 @@ pub const PREVIEW_ROWS: usize = 200;
 /// Characters a card shows before "Show all", for text with very long lines.
 pub const PREVIEW_CHARS: usize = 20_000;
 /// Second line of an empty card: a file or text can be dropped on it instead.
-const DROP_HINT: &str = "Drop a text file here to open it";
+const DROP_HINT: &str = "Drop a text file or image here to open it";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SubjectKind {
@@ -130,6 +130,9 @@ pub struct LaunchData {
     pub source_note: Option<String>,
     /// "Show all" was chosen: the card renders the whole text, not the preview.
     pub full: bool,
+    /// The picture of an image card that is not the clipboard's (a dropped image). Absent: the
+    /// card draws the clipboard's picture.
+    pub picture: Option<crate::clipboard::SecretBytes>,
 }
 
 /// What the card shows in place of the separate preview window.
@@ -382,6 +385,10 @@ pub fn content_key(data: &LaunchData) -> u64 {
         image.width.hash(&mut hasher);
         image.height.hash(&mut hasher);
         image.byte_len.hash(&mut hasher);
+    }
+    // Two dropped pictures alike in name, format and size are still different items.
+    if let Some(picture) = &data.picture {
+        picture.allocation_id().hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -1563,6 +1570,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            picture: None,
         }
     }
 
@@ -2583,6 +2591,39 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
     }
 
     #[test]
+    fn dropped_picture_is_an_image_card_with_its_name() {
+        let mut input = data(SubjectKind::Image, None);
+        input.source_name = Some("photo.heic".to_string());
+        input.image = Some(ImageFacts {
+            format: "HEIC".into(),
+            width: 4032,
+            height: 3024,
+            byte_len: 2_000_000,
+        });
+        input.picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]);
+        let card = work_card(&input);
+        assert_eq!(card.title, "Image");
+        assert_eq!(card.meta, "photo.heic  ·  HEIC  4032×3024  2.00 MB");
+        assert!(card.shows_image);
+        assert!(masks_content(&card, CardView::Original));
+        assert_eq!(titles(&chips(&input)), vec!["Original", "Info"]);
+        assert!(
+            overflow(&input)
+                .iter()
+                .any(|cmd| cmd.id == CommandId::UseClipboard)
+        );
+
+        // Another picture alike in name, format and size is another item: not revealed yet.
+        let mut other = data(SubjectKind::Image, None);
+        other.source_name = input.source_name.clone();
+        other.image = input.image.clone();
+        other.picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]);
+        assert_ne!(content_key(&input), content_key(&other));
+        other.picture = input.picture.clone();
+        assert_eq!(content_key(&input), content_key(&other));
+    }
+
+    #[test]
     fn unreadable_file_uses_its_name_and_a_note() {
         let mut input = data(SubjectKind::NoText, None);
         input.source_name = Some("photo.png".to_string());
@@ -2626,7 +2667,7 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         let card = work_card(&data(SubjectKind::NoText, None));
         assert_eq!(
             card.placeholder,
-            "No text on the clipboard\nDrop a text file here to open it"
+            "No text on the clipboard\nDrop a text file or image here to open it"
         );
         assert!(card.excerpt.is_empty());
     }
@@ -2638,7 +2679,7 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         let card = work_card(&input);
         assert_eq!(
             card.placeholder,
-            "Nothing copied\nDrop a text file here to open it"
+            "Nothing copied\nDrop a text file or image here to open it"
         );
         assert!(card.excerpt.is_empty());
         assert_eq!(

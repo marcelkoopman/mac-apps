@@ -88,7 +88,30 @@ pub(crate) fn change_count() -> isize {
 
 /// Info text and any text or barcode hidden in the current image.
 pub(crate) fn scan_card_image() -> Option<ImageScan> {
-    let decoded = decode_preview()?;
+    scan_decoded(decode_preview()?, image_data_url())
+}
+
+/// Info text and any text or barcode hidden in an encoded picture that is not the clipboard's
+/// (a dropped image).
+pub(crate) fn scan_image_bytes(bytes: &[u8]) -> Option<ImageScan> {
+    let is_png = infer::image::is_png(bytes);
+    let mime = detect_image_bytes(bytes, is_png).mime;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    let data_url = Some(format!("data:{mime};base64,{encoded}"));
+    scan_decoded(decode_bytes(bytes.to_vec(), is_png)?, data_url)
+}
+
+/// Format, pixel size and byte length of an encoded picture that is not the clipboard's, or
+/// `None` when it can't be read.
+pub(crate) fn image_bytes_facts(bytes: &[u8]) -> Option<ImageFacts> {
+    let source = ImageSource::Bytes {
+        bytes: bytes.to_vec(),
+        is_png: infer::image::is_png(bytes),
+    };
+    snap_from_source(0, source).map(|snap| snap.facts)
+}
+
+fn scan_decoded(decoded: DecodedPreview, data_url: Option<String>) -> Option<ImageScan> {
     let image = decoded.image;
     let source_png = decoded.source_png;
     let full_res = image.width == image.full_width && image.height == image.full_height;
@@ -111,7 +134,6 @@ pub(crate) fn scan_card_image() -> Option<ImageScan> {
         .map(Vec::len)
         .or_else(|| scan.map(<[u8]>::len));
     let info = crate::image_ops::info_with_sizes(&image, png_len, jpeg_len);
-    let data_url = image_data_url();
     let (ocr, qr) = scan
         .map(crate::macos_vision::scan_png)
         .unwrap_or((None, None));

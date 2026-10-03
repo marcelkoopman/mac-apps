@@ -12,7 +12,9 @@
   Vision OCR, NSUserDefaults, opening a URL in the browser, and drag and drop. A file
   dropped on the card is read like a chosen file: mac_ui::drop reads its URL from the
   drag pasteboard (readObjectsForClasses), which extends the sandbox to that one file
-  for the rest of the launch. No security scope to start or stop.
+  for the rest of the launch. No security scope to start or stop. A promised file
+  (a photo from Photos) is written into a folder in the app's own temporary directory,
+  and that folder is deleted once the file is read.
 -->
 <plist version="1.0">
 <dict>

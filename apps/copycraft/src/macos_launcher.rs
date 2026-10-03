@@ -29,6 +29,7 @@ use mac_ui::widgets::{self, filled_box, raise_view};
 use zeroize::Zeroize;
 
 use crate::appearance::Theme;
+use crate::clipboard::SecretBytes;
 use crate::commands::{self, ChipFrame, Command, CommandId, LaunchData};
 use crate::format::FormatKind;
 use crate::launcher::{self, UserEvent};
@@ -70,10 +71,12 @@ const PANEL_RADIUS: f64 = 16.0;
 /// [`corners::MIN_RADIUS`].
 const WELL_RADIUS: f64 = corners::concentric_radius(PANEL_RADIUS, PAD);
 /// What the card takes when it is dropped on it: one text file of any kind (plain, source code,
-/// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`), or dropped text. No pictures:
-/// those come from the clipboard only.
+/// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`) or picture (`public.image`:
+/// PNG, JPEG, HEIC, GIF, WebP, TIFF, …), also as a promised file (Photos); image data (a picture
+/// dragged from Safari or Preview); or dropped text. Not PDFs, folders or several files.
 const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
-    file_types: &["public.text"],
+    file_types: &["public.text", "public.image"],
+    images: true,
     text: true,
 };
 /// The drop outline sits this far inside the panel edge, concentric with it.
@@ -93,6 +96,10 @@ thread_local! {
     static THEME: Cell<Theme> = const { Cell::new(Theme::System) };
     static SHOWS_IMAGE: Cell<bool> = const { Cell::new(false) };
     static THUMB_TOKEN: Cell<isize> = const { Cell::new(-1) };
+    /// The dropped picture the card shows instead of the clipboard's (`LaunchData::picture`).
+    static PICTURE: RefCell<Option<SecretBytes>> = const { RefCell::new(None) };
+    /// Allocation of the dropped picture in the well, 0 for none (see `THUMB_TOKEN`).
+    static PICTURE_SHOWN: Cell<usize> = const { Cell::new(0) };
     static ACTIONS: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     static POOL: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     static OVERFLOW: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
@@ -520,6 +527,7 @@ fn present(data: LaunchData, fresh: bool) {
     // leaves the layer empty, and Original stays on that blank well.
     if SHOWS_IMAGE.with(Cell::get) {
         THUMB_TOKEN.set(-1);
+        PICTURE_SHOWN.set(0);
         show_preview_image();
         load_thumbnail();
     }
@@ -554,6 +562,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CARD_SELECTABLE.set(card.selectable);
     LINK_PAGE.with(|slot| set_secret_opt(slot, card.link_page));
     SHOWS_IMAGE.set(card.shows_image);
+    PICTURE.with(|slot| slot.replace(data.picture.clone()));
     publish_search_text();
     THEME.set(data.theme);
     ACTIONS.with(|slot| set_commands(slot, commands::chips(&data)));
@@ -618,6 +627,10 @@ fn ensure_window(mtm: MainThreadMarker) {
     let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(DROP_HIGHLIGHT), |dropped| {
         launcher::emit(match dropped {
             mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
+            mac_ui::drop::Dropped::Promised(path) => UserEvent::DroppedPromisedFile(path),
+            mac_ui::drop::Dropped::Image(bytes) => {
+                UserEvent::DroppedImage(zeroize::Zeroizing::new(bytes))
+            }
             mac_ui::drop::Dropped::Text(text) => {
                 UserEvent::DroppedText(zeroize::Zeroizing::new(text))
             }
@@ -1881,12 +1894,17 @@ fn page_preview_parts(page: &str) -> (Vec<u8>, Option<String>) {
 }
 
 fn load_thumbnail() {
-    let change = crate::macos_pasteboard::change_count();
     let already = PREVIEW_IMAGE.with(|slot| {
         slot.borrow()
             .as_ref()
             .is_some_and(|view| !view.isHidden() && view.image().is_some())
     });
+    if let Some(picture) = PICTURE.with(|slot| slot.borrow().clone()) {
+        load_dropped_picture(&picture, already);
+        return;
+    }
+    PICTURE_SHOWN.set(0);
+    let change = crate::macos_pasteboard::change_count();
     if THUMB_TOKEN.with(Cell::get) == change && already {
         return;
     }
@@ -1896,6 +1914,23 @@ fn load_thumbnail() {
     // A picture set before the window is visible sticks as an empty layer.
     if window_is_visible() {
         THUMB_TOKEN.set(change);
+    }
+    set_preview_image(&image);
+}
+
+/// Draw a dropped picture in the well, decoded once per picture like the clipboard's.
+fn load_dropped_picture(picture: &SecretBytes, already: bool) {
+    // The clipboard's picture is drawn again when the card goes back to it.
+    THUMB_TOKEN.set(-1);
+    let id = picture.allocation_id();
+    if PICTURE_SHOWN.get() == id && already {
+        return;
+    }
+    let Some(image) = picture.with(mac_ui::image::from_bytes) else {
+        return;
+    };
+    if window_is_visible() {
+        PICTURE_SHOWN.set(id);
     }
     set_preview_image(&image);
 }
@@ -2229,6 +2264,8 @@ fn wipe_shown_views() {
         }
     });
     THUMB_TOKEN.set(-1);
+    PICTURE.with(|slot| slot.replace(None));
+    PICTURE_SHOWN.set(0);
     for slot in [&HEADER, &META, &FIELD, &ITEM_COUNT] {
         slot.with(|slot| {
             if let Some(field) = slot.borrow().as_ref() {
@@ -2872,6 +2909,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            picture: None,
         }
     }
 
@@ -2912,6 +2950,7 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
+            picture: None,
         }
     }
 

@@ -142,6 +142,11 @@ impl SecretBytes {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 
+    /// Tells this allocation from others while it lives (see [`same_allocation`](Self::same_allocation)).
+    pub fn allocation_id(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
+
     fn lock(&self) -> MutexGuard<'_, Zeroizing<Vec<u8>>> {
         self.inner.lock().unwrap_or_else(|err| err.into_inner())
     }
@@ -157,6 +162,13 @@ impl SecretBytes {
         // capacity. `len` is inside that capacity, and `guard` still owns it.
         let wiped = unsafe { std::slice::from_raw_parts(ptr, len) };
         wiped.iter().all(|byte| *byte == 0)
+    }
+}
+
+/// Never shows the bytes.
+impl std::fmt::Debug for SecretBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SecretBytes(..)")
     }
 }
 
@@ -238,16 +250,38 @@ impl ClipboardHistory {
             HistoryBody::Image(_) => false,
         });
         self.record(text);
+        Some(self.tracked(same, cursor))
+    }
+
+    /// Like [`record_tracking`](Self::record_tracking), for an image: the entry shares `bytes`'
+    /// allocation, as a copied image's does.
+    pub fn record_image_tracking(&mut self, bytes: SecretBytes, cursor: usize) -> usize {
+        let same = self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Image(existing) => existing == &bytes,
+            HistoryBody::Text(_) => false,
+        });
+        self.insert_image(bytes);
+        self.tracked(same, cursor)
+    }
+
+    /// Where the entry that was at `cursor` is after an entry was put in front, `same` being
+    /// where an equal entry was before (it was taken out).
+    fn tracked(&self, same: Option<usize>, cursor: usize) -> usize {
         let moved = match same {
             Some(index) if index == cursor => 0,
             Some(index) if index < cursor => cursor,
             _ => cursor + 1,
         };
-        Some(moved.min(self.entries.len().saturating_sub(1)))
+        moved.min(self.entries.len().saturating_sub(1))
     }
 
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
         let bytes = SecretBytes::new(bytes)?;
+        self.insert_image(bytes.clone());
+        Some(bytes)
+    }
+
+    fn insert_image(&mut self, bytes: SecretBytes) {
         self.entries.retain(|existing| match &existing.body {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
@@ -255,11 +289,10 @@ impl ClipboardHistory {
         self.entries.insert(
             0,
             HistoryEntry {
-                body: HistoryBody::Image(bytes.clone()),
+                body: HistoryBody::Image(bytes),
             },
         );
         self.entries.truncate(MAX_HISTORY);
-        Some(bytes)
     }
 
     pub fn get(&self, index: usize) -> Option<&str> {
@@ -391,8 +424,8 @@ pub fn one_line(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipboardHistory, ClipboardImage, ClipboardView, Zeroizing, formatted, one_line,
-        try_format_json,
+        ClipboardHistory, ClipboardImage, ClipboardView, SecretBytes, Zeroizing, formatted,
+        one_line, try_format_json,
     };
     use zeroize::Zeroize;
 
@@ -526,6 +559,20 @@ mod tests {
         // "dropped" (index 1) moves to the front; "clip" stays at index 2.
         assert_eq!(history.record_tracking("dropped".into(), 2), Some(2));
         assert_eq!(history.get(2), Some("clip"));
+    }
+
+    #[test]
+    fn a_tracked_image_shares_its_bytes_with_history() {
+        let mut history = ClipboardHistory::default();
+        history.record("clip".into());
+        let bytes = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
+        assert_eq!(history.record_image_tracking(bytes.clone(), 0), 1);
+        assert!(history.image(0).expect("image").same_allocation(&bytes));
+        assert_eq!(history.get(1), Some("clip"));
+        // The same picture again moves to the front instead of being listed twice.
+        let again = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
+        assert_eq!(history.record_image_tracking(again, 1), 1);
+        assert_eq!(history.len(), 2);
     }
 
     #[test]

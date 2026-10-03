@@ -75,11 +75,15 @@ file_panel = [
     "objc2-foundation/NSArray",
     "objc2-foundation/NSURL",
 ]
-# `mac_ui::drop`: a view that takes one dropped file (by uniform type) or dropped text, its
+# `mac_ui::drop`: a view that takes one dropped file (by uniform type, also a promised file:
+# NSFilePromiseReceiver with a block2 reader on NSOperationQueue), image data or dropped text, its
 # highlight (NSBox, NSColor, a VoiceOver announcement in NSAccessibility/NSAccessibilityConstants)
 # and a field editor (NSText, NSTextView) that leaves drops to it.
 drop = [
+    "dep:block2",
     "dep:objc2-uniform-type-identifiers",
+    "objc2-app-kit/block2",
+    "objc2-app-kit/NSFilePromiseReceiver",
     "objc2-app-kit/NSAccessibility",
     "objc2-app-kit/NSAccessibilityConstants",
     "objc2-app-kit/NSAccessibilityProtocols",
@@ -89,7 +93,10 @@ drop = [
     "objc2-app-kit/NSText",
     "objc2-app-kit/NSTextView",
     "objc2-foundation/NSArray",
+    "objc2-foundation/NSData",
     "objc2-foundation/NSDictionary",
+    "objc2-foundation/NSError",
+    "objc2-foundation/NSOperation",
     "objc2-foundation/NSURL",
     "objc2-foundation/NSValue",
 ]
@@ -121,7 +128,7 @@ objc2-app-kit = { workspace = true, features = [
     "NSStatusBarButton",
     "NSStatusItem",
 ] }
-# `notify` only.
+# `notify` and `drop` only.
 block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }
 # `file_panel` and `drop` only.
