@@ -1553,6 +1553,9 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     commands
 }
 
+/// Title of the chip that shows a YAML entry as JSON.
+pub const TO_JSON_TITLE: &str = "To JSON";
+
 /// Title of the chip that opens the table's menu.
 pub const TABLE_MENU_TITLE: &str = "Table ▾";
 
@@ -2222,6 +2225,16 @@ fn text_chips(text: &str) -> Vec<Command> {
             "schema xsd xml",
         ));
     }
+    // YAML as JSON: a view of the entry (Copy and Save take it, as `.json`). Never on JSON,
+    // which is YAML too but detected as JSON first.
+    if kind == FormatKind::Yaml && crate::transform::yaml_to_json(text).is_some() {
+        commands.push(command(
+            CommandId::Convert,
+            TO_JSON_TITLE,
+            "YAML as JSON",
+            "to json convert yaml",
+        ));
+    }
     if toolbar_visibility::shows_convert(text) {
         commands.push(command(
             CommandId::Convert,
@@ -2742,12 +2755,12 @@ mod tests {
     }
 
     #[test]
-    fn yaml_opens_formatted_and_coloured_without_convert() {
+    fn yaml_opens_formatted_and_coloured_with_to_json() {
         let src = "name:   copycraft\nitems:\n  - one\n";
         let input = data(SubjectKind::Text, Some(src));
         assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
         let shown = chips(&input);
-        assert!(shown.iter().all(|cmd| cmd.id != CommandId::Convert));
+        assert_eq!(titles(&shown), vec!["Original", "To JSON"]);
         assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
         assert!(shown.iter().all(|cmd| cmd.id != CommandId::Schema));
         assert!(shown.iter().all(|cmd| cmd.id != CommandId::Dataframe));
@@ -2782,12 +2795,45 @@ mod tests {
         assert!(
             chips(&data(SubjectKind::Text, Some(tidy)))
                 .iter()
-                .all(|cmd| cmd.id != CommandId::Convert && cmd.id != CommandId::Format)
+                .all(|cmd| cmd.id != CommandId::Format)
         );
     }
 
     #[test]
-    fn song_yaml_opens_formatted_without_convert() {
+    fn yaml_to_json_is_a_view_that_copy_and_save_take_as_json() {
+        let src = "base: &b\n  email: jan.devries@example.nl\nuser:\n  <<: *b\n  id: 7\n";
+        let mut input = data(SubjectKind::Text, Some(src));
+        let to_json = chips(&input)
+            .into_iter()
+            .find(|cmd| cmd.title == "To JSON")
+            .expect("To JSON chip");
+        assert_eq!(to_json.id, CommandId::Convert);
+        input.view = CardView::from_command(&to_json.id).expect("view");
+        let card = work_card(&input);
+        let body = transformed_text(src, CardView::Convert).expect("json");
+        let value: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+        assert_eq!(value["user"]["email"], "jan.devries@example.nl");
+        assert_eq!(value["user"]["id"], 7);
+        assert_eq!(card.excerpt, body);
+        assert_eq!(card.title, "JSON");
+        // The labels are the result's; the well is masked like any copied text.
+        assert!(card.meta.ends_with("  ·  PII"), "{}", card.meta);
+        assert!(masks_content(&card, CardView::Convert));
+        let save = text_save_file(src, CardView::Convert).expect("save");
+        assert_eq!(
+            (save.filename.as_str(), save.extension),
+            ("clipboard.json", "json")
+        );
+        assert_eq!(save.bytes, body.as_bytes());
+        // Never on JSON (also YAML), nor on YAML that does not parse.
+        for not_yaml in [r#"{"a": 1}"#, "[1, 2, 3]", "a: [1, 2\nb: 3\n"] {
+            let shown = chips(&data(SubjectKind::Text, Some(not_yaml)));
+            assert!(shown.iter().all(|cmd| cmd.title != "To JSON"), "{not_yaml}");
+        }
+    }
+
+    #[test]
+    fn song_yaml_opens_formatted_with_to_json() {
         let src = "\
 ---
 doe: \"a deer, a female deer\"
@@ -2812,7 +2858,7 @@ xmas-fifth-day:
         assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
         let input = data(SubjectKind::Text, Some(src));
         let shown = chips(&input);
-        assert!(shown.iter().all(|cmd| cmd.id != CommandId::Convert));
+        assert_eq!(titles(&shown), vec!["Original", "To JSON"]);
         assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
         assert_eq!(presented_view(src, CardView::Original), CardView::Format);
         let card = work_card(&input);

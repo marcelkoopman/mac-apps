@@ -219,6 +219,13 @@ fn check(text: &str, check: &str) -> Result<(), String> {
             format!("{:?}", crate::format::detect(&body))
         }
         "convert" => view_text(text, CardView::Convert),
+        "json" => {
+            let body = transformed_text(text, CardView::Convert).ok_or("no Convert result")?;
+            let got: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+            let expected: serde_json::Value =
+                serde_json::from_str(want).map_err(|e| format!("{check}: {e}"))?;
+            return if got == expected { Ok(()) } else { fail(&got) };
+        }
         "decode" => view_text(text, CardView::Decode),
         "schema" => view_text(text, CardView::Schema),
         "sample" => view_text(text, CardView::Sample),

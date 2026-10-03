@@ -1,0 +1,8 @@
+---
+kind: Service
+metadata:
+  app: copycraft-demo
+---
+kind: Deployment
+spec:
+  replicas: 2

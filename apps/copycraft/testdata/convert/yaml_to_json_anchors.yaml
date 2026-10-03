@@ -1,0 +1,15 @@
+defaults: &defaults
+  host: db.example.com
+  port: 5432
+  timeout: 30
+development:
+  <<: *defaults
+  database: demo_dev
+test:
+  <<: *defaults
+  database: demo_test
+  port: 5433
+mirror: *defaults
+1: numeric key
+true: boolean key
+released: 2026-01-02

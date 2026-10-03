@@ -43,7 +43,7 @@ Columns (fixed; the test parses this table between the markers):
 |------|----------|--------|-------|--------|-------|--------|
 | `detect/json_valid.json` | Detection: valid JSON | json | Valid JSON | — | Original, Schema | kind=Json |
 | `detect/json_invalid.json` | Detection: invalid JSON (missing comma) | json | Invalid JSON | — | — | kind=Text |
-| `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | — | kind=Yaml; convert=Json |
+| `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json |
 | `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Original, Schema | kind=Xml |
 | `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | — | kind=Xml |
 | `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>` | html | HTML | — | — | kind=Html |
@@ -59,7 +59,11 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Visit | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
 | `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it) | plain text | Link | credential | Visit | kind=Url; visit=https://example.com/private/report?id=7 |
 | `detect/plain_text.txt` | Plain text | plain text | Content | — | — | kind=Text |
-| `convert/yaml_to_json.yaml` | Convert YAML → JSON | yaml | YAML | — | — | convert=Json; convert~"app": "copycraft-demo" |
+| `convert/yaml_to_json_simple.yaml` | To JSON: simple YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","features":["format","decode"]} |
+| `convert/yaml_to_json_nested.yaml` | To JSON: nested YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","version":3,"features":["format","convert","decode"],"owner":{"team":"demo","active":true}} |
+| `convert/yaml_to_json_anchors.yaml` | To JSON: anchors, aliases, `<<` merge, non-string keys, a date | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json={"defaults":{"host":"db.example.com","port":5432,"timeout":30},"development":{"host":"db.example.com","port":5432,"timeout":30,"database":"demo_dev"},"test":{"host":"db.example.com","port":5433,"timeout":30,"database":"demo_test"},"mirror":{"host":"db.example.com","port":5432,"timeout":30},"1":"numeric key","true":"boolean key","released":"2026-01-02"} |
+| `convert/yaml_to_json_multi_document.yaml` | To JSON: two documents (`---`) become an array | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json=[{"kind":"Service","metadata":{"app":"copycraft-demo"}},{"kind":"Deployment","spec":{"replicas":2}}] |
+| `convert/yaml_invalid.yaml` | To JSON: invalid YAML gets no chip | yaml | Content | — | — | kind=Text |
 | `convert/key_value.txt` | Convert `key: value` → JSON | plain text | Content | — | Original, Convert | kind=Text; convert=Json; convert~"project": "Copycraft" |
 | `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Original, Decode | decode~"name": "John Doe"; decode~"alg": "HS256" |
 | `convert/base64.txt` | Decode Base64 | plain text | Content | — | Original, Decode | decode~Hello from Copycraft! This is synthetic test data. |
@@ -112,6 +116,7 @@ Columns (fixed; the test parses this table between the markers):
 | `link=U` | the Link card shows `U` |
 | `visit=U` | Visit opens `U` (userinfo stripped, as `menubar::visit_current`) |
 | `convert=K` / `convert~S` | the Convert result is detected as `K` / contains `S` |
+| `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
 | `decode~S`, `schema~S`, `sample~S` | the Decode, Schema or Sample view contains `S` |
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |

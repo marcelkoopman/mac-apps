@@ -1,0 +1,4 @@
+app: copycraft-demo
+features:
+  - format
+  - decode

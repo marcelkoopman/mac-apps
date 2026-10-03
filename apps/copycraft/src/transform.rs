@@ -1,14 +1,38 @@
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 
+/// YAML re-indented. A copy of several documents (`---`) stays several documents.
 pub fn pretty_yaml(text: &str) -> Result<String, String> {
-    let value = parse_yaml(text)?;
-    serde_yaml::to_string(&value).map_err(|e| e.to_string())
+    let documents = parse_yaml_documents(text)?;
+    let mut out = String::new();
+    for (index, value) in documents.iter().enumerate() {
+        if index > 0 || documents.len() > 1 {
+            out.push_str("---\n");
+        }
+        out.push_str(&serde_yaml::to_string(value).map_err(|e| e.to_string())?);
+    }
+    Ok(out)
 }
 
+/// YAML as pretty JSON (To JSON, and Convert on `key: value` text): anchors and aliases
+/// expanded (`<<` merge keys too), keys that are numbers, booleans or null become strings,
+/// dates stay the text they were copied as, and several documents (`---`) become an array.
 pub fn yaml_to_json(text: &str) -> Option<String> {
-    let value = parse_yaml(text).ok()?;
-    serde_json::to_string_pretty(&yaml_value_to_json(value)?).ok()
+    let mut documents = parse_yaml_documents(text).ok()?;
+    for document in &mut documents {
+        document.apply_merge().ok()?;
+    }
+    let json = if documents.len() == 1 {
+        yaml_value_to_json(documents.pop()?)?
+    } else {
+        JsonValue::Array(
+            documents
+                .into_iter()
+                .map(yaml_value_to_json)
+                .collect::<Option<Vec<_>>>()?,
+        )
+    };
+    serde_json::to_string_pretty(&json).ok()
 }
 
 fn yaml_value_to_json(value: YamlValue) -> Option<JsonValue> {
@@ -42,7 +66,12 @@ fn json_number(number: serde_yaml::Number) -> Option<JsonValue> {
         return Some(JsonValue::Number(value.into()));
     }
     let value = number.as_f64()?;
-    Some(JsonValue::Number(serde_json::Number::from_f64(value)?))
+    // `.inf` and `.nan` have no JSON number: they stay text.
+    Some(
+        serde_json::Number::from_f64(value)
+            .map(JsonValue::Number)
+            .unwrap_or_else(|| JsonValue::String(number.to_string())),
+    )
 }
 
 fn yaml_key(key: YamlValue) -> Option<String> {
@@ -51,7 +80,9 @@ fn yaml_key(key: YamlValue) -> Option<String> {
         YamlValue::Bool(flag) => Some(flag.to_string()),
         YamlValue::Number(number) => Some(number.to_string()),
         YamlValue::Null => Some("null".into()),
-        _ => None,
+        YamlValue::Tagged(tagged) => yaml_key(tagged.value),
+        // A sequence or mapping as a key: its JSON text.
+        complex => serde_json::to_string(&yaml_value_to_json(complex)?).ok(),
     }
 }
 
@@ -59,7 +90,7 @@ pub fn looks_like_yaml(text: &str) -> bool {
     if looks_like_labeled_record(text) {
         return false;
     }
-    parse_yaml(text).is_ok() && parse_json(text).is_err()
+    parse_yaml_documents(text).is_ok() && parse_json(text).is_err()
 }
 
 /// A flat contact card (`Naam: Jan`), not a YAML document.
@@ -110,13 +141,56 @@ fn parse_json(text: &str) -> Result<JsonValue, String> {
     Ok(value)
 }
 
-fn parse_yaml(text: &str) -> Result<YamlValue, String> {
-    let value: YamlValue =
-        serde_yaml::from_str(text.trim()).map_err(|e| format!("not YAML: {e}"))?;
-    match value {
-        YamlValue::Mapping(_) | YamlValue::Sequence(_) => Ok(value),
-        _ => Err("YAML must be a mapping or sequence".into()),
+/// The documents of a YAML copy (one, or several split by `---`), empty ones left out. Each
+/// must be a mapping or a sequence.
+fn parse_yaml_documents(text: &str) -> Result<Vec<YamlValue>, String> {
+    let mut documents = Vec::new();
+    for part in yaml_document_texts(text.trim()) {
+        if part.trim().is_empty() {
+            continue;
+        }
+        let value: YamlValue = serde_yaml::from_str(part).map_err(|e| format!("not YAML: {e}"))?;
+        match value {
+            YamlValue::Null => {}
+            YamlValue::Mapping(_) | YamlValue::Sequence(_) | YamlValue::Tagged(_) => {
+                documents.push(value)
+            }
+            _ => return Err("YAML must be a mapping or sequence".into()),
+        }
     }
+    if documents.is_empty() {
+        return Err("no YAML document".into());
+    }
+    Ok(documents)
+}
+
+/// `text` split at its document markers: a line `---` (a comment may follow) or `...` at the
+/// start of a line. Content on a `---` line (`--- !tag`, `--- value`) starts the document.
+fn yaml_document_texts(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        let bare = line.trim_end();
+        let marker = bare == "---"
+            || bare == "..."
+            || bare.starts_with("--- ")
+            || bare.starts_with("---\t")
+            || bare.starts_with("... ");
+        if marker {
+            parts.push(&text[start..offset]);
+            // `--- {a: 1}`: what follows the marker belongs to the next document.
+            let rest = if bare.starts_with("---") {
+                3
+            } else {
+                line.len()
+            };
+            start = offset + rest.min(line.len());
+        }
+        offset += line.len();
+    }
+    parts.push(&text[start..]);
+    parts
 }
 
 #[cfg(test)]
@@ -145,6 +219,59 @@ Telefoonnummer: [PHONE_NUMBER]
 Geboortedatum: [DATE_TIME]
 Salaris: [MONEY]";
         assert!(!looks_like_yaml(src));
+    }
+
+    fn json(text: &str) -> serde_json::Value {
+        serde_json::from_str(&yaml_to_json(text).expect("converts")).expect("JSON")
+    }
+
+    #[test]
+    fn yaml_to_json_expands_anchors_aliases_and_merge_keys() {
+        let src = "\
+base: &base
+  host: db.example.com
+  port: 5432
+dev:
+  <<: *base
+  name: dev
+copy: *base
+";
+        let value = json(src);
+        assert_eq!(value["dev"]["host"], "db.example.com");
+        assert_eq!(value["dev"]["port"], 5432);
+        assert_eq!(value["dev"]["name"], "dev");
+        assert!(value["dev"].get("<<").is_none());
+        assert_eq!(value["copy"]["port"], 5432);
+    }
+
+    #[test]
+    fn yaml_to_json_keys_become_strings_and_dates_stay_text() {
+        let value = json("1: one\ntrue: yes\nnull: nothing\n2.5: half\nwhen: 2026-01-02\n");
+        assert_eq!(value["1"], "one");
+        assert_eq!(value["true"], "yes");
+        assert_eq!(value["null"], "nothing");
+        assert_eq!(value["2.5"], "half");
+        assert_eq!(value["when"], "2026-01-02");
+        assert_eq!(json("[1, .inf]\n")[1], ".inf");
+    }
+
+    #[test]
+    fn yaml_to_json_turns_documents_into_an_array() {
+        let value = json("---\nname: a\n---\nname: b\n...\n");
+        assert_eq!(value, serde_json::json!([{"name": "a"}, {"name": "b"}]));
+        // One document, with or without a marker, stays itself.
+        assert_eq!(json("---\nname: a\n"), serde_json::json!({"name": "a"}));
+        assert!(looks_like_yaml("a: 1\n---\nb: 2\n"));
+        let pretty = pretty_yaml("a:   1\n---\nb:   2\n").expect("pretty");
+        assert_eq!(pretty, "---\na: 1\n---\nb: 2\n");
+    }
+
+    #[test]
+    fn invalid_yaml_does_not_convert() {
+        assert!(yaml_to_json("a: [1, 2\nb: 3\n").is_none());
+        assert!(yaml_to_json("a: 1\n  b: 2\n").is_none());
+        assert!(yaml_to_json("just words").is_none());
+        assert!(!looks_like_yaml("a: [1, 2\nb: 3\n"));
     }
 
     #[test]
