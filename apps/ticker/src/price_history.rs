@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, Once};
 
 /// Last known poll price (used as fallback / legacy).
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -19,7 +20,7 @@ pub struct DayOpen {
     pub value: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct PriceHistoryFile {
     /// Legacy / last-poll prices (name → snapshot).
     #[serde(default)]
@@ -29,9 +30,43 @@ struct PriceHistoryFile {
     day_opens: HashMap<String, DayOpen>,
 }
 
-fn price_history_path() -> PathBuf {
-    let home = dirs::home_dir().expect("Cannot find home directory");
-    home.join(".ticker_price_history.json")
+/// `None` without a home directory: the history is then kept in memory only ([`MEMORY`]).
+fn price_history_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".ticker_price_history.json"))
+}
+
+/// History of this run when there is no home directory to save it in.
+static MEMORY: LazyLock<Mutex<PriceHistoryFile>> = LazyLock::new(Default::default);
+static MEMORY_NOTE: Once = Once::new();
+
+/// Run `f` on the stored history (the file, or [`MEMORY`] without a home directory) and save the
+/// result when `save` is set.
+fn with_history<T>(
+    save: bool,
+    f: impl FnOnce(&mut PriceHistoryFile) -> T,
+) -> Result<T, Box<dyn Error>> {
+    match price_history_path() {
+        Some(path) => {
+            let mut file = load_file(&path);
+            let value = f(&mut file);
+            if save {
+                save_file(&path, &file)?;
+            }
+            Ok(value)
+        }
+        None => {
+            MEMORY_NOTE.call_once(|| {
+                crate::log_message(
+                    "price history: no home directory; day opens and last prices are kept in \
+                     memory only (lost when Ticker quits)",
+                );
+            });
+            let mut memory = MEMORY
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            Ok(f(&mut memory))
+        }
+    }
 }
 
 fn today_local() -> String {
@@ -56,28 +91,35 @@ fn save_file(path: &Path, history: &PriceHistoryFile) -> Result<(), Box<dyn Erro
 /// - If a stored open is from today → keep it.
 /// - If missing or from a previous day → not returned (caller should set current price as open).
 pub fn load_day_opens() -> HashMap<String, f64> {
-    load_day_opens_from(&price_history_path())
+    with_history(false, |file| todays_opens(file, &today_local())).unwrap_or_default()
 }
 
+#[cfg(test)]
 pub fn load_day_opens_from(path: &Path) -> HashMap<String, f64> {
-    let today = today_local();
-    let file = load_file(path);
+    todays_opens(&load_file(path), &today_local())
+}
+
+fn todays_opens(file: &PriceHistoryFile, today: &str) -> HashMap<String, f64> {
     file.day_opens
-        .into_iter()
+        .iter()
         .filter(|(_, open)| open.date == today)
-        .map(|(name, open)| (name, open.value))
+        .map(|(name, open)| (name.clone(), open.value))
         .collect()
 }
 
 /// Persist day opens for today. Only writes entries for the current local date.
 pub fn save_day_opens(opens: &HashMap<String, f64>) -> Result<(), Box<dyn Error>> {
-    save_day_opens_to(&price_history_path(), opens)
+    with_history(true, |file| set_day_opens(file, opens, &today_local()))
 }
 
+#[cfg(test)]
 pub fn save_day_opens_to(path: &Path, opens: &HashMap<String, f64>) -> Result<(), Box<dyn Error>> {
-    let today = today_local();
     let mut file = load_file(path);
+    set_day_opens(&mut file, opens, &today_local());
+    save_file(path, &file)
+}
 
+fn set_day_opens(file: &mut PriceHistoryFile, opens: &HashMap<String, f64>, today: &str) {
     // Drop opens from other days, then write today's.
     file.day_opens.retain(|_, open| open.date == today);
 
@@ -88,30 +130,33 @@ pub fn save_day_opens_to(path: &Path, opens: &HashMap<String, f64>) -> Result<()
         file.day_opens.insert(
             name.clone(),
             DayOpen {
-                date: today.clone(),
+                date: today.to_string(),
                 value: *value,
             },
         );
     }
-
-    save_file(path, &file)
 }
 
 /// Save last-poll prices (legacy helper, still used as optional baseline).
 pub fn save_price_history(prices: &HashMap<String, f64>) -> Result<(), Box<dyn Error>> {
-    save_price_history_to(&price_history_path(), prices)
+    with_history(true, |file| set_prices(file, prices))
 }
 
+#[cfg(test)]
 pub fn save_price_history_to(
     path: &Path,
     prices: &HashMap<String, f64>,
 ) -> Result<(), Box<dyn Error>> {
     let mut file = load_file(path);
+    set_prices(&mut file, prices);
+    save_file(path, &file)
+}
+
+fn set_prices(file: &mut PriceHistoryFile, prices: &HashMap<String, f64>) {
     file.prices = prices
         .iter()
         .map(|(name, value)| (name.clone(), PriceSnapshot { value: *value }))
         .collect();
-    save_file(path, &file)
 }
 
 #[cfg(test)]
@@ -187,6 +232,20 @@ mod tests {
         assert!(!loaded.contains_key("Bitcoin"));
         assert!(!loaded.contains_key("Gold"));
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memory_store_keeps_todays_opens() {
+        let mut file = PriceHistoryFile::default();
+        set_day_opens(
+            &mut file,
+            &HashMap::from([("Gold".to_string(), 2.0)]),
+            "2026-10-03",
+        );
+        set_prices(&mut file, &HashMap::from([("Gold".to_string(), 2.5)]));
+        assert_eq!(todays_opens(&file, "2026-10-03").get("Gold"), Some(&2.0));
+        assert!(todays_opens(&file, "2026-10-04").is_empty());
+        assert_eq!(file.prices.get("Gold").map(|p| p.value), Some(2.5));
     }
 
     #[test]

@@ -87,8 +87,9 @@ fn migrate_power_path(config: &mut Config) {
 
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
     eprintln!("📋 Looking for config.toml...");
-    let user = user_config_path()?;
-    let path = if user.exists() {
+    // Without a home directory there is no user config: use the bundled one.
+    let user = user_config_path().ok().filter(|user| user.exists());
+    let path = if let Some(user) = user {
         eprintln!("📂 Reading user config from: {:?}", user);
         user
     } else {

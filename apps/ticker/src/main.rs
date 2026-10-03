@@ -22,18 +22,16 @@ mod watch_ui;
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
-fn log_file_path() -> PathBuf {
-    let home = dirs::home_dir().expect("Cannot find home directory");
-    home.join(".ticker_debug.log")
+/// `None` without a home directory: then the log goes to stderr only.
+fn log_file_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".ticker_debug.log"))
 }
 
 pub(crate) fn log_message(message: &str) {
     eprintln!("{}", message);
 
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_file_path())
+    if let Some(path) = log_file_path()
+        && let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path)
     {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(file, "[{}] {}", timestamp, message);
@@ -88,12 +86,17 @@ fn main() {
     // Menu bar app only, and only once it holds the instance lock: start a fresh log. Without
     // the lock another instance may be writing to it, so append instead.
     let log_path = log_file_path();
-    if instance_guard.is_some() {
-        let _ = std::fs::remove_file(&log_path);
+    if instance_guard.is_some()
+        && let Some(path) = &log_path
+    {
+        let _ = std::fs::remove_file(path);
     }
 
     log_message("=== TICKER APP STARTED ===");
-    log_message(&format!("Log file: {:?}", log_path));
+    match &log_path {
+        Some(path) => log_message(&format!("Log file: {path:?}")),
+        None => log_message("No home directory: logging to stderr only"),
+    }
     log_message(&format!("Working dir: {:?}", std::env::current_dir()));
     log_message(&format!("Executable: {:?}", std::env::current_exe()));
 

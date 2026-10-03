@@ -44,7 +44,7 @@ symbol = "💰"
 
 All fields are required per asset. `menubar_asset` is optional. A menu bar asset picked by clicking a row takes precedence over it. If the config cannot be loaded, the menu shows the error and *Retry* loads it again (after you fixed the file).
 
-State files in your home directory:
+State files in your home directory (without one, Ticker uses the bundled config, logs to stderr only and keeps the price history and watches in memory):
 
 | File | Contents |
 | --- | --- |
