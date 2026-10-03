@@ -287,7 +287,19 @@ impl MenuBuilder {
             ),
             _ => String::new(),
         };
-        format!("{line1}\n  {change}{updated}")
+        let mut text = format!("{line1}\n  {change}{updated}");
+        let trend: Vec<String> = [
+            row.sparkline.clone(),
+            row.change_24h.map(|c| format!("24h {:+.2}%", c.pct)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !trend.is_empty() {
+            text.push_str("\n  ");
+            text.push_str(&trend.join(" · "));
+        }
+        text
     }
 
     /// Tab-separated rows with a header (Copy to clipboard).
@@ -404,6 +416,8 @@ mod tests {
             change: None,
             day_open: None,
             change_day: None,
+            change_24h: None,
+            sparkline: None,
         }
     }
 
@@ -431,6 +445,24 @@ mod tests {
                 now: now(),
             },
         )
+    }
+
+    #[test]
+    fn third_line_shows_sparkline_and_24h_change() {
+        let mut r = row("💰", "Bitcoin", 66672.0, "/BTC");
+        assert_eq!(
+            MenuBuilder::format_price_row(&r, "updated 14:05", false)
+                .lines()
+                .count(),
+            2
+        );
+        r.sparkline = Some("▁▃▅█".into());
+        r.change_24h = Change::between(65000.0, 66672.0);
+        let text = MenuBuilder::format_price_row(&r, "updated 14:05", false);
+        assert_eq!(text.lines().nth(2), Some("  ▁▃▅█ · 24h +2.57%"));
+        r.sparkline = None;
+        let text = MenuBuilder::format_price_row(&r, "updated 14:05", false);
+        assert_eq!(text.lines().nth(2), Some("  24h +2.57%"));
     }
 
     #[test]

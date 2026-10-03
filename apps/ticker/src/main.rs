@@ -15,6 +15,7 @@ mod poll_gate;
 mod price_fetcher;
 mod price_history;
 mod price_input;
+mod price_series;
 mod price_watch;
 mod prices;
 mod watch_cli;

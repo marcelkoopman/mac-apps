@@ -24,6 +24,7 @@ use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
 use crate::price_input;
+use crate::price_series::{self, PriceSeries};
 use crate::price_watch::{
     AppUpdate, FileStamp, PriceWatch, WatchDirection, WatchList, update_watch_list_for_app,
     watch_file_stamp,
@@ -78,6 +79,8 @@ struct App {
     asset_status: HashMap<String, AssetStatus>,
     /// Plausibility check of fetched prices before they may set off a watch.
     trigger_gate: TriggerGate,
+    /// Up to 7 days of prices per asset (24h change, sparkline).
+    series: PriceSeries,
     /// The watch file exists but could not be read or moved aside: never overwrite it.
     watch_save_blocked: bool,
     /// Watch file stamp after our last load or save; a different stamp at a poll means the CLI
@@ -531,6 +534,7 @@ impl App {
         if let Err(e) = save_poll_history(&rows) {
             log_message(&format!("Poll: saving price history failed: {e}"));
         }
+        self.update_series(&mut rows, &current);
         self.reload_watches_if_changed();
         // Only take the lock and touch the file when a watch actually goes off.
         if !fired_watches(&mut self.watch_list.clone(), &current).is_empty() {
@@ -542,6 +546,28 @@ impl App {
         }
         self.prices = Some(rows);
         self.update_menu();
+    }
+
+    /// Add this poll's plausible prices to the price series (saved right away), then give every
+    /// row its 24h change and sparkline from it.
+    fn update_series(&mut self, rows: &mut [PriceRow], plausible: &[(String, f64)]) {
+        let now = chrono::Utc::now().timestamp();
+        for (name, price) in plausible {
+            self.series.record(name, now, *price);
+        }
+        self.series
+            .retain(|name| rows.iter().any(|r| r.name == name));
+        for row in rows.iter_mut() {
+            row.sparkline = self.series.sparkline(&row.name, now);
+            row.change_24h = if row.has_price() {
+                self.series.change_24h(&row.name, now, row.price)
+            } else {
+                None
+            };
+        }
+        if let Err(e) = price_series::save(&self.series) {
+            log_message(&format!("Poll: saving the price series failed: {e}"));
+        }
     }
 
     /// The `(asset, price)` pairs of this poll that pass the [`TriggerGate`]; the others are
@@ -937,6 +963,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         watch_list: WatchList::new(),
         asset_status: HashMap::new(),
         trigger_gate: TriggerGate::new(),
+        series: price_series::load(),
         watch_save_blocked: false,
         watch_stamp: None,
         rows_generation: 0,

@@ -78,6 +78,10 @@ pub struct PriceRow {
     pub day_open: Option<f64>,
     /// Since `day_open`.
     pub change_day: Option<Change>,
+    /// Since the price 24 hours ago (from the price series), once there is a day of history.
+    pub change_24h: Option<Change>,
+    /// Last 24 hours as block characters (`▁▃▅█`), see `PriceSeries::sparkline`.
+    pub sparkline: Option<String>,
 }
 
 impl PriceRow {
@@ -92,6 +96,8 @@ impl PriceRow {
             change: None,
             day_open: None,
             change_day: None,
+            change_24h: None,
+            sparkline: None,
         }
     }
 
@@ -160,6 +166,8 @@ mod tests {
             change: None,
             day_open: None,
             change_day: None,
+            change_24h: None,
+            sparkline: None,
         }
     }
 
