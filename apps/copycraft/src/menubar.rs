@@ -103,6 +103,17 @@ struct App {
     table_job: Option<TableRun>,
     /// Why the last table step failed, shown on the card until the next one.
     table_error: Option<String>,
+    /// The Describe view is on for the table with this text ([`text_hash`]).
+    describe_for: Option<u64>,
+    /// The last description, for the frame with this id ([`TableVersions::frame_id`]).
+    describe_cache: Option<(u64, polars::prelude::DataFrame)>,
+}
+
+/// A copy's hash, to tell which table the Describe view is for (kept in memory only).
+fn text_hash(text: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// A table job running on its thread ([`crate::table::Job`]).
@@ -345,6 +356,7 @@ impl App {
             CommandId::TableVersion(index) => self.table_goto(|_| Some(index)),
             // The card pops the menu itself.
             CommandId::TableMenu => {}
+            CommandId::TableDescribe => self.toggle_describe(),
             CommandId::Quit => event_loop.exit(),
         }
     }
@@ -370,6 +382,21 @@ impl App {
         }
     }
 
+    /// Describe the table version shown (a view, not a version), or go back to the table.
+    fn toggle_describe(&mut self) {
+        let Some((text, _)) = self.table_source() else {
+            return;
+        };
+        let hash = text_hash(&text);
+        if self.describe_for == Some(hash) && self.card_view == CardView::Dataframe {
+            self.describe_for = None;
+        } else {
+            self.describe_for = Some(hash);
+            self.card_view = CardView::Dataframe;
+        }
+        self.refresh_popup();
+    }
+
     /// Run `op` on the version shown; the card shows the new version when it is done.
     fn table_step(&mut self, op: TableOp) {
         let Some((text, home)) = self.table_source() else {
@@ -381,6 +408,7 @@ impl App {
         match table.push(op, &text) {
             Ok(job) => {
                 self.table_error = None;
+                self.describe_for = None;
                 self.card_view = CardView::Dataframe;
                 self.run_table_job(job);
             }
@@ -402,6 +430,7 @@ impl App {
         };
         if let Some(job) = table.goto(index, &text) {
             self.table_error = None;
+            self.describe_for = None;
             self.card_view = CardView::Dataframe;
             self.run_table_job(job);
             self.refresh_popup();
@@ -506,6 +535,8 @@ impl App {
         }
         let running = self.table_job.as_ref().map(|run| run.generation);
         let error = self.table_error.clone();
+        let describing = dataframe_view && self.describe_for == Some(text_hash(&text));
+        let cached = self.describe_cache.take();
         let Some(table) = self.table_at(home) else {
             return;
         };
@@ -515,14 +546,25 @@ impl App {
             None
         };
         let working = load.is_some() || running.is_some_and(|generation| table.awaits(generation));
-        data.table = Some(commands::TableShown {
+        let frame_id = table.frame_id();
+        let describe = match table.frame() {
+            Some(frame) if describing => match cached {
+                Some((id, description)) if id == frame_id => Some(description),
+                _ => crate::table_ops::describe(frame).ok(),
+            },
+            _ => None,
+        };
+        let shown = commands::TableShown {
             frame: table.frame().cloned(),
-            frame_id: table.frame_id(),
+            frame_id,
             version: table.cursor(),
             labels: table.labels(),
             working,
             error,
-        });
+            describe: describe.clone(),
+        };
+        self.describe_cache = describe.map(|description| (frame_id, description));
+        data.table = Some(shown);
         if let Some(job) = load {
             self.run_table_job(job);
         }
@@ -609,10 +651,12 @@ impl App {
             .and_then(|text| self.history.text_index(text, self.history_cursor));
         // A table version's card changes with the version, its job and its errors.
         let versioned = data.view == CardView::Dataframe
-            && data
-                .table
-                .as_ref()
-                .is_some_and(|table| table.version > 0 || table.working || table.error.is_some());
+            && data.table.as_ref().is_some_and(|table| {
+                table.version > 0
+                    || table.working
+                    || table.error.is_some()
+                    || table.describe.is_some()
+            });
         let Some(index) = entry.filter(|_| !versioned) else {
             return commands::work_card(data);
         };
@@ -1252,6 +1296,8 @@ impl App {
         self.image_on_pasteboard = None;
         self.cancel_table_job();
         self.table_error = None;
+        self.describe_for = None;
+        self.describe_cache = None;
         self.history.clear();
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1308,6 +1354,8 @@ impl App {
         self.opened_table = TableVersions::default();
         self.cancel_table_job();
         self.table_error = None;
+        self.describe_for = None;
+        self.describe_cache = None;
         self.full_card = None;
         self.history.clear();
         self.current_image = None;
@@ -1967,6 +2015,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         opened_table: TableVersions::default(),
         table_job: None,
         table_error: None,
+        describe_for: None,
+        describe_cache: None,
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));

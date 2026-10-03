@@ -115,6 +115,11 @@ fn read_dates(df: &mut DataFrame, ambiguous: DateOrder) -> Vec<DateColumn> {
     read
 }
 
+/// [`read_dates`] day first where both orders fit; the number of columns read.
+pub fn read_dates_day_first(df: &mut DataFrame) -> usize {
+    read_dates(df, DateOrder::DayFirst).len()
+}
+
 /// "Dates read as dd/mm/yyyy" when a column's dates fit both orders, so the card says which one
 /// it chose.
 pub fn ambiguous_dates_note(dates: &[DateColumn]) -> Option<String> {

@@ -230,6 +230,8 @@ pub struct TableShown {
     pub working: bool,
     /// Why the last step failed, for the meta line.
     pub error: Option<String>,
+    /// The Describe view of the version shown ([`crate::table_ops::describe`]), when asked for.
+    pub describe: Option<polars::prelude::DataFrame>,
 }
 
 impl TableShown {
@@ -251,6 +253,7 @@ impl PartialEq for TableShown {
             && self.labels == other.labels
             && self.working == other.working
             && self.error == other.error
+            && self.describe.is_some() == other.describe.is_some()
     }
 }
 
@@ -264,6 +267,7 @@ impl std::fmt::Debug for TableShown {
             .field("version", &self.version)
             .field("versions", &self.labels.len())
             .field("working", &self.working)
+            .field("describe", &self.describe.is_some())
             .finish()
     }
 }
@@ -408,6 +412,8 @@ pub enum CommandId {
     TableVersion(usize),
     /// The "Table ▾" chip: the card pops a menu of table steps ([`table_menu`]).
     TableMenu,
+    /// Describe the table version shown, or go back from that view to the table.
+    TableDescribe,
     Quit,
 }
 
@@ -568,9 +574,14 @@ pub fn content_key(data: &LaunchData) -> u64 {
         picture.allocation_id().hash(&mut hasher);
     }
     // Another table version is other content: masked again, its labels checked again.
-    if let Some(table) = data.table.as_ref().filter(|table| table.labels.len() > 1) {
+    if let Some(table) = data
+        .table
+        .as_ref()
+        .filter(|table| table.labels.len() > 1 || table.describe.is_some())
+    {
         table.version.hash(&mut hasher);
         table.labels.hash(&mut hasher);
+        table.describe.is_some().hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -758,9 +769,10 @@ fn apply_text_view(
         return;
     }
     if view == CardView::Dataframe {
-        match table.filter(|table| table.version > 0) {
-            Some(table) => show_table_version(card, table, full),
-            None => show_dataframe(card, source, full),
+        match table {
+            Some(table) if table.describe.is_some() => show_description(card, table),
+            Some(table) if table.version > 0 => show_table_version(card, table, full),
+            _ => show_dataframe(card, source, full),
         }
         if let Some(error) = table.and_then(|table| table.error.as_deref()) {
             add_meta_note(card, error);
@@ -884,6 +896,26 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
     if let Some(note) = dataframe::ambiguous_dates_note(&preview.dates) {
         add_meta_note(card, &note);
     }
+}
+
+/// The Describe view: one row per column of the version shown. Its sensitivity labels are
+/// the version's (the description quotes its values).
+fn show_description(card: &mut WorkCard, table: &TableShown) {
+    let (Some(description), Some(frame)) = (&table.describe, &table.frame) else {
+        return;
+    };
+    card.title = "Describe".to_string();
+    card.highlight = Some(FormatKind::Dataframe);
+    card.preview_note = None;
+    card.selectable = true;
+    card.excerpt = dataframe::frame_grid(description).unwrap_or_default();
+    let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
+    let (rows, columns) = frame.shape();
+    let mut meta = text_meta_from(&csv, &csv);
+    // "12 lines  1.2 KB" → "11 rows × 20 columns" for the table described.
+    let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
+    meta.replace_range(..size_end, &format!("{rows} rows × {columns} columns"));
+    card.meta = meta;
 }
 
 /// A table version after one or more steps, from its frame. Size, lines and sensitivity
@@ -1327,10 +1359,8 @@ pub fn forget_chips() {
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let mut commands = chips(data);
     let offers_table = commands.iter().any(|c| c.id == CommandId::TableMenu);
-    match &data.table {
-        Some(table) => commands.extend(table_commands(table)),
-        None if offers_table => commands.extend(table_steps()),
-        None => {}
+    if offers_table || data.table.is_some() {
+        commands.extend(table_menu(data.table.as_ref()));
     }
     for item in &data.history {
         commands.push(command(
@@ -1367,20 +1397,46 @@ pub const TABLE_MENU_TITLE: &str = "Table ▾";
 
 /// The steps a table can take, for the "Table ▾" menu and the search.
 pub fn table_steps() -> Vec<Command> {
-    use crate::table::TableOp;
-    vec![command(
-        CommandId::TableStep(TableOp::Dedupe),
-        "Remove duplicate rows",
-        "Table",
-        "dedupe unique duplicates rows table",
-    )]
+    crate::table::TableOp::ONE_CLICK
+        .iter()
+        .map(|op| {
+            command(
+                CommandId::TableStep(op.clone()),
+                op.title(),
+                "Table",
+                op.keywords(),
+            )
+        })
+        .collect()
 }
 
-/// The "Table ▾" menu: the steps, then undo and redo when there is a version to go to.
+/// The "Table ▾" menu: Describe (or back to the table), the steps, then undo and redo when
+/// there is a version to go to.
 pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
+    let describing = table.is_some_and(|table| table.describe.is_some());
+    let mut commands = vec![describe_command(describing)];
     match table {
-        Some(table) => table_commands(table),
-        None => table_steps(),
+        Some(table) => commands.extend(table_commands(table)),
+        None => commands.extend(table_steps()),
+    }
+    commands
+}
+
+fn describe_command(describing: bool) -> Command {
+    if describing {
+        command(
+            CommandId::TableDescribe,
+            "Back to the table",
+            "Table",
+            "table describe back",
+        )
+    } else {
+        command(
+            CommandId::TableDescribe,
+            "Describe",
+            "Columns at a glance",
+            "describe summary statistics columns table",
+        )
     }
 }
 
@@ -1712,6 +1768,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableRedo
             | CommandId::TableVersion(_)
             | CommandId::TableMenu
+            | CommandId::TableDescribe
     )
 }
 
@@ -3106,6 +3163,7 @@ Id,Naam,Telefoonnummer,Salaris
             labels: versions.labels(),
             working: false,
             error: None,
+            describe: None,
         }
     }
 
@@ -3167,21 +3225,19 @@ Id,Naam,Telefoonnummer,Salaris
         let ids = |table: &TableShown| -> Vec<CommandId> {
             table_commands(table).into_iter().map(|c| c.id).collect()
         };
-        assert_eq!(
-            ids(&table),
-            [
-                CommandId::TableStep(crate::table::TableOp::Dedupe),
-                CommandId::TableUndo
-            ]
-        );
+        let steps = || {
+            crate::table::TableOp::ONE_CLICK
+                .iter()
+                .cloned()
+                .map(CommandId::TableStep)
+        };
+        let mut expected: Vec<CommandId> = steps().collect();
+        expected.push(CommandId::TableUndo);
+        assert_eq!(ids(&table), expected);
         table.version = 0;
-        assert_eq!(
-            ids(&table),
-            [
-                CommandId::TableStep(crate::table::TableOp::Dedupe),
-                CommandId::TableRedo
-            ]
-        );
+        let mut expected: Vec<CommandId> = steps().collect();
+        expected.push(CommandId::TableRedo);
+        assert_eq!(ids(&table), expected);
         assert!(keeps_card_open(&CommandId::TableUndo));
         let mut input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
         assert!(
@@ -3210,8 +3266,35 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(keeps_card_open(&CommandId::TableMenu));
         let prose = data(SubjectKind::Text, Some("just some words"));
         assert!(!chips(&prose).iter().any(|c| c.id == CommandId::TableMenu));
-        // Without versions the menu has the steps only.
-        assert_eq!(table_menu(None).len(), 1);
+        // Without versions the menu has Describe and the steps.
+        let menu = table_menu(None);
+        assert_eq!(menu[0].id, CommandId::TableDescribe);
+        assert_eq!(menu[0].title, "Describe");
+        assert_eq!(menu.len(), 1 + crate::table::TableOp::ONE_CLICK.len());
+        assert!(keeps_card_open(&CommandId::TableDescribe));
+    }
+
+    #[test]
+    fn describe_is_a_view_of_the_version_shown() {
+        let src = "name,n\na,1\na,1\nb,2";
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        let mut table = deduped(src);
+        let frame = table.frame.clone().expect("frame");
+        table.describe = Some(crate::table_ops::describe(&frame).expect("describe"));
+        let plain_key = {
+            let mut plain = input.clone();
+            plain.table = Some(deduped(src));
+            content_key(&plain)
+        };
+        input.table = Some(table.clone());
+        let card = work_card(&input);
+        assert_eq!(card.title, "Describe");
+        assert!(card.excerpt.contains("distinct"), "{}", card.excerpt);
+        assert!(card.meta.starts_with("2 rows × 2 columns"), "{}", card.meta);
+        // Another view of the data: masked again.
+        assert_ne!(content_key(&input), plain_key);
+        assert_eq!(table_menu(Some(&table))[0].title, "Back to the table");
     }
 
     #[test]

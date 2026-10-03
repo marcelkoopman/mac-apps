@@ -24,6 +24,7 @@ mod recognize;
 mod sensitivity;
 mod settings;
 mod table;
+mod table_ops;
 mod toolbar_visibility;
 mod transform;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

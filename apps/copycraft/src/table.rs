@@ -30,19 +30,70 @@ fn next_generation() -> u64 {
 pub enum TableOp {
     /// Drop repeated rows, keeping the first of each.
     Dedupe,
+    /// Trim text, then drop the rows and columns with no value.
+    DropEmpty,
+    /// Drop the columns with one value in every row.
+    DropConstant,
+    /// Text columns of numbers or dates become numbers or dates (only when every value fits).
+    FixTypes,
+    /// Rows become columns (at most [`crate::table_ops::TRANSPOSE_MAX_ROWS`] rows).
+    Transpose,
 }
 
 impl TableOp {
+    /// The one-click steps, in the order of the "Table ▾" menu.
+    pub const ONE_CLICK: [TableOp; 5] = [
+        TableOp::Dedupe,
+        TableOp::DropEmpty,
+        TableOp::DropConstant,
+        TableOp::FixTypes,
+        TableOp::Transpose,
+    ];
+
     /// Name of the version this step makes, for the version bar.
     pub fn label(&self) -> String {
         match self {
-            Self::Dedupe => "Duplicates removed".to_string(),
+            Self::Dedupe => "Duplicates removed",
+            Self::DropEmpty => "Empty rows and columns removed",
+            Self::DropConstant => "Constant columns removed",
+            Self::FixTypes => "Types fixed",
+            Self::Transpose => "Transposed",
+        }
+        .to_string()
+    }
+
+    /// The menu item and search title that takes this step.
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::Dedupe => "Remove duplicate rows",
+            Self::DropEmpty => "Remove empty rows and columns",
+            Self::DropConstant => "Remove constant columns",
+            Self::FixTypes => "Fix types",
+            Self::Transpose => "Transpose",
         }
     }
 
-    pub fn apply(&self, df: &DataFrame) -> PolarsResult<DataFrame> {
+    /// Search words for [`title`](Self::title).
+    pub fn keywords(&self) -> &'static str {
         match self {
-            Self::Dedupe => df.unique_stable(None, UniqueKeepStrategy::First, None),
+            Self::Dedupe => "dedupe unique duplicates rows table",
+            Self::DropEmpty => "drop empty null blank trim rows columns table",
+            Self::DropConstant => "drop constant columns same value table",
+            Self::FixTypes => "fix types numbers dates cast table",
+            Self::Transpose => "transpose pivot rows columns swap table",
+        }
+    }
+
+    pub fn apply(&self, df: &DataFrame) -> Result<DataFrame, String> {
+        use crate::table_ops;
+        match self {
+            Self::Dedupe => df
+                .unique_stable(None, UniqueKeepStrategy::First, None)
+                .map_err(|e| e.to_string()),
+            Self::DropEmpty => table_ops::drop_empty(df),
+            Self::DropConstant => table_ops::drop_constant(df),
+            Self::FixTypes => table_ops::fix_types(df),
+            Self::Transpose => table_ops::transpose(df),
         }
     }
 }
