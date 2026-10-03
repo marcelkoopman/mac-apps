@@ -58,8 +58,8 @@ enum Check {
     Iban,
     /// The local part does not start or end with a dot.
     Email,
-    /// No digit right before or after.
-    Digits,
+    /// A phone number: no digit right before or after, and not the tail of a decimal (`10.06`).
+    Phone,
     /// Nothing beyond the pattern.
     None,
 }
@@ -136,9 +136,10 @@ const PATTERNS: &[Pattern] = &[
     },
     Pattern {
         label: Label::Pii,
-        check: Check::Digits,
-        // Dutch mobile numbers.
-        source: r"(?:\+31[\s\-]?6|06)[\s\-]?(?:[0-9]{8}|[0-9]{2}[\s\-]?[0-9]{6}|[0-9]{2}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2})",
+        check: Check::Phone,
+        // Dutch mobile numbers, written on one line: a space or hyphen between the groups, not a
+        // line break or tab (a cell ending in `06` before a row starting with a date is no phone).
+        source: r"(?:\+31[\s\-&&[^\r\n\t]]?6|06)[\s\-&&[^\r\n\t]]?(?:[0-9]{8}|[0-9]{2}[\s\-&&[^\r\n\t]]?[0-9]{6}|[0-9]{2}[\s\-&&[^\r\n\t]]?[0-9]{2}[\s\-&&[^\r\n\t]]?[0-9]{2}[\s\-&&[^\r\n\t]]?[0-9]{2})",
     },
 ];
 
@@ -228,7 +229,13 @@ fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
                 .map_or(start, |offset| start + offset);
             bytes[start] != b'.' && bytes[at - 1] != b'.' && !in_url(bytes, start)
         }
-        Check::Digits => no_digit(before) && no_digit(after),
+        Check::Phone => {
+            let decimal = before == Some(b'.')
+                && start
+                    .checked_sub(2)
+                    .is_some_and(|at| bytes[at].is_ascii_digit());
+            no_digit(before) && no_digit(after) && !decimal
+        }
     }
 }
 
@@ -539,6 +546,14 @@ mod tests {
         assert!(found("bel 06-12345678 of +31 6 12345678").pii);
         assert!(found("nummer 06 12 34 56 78").pii);
         assert!(!found("order 0612345678901").pii);
+        assert!(found("mobiel\t06 12345678").pii);
+        assert!(found("+31\u{a0}6\u{a0}12345678").pii);
+        // Not across a line break or tab, nor from a decimal: a value ending in `06`, then a
+        // row starting with a date.
+        assert!(!found("0.06\n2026-04-16,3.17").pii);
+        assert!(!found("10.06\t2026-04-16\t3.17").pii);
+        assert!(!found("waarde 10.06 12345678").pii);
+        assert!(!found("06\n12345678").pii);
         assert!(found("klant 111222333 bevestigd").pii);
         assert!(!found("ref 123456789").pii);
         assert!(has_bare_bsn("oud nummer 12345672"));

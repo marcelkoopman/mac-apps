@@ -170,3 +170,42 @@ fn corpus_labels() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// The version of `src` after `op`, as CSV: what the card checks for a table version.
+fn version_csv(src: &str, op: crate::table::TableOp) -> String {
+    let mut versions = crate::table::TableVersions::default();
+    let job = versions.push(op, src).expect("push");
+    let done = job
+        .run(&std::sync::atomic::AtomicBool::new(false))
+        .expect("job");
+    assert!(versions.finish(done));
+    crate::dataframe::frame_csv(versions.frame().expect("frame")).expect("csv")
+}
+
+#[test]
+fn table_versions_get_no_labels_their_source_has_not() {
+    use crate::table::TableOp;
+    let src = crate::dataframe::tests::ENERGY_FIXTURE;
+    assert_eq!(found(src).labels, NONE);
+    // Their CSV has ISO dates at the start of a row, after a value ending in `06`.
+    for op in [
+        TableOp::Dedupe,
+        TableOp::DropConstant,
+        TableOp::Sort {
+            column: "Date".into(),
+            descending: true,
+        },
+        TableOp::Transpose,
+        TableOp::SelectColumns {
+            columns: vec!["Date".into(), "Home Usage (kWh)".into()],
+            kept_of: Some(20),
+        },
+    ] {
+        let csv = version_csv(src, op.clone());
+        assert_eq!(found(&csv).labels, NONE, "{op:?}");
+    }
+    // A phone number in a version still counts.
+    let phones = "id,ref\n1,06-12345678\n1,06-12345678\n2,x";
+    let csv = version_csv(phones, TableOp::Dedupe);
+    assert_eq!(found(&csv).labels, P);
+}
