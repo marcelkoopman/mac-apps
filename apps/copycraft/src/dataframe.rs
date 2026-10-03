@@ -42,6 +42,7 @@ pub fn try_format_preview(
     overview: Option<bool>,
 ) -> Option<DataframePreview> {
     let mut df = parse(text)?;
+    read_iso_dates(&mut df);
     let dates = read_dates(&mut df, DateOrder::DayFirst);
     let mut preview = frame_preview(&df, max_rows, overview)?;
     preview.dates = dates;
@@ -166,8 +167,9 @@ fn parse(text: &str) -> Option<DataFrame> {
         .or_else(|| try_json(trimmed))
 }
 
-/// The table as the Dataframe view shows it: [`parse`], with columns of `dd/mm/yyyy` text read
-/// as dates ([`read_dates`]; day first where both orders fit). Conversions (CSV → JSON, TSV →
+/// The table as the Dataframe view shows it: [`parse`], with columns of ISO dates and datetimes
+/// read as such ([`read_iso_dates`]) and of `dd/mm/yyyy` text as dates ([`read_dates`]; day
+/// first where both orders fit). Conversions (CSV → JSON, TSV →
 /// CSV) keep the text as copied and use [`parse`].
 pub fn parse_table(text: &str) -> Option<DataFrame> {
     parse_table_with(text, ReadOptions::default()).map(|(df, _)| df)
@@ -236,6 +238,7 @@ pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, 
     } else {
         DateOrder::DayFirst
     };
+    read_iso_dates(&mut df);
     let dates = read_dates(&mut df, order);
     let notes = ReadNotes {
         start,

@@ -89,7 +89,12 @@ fn looks_like_key_value_blob(text: &str) -> bool {
         .iter()
         .filter(|line| {
             line.split_once(':')
-                .map(|(k, v)| !k.trim().is_empty() && !v.trim().is_empty() && !k.contains(';'))
+                // A key with a separator in it is cells of a row before a time (`…,14:05`).
+                .map(|(k, v)| {
+                    !k.trim().is_empty()
+                        && !v.trim().is_empty()
+                        && !k.contains([';', ',', '\t'])
+                })
                 .unwrap_or(false)
         })
         .count();
@@ -569,13 +574,10 @@ Id;Naam;Salaris
         assert_eq!(back.shape(), df.shape());
         assert_eq!(names(&back), names(df));
         assert!(header.contains(','), "{header}");
-        // `yyyy-mm-dd` text, which Fix types makes dates again.
-        let typed = crate::table_ops::fix_types(&back)
-            .expect("fix types")
-            .unwrap_or(back);
-        for (column, read) in df.columns().iter().zip(typed.columns()) {
-            if column.dtype() == &DataType::Date {
-                assert_eq!(read.dtype(), &DataType::Date, "{}", column.name());
+        // Dates come back as dates (`yyyy-mm-dd`), datetimes as datetimes, without Fix types.
+        for (column, read) in df.columns().iter().zip(back.columns()) {
+            if matches!(column.dtype(), DataType::Date | DataType::Datetime(_, _)) {
+                assert_eq!(read.dtype(), column.dtype(), "{}", column.name());
             }
         }
         csv
@@ -614,5 +616,62 @@ Id;Naam;Salaris
         assert_eq!(super::TableFile::ALL[0], super::TableFile::Csv);
         assert_eq!(super::TableFile::Csv.extension(), "csv");
         assert_eq!(super::TableFile::Parquet.extension(), "parquet");
+    }
+
+    #[test]
+    fn iso_dates_and_datetimes_are_read_as_such() {
+        use polars::prelude::{DataType, TimeUnit};
+        let src = "day,at,stamp,n\n\
+                   2026-03-09,2026-03-09T14:05,2026-03-09 14:05:30.25,1\n\
+                   ,2026-03-10T00:00:59,2024-02-29 23:59:59,2\n\
+                   2026-12-31,2026-03-11T09:30:00.123456789,2026-03-11 09:30,3";
+        let df = super::parse_table(src).expect("table");
+        let dtype = |name: &str| df.column(name).expect(name).dtype().clone();
+        assert_eq!(dtype("day"), DataType::Date);
+        assert_eq!(dtype("at"), DataType::Datetime(TimeUnit::Microseconds, None));
+        assert_eq!(dtype("stamp"), DataType::Datetime(TimeUnit::Microseconds, None));
+        assert_eq!(df.column("day").expect("day").null_count(), 1);
+        let shown = super::frame_preview(&df, 10, Some(false)).expect("preview").grid;
+        assert!(shown.contains("2026-03-09 14:05:30.250"), "{shown}");
+        assert!(shown.contains("2024-02-29 23:59:59"), "{shown}");
+        // The card's view of the copied text reads them the same way.
+        let preview = super::try_format_preview(src, 10, Some(true)).expect("preview");
+        assert!(preview.overview.as_deref().is_some_and(|o| o.contains("datetime")));
+        // A saved CSV reads back the same.
+        assert_csv_round_trip(&df);
+        // One value that is not one (or does not exist), or dates mixed with datetimes: text.
+        for odd in [
+            "day,n\n2026-03-09,1\n2026-02-30,1",
+            "day,n\n2026-03-09,1\nsoon,1",
+            "day,n\n2026-03-09,1\n2026-03-09T10:00,1",
+            "at,n\n2026-03-09T24:00,1\n,2\n,3",
+            "at,n\n2026-03-09T10:00+02:00,1\n,2\n,3",
+            "at,n\n2026-03-09T10:0,1\n,2\n,3",
+            "day,n\n2026-3-9,1\n,2\n,3",
+        ] {
+            let df = super::parse_table(odd).expect(odd);
+            assert_eq!(df.columns()[0].dtype(), &DataType::String, "{odd}");
+        }
+        // dd/mm/yyyy dates and the question when both orders fit are as before.
+        let both = "when,iso\n01/02/2024,2024-02-01\n03/04/2024,2024-04-03";
+        let (df, notes) = super::parse_table_with(both, super::ReadOptions::default()).expect("table");
+        assert_eq!(df.column("when").expect("when").dtype(), &DataType::Date);
+        assert_eq!(df.column("iso").expect("iso").dtype(), &DataType::Date);
+        assert!(notes.ambiguous_dates);
+        assert_eq!(notes.meta_notes(), ["Dates read as dd/mm/yyyy"]);
+    }
+
+    #[test]
+    fn iso_day_numbers_are_the_calendar_ones() {
+        assert_eq!(super::iso_days("1970-01-01"), Some(0));
+        assert_eq!(super::iso_days("2000-03-01"), Some(11_017));
+        assert_eq!(super::iso_days("1969-12-31"), Some(-1));
+        assert_eq!(super::iso_days("2024-02-29"), Some(19_782));
+        assert_eq!(super::iso_days("2023-02-29"), None);
+        assert_eq!(super::iso_days("1900-02-29"), None);
+        assert_eq!(super::iso_days("2000-02-29"), Some(11_016));
+        assert_eq!(super::iso_micros("1970-01-01T00:00:01.5"), Some(1_500_000));
+        assert_eq!(super::iso_micros("1970-01-02 00:00"), Some(86_400_000_000));
+        assert_eq!(super::iso_micros("1970-01-01T00:00."), None);
     }
 }
