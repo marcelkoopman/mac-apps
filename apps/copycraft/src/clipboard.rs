@@ -7,6 +7,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::commands::{CardView, ImageScan, WorkCard};
 use crate::format;
+use crate::table::TableVersions;
 
 pub const MAX_HISTORY: usize = 20;
 
@@ -212,6 +213,9 @@ struct HistoryEntry {
     cards: Vec<(CardView, WorkCard)>,
     /// A picture's info, OCR text, QR payload and data URL, once scanned.
     scan: Option<ImageScan>,
+    /// A table's versions (the steps taken on the card), once the card worked on it. Its
+    /// frames are derived data like the cards; its steps stay with the entry.
+    table: Option<TableVersions>,
 }
 
 impl HistoryEntry {
@@ -222,6 +226,7 @@ impl HistoryEntry {
             kind,
             cards: Vec::new(),
             scan: None,
+            table: None,
         }
     }
 
@@ -231,6 +236,7 @@ impl HistoryEntry {
             kind: format::FormatKind::Image,
             cards: Vec::new(),
             scan: None,
+            table: None,
         }
     }
 
@@ -243,6 +249,9 @@ impl HistoryEntry {
             scan.wipe();
         }
         self.scan = None;
+        if let Some(table) = self.table.as_mut() {
+            table.forget_frames();
+        }
     }
 }
 
@@ -422,6 +431,27 @@ impl ClipboardHistory {
             entry.cards.push((view, card));
         }
         self.forget_derived_beyond(index);
+    }
+
+    /// The versions of the table in the text entry at `index`, if the card worked on it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn table(&self, index: usize) -> Option<&TableVersions> {
+        self.entries.get(index)?.table.as_ref()
+    }
+
+    /// The versions of the table in the text entry at `index`, made when needed. `None` for a
+    /// picture. Entries further than [`DERIVED_NEAR`] from it forget their frames.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn table_mut(&mut self, index: usize) -> Option<&mut TableVersions> {
+        if !matches!(self.entries.get(index)?.body, HistoryBody::Text(_)) {
+            return None;
+        }
+        self.forget_derived_beyond(index);
+        Some(
+            self.entries[index]
+                .table
+                .get_or_insert_with(TableVersions::default),
+        )
     }
 
     /// The scan kept with the picture entry holding these very bytes.
@@ -952,6 +982,42 @@ mod tests {
         history.remember_card(1, CardView::Original, card("c"));
         assert!(history.card(0, CardView::Original).is_some());
         assert!(history.card(1, CardView::Original).is_some());
+    }
+
+    #[test]
+    fn table_versions_stay_with_their_entry_and_far_ones_forget_frames() {
+        use crate::table::TableOp;
+        use std::sync::atomic::AtomicBool;
+        let mut history = ClipboardHistory::default();
+        let table = "name,n\na,1\na,1";
+        for text in [table, "b", "c", "d"] {
+            history.record(text.into());
+        }
+        // d c b table
+        let versions = history.table_mut(3).expect("text entry");
+        let job = versions.push(TableOp::Dedupe, table).expect("push");
+        let done = job.run(&AtomicBool::new(false)).expect("job");
+        assert!(versions.finish(done));
+        assert_eq!(history.table(3).map(|t| t.len()), Some(2));
+        assert!(history.table(3).and_then(|t| t.frame()).is_some());
+        // Showing an entry far away: the frames go, the steps stay.
+        history.remember_card(0, crate::commands::CardView::Original, card("d"));
+        let versions = history.table(3).expect("versions");
+        assert!(versions.frame().is_none());
+        assert_eq!((versions.len(), versions.cursor()), (2, 1));
+        assert!(history.table(0).is_none());
+        // Moving it to the front keeps them.
+        history.move_to_front(3);
+        assert_eq!(history.table(0).map(|t| t.len()), Some(2));
+        history.clear();
+        assert!(history.table(0).is_none());
+    }
+
+    #[test]
+    fn pictures_have_no_table_versions() {
+        let mut history = ClipboardHistory::default();
+        history.record_image(vec![1, 2, 3]).expect("image");
+        assert!(history.table_mut(0).is_none());
     }
 
     #[test]

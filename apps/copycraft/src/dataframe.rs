@@ -95,7 +95,7 @@ fn parse(text: &str) -> Option<DataFrame> {
 /// The table as the Dataframe view shows it: [`parse`], with columns of `dd/mm/yyyy` text read
 /// as dates ([`read_dates`]; day first where both orders fit). Conversions (CSV → JSON, TSV →
 /// CSV) keep the text as copied and use [`parse`].
-fn parse_table(text: &str) -> Option<DataFrame> {
+pub fn parse_table(text: &str) -> Option<DataFrame> {
     let mut df = parse(text)?;
     read_dates(&mut df, DateOrder::DayFirst);
     Some(df)
