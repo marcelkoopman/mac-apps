@@ -26,6 +26,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── sign_app.sh         # sign a .app: ad-hoc, or Developer ID with MACOS_SIGN_IDENTITY
 │   ├── import_signing_cert.sh # CI: Developer ID .p12 into a temporary keychain
 │   ├── notarize.sh         # notarytool submit --wait + staple + Gatekeeper check (.app/.dmg)
+│   ├── check_copycraft_offline.sh # CI: no network crates in copycraft's tree, no osascript
 │   └── tag_release.sh      # bump + tag + push a release for one app
 └── .github/workflows/
     ├── ci.yml              # fmt+clippy (macos-26), tests on macos-26 and macos-15, app icon check; cargo audit weekly/manual

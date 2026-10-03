@@ -53,8 +53,15 @@ jobs:
       - name: Rustfmt
         run: cargo fmt --all -- --check
 
+      # apps/copycraft/clippy.toml also forbids std::process::Command, std::net and
+      # std::os::unix::net in copycraft (clippy reads it for that crate only).
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # No HTTP/TLS/socket crates in copycraft's dependency tree and no osascript in its sources
+      # (socket2 via polars → tokio is allowlisted, see the script).
+      - name: Copycraft offline guards
+        run: scripts/check_copycraft_offline.sh
 
   # Tests on the pinned macOS 26 runner and on macOS 15, where the pre-26 fallbacks run for real
   # (FlexiblePush instead of the Glass bezel, frosted background, plain view instead of the glass

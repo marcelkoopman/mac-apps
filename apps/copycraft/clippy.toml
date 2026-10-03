@@ -1,0 +1,26 @@
+# Copycraft works offline and starts no subprocesses (AGENTS.md, README "Privacy"). Clippy reads
+# this file for the copycraft crate only: it looks for clippy.toml in the crate's own directory
+# (CARGO_MANIFEST_DIR) first, so ticker and mac-ui are not affected. CI runs clippy with
+# -D warnings, so any of these fails the build.
+disallowed-types = [
+    { path = "std::process::Command", reason = "copycraft starts no subprocesses (AGENTS.md)" },
+    { path = "std::net::TcpStream", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::TcpListener", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::UdpSocket", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixStream", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixListener", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixDatagram", reason = "copycraft talks to no other process (AGENTS.md)" },
+]
+disallowed-methods = [
+    { path = "std::process::Command::new", reason = "copycraft starts no subprocesses (AGENTS.md)" },
+    { path = "std::net::TcpStream::connect", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::TcpStream::connect_timeout", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::TcpListener::bind", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::UdpSocket::bind", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::net::ToSocketAddrs::to_socket_addrs", reason = "copycraft is offline (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixStream::connect", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixStream::pair", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixListener::bind", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixDatagram::bind", reason = "copycraft talks to no other process (AGENTS.md)" },
+    { path = "std::os::unix::net::UnixDatagram::unbound", reason = "copycraft talks to no other process (AGENTS.md)" },
+]
