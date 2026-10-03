@@ -1,10 +1,8 @@
-fn try_csv(text: &str) -> Option<DataFrame> {
-    let separator = detect_separator(text)?;
-    if !looks_like_delimited_table(text, separator) {
-        return None;
-    }
-    let mut cursor = Cursor::new(text.as_bytes());
-    let parse = CsvParseOptions::default().with_separator(separator);
+/// The delimited table in `text` (see [`table_start`]), read from its header down.
+fn try_csv(text: &str) -> Option<(TableStart, DataFrame)> {
+    let start = table_start(text)?;
+    let mut cursor = Cursor::new(start.body(text).as_bytes());
+    let parse = CsvParseOptions::default().with_separator(start.separator);
     CsvReadOptions::default()
         .with_has_header(true)
         .with_parse_options(parse)
@@ -12,6 +10,7 @@ fn try_csv(text: &str) -> Option<DataFrame> {
         .finish()
         .ok()
         .filter(|df| df.width() >= 2 && df.height() >= 1)
+        .map(|df| (start, df))
 }
 
 fn try_json(text: &str) -> Option<DataFrame> {

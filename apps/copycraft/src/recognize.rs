@@ -374,8 +374,13 @@ fn labeled_field(line: &str) -> Option<Field> {
 }
 
 /// The first non-empty line as a header (tab, `;` or `,`), and a data row with a value in one
-/// of its named columns.
+/// of its named columns. Lines above a table's header ([`crate::dataframe::table_start`]) are
+/// skipped, so the real header names the columns.
 fn table_fields(text: &str, found: &mut Classes) {
+    let text = match crate::dataframe::table_start(text) {
+        Some(start) if start.skipped > 0 => &text[start.offset..],
+        _ => text,
+    };
     let mut lines = text.lines().filter(|line| !line.trim().is_empty());
     let Some(header) = lines.next() else {
         return;
@@ -555,6 +560,9 @@ mod tests {
         assert!(!found("Naam:").pii);
         assert!(!found("Id;Naam\n").pii);
         assert!(!found("Id;Product\n1;Fiets").pii);
+        let below_a_title =
+            found("Personeel export\nId;Naam;Salaris\n1;Jan de Vries;3450\n2;Anja;2900");
+        assert!(below_a_title.pii && below_a_title.financial);
     }
 
     #[test]

@@ -159,8 +159,17 @@ fn is_box(ch: char) -> bool {
 /// Display mark used when a TSV is aligned. A real tab does not sit on a character column.
 const TSV_MARK: char = '\u{00b7}';
 
+/// Lines above the header ([`crate::dataframe::table_start`]) are plain text.
 fn tokenize_csv(source: &str) -> Vec<(TokenKind, String)> {
-    tokenize_table(source, csv_separator(source))
+    match crate::dataframe::table_start(source) {
+        Some(start) if start.skipped > 0 => {
+            let (above, table) = source.split_at(start.offset);
+            let mut out = vec![(TokenKind::Text, above.to_string())];
+            out.extend(tokenize_table(table, start.separator as char));
+            out
+        }
+        _ => tokenize_table(source, csv_separator(source)),
+    }
 }
 
 fn tokenize_tsv(source: &str) -> Vec<(TokenKind, String)> {

@@ -16,10 +16,12 @@ fn detect_separator(text: &str) -> Option<u8> {
 
 fn looks_like_delimited_table(text: &str, separator: u8) -> bool {
     let sep = separator as char;
+    // The first rows decide; a long copy is not split into lines here.
     let lines: Vec<&str> = text
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
+        .take(20)
         .collect();
     if lines.len() < 2 {
         return false;
@@ -95,7 +97,7 @@ fn looks_like_key_value_blob(text: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::try_format;
     use polars::prelude::{ParquetReader, SerReader};
 
@@ -190,6 +192,74 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
                 .map(|(_, value)| *value);
             assert_eq!(value, Some("-1"), "{name}");
         }
+    }
+
+    /// A synthetic look-alike of an energy export: a BOM, a "Definition:" line with semicolons
+    /// above the header, dd/mm/yyyy dates, unit-suffixed columns, six all-0.00 columns and a
+    /// product prefix shared by a group of columns. No real data.
+    pub(crate) const ENERGY_FIXTURE: &str = include_str!("../tests/fixtures/energy_lookalike.csv");
+
+    #[test]
+    fn skips_the_definition_line_above_the_header() {
+        let start = super::table_start(ENERGY_FIXTURE).expect("table");
+        assert_eq!((start.header_line, start.skipped), (1, 1));
+        assert_eq!(start.separator, b',');
+        assert!(super::table_start(ENERGY_FIXTURE)
+            .unwrap()
+            .body(ENERGY_FIXTURE)
+            .starts_with("Date,"));
+        assert_eq!(start.note().as_deref(), Some("Header on line 2"));
+        assert!(super::looks_like_csv(ENERGY_FIXTURE));
+        assert_eq!(
+            crate::format::detect(ENERGY_FIXTURE),
+            crate::format::FormatKind::Csv
+        );
+        let df = super::parse(ENERGY_FIXTURE).expect("df");
+        assert_eq!(df.shape(), (40, 20));
+        assert_eq!(df.get_column_names()[0].as_str(), "Date");
+        let floats = df
+            .columns()
+            .iter()
+            .filter(|c| c.dtype() == &polars::prelude::DataType::Float64)
+            .count();
+        assert_eq!(floats, 19);
+        assert!(super::try_parquet_bytes(ENERGY_FIXTURE).is_some());
+        let csv = super::try_csv_text(ENERGY_FIXTURE).expect("csv");
+        assert!(csv.starts_with("Date,"), "{}", &csv[..20]);
+    }
+
+    #[test]
+    fn a_table_from_its_first_line_skips_nothing() {
+        let src = "\n\nname,age\nalice,30\nbob,40";
+        let start = super::table_start(src).expect("table");
+        assert_eq!((start.header_line, start.skipped, start.offset), (2, 0, 2));
+        assert_eq!(start.note(), None);
+    }
+
+    #[test]
+    fn skips_a_title_and_a_blank_line_with_semicolons() {
+        let src = "Export 2026\n\nId;Naam;Salaris\n1;Jan;3450\n2;Anja;2900";
+        let start = super::table_start(src).expect("table");
+        assert_eq!((start.header_line, start.skipped), (2, 1));
+        assert_eq!(start.separator, b';');
+        assert_eq!(super::parse(src).expect("df").shape(), (2, 3));
+    }
+
+    #[test]
+    fn does_not_skip_into_json_code_or_wide_lines() {
+        let json = "[\n{\"a\": 1, \"b\": 2, \"c\": 3},\n{\"a\": 4, \"b\": 5, \"c\": 6}\n]";
+        assert_eq!(super::table_start(json), None);
+        let df = super::parse(json).expect("json");
+        assert_eq!(df.get_column_names().len(), 3);
+        let rust = "fn main() {\n    call(a, b, c);\n    call(d, e, f);\n    call(g, h, i);\n}";
+        assert_eq!(super::table_start(rust), None);
+        assert!(!super::is_table(rust));
+        // A line above as wide as the header would belong to the table.
+        assert_eq!(super::table_start("a,b,c\nx,y\n1,2\n3,4"), None);
+        let many = format!("{}name,age\nalice,30\nbob,40", "note\n".repeat(11));
+        assert_eq!(super::table_start(&many), None);
+        let ten = format!("{}name,age\nalice,30\nbob,40", "note\n".repeat(10));
+        assert_eq!(super::table_start(&ten).map(|s| s.skipped), Some(10));
     }
 
     #[test]

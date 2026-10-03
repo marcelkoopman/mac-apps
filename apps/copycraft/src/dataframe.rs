@@ -75,9 +75,7 @@ fn delimited_separator(text: &str) -> Option<u8> {
     if trimmed.is_empty() {
         return None;
     }
-    let separator = detect_separator(trimmed)?;
-    try_csv(trimmed)?;
-    Some(separator)
+    try_csv(trimmed).map(|(start, _)| start.separator)
 }
 
 fn parse(text: &str) -> Option<DataFrame> {
@@ -85,7 +83,9 @@ fn parse(text: &str) -> Option<DataFrame> {
     if trimmed.is_empty() || crate::format::looks_like_xml(trimmed) {
         return None;
     }
-    try_csv(trimmed).or_else(|| try_json(trimmed))
+    try_csv(trimmed)
+        .map(|(_, df)| df)
+        .or_else(|| try_json(trimmed))
 }
 
 fn write_parquet(df: &mut DataFrame) -> Option<Vec<u8>> {
@@ -128,4 +128,5 @@ fn render(df: DataFrame) -> Option<String> {
     Some(df.to_string())
 }
 
+include!("dataframe_header.rs");
 include!("dataframe_parse.rs");

@@ -715,6 +715,7 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool
         set_excerpt(card, &body, full);
         card.highlight = Some(FormatKind::Dataframe);
         card.selectable = true;
+        add_table_note(card, dataframe::table_start(source.trim()));
     } else if view == CardView::Format && opens_formatted(source) {
         set_excerpt(card, &body, full);
         card.highlight = Some(kind);
@@ -738,9 +739,12 @@ fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
     let body = align_table(shown, kind).unwrap_or_else(|| shown.to_string());
     card.highlight = Some(kind);
     card.selectable = true;
+    let start = dataframe::table_start(source);
     if cut.is_some() {
-        let rows = source.lines().count().saturating_sub(1);
-        let shown_rows = shown.lines().count().saturating_sub(1);
+        // The header and the lines above it are not rows.
+        let above = 1 + start.map_or(0, |start| start.header_line);
+        let rows = source.lines().count().saturating_sub(above);
+        let shown_rows = shown.lines().count().saturating_sub(above);
         card.excerpt = body;
         card.preview_note = Some(showing_note(shown_rows, rows, "rows"));
         card.meta = text_meta(source);
@@ -748,7 +752,26 @@ fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
         set_excerpt(card, &body, full);
         card.meta = text_meta_from(&body, source);
     }
+    add_table_note(card, start);
 }
+
+/// "Header on line N" in the meta line, after the size, when lines above a table's header
+/// were skipped ([`dataframe::TableStart::note`]).
+fn add_table_note(card: &mut WorkCard, start: Option<dataframe::TableStart>) {
+    let Some(note) = start.and_then(|start| start.note()) else {
+        return;
+    };
+    card.meta = match card.meta.find(META_SEPARATOR) {
+        Some(at) => format!(
+            "{}{META_SEPARATOR}{note}{}",
+            &card.meta[..at],
+            &card.meta[at..]
+        ),
+        None => format!("{}{META_SEPARATOR}{note}", card.meta),
+    };
+}
+
+const META_SEPARATOR: &str = "  ·  ";
 
 /// The first [`PREVIEW_ROWS`] rows of the table as a polars grid, with a note when the table
 /// has more. Title and meta as for the full grid; the meta measures the copied table.
@@ -768,6 +791,7 @@ fn show_dataframe_preview(card: &mut WorkCard, source: &str) {
         card.excerpt = shown_body(&preview.grid);
         card.preview_note = None;
     }
+    add_table_note(card, dataframe::table_start(source.trim()));
 }
 
 /// Put `body` in the well: whole with `full`, else its preview and the note.
@@ -841,7 +865,17 @@ fn group_thousands(n: usize) -> String {
 /// land on character cells; the copied bytes keep their real delimiter.
 const TSV_MARK: char = '\u{00b7}';
 
+/// Lines above the header (see [`dataframe::table_start`]) stay as they are, above the table.
 fn align_table(source: &str, kind: FormatKind) -> Option<String> {
+    let (above, table) = match dataframe::table_start(source) {
+        Some(start) if start.skipped > 0 => source.split_at(start.offset),
+        _ => ("", source),
+    };
+    let aligned = align_rows(table, kind)?;
+    Some(format!("{above}{aligned}"))
+}
+
+fn align_rows(source: &str, kind: FormatKind) -> Option<String> {
     let parsed = source_separator(source, kind)?;
     let shown = if kind == FormatKind::Tsv {
         TSV_MARK
@@ -888,6 +922,9 @@ fn source_separator(source: &str, kind: FormatKind) -> Option<char> {
 }
 
 fn csv_separator(source: &str) -> Option<char> {
+    if let Some(start) = dataframe::table_start(source) {
+        return Some(start.separator as char);
+    }
     let header = source
         .lines()
         .map(str::trim)
@@ -2747,6 +2784,45 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(card.excerpt.contains("Salaris"), "{}", card.excerpt);
         assert!(card.excerpt.contains('┆'), "{}", card.excerpt);
         assert!(card.meta.contains("PII · financial"), "{}", card.meta);
+    }
+
+    #[test]
+    fn a_table_below_a_definition_line_opens_as_a_table_with_a_header_note() {
+        let src = crate::dataframe::tests::ENERGY_FIXTURE;
+        let card = work_card(&data(SubjectKind::Text, Some(src)));
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Csv));
+        assert!(card.meta.contains("  ·  Header on line 2"), "{}", card.meta);
+        // The definition line stays above the aligned table, as copied.
+        let first = card.excerpt.lines().next().unwrap_or_default();
+        assert!(
+            first
+                .trim_start_matches('\u{feff}')
+                .starts_with("Definition:")
+        );
+        let second = card.excerpt.lines().nth(1).unwrap_or_default();
+        assert!(second.starts_with("Date"), "{:?}", second.get(..12));
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        let grid = work_card(&input);
+        assert_eq!(grid.title, "Dataframe");
+        assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
+        assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
+        assert!(
+            ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::Dataframe)
+        );
+    }
+
+    #[test]
+    fn a_long_table_below_a_title_counts_rows_from_the_header() {
+        let mut src = String::from("Title of the export\nname,age\n");
+        for i in 0..(PREVIEW_ROWS + 50) {
+            src.push_str(&format!("p{i},{i}\n"));
+        }
+        let card = work_card(&data(SubjectKind::Text, Some(&src)));
+        assert_eq!(
+            card.preview_note.as_deref(),
+            Some(format!("Showing 199 of {} rows", PREVIEW_ROWS + 50).as_str())
+        );
     }
 
     #[test]
