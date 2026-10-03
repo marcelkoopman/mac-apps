@@ -400,6 +400,11 @@ define_class!(
             if !MASKS.with(Cell::get) || REVEALED.with(Cell::get) {
                 return;
             }
+            // Not before the labels are known: the meta line says "Checking…" meanwhile.
+            if crate::sensitivity::meta_status(&card_meta()) == Some(crate::sensitivity::CHECKING) {
+                NSBeep();
+                return;
+            }
             REVEALED.set(true);
             layout(false);
         }

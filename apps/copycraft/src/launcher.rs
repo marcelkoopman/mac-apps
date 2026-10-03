@@ -24,6 +24,8 @@ pub enum UserEvent {
     DroppedImage(zeroize::Zeroizing<Vec<u8>>),
     /// Text was dropped on the card. Zeroized when the event is dropped.
     DroppedText(zeroize::Zeroizing<String>),
+    /// The background checker has the sensitivity labels of a long copy.
+    LabelsChecked,
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,

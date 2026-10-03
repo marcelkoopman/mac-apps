@@ -325,6 +325,15 @@ pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
     }
 }
 
+/// Add the Concealed type to copycraft's own write on the pasteboard, once its labels are in.
+pub(crate) fn add_concealed() {
+    let pasteboard = NSPasteboard::generalPasteboard();
+    if read_marks(&pasteboard).own {
+        pasteboard.setData_forType(Some(&NSData::new()), &NSString::from_str(CONCEALED_TYPE));
+        invalidate_caches();
+    }
+}
+
 fn mark_own(pasteboard: &NSPasteboard, concealed: bool) -> bool {
     let empty = NSData::new();
     let own = pasteboard.setData_forType(Some(&empty), &NSString::from_str(SELF_TYPE));

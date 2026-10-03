@@ -67,6 +67,16 @@ impl<V: Clone> Memo<V> {
         value
     }
 
+    /// The remembered result for `text`, without computing it.
+    pub fn get(&self, text: &str) -> Option<V> {
+        self.lookup(Key::of(text))
+    }
+
+    /// Remember `value` for `text` (a result computed elsewhere, such as on a worker thread).
+    pub fn put(&self, text: &str, value: V) {
+        self.remember(Key::of(text), value);
+    }
+
     fn lookup(&self, key: Key) -> Option<V> {
         let mut slots = self.slots.lock().ok()?;
         let index = slots.iter().position(|(k, _)| *k == key)?;
@@ -90,6 +100,12 @@ impl<V: Clone> Memo<V> {
             slots.clear();
         }
     }
+}
+
+/// Length and hash of `text`, the key a [`Memo`] files it under.
+pub fn text_key(text: &str) -> (usize, u64) {
+    let key = Key::of(text);
+    (key.len, key.hash)
 }
 
 /// Drop every remembered result (Wipe), so not even a hash of the copy stays behind.

@@ -1110,18 +1110,7 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
 pub fn chips(data: &LaunchData) -> Vec<Command> {
     match data.subject_kind {
         SubjectKind::Image => image_chips(data.image_scan.as_ref()),
-        SubjectKind::Text => {
-            let text = data.subject_text.as_deref().unwrap_or("");
-            TEXT_CHIPS.get_or_compute(text, |text| {
-                if crate::youtube::video_id(text).is_some()
-                    || crate::page_preview::page_url(text).is_some()
-                {
-                    link_chips(text)
-                } else {
-                    text_chips(text)
-                }
-            })
-        }
+        SubjectKind::Text => copied_text_chips(data.subject_text.as_deref().unwrap_or("")),
         SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => Vec::new(),
     }
 }
@@ -1133,6 +1122,22 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
 /// labels. [`forget_chips`] drops them (Wipe).
 static TEXT_CHIPS: crate::memo::Memo<Vec<Command>> =
     crate::memo::Memo::with_min_len(crate::clipboard::MAX_HISTORY + 4, 0);
+
+fn copied_text_chips(text: &str) -> Vec<Command> {
+    TEXT_CHIPS.get_or_compute(text, |text| {
+        if crate::youtube::video_id(text).is_some() || crate::page_preview::page_url(text).is_some()
+        {
+            link_chips(text)
+        } else {
+            text_chips(text)
+        }
+    })
+}
+
+/// Work out (and remember) the chips of a copied text ahead of the card, off the main thread.
+pub fn warm_chips(text: &str) {
+    copied_text_chips(text);
+}
 
 /// Drop the remembered chips (Wipe).
 pub fn forget_chips() {
@@ -1410,7 +1415,7 @@ fn text_chips(text: &str) -> Vec<Command> {
     let kind = format::detect(text);
     let mut commands = Vec::new();
     // The cheap check first: kinds that open formatted never get the chip, so they skip the
-    // formatter (rustfmt runs as a separate process).
+    // formatter (slow on a large copy).
     if !opens_formatted(text) && toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,
@@ -1599,12 +1604,29 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
     } else {
         size
     };
-    let labels = crate::sensitivity::labels(classified);
-    if !labels.is_empty() {
-        meta.push_str("  ·  ");
-        meta.push_str(&crate::sensitivity::label_line(&labels));
+    match crate::sensitivity::labeling(classified) {
+        crate::sensitivity::Labeling::Known(found) => {
+            if !found.labels.is_empty() {
+                meta.push_str("  ·  ");
+                meta.push_str(&crate::sensitivity::label_line(&found.labels));
+            }
+            if found.partial {
+                meta.push_str("  ·  ");
+                meta.push_str(crate::sensitivity::PARTIAL);
+            }
+        }
+        crate::sensitivity::Labeling::Checking => {
+            meta.push_str("  ·  ");
+            meta.push_str(crate::sensitivity::CHECKING);
+        }
     }
     meta
+}
+
+/// The card's labels are still being checked: it cannot be revealed, and it is not kept with
+/// its history entry (the next build has the labels).
+pub fn is_checking(card: &WorkCard) -> bool {
+    crate::sensitivity::meta_status(&card.meta) == Some(crate::sensitivity::CHECKING)
 }
 
 /// Pasted size. Megabytes from 0.01 MB up; kilobytes below that.

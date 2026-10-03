@@ -80,6 +80,8 @@ struct App {
     format_hotkey_id: u32,
     /// The sensitive copy copycraft wrote last, to clear when its minute is up.
     sensitive_clear: Option<SensitiveClear>,
+    /// Change count of copycraft's own write whose labels were still being checked.
+    conceal_when_checked: Option<isize>,
     /// The pasteboard change count the last poll looked at.
     polled_change: Option<isize>,
     /// The last poll found nothing or no text: look again even without a new change count.
@@ -176,6 +178,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DroppedImageScanned { image, scan } => {
                 self.finish_dropped_scan(&image, scan);
             }
+            UserEvent::LabelsChecked => self.labels_checked(),
         }
     }
 
@@ -373,7 +376,9 @@ impl App {
             return card.clone();
         }
         let card = commands::work_card(data);
-        self.history.remember_card(index, data.view, card.clone());
+        if !commands::is_checking(&card) {
+            self.history.remember_card(index, data.view, card.clone());
+        }
         card
     }
 
@@ -1163,18 +1168,64 @@ impl App {
     /// Put text copycraft made or kept on the clipboard. Text labelled sensitive (credential,
     /// PII, financial) goes on with nspasteboard.org's Concealed type, and with that setting on
     /// it is cleared after [`SENSITIVE_CLEAR_AFTER`] unless something else was copied by then.
+    /// A long copy whose labels are still being checked goes on plain; [`Self::labels_checked`]
+    /// conceals it once they are in, if the pasteboard still holds it.
     fn write_own(&mut self, text: &str) -> anyhow::Result<()> {
-        let concealed = !crate::sensitivity::labels(text).is_empty();
+        let labeling = crate::sensitivity::labeling(text);
+        let concealed = matches!(&labeling, crate::sensitivity::Labeling::Known(found) if !found.labels.is_empty());
         clipboard::write_clipboard(text, concealed).map_err(anyhow::Error::msg)?;
         self.sensitive_clear = None;
+        self.conceal_when_checked = None;
         #[cfg(target_os = "macos")]
-        if concealed && crate::settings::load().clear_sensitive {
+        {
+            let change = crate::macos_pasteboard::change_count();
+            if concealed {
+                self.clear_sensitive_later(change);
+            } else if labeling == crate::sensitivity::Labeling::Checking {
+                self.conceal_when_checked = Some(change);
+            }
+        }
+        Ok(())
+    }
+
+    fn clear_sensitive_later(&mut self, change: isize) {
+        if crate::settings::load().clear_sensitive {
             self.sensitive_clear = Some(SensitiveClear {
-                change: crate::macos_pasteboard::change_count(),
+                change,
                 due: Instant::now() + SENSITIVE_CLEAR_AFTER,
             });
         }
-        Ok(())
+    }
+
+    /// The checker has labels for a long copy: rebuild the open card (its meta line said
+    /// "Checking…"), and conceal copycraft's own write that was waiting for them.
+    fn labels_checked(&mut self) {
+        #[cfg(target_os = "macos")]
+        if let Some(change) = self.conceal_when_checked
+            && crate::macos_pasteboard::change_count() == change
+        {
+            let view = ClipboardView::from_os();
+            match view.text().map(crate::sensitivity::labeling) {
+                Some(crate::sensitivity::Labeling::Checking) => {}
+                Some(crate::sensitivity::Labeling::Known(found)) if !found.labels.is_empty() => {
+                    self.conceal_when_checked = None;
+                    crate::macos_pasteboard::add_concealed();
+                    self.clear_sensitive_later(crate::macos_pasteboard::change_count());
+                }
+                _ => self.conceal_when_checked = None,
+            }
+        }
+        if self
+            .full_card
+            .as_ref()
+            .is_some_and(|full| commands::is_checking(&full.card))
+        {
+            self.full_card = None;
+            self.refresh_popup();
+            self.show_all();
+            return;
+        }
+        self.refresh_popup();
     }
 
     /// Empty the pasteboard once the sensitive copy's minute is up, if it still holds that copy.
@@ -1393,11 +1444,13 @@ fn prewarm(text: &str) {
         return;
     }
     let text = Zeroizing::new(text.to_string());
+    // The labels: the background checker. The format and chips here, so the card finds them.
+    crate::sensitivity::labeling(&text);
     let spawned = std::thread::Builder::new()
         .name("copycraft-prewarm".into())
         .spawn(move || {
             crate::format::detect(&text);
-            crate::sensitivity::labels(&text);
+            crate::commands::warm_chips(&text);
         });
     if let Err(e) = spawned {
         eprintln!("prewarm skipped: {e}");
@@ -1526,6 +1579,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     launcher::install_proxy(event_loop.create_proxy());
+    crate::sensitivity::on_checked(|| launcher::emit(UserEvent::LabelsChecked));
 
     let mut app = App {
         tray,
@@ -1551,6 +1605,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         _hotkeys: hotkeys,
         format_hotkey_id,
         sensitive_clear: None,
+        conceal_when_checked: None,
         polled_change: None,
         poll_again: false,
     };
