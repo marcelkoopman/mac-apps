@@ -58,6 +58,9 @@ const BLUR_RADIUS: f64 = 22.0;
 /// Glass controls this close merge on macOS 26+ (`glass::group`). Below the 6 pt gaps between
 /// chips and header buttons, so they only merge while they morph closer together.
 const GLASS_MERGE: f64 = 4.0;
+/// History capsule: chevron symbol size and the position label's font size.
+const NAV_SYMBOL: f64 = 12.0;
+const NAV_FONT: f64 = 12.0;
 /// Corner radius of the launcher panel, its glass and the frosted fallback. Every nested
 /// radius derives from it. Fixed: objc2-app-kit 0.3.2 has no public API for the system window
 /// corner radius on macOS 26+ (`NSViewCornerConfiguration` is not bound), so the panel keeps
@@ -120,9 +123,11 @@ thread_local! {
     /// The chips in [`SHOWN`] order; index = chip tag = selection.
     static CHIPS: RefCell<Vec<GlassButton>> = const { RefCell::new(Vec::new()) };
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
+    /// The history capsule: a glass (or frosted) capsule holding the chevrons and the position.
+    static NAV_CAPSULE: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
     static OLDER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
     static NEWER: RefCell<Option<NavButton>> = const { RefCell::new(None) };
-    /// How many copies history holds, drawn between the arrows.
+    /// The position ("1 / 3") between the chevrons.
     static NAV_COUNT: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Wipe, More and Close in one glass group at the right of the header.
     static HEADER_GROUP: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
@@ -647,11 +652,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_image = image_view(mtm);
     let pills = glass::group(mtm, GLASS_MERGE);
-    let older = nav_button(mtm, "<", "Older", sel!(olderClicked:));
-    let newer = nav_button(mtm, ">", "Newer", sel!(newerClicked:));
-    let nav_count = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
-    nav_count.setAlignment(NSTextAlignment::Center);
-    nav_count.setHidden(true);
+    let (nav_capsule, older, nav_count, newer) = history_capsule(mtm);
     let more = header_symbol(mtm, "ellipsis", "More", "⋯", sel!(moreClicked:));
     let clear = GlassButton::pill(mtm, "Wipe", ButtonSize::Small);
     wire_button(clear.button(), sel!(clearClicked:));
@@ -684,9 +685,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&meta);
     content.addSubview(&field);
     content.addSubview(pills.view());
-    content.addSubview(older.view());
-    content.addSubview(&nav_count);
-    content.addSubview(newer.view());
+    content.addSubview(&nav_capsule);
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
 
@@ -700,6 +699,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     PREVIEW_SCROLL.with(|slot| slot.replace(Some(preview_scroll)));
     PREVIEW_IMAGE.with(|slot| slot.replace(Some(preview_image)));
     PILLS.with(|slot| slot.replace(Some(pills)));
+    NAV_CAPSULE.with(|slot| slot.replace(Some(nav_capsule)));
     OLDER.with(|slot| slot.replace(Some(older)));
     NEWER.with(|slot| slot.replace(Some(newer)));
     NAV_COUNT.with(|slot| slot.replace(Some(nav_count)));
@@ -2435,86 +2435,51 @@ fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
 
 type NavButton = GlassButton;
 
+/// Show the history capsule at the right of the first chip row, or hide it (`None`: fewer than
+/// two copies). The chevrons dim at the ends; the label shows the position.
 fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
-    let newer_x = WIDTH - PAD - commands::NAV_BUTTON;
-    let count_x = newer_x - commands::NAV_GAP - commands::NAV_COUNT_W;
-    let older_x = count_x - commands::NAV_GAP - commands::NAV_BUTTON;
-    let shown = nav.is_some();
-    OLDER.with(|slot| {
-        place_nav_button(
-            slot,
-            older_x,
-            y,
-            shown,
-            nav.is_some_and(|nav| nav.can_older),
-        );
-    });
-    place_history_count(count_x, y, shown, nav.map(|nav| nav.total).unwrap_or(0));
-    NEWER.with(|slot| {
-        place_nav_button(
-            slot,
-            newer_x,
-            y,
-            shown,
-            nav.is_some_and(|nav| nav.can_newer),
-        );
-    });
-}
-
-fn place_history_count(x: f64, y: f64, shown: bool, total: usize) {
-    NAV_COUNT.with(|slot| {
+    NAV_CAPSULE.with(|slot| {
         let borrowed = slot.borrow();
-        let Some(label) = borrowed.as_ref() else {
+        let Some(capsule) = borrowed.as_ref() else {
             return;
         };
-        label.setHidden(!shown);
-        label.setFrame(NSRect::new(
-            NSPoint::new(x, y),
-            NSSize::new(commands::NAV_COUNT_W, commands::CHIP_PILL_H),
+        capsule.setHidden(nav.is_none());
+        capsule.setFrame(NSRect::new(
+            NSPoint::new(WIDTH - PAD - commands::NAV_SPAN, y),
+            NSSize::new(commands::NAV_SPAN, commands::CHIP_PILL_H),
         ));
-        label.setStringValue(&NSString::from_str(&total.to_string()));
-        let spoken = match total {
-            1 => "1 copied item".to_string(),
-            n => format!("{n} copied items"),
-        };
-        label.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
-        if shown {
-            raise_view(label);
+        if nav.is_some() {
+            raise_view(capsule);
         }
     });
-}
-
-fn place_nav_button(slot: &RefCell<Option<NavButton>>, x: f64, y: f64, shown: bool, enabled: bool) {
-    let borrowed = slot.borrow();
-    let Some(button) = borrowed.as_ref() else {
+    let Some(nav) = nav else {
         return;
     };
-    button.view().setHidden(!shown);
-    button.view().setFrame(NSRect::new(
-        NSPoint::new(x, y),
-        NSSize::new(commands::NAV_BUTTON, commands::CHIP_PILL_H),
-    ));
-    // A real NSButton draws its own disabled state.
-    button.button().setEnabled(enabled);
-    if shown {
-        raise_view(button.view());
-    }
-}
-
-fn raise_history_nav() {
     OLDER.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            raise_view(button.view());
+            // A real NSButton draws its own disabled state and leaves the key-view loop.
+            button.button().setEnabled(nav.can_older);
+        }
+    });
+    NEWER.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.button().setEnabled(nav.can_newer);
         }
     });
     NAV_COUNT.with(|slot| {
         if let Some(label) = slot.borrow().as_ref() {
-            raise_view(label);
+            label.setStringValue(&NSString::from_str(&nav.label()));
+            label.setAccessibilityLabel(Some(&NSString::from_str(&nav.spoken())));
         }
     });
-    NEWER.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            raise_view(button.view());
+}
+
+fn raise_history_nav() {
+    NAV_CAPSULE.with(|slot| {
+        if let Some(capsule) = slot.borrow().as_ref()
+            && !capsule.isHidden()
+        {
+            raise_view(capsule);
         }
     });
 }
@@ -2693,13 +2658,69 @@ fn well_action(
     button
 }
 
-/// `<` or `>` pill; `label` ("Older", "Newer") is what VoiceOver reads.
-fn nav_button(mtm: MainThreadMarker, title: &str, label: &str, action: Sel) -> NavButton {
-    let button = GlassButton::pill(mtm, title, ButtonSize::Regular);
-    button.set_accessibility_label(label);
+/// Borderless chevron inside the history capsule; `label` ("Older", "Newer") is what VoiceOver
+/// reads, `fallback` shows without SF Symbols.
+fn nav_button(
+    mtm: MainThreadMarker,
+    symbol: &str,
+    label: &str,
+    fallback: &str,
+    action: Sel,
+) -> NavButton {
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, NAV_SYMBOL);
+    // The capsule is the glass; a second glass bezel inside it would stack glass on glass.
+    button.button().setBordered(false);
     wire_button(button.button(), action);
-    button.view().setHidden(true);
     button
+}
+
+/// The history capsule, hidden until there are two copies: Liquid Glass on macOS 26+ (frosted
+/// before), fully rounded, with `‹` Older and `›` Newer chevrons around the position label in
+/// tabular digits. Fixed size ([`commands::NAV_SPAN`]), so it never jumps while stepping.
+fn history_capsule(
+    mtm: MainThreadMarker,
+) -> (
+    Retained<NSView>,
+    NavButton,
+    Retained<NSTextField>,
+    NavButton,
+) {
+    let height = commands::CHIP_PILL_H;
+    let capsule = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(commands::NAV_SPAN, height),
+        ),
+    );
+    capsule.setHidden(true);
+    let inside = glass::background(mtm, &capsule, height / 2.0).content;
+    let older = nav_button(mtm, "chevron.left", "Older", "‹", sel!(olderClicked:));
+    let newer = nav_button(mtm, "chevron.right", "Newer", "›", sel!(newerClicked:));
+    let count = widgets::label(mtm, NAV_FONT, &NSColor::secondaryLabelColor());
+    // Tabular digits: "1 / 9" and "2 / 9" are the same width. 0.0 is NSFontWeightRegular.
+    count.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
+        NAV_FONT, 0.0,
+    )));
+    count.setAlignment(NSTextAlignment::Center);
+    count.setStringValue(&NSString::from_str("20 / 20"));
+    let count_h = count.fittingSize().height.ceil();
+    older.view().setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(commands::NAV_BUTTON, height),
+    ));
+    count.setFrame(NSRect::new(
+        NSPoint::new(commands::NAV_BUTTON, ((height - count_h) / 2.0).floor()),
+        NSSize::new(commands::NAV_COUNT_W, count_h),
+    ));
+    newer.view().setFrame(NSRect::new(
+        NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
+        NSSize::new(commands::NAV_BUTTON, height),
+    ));
+    inside.addSubview(older.view());
+    inside.addSubview(&count);
+    inside.addSubview(newer.view());
+    (capsule, older, count, newer)
 }
 
 /// Header symbol button (More, Close); `label` is what VoiceOver reads.

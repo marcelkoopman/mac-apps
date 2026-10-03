@@ -15,13 +15,14 @@ pub const CHIP_PITCH: f64 = 34.0;
 pub const CHIP_PILL_H: f64 = 28.0;
 
 const CHIP_GAP: f64 = 6.0;
-/// History arrow buttons. Same height as a chip, wide enough for `<` and `>`.
-pub const NAV_BUTTON: f64 = 32.0;
-pub const NAV_GAP: f64 = CHIP_GAP;
-/// The copied-item total between the arrows. Wide enough for two digits (history holds 20).
-pub const NAV_COUNT_W: f64 = 28.0;
-pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_GAP + NAV_COUNT_W + NAV_GAP + NAV_BUTTON;
-/// Empty space kept on the right of the first chip row so the arrows fit.
+/// History chevrons: square hit areas at the ends of the history capsule, as tall as a chip.
+pub const NAV_BUTTON: f64 = 28.0;
+/// The "3 / 20" position between the chevrons. Fixed and wide enough for the longest label
+/// (history holds 20), so the capsule never changes width while stepping.
+pub const NAV_COUNT_W: f64 = 44.0;
+/// The whole history capsule: chevron, position, chevron, with no gaps.
+pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_COUNT_W + NAV_BUTTON;
+/// Empty space kept on the right of the first chip row so the capsule fits.
 pub const NAV_RESERVE: f64 = CHIP_GAP + NAV_SPAN;
 const EXCERPT_LINES: usize = 6;
 const EXCERPT_LINE_CHARS: usize = 48;
@@ -137,13 +138,29 @@ impl Drop for SaveFile {
     }
 }
 
-/// Which way history can move, and how many copies are kept. Index 0 is the newest copy.
+/// Which way history can move, where the card is, and how many copies are kept. Index 0 is
+/// the newest copy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HistoryNav {
     pub can_older: bool,
     pub can_newer: bool,
+    /// 1-based place of the copy on screen, counted from the newest (1) like the History menu.
+    /// The older chevron counts up, the newer one counts down.
+    pub position: usize,
     /// Copies in history, including the one on screen.
     pub total: usize,
+}
+
+impl HistoryNav {
+    /// Position between the chevrons: `1 / 3`.
+    pub fn label(&self) -> String {
+        format!("{} / {}", self.position, self.total)
+    }
+
+    /// What VoiceOver reads for the position: `Item 1 of 3`.
+    pub fn spoken(&self) -> String {
+        format!("Item {} of {}", self.position, self.total)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1078,20 +1095,18 @@ pub fn layout_chips(widths: &[f64], width: f64, trailing: f64) -> Vec<ChipFrame>
     frames
 }
 
-/// `<` and `>` stay on the card. `cursor` 0 is the newest entry.
-/// A direction with nowhere to go stays visible and faded.
+/// The history capsule for `len` copies with `cursor` on screen (0 is the newest entry).
+/// `None` (no capsule) with fewer than two copies: there is nowhere to go. A direction with
+/// nowhere to go stays visible and dimmed.
 pub fn history_nav(len: usize, cursor: usize) -> Option<HistoryNav> {
     if len < 2 {
-        return Some(HistoryNav {
-            can_older: false,
-            can_newer: false,
-            total: len,
-        });
+        return None;
     }
     let cursor = cursor.min(len - 1);
     Some(HistoryNav {
         can_older: cursor + 1 < len,
         can_newer: cursor > 0,
+        position: cursor + 1,
         total: len,
     })
 }
@@ -1473,6 +1488,7 @@ fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command 
 
 #[cfg(test)]
 mod tests {
+    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W};
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
@@ -2808,10 +2824,8 @@ Kleinste opdracht die de change dekt.
 
     #[test]
     fn history_nav_stays_on_the_card() {
-        let empty = history_nav(0, 0).unwrap();
-        assert!(!empty.can_older && !empty.can_newer);
-        let only = history_nav(1, 0).unwrap();
-        assert!(!only.can_older && !only.can_newer);
+        assert_eq!(history_nav(0, 0), None, "no history: no capsule");
+        assert_eq!(history_nav(1, 0), None, "one copy: nowhere to go");
         let newest = history_nav(3, 0).unwrap();
         assert!(newest.can_older);
         assert!(!newest.can_newer);
@@ -2820,8 +2834,6 @@ Kleinste opdracht die de change dekt.
         let oldest = history_nav(3, 2).unwrap();
         assert!(!oldest.can_older);
         assert!(oldest.can_newer);
-        assert_eq!(history_nav(0, 0).unwrap().total, 0);
-        assert_eq!(history_nav(1, 0).unwrap().total, 1);
         assert_eq!(newest.total, 3);
         assert_eq!(middle.total, 3);
         assert_eq!(step_history(3, 0, true), Some(1));
@@ -2831,6 +2843,34 @@ Kleinste opdracht die de change dekt.
         assert_eq!(step_history(0, 0, true), None);
         assert_eq!(step_history(1, 0, true), None);
         assert_eq!(step_history(1, 0, false), None);
+    }
+
+    #[test]
+    fn history_position_counts_from_the_newest() {
+        let newest = history_nav(2, 0).unwrap();
+        assert_eq!(newest.position, 1);
+        assert_eq!(newest.label(), "1 / 2");
+        assert_eq!(newest.spoken(), "Item 1 of 2");
+        let oldest = history_nav(2, 1).unwrap();
+        assert_eq!(oldest.label(), "2 / 2");
+        assert_eq!(oldest.spoken(), "Item 2 of 2");
+        // Older counts up, newer counts down.
+        let older = step_history(5, 0, true).unwrap();
+        assert_eq!(history_nav(5, older).unwrap().label(), "2 / 5");
+        let newer = step_history(5, older, false).unwrap();
+        assert_eq!(history_nav(5, newer).unwrap().label(), "1 / 5");
+        // A cursor past the end shows the oldest copy.
+        assert_eq!(history_nav(3, 9).unwrap().label(), "3 / 3");
+        assert_eq!(history_nav(20, 19).unwrap().label(), "20 / 20");
+    }
+
+    #[test]
+    fn history_capsule_fits_the_longest_position() {
+        // "20 / 20" in 12 pt monospaced digits is about 40 pt wide.
+        const { assert!(NAV_COUNT_W >= 40.0) };
+        // Square chevron hit areas as tall as the capsule (a chip).
+        const { assert!(NAV_BUTTON == CHIP_PILL_H) };
+        assert_eq!(NAV_SPAN, NAV_BUTTON * 2.0 + NAV_COUNT_W);
     }
 
     #[test]
