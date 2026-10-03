@@ -173,9 +173,6 @@ thread_local! {
     static SHOW_ALL: RefCell<Option<ShowAllButton>> = const { RefCell::new(None) };
     static REVEAL: RefCell<Option<RevealCover>> = const { RefCell::new(None) };
     static REVEALED: Cell<bool> = const { Cell::new(false) };
-    /// The labels the card had when it was revealed ([`commands::stays_revealed`]).
-    static REVEALED_WITH: RefCell<Vec<crate::sensitivity::Label>> =
-        const { RefCell::new(Vec::new()) };
     /// In-item search is visible only while the well is revealed.
     static FIND_ON: Cell<bool> = const { Cell::new(false) };
     /// Zero-based index of the match Enter last landed on.
@@ -437,7 +434,6 @@ define_class!(
                 return;
             }
             REVEALED.set(true);
-            REVEALED_WITH.with(|slot| slot.replace(commands::meta_labels(&card_meta())));
             layout(false);
         }
 
@@ -677,22 +673,19 @@ fn store(data: LaunchData) {
 }
 
 fn store_with_card(data: LaunchData, card: commands::WorkCard) {
-    // Another entry is masked again. The same one (a table step, undo, redo, another version
-    // or view) stays revealed unless it gained a label ([`commands::stays_revealed`]).
+    // Another entry is masked again. The same one stays revealed in every view, chip, version
+    // and step, and when a rebuilt card or its labels arrive ([`commands::stays_revealed`]).
     let key = commands::content_key(&data);
     store_picker_source(&data, key);
-    if CONTENT_KEY.with(Cell::get) != key {
+    let shown = CONTENT_KEY.with(Cell::get);
+    REVEALED.set(commands::stays_revealed(
+        REVEALED.with(Cell::get),
+        shown,
+        key,
+    ));
+    if shown != key {
         CONTENT_KEY.set(key);
-        REVEALED.set(false);
         set_item_find(false);
-    } else if REVEALED.with(Cell::get) {
-        let checking = crate::sensitivity::meta_status(&card.meta).is_some();
-        let next = commands::meta_labels(&card.meta);
-        let stays = REVEALED_WITH
-            .with(|slot| commands::stays_revealed(true, &slot.borrow(), &next, checking));
-        if !stays {
-            REVEALED.set(false);
-        }
     }
     PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
     MASKS.set(commands::masks_content(&card, data.view));
@@ -3286,6 +3279,58 @@ mod tests {
         assert_find(false);
         assert_query_empty();
         assert!(!super::OPEN.get());
+    }
+
+    #[test]
+    fn a_revealed_entry_stays_revealed_through_views_rebuilds_and_labels() {
+        use crate::commands::{CardView, TableShown, work_card};
+        let _reset = ResetFind::arm();
+        let _force = ForceBlurOff::arm();
+        let src = "Id;Naam;Salaris\n1;Jan;3450\n2;Anja;2900";
+        let first = copied(src);
+        super::store(first.clone());
+        super::REVEALED.set(true);
+        for view in [
+            CardView::Dataframe,
+            CardView::Format,
+            CardView::Convert,
+            CardView::Schema,
+            CardView::Sample,
+            CardView::Info,
+            CardView::Original,
+        ] {
+            let mut shown = first.clone();
+            shown.view = view;
+            super::store(shown);
+            assert!(super::REVEALED.get(), "{view:?}");
+        }
+        // The table's job running, then done: the card is rebuilt each time.
+        let mut table = first.clone();
+        table.view = CardView::Dataframe;
+        table.table = Some(TableShown {
+            frame: None,
+            frame_id: 0,
+            version: 1,
+            labels: vec!["Original".into(), "Duplicates removed".into()],
+            working: true,
+            error: None,
+            describe: None,
+            options: crate::dataframe::ReadOptions::default(),
+            notes: None,
+            overview: None,
+        });
+        super::store(table.clone());
+        assert!(super::REVEALED.get());
+        // A rebuilt card with other labels, or still checking them, is the same entry.
+        for meta in ["3 lines  ·  PII", "3 lines", "3 lines  ·  Checking…"] {
+            let mut card = work_card(&table);
+            card.meta = meta.to_string();
+            super::store_with_card(table.clone(), card);
+            assert!(super::REVEALED.get(), "{meta}");
+        }
+        // Another entry is masked.
+        super::store(copied("Id;Naam\n1;Piet"));
+        assert!(!super::REVEALED.get());
     }
 
     #[test]

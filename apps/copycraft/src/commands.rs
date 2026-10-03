@@ -556,26 +556,14 @@ pub fn history_label(mark: &str, byte_len: usize) -> String {
     format!("{mark}  {}", format_bytes(byte_len))
 }
 
-/// The sensitivity labels a card's meta line shows.
-pub fn meta_labels(meta: &str) -> Vec<crate::sensitivity::Label> {
-    crate::sensitivity::warning_marks(meta)
-        .into_iter()
-        .map(|mark| mark.label)
-        .collect()
-}
-
-/// A revealed card stays revealed while it shows the same entry ([`content_key`] unchanged: a
-/// table step, undo, redo, another version or view), unless it now has a label it had not
-/// when it was revealed (`revealed_with`). While its labels are being checked (`checking`) it
-/// stays, and is decided once they are known. Another entry, focus loss, Wipe, lock and
-/// retention mask it as before.
-pub fn stays_revealed(
-    same_entry: bool,
-    revealed_with: &[crate::sensitivity::Label],
-    next: &[crate::sensitivity::Label],
-    checking: bool,
-) -> bool {
-    same_entry && (checking || next.iter().all(|label| revealed_with.contains(label)))
+/// Whether a revealed card stays revealed when it is stored again: while it shows the same
+/// history entry (`shown_key` and `next_key` the same [`content_key`]), in all its views, chips,
+/// table versions and steps, and when a rebuilt card or its sensitivity labels arrive. Views of
+/// one entry can show different labels (a conversion, a version's CSV); a step only removes
+/// data, so none of that masks it again. Another entry does; focus loss, Wipe, lock and
+/// retention mask it on their own.
+pub fn stays_revealed(revealed: bool, shown_key: u64, next_key: u64) -> bool {
+    revealed && shown_key == next_key
 }
 
 /// The well has copied content, so it stays blurred until it is clicked.
@@ -635,8 +623,8 @@ pub fn content_key(data: &LaunchData) -> u64 {
     if let Some(picture) = &data.picture {
         picture.allocation_id().hash(&mut hasher);
     }
-    // Not the table's version, view or reading: those show the same entry, which stays
-    // revealed unless a version brings a new label ([`stays_revealed`]).
+    // Not the table's version, view, reading or labels: those show the same entry, which stays
+    // revealed ([`stays_revealed`]).
     hasher.finish()
 }
 
@@ -2350,9 +2338,9 @@ mod tests {
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
         deferred_save_name, history_label, history_nav, keeps_card_open, layout_chips,
-        masks_content, matching, meta_labels, overflow, payload_excerpt, presented_view, save_tip,
-        search_pool, stays_revealed, step_chip, step_history, text_save_file, transformed_text,
-        well_mask, work_card,
+        masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
+        stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
+        work_card,
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use super::{
@@ -3914,39 +3902,162 @@ Id,Naam,Telefoonnummer,Salaris
         );
     }
 
-    #[test]
-    fn a_revealed_table_stays_revealed_across_its_versions_unless_one_gains_a_label() {
-        use crate::sensitivity::Label;
+    /// The sensitivity labels a card's meta line shows.
+    fn meta_labels(meta: &str) -> Vec<crate::sensitivity::Label> {
+        crate::sensitivity::warning_marks(meta)
+            .into_iter()
+            .map(|mark| mark.label)
+            .collect()
+    }
+
+    /// Every way one entry is shown again: each view and chip, the table while its job runs and
+    /// when it is done, steps, versions, Show columns / Show table, Describe, the picker's step.
+    fn shown_again(src: &str) -> Vec<(String, LaunchData)> {
         use crate::table::TableOp;
-        let src = "Id;Naam;Salaris\n1;Jan;3450\n2;Anja;2900";
-        let mut original = data(SubjectKind::Text, Some(src));
-        original.view = CardView::Dataframe;
-        let revealed_with = meta_labels(&work_card(&original).meta);
-        assert_eq!(revealed_with, [Label::Pii, Label::Financial]);
-        // A step: the same entry, labels recomputed for the version (Salaris gone).
-        let mut step = original.clone();
-        step.table = Some(stepped(
-            src,
+        let plain = data(SubjectKind::Text, Some(src));
+        let mut out = Vec::new();
+        for view in [
+            CardView::Original,
+            CardView::Format,
+            CardView::Convert,
+            CardView::Dataframe,
+            CardView::Schema,
+            CardView::Sample,
+            CardView::Info,
+        ] {
+            let mut shown = plain.clone();
+            shown.view = view;
+            out.push((format!("{view:?}"), shown));
+        }
+        let mut table = plain.clone();
+        table.view = CardView::Dataframe;
+        let read = read(src, crate::dataframe::ReadOptions::default());
+        let mut working = read.clone();
+        working.frame = None;
+        working.working = true;
+        table.table = Some(working);
+        out.push(("table job running".into(), table.clone()));
+        table.table = Some(read.clone());
+        out.push(("table job done".into(), table.clone()));
+        let mut full = table.clone();
+        full.full = true;
+        out.push(("Show all".into(), full));
+        for overview in [true, false] {
+            let mut toggled = read.clone();
+            toggled.overview = Some(overview);
+            table.table = Some(toggled);
+            out.push((format!("overview {overview}"), table.clone()));
+        }
+        let mut described = read.clone();
+        described.describe = read
+            .frame
+            .as_ref()
+            .and_then(|frame| crate::table_ops::describe(frame).ok());
+        assert!(described.describe.is_some());
+        table.table = Some(described);
+        out.push(("Describe".into(), table.clone()));
+        let first = read
+            .frame
+            .as_ref()
+            .and_then(|frame| {
+                frame
+                    .get_column_names()
+                    .first()
+                    .map(|name| name.to_string())
+            })
+            .expect("a column");
+        for op in [
+            TableOp::Dedupe,
+            TableOp::Sort {
+                column: first.clone(),
+                descending: true,
+            },
             TableOp::DropColumns {
+                columns: vec![first.clone()],
+            },
+            TableOp::SelectColumns {
+                columns: vec![first],
+                kept_of: Some(2),
+            },
+        ] {
+            table.table = Some(stepped(src, op.clone()));
+            out.push((format!("step {op:?}"), table.clone()));
+        }
+        out
+    }
+
+    #[test]
+    fn a_revealed_entry_stays_revealed_in_every_view_version_and_step() {
+        use crate::sensitivity::Label;
+        let energy = crate::dataframe::tests::ENERGY_FIXTURE;
+        let pii = "Id;Naam;Salaris\n1;Jan;3450\n2;Anja;2900";
+        for src in [energy, pii] {
+            let key = content_key(&data(SubjectKind::Text, Some(src)));
+            for (what, shown) in shown_again(src) {
+                assert_eq!(content_key(&shown), key, "{what}");
+                assert!(stays_revealed(true, key, content_key(&shown)), "{what}");
+                // The card is built whatever it shows.
+                let _ = work_card(&shown);
+            }
+        }
+        // Views of one entry show different labels; that does not mask it again.
+        let mut original = data(SubjectKind::Text, Some(pii));
+        let labels = meta_labels(&work_card(&original).meta);
+        assert_eq!(labels, [Label::Pii, Label::Financial]);
+        original.view = CardView::Dataframe;
+        original.table = Some(stepped(
+            pii,
+            crate::table::TableOp::DropColumns {
                 columns: vec!["Salaris".into()],
             },
         ));
-        let card = work_card(&step);
-        assert!(card.meta.contains("Salaris removed"), "{}", card.meta);
-        let fewer = meta_labels(&card.meta);
-        assert!(!fewer.contains(&Label::Financial), "{}", card.meta);
-        assert_eq!(content_key(&step), content_key(&original));
-        assert!(stays_revealed(true, &revealed_with, &fewer, false));
-        // Undo: back to the labels it was revealed with.
-        assert!(stays_revealed(true, &revealed_with, &revealed_with, false));
-        // Revealed at the step, then a version with a label it had not: masked.
-        assert!(!stays_revealed(true, &fewer, &revealed_with, false));
-        // Labels still being checked: decided when they are known.
-        assert!(stays_revealed(true, &fewer, &[], true));
-        // Another history entry is masked, whatever its labels.
-        let other = data(SubjectKind::Text, Some("Id;Naam\n1;Piet"));
-        assert_ne!(content_key(&other), content_key(&original));
-        assert!(!stays_revealed(false, &revealed_with, &[], false));
+        let card = work_card(&original);
+        assert!(
+            !meta_labels(&card.meta).contains(&Label::Financial),
+            "{}",
+            card.meta
+        );
+        let key = content_key(&original);
+        assert!(stays_revealed(true, key, key));
+        // Not revealed stays not revealed.
+        assert!(!stays_revealed(false, key, key));
+    }
+
+    #[test]
+    fn a_revealed_entry_stays_revealed_when_its_labels_arrive() {
+        // Long enough for the background checker: "Checking…" first, then the labels.
+        let mut src = String::from("name,email\n");
+        while src.len() <= crate::sensitivity::SYNC_LIMIT {
+            src.push_str("Jan,jan@example.com\n");
+        }
+        let shown = data(SubjectKind::Text, Some(&src));
+        let key = content_key(&shown);
+        let checking = work_card(&shown);
+        // Neither the card's labels nor their status are part of the entry's identity: the
+        // card rebuilt when they arrive is the same entry, and stays revealed.
+        let _ = crate::sensitivity::labeling(&src);
+        let arrived = work_card(&shown);
+        assert_eq!(content_key(&shown), key);
+        assert!(stays_revealed(true, key, content_key(&shown)));
+        assert!(!checking.excerpt.is_empty() && !arrived.excerpt.is_empty());
+    }
+
+    #[test]
+    fn another_entry_is_masked_again() {
+        let first = data(SubjectKind::Text, Some("Id;Naam\n1;Piet"));
+        let second = data(SubjectKind::Text, Some("Id;Naam\n1;Jan"));
+        assert!(!stays_revealed(
+            true,
+            content_key(&first),
+            content_key(&second)
+        ));
+        let mut opened = first.clone();
+        opened.source_name = Some("piet.csv".into());
+        assert!(!stays_revealed(
+            true,
+            content_key(&first),
+            content_key(&opened)
+        ));
     }
 
     #[test]
