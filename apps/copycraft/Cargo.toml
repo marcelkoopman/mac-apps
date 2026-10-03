@@ -1,13 +1,13 @@
 [package]
 name = "copycraft"
-version = "0.1.51"
+version = "0.1.52"
 edition.workspace = true
 
 [package.metadata.bundle]
 name = "Copycraft"
 identifier = "com.github.marcelkoopman.copycraft"
 icon = ["assets/icon.icns"]
-version = "0.1.51"
+version = "0.1.52"
 category = "Utilities"
 short_description = "Clipboard transformer"
 long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
