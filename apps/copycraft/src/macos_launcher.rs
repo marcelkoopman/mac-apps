@@ -122,6 +122,10 @@ thread_local! {
     static CARD_PLACEHOLDER: RefCell<String> = const { RefCell::new(String::new()) };
     static CARD_HIGHLIGHT: RefCell<Option<FormatKind>> = const { RefCell::new(None) };
     static CARD_SELECTABLE: Cell<bool> = const { Cell::new(false) };
+    /// The line of copied JSON that does not parse ([`commands::WorkCard::error_line`]).
+    static CARD_ERROR_LINE: Cell<Option<usize>> = const { Cell::new(None) };
+    /// The error line the well was last painted with (with [`PAINTED`]).
+    static PAINTED_ERROR_LINE: Cell<Option<usize>> = const { Cell::new(None) };
     static PAINTED: RefCell<Option<(String, Option<FormatKind>, bool)>> =
         const { RefCell::new(None) };
     static LINK_PAGE: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -694,6 +698,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CARD_EXCERPT.with(|slot| set_secret(slot, card.excerpt));
     CARD_PLACEHOLDER.with(|slot| set_secret(slot, card.placeholder));
     CARD_HIGHLIGHT.with(|slot| slot.replace(card.highlight));
+    CARD_ERROR_LINE.set(card.error_line);
     CARD_SELECTABLE.set(card.selectable);
     LINK_PAGE.with(|slot| set_secret_opt(slot, card.link_page));
     SHOWS_IMAGE.set(card.shows_image);
@@ -1724,6 +1729,7 @@ fn preview_wrap_width() -> f64 {
 fn paint_preview_text(body: &str, payload: bool) {
     set_item_text(body.to_string());
     let highlight = CARD_HIGHLIGHT.with(|slot| *slot.borrow());
+    let error_line = CARD_ERROR_LINE.get();
     let selectable = CARD_SELECTABLE.with(Cell::get);
     set_preview_text_hidden(false);
     PREVIEW_TEXT.with(|slot| {
@@ -1737,7 +1743,7 @@ fn paint_preview_text(body: &str, payload: bool) {
             .is_some_and(|(text, kind, was_payload)| {
                 text == body && *kind == highlight && *was_payload == payload
             })
-    });
+    }) && PAINTED_ERROR_LINE.get() == error_line;
     if unchanged {
         PAINTED_ITEM.set(Some(ITEM_GEN.get()));
         return;
@@ -1747,7 +1753,7 @@ fn paint_preview_text(body: &str, payload: bool) {
         let Some(view) = borrowed.as_ref() else {
             return;
         };
-        crate::macos_card_text::paint(view, body, highlight, payload);
+        crate::macos_card_text::paint(view, body, highlight, payload, error_line);
         let wrap = (highlight.is_none() || highlight == Some(FormatKind::Markdown))
             .then(preview_wrap_width);
         widgets::fit_text_view(view, wrap);
@@ -1762,6 +1768,7 @@ fn paint_preview_text(body: &str, payload: bool) {
         }
         slot.replace(Some((body.to_string(), highlight, payload)));
     });
+    PAINTED_ERROR_LINE.set(error_line);
     // `set_item_text(body)` above: the view shows the item.
     PAINTED_ITEM.set(Some(ITEM_GEN.get()));
 }

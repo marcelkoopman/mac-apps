@@ -118,7 +118,10 @@ pub fn forget_detected() {
 }
 
 fn detect_uncached(text: &str) -> FormatKind {
-    if crate::clipboard::try_format_json(text).is_some() {
+    // JSON with a mistake is JSON too ("JSON · Invalid"), not YAML or text.
+    if crate::clipboard::try_format_json(text).is_some()
+        || crate::validate::broken_json(text).is_some()
+    {
         return FormatKind::Json;
     }
     // Before Markdown: `# comment` lines would read as headings.

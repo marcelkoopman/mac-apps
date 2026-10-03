@@ -42,7 +42,12 @@ Columns (fixed; the test parses this table between the markers):
 | File | Scenario | Notion | Title | Labels | Chips | Checks |
 |------|----------|--------|-------|--------|-------|--------|
 | `detect/json_valid.json` | Detection: valid JSON | json | Valid JSON | — | Original, Schema | kind=Json |
-| `detect/json_invalid.json` | Detection: invalid JSON (missing comma) | json | Invalid JSON | — | — | kind=Text |
+| `detect/json_invalid.json` | Broken JSON: missing comma | json | JSON · Invalid | — | — | kind=Json; meta~Line 5, column 3: expected `,` or `}`; errorline=5 |
+| `detect/json_invalid_trailing_comma.json` | Broken JSON: trailing comma | json | JSON · Invalid | — | — | kind=Json; meta~Line 5, column 1: trailing comma; errorline=5 |
+| `detect/json_invalid_missing_brace.json` | Broken JSON: missing `}` | json | JSON · Invalid | — | — | kind=Json; meta~Line 6, column 4: missing } or ]; errorline=6 |
+| `detect/json_invalid_single_quotes.json` | Broken JSON: single quotes | json | JSON · Invalid | — | — | kind=Json; meta~Line 1, column 2: key must be a string in double quotes; errorline=1 |
+| `detect/yaml_flow_unquoted.yaml` | Stays YAML: `{a: 1}` without quotes | yaml | YAML | — | Original, To JSON | kind=Yaml; json={"a":1,"b":["x","y"]} |
+| `detect/yaml_quoted_values.yaml` | Stays YAML: a normal document with quoted values | yaml | YAML | — | Original, To JSON | kind=Yaml; json={"title":"Copycraft demo","tags":["clipboard","offline"],"settings":{"theme":"system","history":20}} |
 | `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json |
 | `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Original, Schema | kind=Xml |
 | `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | — | kind=Xml |
@@ -114,6 +119,7 @@ Columns (fixed; the test parses this table between the markers):
 | `kind=K` | `format::detect` of the Notion copy (no final newline) is `FormatKind::K` |
 | `meta~S` / `placeholder~S` | the card's meta line / placeholder contains `S` |
 | `link=U` | the Link card shows `U` |
+| `errorline=N` | the well marks line N (copied JSON that stops parsing there) |
 | `visit=U` | Visit opens `U` (userinfo stripped, as `menubar::visit_current`) |
 | `convert=K` / `convert~S` | the Convert result is detected as `K` / contains `S` |
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |

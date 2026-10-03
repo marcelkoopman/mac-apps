@@ -8,12 +8,31 @@ use mac_ui::text::AttrText;
 use crate::format::FormatKind;
 use crate::highlight::{self, TokenKind};
 
-pub(crate) fn paint(text: &NSTextView, body: &str, highlight: Option<FormatKind>, payload: bool) {
+/// `error_line`: a 1-based line of `body` to mark (copied JSON that stops parsing there).
+pub(crate) fn paint(
+    text: &NSTextView,
+    body: &str,
+    highlight: Option<FormatKind>,
+    payload: bool,
+    error_line: Option<usize>,
+) {
     let attr = if payload {
-        match highlight {
+        let attr = match highlight {
             Some(kind) => colored_capped(body, kind),
             None => plain(body, &editor_font(), &NSColor::labelColor()),
+        };
+        if let Some(range) = error_line.and_then(|line| crate::commands::line_range(body, line)) {
+            let mark = NSColor::systemRedColor().colorWithAlphaComponent(0.22);
+            // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
+            unsafe {
+                attr.addAttribute_value_range(
+                    mac_ui::objc2_app_kit::NSBackgroundColorAttributeName,
+                    &mark,
+                    mac_ui::text::utf16_range(body, &range),
+                );
+            }
         }
+        attr
     } else {
         plain(
             body,

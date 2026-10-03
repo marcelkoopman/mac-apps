@@ -532,6 +532,8 @@ pub struct WorkCard {
     /// Set when the excerpt is a preview of a longer text, for example
     /// "Showing 200 of 23,220 rows". "Show all" renders the rest.
     pub preview_note: Option<String>,
+    /// The line (1-based, in the excerpt) where copied JSON stops parsing; the well marks it.
+    pub error_line: Option<usize>,
 }
 
 impl WorkCard {
@@ -704,6 +706,7 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             preview_note: None,
+            error_line: None,
         };
     }
     let mut card = compose_card(data);
@@ -739,14 +742,17 @@ fn compose_card(data: &LaunchData) -> WorkCard {
                 selectable: false,
                 link_page: None,
                 preview_note,
+                error_line: None,
             };
-            apply_text_view(
-                &mut card,
-                text,
-                presented_view(text, data.view),
-                data.full,
-                data.table.as_ref(),
-            );
+            let view = presented_view(text, data.view);
+            apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
+            // JSON with a mistake stays as copied; the meta line says where, the well marks it.
+            if view == CardView::Format
+                && let Some(problem) = crate::validate::broken_json(text)
+            {
+                add_meta_note(&mut card, &problem.note());
+                card.error_line = Some(problem.line);
+            }
             card
         }
         SubjectKind::Empty => WorkCard {
@@ -759,6 +765,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             preview_note: None,
+            error_line: None,
         },
         SubjectKind::Hidden => WorkCard {
             title: crate::clipboard::HIDDEN_CONTENT.to_string(),
@@ -770,6 +777,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             preview_note: None,
+            error_line: None,
         },
         SubjectKind::NoText => WorkCard {
             title: "Clipboard".to_string(),
@@ -781,6 +789,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             selectable: false,
             link_page: None,
             preview_note: None,
+            error_line: None,
         },
     }
 }
@@ -829,6 +838,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
             selectable: true,
             link_page: None,
             preview_note: None,
+            error_line: None,
         };
     }
     WorkCard {
@@ -841,6 +851,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
         selectable: false,
         link_page: None,
         preview_note: None,
+        error_line: None,
     }
 }
 
@@ -1437,6 +1448,7 @@ fn page_card(text: &str) -> Option<WorkCard> {
         selectable: true,
         link_page: Some(page.to_string()),
         preview_note: None,
+        error_line: None,
     })
 }
 
@@ -1452,6 +1464,7 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
         selectable: true,
         link_page: Some(text.trim().to_string()),
         preview_note: None,
+        error_line: None,
     })
 }
 
@@ -1551,6 +1564,20 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         ));
     }
     commands
+}
+
+/// Byte range of 1-based line `line` in `text` (without its line end), for the well's mark.
+/// `None` past the last line.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn line_range(text: &str, line: usize) -> Option<std::ops::Range<usize>> {
+    let mut start = 0;
+    for (index, part) in text.split('\n').enumerate() {
+        if index + 1 == line {
+            return Some(start..start + part.trim_end_matches('\r').len());
+        }
+        start += part.len() + 1;
+    }
+    None
 }
 
 /// Title of the chip that shows a YAML entry as JSON.
@@ -2201,7 +2228,7 @@ fn text_chips(text: &str) -> Vec<Command> {
             "format pretty print",
         ));
     }
-    if kind == FormatKind::Json {
+    if kind == FormatKind::Json && crate::validate::broken_json(text).is_none() {
         commands.push(command(
             CommandId::Schema,
             "Schema",
@@ -2797,6 +2824,42 @@ mod tests {
                 .iter()
                 .all(|cmd| cmd.id != CommandId::Format)
         );
+    }
+
+    #[test]
+    fn broken_json_stays_json_says_where_and_marks_the_line() {
+        let src = "{\n  \"id\": 42,\n  \"tags\": [\"a\", \"b\"],\n}";
+        let input = data(SubjectKind::Text, Some(src));
+        let card = work_card(&input);
+        assert_eq!(card.title, "JSON · Invalid");
+        assert_eq!(card.excerpt, src);
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Json));
+        assert_eq!(
+            card.meta,
+            "4 lines  0.037 KB  ·  Line 4, column 1: trailing comma"
+        );
+        assert_eq!(card.error_line, Some(4));
+        assert!(chips(&input).is_empty(), "no Schema, no To JSON");
+        // Labels stay at the end of the meta line.
+        let mail = "{\"mail\": \"jan.devries@example.nl\",}";
+        let card = work_card(&data(SubjectKind::Text, Some(mail)));
+        assert!(
+            card.meta
+                .ends_with("Line 1, column 35: trailing comma  ·  PII"),
+            "{}",
+            card.meta
+        );
+        // `{a: 1}` and a normal YAML document stay YAML.
+        for yaml in [
+            "{a: 1}",
+            "name: \"x\"\ntags: [\"a\", \"b\"]\nnested:\n  key: \"v\"\n",
+        ] {
+            let card = work_card(&data(SubjectKind::Text, Some(yaml)));
+            assert_eq!(card.title, "YAML", "{yaml}");
+            assert_eq!(card.error_line, None);
+        }
+        assert_eq!(super::line_range("ab\ncd\r\nef", 2), Some(3..5));
+        assert_eq!(super::line_range("ab", 2), None);
     }
 
     #[test]

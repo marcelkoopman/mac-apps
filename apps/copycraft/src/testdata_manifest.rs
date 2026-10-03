@@ -213,6 +213,7 @@ fn check(text: &str, check: &str) -> Result<(), String> {
         "meta" => card().meta,
         "placeholder" => card().placeholder,
         "link" => card().link_page.unwrap_or_default(),
+        "errorline" => card().error_line.map(|n| n.to_string()).unwrap_or_default(),
         "visit" => visit_url(text).unwrap_or_default(),
         "convert" if op == "=" => {
             let body = transformed_text(text, CardView::Convert).ok_or("no Convert result")?;

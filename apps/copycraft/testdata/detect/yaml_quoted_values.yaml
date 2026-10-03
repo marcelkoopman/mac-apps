@@ -1,0 +1,5 @@
+title: "Copycraft demo"
+tags: ["clipboard", "offline"]
+settings:
+  theme: "system"
+  history: 20

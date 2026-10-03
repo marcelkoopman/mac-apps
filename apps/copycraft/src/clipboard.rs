@@ -941,6 +941,7 @@ mod tests {
             selectable: false,
             link_page: None,
             preview_note: None,
+            error_line: None,
         }
     }
 

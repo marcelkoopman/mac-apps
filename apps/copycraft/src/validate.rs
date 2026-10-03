@@ -6,14 +6,138 @@ pub struct Report {
     pub detail: String,
 }
 
-/// Title-bar label for JSON or XML. Other text has no validation title.
+/// Title-bar label for JSON or XML: `Valid JSON`, `JSON · Invalid` (text meant as JSON that
+/// does not parse, [`broken_json`]), `Valid XML`, `Invalid XML`. Other text, and text in braces
+/// that is not meant as JSON (`{a: 1}` is YAML), has no validation title.
 pub fn title(text: &str) -> Option<String> {
     let report = check(text)?;
+    if report.language == "JSON" && !report.ok {
+        return broken_json(text).map(|_| BROKEN_JSON_TITLE.to_string());
+    }
     Some(format!(
         "{} {}",
         if report.ok { "Valid" } else { "Invalid" },
         report.language
     ))
+}
+
+/// Title of a copy meant as JSON that does not parse.
+pub const BROKEN_JSON_TITLE: &str = "JSON · Invalid";
+
+/// Where a copy meant as JSON stops parsing: 1-based line and column in the copied text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsonProblem {
+    pub line: usize,
+    pub column: usize,
+    pub message: String,
+}
+
+impl JsonProblem {
+    /// For the meta line: `Line 4, column 3: trailing comma`.
+    pub fn note(&self) -> String {
+        format!(
+            "Line {}, column {}: {}",
+            self.line, self.column, self.message
+        )
+    }
+}
+
+/// A copy meant as JSON that does not parse: it starts with `{` or `[`, has a quoted key
+/// (`"name":` or `'name':`) or is an array that opens with a double-quoted string, and is not
+/// JSON lines (one object per line). Such a copy is JSON with a mistake, not YAML or text,
+/// even when YAML would read it (a trailing comma, single quotes). `{a: 1}` has no quoted key
+/// and stays YAML.
+pub fn broken_json(text: &str) -> Option<JsonProblem> {
+    let start = text.trim_start();
+    if !(start.starts_with('{') || start.starts_with('[')) {
+        return None;
+    }
+    let err = serde_json::from_str::<serde_json::Value>(text).err()?;
+    if !json_hint(start) || json_lines(text) {
+        return None;
+    }
+    let full = err.to_string();
+    let message = full
+        .rfind(" at line ")
+        .map_or(full.as_str(), |at| &full[..at])
+        .to_string();
+    let message = match err.classify() {
+        serde_json::error::Category::Eof if start.starts_with('[') && message.contains("list") => {
+            "missing ]".to_string()
+        }
+        serde_json::error::Category::Eof => "missing } or ]".to_string(),
+        _ if message == "key must be a string" && text.contains('\'') => {
+            "key must be a string in double quotes".to_string()
+        }
+        _ => message,
+    };
+    let (line, column) = if err.is_eof() {
+        // The end of the text: point at the last line with something on it.
+        text.lines()
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .last()
+            .map_or((1, 1), |(index, line)| {
+                (index + 1, line.trim_end().chars().count() + 1)
+            })
+    } else {
+        (err.line().max(1), err.column().max(1))
+    };
+    Some(JsonProblem {
+        line,
+        column,
+        message,
+    })
+}
+
+/// A quoted key (`"name":`, `'name':`), or an array that opens with a double-quoted string.
+fn json_hint(start: &str) -> bool {
+    if start
+        .strip_prefix('[')
+        .is_some_and(|rest| rest.trim_start().starts_with('"'))
+    {
+        return true;
+    }
+    let bytes = start.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let quote = bytes[i];
+        if quote == b'"' || quote == b'\'' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j] != quote && bytes[j] != b'\n' {
+                j += if bytes[j] == b'\\' { 2 } else { 1 };
+            }
+            if j >= bytes.len() || bytes[j] == b'\n' {
+                i = j;
+                continue;
+            }
+            let mut k = j + 1;
+            while k < bytes.len() && (bytes[k] == b' ' || bytes[k] == b'\t') {
+                k += 1;
+            }
+            if bytes.get(k) == Some(&b':') {
+                return true;
+            }
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Every non-empty line is a JSON object or array of its own (JSON lines), and there are two
+/// or more.
+fn json_lines(text: &str) -> bool {
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    lines.len() > 1
+        && lines.iter().all(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .is_ok_and(|value| value.is_object() || value.is_array())
+        })
 }
 
 /// Title for Rust or Java whose brackets do not balance (`Java · missing }`), or Python with a
@@ -522,9 +646,35 @@ mod tests {
         assert!(report.summary().starts_with("Invalid JSON"));
         assert_eq!(
             title(r#"{"name":"copycraft",}"#).as_deref(),
-            Some("Invalid JSON")
+            Some("JSON · Invalid")
         );
         assert!(report.detail.contains("trailing comma") || report.detail.contains("comma"));
+    }
+
+    #[test]
+    fn broken_json_says_where() {
+        use super::broken_json;
+        let problem = broken_json("{\n  \"a\": 1,\n  \"b\": 2,\n}\n").expect("broken");
+        assert_eq!((problem.line, problem.column), (4, 1));
+        assert_eq!(problem.note(), "Line 4, column 1: trailing comma");
+        let missing = broken_json("{\n  \"a\": 1\n  \"b\": 2\n}").expect("broken");
+        assert_eq!(missing.line, 3);
+        assert_eq!(missing.message, "expected `,` or `}`");
+        let open = broken_json("{\n  \"a\": {\"b\": 1}\n").expect("broken");
+        assert_eq!(open.message, "missing } or ]");
+        let quotes = broken_json("{'a': 1}").expect("broken");
+        assert_eq!(quotes.message, "key must be a string in double quotes");
+        assert_eq!(
+            broken_json(r#"["a", "b",]"#).expect("broken").message,
+            "trailing comma"
+        );
+        // Not meant as JSON, or not broken.
+        assert_eq!(broken_json("{a: 1}"), None);
+        assert_eq!(broken_json("[1, 2,]"), None);
+        assert_eq!(broken_json(r#"{"a": 1}"#), None);
+        assert_eq!(broken_json("name: \"x\"\nlist: [1, 2]\n"), None);
+        assert_eq!(broken_json("{\"a\": 1}\n{\"a\": 2}\n"), None);
+        assert_eq!(title("{a: 1}"), None);
     }
 
     #[test]
