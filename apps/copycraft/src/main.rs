@@ -63,4 +63,28 @@ mod tests {
     fn crate_name() {
         assert_eq!(env!("CARGO_PKG_NAME"), "copycraft");
     }
+
+    /// The signed app gets exactly these rights: the sandbox and files the user picks. No
+    /// network (copycraft works offline), no hardened-runtime exceptions
+    /// (`com.apple.security.cs.*`), no Apple Events. scripts/sign_app.sh and the release
+    /// workflow check the signed app the same way.
+    #[test]
+    fn entitlements_are_the_sandbox_and_user_selected_files_only() {
+        let plist = include_str!("../assets/entitlements.plist");
+        let body = &plist[plist.find("<plist").expect("plist element")..];
+        let keys: Vec<&str> = body
+            .split("<key>")
+            .skip(1)
+            .filter_map(|rest| rest.split_once("</key>").map(|(key, _)| key.trim()))
+            .collect();
+        assert_eq!(
+            keys,
+            [
+                "com.apple.security.app-sandbox",
+                "com.apple.security.files.user-selected.read-write",
+            ]
+        );
+        assert_eq!(body.matches("<true/>").count(), 2);
+        assert!(!body.contains("<false/>") && !body.contains("<array>"));
+    }
 }

@@ -5,6 +5,10 @@
   .github/workflows/release-copycraft.yml and scripts/sign_app.sh.
   Copycraft works offline by design (it handles sensitive copied data): there is no
   network.client or network.server entitlement, so the sandbox refuses any connection.
+  These two keys are all: no hardened-runtime exceptions (com.apple.security.cs.*) and no
+  automation.apple-events (no osascript; the panels are native NSOpenPanel/NSSavePanel).
+  Pinned by a test in src/main.rs and checked on the signed app by scripts/sign_app.sh and
+  the release workflow.
   - app-sandbox: required for the Mac App Store.
   - files.user-selected.read-write: "Choose file" NSOpenPanel (macos_open::choose_path)
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).

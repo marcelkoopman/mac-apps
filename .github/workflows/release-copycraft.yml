@@ -196,6 +196,14 @@ jobs:
             echo "::error::com.apple.security.app-sandbox is not true in the signed app"
             exit 1
           fi
+          # Offline by design: exactly the sandbox and user-selected files. No network, no
+          # hardened-runtime exceptions (com.apple.security.cs.*), no other rights.
+          KEYS=$(/usr/libexec/PlistBuddy -c Print "$RUNNER_TEMP/entitlements.plist" \
+            | awk -F' = ' 'NF > 1 { gsub(/^[[:space:]]+/, "", $1); print $1 }' | sort | tr '\n' ' ')
+          if [ "$KEYS" != "com.apple.security.app-sandbox com.apple.security.files.user-selected.read-write " ]; then
+            echo "::error::unexpected entitlements in the signed app: $KEYS"
+            exit 1
+          fi
 
       # Before the DMG is built, so the DMG holds the stapled app (also opens offline).
       - name: Notarize and staple the app

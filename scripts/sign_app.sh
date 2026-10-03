@@ -94,6 +94,19 @@ codesign -d --entitlements - --xml "$APP" > "$ENT_OUT" 2>/dev/null
 [ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$ENT_OUT" 2>/dev/null)" = "true" ] \
   || die "com.apple.security.app-sandbox staat niet op true in de signature"
 
+# Exactly the rights in the entitlements file (codesign adds none), and never a hardened-runtime
+# exception (com.apple.security.cs.*).
+ent_keys() {
+  /usr/libexec/PlistBuddy -c Print "$1" 2>/dev/null \
+    | awk -F' = ' 'NF > 1 { gsub(/^[[:space:]]+/, "", $1); print $1 }' | sort
+}
+SIGNED_KEYS="$(ent_keys "$ENT_OUT")"
+[ "$SIGNED_KEYS" = "$(ent_keys "$ENTITLEMENTS")" ] \
+  || die "De entitlements in de signature wijken af van $ENTITLEMENTS: $SIGNED_KEYS"
+if echo "$SIGNED_KEYS" | grep -q '^com\.apple\.security\.cs\.'; then
+  die "Hardened-runtime-uitzondering (com.apple.security.cs.*) in de signature: $SIGNED_KEYS"
+fi
+
 if [ -z "$IDENTITY" ]; then
   echo -e "${GREEN}✅ $NAME.app ad-hoc gesigned met sandbox-entitlements${NC}"
 else
