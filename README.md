@@ -35,7 +35,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 
 ## Requirements
 
-- macOS (both apps target macOS; the release DMGs are built for Apple silicon, `aarch64-apple-darwin`)
+- macOS (both apps target macOS; the release DMGs are built for Apple silicon, `aarch64-apple-darwin`). Copycraft needs macOS 14 (Sonoma) or later, ticker macOS 11 or later (`minimum_system_version` in each app's `Cargo.toml`)
 - Rust as pinned in `rust-toolchain.toml` (rustup installs it on first use; edition 2024)
 - [`cargo-bundle`](https://github.com/burtonageo/cargo-bundle), only to build a `.app` bundle locally
 

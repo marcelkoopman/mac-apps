@@ -13,8 +13,10 @@ short_description = "Clipboard transformer"
 long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
 
 [package.metadata.bundle.macos]
-# Apple silicon only (aarch64-apple-darwin, whose Rust default deployment target is 11.0).
-minimum_system_version = "11.0"
+# Apple silicon only. macOS 14 (Sonoma) or later: LSMinimumSystemVersion in the bundle and the
+# actool deployment target (scripts/build_app_icon.sh). The Liquid Glass fallback before
+# macOS 26 stays for 14 and 15.
+minimum_system_version = "14.0"
 info_plist_exts = ["assets/Info.plist.ext"]
 
 [dependencies]
