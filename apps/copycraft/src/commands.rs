@@ -1,4 +1,4 @@
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::appearance::Theme;
 use crate::clipboard;
@@ -210,6 +210,62 @@ pub struct LaunchData {
     /// The picture of an image card that is not the clipboard's (a dropped image). Absent: the
     /// card draws the clipboard's picture.
     pub picture: Option<crate::clipboard::SecretBytes>,
+    /// The table version the Dataframe view shows, when the text is a table the card has
+    /// worked on ([`crate::table`]). Absent: the copied table as it is.
+    pub table: Option<TableShown>,
+}
+
+/// A table version for the card: its frame, which version it is, and what the versions are.
+#[derive(Clone)]
+pub struct TableShown {
+    /// The version's frame. `None` while it is being worked out.
+    pub frame: Option<polars::prelude::DataFrame>,
+    /// Which frame that is ([`crate::table::TableVersions::frame_id`]).
+    pub frame_id: u64,
+    /// The version shown: 0 is the original.
+    pub version: usize,
+    /// "Original", then the label of each step.
+    pub labels: Vec<String>,
+    /// A step or another version is being worked out.
+    pub working: bool,
+    /// Why the last step failed, for the meta line.
+    pub error: Option<String>,
+}
+
+impl TableShown {
+    pub fn can_undo(&self) -> bool {
+        self.version > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.version + 1 < self.labels.len()
+    }
+}
+
+impl PartialEq for TableShown {
+    /// Same version, versions, state and frame (the same frame, not equal values).
+    fn eq(&self, other: &Self) -> bool {
+        self.frame.is_some() == other.frame.is_some()
+            && self.frame_id == other.frame_id
+            && self.version == other.version
+            && self.labels == other.labels
+            && self.working == other.working
+            && self.error == other.error
+    }
+}
+
+impl Eq for TableShown {}
+
+impl std::fmt::Debug for TableShown {
+    /// Shape and version only: the frame holds copied data.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TableShown")
+            .field("shape", &self.frame.as_ref().map(|df| df.shape()))
+            .field("version", &self.version)
+            .field("versions", &self.labels.len())
+            .field("working", &self.working)
+            .finish()
+    }
 }
 
 /// What the card shows in place of the separate preview window.
@@ -342,6 +398,12 @@ pub enum CommandId {
     ClearSensitive,
     /// Forget history this many minutes after the last copy; 0: no time limit.
     KeepHistory(u32),
+    /// A step on the table: a new version after the one shown ([`crate::table`]).
+    TableStep(crate::table::TableOp),
+    /// Show the table version before the one shown.
+    TableUndo,
+    /// Show the table version after the one shown.
+    TableRedo,
     Quit,
 }
 
@@ -501,6 +563,11 @@ pub fn content_key(data: &LaunchData) -> u64 {
     if let Some(picture) = &data.picture {
         picture.allocation_id().hash(&mut hasher);
     }
+    // Another table version is other content: masked again, its labels checked again.
+    if let Some(table) = data.table.as_ref().filter(|table| table.labels.len() > 1) {
+        table.version.hash(&mut hasher);
+        table.labels.hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -575,7 +642,13 @@ fn compose_card(data: &LaunchData) -> WorkCard {
                 link_page: None,
                 preview_note,
             };
-            apply_text_view(&mut card, text, presented_view(text, data.view), data.full);
+            apply_text_view(
+                &mut card,
+                text,
+                presented_view(text, data.view),
+                data.full,
+                data.table.as_ref(),
+            );
             card
         }
         SubjectKind::Empty => WorkCard {
@@ -669,13 +742,25 @@ pub fn image_view_text(scan: Option<&ImageScan>, view: CardView) -> Option<Strin
 }
 
 /// `full` renders the whole text; otherwise the card shows a preview (see [`excerpt_for`]).
-fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool) {
+fn apply_text_view(
+    card: &mut WorkCard,
+    source: &str,
+    view: CardView,
+    full: bool,
+    table: Option<&TableShown>,
+) {
     if view == CardView::Original {
         show_copied_table(card, source, full);
         return;
     }
     if view == CardView::Dataframe {
-        show_dataframe(card, source, full);
+        match table.filter(|table| table.version > 0) {
+            Some(table) => show_table_version(card, table, full),
+            None => show_dataframe(card, source, full),
+        }
+        if let Some(error) = table.and_then(|table| table.error.as_deref()) {
+            add_meta_note(card, error);
+        }
         return;
     }
     let Some(body) = transformed_text(source, view) else {
@@ -795,6 +880,47 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
     if let Some(note) = dataframe::ambiguous_dates_note(&preview.dates) {
         add_meta_note(card, &note);
     }
+}
+
+/// A table version after one or more steps, from its frame. Size, lines and sensitivity
+/// labels are the version's own (as CSV): a step can drop or keep a sensitive column.
+fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
+    card.title = "Dataframe".to_string();
+    card.highlight = Some(FormatKind::Dataframe);
+    card.preview_note = None;
+    let label = table.labels.get(table.version).cloned().unwrap_or_default();
+    let note = format!(
+        "Version {} of {}: {label}",
+        table.version + 1,
+        table.labels.len()
+    );
+    let Some(frame) = &table.frame else {
+        card.excerpt.clear();
+        card.placeholder = "Working on the table…".to_string();
+        card.selectable = false;
+        card.meta = note;
+        return;
+    };
+    let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
+    let Some(preview) = dataframe::frame_preview(frame, max_rows) else {
+        card.excerpt.clear();
+        card.placeholder = "The table is empty".to_string();
+        card.selectable = false;
+        card.meta = note;
+        return;
+    };
+    let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
+    card.selectable = true;
+    card.meta = text_meta_from(&csv, &csv);
+    if preview.rows > preview.shown_rows {
+        card.preview_note = Some(showing_note(preview.shown_rows, preview.rows, "rows"));
+        card.excerpt = preview.grid;
+    } else if full {
+        card.excerpt = preview.grid;
+    } else {
+        card.excerpt = shown_body(&preview.grid);
+    }
+    add_meta_note(card, &note);
 }
 
 /// Put `body` in the well: whole with `full`, else its preview and the note.
@@ -1202,6 +1328,9 @@ pub fn forget_chips() {
 /// Chips, earlier copies, and appearance. Quit stays out.
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let mut commands = chips(data);
+    if let Some(table) = &data.table {
+        commands.extend(table_commands(table));
+    }
     for item in &data.history {
         commands.push(command(
             CommandId::History(item.index),
@@ -1227,6 +1356,36 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
             name,
             detail,
             keywords,
+        ));
+    }
+    commands
+}
+
+/// Steps on a table, and undo and redo when there is a version to go to.
+pub fn table_commands(table: &TableShown) -> Vec<Command> {
+    use crate::table::TableOp;
+    let mut commands = vec![command(
+        CommandId::TableStep(TableOp::Dedupe),
+        "Remove duplicate rows",
+        "Table",
+        "dedupe unique duplicates rows table",
+    )];
+    if table.can_undo() {
+        let label = &table.labels[table.version];
+        commands.push(command(
+            CommandId::TableUndo,
+            "Undo table step",
+            label,
+            "undo table version back",
+        ));
+    }
+    if table.can_redo() {
+        let label = &table.labels[table.version + 1];
+        commands.push(command(
+            CommandId::TableRedo,
+            "Redo table step",
+            label,
+            "redo table version forward",
         ));
     }
     commands
@@ -1445,6 +1604,9 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Qr
             | CommandId::Copy
             | CommandId::Save
+            | CommandId::TableStep(_)
+            | CommandId::TableUndo
+            | CommandId::TableRedo
     )
 }
 
@@ -1773,6 +1935,7 @@ mod tests {
         step_chip, step_history, text_save_file, transformed_text, well_mask, work_card,
     };
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
+    use super::{TableShown, table_commands};
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
 
@@ -1792,6 +1955,7 @@ mod tests {
             source_note: None,
             full: false,
             picture: None,
+            table: None,
         }
     }
 
@@ -2812,6 +2976,117 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
         assert!(
             ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::Dataframe)
+        );
+    }
+
+    /// `src` after one Dedupe step, as the card gets it.
+    fn deduped(src: &str) -> TableShown {
+        use crate::table::{TableOp, TableVersions};
+        let mut versions = TableVersions::default();
+        let job = versions.push(TableOp::Dedupe, src).expect("push");
+        let done = job
+            .run(&std::sync::atomic::AtomicBool::new(false))
+            .expect("job");
+        assert!(versions.finish(done));
+        TableShown {
+            frame: versions.frame().cloned(),
+            frame_id: versions.frame_id(),
+            version: versions.cursor(),
+            labels: versions.labels(),
+            working: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn the_dataframe_view_shows_the_table_version() {
+        let src = "name,n\na,1\na,1\nb,2";
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        let original = work_card(&input);
+        assert!(
+            original.excerpt.contains("shape: (3, 2)"),
+            "{}",
+            original.excerpt
+        );
+        input.table = Some(deduped(src));
+        let card = work_card(&input);
+        assert!(card.excerpt.contains("shape: (2, 2)"), "{}", card.excerpt);
+        assert!(card.meta.starts_with("3 lines"), "{}", card.meta);
+        assert!(
+            card.meta.contains("Version 2 of 2: Duplicates removed"),
+            "{}",
+            card.meta
+        );
+        // Another version is other content: masked again until revealed.
+        let plain = data(SubjectKind::Text, Some(src));
+        let mut versioned = plain.clone();
+        versioned.table = input.table.clone();
+        assert_ne!(content_key(&plain), content_key(&versioned));
+        // The Original view shows the text as copied.
+        versioned.view = CardView::Original;
+        assert_eq!(work_card(&versioned).excerpt, work_card(&plain).excerpt);
+    }
+
+    #[test]
+    fn a_table_version_being_worked_out_says_so_and_errors_show_in_the_meta() {
+        let src = "name,n\na,1\na,1\nb,2";
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        let mut table = deduped(src);
+        table.frame = None;
+        table.working = true;
+        input.table = Some(table.clone());
+        let card = work_card(&input);
+        assert!(card.excerpt.is_empty());
+        assert_eq!(card.placeholder, "Working on the table…");
+        table = deduped(src);
+        table.error = Some("20 versions at most".to_string());
+        input.table = Some(table);
+        assert!(work_card(&input).meta.contains("20 versions at most"));
+        // The original with a table attached is the plain Dataframe card.
+        let mut original = deduped(src);
+        original.version = 0;
+        original.labels.truncate(1);
+        input.table = None;
+        let plain = work_card(&input);
+        input.table = Some(original);
+        assert_eq!(work_card(&input).excerpt, plain.excerpt);
+    }
+
+    #[test]
+    fn table_commands_offer_undo_and_redo_when_there_is_a_version_to_go_to() {
+        let mut table = deduped("name,n\na,1\na,1");
+        let ids = |table: &TableShown| -> Vec<CommandId> {
+            table_commands(table).into_iter().map(|c| c.id).collect()
+        };
+        assert_eq!(
+            ids(&table),
+            [
+                CommandId::TableStep(crate::table::TableOp::Dedupe),
+                CommandId::TableUndo
+            ]
+        );
+        table.version = 0;
+        assert_eq!(
+            ids(&table),
+            [
+                CommandId::TableStep(crate::table::TableOp::Dedupe),
+                CommandId::TableRedo
+            ]
+        );
+        assert!(keeps_card_open(&CommandId::TableUndo));
+        let mut input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
+        assert!(
+            !search_pool(&input)
+                .iter()
+                .any(|c| c.id == CommandId::TableRedo)
+        );
+        input.table = Some(table);
+        assert!(
+            search_pool(&input)
+                .iter()
+                .any(|c| c.id == CommandId::TableRedo)
         );
     }
 

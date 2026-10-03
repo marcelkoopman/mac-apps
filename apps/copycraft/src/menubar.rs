@@ -1,4 +1,6 @@
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "macos")]
@@ -24,6 +26,7 @@ use crate::format;
 use crate::hotkey;
 use crate::icon;
 use crate::launcher::{self, UserEvent};
+use crate::table::{TableOp, TableVersions};
 
 /// How often the pasteboard is polled while the card is open.
 const REFRESH: Duration = Duration::from_millis(400);
@@ -93,6 +96,27 @@ struct App {
     last_copy: Option<Instant>,
     /// [`crate::settings::Settings::history_minutes`], read once and kept in step with the menu.
     history_minutes: u32,
+    /// The table versions of a chosen file, which is not in history (a history entry keeps its
+    /// own). Dropped with the file.
+    opened_table: TableVersions,
+    /// The table job on its thread. One at a time: a new one cancels it.
+    table_job: Option<TableRun>,
+    /// Why the last table step failed, shown on the card until the next one.
+    table_error: Option<String>,
+}
+
+/// A table job running on its thread ([`crate::table::Job`]).
+struct TableRun {
+    started: Background,
+    generation: u64,
+    cancel: Arc<AtomicBool>,
+}
+
+/// Where the table on the card keeps its versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TableHome {
+    History(usize),
+    Opened,
 }
 
 /// A pasteboard write to clear at `due`, if the pasteboard still holds it (`change`).
@@ -187,6 +211,7 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::LabelsChecked => self.labels_checked(),
             UserEvent::SessionEnded => self.session_ended(),
+            UserEvent::TableDone(done) => self.finish_table_job(*done),
         }
     }
 
@@ -314,8 +339,203 @@ impl App {
                 self.history_minutes = minutes;
                 self.refresh_popup();
             }
+            CommandId::TableStep(op) => self.table_step(op),
+            CommandId::TableUndo => self.table_goto(-1),
+            CommandId::TableRedo => self.table_goto(1),
             CommandId::Quit => event_loop.exit(),
         }
+    }
+
+    /// The text on the card and where its table versions live, when it is a table.
+    fn table_source(&self) -> Option<(Zeroizing<String>, TableHome)> {
+        let text = Zeroizing::new(self.source_text()?);
+        if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text) {
+            return None;
+        }
+        let home = match self.history.text_index(&text, self.history_cursor) {
+            Some(index) => TableHome::History(index),
+            None if self.opened.is_some() => TableHome::Opened,
+            None => return None,
+        };
+        Some((text, home))
+    }
+
+    fn table_at(&mut self, home: TableHome) -> Option<&mut TableVersions> {
+        match home {
+            TableHome::History(index) => self.history.table_mut(index),
+            TableHome::Opened => Some(&mut self.opened_table),
+        }
+    }
+
+    /// Run `op` on the version shown; the card shows the new version when it is done.
+    fn table_step(&mut self, op: TableOp) {
+        let Some((text, home)) = self.table_source() else {
+            return;
+        };
+        let Some(table) = self.table_at(home) else {
+            return;
+        };
+        match table.push(op, &text) {
+            Ok(job) => {
+                self.table_error = None;
+                self.card_view = CardView::Dataframe;
+                self.run_table_job(job);
+            }
+            Err(e) => self.table_error = Some(e.to_string()),
+        }
+        self.refresh_popup();
+    }
+
+    /// Show the version `delta` away from the one shown (undo -1, redo +1).
+    fn table_goto(&mut self, delta: isize) {
+        let Some((text, home)) = self.table_source() else {
+            return;
+        };
+        let Some(table) = self.table_at(home) else {
+            return;
+        };
+        let Some(index) = table.cursor().checked_add_signed(delta) else {
+            return;
+        };
+        if let Some(job) = table.goto(index, &text) {
+            self.table_error = None;
+            self.card_view = CardView::Dataframe;
+            self.run_table_job(job);
+            self.refresh_popup();
+        }
+    }
+
+    /// Start `job` on a thread, cancelling the one running.
+    fn run_table_job(&mut self, job: crate::table::Job) {
+        self.cancel_table_job();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancel);
+        let generation = job.generation;
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-table".into())
+            .spawn(move || {
+                let result = job.run(&flag);
+                launcher::emit(UserEvent::TableDone(Box::new(launcher::TableDone {
+                    generation,
+                    result,
+                })));
+            });
+        match spawned {
+            Ok(_) => {
+                self.table_job = Some(TableRun {
+                    started: Background::now(),
+                    generation,
+                    cancel,
+                });
+            }
+            Err(e) => eprintln!("table job failed to start: {e}"),
+        }
+    }
+
+    fn cancel_table_job(&mut self) {
+        if let Some(run) = self.table_job.take() {
+            run.cancel.store(true, Ordering::Relaxed);
+        }
+        self.stop_spinner_when_idle();
+    }
+
+    /// Take a finished table job into the table it was made for (if that is still waiting for
+    /// it), and show it.
+    fn finish_table_job(&mut self, done: launcher::TableDone) {
+        if let Some(run) = self
+            .table_job
+            .take_if(|run| run.generation == done.generation)
+        {
+            eprintln!(
+                "copycraft: table job done in {} ms",
+                run.started.elapsed_ms()
+            );
+        }
+        self.stop_spinner_when_idle();
+        match done.result {
+            Ok(finished) => {
+                let generation = finished.generation();
+                let table = if self.opened_table.awaits(generation) {
+                    Some(&mut self.opened_table)
+                } else {
+                    self.history.table_awaiting(generation)
+                };
+                if let Some(table) = table {
+                    table.finish(finished);
+                }
+            }
+            Err(crate::table::TableError::Cancelled) => return,
+            Err(e) => self.table_error = Some(e.to_string()),
+        }
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    /// The table version for the card: `data` is the card for the text it holds. Starts the job
+    /// that works out the version when its frame is not there (only once the card has worked on
+    /// the table: steps were taken, or the Dataframe view is open).
+    fn attach_table(&mut self, data: &mut LaunchData) {
+        let Some(text) = data
+            .subject_text
+            .as_deref()
+            .filter(|_| data.subject_kind == SubjectKind::Text)
+        else {
+            return;
+        };
+        let home = match self.history.text_index(text, self.history_cursor) {
+            Some(index) => TableHome::History(index),
+            None if self.opened.is_some() => TableHome::Opened,
+            None => return,
+        };
+        let dataframe_view = data.view == CardView::Dataframe;
+        let worked_on = match home {
+            TableHome::History(index) => self.history.table(index).is_some_and(|t| t.len() > 1),
+            TableHome::Opened => self.opened_table.len() > 1,
+        };
+        // Cheap checks first: most cards are not tables the card worked on.
+        if !worked_on && !dataframe_view {
+            return;
+        }
+        let text = Zeroizing::new(text.to_string());
+        if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text) {
+            return;
+        }
+        let running = self.table_job.as_ref().map(|run| run.generation);
+        let error = self.table_error.clone();
+        let Some(table) = self.table_at(home) else {
+            return;
+        };
+        let load = if dataframe_view || table.cursor() > 0 {
+            table.load(&text)
+        } else {
+            None
+        };
+        let working = load.is_some() || running.is_some_and(|generation| table.awaits(generation));
+        data.table = Some(commands::TableShown {
+            frame: table.frame().cloned(),
+            frame_id: table.frame_id(),
+            version: table.cursor(),
+            labels: table.labels(),
+            working,
+            error,
+        });
+        if let Some(job) = load {
+            self.run_table_job(job);
+        }
+    }
+
+    /// The table version shown when it is not the original: Copy and Save take it in the
+    /// Dataframe view.
+    fn shown_table_version(&mut self) -> Option<polars::prelude::DataFrame> {
+        let (_, home) = self.table_source()?;
+        let table = match home {
+            TableHome::History(index) => self.history.table(index)?,
+            TableHome::Opened => &self.opened_table,
+        };
+        (table.cursor() > 0)
+            .then(|| table.frame().cloned())
+            .flatten()
     }
 
     fn summon_popup(&mut self) {
@@ -384,7 +604,13 @@ impl App {
                     && data.source_name.is_none()
             })
             .and_then(|text| self.history.text_index(text, self.history_cursor));
-        let Some(index) = entry else {
+        // A table version's card changes with the version, its job and its errors.
+        let versioned = data.view == CardView::Dataframe
+            && data
+                .table
+                .as_ref()
+                .is_some_and(|table| table.version > 0 || table.working || table.error.is_some());
+        let Some(index) = entry.filter(|_| !versioned) else {
             return commands::work_card(data);
         };
         if let Some(card) = self.history.card(index, data.view) {
@@ -456,12 +682,14 @@ impl App {
     }
 
     fn current_launch_data(&mut self) -> LaunchData {
-        if self.opened.is_some() {
+        let mut data = if self.opened.is_some() {
             self.launch_from_opened()
         } else {
             let view = ClipboardView::from_os();
             self.launch_data(&view)
-        }
+        };
+        self.attach_table(&mut data);
+        data
     }
 
     fn choose_file(&mut self) {
@@ -572,6 +800,7 @@ impl App {
     /// the clipboard's entry.
     fn leave_opened(&mut self) {
         self.opened = None;
+        self.opened_table = TableVersions::default();
         if let Some(cursor) = self.clipboard_cursor.take() {
             self.history_cursor = cursor;
         }
@@ -582,6 +811,7 @@ impl App {
     /// clipboard. A chosen file is not recorded in history; a drop is (see `show_dropped`).
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
         self.opened = Some(opened);
+        self.opened_table = TableVersions::default();
         self.card_view = CardView::Original;
         self.refresh_popup();
     }
@@ -665,6 +895,7 @@ impl App {
             source_note: None,
             full: false,
             picture: None,
+            table: None,
         }
     }
 
@@ -755,8 +986,14 @@ impl App {
             return Ok(());
         };
         let shown = commands::presented_view(source.as_str(), self.card_view);
-        let Some(body) = commands::transformed_text(source.as_str(), shown).map(Zeroizing::new)
-        else {
+        let version = (shown == CardView::Dataframe)
+            .then(|| self.shown_table_version())
+            .flatten();
+        let body = match version {
+            Some(frame) => crate::dataframe::frame_grid(&frame),
+            None => commands::transformed_text(source.as_str(), shown),
+        };
+        let Some(body) = body.map(Zeroizing::new) else {
             return Ok(());
         };
         // The clipboard already holds this text. A file does not, so Copy still writes it.
@@ -805,10 +1042,19 @@ impl App {
     /// panel and a card with nothing to save.
     #[cfg(target_os = "macos")]
     fn start_save(&mut self) -> anyhow::Result<()> {
-        let job = if self.opened.is_some() {
-            self.opened_save_job()
-        } else {
-            self.clipboard_save_job()
+        let version = (self.card_view == CardView::Dataframe)
+            .then(|| self.shown_table_version())
+            .flatten();
+        let job = match version {
+            Some(frame) => {
+                let mut job = crate::macos_save::SaveJob::table(frame);
+                if let Some(opened) = self.opened.as_ref() {
+                    job.filename = crate::open_file::save_name(&opened.name, job.extension);
+                }
+                Some(job)
+            }
+            None if self.opened.is_some() => self.opened_save_job(),
+            None => self.clipboard_save_job(),
         };
         let Some(job) = job else {
             return Ok(());
@@ -835,7 +1081,8 @@ impl App {
         if self.spinner_on {
             return wake;
         }
-        let Some(started) = [self.saving, self.loading_all]
+        let table = self.table_job.as_ref().map(|run| run.started);
+        let Some(started) = [self.saving, self.loading_all, table]
             .into_iter()
             .flatten()
             .map(|run| run.started)
@@ -859,7 +1106,11 @@ impl App {
 
     /// Take the spinner away once no background work is left.
     fn stop_spinner_when_idle(&mut self) {
-        if self.spinner_on && self.saving.is_none() && self.loading_all.is_none() {
+        if self.spinner_on
+            && self.saving.is_none()
+            && self.loading_all.is_none()
+            && self.table_job.is_none()
+        {
             self.spinner_on = false;
             launcher::set_busy(false);
             eprintln!("copycraft: spinner hidden");
@@ -996,6 +1247,8 @@ impl App {
         }
         self.current_image = None;
         self.image_on_pasteboard = None;
+        self.cancel_table_job();
+        self.table_error = None;
         self.history.clear();
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1049,6 +1302,9 @@ impl App {
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
         self.opened = None;
+        self.opened_table = TableVersions::default();
+        self.cancel_table_job();
+        self.table_error = None;
         self.full_card = None;
         self.history.clear();
         self.current_image = None;
@@ -1705,6 +1961,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_on_pasteboard: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,
+        opened_table: TableVersions::default(),
+        table_job: None,
+        table_error: None,
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));

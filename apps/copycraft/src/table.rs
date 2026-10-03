@@ -10,13 +10,20 @@
 //! entries far from the one shown). A job carries the generation it was made for; only the
 //! newest one is taken ([`TableVersions::finish`]).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use polars::prelude::*;
 use zeroize::Zeroizing;
 
 /// The original and up to 19 steps.
 pub const MAX_VERSIONS: usize = 20;
+
+/// Job generations, unique over every table, so a job for one table is never taken by another.
+static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+fn next_generation() -> u64 {
+    NEXT_GENERATION.fetch_add(1, Ordering::Relaxed)
+}
 
 /// One step from a version to the next.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,12 +89,19 @@ pub struct Job {
 }
 
 /// A finished [`Job`], for [`TableVersions::finish`].
+#[derive(Clone)]
 pub struct JobDone {
     generation: u64,
     target: usize,
     new_step: Option<TableOp>,
     original: Option<DataFrame>,
     frame: DataFrame,
+}
+
+impl JobDone {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 impl Job {
@@ -119,6 +133,8 @@ impl Job {
 }
 
 struct Frames {
+    /// The job that made `current`.
+    generation: u64,
     original: DataFrame,
     /// The version at the cursor.
     current: DataFrame,
@@ -163,17 +179,14 @@ impl TableVersions {
             .collect()
     }
 
+    /// Which frame [`frame`](Self::frame) is: the generation of the job that made it.
+    pub fn frame_id(&self) -> u64 {
+        self.frames.as_ref().map_or(0, |frames| frames.generation)
+    }
+
     /// The version shown, when it is worked out.
     pub fn frame(&self) -> Option<&DataFrame> {
         self.frames.as_ref().map(|frames| &frames.current)
-    }
-
-    pub fn can_undo(&self) -> bool {
-        self.cursor > 0
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.cursor < self.steps.len()
     }
 
     /// The job that works out the version shown, when its frame is not there.
@@ -234,7 +247,7 @@ impl TableVersions {
         target: usize,
         new_step: Option<TableOp>,
     ) -> Job {
-        self.generation += 1;
+        self.generation = next_generation();
         Job {
             generation: self.generation,
             base,
@@ -261,6 +274,7 @@ impl TableVersions {
         }
         self.cursor = done.target.min(self.steps.len());
         self.frames = Some(Frames {
+            generation: done.generation,
             original,
             current: done.frame,
         });
@@ -270,7 +284,12 @@ impl TableVersions {
     /// Drop the frames (the steps stay). A pending job is stale from now on.
     pub fn forget_frames(&mut self) {
         self.frames = None;
-        self.generation += 1;
+        self.generation = next_generation();
+    }
+
+    /// `generation` is this table's newest job.
+    pub fn awaits(&self, generation: u64) -> bool {
+        self.generation == generation
     }
 }
 
@@ -298,11 +317,11 @@ mod tests {
         assert_eq!((versions.len(), versions.cursor()), (2, 1));
         assert_eq!(versions.labels(), ["Original", "Duplicates removed"]);
         assert_eq!(versions.frame().map(|df| df.height()), Some(2));
-        assert!(versions.can_undo() && !versions.can_redo());
+        assert!(versions.cursor() > 0 && versions.cursor() + 1 == versions.len());
         let undo = versions.goto(0, SRC).expect("undo");
         assert!(run(&mut versions, undo));
         assert_eq!(versions.frame().map(|df| df.height()), Some(3));
-        assert!(versions.can_redo());
+        assert!(versions.cursor() + 1 < versions.len());
         let redo = versions.goto(1, SRC).expect("redo");
         assert!(run(&mut versions, redo));
         assert_eq!(versions.frame().map(|df| df.height()), Some(2));
@@ -323,7 +342,7 @@ mod tests {
         let job = versions.push(TableOp::Dedupe, SRC).expect("push");
         assert!(run(&mut versions, job));
         assert_eq!((versions.len(), versions.cursor()), (3, 2));
-        assert!(!versions.can_redo());
+        assert_eq!(versions.cursor() + 1, versions.len());
     }
 
     #[test]

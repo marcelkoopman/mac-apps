@@ -102,6 +102,21 @@ pub(crate) mod tests {
     use polars::prelude::{ParquetReader, SerReader};
 
     #[test]
+    fn a_table_version_renders_writes_and_saves_from_its_frame() {
+        let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
+        let preview = super::frame_preview(&df, 2).expect("preview");
+        assert_eq!((preview.rows, preview.shown_rows), (3, 2));
+        assert!(preview.grid.contains("shape: (2, 2)"), "{}", preview.grid);
+        assert!(super::frame_grid(&df).expect("grid").contains("shape: (3, 2)"));
+        assert_eq!(super::frame_csv(&df).as_deref(), Some("name,n\na,1\nb,2\nc,3\n"));
+        let parquet = super::frame_parquet(&df).expect("parquet");
+        let back = ParquetReader::new(std::io::Cursor::new(parquet))
+            .finish()
+            .expect("read");
+        assert!(back.equals(&df));
+    }
+
+    #[test]
     fn formats_semicolon_csv_with_trailing_delimiters() {
         let src = "\
 Id;Naam;

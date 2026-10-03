@@ -21,8 +21,6 @@ mod python;
 mod recognize;
 mod sensitivity;
 mod settings;
-// The card takes the table versions in the next steps; until then only the tests use them.
-#[cfg_attr(not(test), allow(dead_code))]
 mod table;
 mod toolbar_visibility;
 mod transform;

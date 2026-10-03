@@ -48,6 +48,34 @@ pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePrevie
     })
 }
 
+/// [`try_format_preview`] for a table version worked out already.
+pub fn frame_preview(df: &DataFrame, max_rows: usize) -> Option<DataframePreview> {
+    let rows = df.height();
+    let shown = df.head(Some(max_rows));
+    let shown_rows = shown.height();
+    Some(DataframePreview {
+        grid: render(shown)?,
+        rows,
+        shown_rows,
+        dates: Vec::new(),
+    })
+}
+
+/// The whole grid of a table version (what Copy takes in the Dataframe view).
+pub fn frame_grid(df: &DataFrame) -> Option<String> {
+    render(df.clone())
+}
+
+/// A table version as CSV, for its sensitivity labels.
+pub fn frame_csv(df: &DataFrame) -> Option<String> {
+    write_csv(df.clone())
+}
+
+/// A table version as Parquet (Save in the Dataframe view).
+pub fn frame_parquet(df: &DataFrame) -> Option<Vec<u8>> {
+    write_parquet(&mut df.clone())
+}
+
 /// The text parses as a non-empty table (what [`try_format`] needs), without rendering it.
 pub fn is_table(text: &str) -> bool {
     parse(text).is_some_and(|df| df.width() > 0 && df.height() > 0)

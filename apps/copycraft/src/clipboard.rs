@@ -434,14 +434,12 @@ impl ClipboardHistory {
     }
 
     /// The versions of the table in the text entry at `index`, if the card worked on it.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn table(&self, index: usize) -> Option<&TableVersions> {
         self.entries.get(index)?.table.as_ref()
     }
 
     /// The versions of the table in the text entry at `index`, made when needed. `None` for a
     /// picture. Entries further than [`DERIVED_NEAR`] from it forget their frames.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn table_mut(&mut self, index: usize) -> Option<&mut TableVersions> {
         if !matches!(self.entries.get(index)?.body, HistoryBody::Text(_)) {
             return None;
@@ -452,6 +450,14 @@ impl ClipboardHistory {
                 .table
                 .get_or_insert_with(TableVersions::default),
         )
+    }
+
+    /// The table whose newest job is `generation` ([`TableVersions::awaits`]).
+    pub fn table_awaiting(&mut self, generation: u64) -> Option<&mut TableVersions> {
+        self.entries
+            .iter_mut()
+            .filter_map(|entry| entry.table.as_mut())
+            .find(|table| table.awaits(generation))
     }
 
     /// The scan kept with the picture entry holding these very bytes.
@@ -1011,6 +1017,31 @@ mod tests {
         assert_eq!(history.table(0).map(|t| t.len()), Some(2));
         history.clear();
         assert!(history.table(0).is_none());
+    }
+
+    #[test]
+    fn a_finished_job_finds_the_table_it_was_made_for() {
+        use crate::table::TableOp;
+        let mut history = ClipboardHistory::default();
+        for text in ["x,y\n1,2", "p,q\n3,4"] {
+            history.record(text.into());
+        }
+        let first = history
+            .table_mut(0)
+            .expect("text")
+            .push(TableOp::Dedupe, "p,q\n3,4")
+            .expect("push");
+        let second = history
+            .table_mut(1)
+            .expect("text")
+            .push(TableOp::Dedupe, "x,y\n1,2")
+            .expect("push");
+        assert_ne!(first.generation, second.generation);
+        assert!(history.table_awaiting(second.generation).is_some());
+        assert!(history.table_awaiting(first.generation).is_some());
+        assert!(history.table_awaiting(u64::MAX).is_none());
+        history.clear();
+        assert!(history.table_awaiting(second.generation).is_none());
     }
 
     #[test]

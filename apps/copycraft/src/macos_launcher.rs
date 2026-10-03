@@ -2883,6 +2883,7 @@ mod tests {
             source_note: None,
             full: false,
             picture: None,
+            table: None,
         }
     }
 
@@ -2925,6 +2926,7 @@ mod tests {
             source_note: None,
             full: false,
             picture: None,
+            table: None,
         }
     }
 

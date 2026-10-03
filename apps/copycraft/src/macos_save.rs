@@ -29,9 +29,20 @@ pub enum SaveContent {
     },
     /// The clipboard picture, decoded and encoded as PNG.
     ClipboardPng,
+    /// A table version, written as Parquet.
+    Table(polars::prelude::DataFrame),
 }
 
 impl SaveJob {
+    /// Save job for a table version (Dataframe view): Parquet, built on the save thread.
+    pub fn table(frame: polars::prelude::DataFrame) -> Self {
+        Self {
+            filename: crate::format::FormatKind::Dataframe.suggested_filename(),
+            extension: crate::format::FormatKind::Dataframe.suggested_extension(),
+            content: SaveContent::Table(frame),
+        }
+    }
+
     /// Save job for the card text in `view`. `None` when the view has nothing to save.
     pub fn text(source: &str, view: CardView) -> Option<Self> {
         if let Some((filename, extension)) = commands::deferred_save_name(source, view) {
@@ -64,6 +75,9 @@ impl SaveContent {
                     .context("the card has nothing to save in this view")?;
                 Zeroizing::new(std::mem::take(&mut file.bytes))
             }
+            Self::Table(frame) => Zeroizing::new(
+                crate::dataframe::frame_parquet(&frame).context("the table is empty")?,
+            ),
             Self::ClipboardPng => {
                 let decoded = crate::macos_pasteboard::decode_preview()
                     .context("no image on the clipboard")?;

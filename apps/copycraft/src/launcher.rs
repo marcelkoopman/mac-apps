@@ -28,11 +28,29 @@ pub enum UserEvent {
     LabelsChecked,
     /// The screen locked, the Mac is going to sleep, or the user switched away.
     SessionEnded,
+    /// A table job ([`crate::table::Job`]) is done, or failed.
+    TableDone(Box<TableDone>),
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,
         scan: Option<crate::commands::ImageScan>,
     },
+}
+
+/// What a table job left: the generation it ran for and its frame, or why it stopped.
+#[derive(Clone)]
+pub struct TableDone {
+    pub generation: u64,
+    pub result: Result<crate::table::JobDone, crate::table::TableError>,
+}
+
+impl std::fmt::Debug for TableDone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TableDone")
+            .field("generation", &self.generation)
+            .field("ok", &self.result.is_ok())
+            .finish()
+    }
 }
 
 /// The whole-text ("Show all") card for one copied item and view.
