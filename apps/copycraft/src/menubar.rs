@@ -39,6 +39,9 @@ struct App {
     history: ClipboardHistory,
     /// Index into history while the arrows are browsing. 0 is the newest.
     history_cursor: usize,
+    /// While a drop is on the card (at history index 0): the clipboard's own history index,
+    /// for when the card follows the clipboard again.
+    clipboard_cursor: Option<usize>,
     current_image: Option<SecretBytes>,
     recorded_image_change: Option<isize>,
     skip_image_change: Option<isize>,
@@ -135,13 +138,9 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
-            UserEvent::DroppedFile(path) => {
-                self.show_source(crate::open_file::load(&path));
-                launcher::order_front();
-            }
+            UserEvent::DroppedFile(path) => self.show_dropped(crate::open_file::load(&path)),
             UserEvent::DroppedText(text) => {
-                self.show_source(crate::open_file::from_text(DROPPED_TEXT, text));
-                launcher::order_front();
+                self.show_dropped(crate::open_file::from_text(DROPPED_TEXT, text));
             }
         }
     }
@@ -149,7 +148,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // A closed card forgets the file, so the next hotkey shows the clipboard.
         if self.opened.is_some() && !launcher::is_open() {
-            self.opened = None;
+            self.leave_opened();
         }
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
@@ -240,7 +239,7 @@ impl App {
             CommandId::Clear => self.clear_secrets(),
             CommandId::ChooseFile => self.choose_file(),
             CommandId::UseClipboard => {
-                self.opened = None;
+                self.leave_opened();
                 self.card_view = CardView::Original;
                 self.image_scan = None;
                 self.image_scan_change = None;
@@ -257,7 +256,7 @@ impl App {
     fn summon_popup(&mut self) {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
-            self.opened = None;
+            self.leave_opened();
             self.full_card = None;
         }
         launcher::summon(self.launch_for_popup());
@@ -266,7 +265,7 @@ impl App {
     fn toggle_popup_under_icon(&mut self) {
         if !launcher::is_open() {
             self.card_view = CardView::Original;
-            self.opened = None;
+            self.leave_opened();
             self.full_card = None;
         }
         launcher::toggle_under_icon(self.launch_for_popup(), &self.tray);
@@ -382,9 +381,37 @@ impl App {
         }
     }
 
+    /// A dropped file or text: into history like a copy (newest first, the same limit, zeroized
+    /// when it falls off or on Wipe), then onto the card. The clipboard is left as it is.
+    fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
+        if let Some(text) = opened.text.as_deref() {
+            let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+            if let Some(clipboard_at) = self.history.record_tracking(text.to_string(), base) {
+                // The clipboard is not recorded again (back to the front) until it changes.
+                if let Some(current) = ClipboardView::from_os().text() {
+                    self.skip_record = Some(Zeroizing::new(current.to_string()));
+                }
+                self.clipboard_cursor = Some(clipboard_at);
+                self.history_cursor = 0;
+                self.refresh_status_menu();
+            }
+        }
+        self.show_source(opened);
+        launcher::order_front();
+    }
+
+    /// The card follows the clipboard again. After a drop, the history position goes back to
+    /// the clipboard's entry.
+    fn leave_opened(&mut self) {
+        self.opened = None;
+        if let Some(cursor) = self.clipboard_cursor.take() {
+            self.history_cursor = cursor;
+        }
+    }
+
     /// Show `opened` on the card instead of the clipboard, from its original view. Every way a
-    /// file gets onto the card goes through here: it is never recorded in history, and the card
-    /// labels and blurs it like the clipboard.
+    /// file gets onto the card goes through here, and the card labels and blurs it like the
+    /// clipboard. A chosen file is not recorded in history; a drop is (see `show_dropped`).
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
         self.opened = Some(opened);
         self.card_view = CardView::Original;
@@ -756,6 +783,7 @@ impl App {
         self.current_image = None;
         self.history.clear();
         self.history_cursor = 0;
+        self.clipboard_cursor = None;
         self.refresh_status_menu();
         if launcher::is_open() {
             self.refresh_popup();
@@ -779,6 +807,7 @@ impl App {
         self.history.clear();
         self.current_image = None;
         self.history_cursor = 0;
+        self.clipboard_cursor = None;
         self.recorded_image_change = None;
         self.skip_image_change = None;
         self.card_view = CardView::Original;
@@ -820,7 +849,10 @@ impl App {
             eprintln!("restore history failed: {e:#}");
             false
         });
-        if !presented {
+        if presented {
+            // The entry is on the clipboard now, so the card follows the clipboard there.
+            self.clipboard_cursor = None;
+        } else {
             self.history_cursor = previous;
         }
     }
@@ -881,6 +913,7 @@ impl App {
 
     fn restore_history(&mut self, index: usize) -> anyhow::Result<()> {
         self.card_view = CardView::Original;
+        self.clipboard_cursor = None;
         if let Some(bytes) = self.history.image(index) {
             #[cfg(target_os = "macos")]
             bytes
@@ -932,6 +965,7 @@ impl App {
             if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
                 self.current_image = self.history.record_image(bytes);
                 self.history_cursor = 0;
+                self.clipboard_cursor = None;
             }
             return;
         }
@@ -942,6 +976,7 @@ impl App {
             self.skip_record = None;
             self.history.record(text.to_string());
             self.history_cursor = 0;
+            self.clipboard_cursor = None;
         }
     }
 
@@ -1176,6 +1211,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         tray,
         history: ClipboardHistory::default(),
         history_cursor: 0,
+        clipboard_cursor: None,
         current_image: None,
         recorded_image_change: None,
         skip_image_change: None,

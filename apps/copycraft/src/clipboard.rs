@@ -224,6 +224,28 @@ impl ClipboardHistory {
         self.entries.truncate(MAX_HISTORY);
     }
 
+    /// [`record`](Self::record) `text`, and say where the entry that was at `cursor` is now:
+    /// one further down, or at the front when it was `text` itself. `None` when nothing was
+    /// recorded (blank text), so `cursor` still holds.
+    pub fn record_tracking(&mut self, text: String, cursor: usize) -> Option<usize> {
+        if text.trim().is_empty() {
+            let mut text = text;
+            text.zeroize();
+            return None;
+        }
+        let same = self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Text(existing) => existing.as_str() == text,
+            HistoryBody::Image(_) => false,
+        });
+        self.record(text);
+        let moved = match same {
+            Some(index) if index == cursor => 0,
+            Some(index) if index < cursor => cursor,
+            _ => cursor + 1,
+        };
+        Some(moved.min(self.entries.len().saturating_sub(1)))
+    }
+
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
         let bytes = SecretBytes::new(bytes)?;
         self.entries.retain(|existing| match &existing.body {
@@ -473,6 +495,58 @@ mod tests {
     fn one_line_is_short_symbol() {
         let label = one_line(&"a".repeat(80));
         assert_eq!(label, "Aa");
+    }
+
+    #[test]
+    fn tracked_entry_moves_down_one() {
+        let mut history = ClipboardHistory::default();
+        history.record("old".into());
+        history.record("clip".into());
+        assert_eq!(history.record_tracking("dropped".into(), 0), Some(1));
+        assert_eq!(history.get(0), Some("dropped"));
+        assert_eq!(history.get(1), Some("clip"));
+    }
+
+    #[test]
+    fn tracked_entry_that_is_the_text_moves_to_the_front() {
+        let mut history = ClipboardHistory::default();
+        history.record("clip".into());
+        history.record("newer".into());
+        assert_eq!(history.record_tracking("clip".into(), 1), Some(0));
+        assert_eq!(history.get(0), Some("clip"));
+        assert_eq!(history.len(), 2);
+    }
+
+    #[test]
+    fn tracked_entry_keeps_its_place_when_the_text_came_from_above() {
+        let mut history = ClipboardHistory::default();
+        history.record("clip".into());
+        history.record("dropped".into());
+        history.record("newest".into());
+        // "dropped" (index 1) moves to the front; "clip" stays at index 2.
+        assert_eq!(history.record_tracking("dropped".into(), 2), Some(2));
+        assert_eq!(history.get(2), Some("clip"));
+    }
+
+    #[test]
+    fn tracking_blank_text_records_nothing() {
+        let mut history = ClipboardHistory::default();
+        history.record("clip".into());
+        assert_eq!(history.record_tracking("  \n".into(), 0), None);
+        assert_eq!(history.len(), 1);
+    }
+
+    #[test]
+    fn tracking_keeps_the_history_limit() {
+        let mut history = ClipboardHistory::default();
+        for i in 0..super::MAX_HISTORY {
+            history.record(format!("copy {i}"));
+        }
+        let last = super::MAX_HISTORY - 1;
+        // The tracked entry was the oldest and falls off the end.
+        assert_eq!(history.record_tracking("dropped".into(), last), Some(last));
+        assert_eq!(history.len(), super::MAX_HISTORY);
+        assert_eq!(history.get(0), Some("dropped"));
     }
 
     #[test]
