@@ -19,6 +19,7 @@ mod page_preview;
 mod python;
 mod redact;
 mod sensitivity;
+mod settings;
 mod toolbar_visibility;
 mod transform;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

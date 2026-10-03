@@ -166,6 +166,8 @@ pub enum SubjectKind {
     NoText,
     Image,
     Text,
+    /// Another app marked the copy private; the card has no text for it.
+    Hidden,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,6 +195,8 @@ pub struct LaunchData {
     /// `<` older and `>` newer, when an earlier copy exists. Absent hides both.
     pub history_nav: Option<HistoryNav>,
     pub theme: Theme,
+    /// Settings with a check mark in the `⋯` menu.
+    pub settings: crate::settings::Settings,
     /// Which result the card is showing. Original is the clipboard itself.
     pub view: CardView,
     /// Info, a smaller JPEG, recognized text, and QR payloads for an image.
@@ -321,6 +325,8 @@ pub enum CommandId {
     /// Render the whole text on the card instead of its preview.
     ShowAll,
     Appearance(Theme),
+    /// Turn the minute timer on copycraft's sensitive copies on or off.
+    ClearSensitive,
     Quit,
 }
 
@@ -562,6 +568,17 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             meta: String::new(),
             excerpt: String::new(),
             placeholder: format!("Nothing copied\n{DROP_HINT}"),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+        },
+        SubjectKind::Hidden => WorkCard {
+            title: crate::clipboard::HIDDEN_CONTENT.to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: "The app that copied this marked it private.\nCopycraft does not show it or keep it in history.".to_string(),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -1105,7 +1122,7 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
                 }
             })
         }
-        SubjectKind::Empty | SubjectKind::NoText => Vec::new(),
+        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => Vec::new(),
     }
 }
 
@@ -1193,6 +1210,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             "clear history forget",
         ));
     }
+    commands.push(command(
+        CommandId::ClearSensitive,
+        "Clear sensitive copies after 60 s",
+        "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
+        "clear sensitive pasteboard timer",
+    ));
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         commands.push(command(
             CommandId::Appearance(theme),
@@ -1325,6 +1348,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryOlder
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
+            | CommandId::ClearSensitive
             | CommandId::ClearClipboard
             | CommandId::ClearHistory
             | CommandId::Clear
@@ -1498,7 +1522,7 @@ pub struct ContentActions {
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
     match data.subject_kind {
-        SubjectKind::Empty | SubjectKind::NoText => ContentActions {
+        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => ContentActions {
             copy: false,
             save: false,
         },
@@ -1670,6 +1694,7 @@ mod tests {
             can_clear_history: false,
             history_nav: None,
             theme: Theme::System,
+            settings: crate::settings::Settings::default(),
             view: CardView::Original,
             image_scan: None,
             source_name: None,
@@ -1677,6 +1702,17 @@ mod tests {
             full: false,
             picture: None,
         }
+    }
+
+    #[test]
+    fn hidden_copy_shows_no_text_and_no_actions() {
+        let hidden = data(SubjectKind::Hidden, None);
+        let card = work_card(&hidden);
+        assert_eq!(card.title, "Hidden content");
+        assert!(card.excerpt.is_empty() && card.meta.is_empty());
+        assert!(chips(&hidden).is_empty());
+        let actions = content_actions(&hidden);
+        assert!(!actions.copy && !actions.save);
     }
 
     #[test]

@@ -106,6 +106,8 @@ thread_local! {
     static SEARCHING: Cell<bool> = const { Cell::new(false) };
     static SELECTION: Cell<usize> = const { Cell::new(0) };
     static THEME: Cell<Theme> = const { Cell::new(Theme::System) };
+    /// The `⋯` menu's check marks for settings.
+    static CLEAR_SENSITIVE: Cell<bool> = const { Cell::new(true) };
     static SHOWS_IMAGE: Cell<bool> = const { Cell::new(false) };
     static THUMB_TOKEN: Cell<isize> = const { Cell::new(-1) };
     /// The dropped picture the card shows instead of the clipboard's (`LaunchData::picture`).
@@ -580,6 +582,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     PICTURE.with(|slot| slot.replace(data.picture.clone()));
     publish_search_text();
     THEME.set(data.theme);
+    CLEAR_SENSITIVE.set(data.settings.clear_sensitive);
     ACTIONS.with(|slot| set_commands(slot, commands::chips(&data)));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
@@ -1858,6 +1861,9 @@ fn pop_overflow() {
             submenu.addItem(&item);
             continue;
         }
+        if matches!(cmd.id, CommandId::ClearSensitive) {
+            menu.addItem(&NSMenuItem::separatorItem(mtm));
+        }
         if !saw_appearance && matches!(cmd.id, CommandId::Appearance(_)) {
             menu.addItem(&NSMenuItem::separatorItem(mtm));
             saw_appearance = true;
@@ -1874,6 +1880,13 @@ fn pop_overflow() {
                 NSControlStateValueOff
             };
             item.setState(state);
+        }
+        if cmd.id == CommandId::ClearSensitive {
+            item.setState(if CLEAR_SENSITIVE.with(Cell::get) {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
         }
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
@@ -2664,6 +2677,7 @@ mod tests {
             can_clear_history: false,
             history_nav: None,
             theme: crate::appearance::Theme::System,
+            settings: crate::settings::Settings::default(),
             view: crate::commands::CardView::Original,
             image_scan: None,
             source_name: None,
@@ -2705,6 +2719,7 @@ mod tests {
             can_clear_history: false,
             history_nav: None,
             theme: crate::appearance::Theme::System,
+            settings: crate::settings::Settings::default(),
             view: crate::commands::CardView::Original,
             image_scan: None,
             source_name: None,

@@ -26,6 +26,9 @@ use crate::icon;
 use crate::launcher::{self, UserEvent};
 
 const REFRESH: Duration = Duration::from_millis(400);
+/// A copy copycraft wrote that is labelled sensitive is cleared from the pasteboard this long
+/// after the write, when that setting is on and nothing else was copied since.
+const SENSITIVE_CLEAR_AFTER: Duration = Duration::from_secs(60);
 /// Background work that finishes sooner shows no spinner, so small files do not flicker.
 const SPINNER_DELAY: Duration = Duration::from_millis(180);
 /// Copies at least this long are classified on a background thread right after the copy, so the
@@ -72,6 +75,15 @@ struct App {
     icons: tray::Glyphs,
     _hotkeys: GlobalHotKeyManager,
     format_hotkey_id: u32,
+    /// The sensitive copy copycraft wrote last, to clear when its minute is up.
+    sensitive_clear: Option<SensitiveClear>,
+}
+
+/// A pasteboard write to clear at `due`, if the pasteboard still holds it (`change`).
+#[derive(Debug, Clone, Copy)]
+struct SensitiveClear {
+    change: isize,
+    due: Instant,
 }
 
 /// Work running on a background thread: a save, or the "Show all" card.
@@ -207,7 +219,12 @@ impl ApplicationHandler<UserEvent> for App {
         }
         let wake = self.spin_slow_work(now);
         let blink_wake = self.show_blink(now);
-        event_loop.set_control_flow(mac_ui::wake::control_flow([Some(wake), blink_wake]));
+        let clear_wake = self.clear_sensitive_when_due(now);
+        event_loop.set_control_flow(mac_ui::wake::control_flow([
+            Some(wake),
+            blink_wake,
+            clear_wake,
+        ]));
     }
 }
 
@@ -262,6 +279,14 @@ impl App {
             }
             CommandId::Appearance(theme) => {
                 appearance::save(theme);
+                self.refresh_popup();
+            }
+            CommandId::ClearSensitive => {
+                let on = !crate::settings::load().clear_sensitive;
+                crate::settings::set_clear_sensitive(on);
+                if !on {
+                    self.sensitive_clear = None;
+                }
                 self.refresh_popup();
             }
             CommandId::Quit => event_loop.exit(),
@@ -540,6 +565,7 @@ impl App {
         let (subject_kind, subject_text) = match view {
             ClipboardView::Empty => (SubjectKind::Empty, None),
             ClipboardView::NoText => (SubjectKind::NoText, None),
+            ClipboardView::Hidden => (SubjectKind::Hidden, None),
             ClipboardView::Image => (SubjectKind::Image, None),
             ClipboardView::Text(text) => {
                 self.card_view = commands::presented_view(text.as_str(), self.card_view);
@@ -604,6 +630,7 @@ impl App {
             can_clear_history: !self.history.is_empty(),
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
             theme: appearance::load(),
+            settings: crate::settings::load(),
             view: self.card_view,
             image_scan: self.image_scan.clone(),
             source_name: None,
@@ -668,7 +695,7 @@ impl App {
             if let Some(text) =
                 commands::image_view_text(image.scan.as_ref(), self.card_view).map(Zeroizing::new)
             {
-                clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+                self.write_own(text.as_str())?;
                 self.record_own_copy(text.as_str());
             }
             return Ok(());
@@ -688,7 +715,7 @@ impl App {
         if !from_file && body.as_str() == source.as_str() {
             return Ok(());
         }
-        clipboard::write_clipboard(body.as_str()).map_err(anyhow::Error::msg)?;
+        self.write_own(body.as_str())?;
         self.record_own_copy(body.as_str());
         if from_file {
             return Ok(());
@@ -705,7 +732,7 @@ impl App {
             return Ok(());
         };
         self.card_view = CardView::Original;
-        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+        self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());
         self.refresh_popup();
         Ok(())
@@ -900,7 +927,7 @@ impl App {
                     file.text = Some(Zeroizing::new(formatted));
                 }
                 self.refresh_popup();
-            } else if let Err(e) = clipboard::write_clipboard(&formatted) {
+            } else if let Err(e) = self.write_own(&formatted) {
                 eprintln!("format link failed: {e}");
             } else {
                 self.record_own_copy(&formatted);
@@ -1053,7 +1080,7 @@ impl App {
         // The write carries copycraft's own pasteboard type, so it is not recorded: that would
         // move this entry to the front, and the other arrow could no longer walk back.
         self.card_view = CardView::Original;
-        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+        self.write_own(text.as_str())?;
         self.opened = None;
         if launcher::is_open() {
             self.refresh_popup();
@@ -1118,11 +1145,49 @@ impl App {
         else {
             return Ok(());
         };
-        clipboard::write_clipboard(text.as_str()).map_err(anyhow::Error::msg)?;
+        self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());
         self.opened = None;
         self.show_restored();
         Ok(())
+    }
+
+    /// Put text copycraft made or kept on the clipboard. Text labelled sensitive (credential,
+    /// PII, financial) goes on with nspasteboard.org's Concealed type, and with that setting on
+    /// it is cleared after [`SENSITIVE_CLEAR_AFTER`] unless something else was copied by then.
+    fn write_own(&mut self, text: &str) -> anyhow::Result<()> {
+        let concealed = !crate::sensitivity::labels(text).is_empty();
+        clipboard::write_clipboard(text, concealed).map_err(anyhow::Error::msg)?;
+        self.sensitive_clear = None;
+        #[cfg(target_os = "macos")]
+        if concealed && crate::settings::load().clear_sensitive {
+            self.sensitive_clear = Some(SensitiveClear {
+                change: crate::macos_pasteboard::change_count(),
+                due: Instant::now() + SENSITIVE_CLEAR_AFTER,
+            });
+        }
+        Ok(())
+    }
+
+    /// Empty the pasteboard once the sensitive copy's minute is up, if it still holds that copy.
+    /// Returns when the event loop should look again.
+    fn clear_sensitive_when_due(&mut self, now: Instant) -> Option<Instant> {
+        let pending = self.sensitive_clear?;
+        if now < pending.due {
+            return Some(pending.due);
+        }
+        self.sensitive_clear = None;
+        #[cfg(not(target_os = "macos"))]
+        let _ = pending.change;
+        #[cfg(target_os = "macos")]
+        if crate::macos_pasteboard::change_count() == pending.change {
+            if let Err(e) = self.clear_clipboard() {
+                eprintln!("clear sensitive copy failed: {e:#}");
+            } else {
+                eprintln!("copycraft: sensitive copy cleared after a minute");
+            }
+        }
+        None
     }
 
     /// Text copycraft put on the clipboard (Copy, Format in place, a history entry chosen from
@@ -1255,6 +1320,7 @@ fn icon_tip(view: &ClipboardView) -> String {
     match view {
         ClipboardView::Image => "Image".to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
+        ClipboardView::Hidden => clipboard::HIDDEN_CONTENT.to_string(),
         ClipboardView::Text(text) => {
             if crate::youtube::video_id(text.as_str()).is_some() {
                 "YouTube".to_string()
@@ -1456,6 +1522,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         icons,
         _hotkeys: hotkeys,
         format_hotkey_id,
+        sensitive_clear: None,
     };
     event_loop.run_app(&mut app)?;
     Ok(())
