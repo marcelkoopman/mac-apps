@@ -186,21 +186,32 @@ fn png_round_trips_exactly_with_transparency() {
 
 #[test]
 fn jpeg_encodes_with_quality_and_without_transparency() {
-    let mut pixels = halves(32, 16);
-    pixels[3] = 0;
-    let image = Rgba::new(32, 16, pixels).unwrap();
+    // 48 × 16: transparent, red and blue thirds, each a whole 16 × 16 JPEG block (so the
+    // colors do not bleed into each other with chroma subsampling).
+    let mut pixels = Vec::new();
+    for _ in 0..16 {
+        for x in 0..48 {
+            pixels.extend_from_slice(match x / 16 {
+                0 => &[0, 0, 0, 0],
+                1 => &[255, 0, 0, 255],
+                _ => &[0, 0, 255, 255],
+            });
+        }
+    }
+    let image = Rgba::new(48, 16, pixels).unwrap();
     let high = encode(&image, Encoding::Jpeg(0.9)).unwrap();
     let low = encode(&image, Encoding::Jpeg(0.2)).unwrap();
     assert_eq!(uti_of(&high), "public.jpeg");
     assert!(low.len() < high.len(), "{} < {}", low.len(), high.len());
     let back = decode(&high).unwrap();
-    assert_eq!((back.width, back.height), (32, 16));
+    assert_eq!((back.width, back.height), (48, 16));
+    let white = pixel(&back, 6, 8);
     assert!(
-        near(pixel(&back, 0, 0), [255, 255, 255, 255]),
-        "white, not black"
+        near(white, [255, 255, 255, 255]),
+        "white, not black: {white:?}"
     );
-    assert!(near(pixel(&back, 8, 8), [255, 0, 0, 255]));
-    assert!(near(pixel(&back, 24, 8), [0, 0, 255, 255]));
+    assert!(near(pixel(&back, 24, 8), [255, 0, 0, 255]));
+    assert!(near(pixel(&back, 40, 8), [0, 0, 255, 255]));
 }
 
 #[test]
