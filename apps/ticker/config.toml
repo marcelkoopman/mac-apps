@@ -53,7 +53,7 @@ symbol = "🛢️"
 [[assets]]
 name = "Power NL"
 url = "https://dap.xadi.eu/api/nl/today"
-price_path = "data.0.price"
+price_path = "data.@now.price"
 unit = "EUR"
 unit_hint = "/kWh"
 symbol = "⚡"

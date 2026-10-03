@@ -1,4 +1,5 @@
 use crate::config::Asset;
+use chrono::{DateTime, TimeDelta, Utc};
 use polars::prelude::*;
 use reqwest::blocking::Client;
 use serde_json::Value;
@@ -16,6 +17,11 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Price APIs answer with a few KB; anything above this is refused instead of buffered.
 const MAX_BODY_BYTES: u64 = 1024 * 1024;
+/// Path part that picks, from an array of `{"time": <RFC 3339>, …}` entries, the one whose period
+/// contains the current time (see [`select_now`]).
+const NOW_SELECTOR: &str = "@now";
+/// Period of the last entry when an `@now` array has a single entry (no step to derive it from).
+const DEFAULT_PERIOD: TimeDelta = TimeDelta::hours(1);
 
 /// Cheap to clone (the reqwest client is reference-counted), so a clone can move into the fetch
 /// thread.
@@ -184,7 +190,7 @@ impl PriceFetcher {
                     direction_col.push(String::new());
                 } else {
                     let change = price - p;
-                    let pct = (change / p) * 100.0;
+                    let pct = (change / p.abs()) * 100.0;
                     change_col.push(Some(change));
                     pct_col.push(Some(pct));
                     direction_col.push(Self::direction_label(change));
@@ -215,7 +221,7 @@ impl PriceFetcher {
                     direction_day_col.push(String::new());
                 } else {
                     let change = price - o;
-                    let pct = (change / o) * 100.0;
+                    let pct = (change / o.abs()) * 100.0;
                     change_day_col.push(Some(change));
                     pct_day_col.push(Some(pct));
                     direction_day_col.push(Self::direction_label(change));
@@ -251,41 +257,81 @@ impl PriceFetcher {
     }
 
     fn get_value_by_path(&self, value: &Value, path: &str) -> Option<Value> {
-        let mut current = value.clone();
-
-        for part in path.split('.') {
-            if part.contains('=') {
-                let (field_name, filter_value) = part.split_once('=')?;
-
-                if let Value::Array(arr) = &current {
-                    current = arr
-                        .iter()
-                        .find(|item| {
-                            if let Value::Object(map) = item
-                                && let Some(field) = map.get(field_name)
-                            {
-                                return field.as_str().map(|s| s == filter_value).unwrap_or(false);
-                            }
-                            false
-                        })?
-                        .clone();
-                } else {
-                    return None;
-                }
-            } else {
-                current = match &current {
-                    Value::Object(map) => map.get(part)?.clone(),
-                    Value::Array(arr) => {
-                        let index: usize = part.parse().ok()?;
-                        arr.get(index)?.clone()
-                    }
-                    _ => return None,
-                };
-            }
-        }
-
-        Some(current)
+        value_at_path(value, path, Utc::now())
     }
+}
+
+/// `path` resolved in `value` at time `now` (only `@now` parts depend on it). Parts are split on
+/// `.`: an object key, an array index, `field=value` (the array element whose string `field`
+/// equals `value`) or `@now` (see [`select_now`]).
+fn value_at_path(value: &Value, path: &str, now: DateTime<Utc>) -> Option<Value> {
+    let mut current = value.clone();
+
+    for part in path.split('.') {
+        if part == NOW_SELECTOR {
+            let Value::Array(arr) = &current else {
+                return None;
+            };
+            current = select_now(arr, now)?.clone();
+        } else if part.contains('=') {
+            let (field_name, filter_value) = part.split_once('=')?;
+
+            if let Value::Array(arr) = &current {
+                current = arr
+                    .iter()
+                    .find(|item| {
+                        if let Value::Object(map) = item
+                            && let Some(field) = map.get(field_name)
+                        {
+                            return field.as_str().map(|s| s == filter_value).unwrap_or(false);
+                        }
+                        false
+                    })?
+                    .clone();
+            } else {
+                return None;
+            }
+        } else {
+            current = match &current {
+                Value::Object(map) => map.get(part)?.clone(),
+                Value::Array(arr) => {
+                    let index: usize = part.parse().ok()?;
+                    arr.get(index)?.clone()
+                }
+                _ => return None,
+            };
+        }
+    }
+
+    Some(current)
+}
+
+/// The entry of `arr` (objects with an RFC 3339 `time`, e.g. `2026-10-02T22:00:00.000Z`) whose
+/// period contains `now`: its `time` ≤ `now` < the next entry's `time`. The last entry lasts as
+/// long as the step before it (one hour when it is the only entry), so hourly and quarter-hour
+/// data both work. Times are compared as instants, so a DST day (23 or 25 hourly entries) needs
+/// nothing special. `None` before the first entry, after the last period, or without usable times.
+fn select_now(arr: &[Value], now: DateTime<Utc>) -> Option<&Value> {
+    let mut timed: Vec<(DateTime<Utc>, &Value)> = arr
+        .iter()
+        .filter_map(|item| {
+            let time = DateTime::parse_from_rfc3339(item.get("time")?.as_str()?).ok()?;
+            Some((time.with_timezone(&Utc), item))
+        })
+        .collect();
+    timed.sort_by_key(|(time, _)| *time);
+    let i = timed.iter().rposition(|(time, _)| *time <= now)?;
+    let end = match timed.get(i + 1) {
+        Some((next, _)) => *next,
+        None => {
+            let step = match i.checked_sub(1) {
+                Some(prev) => timed[i].0 - timed[prev].0,
+                None => DEFAULT_PERIOD,
+            };
+            timed[i].0 + step
+        }
+    };
+    (now < end).then_some(timed[i].1)
 }
 
 /// Response body as JSON, refusing bodies over `cap` bytes (by `Content-Length` up front, and
@@ -501,5 +547,152 @@ mod tests {
         let data = json!({"price": "42.5"});
         let v = f.get_value_by_path(&data, "price").unwrap();
         assert_eq!(v.as_str(), Some("42.5"));
+    }
+
+    /// `dap.xadi.eu/api/nl/today` shape: `data` entries with a UTC `time`, `localTime`, `price`.
+    fn day_ahead(start: &str, step_minutes: i64, prices: &[f64]) -> Value {
+        let start = DateTime::parse_from_rfc3339(start)
+            .unwrap()
+            .with_timezone(&Utc);
+        let data: Vec<Value> = prices
+            .iter()
+            .enumerate()
+            .map(|(i, price)| {
+                let time = start + TimeDelta::minutes(step_minutes * i as i64);
+                json!({
+                    "time": time.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                    "localTime": "",
+                    "price": price,
+                })
+            })
+            .collect();
+        json!({"status": "success", "data": data})
+    }
+
+    fn at(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    fn price_now(data: &Value, now: &str) -> Option<f64> {
+        value_at_path(data, "data.@now.price", at(now))?.as_f64()
+    }
+
+    #[test]
+    fn now_selector_on_real_response_shape() {
+        let data = json!({"status": "success", "data": [
+            {"time": "2026-10-02T22:00:00.000Z", "priceMwh": 191.4, "price": 0.19141,
+             "localTime": "00:00", "hour": "00:00"},
+            {"time": "2026-10-02T23:00:00.000Z", "priceMwh": 177.4, "price": 0.17747,
+             "localTime": "01:00", "hour": "01:00"},
+            {"time": "2026-10-03T00:00:00.000Z", "priceMwh": 173.5, "price": 0.17351,
+             "localTime": "02:00", "hour": "02:00"},
+        ]});
+        // 01:30 local (UTC+2) is 23:30Z: the 01:00 entry, not data.0 (midnight).
+        assert_eq!(price_now(&data, "2026-10-02T23:30:00Z"), Some(0.17747));
+        assert_eq!(price_now(&data, "2026-10-02T22:00:00Z"), Some(0.19141));
+        assert_eq!(price_now(&data, "2026-10-02T22:59:59Z"), Some(0.19141));
+        // The last entry covers one step (1 h) past its time, then nothing.
+        assert_eq!(price_now(&data, "2026-10-03T00:59:59Z"), Some(0.17351));
+        assert_eq!(price_now(&data, "2026-10-03T01:00:00Z"), None);
+        assert_eq!(price_now(&data, "2026-10-02T21:59:59Z"), None);
+    }
+
+    #[test]
+    fn now_selector_hourly_day_picks_current_hour() {
+        let prices: Vec<f64> = (0..24).map(|h| h as f64 / 100.0).collect();
+        // 2026-10-03 in Amsterdam (UTC+2) starts at 2026-10-02T22:00Z.
+        let data = day_ahead("2026-10-02T22:00:00Z", 60, &prices);
+        // 18:05 local = 16:05Z → hour index 18.
+        assert_eq!(price_now(&data, "2026-10-03T16:05:00Z"), Some(0.18));
+        assert_eq!(price_now(&data, "2026-10-03T21:59:00Z"), Some(0.23));
+        assert_eq!(price_now(&data, "2026-10-03T22:00:00Z"), None);
+    }
+
+    #[test]
+    fn now_selector_dst_fall_back_day_has_25_hours() {
+        // 2026-10-25: Amsterdam goes from UTC+2 to UTC+1 at 03:00 local; 02:00–03:00 local
+        // happens twice. Day starts 2026-10-24T22:00Z and has 25 hourly entries.
+        let prices: Vec<f64> = (0..25).map(|h| h as f64).collect();
+        let data = day_ahead("2026-10-24T22:00:00Z", 60, &prices);
+        // First 02:30 local (UTC+2) = 00:30Z → index 2; second 02:30 (UTC+1) = 01:30Z → index 3.
+        assert_eq!(price_now(&data, "2026-10-25T00:30:00Z"), Some(2.0));
+        assert_eq!(price_now(&data, "2026-10-25T01:30:00Z"), Some(3.0));
+        // 23:30 local (UTC+1) = 22:30Z → last entry (index 24).
+        assert_eq!(price_now(&data, "2026-10-25T22:30:00Z"), Some(24.0));
+        assert_eq!(price_now(&data, "2026-10-25T23:00:00Z"), None);
+    }
+
+    #[test]
+    fn now_selector_dst_spring_forward_day_has_23_hours() {
+        // 2026-03-29: UTC+1 → UTC+2 at 02:00 local. Starts 2026-03-28T23:00Z, 23 entries.
+        let prices: Vec<f64> = (0..23).map(|h| h as f64).collect();
+        let data = day_ahead("2026-03-28T23:00:00Z", 60, &prices);
+        // 03:30 local (UTC+2) = 01:30Z → index 2 (00:00, 01:00, then 03:00 local).
+        assert_eq!(price_now(&data, "2026-03-29T01:30:00Z"), Some(2.0));
+        assert_eq!(price_now(&data, "2026-03-29T21:59:00Z"), Some(22.0));
+        assert_eq!(price_now(&data, "2026-03-29T22:00:00Z"), None);
+    }
+
+    #[test]
+    fn now_selector_quarter_hours_and_negative_prices() {
+        let prices: Vec<f64> = (0..96).map(|q| -0.05 + q as f64 / 1000.0).collect();
+        let data = day_ahead("2026-10-02T22:00:00Z", 15, &prices);
+        // 12:20 local = 10:20Z → quarter 12*4+1 = 49.
+        let p = price_now(&data, "2026-10-03T10:20:00Z").unwrap();
+        assert!((p - (-0.05 + 0.049)).abs() < 1e-12, "{p}");
+        assert_eq!(price_now(&data, "2026-10-02T22:14:59Z"), Some(-0.05));
+        // The last quarter covers 15 minutes, not an hour.
+        assert!(price_now(&data, "2026-10-03T21:59:00Z").is_some());
+        assert_eq!(price_now(&data, "2026-10-03T22:00:00Z"), None);
+    }
+
+    #[test]
+    fn now_selector_handles_unsorted_single_and_bad_entries() {
+        let data = json!({"data": [
+            {"time": "2026-10-03T01:00:00Z", "price": 2.0},
+            {"time": "not a time", "price": 99.0},
+            {"price": 98.0},
+            {"time": "2026-10-03T00:00:00Z", "price": 1.0},
+        ]});
+        assert_eq!(price_now(&data, "2026-10-03T00:30:00Z"), Some(1.0));
+        assert_eq!(price_now(&data, "2026-10-03T01:30:00Z"), Some(2.0));
+        let single = json!({"data": [{"time": "2026-10-03T00:00:00Z", "price": 1.0}]});
+        assert_eq!(price_now(&single, "2026-10-03T00:59:00Z"), Some(1.0));
+        assert_eq!(price_now(&single, "2026-10-03T01:00:00Z"), None);
+        // `@now` on something that is not an array.
+        assert_eq!(
+            price_now(&json!({"data": {"price": 1.0}}), "2026-10-03T00:00:00Z"),
+            None
+        );
+        assert_eq!(
+            price_now(&json!({"data": []}), "2026-10-03T00:00:00Z"),
+            None
+        );
+    }
+
+    #[test]
+    fn bundled_power_asset_uses_now_selector() {
+        let config = crate::config::parse_config(include_str!("../config.toml")).unwrap();
+        let power = config.assets.iter().find(|a| a.name == "Power NL").unwrap();
+        assert_eq!(power.price_path, "data.@now.price");
+    }
+
+    #[test]
+    fn pct_change_of_negative_price_keeps_the_sign_of_the_move() {
+        let df = base_df("Power NL", 0.05);
+        let prev = HashMap::from([("Power NL".to_string(), -0.05)]);
+        let df = PriceFetcher::attach_change_columns(df, Some(&prev), &HashMap::new()).unwrap();
+        let pct = df
+            .column("pct_change")
+            .unwrap()
+            .f64()
+            .unwrap()
+            .get(0)
+            .unwrap();
+        assert!((pct - 200.0).abs() < 1e-9, "{pct}");
+        assert_eq!(
+            df.column("direction").unwrap().str().unwrap().get(0),
+            Some("up")
+        );
     }
 }

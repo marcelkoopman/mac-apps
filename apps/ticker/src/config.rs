@@ -59,7 +59,30 @@ pub fn parse_config(config_str: &str) -> Result<Config, Box<dyn Error>> {
 pub fn load_config_from(path: &Path) -> Result<Config, Box<dyn Error>> {
     let config_str =
         fs::read_to_string(path).map_err(|e| format!("Failed to read {:?}: {}", path, e))?;
-    parse_config(&config_str)
+    let mut config = parse_config(&config_str)?;
+    migrate_power_path(&mut config);
+    Ok(config)
+}
+
+/// Power price path of the default config before `@now` existed: `data.0` is always the 00:00
+/// entry of the day-ahead list, so the menu showed midnight's price all day. A user config written
+/// by *Edit asset…* still has it; switch it to the entry of the current period.
+const OLD_POWER_PATH: &str = "data.0.price";
+const POWER_HOST: &str = "dap.xadi.eu";
+
+fn migrate_power_path(config: &mut Config) {
+    for asset in &mut config.assets {
+        let on_power_host = reqwest::Url::parse(&asset.url)
+            .ok()
+            .is_some_and(|url| url.host_str() == Some(POWER_HOST));
+        if on_power_host && asset.price_path == OLD_POWER_PATH {
+            crate::log_message(&format!(
+                "config: {}: price path {OLD_POWER_PATH} → data.@now.price (current period)",
+                asset.name
+            ));
+            asset.price_path = "data.@now.price".to_string();
+        }
+    }
 }
 
 pub fn load_config() -> Result<Config, Box<dyn Error>> {
@@ -352,6 +375,15 @@ url = "https://example.com"
         }
         let long = format!("https://example.com/{}", "a".repeat(MAX_URL_LEN));
         assert!(validate_asset_url(&long).is_err());
+    }
+
+    #[test]
+    fn old_power_path_is_migrated_only_on_the_power_host() {
+        let toml = "[[assets]]\nname = \"Power NL\"\nurl = \"https://dap.xadi.eu/api/nl/today\"\nprice_path = \"data.0.price\"\nunit = \"EUR\"\nunit_hint = \"/kWh\"\nsymbol = \"P\"\n\n[[assets]]\nname = \"Other\"\nurl = \"https://example.com/x\"\nprice_path = \"data.0.price\"\nunit = \"EUR\"\nunit_hint = \"\"\nsymbol = \"O\"\n";
+        let mut config = parse_config(toml).unwrap();
+        migrate_power_path(&mut config);
+        assert_eq!(config.assets[0].price_path, "data.@now.price");
+        assert_eq!(config.assets[1].price_path, "data.0.price");
     }
 
     #[test]

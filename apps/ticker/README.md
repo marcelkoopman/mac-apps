@@ -36,7 +36,7 @@ symbol = "💰"
 | --- | --- |
 | `name` | Label, and the key for watches and the menu bar choice |
 | `url` | HTTP GET endpoint that returns JSON |
-| `price_path` | Dot path into the JSON. Numeric parts index arrays, and `field=value` picks the array element whose `field` equals `value` (e.g. `countries.countryCode=NL.petrolPrice`). The value may be a number or a numeric string. |
+| `price_path` | Dot path into the JSON. Numeric parts index arrays, `field=value` picks the array element whose `field` equals `value` (e.g. `countries.countryCode=NL.petrolPrice`), and `@now` picks, from an array of entries with an RFC 3339 `time`, the one whose period contains the current time (e.g. `data.@now.price` for the hourly or quarter-hourly day-ahead power price). An entry's period runs until the next entry's `time`; the last one lasts as long as the step before it. The value may be a number or a numeric string, and may be negative. |
 | `unit` | Currency code |
 | `unit_hint` | Suffix after the price, e.g. `/MWh` |
 | `symbol` | Emoji/prefix in the menu |

@@ -306,7 +306,12 @@ impl MenuBuilder {
         if price.is_nan() {
             return "?".to_string();
         }
-        let formatted = format!("{:.2}", price);
+        let sign = if price < 0.0 && format!("{:.2}", price.abs()) != "0.00" {
+            "-"
+        } else {
+            ""
+        };
+        let formatted = format!("{:.2}", price.abs());
         let parts: Vec<&str> = formatted.split('.').collect();
         if parts.len() == 2 {
             let integer_part = parts[0];
@@ -318,9 +323,9 @@ impl MenuBuilder {
                 }
                 result.insert(0, ch);
             }
-            format!("{},{}", result, decimal_part)
+            format!("{sign}{result},{decimal_part}")
         } else {
-            formatted
+            format!("{sign}{formatted}")
         }
     }
 
@@ -372,6 +377,13 @@ mod tests {
     #[test]
     fn format_price_thousands() {
         assert_eq!(MenuBuilder::format_price(1234.56), "1.234,56");
+    }
+
+    #[test]
+    fn format_price_negative() {
+        assert_eq!(MenuBuilder::format_price(-0.05), "-0,05");
+        assert_eq!(MenuBuilder::format_price(-123456.0), "-123.456,00");
+        assert_eq!(MenuBuilder::format_price(-0.001), "0,00");
     }
 
     #[test]
