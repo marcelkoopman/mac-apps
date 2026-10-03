@@ -12,10 +12,13 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use objc2::MainThreadMarker;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSModalResponseOK, NSOpenPanel, NSSavePanel};
-use objc2_foundation::{NSArray, NSString};
+use objc2::runtime::{AnyObject, NSObject};
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2_app_kit::{
+    NSModalResponseOK, NSOpenPanel, NSPopUpButton, NSSavePanel, NSTextField, NSView,
+};
+use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 use objc2_uniform_type_identifiers::UTType;
 
 /// Why [`choose_file`] or [`choose_save_path`] failed.
@@ -80,6 +83,169 @@ pub fn choose_save_path(
     // Without a restriction it keeps the name as suggested or typed.
     set_allowed_types(&panel, declared_types(allowed_extensions));
     run(&panel)
+}
+
+/// One file format in the popup of [`choose_save_path_with_format`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SaveFormat<'a> {
+    /// The popup item, such as `"CSV"`.
+    pub title: &'a str,
+    /// Its file name extension, such as `"csv"`.
+    pub extension: &'a str,
+}
+
+/// [`choose_save_path`] with a *Format* popup of `formats` under the panel, `selected` (an
+/// index into `formats`) chosen first. Picking another format restricts the panel to it as
+/// [`choose_save_path`] does and puts its extension on the name in place of a format's one
+/// (`people.csv` → `people.parquet`). Give `suggested_name` with the selected format's
+/// extension. Returns the path and the index of the format chosen; `Ok(None)` when the panel
+/// is cancelled. With no formats this is [`choose_save_path`] with format 0.
+///
+/// # Errors
+///
+/// [`FilePanelError::NoPath`] when the panel is confirmed without a file path.
+pub fn choose_save_path_with_format(
+    mtm: MainThreadMarker,
+    title: &str,
+    suggested_name: &str,
+    formats: &[SaveFormat<'_>],
+    selected: usize,
+) -> Result<Option<(PathBuf, usize)>, FilePanelError> {
+    let Some(first) = formats.get(selected.min(formats.len().saturating_sub(1))) else {
+        return Ok(choose_save_path(mtm, title, suggested_name, &[])?.map(|path| (path, 0)));
+    };
+    let selected = selected.min(formats.len() - 1);
+    let panel = NSSavePanel::savePanel(mtm);
+    panel.setCanCreateDirectories(true);
+    panel.setExtensionHidden(false);
+    panel.setTitle(Some(&NSString::from_str(title)));
+    let extensions: Vec<String> = formats.iter().map(|f| f.extension.to_string()).collect();
+    restrict_to(&panel, first.extension);
+    panel.setNameFieldStringValue(&NSString::from_str(suggested_name));
+
+    let label = NSTextField::labelWithString(&NSString::from_str("Format:"), mtm);
+    label.sizeToFit();
+    let popup = NSPopUpButton::initWithFrame_pullsDown(
+        NSPopUpButton::alloc(mtm),
+        NSRect::new(NSPoint::ZERO, NSSize::new(160.0, 26.0)),
+        false,
+    );
+    for format in formats {
+        popup.addItemWithTitle(&NSString::from_str(format.title));
+    }
+    popup.selectItemAtIndex(selected as isize);
+    popup.sizeToFit();
+    let (label_size, popup_size) = (label.frame().size, popup.frame().size);
+    let gap = 8.0;
+    let margin = 12.0;
+    let width = label_size.width + gap + popup_size.width.max(120.0);
+    let height = popup_size.height.max(label_size.height) + 2.0 * margin;
+    let accessory = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::ZERO, NSSize::new(width + 2.0 * margin, height)),
+    );
+    label.setFrameOrigin(NSPoint::new(margin, (height - label_size.height) / 2.0));
+    popup.setFrame(NSRect::new(
+        NSPoint::new(
+            margin + label_size.width + gap,
+            (height - popup_size.height) / 2.0,
+        ),
+        NSSize::new(popup_size.width.max(120.0), popup_size.height),
+    ));
+    accessory.addSubview(&label);
+    accessory.addSubview(&popup);
+    panel.setAccessoryView(Some(&accessory));
+
+    // The popup holds its target weakly: `switch` lives until the panel is closed.
+    let switch = FormatSwitch::new(mtm, panel.clone(), extensions);
+    // SAFETY: `FormatSwitch` implements `formatChosen:` taking the sender.
+    unsafe {
+        popup.setTarget(Some(&switch));
+        popup.setAction(Some(sel!(formatChosen:)));
+    }
+    let path = run(&panel);
+    // SAFETY: clears the target set above.
+    unsafe { popup.setTarget(None) };
+    let chosen = usize::try_from(popup.indexOfSelectedItem()).unwrap_or(selected);
+    Ok(path?.map(|path| (path, chosen.min(formats.len() - 1))))
+}
+
+/// Restrict `panel` to `extension`'s declared content type, or to none when it has only a
+/// dynamic one (see [`choose_save_path`]).
+fn restrict_to(panel: &NSSavePanel, extension: &str) {
+    let types = declared_types(&[extension]);
+    let refs: Vec<&UTType> = types.iter().map(|t| &**t).collect();
+    panel.setAllowedContentTypes(&NSArray::from_slice(&refs));
+}
+
+/// `name` with its extension, when it is one of `extensions` (any case), replaced by `to`;
+/// otherwise `to` is added. A name that is only an extension keeps it (`.csv` → `.csv.parquet`).
+pub fn switch_extension(name: &str, extensions: &[&str], to: &str) -> String {
+    let to = to.trim().trim_start_matches('.');
+    let stem = extensions
+        .iter()
+        .map(|ext| ext.trim().trim_start_matches('.'))
+        .filter(|ext| !ext.is_empty())
+        .find_map(|ext| {
+            let cut = name.len().checked_sub(ext.len() + 1)?;
+            let (stem, tail) = (name.get(..cut)?, name.get(cut..)?);
+            (!stem.is_empty() && tail[1..].eq_ignore_ascii_case(ext) && tail.starts_with('.'))
+                .then_some(stem)
+        })
+        .unwrap_or(name);
+    if to.is_empty() {
+        stem.to_string()
+    } else {
+        format!("{stem}.{to}")
+    }
+}
+
+struct SwitchIvars {
+    panel: Retained<NSSavePanel>,
+    extensions: Vec<String>,
+}
+
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements; the ivars need no Objective-C cleanup.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "MacUiSaveFormatSwitch"]
+    #[ivars = SwitchIvars]
+    struct FormatSwitch;
+
+    impl FormatSwitch {
+        #[unsafe(method(formatChosen:))]
+        fn format_chosen(&self, sender: Option<&AnyObject>) {
+            let Some(popup) = sender.and_then(|sender| sender.downcast_ref::<NSPopUpButton>())
+            else {
+                return;
+            };
+            let ivars = self.ivars();
+            let Some(to) = usize::try_from(popup.indexOfSelectedItem())
+                .ok()
+                .and_then(|index| ivars.extensions.get(index))
+            else {
+                return;
+            };
+            let known: Vec<&str> = ivars.extensions.iter().map(String::as_str).collect();
+            let name = switch_extension(&ivars.panel.nameFieldStringValue().to_string(), &known, to);
+            // The types first: a name set under the old restriction could get its extension too.
+            restrict_to(&ivars.panel, to);
+            ivars.panel.setNameFieldStringValue(&NSString::from_str(&name));
+        }
+    }
+);
+
+impl FormatSwitch {
+    fn new(
+        mtm: MainThreadMarker,
+        panel: Retained<NSSavePanel>,
+        extensions: Vec<String>,
+    ) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(SwitchIvars { panel, extensions });
+        // SAFETY: `init` of NSObject.
+        unsafe { msg_send![super(this), init] }
+    }
 }
 
 /// The declared content types of `extensions` (after [`normalize_extensions`]); dynamic ones
@@ -171,6 +337,43 @@ mod tests {
     #[test]
     fn case_is_kept() {
         assert_eq!(normalize_extensions(&["PNG", "png"]), ["PNG", "png"]);
+    }
+
+    #[test]
+    fn switching_the_format_switches_a_known_extension_only() {
+        let formats = ["csv", "parquet"];
+        assert_eq!(
+            switch_extension("people.csv", &formats, "parquet"),
+            "people.parquet"
+        );
+        assert_eq!(
+            switch_extension("people.parquet", &formats, "csv"),
+            "people.csv"
+        );
+        assert_eq!(
+            switch_extension("People.CSV", &formats, "parquet"),
+            "People.parquet"
+        );
+        assert_eq!(
+            switch_extension("Report v1.2", &formats, "csv"),
+            "Report v1.2.csv"
+        );
+        assert_eq!(
+            switch_extension("a.b.csv", &formats, "parquet"),
+            "a.b.parquet"
+        );
+        assert_eq!(switch_extension("data", &formats, ".csv"), "data.csv");
+        assert_eq!(
+            switch_extension(".csv", &formats, "parquet"),
+            ".csv.parquet"
+        );
+        assert_eq!(switch_extension("data.csv", &formats, ""), "data");
+        let back = switch_extension(
+            &switch_extension("t.csv", &formats, "parquet"),
+            &formats,
+            "csv",
+        );
+        assert_eq!(back, "t.csv");
     }
 
     #[test]

@@ -81,9 +81,44 @@ pub fn frame_csv(df: &DataFrame) -> Option<String> {
     write_csv(df.clone())
 }
 
-/// A table version as Parquet (Save in the Dataframe view).
+/// A table version as Parquet (Save in the Dataframe view, when Parquet is chosen).
 pub fn frame_parquet(df: &DataFrame) -> Option<Vec<u8>> {
     write_parquet(&mut df.clone())
+}
+
+/// The file formats Save offers in the Dataframe view: CSV first (the default), then Parquet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableFile {
+    Csv,
+    Parquet,
+}
+
+impl TableFile {
+    /// In the save panel's format popup, in this order; the first is the default.
+    pub const ALL: [TableFile; 2] = [TableFile::Csv, TableFile::Parquet];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Csv => "CSV",
+            Self::Parquet => "Parquet",
+        }
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Csv => "csv",
+            Self::Parquet => "parquet",
+        }
+    }
+
+    /// `df` as this file: CSV is UTF-8 with a header of the real column names, comma separated,
+    /// dates as `yyyy-mm-dd` (also for a TSV or `;` source). `None` for an empty table.
+    pub fn bytes(self, df: &DataFrame) -> Option<Vec<u8>> {
+        match self {
+            Self::Csv => frame_csv(df).map(String::into_bytes),
+            Self::Parquet => frame_parquet(df),
+        }
+    }
 }
 
 /// The text parses as a non-empty table (what [`try_format`] needs), without rendering it.
@@ -95,6 +130,7 @@ pub fn try_csv_text(text: &str) -> Option<String> {
     parse(text).and_then(write_csv)
 }
 
+#[cfg(test)]
 pub fn try_parquet_bytes(text: &str) -> Option<Vec<u8>> {
     let mut df = parse_table(text)?;
     write_parquet(&mut df)
@@ -226,6 +262,9 @@ fn write_csv(mut df: DataFrame) -> Option<String> {
     let mut buf = Vec::new();
     CsvWriter::new(&mut buf)
         .include_header(true)
+        .include_bom(false)
+        .with_separator(b',')
+        .with_date_format(Some("%Y-%m-%d".into()))
         .finish(&mut df)
         .ok()?;
     String::from_utf8(buf).ok()

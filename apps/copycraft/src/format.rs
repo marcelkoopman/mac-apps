@@ -91,7 +91,9 @@ impl FormatKind {
             Self::Markdown => "md",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
-            Self::Dataframe => "parquet",
+            // Save in the Dataframe view: CSV by default, Parquet on choice
+            // ([`crate::dataframe::TableFile`]).
+            Self::Dataframe => "csv",
             Self::Image => "png",
             Self::Text | Self::Plain => "txt",
         }
@@ -1349,15 +1351,12 @@ mod tests {
         assert_eq!(FormatKind::Markdown.suggested_extension(), "md");
         assert_eq!(FormatKind::Csv.suggested_extension(), "csv");
         assert_eq!(FormatKind::Tsv.suggested_extension(), "tsv");
-        assert_eq!(FormatKind::Dataframe.suggested_extension(), "parquet");
+        assert_eq!(FormatKind::Dataframe.suggested_extension(), "csv");
         assert_eq!(FormatKind::Image.suggested_extension(), "png");
         assert_eq!(FormatKind::Plain.suggested_extension(), "txt");
         assert_eq!(FormatKind::Csv.suggested_filename(), "clipboard.csv");
         assert_eq!(FormatKind::Tsv.suggested_filename(), "clipboard.tsv");
-        assert_eq!(
-            FormatKind::Dataframe.suggested_filename(),
-            "clipboard.parquet"
-        );
+        assert_eq!(FormatKind::Dataframe.suggested_filename(), "clipboard.csv");
     }
 
     #[test]

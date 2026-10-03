@@ -64,12 +64,20 @@ panel = [
     "objc2-foundation/NSEnumerator",
 ]
 # `mac_ui::file_panel`: modal NSOpenPanel (choose a file) and NSSavePanel (choose a save path).
+# The save panel's format popup (`choose_save_path_with_format`): NSPopUpButton and an
+# NSTextField label in an NSView accessory.
 file_panel = [
     "dep:objc2-uniform-type-identifiers",
     "objc2-app-kit/NSApplication",
+    "objc2-app-kit/NSButton",
+    "objc2-app-kit/NSControl",
     "objc2-app-kit/NSOpenPanel",
     "objc2-app-kit/NSPanel",
+    "objc2-app-kit/NSPopUpButton",
+    "objc2-app-kit/NSResponder",
     "objc2-app-kit/NSSavePanel",
+    "objc2-app-kit/NSTextField",
+    "objc2-app-kit/NSView",
     "objc2-app-kit/NSWindow",
     "objc2-app-kit/objc2-uniform-type-identifiers",
     "objc2-foundation/NSArray",

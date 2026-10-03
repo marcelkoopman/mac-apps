@@ -1332,7 +1332,8 @@ pub fn deferred_save_name(source: &str, view: CardView) -> Option<(String, &'sta
 
 pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     if view == CardView::Dataframe {
-        let bytes = dataframe::try_parquet_bytes(source)?;
+        // The table as the view reads it (dates typed), as CSV; the save panel can pick Parquet.
+        let bytes = dataframe::TableFile::Csv.bytes(&dataframe::parse_table(source)?)?;
         return Some(SaveFile {
             filename: FormatKind::Dataframe.suggested_filename(),
             extension: FormatKind::Dataframe.suggested_extension(),
@@ -4676,6 +4677,28 @@ Kleinste opdracht die de change dekt.
         for frame in frames.iter().filter(|frame| frame.row == 0) {
             assert!(frame.x + frame.width <= nav_left - super::CHIP_GAP + 0.01);
         }
+    }
+
+    #[test]
+    fn save_in_the_dataframe_view_writes_csv() {
+        let tsv = "Naam\tWanneer\nJan\t13/03/2026\nPiet\t14/03/2026";
+        let file = text_save_file(tsv, CardView::Dataframe).expect("file");
+        assert_eq!(
+            (file.filename.as_str(), file.extension),
+            ("clipboard.csv", "csv")
+        );
+        assert_eq!(
+            std::str::from_utf8(&file.bytes).expect("UTF-8"),
+            "Naam,Wanneer\nJan,2026-03-13\nPiet,2026-03-14\n"
+        );
+        assert_eq!(
+            deferred_save_name(tsv, CardView::Dataframe),
+            Some(("clipboard.csv".to_string(), "csv"))
+        );
+        assert_eq!(
+            crate::open_file::save_name("export.tsv", "csv"),
+            "export.csv"
+        );
     }
 
     #[test]

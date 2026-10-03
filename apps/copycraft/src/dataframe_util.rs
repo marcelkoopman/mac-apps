@@ -550,4 +550,69 @@ Id;Naam;Salaris
             assert_eq!(df.width(), 2, "{src}");
         }
     }
+
+    fn names(df: &polars::prelude::DataFrame) -> Vec<String> {
+        df.get_column_names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    /// Save in the Dataframe view: CSV of the table as shown, read back the same.
+    fn assert_csv_round_trip(df: &polars::prelude::DataFrame) -> String {
+        use polars::prelude::DataType;
+        let bytes = super::TableFile::Csv.bytes(df).expect("csv");
+        assert!(!bytes.starts_with(&[0xEF, 0xBB, 0xBF]), "no BOM");
+        let csv = String::from_utf8(bytes).expect("UTF-8");
+        let header = csv.lines().next().expect("header");
+        let back = super::parse_table(&csv).expect("read back");
+        assert_eq!(back.shape(), df.shape());
+        assert_eq!(names(&back), names(df));
+        assert!(header.contains(','), "{header}");
+        // `yyyy-mm-dd` text, which Fix types makes dates again.
+        let typed = crate::table_ops::fix_types(&back)
+            .expect("fix types")
+            .unwrap_or(back);
+        for (column, read) in df.columns().iter().zip(typed.columns()) {
+            if column.dtype() == &DataType::Date {
+                assert_eq!(read.dtype(), &DataType::Date, "{}", column.name());
+            }
+        }
+        csv
+    }
+
+    #[test]
+    fn a_table_saves_as_csv_with_its_names_and_iso_dates() {
+        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
+        let csv = assert_csv_round_trip(&df);
+        let mut lines = csv.lines();
+        // The real column names, also the long shared-prefix ones the card shortens.
+        assert_eq!(lines.next(), Some(names(&df).join(",").as_str()));
+        assert!(lines.next().is_some_and(|row| row.starts_with("2026-03-09,")));
+        // A version: its own columns and rows.
+        let version = crate::table_ops::drop_constant(&df).expect("step");
+        assert!(version.width() < df.width());
+        assert_csv_round_trip(&version);
+        // A tab or `;` source still saves comma separated; a name or value with a comma is quoted.
+        let tsv = "Naam\tPlaats, land\tWanneer\nJan\tDen Haag, NL\t13/03/2026\nPiet\tUtrecht\t14/03/2026";
+        let df = super::parse_table(tsv).expect("tsv");
+        let csv = assert_csv_round_trip(&df);
+        assert!(csv.starts_with("Naam,\"Plaats, land\",Wanneer\n"), "{csv}");
+        assert!(csv.contains("Jan,\"Den Haag, NL\",2026-03-13"), "{csv}");
+        let semis = "id;prijs\n1;2,50\n2;3,75";
+        assert_csv_round_trip(&super::parse_table(semis).expect("semis"));
+    }
+
+    #[test]
+    fn parquet_stays_a_choice() {
+        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
+        let bytes = super::TableFile::Parquet.bytes(&df).expect("parquet");
+        let back = ParquetReader::new(std::io::Cursor::new(bytes))
+            .finish()
+            .expect("read");
+        assert_eq!(back.shape(), df.shape());
+        assert_eq!(super::TableFile::ALL[0], super::TableFile::Csv);
+        assert_eq!(super::TableFile::Csv.extension(), "csv");
+        assert_eq!(super::TableFile::Parquet.extension(), "parquet");
+    }
 }

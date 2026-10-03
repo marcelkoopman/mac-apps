@@ -1153,10 +1153,10 @@ impl App {
             None if self.opened.is_some() => self.opened_save_job(),
             None => self.clipboard_save_job(),
         };
-        let Some(job) = job else {
+        let Some(mut job) = job else {
             return Ok(());
         };
-        let Some(path) = crate::macos_save::choose_path(&job.filename, job.extension)? else {
+        let Some(path) = job.choose_path()? else {
             return Ok(());
         };
         let content = job.content;

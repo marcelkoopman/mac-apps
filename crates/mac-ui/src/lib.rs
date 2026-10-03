@@ -17,7 +17,7 @@
 //! - `panel`: `panel`, borderless floating panel creation, activation and placement.
 //! - `notify`: `notify`, user notifications.
 //! - `file_panel`: `file_panel`, modal `NSOpenPanel` (choose a file) and `NSSavePanel`
-//!   (choose a save path).
+//!   (choose a save path, optionally with a format popup that switches the extension).
 //! - `progress`: `progress`, an indeterminate spinning `NSProgressIndicator` (busy wheel).
 //! - `drop`: `drop`, a view that takes one dropped file (also a promised one), image data or
 //!   dropped text, judged by type while the drag moves. Its accept rules (`drop::judge`) build
