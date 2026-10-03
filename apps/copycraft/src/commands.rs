@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use zeroize::Zeroize;
 
 use crate::appearance::Theme;
@@ -132,8 +130,6 @@ pub struct LaunchData {
     pub source_note: Option<String>,
     /// "Show all" was chosen: the card renders the whole text, not the preview.
     pub full: bool,
-    /// When the shown copy was copied. Absent for an opened file or an empty clipboard.
-    pub copied_at: Option<SystemTime>,
 }
 
 /// What the card shows in place of the separate preview window.
@@ -1567,7 +1563,6 @@ mod tests {
             source_name: None,
             source_note: None,
             full: false,
-            copied_at: None,
         }
     }
 

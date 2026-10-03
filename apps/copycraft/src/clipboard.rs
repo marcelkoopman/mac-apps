@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::SystemTime;
 
 use image::ExtendedColorType;
 use image::ImageEncoder;
@@ -180,11 +179,9 @@ enum HistoryBody {
     Image(SecretBytes),
 }
 
-/// One copied item. `copied_at` is when it was copied, and stays put when history steps back
-/// to it. Copying the same text or image again replaces that time.
+/// One copied item.
 #[derive(Clone)]
 struct HistoryEntry {
-    copied_at: SystemTime,
     body: HistoryBody,
 }
 
@@ -209,11 +206,7 @@ pub struct ClipboardHistory {
 }
 
 impl ClipboardHistory {
-    pub fn record(&mut self, text: String) {
-        self.record_at(text, SystemTime::now());
-    }
-
-    fn record_at(&mut self, mut text: String, copied_at: SystemTime) {
+    pub fn record(&mut self, mut text: String) {
         if text.trim().is_empty() {
             text.zeroize();
             return;
@@ -225,7 +218,6 @@ impl ClipboardHistory {
         self.entries.insert(
             0,
             HistoryEntry {
-                copied_at,
                 body: HistoryBody::Text(Zeroizing::new(text)),
             },
         );
@@ -241,17 +233,11 @@ impl ClipboardHistory {
         self.entries.insert(
             0,
             HistoryEntry {
-                copied_at: SystemTime::now(),
                 body: HistoryBody::Image(bytes.clone()),
             },
         );
         self.entries.truncate(MAX_HISTORY);
         Some(bytes)
-    }
-
-    /// When the item at `index` was copied. `None` when there is no such item.
-    pub fn copied_at(&self, index: usize) -> Option<SystemTime> {
-        self.entries.get(index).map(|entry| entry.copied_at)
     }
 
     pub fn get(&self, index: usize) -> Option<&str> {
@@ -487,26 +473,6 @@ mod tests {
     fn one_line_is_short_symbol() {
         let label = one_line(&"a".repeat(80));
         assert_eq!(label, "Aa");
-    }
-
-    #[test]
-    fn history_keeps_each_copy_time() {
-        use std::time::{Duration, SystemTime};
-
-        let mut history = ClipboardHistory::default();
-        let earlier = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-        let later = earlier + Duration::from_secs(90);
-        history.record_at("one".into(), earlier);
-        history.record_at("two".into(), later);
-        assert_eq!(history.copied_at(0), Some(later));
-        assert_eq!(history.copied_at(1), Some(earlier));
-        assert_eq!(history.copied_at(2), None);
-        let again = later + Duration::from_secs(30);
-        history.record_at("one".into(), again);
-        assert_eq!(history.get(0), Some("one"));
-        assert_eq!(history.copied_at(0), Some(again));
-        assert_eq!(history.get(1), Some("two"));
-        assert_eq!(history.copied_at(1), Some(later));
     }
 
     #[test]
