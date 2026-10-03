@@ -26,8 +26,14 @@ mod transform;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod url_policy;
 mod validate;
+mod wipe_alloc;
 mod xsd_schema;
 mod youtube;
+
+/// Freed heap memory is zeroed first ([`wipe_alloc`]), so copied text left in buffers of
+/// Polars, AppKit or any other library does not stay readable after use.
+#[global_allocator]
+static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 
 #[cfg(target_os = "macos")]
 mod macos_card_text;
