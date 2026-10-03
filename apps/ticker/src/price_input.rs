@@ -96,10 +96,11 @@ pub fn parse_price(input: &str) -> Result<f64, String> {
     Ok(value)
 }
 
-/// A watch target: [`parse_price`], and more than zero.
-pub fn parse_watch_target(input: &str) -> Result<f64, String> {
+/// A watch target: [`parse_price`], and more than zero unless the asset has `allow_negative`
+/// (day-ahead power, where "below 0" is a real alert).
+pub fn parse_watch_target(input: &str, allow_negative: bool) -> Result<f64, String> {
     let value = parse_price(input)?;
-    if value <= 0.0 {
+    if value <= 0.0 && !allow_negative {
         return Err(format!(
             "Target price must be above 0 (got {:?})",
             input.trim()
@@ -174,11 +175,19 @@ mod tests {
 
     #[test]
     fn watch_target_must_be_positive() {
-        assert_eq!(parse_watch_target("68.000"), Ok(68000.0));
-        assert!(parse_watch_target("0").is_err());
-        assert!(parse_watch_target("0,00").is_err());
-        assert!(parse_watch_target("-5").is_err());
-        assert!(parse_watch_target("NaN").is_err());
+        assert_eq!(parse_watch_target("68.000", false), Ok(68000.0));
+        assert!(parse_watch_target("0", false).is_err());
+        assert!(parse_watch_target("0,00", false).is_err());
+        assert!(parse_watch_target("-5", false).is_err());
+        assert!(parse_watch_target("NaN", false).is_err());
+    }
+
+    #[test]
+    fn watch_target_may_be_zero_or_negative_with_allow_negative() {
+        assert_eq!(parse_watch_target("0", true), Ok(0.0));
+        assert_eq!(parse_watch_target("-0,05", true), Ok(-0.05));
+        assert!(parse_watch_target("NaN", true).is_err());
+        assert!(parse_watch_target("inf", true).is_err());
     }
 
     #[test]

@@ -19,6 +19,7 @@ use crate::freshness::AssetStatus;
 use crate::log_message;
 use crate::menu_builder::{Freshness, MenuBuilder};
 use crate::menu_ids::{self, RowRef};
+use crate::plausibility::{TriggerGate, Verdict};
 use crate::poll_gate::{Generation, PollGate};
 use crate::price_fetcher::PriceFetcher;
 use crate::price_history;
@@ -67,6 +68,8 @@ struct App {
     watch_list: WatchList,
     /// Per asset name: last successful fetch and failed polls since (stale marker in the menu).
     asset_status: HashMap<String, AssetStatus>,
+    /// Plausibility check of fetched prices before they may set off a watch.
+    trigger_gate: TriggerGate,
     /// The watch file exists but could not be read or moved aside: never overwrite it.
     watch_save_blocked: bool,
     /// Watch file stamp after our last load or save; a different stamp at a poll means the CLI
@@ -386,6 +389,8 @@ impl App {
 
         match apply_result {
             Ok(()) => {
+                // New URL or unit: its next price is not compared with the old one.
+                self.trigger_gate.retain(|name| name != asset_name);
                 watch_ui::send_macos_notification(
                     "Ticker",
                     &format!("{asset_name} saved ({unit})"),
@@ -402,6 +407,7 @@ impl App {
         match config::reset_user_config() {
             Ok(config) => {
                 self.config = Some(config);
+                self.trigger_gate = TriggerGate::new();
                 self.prices = None;
                 self.rows_changed();
                 watch_ui::send_macos_notification("Ticker", "Assets reset to defaults.");
@@ -467,6 +473,8 @@ impl App {
     /// refresh the menu (unchanged from the former synchronous poll).
     fn apply_poll_result(&mut self, mut rows: Vec<PriceRow>) {
         self.record_fetch_status(&rows);
+        // Only prices fetched by this poll, and only plausible ones, may set off a watch.
+        let current = self.plausible_prices(&rows);
         if let Some(prev) = &self.prices {
             prices::fill_nan_from_prev(&mut rows, prev);
         }
@@ -474,11 +482,6 @@ impl App {
             log_message(&format!("Poll: saving price history failed: {e}"));
         }
         self.reload_watches_if_changed();
-        let current: Vec<(String, f64)> = rows
-            .iter()
-            .filter(|r| r.has_price())
-            .map(|r| (r.name.clone(), r.price))
-            .collect();
         // Only take the lock and touch the file when a watch actually goes off.
         if !fired_watches(&mut self.watch_list.clone(), &current).is_empty() {
             for (w, p) in self.update_watches(|list| fired_watches(list, &current)) {
@@ -488,6 +491,35 @@ impl App {
         }
         self.prices = Some(rows);
         self.update_menu();
+    }
+
+    /// The `(asset, price)` pairs of this poll that pass the [`TriggerGate`]; the others are
+    /// logged.
+    fn plausible_prices(&mut self, rows: &[PriceRow]) -> Vec<(String, f64)> {
+        let Some(config) = &self.config else {
+            return Vec::new();
+        };
+        let mut plausible = Vec::new();
+        for row in rows.iter().filter(|r| r.has_price()) {
+            let Some(asset) = config.assets.iter().find(|a| a.name == row.name) else {
+                continue;
+            };
+            match self.trigger_gate.check(asset, row.price) {
+                Verdict::Accept => plausible.push((row.name.clone(), row.price)),
+                Verdict::Reject(why) => log_message(&format!(
+                    "watches: {} price not used for watches: {why}",
+                    row.name
+                )),
+                Verdict::Unconfirmed { from, pct } => log_message(&format!(
+                    "watches: {} jumped {pct:.0}% ({from} → {}); waiting for the next poll to \
+                     confirm before checking watches",
+                    row.name, row.price
+                )),
+            }
+        }
+        self.trigger_gate
+            .retain(|name| rows.iter().any(|r| r.name == name));
+        plausible
     }
 
     fn handle_add_watch(&mut self) {
@@ -517,12 +549,17 @@ impl App {
             .as_ref()
             .and_then(|rows| prices::price_of(rows, &asset))
             .unwrap_or(0.0);
+        let allow_negative = self
+            .config
+            .as_ref()
+            .and_then(|c| c.assets.iter().find(|a| a.name == asset))
+            .is_some_and(config::Asset::allows_negative);
         // Prefilled in the menu's Dutch notation, which parse_watch_target reads back.
         let target_price: f64 = match prompt_text(
             &format!("Target price for {asset} (€):"),
             &MenuBuilder::format_price(default_price),
         ) {
-            Some(s) => match price_input::parse_watch_target(&s) {
+            Some(s) => match price_input::parse_watch_target(&s, allow_negative) {
                 Ok(v) => v,
                 Err(e) => {
                     log_message(&format!("add_watch: {e}"));
@@ -788,6 +825,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         prices: None,
         watch_list: WatchList::new(),
         asset_status: HashMap::new(),
+        trigger_gate: TriggerGate::new(),
         watch_save_blocked: false,
         watch_stamp: None,
         rows_generation: 0,

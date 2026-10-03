@@ -67,6 +67,33 @@ pub struct Asset {
     pub unit: String,
     pub unit_hint: String,
     pub symbol: String,
+    /// Prices at or below zero are real for this asset (day-ahead power), not a fetch glitch;
+    /// they may set off watches, and targets at or below zero are accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_negative: Option<bool>,
+    /// Largest move (in %) from the last plausible price that may set off a watch at once; a
+    /// bigger jump only counts once the next poll confirms it. Default [`DEFAULT_MAX_JUMP_PCT`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jump_pct: Option<f64>,
+}
+
+/// [`Asset::max_jump_pct`] when the config does not set it.
+pub const DEFAULT_MAX_JUMP_PCT: f64 = 25.0;
+/// What the bundled config (and the migration of an older user config) sets for day-ahead power,
+/// whose hourly or quarter-hourly price can triple, or cross zero, from one period to the next.
+const POWER_MAX_JUMP_PCT: f64 = 300.0;
+
+impl Asset {
+    pub fn allows_negative(&self) -> bool {
+        self.allow_negative.unwrap_or(false)
+    }
+
+    /// [`Asset::max_jump_pct`], or the default when it is missing or not a positive number.
+    pub fn max_jump(&self) -> f64 {
+        self.max_jump_pct
+            .filter(|p| p.is_finite() && *p > 0.0)
+            .unwrap_or(DEFAULT_MAX_JUMP_PCT)
+    }
 }
 
 pub fn bundled_config_path() -> Result<PathBuf, Box<dyn Error>> {
@@ -118,17 +145,28 @@ pub fn load_config_from(path: &Path) -> Result<Config, Box<dyn Error>> {
 const OLD_POWER_PATH: &str = "data.0.price";
 const POWER_HOST: &str = "dap.xadi.eu";
 
+/// Also gives a power asset written before `allow_negative` / `max_jump_pct` existed the bundled
+/// values (only where the file does not set them).
 fn migrate_power_path(config: &mut Config) {
     for asset in &mut config.assets {
         let on_power_host = reqwest::Url::parse(&asset.url)
             .ok()
             .is_some_and(|url| url.host_str() == Some(POWER_HOST));
-        if on_power_host && asset.price_path == OLD_POWER_PATH {
+        if !on_power_host {
+            continue;
+        }
+        if asset.price_path == OLD_POWER_PATH {
             crate::log_message(&format!(
                 "config: {}: price path {OLD_POWER_PATH} → data.@now.price (current period)",
                 asset.name
             ));
             asset.price_path = "data.@now.price".to_string();
+        }
+        if asset.allow_negative.is_none() {
+            asset.allow_negative = Some(true);
+        }
+        if asset.max_jump_pct.is_none() {
+            asset.max_jump_pct = Some(POWER_MAX_JUMP_PCT);
         }
     }
 }
@@ -281,6 +319,8 @@ symbol = "🥇"
             unit: "EUR".into(),
             unit_hint: "/BTC".into(),
             symbol: "💰".into(),
+            allow_negative: None,
+            max_jump_pct: None,
         }
     }
 
@@ -433,6 +473,51 @@ url = "https://example.com"
         migrate_power_path(&mut config);
         assert_eq!(config.assets[0].price_path, "data.@now.price");
         assert_eq!(config.assets[1].price_path, "data.0.price");
+        assert!(config.assets[0].allows_negative());
+        assert_eq!(config.assets[0].max_jump(), POWER_MAX_JUMP_PCT);
+        assert!(!config.assets[1].allows_negative());
+        assert_eq!(config.assets[1].max_jump(), DEFAULT_MAX_JUMP_PCT);
+    }
+
+    #[test]
+    fn migration_keeps_explicit_power_settings() {
+        let toml = "[[assets]]\nname = \"Power NL\"\nurl = \"https://dap.xadi.eu/api/nl/today\"\nprice_path = \"data.@now.price\"\nunit = \"EUR\"\nunit_hint = \"/kWh\"\nsymbol = \"P\"\nallow_negative = false\nmax_jump_pct = 50.0\n";
+        let mut config = parse_config(toml).unwrap();
+        migrate_power_path(&mut config);
+        assert!(!config.assets[0].allows_negative());
+        assert_eq!(config.assets[0].max_jump(), 50.0);
+    }
+
+    #[test]
+    fn plausibility_settings_default_and_roundtrip() {
+        let config = parse_config(sample_toml()).unwrap();
+        assert!(!config.assets[0].allows_negative());
+        assert_eq!(config.assets[0].max_jump(), DEFAULT_MAX_JUMP_PCT);
+        let body = toml::to_string_pretty(&config).unwrap();
+        assert!(
+            !body.contains("allow_negative"),
+            "unset fields stay out of the file"
+        );
+        let mut bad = gecko_btc();
+        for pct in [0.0, -5.0, f64::NAN, f64::INFINITY] {
+            bad.max_jump_pct = Some(pct);
+            assert_eq!(bad.max_jump(), DEFAULT_MAX_JUMP_PCT);
+        }
+    }
+
+    #[test]
+    fn bundled_power_asset_allows_negative_prices() {
+        let config = parse_config(include_str!("../config.toml")).unwrap();
+        for asset in &config.assets {
+            let power = asset.name == "Power NL";
+            assert_eq!(asset.allows_negative(), power, "{}", asset.name);
+            let jump = if power {
+                POWER_MAX_JUMP_PCT
+            } else {
+                DEFAULT_MAX_JUMP_PCT
+            };
+            assert_eq!(asset.max_jump(), jump, "{}", asset.name);
+        }
     }
 
     #[test]

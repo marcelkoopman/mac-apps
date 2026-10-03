@@ -10,6 +10,7 @@ mod instance_lock;
 mod menu_builder;
 mod menu_ids;
 mod menubar;
+mod plausibility;
 mod poll_gate;
 mod price_fetcher;
 mod price_history;

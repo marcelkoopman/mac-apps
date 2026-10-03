@@ -1,3 +1,4 @@
+use crate::config::{Asset, Config};
 use crate::price_input::{parse_price, parse_watch_target};
 use crate::price_watch::{WatchDirection, update_watch_list};
 use std::error::Error;
@@ -24,7 +25,8 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
     }
 
     let asset_name = args[0].clone();
-    let target_price = parse_watch_target(&args[1])?;
+    let allow_negative = configured_asset(&asset_name).is_some_and(|a| a.allows_negative());
+    let target_price = parse_watch_target(&args[1], allow_negative)?;
     let direction = match args[2].to_lowercase().as_str() {
         "above" => WatchDirection::Above,
         "below" => WatchDirection::Below,
@@ -58,6 +60,19 @@ fn add_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
         asset_name,
         target_price
     ))
+}
+
+/// The asset `name` (case-insensitive) in the config the menu bar app uses, if it is there.
+fn configured_asset(name: &str) -> Option<Asset> {
+    find_asset(crate::config::load_config().ok()?, name)
+}
+
+fn find_asset(config: Config, name: &str) -> Option<Asset> {
+    let wanted = name.to_lowercase();
+    config
+        .assets
+        .into_iter()
+        .find(|a| a.name.to_lowercase() == wanted)
 }
 
 fn remove_watch(args: &[String]) -> Result<String, Box<dyn Error>> {
@@ -343,6 +358,15 @@ mod tests {
         assert!(!help.contains("once per day"));
         assert!(!help.contains("active price watches"));
         assert!(help.contains("until you run `ticker reset`"));
+    }
+
+    #[test]
+    fn find_asset_is_case_insensitive_and_sees_allow_negative() {
+        let bundled = || crate::config::parse_config(include_str!("../config.toml")).unwrap();
+        let power = find_asset(bundled(), "power nl").expect("bundled Power NL");
+        assert!(power.allows_negative());
+        assert!(!find_asset(bundled(), "Gold").unwrap().allows_negative());
+        assert!(find_asset(bundled(), "Platinum").is_none());
     }
 
     #[test]

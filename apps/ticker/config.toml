@@ -57,3 +57,6 @@ price_path = "data.@now.price"
 unit = "EUR"
 unit_hint = "/kWh"
 symbol = "⚡"
+# Day-ahead prices go negative, and can triple from one hour to the next.
+allow_negative = true
+max_jump_pct = 300.0
