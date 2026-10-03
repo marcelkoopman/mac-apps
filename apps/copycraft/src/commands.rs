@@ -674,8 +674,8 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool
         show_copied_table(card, source, full);
         return;
     }
-    if view == CardView::Dataframe && !full {
-        show_dataframe_preview(card, source);
+    if view == CardView::Dataframe {
+        show_dataframe(card, source, full);
         return;
     }
     let Some(body) = transformed_text(source, view) else {
@@ -695,13 +695,7 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool
     } else {
         text_view_title(source, view, &body)
     };
-    // The grid no longer has the table's delimiters, so a Salaris column
-    // would lose its financial mark. Classify the copied table.
-    card.meta = if view == CardView::Dataframe {
-        text_meta_from(&body, source)
-    } else {
-        text_meta(&body)
-    };
+    card.meta = text_meta(&body);
     if matches!(view, CardView::Schema | CardView::Sample) {
         set_excerpt(card, &body, full);
         card.highlight = Some(if view == CardView::Sample || kind == FormatKind::Xml {
@@ -710,12 +704,6 @@ fn apply_text_view(card: &mut WorkCard, source: &str, view: CardView, full: bool
             FormatKind::Json
         });
         card.selectable = true;
-    } else if view == CardView::Dataframe {
-        // The grid's header chrome is already six lines, so a short excerpt hides every row.
-        set_excerpt(card, &body, full);
-        card.highlight = Some(FormatKind::Dataframe);
-        card.selectable = true;
-        add_table_note(card, dataframe::table_start(source.trim()));
     } else if view == CardView::Format && opens_formatted(source) {
         set_excerpt(card, &body, full);
         card.highlight = Some(kind);
@@ -758,9 +746,13 @@ fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
 /// "Header on line N" in the meta line, after the size, when lines above a table's header
 /// were skipped ([`dataframe::TableStart::note`]).
 fn add_table_note(card: &mut WorkCard, start: Option<dataframe::TableStart>) {
-    let Some(note) = start.and_then(|start| start.note()) else {
-        return;
-    };
+    if let Some(note) = start.and_then(|start| start.note()) {
+        add_meta_note(card, &note);
+    }
+}
+
+/// `note` in the meta line after the size, before the sensitivity labels.
+fn add_meta_note(card: &mut WorkCard, note: &str) {
     card.meta = match card.meta.find(META_SEPARATOR) {
         Some(at) => format!(
             "{}{META_SEPARATOR}{note}{}",
@@ -773,10 +765,14 @@ fn add_table_note(card: &mut WorkCard, start: Option<dataframe::TableStart>) {
 
 const META_SEPARATOR: &str = "  ·  ";
 
-/// The first [`PREVIEW_ROWS`] rows of the table as a polars grid, with a note when the table
-/// has more. Title and meta as for the full grid; the meta measures the copied table.
-fn show_dataframe_preview(card: &mut WorkCard, source: &str) {
-    let Some(preview) = dataframe::try_format_preview(source, PREVIEW_ROWS) else {
+/// The table as a polars grid: whole with `full`, else its first [`PREVIEW_ROWS`] rows with a
+/// note when the table has more. The meta measures the copied table when rows are left out,
+/// and says where the header is and which date order was read when either is a guess.
+/// The grid no longer has the table's delimiters, so a Salaris column would lose its financial
+/// mark: the meta classifies the copied table.
+fn show_dataframe(card: &mut WorkCard, source: &str, full: bool) {
+    let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
+    let Some(preview) = dataframe::try_format_preview(source, max_rows) else {
         return;
     };
     card.title = "Dataframe".to_string();
@@ -788,10 +784,17 @@ fn show_dataframe_preview(card: &mut WorkCard, source: &str) {
         card.excerpt = preview.grid;
     } else {
         card.meta = text_meta_from(&preview.grid, source);
-        card.excerpt = shown_body(&preview.grid);
+        card.excerpt = if full {
+            preview.grid
+        } else {
+            shown_body(&preview.grid)
+        };
         card.preview_note = None;
     }
     add_table_note(card, dataframe::table_start(source.trim()));
+    if let Some(note) = dataframe::ambiguous_dates_note(&preview.dates) {
+        add_meta_note(card, &note);
+    }
 }
 
 /// Put `body` in the well: whole with `full`, else its preview and the note.
@@ -2810,6 +2813,23 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(
             ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::Dataframe)
         );
+    }
+
+    #[test]
+    fn dataframe_meta_says_when_dates_could_be_either_order() {
+        let mut input = data(
+            SubjectKind::Text,
+            Some("when,amount\n01/02/2024,1\n03/04/2024,2"),
+        );
+        input.view = CardView::Dataframe;
+        let card = work_card(&input);
+        assert!(
+            card.meta.contains("  ·  Dates read as dd/mm/yyyy"),
+            "{}",
+            card.meta
+        );
+        input.full = true;
+        assert!(work_card(&input).meta.contains("Dates read as dd/mm/yyyy"));
     }
 
     #[test]

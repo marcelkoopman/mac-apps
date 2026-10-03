@@ -263,6 +263,66 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn guesses_the_date_order_from_days_over_12() {
+        use super::{DateGuess, DateOrder, date_guess};
+        let day_first = DateGuess {
+            separator: '/',
+            order: Some(DateOrder::DayFirst),
+        };
+        assert_eq!(date_guess(["09/03/2026", "", "22/04/2026"]), Some(day_first));
+        assert_eq!(
+            date_guess(["03/22/2026", "4/1/2026"]).and_then(|g| g.order),
+            Some(DateOrder::MonthFirst)
+        );
+        let ambiguous = date_guess(["01.02.2024", "03.04.2024"]).expect("dates");
+        assert_eq!((ambiguous.separator, ambiguous.order), ('.', None));
+        // Both orders fail, or it is not a date column.
+        assert_eq!(date_guess(["13/01/2024", "01/13/2024"]), None);
+        assert_eq!(date_guess(["01/02/24"]), None);
+        assert_eq!(date_guess(["01/02/2024", "01-03-2024"]), None);
+        assert_eq!(date_guess(["2024-01-02"]), None);
+        assert_eq!(date_guess(["1.5", "2.25"]), None);
+        assert_eq!(date_guess(["32/01/2024"]), None);
+        assert_eq!(date_guess([""]), None);
+    }
+
+    #[test]
+    fn reads_day_first_dates_as_dates() {
+        use polars::prelude::DataType;
+        let preview = super::try_format_preview(ENERGY_FIXTURE, 200).expect("preview");
+        assert_eq!(preview.dates.len(), 1);
+        assert!(!preview.dates[0].ambiguous);
+        assert_eq!(preview.dates[0].order, super::DateOrder::DayFirst);
+        assert!(preview.grid.contains("2026-03-09"), "{}", preview.grid);
+        assert_eq!(super::ambiguous_dates_note(&preview.dates), None);
+        let bytes = super::try_parquet_bytes(ENERGY_FIXTURE).expect("parquet");
+        let df = ParquetReader::new(std::io::Cursor::new(bytes))
+            .finish()
+            .expect("read");
+        assert_eq!(df.columns()[0].dtype(), &DataType::Date);
+        // Conversions keep the dates as copied.
+        let json = super::try_json_text(ENERGY_FIXTURE).expect("json");
+        assert!(json.contains("09/03/2026"));
+    }
+
+    #[test]
+    fn ambiguous_dates_are_read_day_first_and_said_so() {
+        let src = "when,amount\n01/02/2024,1\n03/04/2024,2";
+        let preview = super::try_format_preview(src, 200).expect("preview");
+        assert!(preview.dates[0].ambiguous);
+        assert!(preview.grid.contains("2024-02-01"), "{}", preview.grid);
+        assert_eq!(
+            super::ambiguous_dates_note(&preview.dates).as_deref(),
+            Some("Dates read as dd/mm/yyyy")
+        );
+        // 31 February is no date: the column stays text.
+        let bad = super::try_format_preview("when,amount\n31/02/2024,1\n15/03/2024,2", 200)
+            .expect("preview");
+        assert!(bad.dates.is_empty());
+        assert!(bad.grid.contains("31/02/2024"));
+    }
+
+    #[test]
     fn rejects_plain_text() {
         assert!(try_format("just a sentence about nothing").is_none());
         assert!(try_format("Naam: Jan de Vries\nSalaris: 3450").is_none());

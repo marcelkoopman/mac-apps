@@ -38,7 +38,10 @@ mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "dro
 # One RegexSet for the first layer of the sensitivity check (src/recognize.rs). Already in
 # the tree through polars.
 regex = "1.13"
-polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
+# `temporal`: reading `dd/mm/yyyy` text as dates (src/dataframe_dates.rs). No extra crates: the
+# polars-time crate was already in the tree through polars-io. Not `lazy`: with csv, json and
+# parquet it pulls in polars-stream and with it object_store and reqwest (network crates).
+polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet", "temporal"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = "0.9"
 zeroize = "1.9.0"

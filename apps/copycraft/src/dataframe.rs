@@ -13,7 +13,7 @@ pub const DISPLAY_ENV: [(&str, &str); 3] = [
 ];
 
 pub fn try_format(text: &str) -> Option<String> {
-    parse(text).and_then(render)
+    parse_table(text).and_then(render)
 }
 
 /// A table's first rows as a polars grid, for the card preview.
@@ -24,12 +24,15 @@ pub struct DataframePreview {
     pub rows: usize,
     /// Rows in `grid`.
     pub shown_rows: usize,
+    /// Text columns read as dates.
+    pub dates: Vec<DateColumn>,
 }
 
 /// Like [`try_format`], but renders at most `max_rows` rows. Parsing is quick; rendering every
 /// row of a large table is what takes time.
 pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePreview> {
-    let df = parse(text)?;
+    let mut df = parse(text)?;
+    let dates = read_dates(&mut df, DateOrder::DayFirst);
     let rows = df.height();
     let shown = if rows > max_rows {
         df.head(Some(max_rows))
@@ -41,6 +44,7 @@ pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePrevie
         grid: render(shown)?,
         rows,
         shown_rows,
+        dates,
     })
 }
 
@@ -54,7 +58,7 @@ pub fn try_csv_text(text: &str) -> Option<String> {
 }
 
 pub fn try_parquet_bytes(text: &str) -> Option<Vec<u8>> {
-    let mut df = parse(text)?;
+    let mut df = parse_table(text)?;
     write_parquet(&mut df)
 }
 
@@ -86,6 +90,15 @@ fn parse(text: &str) -> Option<DataFrame> {
     try_csv(trimmed)
         .map(|(_, df)| df)
         .or_else(|| try_json(trimmed))
+}
+
+/// The table as the Dataframe view shows it: [`parse`], with columns of `dd/mm/yyyy` text read
+/// as dates ([`read_dates`]; day first where both orders fit). Conversions (CSV → JSON, TSV →
+/// CSV) keep the text as copied and use [`parse`].
+fn parse_table(text: &str) -> Option<DataFrame> {
+    let mut df = parse(text)?;
+    read_dates(&mut df, DateOrder::DayFirst);
+    Some(df)
 }
 
 fn write_parquet(df: &mut DataFrame) -> Option<Vec<u8>> {
@@ -128,5 +141,6 @@ fn render(df: DataFrame) -> Option<String> {
     Some(df.to_string())
 }
 
+include!("dataframe_dates.rs");
 include!("dataframe_header.rs");
 include!("dataframe_parse.rs");
