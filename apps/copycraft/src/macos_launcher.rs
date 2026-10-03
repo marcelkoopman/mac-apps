@@ -1,6 +1,7 @@
 #![cfg(target_os = "macos")]
 
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::corners;
@@ -142,7 +143,12 @@ thread_local! {
     /// Chip row: a glass group holding one GlassButton per shown command.
     static PILLS: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
     /// The chips in [`SHOWN`] order; index = chip tag = selection.
-    static CHIPS: RefCell<Vec<GlassButton>> = const { RefCell::new(Vec::new()) };
+    static CHIPS: RefCell<Vec<Rc<GlassButton>>> = const { RefCell::new(Vec::new()) };
+    /// Every chip button in the chip row, shown or hidden, by command and title. Searching hides
+    /// and shows these instead of making new buttons; a command the card no longer offers goes.
+    static CHIP_POOL: RefCell<Vec<PooledChip>> = const { RefCell::new(Vec::new()) };
+    /// "No matching commands" under a search that matches nothing.
+    static NO_MATCHES: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
     /// The history capsule: a glass (or frosted) capsule holding the chevrons and the position.
     static NAV_CAPSULE: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
@@ -779,18 +785,15 @@ fn layout(fresh_place: bool) {
         return;
     };
     // Each chip is laid out at the width its own pill measures, so titles never get cut early.
-    let chips: Vec<GlassButton> = shown
-        .iter()
-        .map(|cmd| {
-            let chip = GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular);
-            // The title is the label. VoiceOver reads the detail as the hint.
-            if !cmd.detail.is_empty() {
-                chip.button()
-                    .setAccessibilityHelp(Some(&NSString::from_str(&cmd.detail)));
-            }
-            chip
-        })
-        .collect();
+    // The buttons are reused: a search hides and shows them (see `CHIP_POOL`).
+    ACTIONS.with(|actions| {
+        POOL.with(|pool| {
+            let (actions, pool) = (actions.borrow(), pool.borrow());
+            let offered: Vec<&Command> = actions.iter().chain(pool.iter()).collect();
+            prune_chip_pool(&offered);
+        });
+    });
+    let chips: Vec<Rc<GlassButton>> = shown.iter().map(|cmd| chip_for(mtm, cmd)).collect();
     let widths: Vec<f64> = chips
         .iter()
         .map(|chip| commands::chip_width(chip.fitted_size().width))
@@ -1780,30 +1783,87 @@ fn load_dropped_picture(picture: &SecretBytes, already: bool) {
     set_preview_image(&image);
 }
 
+/// One chip button kept in the chip row, and the command and title it was made for.
+struct PooledChip {
+    id: CommandId,
+    title: String,
+    chip: Rc<GlassButton>,
+}
+
+/// The chip for `cmd`: the pooled button with the same command and title, or a new one.
+fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> {
+    let pooled = CHIP_POOL.with(|pool| {
+        pool.borrow()
+            .iter()
+            .find(|pooled| pooled.id == cmd.id && pooled.title == cmd.title)
+            .map(|pooled| Rc::clone(&pooled.chip))
+    });
+    let chip = pooled.unwrap_or_else(|| {
+        let chip = Rc::new(GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular));
+        wire_button(chip.button(), sel!(chipClicked:));
+        CHIP_POOL.with(|pool| {
+            pool.borrow_mut().push(PooledChip {
+                id: cmd.id.clone(),
+                title: cmd.title.clone(),
+                chip: Rc::clone(&chip),
+            });
+        });
+        chip
+    });
+    // The title is the label. VoiceOver reads the detail as the hint.
+    let help = (!cmd.detail.is_empty()).then(|| NSString::from_str(&cmd.detail));
+    chip.button().setAccessibilityHelp(help.as_deref());
+    chip
+}
+
+/// Drop pooled chips for commands the card no longer offers (`offered`), and zeroize their
+/// titles: a history row's title is part of a copy.
+fn prune_chip_pool(offered: &[&Command]) {
+    CHIP_POOL.with(|pool| {
+        pool.borrow_mut().retain_mut(|pooled| {
+            let keep = offered
+                .iter()
+                .any(|cmd| cmd.id == pooled.id && cmd.title == pooled.title);
+            if !keep {
+                pooled.chip.view().removeFromSuperview();
+                pooled.title.zeroize();
+            }
+            keep
+        });
+    });
+}
+
+/// Every pooled chip and the "no matches" note go; for Wipe.
+fn drop_chip_pool() {
+    prune_chip_pool(&[]);
+    CHIPS.with(|slot| slot.borrow_mut().clear());
+}
+
+/// Show `chips` (in order, at `frames`) and hide the other pooled chips.
 fn rebuild_pills(
     mtm: MainThreadMarker,
     list: &NSView,
-    chips: Vec<GlassButton>,
+    chips: Vec<Rc<GlassButton>>,
     frames: &[ChipFrame],
     show_empty: bool,
     text_width: f64,
 ) {
-    while list.subviews().count() > 0 {
-        list.subviews().objectAtIndex(0).removeFromSuperview();
-    }
-    CHIPS.with(|slot| slot.borrow_mut().clear());
-    if chips.is_empty() {
-        if show_empty {
+    NO_MATCHES.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if show_empty && slot.is_none() {
             let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
+            empty.setStringValue(&NSString::from_str("No matching commands"));
+            list.addSubview(&empty);
+            *slot = Some(empty);
+        }
+        if let Some(empty) = slot.as_ref() {
             empty.setFrame(NSRect::new(
                 NSPoint::new(2.0, 4.0),
                 NSSize::new(text_width, 20.0),
             ));
-            empty.setStringValue(&NSString::from_str("No matching commands"));
-            list.addSubview(&empty);
+            empty.setHidden(!(show_empty && chips.is_empty()));
         }
-        return;
-    }
+    });
     let area_h = commands::chips_height(frames);
     let mut placed = Vec::with_capacity(chips.len());
     for (index, chip) in chips.into_iter().enumerate() {
@@ -1817,10 +1877,22 @@ fn rebuild_pills(
             NSSize::new(frame.width, commands::CHIP_PILL_H),
         ));
         chip.button().setTag(index as isize);
-        wire_button(chip.button(), sel!(chipClicked:));
-        list.addSubview(chip.view());
+        // SAFETY: reading the view's parent on the main thread, only to compare it with `list`.
+        let parent = unsafe { chip.view().superview() };
+        if parent.is_none_or(|parent| !std::ptr::eq(&*parent, list)) {
+            list.addSubview(chip.view());
+        }
+        chip.view().setHidden(false);
         placed.push(chip);
     }
+    CHIP_POOL.with(|pool| {
+        for pooled in pool.borrow().iter() {
+            if !placed.iter().any(|chip| Rc::ptr_eq(chip, &pooled.chip)) {
+                pooled.chip.view().setHidden(true);
+                pooled.chip.button().setTag(-1);
+            }
+        }
+    });
     CHIPS.with(|slot| *slot.borrow_mut() = placed);
 }
 
@@ -2149,6 +2221,7 @@ fn set_commands(slot: &RefCell<Vec<Command>>, next: Vec<Command>) {
 
 fn wipe_shown_views() {
     FIND_CACHE.with(|slot| slot.borrow_mut().take());
+    drop_chip_pool();
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             widgets::wipe_text_view(view);
