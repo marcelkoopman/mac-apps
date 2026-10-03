@@ -1,3 +1,6 @@
+//! Recognising a copied YouTube link, for the YouTube card and Visit. String checks only:
+//! nothing is fetched (copycraft works offline).
+
 /// A clipboard that is only a YouTube video URL.
 pub fn video_id(text: &str) -> Option<&str> {
     let text = text.trim();

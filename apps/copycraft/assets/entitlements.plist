@@ -3,15 +3,15 @@
 <!--
   Copycraft App Sandbox entitlements. Applied by `codesign ... entitlements` in
   .github/workflows/release-copycraft.yml and scripts/sign_app.sh.
+  Copycraft works offline by design (it handles sensitive copied data): there is no
+  network.client or network.server entitlement, so the sandbox refuses any connection.
   - app-sandbox: required for the Mac App Store.
-  - network.client: link previews (pages and YouTube) via LinkPresentation's
-    LPMetadataProvider (mac_ui::link::fetch, started from the link card in
-    src/macos_launcher.rs only after the user reveals the card). LinkPresentation needs
-    this entitlement to fetch remote URLs in the sandbox.
   - files.user-selected.read-write: "Choose file" NSOpenPanel (macos_open::choose_path)
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).
   Not needed: NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),
-  Vision OCR, NSUserDefaults, opening a URL in the browser, and drag and drop. A file
+  Vision text and barcode reading and the CoreImage blur (all on the device),
+  NSUserDefaults, drag and drop, and Visit:
+  NSWorkspace hands the link to the default browser, which loads it, not Copycraft. A file
   dropped on the card is read like a chosen file: mac_ui::drop reads its URL from the
   drag pasteboard (readObjectsForClasses), which extends the sandbox to that one file
   for the rest of the launch. No security scope to start or stop. A promised file
@@ -21,8 +21,6 @@
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>

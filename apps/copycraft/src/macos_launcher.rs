@@ -33,7 +33,6 @@ use crate::clipboard::SecretBytes;
 use crate::commands::{self, ChipFrame, Command, CommandId, LaunchData};
 use crate::format::FormatKind;
 use crate::launcher::{self, UserEvent};
-use crate::link_preview::{self, State as LinkState};
 
 const WIDTH: f64 = 440.0;
 const PAD: f64 = 14.0;
@@ -41,8 +40,6 @@ const HEADER_H: f64 = 32.0;
 const HEADER_BUTTON: f64 = 22.0;
 const CLEAR_BUTTON_W: f64 = 64.0;
 const PREVIEW_H: f64 = 264.0;
-/// A revealed link with a preview shows the URL in a strip this tall at the bottom of the well.
-const URL_STRIP_H: f64 = 40.0;
 const WELL_ACTION: f64 = 26.0;
 const WELL_INSET: f64 = 8.0;
 const WELL_GAP: f64 = 6.0;
@@ -129,13 +126,6 @@ thread_local! {
     static PAINTED: RefCell<Option<(String, Option<FormatKind>, bool)>> =
         const { RefCell::new(None) };
     static LINK_PAGE: RefCell<Option<String>> = const { RefCell::new(None) };
-    /// Link previews of this session (`link_preview`), fetched with LinkPresentation.
-    static LINK_PREVIEWS: RefCell<link_preview::Previews<mac_ui::link::Metadata>> =
-        const { RefCell::new(link_preview::Previews::new()) };
-    /// The running preview fetch, to cancel it on close, Wipe or another link.
-    static LINK_FETCH: RefCell<Option<mac_ui::link::Fetch>> = const { RefCell::new(None) };
-    /// The rich preview in the well (`mac_ui::link::view`) and the link it shows.
-    static LINK_VIEW: RefCell<Option<(String, Retained<NSView>)>> = const { RefCell::new(None) };
     static WINDOW: RefCell<Option<Retained<LauncherWindow>>> = const { RefCell::new(None) };
     static FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static HEADER: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -599,7 +589,6 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
 
 fn hide() {
     set_item_find(false);
-    close_link_previews();
     if !is_open() && !window_is_visible() {
         return;
     }
@@ -609,16 +598,6 @@ fn hide() {
         }
     });
     OPEN.set(false);
-}
-
-/// The card closes: cancel a running preview fetch and forget failed ones (the next open tries
-/// again). Fetched previews stay for the session.
-fn close_link_previews() {
-    LINK_PREVIEWS.with(|previews| previews.borrow_mut().close());
-    if let Some(fetch) = LINK_FETCH.with(|slot| slot.borrow_mut().take()) {
-        fetch.cancel();
-    }
-    hide_link_view();
 }
 
 fn window_is_visible() -> bool {
@@ -760,7 +739,6 @@ fn ensure_window(mtm: MainThreadMarker) {
 }
 
 fn layout(fresh_place: bool) {
-    start_link_preview();
     let searching = SEARCHING.with(Cell::get);
     let query = if searching {
         current_query()
@@ -772,7 +750,7 @@ fn layout(fresh_place: bool) {
     } else {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
-    let meta = resolved_meta();
+    let meta = card_meta();
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -1224,33 +1202,6 @@ fn blank_masked_well() {
     });
 }
 
-fn resolved_meta() -> String {
-    let meta = card_meta();
-    match link_note() {
-        Some(note) if meta.is_empty() => note.to_string(),
-        Some(note) => format!("{note}  ·  {meta}"),
-        None => meta,
-    }
-}
-
-/// The note in the meta line of a revealed link card while its preview loads, or why it has
-/// none (the URL stays in the well either way).
-fn link_note() -> Option<&'static str> {
-    if well_is_masked() {
-        return None;
-    }
-    let page = LINK_PAGE.with(|slot| slot.borrow().clone())?;
-    let Some(target) = link_preview::preview_target(&page) else {
-        return Some("No preview for this link");
-    };
-    match LINK_PREVIEWS.with(|previews| previews.borrow().state(&target)) {
-        LinkState::Loading => Some("Loading preview…"),
-        LinkState::Failed => Some("No preview: the page did not load"),
-        LinkState::Blocked => Some("No preview for private or local links"),
-        LinkState::Idle | LinkState::Ready => None,
-    }
-}
-
 fn card_meta() -> String {
     CARD_META.with(|slot| slot.borrow().clone())
 }
@@ -1280,7 +1231,6 @@ fn apply_preview(y: f64) {
     });
     place_reveal_cover(y);
     if SHOWS_IMAGE.with(Cell::get) {
-        hide_link_view();
         clear_preview_text();
         set_preview_text_hidden(true);
         show_preview_image();
@@ -1289,27 +1239,7 @@ fn apply_preview(y: f64) {
         return;
     }
     THUMB_TOKEN.set(-1);
-    let page = LINK_PAGE.with(|slot| slot.borrow().clone());
-    if let Some(page) = page.as_deref() {
-        set_preview_image_hidden(true);
-        // Revealed and fetched: the preview above, the URL in a strip under it. Otherwise the
-        // URL fills the well (blurred until revealed, or with a note when there is no preview).
-        if show_link_view(page, y) {
-            PREVIEW_SCROLL.with(|slot| {
-                if let Some(view) = slot.borrow().as_ref() {
-                    view.setFrame(NSRect::new(
-                        NSPoint::new(PAD, y),
-                        NSSize::new(WIDTH - PAD * 2.0, URL_STRIP_H),
-                    ));
-                }
-            });
-        }
-        let excerpt = CARD_EXCERPT.with(|slot| slot.borrow().clone());
-        paint_preview_text(&excerpt, true);
-        finish_preview();
-        return;
-    }
-    hide_link_view();
+    // A link is plain text in the well, like any copy (copycraft never goes online).
     set_preview_image_hidden(true);
     let excerpt = CARD_EXCERPT.with(|slot| slot.borrow().clone());
     let placeholder = CARD_PLACEHOLDER.with(|slot| slot.borrow().clone());
@@ -1693,130 +1623,6 @@ fn paint_preview_text(body: &str, payload: bool) {
     });
 }
 
-/// Fetch the preview of the link on the card, once the user has revealed it: never on copy or
-/// while the card is blurred. A fetch still running for another link is cancelled.
-fn start_link_preview() {
-    let page = LINK_PAGE.with(|slot| slot.borrow().clone());
-    let target = page.as_deref().and_then(link_preview::preview_target);
-    let stale = LINK_PREVIEWS.with(|previews| {
-        previews
-            .borrow()
-            .loading_target()
-            .is_some_and(|loading| Some(loading) != target.as_deref())
-    });
-    if stale {
-        cancel_link_fetch();
-    }
-    let Some(target) = target else {
-        return;
-    };
-    let revealed = is_open() && !well_is_masked();
-    let Some(token) = LINK_PREVIEWS.with(|previews| previews.borrow_mut().begin(&target, revealed))
-    else {
-        return;
-    };
-    if let Some(replaced) = LINK_FETCH.with(|slot| slot.borrow_mut().take()) {
-        replaced.cancel();
-    }
-    let fetch = mac_ui::link::fetch(&target, link_preview::TIMEOUT, move |found| {
-        link_fetched(token, found);
-    });
-    match fetch {
-        Some(fetch) => {
-            LINK_FETCH.with(|slot| slot.replace(Some(fetch)));
-        }
-        None => {
-            LINK_PREVIEWS.with(|previews| previews.borrow_mut().finish(token, None));
-        }
-    }
-}
-
-/// A preview fetch ended (on the main thread). Show it when its link is still on the card.
-fn link_fetched(token: u64, found: Option<mac_ui::link::Metadata>) {
-    let Some(target) = LINK_PREVIEWS.with(|previews| previews.borrow_mut().finish(token, found))
-    else {
-        return;
-    };
-    LINK_FETCH.with(|slot| slot.replace(None));
-    let page = LINK_PAGE.with(|slot| slot.borrow().clone());
-    let shown = page.as_deref().and_then(link_preview::preview_target) == Some(target);
-    if shown && is_open() {
-        layout(false);
-    }
-}
-
-fn cancel_link_fetch() {
-    LINK_PREVIEWS.with(|previews| previews.borrow_mut().cancel());
-    if let Some(fetch) = LINK_FETCH.with(|slot| slot.borrow_mut().take()) {
-        fetch.cancel();
-    }
-}
-
-/// Put the fetched preview of `page` in the well, above the URL strip, when the card is
-/// revealed and the preview is there. Returns whether it is shown.
-fn show_link_view(page: &str, y: f64) -> bool {
-    let target = if well_is_masked() {
-        None
-    } else {
-        link_preview::preview_target(page)
-    };
-    let metadata = target.as_deref().and_then(|target| {
-        LINK_PREVIEWS.with(|previews| previews.borrow().metadata(target).cloned())
-    });
-    let (Some(mtm), Some(target), Some(metadata)) = (MainThreadMarker::new(), target, metadata)
-    else {
-        hide_link_view();
-        return false;
-    };
-    let Some(well) = WELL.with(|slot| slot.borrow().clone()) else {
-        return false;
-    };
-    // SAFETY: the superview is used right away, while the view hierarchy keeps it alive.
-    let Some(parent) = (unsafe { well.superview() }) else {
-        return false;
-    };
-    let current = LINK_VIEW.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .is_some_and(|(shown, _)| *shown == target)
-    });
-    if !current {
-        hide_link_view();
-        // VoiceOver reads the page title, or the site when the page has none.
-        let site = crate::page_preview::host(&target).unwrap_or("Link");
-        let view = mac_ui::link::view(mtm, &metadata, site);
-        parent.addSubview_positioned_relativeTo(&view, NSWindowOrderingMode::Above, Some(&well));
-        LINK_VIEW.with(|slot| slot.replace(Some((target, view))));
-    }
-    // Clear of the Copy button at the top right of the well.
-    let actions = CONTENT_ACTIONS.get();
-    let right = if actions.copy || actions.save {
-        WELL_ACTION + WELL_GAP
-    } else {
-        0.0
-    };
-    LINK_VIEW.with(|slot| {
-        if let Some((_, view)) = slot.borrow().as_ref() {
-            view.setFrame(NSRect::new(
-                NSPoint::new(PAD + WELL_INSET, y + URL_STRIP_H),
-                NSSize::new(
-                    WIDTH - PAD * 2.0 - WELL_INSET * 2.0 - right,
-                    PREVIEW_H - URL_STRIP_H - WELL_INSET,
-                ),
-            ));
-        }
-    });
-    raise_content_actions();
-    true
-}
-
-fn hide_link_view() {
-    if let Some((mut target, view)) = LINK_VIEW.with(|slot| slot.borrow_mut().take()) {
-        view.removeFromSuperview();
-        target.zeroize();
-    }
-}
-
 fn load_thumbnail() {
     let already = PREVIEW_IMAGE.with(|slot| {
         slot.borrow()
@@ -2172,12 +1978,6 @@ pub fn wipe_shown() {
     for slot in [&ACTIONS, &POOL, &OVERFLOW, &SHOWN] {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
-    // Stop a running preview fetch and forget every fetched preview.
-    LINK_PREVIEWS.with(|previews| previews.borrow_mut().wipe());
-    if let Some(fetch) = LINK_FETCH.with(|slot| slot.borrow_mut().take()) {
-        fetch.cancel();
-    }
-    hide_link_view();
     PAINTED.with(|slot| {
         if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
             text.zeroize();
@@ -2396,7 +2196,7 @@ fn text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<NSScrollVie
 fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     let view = widgets::image_view(mtm);
     view.setHidden(true);
-    // Clipboard pictures, link page thumbnails and video thumbnails all show here.
+    // Copied and dropped pictures show here.
     view.setAccessibilityLabel(Some(&NSString::from_str("Image preview")));
     view
 }
@@ -2749,36 +2549,6 @@ mod tests {
         fn drop(&mut self) {
             super::FAIL_BLUR.with(|cell| cell.set(false));
         }
-    }
-
-    #[test]
-    fn link_is_fetched_only_after_the_reveal() {
-        let _reset = ResetFind::arm();
-        let idle = || {
-            super::LINK_PREVIEWS.with(|previews| previews.borrow().loading_target().is_none())
-                && super::LINK_FETCH.with(|slot| slot.borrow().is_none())
-        };
-        // Copied and opened: blurred, so nothing is requested and there is no note.
-        super::store(copied("https://example.com/docs"));
-        assert!(super::MASKS.get());
-        super::OPEN.set(true);
-        super::start_link_preview();
-        assert!(idle());
-        assert_eq!(super::link_note(), None);
-        assert_eq!(super::resolved_meta(), super::card_meta());
-        // Revealed, but private: still no request, the URL with a note instead.
-        super::store(copied("http://nas.local/admin"));
-        super::REVEALED.set(true);
-        super::start_link_preview();
-        assert!(idle());
-        assert_eq!(
-            super::link_note(),
-            Some("No preview for private or local links")
-        );
-        assert!(super::resolved_meta().starts_with("No preview for private or local links"));
-        super::hide();
-        super::wipe_shown();
-        assert!(idle());
     }
 
     #[test]

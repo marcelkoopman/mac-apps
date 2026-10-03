@@ -12,8 +12,6 @@ mod hotkey;
 mod icon;
 mod image_ops;
 mod launcher;
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-mod link_preview;
 mod memo;
 mod menubar;
 mod open_file;

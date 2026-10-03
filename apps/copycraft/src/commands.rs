@@ -357,8 +357,8 @@ pub struct WorkCard {
     pub highlight: Option<FormatKind>,
     /// The well text can be selected, so part of a data URL can be copied on its own.
     pub selectable: bool,
-    /// The link (a page or a YouTube video) when the card shows a link preview
-    /// (`link_preview`, LinkPresentation) above the URL once it is revealed.
+    /// The link (a page or a YouTube video) on a link card. Shown as plain text: nothing is
+    /// fetched for it.
     pub link_page: Option<String>,
     /// Set when the excerpt is a preview of a longer text, for example
     /// "Showing 200 of 23,220 rows". "Show all" renders the rest.
@@ -1057,7 +1057,7 @@ pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     })
 }
 
-/// A page link. The site shows in the preview, so the title is the kind: "Link".
+/// A page link: the URL as plain text under the kind, "Link". Nothing is fetched for it.
 fn page_card(text: &str) -> Option<WorkCard> {
     let page = crate::page_preview::page_url(text)?;
     Some(WorkCard {
@@ -1067,7 +1067,7 @@ fn page_card(text: &str) -> Option<WorkCard> {
         placeholder: String::new(),
         shows_image: false,
         highlight: None,
-        // The URL under the preview can be selected and copied.
+        // The URL can be selected and copied.
         selectable: true,
         link_page: Some(page.to_string()),
         preview_note: None,
@@ -1508,7 +1508,7 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
             if crate::youtube::video_id(text).is_some()
                 || crate::page_preview::page_url(text).is_some()
             {
-                // Copy the URL shown under the preview. Nothing to save.
+                // Copy the URL. Nothing to save.
                 ContentActions {
                     copy: true,
                     save: false,
@@ -2143,7 +2143,7 @@ fn main() {
     }
 
     #[test]
-    fn credential_url_stays_a_link_card_without_a_preview_fetch() {
+    fn credential_url_stays_a_link_card() {
         let url = "https://deploy:s3cr3t@github.com/acme/app.git";
         let input = data(SubjectKind::Text, Some(url));
         let card = work_card(&input);
@@ -2581,7 +2581,7 @@ fn main() {
         assert_eq!(card.link_page.as_deref(), Some(url));
         assert_eq!(card.excerpt, url);
         assert!(card.selectable);
-        // Blurred until revealed: the preview is fetched only after that.
+        // Blurred until revealed, like any copy.
         assert!(masks_content(&card, CardView::Original));
         assert_eq!(titles(&chips(&input)), vec!["Visit"]);
         assert_eq!(
@@ -2594,7 +2594,7 @@ fn main() {
     }
 
     #[test]
-    fn bare_host_previews_as_a_page() {
+    fn bare_host_is_a_link_card() {
         let input = data(SubjectKind::Text, Some("grok.com"));
         let card = work_card(&input);
         assert_eq!(card.title, "Link");

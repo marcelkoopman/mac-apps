@@ -34,6 +34,7 @@ Kleinste opdracht die de change dekt:
 - Wijzig je `crates/mac-ui`, check dan beide apps (`cargo check --workspace`).
 - Klaar = code is geschreven, compileert lokaal, relevante tests zijn groen en clippy is clean.
 - Geen generated files of `Cargo.lock` aanraken tenzij deps écht wijzigen.
+- Copycraft is offline by design (gevoelige klembordgegevens): geen netwerkcode, geen netwerk-dependencies (ook niet via mac-ui-features) en geen `com.apple.security.network.*`-entitlement. Netwerk hoort alleen in ticker.
 
 ## Git & Workflow (Strikte Restricties)
 

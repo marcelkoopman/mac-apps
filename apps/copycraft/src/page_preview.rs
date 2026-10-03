@@ -1,3 +1,6 @@
+//! Recognising a copied page link, for the Link card and Visit. String checks only: nothing is
+//! fetched (copycraft works offline).
+
 /// A clipboard that is only an HTML page URL. YouTube videos are handled apart.
 pub fn page_url(text: &str) -> Option<&str> {
     let text = text.trim();
