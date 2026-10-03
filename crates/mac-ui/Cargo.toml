@@ -106,6 +106,16 @@ progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "o
 blur = ["objc2-foundation/NSArray"]
 # `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
 image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep"]
+# `mac_ui::link`: link previews with LinkPresentation: an LPMetadataProvider fetch (http/https
+# only, with a timeout and cancel; the result goes to the main thread on NSOperationQueue with a
+# block2 block) and an LPLinkView labelled for VoiceOver (NSAccessibilityProtocols, already on).
+link = [
+    "dep:block2",
+    "dep:objc2-link-presentation",
+    "objc2-foundation/block2",
+    "objc2-foundation/NSOperation",
+    "objc2-foundation/NSURL",
+]
 # `mac_ui::notify`: user notifications (UserNotifications framework in an app bundle, osascript
 # `display notification` without one).
 notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBundle", "objc2-foundation/NSError"]
@@ -128,8 +138,10 @@ objc2-app-kit = { workspace = true, features = [
     "NSStatusBarButton",
     "NSStatusItem",
 ] }
-# `notify` and `drop` only.
+# `notify`, `drop` and `link` only.
 block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }
 # `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
+# `link` only.
+objc2-link-presentation = { workspace = true, optional = true }
