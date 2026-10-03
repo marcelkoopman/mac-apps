@@ -1,3 +1,4 @@
+use crate::atomic_file::{move_aside, write_atomic};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
@@ -313,8 +314,7 @@ fn load_or_backup(path: &Path) -> io::Result<WatchLoad> {
     match serde_json::from_str(&content) {
         Ok(list) => Ok(WatchLoad::Loaded(list)),
         Err(e) => {
-            let backup = backup_path(path);
-            fs::rename(path, &backup)?;
+            let backup = move_aside(path)?;
             Ok(WatchLoad::Recovered {
                 list: WatchList::new(),
                 backup,
@@ -324,33 +324,11 @@ fn load_or_backup(path: &Path) -> io::Result<WatchLoad> {
     }
 }
 
-/// `<file>.bak`, or `<file>.<n>.bak` when earlier backups exist (never replaces one).
-fn backup_path(path: &Path) -> PathBuf {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "watches.json".into());
-    let candidate = path.with_file_name(format!("{name}.bak"));
-    if !candidate.exists() {
-        return candidate;
-    }
-    (1u32..)
-        .map(|n| path.with_file_name(format!("{name}.{n}.bak")))
-        .find(|p| !p.exists())
-        .unwrap_or(candidate)
-}
-
-/// Write to a temporary file next to `path`, then rename over it: a crash mid-write leaves the
-/// old file intact instead of a truncated one.
+/// Write the list to a temporary file next to `path`, then rename over it
+/// ([`write_atomic`]): a crash mid-write leaves the old file intact instead of a truncated one.
 fn save_to(path: &Path, watch_list: &WatchList) -> io::Result<()> {
     let content = serde_json::to_string_pretty(watch_list)?;
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "watches.json".into());
-    let tmp = path.with_file_name(format!(".{name}.tmp"));
-    fs::write(&tmp, content)?;
-    fs::rename(&tmp, path)
+    write_atomic(path, content.as_bytes())
 }
 
 #[cfg(test)]

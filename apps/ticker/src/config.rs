@@ -1,3 +1,4 @@
+use crate::atomic_file::write_atomic;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
@@ -154,7 +155,7 @@ pub fn load_config() -> Result<Config, Box<dyn Error>> {
 pub fn save_user_config(config: &Config) -> Result<PathBuf, Box<dyn Error>> {
     let path = user_config_path()?;
     let body = toml::to_string_pretty(config)?;
-    fs::write(&path, body)?;
+    write_atomic(&path, body.as_bytes())?;
     Ok(path)
 }
 
@@ -242,7 +243,7 @@ pub fn load_menubar_pin() -> Option<String> {
 
 pub fn save_menubar_pin(name: &str) -> Result<(), Box<dyn Error>> {
     let path = menubar_pin_path()?;
-    fs::write(path, name.trim())?;
+    write_atomic(&path, name.trim().as_bytes())?;
     Ok(())
 }
 

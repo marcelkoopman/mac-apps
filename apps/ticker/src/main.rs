@@ -2,6 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
+mod atomic_file;
 mod config;
 mod dialogs;
 mod freshness;

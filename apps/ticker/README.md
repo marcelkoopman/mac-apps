@@ -51,10 +51,12 @@ State files in your home directory (without one, Ticker uses the bundled config,
 | `~/.ticker_config.toml` | User config (written by *Edit asset…*) |
 | `~/.ticker_menubar_asset` | Menu bar asset picked from the menu |
 | `~/.ticker_watches.json` | Price watches. If it cannot be parsed at start, the menu bar app moves it to `.ticker_watches.json.bak` (`.1.bak`, … if that exists), starts with no watches and shows a notification |
-| `~/.ticker_price_history.json` | Day-open and last-poll prices |
+| `~/.ticker_price_history.json` | Day-open and last-poll prices. A file that cannot be parsed is moved to `.ticker_price_history.json.bak` (logged) and the history starts over |
 | `~/.ticker_watches.json.lock` | Lock held while the CLI or the menu bar app loads, changes and saves the watches, so neither overwrites the other's change |
 | `~/.ticker_debug.log` | Log of the menu bar app, recreated at every start once it holds the instance lock (CLI commands never touch it) |
 | `~/.ticker.lock` | Single-instance lock of the menu bar app (next to `.ticker_config.toml`; a second start exits, CLI commands ignore it) |
+
+Config, pin, history and watches are saved atomically: written to a temporary file in the same directory, fsynced, then renamed over the old one, so a crash or full disk never leaves half a file. A symlinked file (for example from a dotfiles repo) stays a symlink; its target is replaced.
 
 ## Watch CLI
 

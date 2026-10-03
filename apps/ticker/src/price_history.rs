@@ -1,3 +1,4 @@
+use crate::atomic_file::{move_aside, write_atomic};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,16 +74,43 @@ fn today_local() -> String {
     Local::now().format("%Y-%m-%d").to_string()
 }
 
+/// The history at `path`; empty when there is none yet. A file that does not parse is moved to
+/// `.bak` (with a log line) so the next save starts a fresh one without destroying it.
 fn load_file(path: &Path) -> PriceHistoryFile {
-    match fs::read_to_string(path) {
-        Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
-        Err(_) => PriceHistoryFile::default(),
+    let data = match fs::read_to_string(path) {
+        Ok(data) => data,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return PriceHistoryFile::default(),
+        Err(e) => {
+            crate::log_message(&format!(
+                "price history: cannot read {}: {e}",
+                path.display()
+            ));
+            return PriceHistoryFile::default();
+        }
+    };
+    match serde_json::from_str(&data) {
+        Ok(file) => file,
+        Err(e) => {
+            match move_aside(path) {
+                Ok(backup) => crate::log_message(&format!(
+                    "price history: {} is corrupt ({e}); moved to {} and starting over",
+                    path.display(),
+                    backup.display()
+                )),
+                Err(move_err) => crate::log_message(&format!(
+                    "price history: {} is corrupt ({e}) and could not be moved aside \
+                     ({move_err}); starting over",
+                    path.display()
+                )),
+            }
+            PriceHistoryFile::default()
+        }
     }
 }
 
 fn save_file(path: &Path, history: &PriceHistoryFile) -> Result<(), Box<dyn Error>> {
     let data = serde_json::to_string_pretty(history)?;
-    fs::write(path, data)?;
+    write_atomic(path, data.as_bytes())?;
     Ok(())
 }
 
@@ -181,6 +209,30 @@ mod tests {
         assert_eq!(loaded.get("Bitcoin"), Some(&94000.0));
 
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn corrupt_file_is_moved_to_bak_and_history_starts_over() {
+        let dir = env::temp_dir().join(format!(
+            "ticker_test_corrupt_history_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        fs::write(&path, "{ not json").unwrap();
+
+        assert!(load_day_opens_from(&path).is_empty());
+        assert!(!path.exists());
+        let backup = dir.join("history.json.bak");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "{ not json");
+
+        let mut opens = HashMap::new();
+        opens.insert("Gold".to_string(), 2500.0);
+        save_day_opens_to(&path, &opens).unwrap();
+        assert_eq!(load_day_opens_from(&path).get("Gold"), Some(&2500.0));
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "{ not json");
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
