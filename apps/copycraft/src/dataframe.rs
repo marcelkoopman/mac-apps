@@ -26,7 +26,7 @@ pub struct DataframePreview {
     pub shown_rows: usize,
     /// Text columns read as dates.
     pub dates: Vec<DateColumn>,
-    /// The column overview of a wide table ([`overview`]).
+    /// The column overview ([`overview`]), when it is the view shown.
     pub overview: Option<String>,
     /// Columns in the table.
     pub columns: usize,
@@ -35,16 +35,27 @@ pub struct DataframePreview {
 /// Like [`try_format`], but renders at most `max_rows` rows. Parsing is quick; rendering every
 /// row of a large table is what takes time.
 /// The card shows it: long shared prefixes of column names are shortened ([`display_names`]).
-pub fn try_format_preview(text: &str, max_rows: usize) -> Option<DataframePreview> {
+/// `overview`: show the column overview ([`shows_overview`]).
+pub fn try_format_preview(
+    text: &str,
+    max_rows: usize,
+    overview: Option<bool>,
+) -> Option<DataframePreview> {
     let mut df = parse(text)?;
     let dates = read_dates(&mut df, DateOrder::DayFirst);
-    let mut preview = frame_preview(&df, max_rows)?;
+    let mut preview = frame_preview(&df, max_rows, overview)?;
     preview.dates = dates;
     Some(preview)
 }
 
-/// [`try_format_preview`] for a table version worked out already.
-pub fn frame_preview(df: &DataFrame, max_rows: usize) -> Option<DataframePreview> {
+/// [`try_format_preview`] for a table version worked out already. The column overview is
+/// worked out only when it is shown: `overview` is the entry's choice, `None` before there is
+/// one ([`shows_overview`]).
+pub fn frame_preview(
+    df: &DataFrame,
+    max_rows: usize,
+    overview: Option<bool>,
+) -> Option<DataframePreview> {
     let rows = df.height();
     let shown = df.head(Some(max_rows));
     let shown_rows = shown.height();
@@ -53,7 +64,9 @@ pub fn frame_preview(df: &DataFrame, max_rows: usize) -> Option<DataframePreview
         rows,
         shown_rows,
         dates: Vec::new(),
-        overview: overview(df),
+        overview: shows_overview(overview, df.width())
+            .then(|| self::overview(df))
+            .flatten(),
         columns: df.width(),
     })
 }

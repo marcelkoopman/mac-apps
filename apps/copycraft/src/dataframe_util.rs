@@ -177,8 +177,12 @@ pub(crate) mod tests {
         let cell = |from: usize| chars[from..].iter().collect::<String>();
         assert!(cell(type_at).starts_with("number "), "{pv4}");
         assert_eq!(cell(values_at), "always 0.0");
+        // A narrow table has one too; it opens on its grid.
         let narrow = super::parse_table("a,b\n1,2").expect("table");
-        assert!(super::overview(&narrow).is_none());
+        assert!(super::overview(&narrow).is_some());
+        assert!(!super::shows_overview(None, 2) && super::shows_overview(None, 7));
+        assert!(super::shows_overview(Some(true), 2) && !super::shows_overview(Some(false), 20));
+        assert!(!super::shows_overview(Some(true), 0));
     }
 
     #[test]
@@ -249,7 +253,7 @@ pub(crate) mod tests {
     #[test]
     fn a_table_version_renders_writes_and_saves_from_its_frame() {
         let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
-        let preview = super::frame_preview(&df, 2).expect("preview");
+        let preview = super::frame_preview(&df, 2, None).expect("preview");
         assert_eq!((preview.rows, preview.shown_rows), (3, 2));
         assert!(preview.grid.contains("shape: (2, 2)"), "{}", preview.grid);
         assert!(super::frame_grid(&df).expect("grid").contains("shape: (3, 2)"));
@@ -449,7 +453,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     #[test]
     fn reads_day_first_dates_as_dates() {
         use polars::prelude::DataType;
-        let preview = super::try_format_preview(ENERGY_FIXTURE, 200).expect("preview");
+        let preview = super::try_format_preview(ENERGY_FIXTURE, 200, None).expect("preview");
         assert_eq!(preview.dates.len(), 1);
         assert!(!preview.dates[0].ambiguous);
         assert_eq!(preview.dates[0].order, super::DateOrder::DayFirst);
@@ -468,7 +472,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
     #[test]
     fn ambiguous_dates_are_read_day_first_and_said_so() {
         let src = "when,amount\n01/02/2024,1\n03/04/2024,2";
-        let preview = super::try_format_preview(src, 200).expect("preview");
+        let preview = super::try_format_preview(src, 200, None).expect("preview");
         assert!(preview.dates[0].ambiguous);
         assert!(preview.grid.contains("2024-02-01"), "{}", preview.grid);
         assert_eq!(
@@ -476,7 +480,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
             Some("Dates read as dd/mm/yyyy")
         );
         // 31 February is no date: the column stays text.
-        let bad = super::try_format_preview("when,amount\n31/02/2024,1\n15/03/2024,2", 200)
+        let bad = super::try_format_preview("when,amount\n31/02/2024,1\n15/03/2024,2", 200, None)
             .expect("preview");
         assert!(bad.dates.is_empty());
         assert!(bad.grid.contains("31/02/2024"));

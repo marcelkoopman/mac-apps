@@ -258,8 +258,9 @@ pub struct TableShown {
     pub options: dataframe::ReadOptions,
     /// What reading it found, once it was read.
     pub notes: Option<dataframe::ReadNotes>,
-    /// Show a wide table as its grid, not its column overview.
-    pub grid: bool,
+    /// The entry shows the column overview (`true`) or the grid; `None` until it is decided
+    /// ([`dataframe::shows_overview`]).
+    pub overview: Option<bool>,
 }
 
 impl TableShown {
@@ -284,7 +285,7 @@ impl PartialEq for TableShown {
             && self.describe.is_some() == other.describe.is_some()
             && self.options == other.options
             && self.notes == other.notes
-            && self.grid == other.grid
+            && self.overview == other.overview
     }
 }
 
@@ -449,7 +450,7 @@ pub enum CommandId {
     TableHeaderLine(usize),
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
-    /// Show a wide table as its grid (`true`) or its column overview.
+    /// Show the table as its grid (`true`) or its column overview, for every version of the entry.
     TableGrid(bool),
     Quit,
 }
@@ -827,7 +828,7 @@ fn apply_text_view(
             {
                 show_table_version(card, table, full)
             }
-            _ => show_dataframe(card, source, full, table.is_some_and(|table| table.grid)),
+            _ => show_dataframe(card, source, full, table.and_then(|table| table.overview)),
         }
         if let Some(error) = table.and_then(|table| table.error.as_deref()) {
             add_meta_note(card, error);
@@ -931,15 +932,15 @@ const META_SEPARATOR: &str = "  ·  ";
 /// and says where the header is and which date order was read when either is a guess.
 /// The grid no longer has the table's delimiters, so a Salaris column would lose its financial
 /// mark: the meta classifies the copied table.
-fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, grid: bool) {
+fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, overview: Option<bool>) {
     let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
-    let Some(preview) = dataframe::try_format_preview(source, max_rows) else {
+    let Some(preview) = dataframe::try_format_preview(source, max_rows, overview) else {
         return;
     };
     card.title = "Dataframe".to_string();
     card.highlight = Some(FormatKind::Dataframe);
     card.selectable = true;
-    if let Some(overview) = preview.overview.as_ref().filter(|_| !grid) {
+    if let Some(overview) = preview.overview.as_ref() {
         card.meta = text_meta(source);
         card.excerpt = overview.clone();
         card.preview_note = None;
@@ -1009,7 +1010,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
         return;
     };
     let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
-    let Some(preview) = dataframe::frame_preview(frame, max_rows) else {
+    let Some(preview) = dataframe::frame_preview(frame, max_rows, table.overview) else {
         card.excerpt.clear();
         card.placeholder = "The table is empty".to_string();
         card.selectable = false;
@@ -1019,7 +1020,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     card.selectable = true;
     card.meta = text_meta_from(&csv, &csv);
-    if let Some(overview) = preview.overview.as_ref().filter(|_| !table.grid) {
+    if let Some(overview) = preview.overview.as_ref() {
         card.excerpt = overview.clone();
         add_meta_note(card, &overview_note(&preview));
     } else if preview.rows > preview.shown_rows {
@@ -1525,18 +1526,19 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
     }
 }
 
-/// "Show table" on a wide table's column overview, "Show columns" on its grid (Dataframe view).
+/// "Show table" on the column overview, "Show columns" on the grid (Dataframe view), for any
+/// table with a column. The width only picks the view an entry opens on.
 fn grid_command(data: &LaunchData) -> Option<Command> {
     let table = data.table.as_ref()?;
-    let wide = table
-        .frame
-        .as_ref()
-        .is_some_and(|frame| frame.width() >= dataframe::OVERVIEW_MIN_COLUMNS);
+    let width = table.frame.as_ref().map_or(0, |frame| frame.width());
     let text = data.subject_text.as_deref()?;
-    if !wide || table.describe.is_some() || presented_view(text, data.view) != CardView::Dataframe {
+    if width == 0
+        || table.describe.is_some()
+        || presented_view(text, data.view) != CardView::Dataframe
+    {
         return None;
     }
-    Some(if table.grid {
+    Some(if !dataframe::shows_overview(table.overview, width) {
         command(
             CommandId::TableGrid(false),
             "Show columns",
@@ -3381,7 +3383,7 @@ Id,Naam,Telefoonnummer,Salaris
         let mut table = read(src, crate::dataframe::ReadOptions::default());
         input.table = Some(table.clone());
         assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(true)));
-        table.grid = true;
+        table.overview = Some(false);
         input.table = Some(table);
         let grid = work_card(&input);
         assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
@@ -3419,7 +3421,7 @@ Id,Naam,Telefoonnummer,Salaris
             describe: None,
             options: versions.options(),
             notes: versions.notes(),
-            grid: false,
+            overview: None,
         }
     }
 
@@ -3627,7 +3629,7 @@ Id,Naam,Telefoonnummer,Salaris
             describe: None,
             options: versions.options(),
             notes: versions.notes(),
-            grid: false,
+            overview: None,
         }
     }
 
@@ -3743,6 +3745,54 @@ Id,Naam,Telefoonnummer,Salaris
         original.version = 0;
         input.table = Some(original);
         assert_eq!(VersionBar::of(&input), None);
+    }
+
+    #[test]
+    fn show_columns_and_show_table_are_there_for_any_table_and_the_choice_holds() {
+        use crate::table::TableOp;
+        let src = crate::dataframe::tests::ENERGY_FIXTURE;
+        let names: Vec<String> = crate::dataframe::parse_table(src)
+            .expect("table")
+            .get_column_names()
+            .iter()
+            .take(6)
+            .map(|name| name.to_string())
+            .collect();
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = CardView::Dataframe;
+        let mut table = stepped(src, TableOp::SelectColumns { columns: names });
+        // Chosen (or picked) when the 20 columns were first shown: 6 columns keep the overview.
+        table.overview = Some(true);
+        input.table = Some(table.clone());
+        let card = work_card(&input);
+        assert!(
+            card.excerpt.starts_with("6 columns · 40 rows"),
+            "{}",
+            card.excerpt
+        );
+        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(true)));
+        // Show table: the grid, and Show columns to go back, at 6 columns too.
+        table.overview = Some(false);
+        input.table = Some(table);
+        let card = work_card(&input);
+        assert!(card.excerpt.contains("shape: (40, 6)"), "{}", card.excerpt);
+        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(false)));
+        // A narrow table opens on its grid and can show its columns.
+        let narrow = "name,n\na,1\nb,2";
+        let mut input = data(SubjectKind::Text, Some(narrow));
+        input.view = CardView::Dataframe;
+        let mut table = read(narrow, crate::dataframe::ReadOptions::default());
+        input.table = Some(table.clone());
+        assert!(work_card(&input).excerpt.contains("shape: (2, 2)"));
+        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(false)));
+        table.overview = Some(true);
+        input.table = Some(table);
+        let card = work_card(&input);
+        assert!(
+            card.excerpt.starts_with("2 columns · 2 rows"),
+            "{}",
+            card.excerpt
+        );
     }
 
     #[test]

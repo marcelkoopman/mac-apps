@@ -1,8 +1,15 @@
 // How the card shows a table: column names with a long shared prefix shortened, and for wide
 // tables a column overview. Display only: Copy, Save and the conversions keep the real names.
 
-/// Above this many columns the Dataframe view opens on the column overview.
+/// A table of this many columns or more opens on the column overview.
 pub const OVERVIEW_MIN_COLUMNS: usize = 7;
+
+/// Whether the Dataframe view shows the column overview: the entry's choice once there is one
+/// (made when the entry is first shown, or with Show columns / Show table), else the default
+/// for a table of `width` columns.
+pub fn shows_overview(choice: Option<bool>, width: usize) -> bool {
+    width > 0 && choice.unwrap_or(width >= OVERVIEW_MIN_COLUMNS)
+}
 /// Longest "values" summary in the overview, so a row stays short.
 pub const OVERVIEW_VALUES_CHARS: usize = 64;
 /// Space between the overview's columns.
@@ -247,10 +254,10 @@ fn text_summary(column: &Column) -> String {
 /// The column overview: a plain list, not a polars grid, so it does not read as a transposed
 /// table. A line "20 columns · 192 rows", then the headings column, type and values, then one
 /// aligned line per column with its (display) name, its type ([`friendly_type`]) and its values
-/// in a few words ([`values_summary`]). `None` for a table of at most
-/// [`OVERVIEW_MIN_COLUMNS`] - 1 columns.
+/// in a few words ([`values_summary`]). Any table with a column has one; a wide one opens on
+/// it ([`shows_overview`]). `None` without columns.
 pub fn overview(df: &DataFrame) -> Option<String> {
-    if df.width() < OVERVIEW_MIN_COLUMNS {
+    if df.width() == 0 {
         return None;
     }
     let names: Vec<String> = df
