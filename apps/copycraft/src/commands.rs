@@ -1610,10 +1610,6 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
                 meta.push_str("  ·  ");
                 meta.push_str(&crate::sensitivity::label_line(&found.labels));
             }
-            if found.partial {
-                meta.push_str("  ·  ");
-                meta.push_str(crate::sensitivity::PARTIAL);
-            }
         }
         crate::sensitivity::Labeling::Checking => {
             meta.push_str("  ·  ");

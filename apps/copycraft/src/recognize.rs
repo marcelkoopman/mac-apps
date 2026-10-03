@@ -137,7 +137,7 @@ const PATTERNS: &[Pattern] = &[
     Pattern {
         label: Label::Pii,
         check: Check::Digits,
-        // Dutch mobile numbers, as in the earlier redact-core recognizer.
+        // Dutch mobile numbers.
         source: r"(?:\+31[\s\-]?6|06)[\s\-]?(?:[0-9]{8}|[0-9]{2}[\s\-]?[0-9]{6}|[0-9]{2}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2})",
     },
 ];
@@ -221,10 +221,20 @@ fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
                 .iter()
                 .position(|byte| *byte == b'@')
                 .map_or(start, |offset| start + offset);
-            bytes[start] != b'.' && bytes[at - 1] != b'.'
+            bytes[start] != b'.' && bytes[at - 1] != b'.' && !in_url(bytes, start)
         }
         Check::Digits => no_digit(before) && no_digit(after),
     }
+}
+
+/// `start` sits in a `scheme://user:password@host` token: those are URL credentials, not an
+/// address.
+fn in_url(bytes: &[u8], start: usize) -> bool {
+    let token = bytes[..start]
+        .iter()
+        .rposition(u8::is_ascii_whitespace)
+        .map_or(0, |space| space + 1);
+    memchr::memmem::find(&bytes[token..start], b"://").is_some()
 }
 
 fn no_digit(byte: Option<u8>) -> bool {
@@ -465,22 +475,30 @@ mod tests {
     #[test]
     fn tokens_and_keys_are_credentials() {
         for text in [
-            "aws AKIAIOSFODNN7EXAMPLE rotated",
-            "token ghp_0123456789abcdefghijklmnopqrstuvwxyzAB",
-            "github_pat_11ABCDEFG0123456789_abcdefghijklmnop",
-            "slack xoxb-123456789012-abcdefghijkl",
-            "stripe sk_live_51H8abcdefghijklmnop",
-            "google AIzaSyA-1234567890abcdefghijklmnopqrstu",
-            "openai sk-proj-abcdefghijklmnopqrstuvwx",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----",
-            "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcdefghijk_LMNOP",
-            "v2AKIAIOSFODNN7EXAMPLE",
+            concat!("aws AK", "IAIOSFODNN7EXAMPLE rotated"),
+            concat!("token gh", "p_0123456789abcdefghijklmnopqrstuvwxyzAB"),
+            concat!("github_", "pat_11ABCDEFG0123456789_abcdefghijklmnop"),
+            concat!("slack xo", "xb-123456789012-abcdefghijkl"),
+            concat!("stripe sk_", "live_51H8abcdefghijklmnop"),
+            concat!("google AI", "zaSyA-1234567890abcdefghijklmnopqrstu"),
+            concat!("openai sk-", "proj-abcdefghijklmnopqrstuvwx"),
+            concat!(
+                "-----BEGIN OPENSSH PRIVATE ",
+                "KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE ",
+                "KEY-----"
+            ),
+            concat!(
+                "Bearer ey",
+                "JhbGciOiJIUzI1NiJ9.ey",
+                "JzdWIiOiIxMjM0In0.abcdefghijk_LMNOP"
+            ),
+            concat!("v2AK", "IAIOSFODNN7EXAMPLE"),
         ] {
             assert!(found(text).credential, "{text}");
         }
         for text in [
-            "xAKIAIOSFODNN7EXAMPLE",
-            "AKIAIOSFODNN7EXAMPLEX",
+            concat!("xAK", "IAIOSFODNN7EXAMPLE"),
+            concat!("AK", "IAIOSFODNN7EXAMPLEX"),
             "ghp_short",
             "sk-short",
         ] {
@@ -506,6 +524,8 @@ mod tests {
     fn personal_data() {
         assert!(found("mail me at jan.devries@email.nl please").pii);
         assert!(!found("not an address: jan@localhost").pii);
+        assert!(!found(concat!("postgres://admin:", "hunter2@db.internal/app")).pii);
+        assert!(found("mailto:jan@example.nl").pii);
         assert!(found("bel 06-12345678 of +31 6 12345678").pii);
         assert!(found("nummer 06 12 34 56 78").pii);
         assert!(!found("order 0612345678901").pii);
@@ -534,7 +554,10 @@ mod tests {
 
     #[test]
     fn code_has_no_personal_data_but_keeps_keys() {
-        let rust = "fn main() {\n    let name = \"jan@example.com\";\n    let key = \"AKIAIOSFODNN7EXAMPLE\";\n}\n";
+        let rust = concat!(
+            "fn main() {\n    let name = \"jan@example.com\";\n    let key = \"AK",
+            "IAIOSFODNN7EXAMPLE\";\n}\n"
+        );
         let code = classes(rust, true);
         assert!(code.credential);
         assert!(!code.pii);

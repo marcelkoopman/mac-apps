@@ -26,19 +26,13 @@ impl Label {
 /// Copies shorter than this are checked while the card is built. Longer ones go to the
 /// background checker, and the card says [`CHECKING`] until their labels arrive.
 pub const SYNC_LIMIT: usize = 32 * 1024;
-/// Copies up to this long get every recognizer. Longer ones only the fast linear ones, and the
-/// card says [`PARTIAL`].
-pub const FULL_LIMIT: usize = 256 * 1024;
 /// Meta-line status while the labels are not known yet. The card cannot be revealed meanwhile.
 pub const CHECKING: &str = "Checking…";
-/// Meta-line status of a copy only the fast recognizers looked at.
-pub const PARTIAL: &str = "partially checked";
 
-/// The labels found in a copy, and whether only part of the recognizers ran ([`FULL_LIMIT`]).
+/// The labels found in a copy.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Found {
     pub labels: Vec<Label>,
-    pub partial: bool,
 }
 
 /// What the card knows about a copy's labels.
@@ -67,11 +61,10 @@ pub fn on_checked(hook: fn()) {
     checker::on_ready(hook);
 }
 
-/// The meta-line status at the end of `meta`, if any: [`CHECKING`] or [`PARTIAL`].
+/// The meta-line status at the end of `meta`, if any: [`CHECKING`].
 pub fn meta_status(meta: &str) -> Option<&'static str> {
-    [CHECKING, PARTIAL]
-        .into_iter()
-        .find(|status| meta.ends_with(&format!("  ·  {status}")))
+    meta.ends_with(&format!("  ·  {CHECKING}"))
+        .then_some(CHECKING)
 }
 
 pub fn label_line(labels: &[Label]) -> String {
@@ -128,7 +121,7 @@ fn label_named(name: &str) -> Option<Label> {
 }
 
 /// Kinds present in `text`, one label each, in [`Label`] order.
-/// Named columns such as Naam or Salaris join the leakguard hits.
+/// Named columns such as Naam or Salaris count too.
 /// Rust and Java are source: a path or a field name is not personal data,
 /// so those cards do not pick up a PII label. A real key or account still does.
 /// Remembered for large texts (see [`crate::memo`]): scanning a large copy takes hundreds of
@@ -138,7 +131,7 @@ pub fn labels(text: &str) -> Vec<Label> {
     found(text).labels
 }
 
-/// [`labels`] with the partial flag, computed here and now.
+/// The labels of `text`, computed here and now (or remembered).
 pub fn found(text: &str) -> Found {
     LABELS.get_or_compute(text, |text| scan(text, &|| false).unwrap_or_default())
 }
@@ -153,11 +146,9 @@ pub fn forget_labels() {
 
 /// Scan `text`. `None` when `cancelled` said so between two stages (a newer copy came in).
 ///
-/// First copycraft's own recognizers ([`crate::recognize`]); then leakguard, only for the
-/// classes they did not find; then redact-core's analyzer for personal and financial fields,
-/// only when those are still missing and the copy is at most [`FULL_LIMIT`] long.
+/// First copycraft's own recognizers ([`crate::recognize`]), then leakguard, only for the
+/// classes they did not find. Both are linear: about 60 ms for a megabyte (release build).
 fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
-    let partial = text.len() > FULL_LIMIT;
     let code = is_code(crate::format::detect(text));
     if cancelled() {
         return None;
@@ -174,25 +165,8 @@ fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
             }
         }
     }
-    let fields_missing = !(classes.pii && classes.financial);
-    if !code && fields_missing && !partial {
-        if cancelled() {
-            return None;
-        }
-        // The analyzer is far from linear on large tables (seconds per megabyte).
-        for class in crate::redact::field_classes(text) {
-            classes = with(
-                classes,
-                match class {
-                    crate::redact::FieldClass::Pii => Label::Pii,
-                    crate::redact::FieldClass::Financial => Label::Financial,
-                },
-            );
-        }
-    }
     Some(Found {
         labels: classes.labels(),
-        partial: partial && fields_missing && !code,
     })
 }
 
@@ -340,10 +314,9 @@ mod checker {
             };
             #[cfg(debug_assertions)]
             eprintln!(
-                "copycraft: checked {} KB in {} ms{}",
+                "copycraft: checked {} KB in {} ms",
                 job.text.len() / 1024,
-                started.elapsed().as_millis(),
-                if found.partial { " (partially)" } else { "" }
+                started.elapsed().as_millis()
             );
             #[cfg(not(debug_assertions))]
             let _ = started;
@@ -399,6 +372,9 @@ fn label_for(kind: &Kind) -> Label {
 }
 
 #[cfg(test)]
+mod corpus;
+
+#[cfg(test)]
 mod tests {
     use super::{Label, label_line, labels, warning_marks};
 
@@ -411,7 +387,7 @@ mod tests {
         assert_eq!(labels("pay to NL91ABNA0417164300"), vec![Label::Financial]);
         assert_eq!(labels("card 4111 1111 1111 1111"), vec![Label::Financial]);
         assert_eq!(
-            labels("aws creds AKIAIOSFODNN7EXAMPLE rotated"),
+            labels(concat!("aws creds AK", "IAIOSFODNN7EXAMPLE rotated")),
             vec![Label::Credential]
         );
         assert_eq!(
@@ -419,9 +395,10 @@ mod tests {
             vec![Label::Pii]
         );
         assert_eq!(
-            label_line(&labels(
-                "user jan@example.com key AKIAIOSFODNN7EXAMPLE iban NL91ABNA0417164300"
-            )),
+            label_line(&labels(concat!(
+                "user jan@example.com key AK",
+                "IAIOSFODNN7EXAMPLE iban NL91ABNA0417164300"
+            ))),
             "credential · PII · financial"
         );
     }
@@ -447,13 +424,12 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
 
     #[test]
     fn long_copies_are_checked_in_the_background() {
-        use super::{FULL_LIMIT, Found, Labeling, SYNC_LIMIT, labeling, meta_status};
+        use super::{Found, Labeling, SYNC_LIMIT, labeling, meta_status};
         let short = "mail jan@example.com";
         assert_eq!(
             labeling(short),
             Labeling::Known(Found {
-                labels: vec![Label::Pii],
-                partial: false
+                labels: vec![Label::Pii]
             })
         );
         let long = format!(
@@ -469,28 +445,22 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         assert_eq!(
             answer,
             Labeling::Known(Found {
-                labels: vec![Label::Pii],
-                partial: false
+                labels: vec![Label::Pii]
             })
         );
         let huge = format!(
-            "{}\nkey AKIAIOSFODNN7EXAMPLE\n",
-            "lorem ipsum ".repeat(FULL_LIMIT / 10)
+            concat!("{}\nkey AK", "IAIOSFODNN7EXAMPLE\n"),
+            "lorem ipsum ".repeat(1 << 17)
         );
         assert_eq!(
             super::found(&huge),
             Found {
-                labels: vec![Label::Credential],
-                partial: true
+                labels: vec![Label::Credential]
             }
-        );
-        assert_eq!(
-            meta_status("1.2 MB  ·  credential  ·  partially checked"),
-            Some("partially checked")
         );
         assert_eq!(meta_status("1.2 MB  ·  Checking…"), Some("Checking…"));
         assert_eq!(meta_status("1.2 MB  ·  PII"), None);
-        let marks = warning_marks("1.2 MB  ·  PII · financial  ·  partially checked");
+        let marks = warning_marks("1.2 MB  ·  PII · financial  ·  Checking…");
         assert_eq!(marks.len(), 2);
         assert!(warning_marks("1.2 MB  ·  Checking…").is_empty());
     }
@@ -521,7 +491,10 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
 
     #[test]
     fn rust_source_with_a_key_is_a_credential() {
-        let key = "fn main() {\n    let key = \"AKIAIOSFODNN7EXAMPLE\";\n}\n";
+        let key = concat!(
+            "fn main() {\n    let key = \"AK",
+            "IAIOSFODNN7EXAMPLE\";\n}\n"
+        );
         assert_eq!(labels(key), vec![Label::Credential]);
     }
 

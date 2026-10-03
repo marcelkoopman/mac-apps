@@ -37,7 +37,6 @@ mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "dro
 # the tree through polars.
 regex = "1.13"
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet"] }
-redact-core = "0.12"
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = "0.9"
 zeroize = "1.9.0"
