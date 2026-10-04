@@ -149,6 +149,39 @@ fn table_op(name: &str) -> TableOp {
             rule,
         };
     }
+    // Join(tables/b.csv,key,inner|left), Concat(tables/b.csv): another testdata file's table.
+    if let Some((file, rest)) = name
+        .strip_prefix("Join(")
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|rest| rest.split_once(','))
+    {
+        let (key, how) = rest.rsplit_once(',').expect("Join(file,key,inner|left)");
+        return TableOp::Join {
+            other: other_table(file),
+            key: key.to_string(),
+            left: match how {
+                "inner" => false,
+                "left" => true,
+                other => panic!("unknown join {other}"),
+            },
+        };
+    }
+    if let Some(file) = name
+        .strip_prefix("Concat(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return TableOp::Concat {
+            other: other_table(file),
+        };
+    }
+    if let Some(column) = name
+        .strip_prefix("Drop(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return TableOp::DropColumns {
+            columns: vec![column.to_string()],
+        };
+    }
     // GroupBy(region+product,sum): the keys joined with `+`, then count, sum, mean, min or max.
     if let Some((keys, agg)) = name
         .strip_prefix("GroupBy(")
@@ -182,27 +215,38 @@ fn table_op(name: &str) -> TableOp {
     }
 }
 
-/// The table after the steps `ops` (`Dedupe>DropEmpty`), each from the version before.
-fn after_steps(text: &str, ops: &str) -> polars::prelude::DataFrame {
+/// The versions after the steps `ops` (`Dedupe>DropEmpty`), each from the version before;
+/// none for an empty `ops` (the original, loaded).
+fn versions_after(text: &str, ops: &str) -> crate::table::TableVersions {
     let mut versions = crate::table::TableVersions::default();
-    for op in ops.split('>') {
-        let job = versions.push(table_op(op), text).expect("table step");
+    let run = |versions: &mut crate::table::TableVersions, job: crate::table::Job, op: &str| {
         let done = job
             .run(&std::sync::atomic::AtomicBool::new(false))
             .expect("table job");
         assert!(versions.finish(done), "table step {op} was not taken");
+    };
+    if ops.is_empty() {
+        let job = versions.load(text).expect("table load");
+        run(&mut versions, job, "load");
     }
-    versions.frame().expect("table frame").clone()
+    for op in ops.split('>').filter(|op| !op.is_empty()) {
+        let job = versions.push(table_op(op), text).expect("table step");
+        run(&mut versions, job, op);
+    }
+    versions
 }
 
-/// What "Open in window" shows for the original version of `text`.
-fn window_view(text: &str) -> crate::commands::TableWindowView {
-    let mut versions = crate::table::TableVersions::default();
-    let job = versions.load(text).expect("table load");
-    let done = job
-        .run(&std::sync::atomic::AtomicBool::new(false))
-        .expect("table job");
-    assert!(versions.finish(done), "the table was not loaded");
+/// The table after the steps `ops` ([`versions_after`]).
+fn after_steps(text: &str, ops: &str) -> polars::prelude::DataFrame {
+    versions_after(text, ops)
+        .frame()
+        .expect("table frame")
+        .clone()
+}
+
+/// What "Open in window" shows for the version after `ops` of `text` (the original for none).
+fn window_view_after(text: &str, ops: &str) -> crate::commands::TableWindowView {
+    let versions = versions_after(text, ops);
     let shown = crate::commands::TableShown {
         frame: versions.frame().cloned(),
         frame_id: versions.frame_id(),
@@ -214,8 +258,28 @@ fn window_view(text: &str) -> crate::commands::TableWindowView {
         options: versions.options(),
         notes: versions.notes(),
         overview: None,
+        inherited: versions.inherited(),
+        combine: Vec::new(),
     };
     crate::commands::table_window_view(&shown, text)
+}
+
+/// What "Open in window" shows for the original version of `text`.
+fn window_view(text: &str) -> crate::commands::TableWindowView {
+    window_view_after(text, "")
+}
+
+/// Another testdata file as the other table of Join or Concat: its original, with its labels.
+fn other_table(file: &str) -> crate::table_combine::OtherTable {
+    let text = std::fs::read_to_string(root().join(file))
+        .unwrap_or_else(|e| panic!("other table {file}: {e}"));
+    let (frame, _) = crate::dataframe::parse_table_with(&text, Default::default())
+        .unwrap_or_else(|| panic!("{file} is not a table"));
+    let labels = match crate::sensitivity::labeling(&text) {
+        crate::sensitivity::Labeling::Known(found) => found.labels,
+        crate::sensitivity::Labeling::Checking => panic!("{file} is too long to check now"),
+    };
+    crate::table_combine::OtherTable::new(frame, labels)
 }
 
 fn shape(df: &polars::prelude::DataFrame) -> String {
@@ -248,6 +312,14 @@ fn check(text: &str, check: &str) -> Result<(), String> {
         let rest = &step[ops.len()..];
         let ok = if let Some(want) = rest.strip_prefix(":dtypes=") {
             dtypes(&df) == want
+        } else if let Some(want) = rest.strip_prefix(":meta~") {
+            // The version's meta line (as the table window and the card show it).
+            let meta = window_view_after(text, ops).meta.clone();
+            return if meta.contains(want) {
+                Ok(())
+            } else {
+                fail(&meta)
+            };
         } else if let Some(want) = rest.strip_prefix('=') {
             shape(&df) == want
         } else if let Some(want) = rest.strip_prefix('~') {

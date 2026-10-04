@@ -290,7 +290,37 @@ pub struct TableShown {
     /// The entry shows the column overview (`true`) or the grid; `None` until it is decided
     /// ([`dataframe::shows_overview`]).
     pub overview: Option<bool>,
+    /// Labels the version has from tables combined into it
+    /// ([`crate::table::TableVersions::inherited`]), on its meta line whatever its cells say.
+    pub inherited: Vec<crate::sensitivity::Label>,
+    /// The other history entries' tables it can be joined with or appended to.
+    pub combine: Vec<CombineChoice>,
 }
+
+/// Another history entry with a table, for Join with / Left join with / Append rows of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CombineChoice {
+    /// Where it is in history.
+    pub entry: usize,
+    /// A hash of its copied text, so a pick after history moved does not take another entry.
+    pub check: u64,
+    /// "Copy 2 · CSV  0.3 KB": its place and history title (masked; no copied text).
+    pub title: String,
+    /// Its version's columns, for the keys both tables have.
+    pub columns: Vec<String>,
+}
+
+/// How a picked [`CombineChoice`] combines with the table shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CombineHow {
+    Join { key: String, left: bool },
+    Concat,
+}
+
+/// The Table ▾ submenus of the combining steps.
+pub const JOIN_GROUP: &str = "Join with";
+pub const LEFT_JOIN_GROUP: &str = "Left join with";
+pub const CONCAT_GROUP: &str = "Append rows of";
 
 impl TableShown {
     pub fn can_undo(&self) -> bool {
@@ -315,6 +345,8 @@ impl PartialEq for TableShown {
             && self.options == other.options
             && self.notes == other.notes
             && self.overview == other.overview
+            && self.inherited == other.inherited
+            && self.combine == other.combine
     }
 }
 
@@ -495,6 +527,13 @@ pub enum CommandId {
     /// Ask for a rule for this column (by its type), then filter the table as one step
     /// ([`crate::table_filter`]).
     TableFilter(String),
+    /// Combine the table shown with the history entry `entry` (if its text still hashes to
+    /// `check`) as one step ([`crate::table_combine`]).
+    TableCombine {
+        entry: usize,
+        check: u64,
+        how: CombineHow,
+    },
     Quit,
 }
 
@@ -1084,7 +1123,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     };
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     card.selectable = true;
-    card.meta = text_meta_from(&csv, &csv);
+    card.meta = text_meta_inheriting(&csv, &csv, &table.inherited);
     if let Some(overview) = preview.overview.as_ref() {
         card.excerpt = overview.clone();
         add_meta_note(card, &overview_note(&preview));
@@ -1617,6 +1656,11 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
         CommandId::TableHeaderLine(_) => Some("Header on line"),
         CommandId::TableFilter(_) => Some(FILTER_GROUP),
+        CommandId::TableCombine { how, .. } => Some(match how {
+            CombineHow::Join { left: false, .. } => JOIN_GROUP,
+            CombineHow::Join { left: true, .. } => LEFT_JOIN_GROUP,
+            CombineHow::Concat => CONCAT_GROUP,
+        }),
         _ => None,
     }
 }
@@ -1829,6 +1873,7 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
                 .map(table_step_command),
         );
         commands.extend(filter_commands(frame));
+        commands.extend(combine_commands(&columns, &table.combine));
     }
     if table.can_undo() {
         let label = &table.labels[table.version];
@@ -1871,6 +1916,47 @@ fn filter_commands(frame: &polars::prelude::DataFrame) -> Vec<Command> {
             )
         })
         .collect()
+}
+
+/// Join with › / Left join with › "Copy 2 · CSV  0.3 KB on customer" (one item per column both
+/// tables have), Append rows of › "Copy 2 · …" (when they share a column).
+fn combine_commands(columns: &[String], choices: &[CombineChoice]) -> Vec<Command> {
+    let mut joins = Vec::new();
+    let mut left_joins = Vec::new();
+    let mut appends = Vec::new();
+    for choice in choices {
+        let keys = crate::table_combine::shared_columns(columns, &choice.columns);
+        for key in &keys {
+            for (left, list) in [(false, &mut joins), (true, &mut left_joins)] {
+                list.push(command(
+                    CommandId::TableCombine {
+                        entry: choice.entry,
+                        check: choice.check,
+                        how: CombineHow::Join {
+                            key: key.clone(),
+                            left,
+                        },
+                    },
+                    &format!("{} on {key}", choice.title),
+                    if left { LEFT_JOIN_GROUP } else { JOIN_GROUP },
+                    "join merge combine lookup match key inner left tables",
+                ));
+            }
+        }
+        if !keys.is_empty() {
+            appends.push(command(
+                CommandId::TableCombine {
+                    entry: choice.entry,
+                    check: choice.check,
+                    how: CombineHow::Concat,
+                },
+                &choice.title,
+                CONCAT_GROUP,
+                "concat append combine stack union rows tables",
+            ));
+        }
+    }
+    joins.into_iter().chain(left_joins).chain(appends).collect()
 }
 
 /// The Table ▾ item that opens the column picker.
@@ -1969,7 +2055,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     let original = table.version == 0 && table.options == dataframe::ReadOptions::default();
     let classified: &str = if original { source } else { &csv };
-    let mut meta = text_meta_from(&csv, classified);
+    let mut meta = text_meta_inheriting(&csv, classified, &table.inherited);
     let (rows, columns) = frame.shape();
     let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
     meta.replace_range(
@@ -2373,6 +2459,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableChooseColumns
             | CommandId::TableOpenWindow
             | CommandId::TableFilter(_)
+            | CommandId::TableCombine { .. }
     )
 }
 
@@ -2622,6 +2709,16 @@ fn text_meta(text: &str) -> String {
 /// Size and line count come from `measured`. Classification comes from
 /// `classified`, which stays the copied table when the card shows another rendering.
 fn text_meta_from(measured: &str, classified: &str) -> String {
+    text_meta_inheriting(measured, classified, &[])
+}
+
+/// [`text_meta_from`] with `inherited` labels as well (a table version combined from another
+/// table, [`TableShown::inherited`]), once the labels of `classified` are known.
+fn text_meta_inheriting(
+    measured: &str,
+    classified: &str,
+    inherited: &[crate::sensitivity::Label],
+) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
@@ -2631,9 +2728,13 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
     };
     match crate::sensitivity::labeling(classified) {
         crate::sensitivity::Labeling::Known(found) => {
-            if !found.labels.is_empty() {
+            let mut labels = found.labels.clone();
+            labels.extend_from_slice(inherited);
+            labels.sort();
+            labels.dedup();
+            if !labels.is_empty() {
                 meta.push_str("  ·  ");
-                meta.push_str(&crate::sensitivity::label_line(&found.labels));
+                meta.push_str(&crate::sensitivity::label_line(&labels));
             }
         }
         crate::sensitivity::Labeling::Checking => {
@@ -4074,6 +4175,80 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     #[test]
+    fn join_and_append_are_offered_with_the_other_tables_that_share_a_column() {
+        use super::{CombineChoice, CombineHow};
+        let mut table = deduped("customer,total\nc1,1\nc1,1\nc2,2");
+        table.combine = vec![
+            CombineChoice {
+                entry: 1,
+                check: 7,
+                title: "Copy 2 · CSV  0.1 KB".into(),
+                columns: vec!["name".into(), "customer".into()],
+            },
+            CombineChoice {
+                entry: 3,
+                check: 9,
+                title: "Copy 4 · CSV  0.1 KB".into(),
+                columns: vec!["other".into()],
+            },
+        ];
+        let combine: Vec<(String, Option<&str>, CommandId)> = table_commands(&table)
+            .into_iter()
+            .filter(|c| matches!(c.id, CommandId::TableCombine { .. }))
+            .map(|c| (c.title.clone(), menu_group(&c.id), c.id))
+            .collect();
+        let titles: Vec<(&str, Option<&str>)> =
+            combine.iter().map(|(t, g, _)| (t.as_str(), *g)).collect();
+        // Copy 4 shares no column: not offered.
+        assert_eq!(
+            titles,
+            [
+                ("Copy 2 · CSV  0.1 KB on customer", Some(super::JOIN_GROUP)),
+                (
+                    "Copy 2 · CSV  0.1 KB on customer",
+                    Some(super::LEFT_JOIN_GROUP)
+                ),
+                ("Copy 2 · CSV  0.1 KB", Some(super::CONCAT_GROUP)),
+            ]
+        );
+        assert_eq!(
+            combine[1].2,
+            CommandId::TableCombine {
+                entry: 1,
+                check: 7,
+                how: CombineHow::Join {
+                    key: "customer".into(),
+                    left: true
+                }
+            }
+        );
+        assert!(keeps_card_open(&combine[2].2));
+        // The window offers them too.
+        let view = table_window_view(&table, "customer,total\nc1,1");
+        assert_eq!(
+            view.menu
+                .iter()
+                .filter(|(c, _)| matches!(c.id, CommandId::TableCombine { .. }))
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn a_combined_version_keeps_the_labels_of_the_tables_combined_into_it() {
+        let src = "customer,total\nc1,1\nc1,1\nc2,2";
+        let mut table = deduped(src);
+        let plain = table_window_view(&table, src);
+        assert!(!plain.meta.contains("PII"), "{}", plain.meta);
+        table.inherited = vec![crate::sensitivity::Label::Pii];
+        let inherited = table_window_view(&table, src);
+        assert!(inherited.meta.contains("PII"), "{}", inherited.meta);
+        let mut card = work_card(&data(SubjectKind::Text, Some(src)));
+        super::show_table_version(&mut card, &table, false);
+        assert!(card.meta.contains("PII"), "{}", card.meta);
+    }
+
+    #[test]
     fn the_table_window_says_when_it_shows_part_of_a_long_table() {
         let mut src = String::from("n,m\n");
         for i in 0..(WINDOW_ROWS + 5) {
@@ -4122,6 +4297,8 @@ Id,Naam,Telefoonnummer,Salaris
             options: versions.options(),
             notes: versions.notes(),
             overview: None,
+            inherited: versions.inherited(),
+            combine: Vec::new(),
         }
     }
 
@@ -4335,6 +4512,8 @@ Id,Naam,Telefoonnummer,Salaris
             options: versions.options(),
             notes: versions.notes(),
             overview: None,
+            inherited: versions.inherited(),
+            combine: Vec::new(),
         }
     }
 

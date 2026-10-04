@@ -128,6 +128,18 @@ struct ImageRun {
 }
 
 /// A copy's hash, to tell which table the Describe view is for (kept in memory only).
+/// A quick fingerprint of a history entry's text for [`commands::CombineChoice::check`]: its
+/// length and its first and last 4 KB (the menu is built several times a second).
+fn entry_check(text: &str) -> u64 {
+    const PART: usize = 4096;
+    let bytes = text.as_bytes();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.len().hash(&mut hasher);
+    bytes[..bytes.len().min(PART)].hash(&mut hasher);
+    bytes[bytes.len().saturating_sub(PART)..].hash(&mut hasher);
+    hasher.finish()
+}
+
 fn text_hash(text: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut hasher);
@@ -166,9 +178,17 @@ struct TableWindow {
 }
 
 impl TableWindow {
-    fn key(table: &TableVersions, error: Option<&str>, working: bool) -> u64 {
+    fn key(
+        table: &TableVersions,
+        error: Option<&str>,
+        working: bool,
+        combine: &[commands::CombineChoice],
+    ) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (table.frame_id(), table.frame().is_some(), table.cursor()).hash(&mut hasher);
+        for choice in combine {
+            (choice.entry, choice.check, &choice.columns).hash(&mut hasher);
+        }
         table.labels().hash(&mut hasher);
         (
             error,
@@ -419,6 +439,9 @@ impl App {
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
             CommandId::TableFilter(column) => self.filter_prompt(TableTarget::Card, column),
+            CommandId::TableCombine { entry, check, how } => {
+                self.table_combine(TableTarget::Card, entry, check, how);
+            }
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
@@ -564,6 +587,9 @@ impl App {
                 match id {
                     CommandId::TableStep(op) => self.table_step(target, op),
                     CommandId::TableFilter(column) => self.filter_prompt(target, column),
+                    CommandId::TableCombine { entry, check, how } => {
+                        self.table_combine(target, entry, check, how);
+                    }
                     CommandId::TableUndo => {
                         self.table_goto(target, |cursor| cursor.checked_sub(1));
                     }
@@ -600,6 +626,7 @@ impl App {
             Some(window) => (window.error.clone(), window.shown, window.checking),
             None => return,
         };
+        let combine = self.combine_choices(home);
         let Some(table) = self.target_table(TableTarget::Window, home) else {
             self.close_table_window();
             return;
@@ -612,7 +639,7 @@ impl App {
             table.load(&text)
         };
         let working = load.is_some() || running_here;
-        let key = TableWindow::key(table, error.as_deref(), working);
+        let key = TableWindow::key(table, error.as_deref(), working, &combine);
         if shown == Some(key) && !checking && load.is_none() {
             return;
         }
@@ -627,6 +654,8 @@ impl App {
             options: table.options(),
             notes: table.notes(),
             overview: Some(false),
+            inherited: table.inherited(),
+            combine,
         };
         let view = commands::table_window_view(&shown_table, &text);
         if let Some(window) = self.table_window.as_mut() {
@@ -693,6 +722,94 @@ impl App {
                 }
             }
         }
+    }
+
+    /// The other history entries whose table the card has read (their columns are known), to
+    /// combine the table at `home` with: newest first, as in history.
+    fn combine_choices(&self, home: TableHome) -> Vec<commands::CombineChoice> {
+        (0..self.history.len())
+            .filter(|&index| home != TableHome::History(index))
+            .filter_map(|index| {
+                let columns = self.history.table(index)?.columns()?.to_vec();
+                let text = self.history.entry_text(index)?;
+                Some(commands::CombineChoice {
+                    entry: index,
+                    check: entry_check(text),
+                    title: format!(
+                        "Copy {} · {}",
+                        index + 1,
+                        history_title(&self.history, index)
+                    ),
+                    columns,
+                })
+            })
+            .collect()
+    }
+
+    /// Join with / Left join with / Append rows of: the table of `target` combined with the
+    /// version the history entry `entry` shows, as one step. That table is worked out here
+    /// when its frame was forgotten. The step keeps both tables' sensitivity labels.
+    fn table_combine(
+        &mut self,
+        target: TableTarget,
+        entry: usize,
+        check: u64,
+        how: commands::CombineHow,
+    ) {
+        let result = self.combine_step(target, entry, check, how);
+        match result {
+            Ok(op) => self.table_step(target, op),
+            Err(error) => {
+                self.set_table_error(target, Some(error));
+                self.refresh_popup();
+                if target == TableTarget::Window {
+                    self.refresh_table_window();
+                }
+            }
+        }
+    }
+
+    fn combine_step(
+        &mut self,
+        target: TableTarget,
+        entry: usize,
+        check: u64,
+        how: commands::CombineHow,
+    ) -> Result<TableOp, String> {
+        let gone = || "That copy is no longer in history; open the menu again".to_string();
+        let checking = || "Still checking for sensitive data; try again in a moment".to_string();
+        let (text, home) = self.target_source(target).ok_or_else(gone)?;
+        let other_text = Zeroizing::new(
+            self.history
+                .entry_text(entry)
+                .filter(|other| entry_check(other) == check)
+                .ok_or_else(gone)?
+                .to_string(),
+        );
+        if home == TableHome::History(entry) {
+            return Err(gone());
+        }
+        // The other table's version, worked out now when it is not there.
+        let other = self.history.table_mut_in_place(entry).ok_or_else(gone)?;
+        if let Some(job) = other.load(&other_text) {
+            let done = job
+                .run(&std::sync::atomic::AtomicBool::new(false))
+                .map_err(|e| e.to_string())?;
+            other.finish(done);
+        }
+        let other_frame = other.frame().cloned().ok_or_else(gone)?;
+        let mut labels = version_labels(other, &other_frame, &other_text).ok_or_else(checking)?;
+        let table = self.target_table(target, home).ok_or_else(gone)?;
+        let frame = table
+            .frame()
+            .cloned()
+            .ok_or_else(|| "Working on the table…".to_string())?;
+        labels.extend(version_labels(table, &frame, &text).ok_or_else(checking)?);
+        let other = crate::table_combine::OtherTable::new(other_frame, labels);
+        Ok(match how {
+            commands::CombineHow::Join { key, left } => TableOp::Join { other, key, left },
+            commands::CombineHow::Concat => TableOp::Concat { other },
+        })
     }
 
     /// Table ▾ › Filter › `column`: ask for a rule of the column's kind (text, numbers, dates),
@@ -902,6 +1019,7 @@ impl App {
         let error = self.table_error.clone();
         let describing = dataframe_view && self.describe_for == Some(text_hash(&text));
         let cached = self.describe_cache.take();
+        let combine = self.combine_choices(home);
         let Some(table) = self.table_at(home) else {
             return;
         };
@@ -938,6 +1056,8 @@ impl App {
             options: table.options(),
             notes: table.notes(),
             overview: table.overview_choice(),
+            inherited: table.inherited(),
+            combine,
         };
         self.describe_cache = describe.map(|description| (frame_id, description));
         data.table = Some(shown);
@@ -2659,6 +2779,33 @@ fn dropped_image_save_job(
         false,
         crate::image_edit::image_files(Some(source), true),
     )
+}
+
+/// The sensitivity labels of the version `table` shows (`frame`): the copied text's for the
+/// original, the version's own CSV otherwise, and those it inherited. `None` while a long
+/// copy is still being checked.
+fn version_labels(
+    table: &TableVersions,
+    frame: &polars::prelude::DataFrame,
+    source: &str,
+) -> Option<Vec<crate::sensitivity::Label>> {
+    let original =
+        table.cursor() == 0 && table.options() == crate::dataframe::ReadOptions::default();
+    let csv;
+    let classified: &str = if original {
+        source
+    } else {
+        csv = Zeroizing::new(crate::dataframe::frame_csv(frame).unwrap_or_default());
+        &csv
+    };
+    match crate::sensitivity::labeling(classified) {
+        crate::sensitivity::Labeling::Known(found) => {
+            let mut labels = found.labels;
+            labels.extend(table.inherited());
+            Some(labels)
+        }
+        crate::sensitivity::Labeling::Checking => None,
+    }
 }
 
 fn history_title(history: &ClipboardHistory, index: usize) -> String {

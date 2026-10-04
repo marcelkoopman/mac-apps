@@ -442,6 +442,14 @@ impl ClipboardHistory {
         self.forget_derived_beyond(index);
     }
 
+    /// The copied text of the entry at `index`; `None` for a picture.
+    pub fn entry_text(&self, index: usize) -> Option<&str> {
+        match &self.entries.get(index)?.body {
+            HistoryBody::Text(text) => Some(text.as_str()),
+            HistoryBody::Image(_) => None,
+        }
+    }
+
     /// The versions of the table in the text entry at `index`, if the card worked on it.
     pub fn table(&self, index: usize) -> Option<&TableVersions> {
         self.entries.get(index)?.table.as_ref()

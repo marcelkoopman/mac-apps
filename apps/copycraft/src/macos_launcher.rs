@@ -3336,6 +3336,8 @@ mod tests {
             options: crate::dataframe::ReadOptions::default(),
             notes: None,
             overview: None,
+            inherited: Vec::new(),
+            combine: Vec::new(),
         });
         super::store(table.clone());
         assert!(super::REVEALED.get());

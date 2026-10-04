@@ -99,6 +99,17 @@ pub enum TableOp {
         column: String,
         rule: crate::table_filter::FilterRule,
     },
+    /// Join with another history entry's table on the column `key` both have: inner (the
+    /// rows with a match) or `left` (every row of this table) ([`crate::table_combine`]).
+    Join {
+        other: crate::table_combine::OtherTable,
+        key: String,
+        left: bool,
+    },
+    /// The rows of another history entry's table after these, columns lined up by name.
+    Concat {
+        other: crate::table_combine::OtherTable,
+    },
 }
 
 impl TableOp {
@@ -145,6 +156,11 @@ impl TableOp {
             Self::Filter { column, rule } => {
                 return format!("Filtered on {column} ({})", rule.kind());
             }
+            Self::Join { other, key, left } => {
+                let how = if *left { "Left joined" } else { "Joined" };
+                return format!("{how} with {} on {key}", other.described());
+            }
+            Self::Concat { other } => return format!("Rows of {} appended", other.described()),
         }
         .to_string()
     }
@@ -157,6 +173,7 @@ impl TableOp {
             Self::DropColumns { columns } if columns.len() == 1 => return columns[0].clone(),
             Self::GroupBy { keys, .. } => return keys.join(", "),
             Self::Filter { column, .. } => return column.clone(),
+            Self::Join { .. } | Self::Concat { .. } => return self.label(),
             Self::SelectColumns {
                 columns,
                 kept_of: Some(_),
@@ -177,7 +194,9 @@ impl TableOp {
             | Self::ValueCounts { .. }
             | Self::SelectColumns { .. }
             | Self::GroupBy { .. }
-            | Self::Filter { .. } => {
+            | Self::Filter { .. }
+            | Self::Join { .. }
+            | Self::Concat { .. } => {
                 unreachable!("titled above")
             }
         }
@@ -267,6 +286,8 @@ impl TableOp {
                 "group by aggregate count sum total mean average min max pivot column table"
             }
             Self::Filter { .. } => "filter rows where contains between range from to date table",
+            Self::Join { .. } => "join merge combine lookup match key inner left tables",
+            Self::Concat { .. } => "concat append combine stack union rows tables",
         }
     }
 
@@ -292,6 +313,10 @@ impl TableOp {
             Self::Filter { column, rule } => {
                 return crate::table_filter::filter(df, column, rule);
             }
+            Self::Join { other, key, left } => {
+                crate::table_combine::join(df, other.frame(), key, *left)
+            }
+            Self::Concat { other } => crate::table_combine::concat(df, other.frame()),
         };
         next.map(Some)
     }
@@ -432,6 +457,9 @@ pub struct TableVersions {
     /// The table window shows this table: its frames stay when the card moves far away
     /// ([`forget_frames`](Self::forget_frames)). They still go with the entry.
     pinned: bool,
+    /// The column names of the version shown when it was last worked out; kept when the frames
+    /// are forgotten, for the other tables' Join with menus.
+    columns: Option<Vec<String>>,
 }
 
 impl Clone for TableVersions {
@@ -446,6 +474,7 @@ impl Clone for TableVersions {
             notes: self.notes,
             overview: self.overview,
             pinned: false,
+            columns: self.columns.clone(),
         }
     }
 }
@@ -584,12 +613,41 @@ impl TableVersions {
         if done.notes.is_some() {
             self.notes = done.notes;
         }
+        self.columns = Some(
+            done.frame
+                .get_column_names()
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+        );
         self.frames = Some(Frames {
             generation: done.generation,
             original,
             current: done.frame,
         });
         true
+    }
+
+    /// The column names of the version shown, once it was worked out (also after its frames
+    /// were forgotten).
+    pub fn columns(&self) -> Option<&[String]> {
+        self.columns.as_deref()
+    }
+
+    /// The sensitivity labels the version shown has from the tables combined into it (Join
+    /// with, Append rows of), whatever its own cells say: a result is sensitive when either
+    /// source was.
+    pub fn inherited(&self) -> Vec<crate::sensitivity::Label> {
+        let mut labels: Vec<crate::sensitivity::Label> = self.steps[..self.cursor]
+            .iter()
+            .flat_map(|op| match op {
+                TableOp::Join { other, .. } | TableOp::Concat { other } => other.labels.clone(),
+                _ => Vec::new(),
+            })
+            .collect();
+        labels.sort();
+        labels.dedup();
+        labels
     }
 
     /// Keep the frames while the table window shows this table (`true`), or not any more.
@@ -650,6 +708,41 @@ mod tests {
     fn run(versions: &mut TableVersions, job: super::Job) -> bool {
         let done = job.run(&AtomicBool::new(false)).expect("job");
         versions.finish(done)
+    }
+
+    #[test]
+    fn a_join_is_a_version_that_inherits_the_other_tables_labels_until_undone() {
+        use crate::sensitivity::Label;
+        let customers = crate::dataframe::parse_table("name,email\na,x\nb,y").unwrap();
+        let other = crate::table_combine::OtherTable::new(customers, vec![Label::Pii]);
+        let mut versions = TableVersions::default();
+        assert_eq!(versions.columns(), None);
+        let job = versions
+            .push(
+                TableOp::Join {
+                    other,
+                    key: "name".into(),
+                    left: true,
+                },
+                SRC,
+            )
+            .expect("push");
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.inherited(), [Label::Pii]);
+        assert_eq!(
+            versions.labels()[1],
+            "Left joined with a 2 × 2 table on name"
+        );
+        assert_eq!(versions.columns().unwrap(), ["name", "n", "email"]);
+        // The columns stay known when the frames are forgotten (for the other tables' menus).
+        versions.forget_frames();
+        assert!(versions.frame().is_none());
+        assert_eq!(versions.columns().unwrap(), ["name", "n", "email"]);
+        // The original has none of it.
+        let job = versions.goto(0, SRC).expect("undo");
+        assert!(run(&mut versions, job));
+        assert!(versions.inherited().is_empty());
+        assert_eq!(versions.columns().unwrap(), ["name", "n"]);
     }
 
     #[test]
