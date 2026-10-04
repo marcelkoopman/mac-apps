@@ -190,12 +190,11 @@ fn table_versions_get_no_labels_their_source_has_not() {
     // Their CSV has ISO dates at the start of a row, after a value ending in `06`.
     for op in [
         TableOp::Dedupe,
-        TableOp::DropConstant,
+        TableOp::DropEmpty,
         TableOp::Sort {
             column: "Date".into(),
             descending: true,
         },
-        TableOp::Transpose,
         TableOp::SelectColumns {
             columns: vec!["Date".into(), "Home Usage (kWh)".into()],
             kept_of: Some(20),

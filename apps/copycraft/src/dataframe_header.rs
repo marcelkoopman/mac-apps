@@ -52,30 +52,6 @@ pub fn table_start(text: &str) -> Option<TableStart> {
     None
 }
 
-/// The table in `text` with its header on line `header_line` (0-based, blank lines counted), as
-/// the card was told ("Header on line N"): the lines above are skipped whatever they hold.
-pub fn table_start_at(text: &str, header_line: usize) -> Option<TableStart> {
-    let mut offset = 0;
-    let mut skipped = 0;
-    for (index, raw) in text.split('\n').enumerate() {
-        if index == header_line {
-            let lead = raw.len() - raw.trim_start().len();
-            let separator = detect_separator(raw.trim())?;
-            return Some(TableStart {
-                separator,
-                header_line,
-                offset: offset + lead,
-                skipped,
-            });
-        }
-        if !raw.trim().is_empty() {
-            skipped += 1;
-        }
-        offset += raw.len() + 1;
-    }
-    None
-}
-
 fn table_at(text: &str, header_line: usize, offset: usize, skipped: usize) -> Option<TableStart> {
     let body = &text[offset..];
     let header = body.lines().next()?.trim();

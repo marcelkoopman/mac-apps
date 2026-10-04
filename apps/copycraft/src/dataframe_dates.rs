@@ -115,12 +115,6 @@ fn read_dates(df: &mut DataFrame, ambiguous: DateOrder) -> Vec<DateColumn> {
     read
 }
 
-/// [`read_iso_dates`], then [`read_dates`] day first where both orders fit; the number of
-/// columns read.
-pub fn read_dates_day_first(df: &mut DataFrame) -> usize {
-    read_iso_dates(df) + read_dates(df, DateOrder::DayFirst).len()
-}
-
 /// Read every text column of ISO dates (`2026-03-09`) as dates, and of ISO datetimes
 /// (`2026-03-09T14:05`, also with a space, seconds and a fraction, as a saved CSV has them) as
 /// datetimes. Only when every value (empty ones aside) is one: a column with one other value

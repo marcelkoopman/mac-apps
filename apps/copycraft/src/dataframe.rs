@@ -44,6 +44,7 @@ pub fn try_format_preview(
     let mut df = parse(text)?;
     read_iso_dates(&mut df);
     let dates = read_dates(&mut df, DateOrder::DayFirst);
+    crate::table_ops::type_text_columns(&mut df);
     let mut preview = frame_preview(&df, max_rows, overview)?;
     preview.dates = dates;
     Some(preview)
@@ -167,12 +168,10 @@ pub fn parse_table(text: &str) -> Option<DataFrame> {
     parse_table_with(text, ReadOptions::default()).map(|(df, _)| df)
 }
 
-/// How to read a copied table when the card was told: the header's line and the order of dates
-/// that fit both orders. The default finds the header and reads such dates day first.
+/// How to read a copied table when the card was told: the order of dates that fit both orders.
+/// The default reads such dates day first.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct ReadOptions {
-    /// The header's line (0-based in the trimmed text, blank lines counted).
-    pub header_line: Option<usize>,
     /// Dates that fit both orders are `mm/dd/yyyy`.
     pub month_first: bool,
 }
@@ -188,8 +187,6 @@ pub struct ReadNotes {
     pub month_first: bool,
     /// A date column had to be read `mm/dd/yyyy`: a value's second part is over 12.
     pub forced_month_first: bool,
-    /// Lines the header could be on (the first lines of the trimmed text).
-    pub header_lines: usize,
 }
 
 impl ReadNotes {
@@ -222,15 +219,9 @@ pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, 
     if trimmed.is_empty() || crate::format::looks_like_xml(trimmed) {
         return None;
     }
-    let (start, mut df) = match options.header_line {
-        Some(line) => {
-            let start = table_start_at(trimmed, line)?;
-            (Some(start), csv_at(trimmed, start)?)
-        }
-        None => match try_csv(trimmed) {
-            Some((start, df)) => (Some(start), df),
-            None => (None, try_json(trimmed)?),
-        },
+    let (start, mut df) = match try_csv(trimmed) {
+        Some((start, df)) => (Some(start), df),
+        None => (None, try_json(trimmed)?),
     };
     let order = if options.month_first {
         DateOrder::MonthFirst
@@ -239,12 +230,14 @@ pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, 
     };
     read_iso_dates(&mut df);
     let dates = read_dates(&mut df, order);
+    // Numbers and dates copied as text (quoted, or with a decimal comma) typed as they are read:
+    // one pass over the text columns, so this stays cheap.
+    crate::table_ops::type_text_columns(&mut df);
     let notes = ReadNotes {
         start,
         ambiguous_dates: dates.iter().any(|column| column.ambiguous),
         month_first: options.month_first,
         forced_month_first: dates.iter().any(DateColumn::forced_month_first),
-        header_lines: trimmed.split('\n').take(MAX_PREAMBLE_LINES + 2).count(),
     };
     Some((df, notes))
 }

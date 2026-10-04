@@ -28,8 +28,6 @@ mod recognize;
 mod sensitivity;
 mod settings;
 mod table;
-mod table_combine;
-mod table_filter;
 mod table_ops;
 #[cfg(test)]
 mod testdata_manifest;

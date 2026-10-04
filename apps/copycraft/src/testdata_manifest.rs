@@ -126,91 +126,9 @@ fn visit_url(text: &str) -> Option<String> {
 }
 
 fn table_op(name: &str) -> TableOp {
-    // Filter(units,number,2 to 4): the column, its kind (text, number, date), the rule as typed.
-    if let Some(rest) = name
-        .strip_prefix("Filter(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    {
-        let mut parts = rest.splitn(3, ',');
-        let (Some(column), Some(kind), Some(answer)) = (parts.next(), parts.next(), parts.next())
-        else {
-            panic!("bad filter step {name}");
-        };
-        let kind = match kind {
-            "text" => crate::table_filter::FilterKind::Text,
-            "number" => crate::table_filter::FilterKind::Number,
-            "date" => crate::table_filter::FilterKind::Date,
-            other => panic!("unknown filter kind {other}"),
-        };
-        let rule = crate::table_filter::parse(kind, answer)
-            .unwrap_or_else(|| panic!("filter rule {answer} does not read"));
-        return TableOp::Filter {
-            column: column.to_string(),
-            rule,
-        };
-    }
-    // Join(tables/b.csv,key,inner|left), Concat(tables/b.csv): another testdata file's table.
-    if let Some((file, rest)) = name
-        .strip_prefix("Join(")
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|rest| rest.split_once(','))
-    {
-        let (key, how) = rest.rsplit_once(',').expect("Join(file,key,inner|left)");
-        return TableOp::Join {
-            other: other_table(file),
-            key: key.to_string(),
-            left: match how {
-                "inner" => false,
-                "left" => true,
-                other => panic!("unknown join {other}"),
-            },
-        };
-    }
-    if let Some(file) = name
-        .strip_prefix("Concat(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    {
-        return TableOp::Concat {
-            other: other_table(file),
-        };
-    }
-    if let Some(column) = name
-        .strip_prefix("Drop(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    {
-        return TableOp::DropColumns {
-            columns: vec![column.to_string()],
-        };
-    }
-    // GroupBy(region+product,sum): the keys joined with `+`, then count, sum, mean, min or max.
-    if let Some((keys, agg)) = name
-        .strip_prefix("GroupBy(")
-        .and_then(|rest| rest.strip_suffix(')'))
-        .and_then(|rest| rest.rsplit_once(','))
-    {
-        let agg = crate::table::Agg::ALL
-            .into_iter()
-            .find(|of| of.name() == agg)
-            .unwrap_or_else(|| panic!("unknown aggregate {agg}"));
-        return TableOp::GroupBy {
-            keys: keys.split('+').map(str::to_string).collect(),
-            agg,
-        };
-    }
-    if let Some(column) = name
-        .strip_prefix("ValueCounts(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    {
-        return TableOp::ValueCounts {
-            column: column.to_string(),
-        };
-    }
     match name {
         "Dedupe" => TableOp::Dedupe,
         "DropEmpty" => TableOp::DropEmpty,
-        "DropConstant" => TableOp::DropConstant,
-        "FixTypes" => TableOp::FixTypes,
-        "Transpose" => TableOp::Transpose,
         other => panic!("unknown table step {other}"),
     }
 }
@@ -254,12 +172,9 @@ fn window_view_after(text: &str, ops: &str) -> crate::commands::TableWindowView 
         labels: versions.labels(),
         working: false,
         error: None,
-        describe: None,
         options: versions.options(),
         notes: versions.notes(),
         overview: None,
-        inherited: versions.inherited(),
-        combine: Vec::new(),
     };
     crate::commands::table_window_view(&shown, text)
 }
@@ -267,19 +182,6 @@ fn window_view_after(text: &str, ops: &str) -> crate::commands::TableWindowView 
 /// What "Open in window" shows for the original version of `text`.
 fn window_view(text: &str) -> crate::commands::TableWindowView {
     window_view_after(text, "")
-}
-
-/// Another testdata file as the other table of Join or Concat: its original, with its labels.
-fn other_table(file: &str) -> crate::table_combine::OtherTable {
-    let text = std::fs::read_to_string(root().join(file))
-        .unwrap_or_else(|e| panic!("other table {file}: {e}"));
-    let (frame, _) = crate::dataframe::parse_table_with(&text, Default::default())
-        .unwrap_or_else(|| panic!("{file} is not a table"));
-    let labels = match crate::sensitivity::labeling(&text) {
-        crate::sensitivity::Labeling::Known(found) => found.labels,
-        crate::sensitivity::Labeling::Checking => panic!("{file} is too long to check now"),
-    };
-    crate::table_combine::OtherTable::new(frame, labels)
 }
 
 fn shape(df: &polars::prelude::DataFrame) -> String {

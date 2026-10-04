@@ -25,46 +25,6 @@ fn next_generation() -> u64 {
     NEXT_GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
-/// What Group by works out per group.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Agg {
-    /// The number of rows.
-    Count,
-    /// Per number column.
-    Sum,
-    Mean,
-    /// Per number, date or time column.
-    Min,
-    Max,
-}
-
-impl Agg {
-    /// In the order of the Table ▾ submenus.
-    pub const ALL: [Agg; 5] = [Agg::Count, Agg::Sum, Agg::Mean, Agg::Min, Agg::Max];
-
-    /// The suffix of an aggregate column ("units (sum)").
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Count => "count",
-            Self::Sum => "sum",
-            Self::Mean => "mean",
-            Self::Min => "min",
-            Self::Max => "max",
-        }
-    }
-
-    /// The Table ▾ submenu of its steps, with a column per item.
-    pub fn group(self) -> &'static str {
-        match self {
-            Self::Count => "Count by",
-            Self::Sum => "Sum by",
-            Self::Mean => "Mean by",
-            Self::Min => "Min by",
-            Self::Max => "Max by",
-        }
-    }
-}
-
 /// One step from a version to the next.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableOp {
@@ -72,138 +32,52 @@ pub enum TableOp {
     Dedupe,
     /// Trim text, then drop the rows and columns with no value.
     DropEmpty,
-    /// Drop the columns with one value in every row.
-    DropConstant,
-    /// Text columns of numbers or dates become numbers or dates (only when every value fits).
-    FixTypes,
-    /// Rows become columns (at most [`crate::table_ops::TRANSPOSE_MAX_ROWS`] rows).
-    Transpose,
     /// Rows in the order of one column (empty cells last; equal values keep their order).
     Sort { column: String, descending: bool },
-    /// Each value of one column once, with how many rows have it, the most common first.
-    ValueCounts { column: String },
-    /// These columns, in this order (the others dropped).
-    /// `kept_of`: chosen in the column picker from that many columns ("Kept 8 of 20 columns"),
-    /// in the table's order; `None` for Move column to front.
+    /// These columns, in this order (the others dropped), chosen in the column picker from
+    /// `kept_of` columns ("Kept 8 of 20 columns"), in the table's order.
     SelectColumns {
         columns: Vec<String>,
         kept_of: Option<usize>,
-    },
-    /// These columns dropped.
-    DropColumns { columns: Vec<String> },
-    /// One row per value of the `keys` columns (first seen first) with the number of rows, or
-    /// the sum, mean, min or max of each other number (min, max: and date) column.
-    GroupBy { keys: Vec<String>, agg: Agg },
-    /// The rows whose `column` fits `rule` (Table ▾ › Filter, [`crate::table_filter`]).
-    Filter {
-        column: String,
-        rule: crate::table_filter::FilterRule,
-    },
-    /// Join with another history entry's table on the column `key` both have: inner (the
-    /// rows with a match) or `left` (every row of this table) ([`crate::table_combine`]).
-    Join {
-        other: crate::table_combine::OtherTable,
-        key: String,
-        left: bool,
-    },
-    /// The rows of another history entry's table after these, columns lined up by name.
-    Concat {
-        other: crate::table_combine::OtherTable,
     },
 }
 
 impl TableOp {
     /// The one-click steps, in the order of the "Table ▾" menu.
-    pub const ONE_CLICK: [TableOp; 5] = [
-        TableOp::Dedupe,
-        TableOp::DropEmpty,
-        TableOp::DropConstant,
-        TableOp::FixTypes,
-        TableOp::Transpose,
-    ];
+    pub const ONE_CLICK: [TableOp; 2] = [TableOp::Dedupe, TableOp::DropEmpty];
 
     /// Name of the version this step makes, for the version capsule.
     pub fn label(&self) -> String {
         match self {
-            Self::Dedupe => "Duplicates removed",
-            Self::DropEmpty => "Empty rows and columns removed",
-            Self::DropConstant => "Constant columns removed",
-            Self::FixTypes => "Types fixed",
-            Self::Transpose => "Transposed",
+            Self::Dedupe => "Duplicates removed".to_string(),
+            Self::DropEmpty => "Empty rows and columns removed".to_string(),
             Self::Sort { column, descending } => {
                 let arrow = if *descending { "↓" } else { "↑" };
-                return format!("Sorted by {column} {arrow}");
+                format!("Sorted by {column} {arrow}")
             }
-            Self::ValueCounts { column } => return format!("Value counts of {column}"),
             Self::SelectColumns {
                 columns,
                 kept_of: Some(total),
-            } => return format!("Kept {} of {total} columns", columns.len()),
-            Self::SelectColumns { columns, .. } => {
-                return match columns.as_slice() {
-                    [one] => format!("Only {one}"),
-                    _ => format!("{} columns chosen", columns.len()),
-                };
-            }
-            Self::DropColumns { columns } => {
-                return match columns.as_slice() {
-                    [one] => format!("{one} removed"),
-                    _ => format!("{} columns removed", columns.len()),
-                };
-            }
-            Self::GroupBy { keys, agg } => return format!("{} {}", agg.group(), keys.join(", ")),
-            // Not the typed text or bounds: they may quote the table.
-            Self::Filter { column, rule } => {
-                return format!("Filtered on {column} ({})", rule.kind());
-            }
-            Self::Join { other, key, left } => {
-                let how = if *left { "Left joined" } else { "Joined" };
-                return format!("{how} with {} on {key}", other.described());
-            }
-            Self::Concat { other } => return format!("Rows of {} appended", other.described()),
+            } => format!("Kept {} of {total} columns", columns.len()),
+            Self::SelectColumns { columns, .. } => match columns.as_slice() {
+                [one] => format!("Only {one}"),
+                _ => format!("{} columns chosen", columns.len()),
+            },
         }
-        .to_string()
     }
 
-    /// The menu item and search title that takes this step. A step on a column is titled with
-    /// the column's name (it sits in that step's submenu, [`group`](Self::group)).
+    /// The menu item and search title that takes this step. A sort is titled with the
+    /// column's name (it sits in that step's submenu, [`group`](Self::group)).
     pub fn title(&self) -> String {
         match self {
-            Self::Sort { column, .. } | Self::ValueCounts { column } => return column.clone(),
-            Self::DropColumns { columns } if columns.len() == 1 => return columns[0].clone(),
-            Self::GroupBy { keys, .. } => return keys.join(", "),
-            Self::Filter { column, .. } => return column.clone(),
-            Self::Join { .. } | Self::Concat { .. } => return self.label(),
-            Self::SelectColumns {
-                columns,
-                kept_of: Some(_),
-            } => return format!("Keep {} columns", columns.len()),
-            Self::SelectColumns { columns, .. } => {
-                return columns.first().cloned().unwrap_or_default();
-            }
-            _ => {}
+            Self::Dedupe => "Remove duplicate rows".to_string(),
+            Self::DropEmpty => "Remove empty rows and columns".to_string(),
+            Self::Sort { column, .. } => column.clone(),
+            Self::SelectColumns { columns, .. } => format!("Keep {} columns", columns.len()),
         }
-        match self {
-            Self::Dedupe => "Remove duplicate rows",
-            Self::DropEmpty => "Remove empty rows and columns",
-            Self::DropConstant => "Remove constant columns",
-            Self::FixTypes => "Fix types",
-            Self::Transpose => "Transpose",
-            Self::DropColumns { .. } => "Remove columns",
-            Self::Sort { .. }
-            | Self::ValueCounts { .. }
-            | Self::SelectColumns { .. }
-            | Self::GroupBy { .. }
-            | Self::Filter { .. }
-            | Self::Join { .. }
-            | Self::Concat { .. } => {
-                unreachable!("titled above")
-            }
-        }
-        .to_string()
     }
 
-    /// The submenu of a step on a column: "Sort ascending", "Sort descending", "Value counts".
+    /// The submenu of a step on a column: "Sort ascending", "Sort descending".
     pub fn group(&self) -> Option<&'static str> {
         match self {
             Self::Sort {
@@ -212,15 +86,11 @@ impl TableOp {
             Self::Sort {
                 descending: true, ..
             } => Some("Sort descending"),
-            Self::ValueCounts { .. } => Some("Value counts"),
-            Self::DropColumns { columns } if columns.len() == 1 => Some("Remove column"),
-            Self::SelectColumns { kept_of: None, .. } => Some("Move column to front"),
-            Self::GroupBy { agg, .. } => Some(agg.group()),
             _ => None,
         }
     }
 
-    /// The steps on a column of a table with `columns`, by submenu.
+    /// The sort steps of a table with `columns`: ascending, then descending, a column each.
     pub fn column_steps(columns: &[String]) -> Vec<TableOp> {
         let sort = |descending| {
             columns.iter().map(move |column| TableOp::Sort {
@@ -228,46 +98,7 @@ impl TableOp {
                 descending,
             })
         };
-        sort(false)
-            .chain(sort(true))
-            .chain(columns.iter().map(|column| TableOp::ValueCounts {
-                column: column.clone(),
-            }))
-            .chain(columns.iter().map(|column| TableOp::DropColumns {
-                columns: vec![column.clone()],
-            }))
-            // Moving the first column to the front changes nothing.
-            .chain(columns.iter().skip(1).map(|column| {
-                TableOp::SelectColumns {
-                    columns: std::iter::once(column)
-                        .chain(columns.iter().filter(|other| *other != column))
-                        .cloned()
-                        .collect(),
-                    kept_of: None,
-                }
-            }))
-            .collect()
-    }
-
-    /// The Group by steps on one column of `df`, by submenu (Count by, Sum by, …): a column
-    /// is offered for Sum, Mean, Min or Max only when another column has values for it.
-    pub fn group_steps(df: &DataFrame) -> Vec<TableOp> {
-        let columns = df.columns();
-        Agg::ALL
-            .iter()
-            .flat_map(|&agg| {
-                columns.iter().enumerate().filter_map(move |(at, key)| {
-                    let usable = agg == Agg::Count
-                        || columns.iter().enumerate().any(|(other, column)| {
-                            other != at && crate::table_ops::aggregates(agg, column.dtype())
-                        });
-                    usable.then(|| TableOp::GroupBy {
-                        keys: vec![key.name().to_string()],
-                        agg,
-                    })
-                })
-            })
-            .collect()
+        sort(false).chain(sort(true)).collect()
     }
 
     /// Search words for [`title`](Self::title).
@@ -275,26 +106,13 @@ impl TableOp {
         match self {
             Self::Dedupe => "dedupe unique duplicates rows table",
             Self::DropEmpty => "drop empty null blank trim rows columns table",
-            Self::DropConstant => "drop constant columns same value table",
-            Self::FixTypes => "fix types numbers dates cast table",
-            Self::Transpose => "transpose pivot rows columns swap table",
             Self::Sort { .. } => "sort order column table",
-            Self::ValueCounts { .. } => "value counts frequency count column table",
-            Self::SelectColumns { .. } => "select move column front order table",
-            Self::DropColumns { .. } => "drop remove delete column table",
-            Self::GroupBy { .. } => {
-                "group by aggregate count sum total mean average min max pivot column table"
-            }
-            Self::Filter { .. } => "filter rows where contains between range from to date table",
-            Self::Join { .. } => "join merge combine lookup match key inner left tables",
-            Self::Concat { .. } => "concat append combine stack union rows tables",
+            Self::SelectColumns { .. } => "select choose keep columns table",
         }
     }
 
-    /// The version after this step. `Ok(None)` when it would be the same (Fix types with every
-    /// column typed already): no version is made, and the card says [`unchanged_note`].
-    ///
-    /// [`unchanged_note`]: Self::unchanged_note
+    /// The version after this step. `Ok(None)` when it would be the same: no version is made,
+    /// and the card says [`unchanged_note`](Self::unchanged_note).
     pub fn apply(&self, df: &DataFrame) -> Result<Option<DataFrame>, String> {
         use crate::table_ops;
         let next = match self {
@@ -302,32 +120,15 @@ impl TableOp {
                 .unique_stable(None, UniqueKeepStrategy::First, None)
                 .map_err(|e| e.to_string()),
             Self::DropEmpty => table_ops::drop_empty(df),
-            Self::DropConstant => table_ops::drop_constant(df),
-            Self::FixTypes => return table_ops::fix_types(df),
-            Self::Transpose => table_ops::transpose(df),
             Self::Sort { column, descending } => table_ops::sort(df, column, *descending),
-            Self::ValueCounts { column } => table_ops::value_counts(df, column),
             Self::SelectColumns { columns, .. } => table_ops::select_columns(df, columns),
-            Self::DropColumns { columns } => table_ops::drop_columns(df, columns),
-            Self::GroupBy { keys, agg } => table_ops::group_by(df, keys, *agg),
-            Self::Filter { column, rule } => {
-                return crate::table_filter::filter(df, column, rule);
-            }
-            Self::Join { other, key, left } => {
-                crate::table_combine::join(df, other.frame(), key, *left)
-            }
-            Self::Concat { other } => crate::table_combine::concat(df, other.frame()),
         };
         next.map(Some)
     }
 
     /// The meta-line note when this step would change nothing ([`apply`](Self::apply)).
     pub fn unchanged_note(&self) -> &'static str {
-        match self {
-            Self::FixTypes => "Types already fine",
-            Self::Filter { .. } => "Every row matches",
-            _ => "Nothing to change",
-        }
+        "Nothing to change"
     }
 }
 
@@ -457,9 +258,6 @@ pub struct TableVersions {
     /// The table window shows this table: its frames stay when the card moves far away
     /// ([`forget_frames`](Self::forget_frames)). They still go with the entry.
     pinned: bool,
-    /// The column names of the version shown when it was last worked out; kept when the frames
-    /// are forgotten, for the other tables' Join with menus.
-    columns: Option<Vec<String>>,
 }
 
 impl Clone for TableVersions {
@@ -474,7 +272,6 @@ impl Clone for TableVersions {
             notes: self.notes,
             overview: self.overview,
             pinned: false,
-            columns: self.columns.clone(),
         }
     }
 }
@@ -613,41 +410,12 @@ impl TableVersions {
         if done.notes.is_some() {
             self.notes = done.notes;
         }
-        self.columns = Some(
-            done.frame
-                .get_column_names()
-                .iter()
-                .map(|name| name.to_string())
-                .collect(),
-        );
         self.frames = Some(Frames {
             generation: done.generation,
             original,
             current: done.frame,
         });
         true
-    }
-
-    /// The column names of the version shown, once it was worked out (also after its frames
-    /// were forgotten).
-    pub fn columns(&self) -> Option<&[String]> {
-        self.columns.as_deref()
-    }
-
-    /// The sensitivity labels the version shown has from the tables combined into it (Join
-    /// with, Append rows of), whatever its own cells say: a result is sensitive when either
-    /// source was.
-    pub fn inherited(&self) -> Vec<crate::sensitivity::Label> {
-        let mut labels: Vec<crate::sensitivity::Label> = self.steps[..self.cursor]
-            .iter()
-            .flat_map(|op| match op {
-                TableOp::Join { other, .. } | TableOp::Concat { other } => other.labels.clone(),
-                _ => Vec::new(),
-            })
-            .collect();
-        labels.sort();
-        labels.dedup();
-        labels
     }
 
     /// Keep the frames while the table window shows this table (`true`), or not any more.
@@ -699,7 +467,7 @@ impl TableVersions {
 
 #[cfg(test)]
 mod tests {
-    use super::{Agg, MAX_VERSIONS, TableError, TableOp, TableVersions};
+    use super::{MAX_VERSIONS, TableError, TableOp, TableVersions};
     use crate::dataframe::ReadOptions;
     use std::sync::atomic::AtomicBool;
 
@@ -708,83 +476,6 @@ mod tests {
     fn run(versions: &mut TableVersions, job: super::Job) -> bool {
         let done = job.run(&AtomicBool::new(false)).expect("job");
         versions.finish(done)
-    }
-
-    #[test]
-    fn a_join_is_a_version_that_inherits_the_other_tables_labels_until_undone() {
-        use crate::sensitivity::Label;
-        let customers = crate::dataframe::parse_table("name,email\na,x\nb,y").unwrap();
-        let other = crate::table_combine::OtherTable::new(customers, vec![Label::Pii]);
-        let mut versions = TableVersions::default();
-        assert_eq!(versions.columns(), None);
-        let job = versions
-            .push(
-                TableOp::Join {
-                    other,
-                    key: "name".into(),
-                    left: true,
-                },
-                SRC,
-            )
-            .expect("push");
-        assert!(run(&mut versions, job));
-        assert_eq!(versions.inherited(), [Label::Pii]);
-        assert_eq!(
-            versions.labels()[1],
-            "Left joined with a 2 × 2 table on name"
-        );
-        assert_eq!(versions.columns().unwrap(), ["name", "n", "email"]);
-        // The columns stay known when the frames are forgotten (for the other tables' menus).
-        versions.forget_frames();
-        assert!(versions.frame().is_none());
-        assert_eq!(versions.columns().unwrap(), ["name", "n", "email"]);
-        // The original has none of it.
-        let job = versions.goto(0, SRC).expect("undo");
-        assert!(run(&mut versions, job));
-        assert!(versions.inherited().is_empty());
-        assert_eq!(versions.columns().unwrap(), ["name", "n"]);
-    }
-
-    #[test]
-    fn group_by_is_offered_per_column_where_there_is_something_to_add_up() {
-        let df = crate::dataframe::parse_table("city,name,n\nDelft,ann,1\nUtrecht,bob,2").unwrap();
-        let steps = TableOp::group_steps(&df);
-        let offered = |agg: Agg| -> Vec<String> {
-            steps
-                .iter()
-                .filter_map(|op| match op {
-                    TableOp::GroupBy { keys, agg: of } if *of == agg => Some(keys.join("+")),
-                    _ => None,
-                })
-                .collect()
-        };
-        assert_eq!(offered(Agg::Count), ["city", "name", "n"]);
-        // Grouping by n leaves no number to sum.
-        assert_eq!(offered(Agg::Sum), ["city", "name"]);
-        assert_eq!(offered(Agg::Max), ["city", "name"]);
-        let op = TableOp::GroupBy {
-            keys: vec!["city".into()],
-            agg: Agg::Sum,
-        };
-        assert_eq!(op.label(), "Sum by city");
-        assert_eq!(op.title(), "city");
-        assert_eq!(op.group(), Some("Sum by"));
-        let text = crate::dataframe::parse_table("a,b\nx,y").unwrap();
-        assert!(TableOp::group_steps(&text).iter().all(|op| matches!(
-            op,
-            TableOp::GroupBy {
-                agg: Agg::Count,
-                ..
-            }
-        )));
-        // A version like any other step.
-        let mut versions = TableVersions::default();
-        let job = versions
-            .push(op, "city,n\nDelft,1\nDelft,2\nUtrecht,5")
-            .expect("push");
-        assert!(run(&mut versions, job));
-        assert_eq!(versions.labels(), ["Original", "Sum by city"]);
-        assert_eq!(versions.frame().unwrap().shape(), (2, 2));
     }
 
     #[test]
@@ -849,22 +540,6 @@ mod tests {
         assert!(run(&mut versions, job));
         assert_eq!((versions.len(), versions.cursor()), (3, 2));
         assert_eq!(versions.cursor() + 1, versions.len());
-    }
-
-    #[test]
-    fn fix_types_with_every_column_typed_makes_no_version() {
-        // The reader types the energy export already: its dates (day first) and its decimals.
-        let src = crate::dataframe::tests::ENERGY_FIXTURE;
-        let mut versions = TableVersions::default();
-        let load = versions.load(src).expect("load");
-        assert!(run(&mut versions, load));
-        let job = versions.push(TableOp::FixTypes, src).expect("push");
-        assert_eq!(
-            job.run(&AtomicBool::new(false)).err(),
-            Some(TableError::Unchanged("Types already fine"))
-        );
-        assert_eq!(versions.len(), 1);
-        assert_eq!(versions.cursor(), 0);
     }
 
     #[test]
@@ -953,25 +628,12 @@ mod tests {
         assert_eq!(notes.start.map(|start| start.header_line), Some(1));
         assert!(notes.ambiguous_dates && !notes.month_first);
         // Dates the other way round: the steps go, the original is read again.
-        let options = ReadOptions {
-            month_first: true,
-            ..ReadOptions::default()
-        };
+        let options = ReadOptions { month_first: true };
         let job = versions.reread(options, src).expect("reread");
         assert_eq!((versions.len(), versions.cursor()), (1, 0));
         assert!(run(&mut versions, job));
         assert!(versions.notes().is_some_and(|notes| notes.month_first));
         assert!(versions.reread(options, src).is_none());
-        // The header on the first line instead: one column, "Export of 2026", is no table.
-        let first_line = ReadOptions {
-            header_line: Some(0),
-            ..options
-        };
-        let job = versions.reread(first_line, src).expect("reread");
-        assert_eq!(
-            job.run(&AtomicBool::new(false)).err(),
-            Some(TableError::NotATable)
-        );
-        assert_eq!(versions.clone().options(), first_line);
+        assert_eq!(versions.clone().options(), options);
     }
 }

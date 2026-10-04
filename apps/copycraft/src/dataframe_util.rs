@@ -646,13 +646,26 @@ Id;Naam;Salaris
         assert_eq!(back.shape(), df.shape());
         assert_eq!(names(&back), names(df));
         assert!(header.contains(','), "{header}");
-        // Dates come back as dates (`yyyy-mm-dd`), datetimes as datetimes, without Fix types.
+        // Dates come back as dates (`yyyy-mm-dd`), datetimes as datetimes, without a step.
         for (column, read) in df.columns().iter().zip(back.columns()) {
             if matches!(column.dtype(), DataType::Date | DataType::Datetime(_, _)) {
                 assert_eq!(read.dtype(), column.dtype(), "{}", column.name());
             }
         }
         csv
+    }
+
+    #[test]
+    fn numbers_copied_as_text_are_typed_when_the_table_is_read() {
+        use polars::prelude::DataType;
+        // A decimal comma, and a column with one value that is not a number.
+        let src = "id;prijs;code\n1;2,50;7\n2;3,75;x";
+        let (df, notes) = super::parse_table_with(src, super::ReadOptions::default()).expect("table");
+        assert_eq!(df.column("prijs").unwrap().dtype(), &DataType::Float64);
+        assert_eq!(df.column("code").unwrap().dtype(), &DataType::String);
+        assert_eq!(notes.meta_notes(), Vec::<String>::new());
+        let preview = super::try_format_preview(src, 10, Some(false)).expect("preview");
+        assert!(preview.grid.contains("3.75"), "{}", preview.grid);
     }
 
     #[test]
@@ -664,7 +677,8 @@ Id;Naam;Salaris
         assert_eq!(lines.next(), Some(names(&df).join(",").as_str()));
         assert!(lines.next().is_some_and(|row| row.starts_with("2026-03-09,")));
         // A version: its own columns and rows.
-        let version = crate::table_ops::drop_constant(&df).expect("step");
+        let version =
+            crate::table_ops::select_columns(&df, &names(&df)[..2]).expect("step");
         assert!(version.width() < df.width());
         assert_csv_round_trip(&version);
         // A tab or `;` source still saves comma separated; a name or value with a comma is quoted.

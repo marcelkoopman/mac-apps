@@ -2063,6 +2063,10 @@ fn activate_overflow(index: usize) {
 
 fn run_command(cmd: Command) {
     if matches!(cmd.id, CommandId::TableMenu | CommandId::ImageMenu) {
+        // There is no Dataframe chip: Table ▾ brings the card to the table's grid as well.
+        if cmd.id == CommandId::TableMenu {
+            launcher::emit(UserEvent::Run(CommandId::Dataframe));
+        }
         pop_table_menu();
         return;
     }
@@ -3355,12 +3359,9 @@ mod tests {
             labels: vec!["Original".into(), "Duplicates removed".into()],
             working: true,
             error: None,
-            describe: None,
             options: crate::dataframe::ReadOptions::default(),
             notes: None,
             overview: None,
-            inherited: Vec::new(),
-            combine: Vec::new(),
         });
         super::store(table.clone());
         assert!(super::REVEALED.get());

@@ -288,46 +288,14 @@ pub struct TableShown {
     pub working: bool,
     /// Why the last step failed, for the meta line.
     pub error: Option<String>,
-    /// The Describe view of the version shown ([`crate::table_ops::describe`]), when asked for.
-    pub describe: Option<polars::prelude::DataFrame>,
-    /// How the copied text is read ("Header on line N", the date order).
+    /// How the copied text is read (the date order).
     pub options: dataframe::ReadOptions,
     /// What reading it found, once it was read.
     pub notes: Option<dataframe::ReadNotes>,
     /// The entry shows the column overview (`true`) or the grid; `None` until it is decided
     /// ([`dataframe::shows_overview`]).
     pub overview: Option<bool>,
-    /// Labels the version has from tables combined into it
-    /// ([`crate::table::TableVersions::inherited`]), on its meta line whatever its cells say.
-    pub inherited: Vec<crate::sensitivity::Label>,
-    /// The other history entries' tables it can be joined with or appended to.
-    pub combine: Vec<CombineChoice>,
 }
-
-/// Another history entry with a table, for Join with / Left join with / Append rows of.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CombineChoice {
-    /// Where it is in history.
-    pub entry: usize,
-    /// A hash of its copied text, so a pick after history moved does not take another entry.
-    pub check: u64,
-    /// "Copy 2 · CSV  0.3 KB": its place and history title (masked; no copied text).
-    pub title: String,
-    /// Its version's columns, for the keys both tables have.
-    pub columns: Vec<String>,
-}
-
-/// How a picked [`CombineChoice`] combines with the table shown.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CombineHow {
-    Join { key: String, left: bool },
-    Concat,
-}
-
-/// The Table ▾ submenus of the combining steps.
-pub const JOIN_GROUP: &str = "Join with";
-pub const LEFT_JOIN_GROUP: &str = "Left join with";
-pub const CONCAT_GROUP: &str = "Append rows of";
 
 impl TableShown {
     pub fn can_undo(&self) -> bool {
@@ -348,12 +316,9 @@ impl PartialEq for TableShown {
             && self.labels == other.labels
             && self.working == other.working
             && self.error == other.error
-            && self.describe.is_some() == other.describe.is_some()
             && self.options == other.options
             && self.notes == other.notes
             && self.overview == other.overview
-            && self.inherited == other.inherited
-            && self.combine == other.combine
     }
 }
 
@@ -367,7 +332,6 @@ impl std::fmt::Debug for TableShown {
             .field("version", &self.version)
             .field("versions", &self.labels.len())
             .field("working", &self.working)
-            .field("describe", &self.describe.is_some())
             .finish()
     }
 }
@@ -519,10 +483,6 @@ pub enum CommandId {
     ImageStep(crate::image_edit::ImageOp),
     /// Resize › Custom…: asks for a width or a height.
     ImageResizeCustom,
-    /// Describe the table version shown, or go back from that view to the table.
-    TableDescribe,
-    /// Read the table with its header on this line (0-based in the trimmed text).
-    TableHeaderLine(usize),
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
     /// Show the table as its grid (`true`) or its column overview, for every version of the entry.
@@ -531,16 +491,6 @@ pub enum CommandId {
     TableChooseColumns,
     /// Open the table on the card in its own resizable window ([`table_window_view`]).
     TableOpenWindow,
-    /// Ask for a rule for this column (by its type), then filter the table as one step
-    /// ([`crate::table_filter`]).
-    TableFilter(String),
-    /// Combine the table shown with the history entry `entry` (if its text still hashes to
-    /// `check`) as one step ([`crate::table_combine`]).
-    TableCombine {
-        entry: usize,
-        check: u64,
-        how: CombineHow,
-    },
     Quit,
 }
 
@@ -963,7 +913,6 @@ fn apply_text_view(
     }
     if view == CardView::Dataframe {
         match table {
-            Some(table) if table.describe.is_some() => show_description(card, table),
             Some(table)
                 if table.version > 0 || table.options != dataframe::ReadOptions::default() =>
             {
@@ -1106,27 +1055,6 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, overview: Optio
     }
 }
 
-/// The Describe view: one row per column of the version shown. Its sensitivity labels are
-/// the version's (the description quotes its values).
-fn show_description(card: &mut WorkCard, table: &TableShown) {
-    let (Some(description), Some(frame)) = (&table.describe, &table.frame) else {
-        return;
-    };
-    card.title = "Describe".to_string();
-    card.highlight = Some(FormatKind::Dataframe);
-    card.preview_note = None;
-    card.selectable = true;
-    card.excerpt = dataframe::frame_grid(description).unwrap_or_default();
-    let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
-    let (rows, columns) = frame.shape();
-    let mut meta = text_meta_from(&csv, &csv);
-    // "12 lines  1.2 KB" → "11 rows × 20 columns" for the table described.
-    let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
-    meta.replace_range(..size_end, &format!("{rows} rows × {columns} columns"));
-    card.meta = meta;
-    add_version_note(card, table);
-}
-
 /// The step of the version shown ("Identifier removed") in the meta line, after the size;
 /// nothing for the original.
 fn add_version_note(card: &mut WorkCard, table: &TableShown) {
@@ -1161,7 +1089,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     };
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     card.selectable = true;
-    card.meta = text_meta_inheriting(&csv, &csv, &table.inherited);
+    card.meta = text_meta_from(&csv, &csv);
     if let Some(overview) = preview.overview.as_ref() {
         card.excerpt = overview.clone();
         add_meta_note(card, &overview_note(&preview));
@@ -1616,6 +1544,7 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let offers_table = commands.iter().any(|c| c.id == CommandId::TableMenu);
     if offers_table || data.table.is_some() {
         commands.extend(table_menu(data.table.as_ref()));
+        commands.extend(data.table.as_ref().map(table_undo_redo).unwrap_or_default());
     }
     if let Some(edit) = &data.image_edit {
         commands.extend(
@@ -1697,13 +1626,6 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::TableStep(op) => op.group(),
         CommandId::ImageStep(op) => op.group(),
         CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
-        CommandId::TableHeaderLine(_) => Some("Header on line"),
-        CommandId::TableFilter(_) => Some(FILTER_GROUP),
-        CommandId::TableCombine { how, .. } => Some(match how {
-            CombineHow::Join { left: false, .. } => JOIN_GROUP,
-            CombineHow::Join { left: true, .. } => LEFT_JOIN_GROUP,
-            CombineHow::Concat => CONCAT_GROUP,
-        }),
         _ => None,
     }
 }
@@ -1714,10 +1636,7 @@ fn grid_command(data: &LaunchData) -> Option<Command> {
     let table = data.table.as_ref()?;
     let width = table.frame.as_ref().map_or(0, |frame| frame.width());
     let text = data.subject_text.as_deref()?;
-    if width == 0
-        || table.describe.is_some()
-        || presented_view(text, data.view) != CardView::Dataframe
-    {
+    if width == 0 || presented_view(text, data.view) != CardView::Dataframe {
         return None;
     }
     Some(if !dataframe::shows_overview(table.overview, width) {
@@ -1817,73 +1736,46 @@ fn image_keywords(op: &crate::image_edit::ImageOp) -> &'static str {
     }
 }
 
-/// The "Table ▾" menu with check marks: [`table_menu`], the header line the table is read
-/// from checked.
-pub fn table_menu_items(table: Option<&TableShown>) -> Vec<(Command, bool)> {
-    let mut items: Vec<(Command, bool)> = table_menu(table)
-        .into_iter()
-        .map(|command| (command, false))
-        .collect();
-    let Some(notes) = table.and_then(|table| table.notes) else {
-        return items;
-    };
-    let Some(start) = notes.start else {
-        return items;
-    };
-    for line in 0..notes.header_lines {
-        items.push((
-            command(
-                CommandId::TableHeaderLine(line),
-                &format!("Line {}", line + 1),
-                "Header on line",
-                "header line row",
-            ),
-            line == start.header_line,
+/// Undo and redo of a table step, for the search when there is a version to go to (⌘Z, ⇧⌘Z
+/// and the version capsule have them too; the Table ▾ menu does not).
+fn table_undo_redo(table: &TableShown) -> Vec<Command> {
+    let mut commands = Vec::new();
+    if table.can_undo() {
+        commands.push(command(
+            CommandId::TableUndo,
+            "Undo table step",
+            &table.labels[table.version],
+            "undo table version back",
         ));
     }
-    items
-}
-
-/// The "Table ▾" menu: Describe (or back to the table), the steps, then undo and redo when
-/// there is a version to go to.
-pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
-    let describing = table.is_some_and(|table| table.describe.is_some());
-    let mut commands = vec![describe_command(describing)];
-    if let Some(question) = table
-        .and_then(|table| table.notes)
-        .and_then(|notes| date_order_command(&notes))
-    {
-        commands.push(question);
-    }
-    match table {
-        Some(table) => commands.extend(table_commands(table)),
-        None => commands.extend(table_steps()),
+    if table.can_redo() {
+        commands.push(command(
+            CommandId::TableRedo,
+            "Redo table step",
+            &table.labels[table.version + 1],
+            "redo table version forward",
+        ));
     }
     commands
 }
 
-fn describe_command(describing: bool) -> Command {
-    if describing {
-        command(
-            CommandId::TableDescribe,
-            "Back to the table",
-            "Table",
-            "table describe back",
-        )
-    } else {
-        command(
-            CommandId::TableDescribe,
-            "Describe",
-            "Columns at a glance",
-            "describe summary statistics columns table",
-        )
-    }
+/// The "Table ▾" menu with check marks ([`table_menu`]; none is checked).
+pub fn table_menu_items(table: Option<&TableShown>) -> Vec<(Command, bool)> {
+    table_menu(table)
+        .into_iter()
+        .map(|command| (command, false))
+        .collect()
 }
 
-/// Steps on a table, and undo and redo when there is a version to go to.
-pub fn table_commands(table: &TableShown) -> Vec<Command> {
+/// The "Table ▾" menu: Remove duplicate rows, Remove empty rows and columns, then, once the
+/// table is read, Choose columns… (more than one column), Sort ascending ›, Sort descending ›
+/// and Open in window. Undo and redo are ⌘Z and ⇧⌘Z and the version capsule.
+pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
     let mut commands = table_steps();
-    if table.frame.as_ref().is_some_and(|frame| frame.width() > 1) {
+    let Some(frame) = table.and_then(|table| table.frame.as_ref()) else {
+        return commands;
+    };
+    if frame.width() > 1 {
         commands.push(command(
             CommandId::TableChooseColumns,
             CHOOSE_COLUMNS_TITLE,
@@ -1891,115 +1783,23 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
             "choose pick select keep remove columns table",
         ));
     }
-    if table.frame.is_some() {
-        commands.push(command(
-            CommandId::TableOpenWindow,
-            OPEN_WINDOW_TITLE,
-            "A larger, resizable table window",
-            "open window table larger resize sidebar",
-        ));
-    }
-    if let Some(frame) = &table.frame {
-        let columns: Vec<String> = frame
-            .get_column_names()
-            .into_iter()
-            .map(|name| name.to_string())
-            .collect();
-        commands.extend(
-            crate::table::TableOp::column_steps(&columns)
-                .iter()
-                .map(table_step_command),
-        );
-        commands.extend(
-            crate::table::TableOp::group_steps(frame)
-                .iter()
-                .map(table_step_command),
-        );
-        commands.extend(filter_commands(frame));
-        commands.extend(combine_commands(&columns, &table.combine));
-    }
-    if table.can_undo() {
-        let label = &table.labels[table.version];
-        commands.push(command(
-            CommandId::TableUndo,
-            "Undo table step",
-            label,
-            "undo table version back",
-        ));
-    }
-    if table.can_redo() {
-        let label = &table.labels[table.version + 1];
-        commands.push(command(
-            CommandId::TableRedo,
-            "Redo table step",
-            label,
-            "redo table version forward",
-        ));
-    }
+    let columns: Vec<String> = frame
+        .get_column_names()
+        .into_iter()
+        .map(|name| name.to_string())
+        .collect();
+    commands.extend(
+        crate::table::TableOp::column_steps(&columns)
+            .iter()
+            .map(table_step_command),
+    );
+    commands.push(command(
+        CommandId::TableOpenWindow,
+        OPEN_WINDOW_TITLE,
+        "A larger, resizable table window",
+        "open window table larger resize sidebar",
+    ));
     commands
-}
-
-/// The Table ▾ submenu with a Filter item per column.
-pub const FILTER_GROUP: &str = "Filter";
-
-/// Table ▾ › Filter › a column, for the columns of a type a rule is typed for (text, numbers,
-/// dates); the item asks for the rule.
-fn filter_commands(frame: &polars::prelude::DataFrame) -> Vec<Command> {
-    frame
-        .columns()
-        .iter()
-        .filter(|column| crate::table_filter::FilterKind::of(column.dtype()).is_some())
-        .map(|column| {
-            let name = column.name().to_string();
-            command(
-                CommandId::TableFilter(name.clone()),
-                &format!("{name}…"),
-                FILTER_GROUP,
-                "filter rows where contains between range from to date column table",
-            )
-        })
-        .collect()
-}
-
-/// Join with › / Left join with › "Copy 2 · CSV  0.3 KB on customer" (one item per column both
-/// tables have), Append rows of › "Copy 2 · …" (when they share a column).
-fn combine_commands(columns: &[String], choices: &[CombineChoice]) -> Vec<Command> {
-    let mut joins = Vec::new();
-    let mut left_joins = Vec::new();
-    let mut appends = Vec::new();
-    for choice in choices {
-        let keys = crate::table_combine::shared_columns(columns, &choice.columns);
-        for key in &keys {
-            for (left, list) in [(false, &mut joins), (true, &mut left_joins)] {
-                list.push(command(
-                    CommandId::TableCombine {
-                        entry: choice.entry,
-                        check: choice.check,
-                        how: CombineHow::Join {
-                            key: key.clone(),
-                            left,
-                        },
-                    },
-                    &format!("{} on {key}", choice.title),
-                    if left { LEFT_JOIN_GROUP } else { JOIN_GROUP },
-                    "join merge combine lookup match key inner left tables",
-                ));
-            }
-        }
-        if !keys.is_empty() {
-            appends.push(command(
-                CommandId::TableCombine {
-                    entry: choice.entry,
-                    check: choice.check,
-                    how: CombineHow::Concat,
-                },
-                &choice.title,
-                CONCAT_GROUP,
-                "concat append combine stack union rows tables",
-            ));
-        }
-    }
-    joins.into_iter().chain(left_joins).chain(appends).collect()
 }
 
 /// The Table ▾ item that opens the column picker.
@@ -2098,7 +1898,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     let original = table.version == 0 && table.options == dataframe::ReadOptions::default();
     let classified: &str = if original { source } else { &csv };
-    let mut meta = text_meta_inheriting(&csv, classified, &table.inherited);
+    let mut meta = text_meta_from(&csv, classified);
     let (rows, columns) = frame.shape();
     let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
     meta.replace_range(
@@ -2137,21 +1937,15 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     view
 }
 
-/// The table window's Table ▾ menu: the card's, without what is the card's own (Describe,
-/// Show columns, the column picker, Open in window) or on the window's version bar (undo,
-/// redo).
+/// The table window's Table ▾ menu: the card's, without what is the card's own (the column
+/// picker, Open in window): the two one-click steps and the sorts.
 pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
     table_menu_items(Some(table))
         .into_iter()
         .filter(|(command, _)| {
             !matches!(
                 command.id,
-                CommandId::TableDescribe
-                    | CommandId::TableChooseColumns
-                    | CommandId::TableOpenWindow
-                    | CommandId::TableGrid(_)
-                    | CommandId::TableUndo
-                    | CommandId::TableRedo
+                CommandId::TableChooseColumns | CommandId::TableOpenWindow
             )
         })
         .collect()
@@ -2495,14 +2289,10 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageMenu
             | CommandId::ImageStep(_)
             | CommandId::ImageResizeCustom
-            | CommandId::TableDescribe
-            | CommandId::TableHeaderLine(_)
             | CommandId::TableDateOrder(_)
             | CommandId::TableGrid(_)
             | CommandId::TableChooseColumns
             | CommandId::TableOpenWindow
-            | CommandId::TableFilter(_)
-            | CommandId::TableCombine { .. }
     )
 }
 
@@ -2606,12 +2396,6 @@ fn text_chips(text: &str) -> Vec<Command> {
         ));
     }
     if toolbar_visibility::shows_dataframe_button(kind, text) {
-        commands.push(command(
-            CommandId::Dataframe,
-            "Dataframe",
-            "Table",
-            "dataframe table csv tsv",
-        ));
         commands.push(command(
             CommandId::TableMenu,
             TABLE_MENU_TITLE,
@@ -2757,16 +2541,6 @@ fn text_meta(text: &str) -> String {
 /// Size and line count come from `measured`. Classification comes from
 /// `classified`, which stays the copied table when the card shows another rendering.
 fn text_meta_from(measured: &str, classified: &str) -> String {
-    text_meta_inheriting(measured, classified, &[])
-}
-
-/// [`text_meta_from`] with `inherited` labels as well (a table version combined from another
-/// table, [`TableShown::inherited`]), once the labels of `classified` are known.
-fn text_meta_inheriting(
-    measured: &str,
-    classified: &str,
-    inherited: &[crate::sensitivity::Label],
-) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
@@ -2776,13 +2550,10 @@ fn text_meta_inheriting(
     };
     match crate::sensitivity::labeling(classified) {
         crate::sensitivity::Labeling::Known(found) => {
-            let mut labels = found.labels.clone();
-            labels.extend_from_slice(inherited);
-            labels.sort();
-            labels.dedup();
+            let labels = &found.labels;
             if !labels.is_empty() {
                 meta.push_str("  ·  ");
-                meta.push_str(&crate::sensitivity::label_line(&labels));
+                meta.push_str(&crate::sensitivity::label_line(labels));
             }
         }
         crate::sensitivity::Labeling::Checking => {
@@ -2877,10 +2648,7 @@ mod tests {
     };
     use super::{OPEN_WINDOW_TITLE, WINDOW_ROWS, table_window_view};
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
-    use super::{
-        TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_commands, table_menu,
-        table_menu_items, undo_key,
-    };
+    use super::{TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_menu, undo_key};
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
 
@@ -3351,7 +3119,7 @@ xmas-fifth-day:
             assert!(
                 chips(&input)
                     .iter()
-                    .any(|cmd| cmd.id == CommandId::Dataframe),
+                    .any(|cmd| cmd.id == CommandId::TableMenu),
                 "{src}"
             );
             let file = text_save_file(src, presented_view(src, CardView::Original)).unwrap();
@@ -3392,7 +3160,7 @@ xmas-fifth-day:
                 "{src}"
             );
             assert!(
-                shown.iter().any(|cmd| cmd.id == CommandId::Dataframe),
+                shown.iter().any(|cmd| cmd.id == CommandId::TableMenu),
                 "{src}"
             );
         }
@@ -4150,7 +3918,7 @@ Id,Naam,Telefoonnummer,Salaris
         let copied = transformed_text(src, CardView::Dataframe).expect("copy");
         assert!(copied.contains("Sunbox 7"), "{copied}");
         assert!(
-            ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::Dataframe)
+            ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::TableMenu)
         );
     }
 
@@ -4173,7 +3941,6 @@ Id,Naam,Telefoonnummer,Salaris
         // The card's own items are not in the window's menu; the steps are.
         let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
         for card_only in [
-            CommandId::TableDescribe,
             CommandId::TableChooseColumns,
             CommandId::TableOpenWindow,
             CommandId::TableUndo,
@@ -4184,7 +3951,7 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(ids.contains(&&CommandId::TableStep(crate::table::TableOp::Dedupe)));
         // The card offers the window; it keeps the card open.
         assert!(
-            table_commands(&table)
+            table_menu(Some(&table))
                 .iter()
                 .any(|c| c.id == CommandId::TableOpenWindow && c.title == OPEN_WINDOW_TITLE)
         );
@@ -4197,103 +3964,6 @@ Id,Naam,Telefoonnummer,Salaris
         let mut wiped = view.clone();
         wiped.wipe();
         assert!(wiped.grid.is_empty() && wiped.meta.is_empty() && wiped.columns.is_empty());
-    }
-
-    #[test]
-    fn filter_is_offered_per_text_number_and_date_column_and_asks_first() {
-        let table = deduped("name,n,day\nann,1,2026-09-01\nann,1,2026-09-01\nbob,2,2026-09-02");
-        let filters: Vec<super::Command> = table_commands(&table)
-            .into_iter()
-            .filter(|c| matches!(c.id, CommandId::TableFilter(_)))
-            .collect();
-        let titles: Vec<&str> = filters.iter().map(|c| c.title.as_str()).collect();
-        assert_eq!(titles, ["name…", "n…", "day…"]);
-        assert_eq!(
-            menu_group(&CommandId::TableFilter("n".into())),
-            Some(super::FILTER_GROUP)
-        );
-        assert!(keeps_card_open(&CommandId::TableFilter("n".into())));
-        // In the window's menu too.
-        let view = table_window_view(&table, "name,n,day\nann,1,2026-09-01");
-        assert!(
-            view.menu
-                .iter()
-                .any(|(c, _)| c.id == CommandId::TableFilter("day".into()))
-        );
-    }
-
-    #[test]
-    fn join_and_append_are_offered_with_the_other_tables_that_share_a_column() {
-        use super::{CombineChoice, CombineHow};
-        let mut table = deduped("customer,total\nc1,1\nc1,1\nc2,2");
-        table.combine = vec![
-            CombineChoice {
-                entry: 1,
-                check: 7,
-                title: "Copy 2 · CSV  0.1 KB".into(),
-                columns: vec!["name".into(), "customer".into()],
-            },
-            CombineChoice {
-                entry: 3,
-                check: 9,
-                title: "Copy 4 · CSV  0.1 KB".into(),
-                columns: vec!["other".into()],
-            },
-        ];
-        let combine: Vec<(String, Option<&str>, CommandId)> = table_commands(&table)
-            .into_iter()
-            .filter(|c| matches!(c.id, CommandId::TableCombine { .. }))
-            .map(|c| (c.title.clone(), menu_group(&c.id), c.id))
-            .collect();
-        let titles: Vec<(&str, Option<&str>)> =
-            combine.iter().map(|(t, g, _)| (t.as_str(), *g)).collect();
-        // Copy 4 shares no column: not offered.
-        assert_eq!(
-            titles,
-            [
-                ("Copy 2 · CSV  0.1 KB on customer", Some(super::JOIN_GROUP)),
-                (
-                    "Copy 2 · CSV  0.1 KB on customer",
-                    Some(super::LEFT_JOIN_GROUP)
-                ),
-                ("Copy 2 · CSV  0.1 KB", Some(super::CONCAT_GROUP)),
-            ]
-        );
-        assert_eq!(
-            combine[1].2,
-            CommandId::TableCombine {
-                entry: 1,
-                check: 7,
-                how: CombineHow::Join {
-                    key: "customer".into(),
-                    left: true
-                }
-            }
-        );
-        assert!(keeps_card_open(&combine[2].2));
-        // The window offers them too.
-        let view = table_window_view(&table, "customer,total\nc1,1");
-        assert_eq!(
-            view.menu
-                .iter()
-                .filter(|(c, _)| matches!(c.id, CommandId::TableCombine { .. }))
-                .count(),
-            3
-        );
-    }
-
-    #[test]
-    fn a_combined_version_keeps_the_labels_of_the_tables_combined_into_it() {
-        let src = "customer,total\nc1,1\nc1,1\nc2,2";
-        let mut table = deduped(src);
-        let plain = table_window_view(&table, src);
-        assert!(!plain.meta.contains("PII"), "{}", plain.meta);
-        table.inherited = vec![crate::sensitivity::Label::Pii];
-        let inherited = table_window_view(&table, src);
-        assert!(inherited.meta.contains("PII"), "{}", inherited.meta);
-        let mut card = work_card(&data(SubjectKind::Text, Some(src)));
-        super::show_table_version(&mut card, &table, false);
-        assert!(card.meta.contains("PII"), "{}", card.meta);
     }
 
     #[test]
@@ -4341,12 +4011,9 @@ Id,Naam,Telefoonnummer,Salaris
             labels: versions.labels(),
             working: false,
             error: None,
-            describe: None,
             options: versions.options(),
             notes: versions.notes(),
             overview: None,
-            inherited: versions.inherited(),
-            combine: Vec::new(),
         }
     }
 
@@ -4408,33 +4075,14 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     #[test]
-    fn table_commands_offer_undo_and_redo_when_there_is_a_version_to_go_to() {
+    fn undo_and_redo_are_in_the_search_not_in_the_table_menu() {
         let mut table = deduped("name,n\na,1\na,1");
-        // The one-click steps and undo or redo (the column steps sit in submenus).
-        let ids = |table: &TableShown| -> Vec<CommandId> {
-            table_commands(table)
-                .into_iter()
-                .map(|c| c.id)
-                .filter(|id| menu_group(id).is_none())
-                .collect()
+        let in_menu = |table: &TableShown| -> Vec<CommandId> {
+            table_menu(Some(table)).into_iter().map(|c| c.id).collect()
         };
-        let steps = || {
-            crate::table::TableOp::ONE_CLICK
-                .iter()
-                .cloned()
-                .map(CommandId::TableStep)
-        };
-        let mut expected: Vec<CommandId> = steps().collect();
-        expected.push(CommandId::TableChooseColumns);
-        expected.push(CommandId::TableOpenWindow);
-        expected.push(CommandId::TableUndo);
-        assert_eq!(ids(&table), expected);
+        assert!(!in_menu(&table).contains(&CommandId::TableUndo));
         table.version = 0;
-        let mut expected: Vec<CommandId> = steps().collect();
-        expected.push(CommandId::TableChooseColumns);
-        expected.push(CommandId::TableOpenWindow);
-        expected.push(CommandId::TableRedo);
-        assert_eq!(ids(&table), expected);
+        assert!(!in_menu(&table).contains(&CommandId::TableRedo));
         assert!(keeps_card_open(&CommandId::TableUndo));
         let mut input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
         assert!(
@@ -4463,36 +4111,43 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(keeps_card_open(&CommandId::TableMenu));
         let prose = data(SubjectKind::Text, Some("just some words"));
         assert!(!chips(&prose).iter().any(|c| c.id == CommandId::TableMenu));
-        // Without versions the menu has Describe and the steps.
+        // Before the table is read the menu has the one-click steps.
         let menu = table_menu(None);
-        assert_eq!(menu[0].id, CommandId::TableDescribe);
-        assert_eq!(menu[0].title, "Describe");
-        assert_eq!(menu.len(), 1 + crate::table::TableOp::ONE_CLICK.len());
-        assert!(keeps_card_open(&CommandId::TableDescribe));
+        assert_eq!(menu.len(), crate::table::TableOp::ONE_CLICK.len());
+        // The Dataframe view has no chip: Table ▾ opens it.
+        assert!(!chips(&input).iter().any(|c| c.id == CommandId::Dataframe));
     }
 
     #[test]
-    fn the_table_menu_sorts_and_counts_by_each_column_in_submenus() {
+    fn the_table_menu_has_six_items_and_sorts_by_each_column_in_submenus() {
         use crate::table::TableOp;
         let table = deduped("name,n\na,1\na,1");
         let menu = table_menu(Some(&table));
+        // The top level, in order; the sorts are submenus.
+        let mut top: Vec<String> = Vec::new();
+        for c in &menu {
+            let item = menu_group(&c.id).map_or(c.title.clone(), |group| format!("{group} ›"));
+            if !top.contains(&item) {
+                top.push(item);
+            }
+        }
+        assert_eq!(
+            top,
+            [
+                "Remove duplicate rows",
+                "Remove empty rows and columns",
+                "Choose columns…",
+                "Sort ascending ›",
+                "Sort descending ›",
+                "Open in window"
+            ]
+        );
         let sort_up: Vec<&str> = menu
             .iter()
             .filter(|c| menu_group(&c.id) == Some("Sort ascending"))
             .map(|c| c.title.as_str())
             .collect();
         assert_eq!(sort_up, ["name", "n"]);
-        let counts = menu
-            .iter()
-            .find(|c| menu_group(&c.id) == Some("Value counts"))
-            .expect("value counts");
-        assert_eq!(
-            counts.id,
-            CommandId::TableStep(TableOp::ValueCounts {
-                column: "name".into()
-            })
-        );
-        assert_eq!(counts.detail, "Value counts");
         assert_eq!(
             TableOp::Sort {
                 column: "Price".into(),
@@ -4502,31 +4157,6 @@ Id,Naam,Telefoonnummer,Salaris
             "Sorted by Price ↓"
         );
         assert_eq!(menu_group(&CommandId::TableUndo), None);
-        let removes: Vec<&str> = menu
-            .iter()
-            .filter(|c| menu_group(&c.id) == Some("Remove column"))
-            .map(|c| c.title.as_str())
-            .collect();
-        assert_eq!(removes, ["name", "n"]);
-        let to_front: Vec<&CommandId> = menu
-            .iter()
-            .filter(|c| menu_group(&c.id) == Some("Move column to front"))
-            .map(|c| &c.id)
-            .collect();
-        assert_eq!(
-            to_front,
-            [&CommandId::TableStep(TableOp::SelectColumns {
-                columns: vec!["n".into(), "name".into()],
-                kept_of: None,
-            })]
-        );
-        assert_eq!(
-            TableOp::DropColumns {
-                columns: vec!["Salary".into()]
-            }
-            .label(),
-            "Salary removed"
-        );
         // Without a frame there are no columns to offer yet.
         let mut loading = table.clone();
         loading.frame = None;
@@ -4556,17 +4186,14 @@ Id,Naam,Telefoonnummer,Salaris
             labels: versions.labels(),
             working: false,
             error: None,
-            describe: None,
             options: versions.options(),
             notes: versions.notes(),
             overview: None,
-            inherited: versions.inherited(),
-            combine: Vec::new(),
         }
     }
 
     #[test]
-    fn dates_in_either_order_ask_with_a_chip_and_the_header_line_can_be_set() {
+    fn dates_in_either_order_ask_with_a_chip() {
         use crate::dataframe::ReadOptions;
         let src = "Export\nwhen,n\n01/02/2026,1\n03/04/2026,2";
         let mut input = data(SubjectKind::Text, Some(src));
@@ -4584,27 +4211,8 @@ Id,Naam,Telefoonnummer,Salaris
                 .iter()
                 .any(|c| matches!(c.id, CommandId::TableDateOrder(_)))
         );
-        // The header lines, the one read checked.
-        let items = table_menu_items(input.table.as_ref());
-        let lines: Vec<(&str, bool)> = items
-            .iter()
-            .filter(|(c, _)| menu_group(&c.id) == Some("Header on line"))
-            .map(|(c, checked)| (c.title.as_str(), *checked))
-            .collect();
-        assert_eq!(
-            lines,
-            [
-                ("Line 1", false),
-                ("Line 2", true),
-                ("Line 3", false),
-                ("Line 4", false)
-            ]
-        );
         // Read month first: the card renders the frame and says so; the chip asks back.
-        let month_first = ReadOptions {
-            month_first: true,
-            ..ReadOptions::default()
-        };
+        let month_first = ReadOptions { month_first: true };
         input.view = CardView::Dataframe;
         let plain_key = content_key(&input);
         input.table = Some(read(src, month_first));
@@ -4623,35 +4231,6 @@ Id,Naam,Telefoonnummer,Salaris
                 .iter()
                 .any(|c| c.id == CommandId::TableDateOrder(false))
         );
-        assert!(keeps_card_open(&CommandId::TableHeaderLine(0)));
-    }
-
-    #[test]
-    fn describe_is_a_view_of_the_version_shown() {
-        let src = "name,n\na,1\na,1\nb,2";
-        let mut input = data(SubjectKind::Text, Some(src));
-        input.view = CardView::Dataframe;
-        let mut table = deduped(src);
-        let frame = table.frame.clone().expect("frame");
-        table.describe = Some(crate::table_ops::describe(&frame).expect("describe"));
-        let plain_key = {
-            let mut plain = input.clone();
-            plain.table = Some(deduped(src));
-            content_key(&plain)
-        };
-        input.table = Some(table.clone());
-        let card = work_card(&input);
-        assert_eq!(card.title, "Describe");
-        assert!(card.excerpt.contains("distinct"), "{}", card.excerpt);
-        assert!(card.meta.starts_with("2 rows × 2 columns"), "{}", card.meta);
-        assert!(
-            card.meta.contains("columns  ·  Duplicates removed"),
-            "{}",
-            card.meta
-        );
-        // Another view of the same entry: it stays revealed.
-        assert_eq!(content_key(&input), plain_key);
-        assert_eq!(table_menu(Some(&table))[0].title, "Back to the table");
     }
 
     #[test]
@@ -4692,17 +4271,6 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(choose.title, "Choose columns…");
         assert_eq!(menu_group(&choose.id), None);
         assert!(keeps_card_open(&CommandId::TableChooseColumns));
-        // Column steps are still there one at a time.
-        assert!(
-            items
-                .iter()
-                .any(|c| menu_group(&c.id) == Some("Remove column"))
-        );
-        assert!(
-            items
-                .iter()
-                .any(|c| menu_group(&c.id) == Some("Move column to front"))
-        );
         let columns = picker_columns(&table).expect("columns");
         assert_eq!(columns.len(), 20);
         assert_eq!(columns[0].kind, "date");
@@ -4810,7 +4378,7 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     /// Every way one entry is shown again: each view and chip, the table while its job runs and
-    /// when it is done, steps, versions, Show columns / Show table, Describe, the picker's step.
+    /// when it is done, steps, versions, Show columns / Show table, the picker's step.
     fn shown_again(src: &str) -> Vec<(String, LaunchData)> {
         use crate::table::TableOp;
         let plain = data(SubjectKind::Text, Some(src));
@@ -4847,14 +4415,6 @@ Id,Naam,Telefoonnummer,Salaris
             table.table = Some(toggled);
             out.push((format!("overview {overview}"), table.clone()));
         }
-        let mut described = read.clone();
-        described.describe = read
-            .frame
-            .as_ref()
-            .and_then(|frame| crate::table_ops::describe(frame).ok());
-        assert!(described.describe.is_some());
-        table.table = Some(described);
-        out.push(("Describe".into(), table.clone()));
         let first = read
             .frame
             .as_ref()
@@ -4870,9 +4430,6 @@ Id,Naam,Telefoonnummer,Salaris
             TableOp::Sort {
                 column: first.clone(),
                 descending: true,
-            },
-            TableOp::DropColumns {
-                columns: vec![first.clone()],
             },
             TableOp::SelectColumns {
                 columns: vec![first],
@@ -4906,8 +4463,9 @@ Id,Naam,Telefoonnummer,Salaris
         original.view = CardView::Dataframe;
         original.table = Some(stepped(
             pii,
-            crate::table::TableOp::DropColumns {
-                columns: vec!["Salaris".into()],
+            crate::table::TableOp::SelectColumns {
+                columns: vec!["Id".into(), "Naam".into()],
+                kept_of: Some(3),
             },
         ));
         let card = work_card(&original);

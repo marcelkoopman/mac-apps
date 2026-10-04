@@ -80,24 +80,22 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Original, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |
-| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Original, Dataframe, Table ▾ | meta~Header on line 3; read=4x4; notes=Header on line 3 |
-| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
-| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Original, Dataframe, Table ▾ | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
-| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
-| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
-| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, for Fix types | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,str,i64; step:FixTypes:dtypes=date,str,f64,i64; step:FixTypes~24.95 |
-| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column, constant column | plain text | CSV | — | Original, Dataframe, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropConstant=8x4; step:DropEmpty>Dedupe>DropConstant=4x3 |
-| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
-| `tables/join_orders.csv` | Table: Join with / Left join with another copy (customers with e-mail addresses) and Append rows of a third; the result keeps the PII label of the customers, also after their columns are removed | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Join(tables/join_customers_pii.csv,customer,inner)=3x5; step:Join(tables/join_customers_pii.csv,customer,inner)~Ann de Vries; step:Join(tables/join_customers_pii.csv,customer,left)=4x5; step:Join(tables/join_customers_pii.csv,customer,inner):meta~PII; step:Join(tables/join_customers_pii.csv,customer,inner):meta~Joined with a 3 × 3 table on customer; step:Join(tables/join_customers_pii.csv,customer,left)>Drop(email)>Drop(name):meta~PII; step:Join(tables/join_customers_pii.csv,customer,left)>Drop(email)>Drop(name)=4x3; step:Concat(tables/concat_more_orders.csv)=6x4; step:Concat(tables/concat_more_orders.csv):dtypes=str,str,f64,str; step:Concat(tables/concat_more_orders.csv)~gift wrap; step:Concat(tables/concat_more_orders.csv):meta~Rows of a 2 × 4 table appended |
-| `tables/join_customers_pii.csv` | Table: the customers joined in (PII: e-mail addresses at example.com) | plain text | CSV | PII | Original, Dataframe, Table ▾ | read=3x3 |
-| `tables/concat_more_orders.csv` | Table: more orders to append, columns in another order, one more column, an order number that is text | plain text | CSV | — | Original, Dataframe, Table ▾ | read=2x4; dtypes=str,f64,str,str |
-| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Original, Dataframe, Table ▾ | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
-| `tables/ledger_filter.csv` | Table: Filter on a datetime column by day (the whole last day is in) and on negative amounts; text filters in any case | plain text | CSV | financial | Original, Dataframe, Table ▾ | read=5x3; dtypes=datetime[μs],str,f64; step:Filter(booked at,date,2026-09-01)=2x3; step:Filter(booked at,date,to 2026-09-02)=3x3; step:Filter(amount,number,-60 to -10)=2x3; step:Filter(amount,number,to 0)=3x3; step:Filter(description,text,coffee)=2x3; step:Filter(description,text,coffee)>Filter(amount,number,to -5)~Coffee beans |
-| `tables/small_table.csv` | Table: Transpose and Value counts | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Transpose=2x5; step:ValueCounts(color)=3x2; step:ValueCounts(color)~red |
-| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open in window) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
-| `tables/window_payees_iban.csv` | Table: Open in window on a sensitive table (IBANs): the window opens blurred and names the labels | plain text | CSV | financial | Original, Dataframe, Table ▾ | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
-| `tables/sales_by_region.csv` | Table: Group by (Count by, Sum by, Mean by, Min by, Max by), dates kept as dates; Filter by text, number and date | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x5; dtypes=str,str,i64,f64,date; step:GroupBy(region,count)=3x2; step:GroupBy(region,count)~│ North  ┆ 3 ; step:GroupBy(region,sum)=3x3; step:GroupBy(region,sum)~223.45; step:GroupBy(region,mean):dtypes=str,f64,f64; step:GroupBy(region,max):dtypes=str,i64,f64,date; step:GroupBy(region,max)~2026-09-08; step:GroupBy(region+product,count)=6x3; step:Dedupe>GroupBy(product,min)~24.95; step:Filter(product,text,LAMP)=3x5; step:Filter(units,number,2 to 4)=3x5; step:Filter(price,number,from 100)~Office chair; step:Filter(sold on,date,2026-09-02 to 2026-09-04)=3x5; step:Filter(sold on,date,from 05/09/2026)=2x5; step:Filter(region,text,North)>GroupBy(product,sum)=3x3 |
-| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
+| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Original, Table ▾ | meta~Header on line 3; read=4x4; notes=Header on line 3 |
+| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Table ▾ | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
+| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Original, Table ▾ | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
+| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Table ▾ | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
+| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Table ▾ | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
+| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Original, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
+| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Original, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
+| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
+| `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Original, Table ▾ | read=4x3 |
+| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Original, Table ▾ | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
+| `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Original, Table ▾ | read=5x3; dtypes=datetime[μs],str,f64 |
+| `tables/small_table.csv` | Table: a small table | plain text | CSV | — | Original, Table ▾ | read=4x3 |
+| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open in window) | plain text | CSV | — | Original, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
+| `tables/window_payees_iban.csv` | Table: Open in window on a sensitive table (IBANs): the window opens blurred and names the labels | plain text | CSV | financial | Original, Table ▾ | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
+| `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Original, Table ▾ | read=6x5; dtypes=str,str,i64,f64,date |
+| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
 | `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | — | kind=Plain |
@@ -105,10 +103,10 @@ Columns (fixed; the test parses this table between the markers):
 | `sensitivity/pii_email.txt` | PII: `example.com` email | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/pii_phone.txt` | PII: fake 06 number | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/pii_bsn.txt` | PII: test BSN 111222333 | plain text | Content | PII | — | kind=Plain |
-| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Original, Dataframe, Table ▾ | kind=Csv |
+| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Original, Table ▾ | kind=Csv |
 | `sensitivity/financial_iban.txt` | Financial: test IBAN | plain text | Content | financial | — | kind=Plain |
 | `sensitivity/financial_card.txt` | Financial: test card 4111 1111 1111 1111 | plain text | Content | financial | — | kind=Plain |
-| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Original, Dataframe, Table ▾ | kind=Csv |
+| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Original, Table ▾ | kind=Csv |
 | `sensitivity/leak_url_credentials.txt` | Leakguard: credentials in a URL | plain text | Content | credential | — | kind=Plain |
 | `sensitivity/leak_ip_address.txt` | Leakguard: IPs from 192.0.2.0/24 | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | — | kind=Plain |
@@ -144,14 +142,13 @@ Columns (fixed; the test parses this table between the markers):
 | `dtypes=…` | the table's column types, in order |
 | `dataframe~S` / `dfcard~S` / `dfmeta~S` | the Dataframe text / the Dataframe card / its meta line contains `S` |
 | `columns~S` | one shown column name (shared prefix shortened) is `S` |
-| `step:OPS=RxC`, `step:OPS~S`, `step:OPS:dtypes=…`, `step:OPS:meta~S` | after the Table ▾ steps `OPS` (joined by `>`): the shape, the frame contains `S`, the types, the version's meta line (as the table window shows it) contains `S`. Steps: `Dedupe`, `DropEmpty`, `DropConstant`, `FixTypes`, `Transpose`, `ValueCounts(col)`, `GroupBy(col+col,count|sum|mean|min|max)`, `Filter(col,text|number|date,rule as typed)`, `Join(file,key,inner|left)`, `Concat(file)` (another testdata file as the other table, read as copied, with its labels), `Drop(col)` (a rule without `>`, `=`, `~` or `:`: write `from 10`, `to 0`) |
+| `step:OPS=RxC`, `step:OPS~S`, `step:OPS:dtypes=…`, `step:OPS:meta~S` | after the Table ▾ steps `OPS` (joined by `>`): the shape, the frame contains `S`, the types, the version's meta line (as the table window shows it) contains `S`. Steps: `Dedupe`, `DropEmpty` |
 | `mac-only` | Title, Labels and Chips are what macOS should show; Linux checks only the rest |
 | `size=WxH` | the image decodes (as stored) to W × H pixels |
 | `exif-orientation=N`, `exif-gps` | the JPEG carries EXIF Orientation N and a GPS block |
 
 Table ▾ step names: `Dedupe` (Remove duplicate rows), `DropEmpty` (Remove empty rows and
-columns), `DropConstant` (Remove constant columns), `FixTypes` (Fix types), `Transpose`,
-`ValueCounts(column)`.
+columns).
 
 ## Large files (not committed)
 
@@ -193,16 +190,13 @@ expectations; on Linux the test only checks size and EXIF.
 - [ ] Reopen the window, then Wipe, lock (⌃⌘Q), sleep and Clear history: each closes it.
       Copying new items until its entry leaves history also closes it.
 - [ ] `tables/window_payees_iban.csv` in the window: the meta line shows financial in red.
-- [ ] `tables/sales_by_region.csv`: Sum by › region gives 3 rows, Max by › region keeps the
-      date a date, Count by › product, then undo.
-- [ ] `tables/sales_by_region.csv` Filter: price… with `abc` asks again, `100 to 200` keeps 2
-      rows; sold on… `from 05/09/2026` keeps 2 rows; product… `LAMP` keeps 3 rows. Run a
-      filter from the window too.
-- [ ] Join: show `tables/join_customers_pii.csv` on the card, then copy `tables/join_orders.csv`.
-      Join with › "Copy 2 · … on customer" gives 3 rows with PII in the meta; undo, Left join
-      with gives 4 rows; remove email and name and PII stays.
-- [ ] Show `tables/concat_more_orders.csv` once, then from the orders card Append rows of gives
-      6 rows. Copy something new and join from the old menu: it refuses.
+- [ ] Table ▾ on any table shows exactly: Remove duplicate rows, Remove empty rows and
+      columns, Choose columns…, Sort ascending ›, Sort descending ›, Open in window. The
+      window's Table ▾ has the two Remove steps and the two Sort submenus.
+- [ ] There is no Dataframe chip: a table shows Original and Table ▾; clicking Table ▾ shows
+      the grid (Original goes back to the text). Find filters the rows; ⌘Z/⇧⌘Z step versions.
+- [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
+      the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] Pasteboard privacy, Always Deny (macOS with pasteboard privacy on; see
       `docs/pasteboard-privacy/README.md` for the developer flag): set *Privacy & Security ›
       Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says
@@ -228,14 +222,7 @@ expectations; on Linux the test only checks size and EXIF.
       Allow to Ask to Deny and back in Privacy & Security; after each, copy and open the card:
       it follows the setting (the log shows `pasteboard accessBehavior now …`).
 - [ ] `tables/datetime_first_column.csv` (datetimes in the first column): copied from a text
-      editor, the card shows CSV with Dataframe and Table ▾, `measured at` as a datetime.
-      `tables/ledger_filter.csv` (datetime first too): Filter: booked at… `2026-09-01` keeps 2 rows.
-- [ ] Large-table join: copy `large_1mb.csv` from `generate_large.sh` (open it in a text
-      editor, select all, copy) and show it once, copy two other items so its frames are let
-      go, then copy `id,site` / `1,North` / `2,South` and Join with › that large copy on id:
-      the card stays responsive (no beach ball), the spinner shows when slow, and the 2-row
-      joined version follows. Again with Append rows of: 32,002 rows. Wipe while the spinner
-      turns: no version appears afterwards.
+      editor, the card shows CSV with Table ▾, `measured at` as a datetime.
 - [ ] Out of screen capture: with the card open and the table window open (one revealed, one
       blurred), take a screenshot (⇧⌘3 and ⇧⌘4 › Space on each window), a screen recording
       (⇧⌘5) and share the screen in a video call: card and window should be absent. Note per

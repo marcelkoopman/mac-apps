@@ -47,7 +47,7 @@ fn picker_open() -> bool {
 /// Called from [`store_with_card`]: the columns of the version shown. Another entry or
 /// version closes an open picker.
 fn store_picker_source(data: &LaunchData, content_key: u64) {
-    let table = data.table.as_ref().filter(|table| table.describe.is_none());
+    let table = data.table.as_ref();
     let columns = table.and_then(commands::picker_columns);
     let key = (content_key, table.map_or(0, |table| table.frame_id));
     if PICKER_KEY.with(Cell::get) != key {

@@ -107,16 +107,10 @@ struct App {
     opened_table: TableVersions,
     /// The table job on its thread. One at a time: a new one cancels it.
     table_job: Option<TableRun>,
-    /// A Join / Append waiting for the table job that works out the other table's version.
-    pending_combine: Option<PendingCombine>,
     /// Why the last table step failed, shown on the card until the next one.
     table_error: Option<String>,
     /// The entry the table window shows, while it is open.
     table_window: Option<TableWindow>,
-    /// The Describe view is on for the table with this text ([`text_hash`]).
-    describe_for: Option<u64>,
-    /// The last description, for the frame with this id ([`TableVersions::frame_id`]).
-    describe_cache: Option<(u64, polars::prelude::DataFrame)>,
     /// The picture versions of a chosen file, which is not in history (a history entry,
     /// a dropped picture's too, keeps its own). Dropped with the file.
     opened_image: ImageVersions,
@@ -132,47 +126,6 @@ struct ImageRun {
     started: Background,
     generation: u64,
     cancel: Arc<AtomicBool>,
-}
-
-/// A copy's hash, to tell which table the Describe view is for (kept in memory only).
-/// A quick fingerprint of a history entry's text for [`commands::CombineChoice::check`]: its
-/// length and its first and last 4 KB (the menu is built several times a second).
-fn entry_check(text: &str) -> u64 {
-    const PART: usize = 4096;
-    let bytes = text.as_bytes();
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    bytes.len().hash(&mut hasher);
-    bytes[..bytes.len().min(PART)].hash(&mut hasher);
-    bytes[bytes.len().saturating_sub(PART)..].hash(&mut hasher);
-    hasher.finish()
-}
-
-fn text_hash(text: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
-}
-
-/// A Join / Append whose other table is being worked out by the table job `generation`: it
-/// goes on when that job is done ([`combine_goes_on`]), and is dropped with the job.
-struct PendingCombine {
-    generation: u64,
-    target: TableTarget,
-    entry: usize,
-    check: u64,
-    how: commands::CombineHow,
-}
-
-/// What [`App::combine_step`] gives: the step, or the job to run first for the other table.
-enum CombineStep {
-    Ready(TableOp),
-    LoadOther(crate::table::Job),
-}
-
-/// A finished table job lets the combine waiting for it go on only when it is that job and its
-/// version went into the other table (which was not wiped or forgotten meanwhile).
-fn combine_goes_on(waiting_for: Option<u64>, generation: u64, taken_in: bool) -> bool {
-    waiting_for == Some(generation) && taken_in
 }
 
 /// A table job running on its thread ([`crate::table::Job`]).
@@ -207,17 +160,9 @@ struct TableWindow {
 }
 
 impl TableWindow {
-    fn key(
-        table: &TableVersions,
-        error: Option<&str>,
-        working: bool,
-        combine: &[commands::CombineChoice],
-    ) -> u64 {
+    fn key(table: &TableVersions, error: Option<&str>, working: bool) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (table.frame_id(), table.frame().is_some(), table.cursor()).hash(&mut hasher);
-        for choice in combine {
-            (choice.entry, choice.check, &choice.columns).hash(&mut hasher);
-        }
         table.labels().hash(&mut hasher);
         (
             error,
@@ -476,10 +421,6 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
-            CommandId::TableFilter(column) => self.filter_prompt(TableTarget::Card, column),
-            CommandId::TableCombine { entry, check, how } => {
-                self.table_combine(TableTarget::Card, entry, check, how, false);
-            }
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
@@ -499,7 +440,6 @@ impl App {
             CommandId::ImageResizeCustom => self.custom_resize(),
             // The card pops the menu itself.
             CommandId::TableMenu | CommandId::ImageMenu | CommandId::TableChooseColumns => {}
-            CommandId::TableDescribe => self.toggle_describe(),
             CommandId::TableGrid(grid) => {
                 if let Some((_, home)) = self.table_source()
                     && let Some(table) = self.table_at(home)
@@ -508,9 +448,6 @@ impl App {
                 }
                 self.refresh_popup();
             }
-            CommandId::TableHeaderLine(line) => self.table_reread(TableTarget::Card, |options| {
-                options.header_line = Some(line);
-            }),
             CommandId::TableDateOrder(month_first) => {
                 self.table_reread(TableTarget::Card, |options| {
                     options.month_first = month_first;
@@ -624,18 +561,11 @@ impl App {
                 let target = TableTarget::Window;
                 match id {
                     CommandId::TableStep(op) => self.table_step(target, op),
-                    CommandId::TableFilter(column) => self.filter_prompt(target, column),
-                    CommandId::TableCombine { entry, check, how } => {
-                        self.table_combine(target, entry, check, how, false);
-                    }
                     CommandId::TableUndo => {
                         self.table_goto(target, |cursor| cursor.checked_sub(1));
                     }
                     CommandId::TableRedo => self.table_goto(target, |cursor| Some(cursor + 1)),
                     CommandId::TableVersion(index) => self.table_goto(target, |_| Some(index)),
-                    CommandId::TableHeaderLine(line) => self.table_reread(target, |options| {
-                        options.header_line = Some(line);
-                    }),
                     CommandId::TableDateOrder(month_first) => {
                         self.table_reread(target, |options| {
                             options.month_first = month_first;
@@ -664,7 +594,6 @@ impl App {
             Some(window) => (window.error.clone(), window.shown, window.checking),
             None => return,
         };
-        let combine = self.combine_choices(home);
         let Some(table) = self.target_table(TableTarget::Window, home) else {
             self.close_table_window();
             return;
@@ -677,7 +606,7 @@ impl App {
             table.load(&text)
         };
         let working = load.is_some() || running_here;
-        let key = TableWindow::key(table, error.as_deref(), working, &combine);
+        let key = TableWindow::key(table, error.as_deref(), working);
         if shown == Some(key) && !checking && load.is_none() {
             return;
         }
@@ -688,12 +617,9 @@ impl App {
             labels: table.labels(),
             working,
             error,
-            describe: None,
             options: table.options(),
             notes: table.notes(),
             overview: Some(false),
-            inherited: table.inherited(),
-            combine,
         };
         let view = commands::table_window_view(&shown_table, &text);
         if let Some(window) = self.table_window.as_mut() {
@@ -706,22 +632,7 @@ impl App {
         }
     }
 
-    /// Describe the table version shown (a view, not a version), or go back to the table.
-    fn toggle_describe(&mut self) {
-        let Some((text, _)) = self.table_source() else {
-            return;
-        };
-        let hash = text_hash(&text);
-        if self.describe_for == Some(hash) && self.card_view == CardView::Dataframe {
-            self.describe_for = None;
-        } else {
-            self.describe_for = Some(hash);
-            self.card_view = CardView::Dataframe;
-        }
-        self.refresh_popup();
-    }
-
-    /// Read the table another way ("Header on line N", the date order): it starts over from
+    /// Read the table another way (the date order): it starts over from
     /// the original.
     fn table_reread(
         &mut self,
@@ -744,12 +655,11 @@ impl App {
     }
 
     /// A step's error (or none) for `target`'s meta line. A step from the card also brings the
-    /// card to the table (out of Describe, into the Dataframe view).
+    /// card to the table (the Dataframe view).
     fn set_table_error(&mut self, target: TableTarget, error: Option<String>) {
         match target {
             TableTarget::Card => {
                 if error.is_none() {
-                    self.describe_for = None;
                     self.card_view = CardView::Dataframe;
                 }
                 self.table_error = error;
@@ -759,174 +669,6 @@ impl App {
                     window.error = error;
                 }
             }
-        }
-    }
-
-    /// The other history entries whose table the card has read (their columns are known), to
-    /// combine the table at `home` with: newest first, as in history.
-    fn combine_choices(&self, home: TableHome) -> Vec<commands::CombineChoice> {
-        (0..self.history.len())
-            .filter(|&index| home != TableHome::History(index))
-            .filter_map(|index| {
-                let columns = self.history.table(index)?.columns()?.to_vec();
-                let text = self.history.entry_text(index)?;
-                Some(commands::CombineChoice {
-                    entry: index,
-                    check: entry_check(text),
-                    title: format!(
-                        "Copy {} · {}",
-                        index + 1,
-                        history_title(&self.history, index)
-                    ),
-                    columns,
-                })
-            })
-            .collect()
-    }
-
-    /// Join with / Left join with / Append rows of: the table of `target` combined with the
-    /// version the history entry `entry` shows, as one step. When that table's frame was
-    /// forgotten, a table job works it out first (with the spinner) and the step follows when it
-    /// is done ([`PendingCombine`]); `resumed` is that second go. The step keeps both tables'
-    /// sensitivity labels.
-    fn table_combine(
-        &mut self,
-        target: TableTarget,
-        entry: usize,
-        check: u64,
-        how: commands::CombineHow,
-        resumed: bool,
-    ) {
-        let result = self.combine_step(target, entry, check, &how, resumed);
-        match result {
-            Ok(CombineStep::Ready(op)) => self.table_step(target, op),
-            Ok(CombineStep::LoadOther(job)) => {
-                let generation = job.generation;
-                self.set_table_error(target, None);
-                self.run_table_job(job, false, target);
-                if self.table_job.is_some() {
-                    self.pending_combine = Some(PendingCombine {
-                        generation,
-                        target,
-                        entry,
-                        check,
-                        how,
-                    });
-                }
-                self.refresh_popup();
-                if target == TableTarget::Window {
-                    self.refresh_table_window();
-                }
-            }
-            Err(error) => {
-                self.set_table_error(target, Some(error));
-                self.refresh_popup();
-                if target == TableTarget::Window {
-                    self.refresh_table_window();
-                }
-            }
-        }
-    }
-
-    fn combine_step(
-        &mut self,
-        target: TableTarget,
-        entry: usize,
-        check: u64,
-        how: &commands::CombineHow,
-        resumed: bool,
-    ) -> Result<CombineStep, String> {
-        let gone = || "That copy is no longer in history; open the menu again".to_string();
-        let checking = || "Still checking for sensitive data; try again in a moment".to_string();
-        let (text, home) = self.target_source(target).ok_or_else(gone)?;
-        let other_text = Zeroizing::new(
-            self.history
-                .entry_text(entry)
-                .filter(|other| entry_check(other) == check)
-                .ok_or_else(gone)?
-                .to_string(),
-        );
-        if home == TableHome::History(entry) {
-            return Err(gone());
-        }
-        if self
-            .target_table(target, home)
-            .ok_or_else(gone)?
-            .frame()
-            .is_none()
-        {
-            return Err("Working on the table…".to_string());
-        }
-        // The other table's version, worked out on the table thread when it is not there.
-        let other = self.history.table_mut_in_place(entry).ok_or_else(gone)?;
-        if let Some(job) = other.load(&other_text) {
-            if resumed {
-                return Err(gone());
-            }
-            return Ok(CombineStep::LoadOther(job));
-        }
-        let other_frame = other.frame().cloned().ok_or_else(gone)?;
-        let mut labels = version_labels(other, &other_frame, &other_text).ok_or_else(checking)?;
-        let table = self.target_table(target, home).ok_or_else(gone)?;
-        let frame = table
-            .frame()
-            .cloned()
-            .ok_or_else(|| "Working on the table…".to_string())?;
-        labels.extend(version_labels(table, &frame, &text).ok_or_else(checking)?);
-        let other = crate::table_combine::OtherTable::new(other_frame, labels);
-        Ok(CombineStep::Ready(match how.clone() {
-            commands::CombineHow::Join { key, left } => TableOp::Join { other, key, left },
-            commands::CombineHow::Concat => TableOp::Concat { other },
-        }))
-    }
-
-    /// Table ▾ › Filter › `column`: ask for a rule of the column's kind (text, numbers, dates),
-    /// again until it reads as one or is cancelled, then filter as one step.
-    fn filter_prompt(&mut self, target: TableTarget, column: String) {
-        #[cfg(target_os = "macos")]
-        {
-            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
-                return;
-            };
-            let Some((_, home)) = self.target_source(target) else {
-                return;
-            };
-            let kind = self
-                .target_table(target, home)
-                .and_then(|table| table.frame())
-                .and_then(|frame| frame.column(&column).ok())
-                .and_then(|values| crate::table_filter::FilterKind::of(values.dtype()));
-            let Some(kind) = kind else {
-                self.set_table_error(target, Some(format!("{column} cannot be filtered")));
-                self.refresh_popup();
-                return;
-            };
-            let title = format!("Filter {column}");
-            let mut message = kind.prompt().to_string();
-            loop {
-                let answer = mac_ui::dialog::prompt_text(mtm, &title, &message, "");
-                match target {
-                    TableTarget::Card => launcher::order_front(),
-                    TableTarget::Window => launcher::front_table_window(),
-                }
-                let Some(answer) = answer.map(Zeroizing::new) else {
-                    return;
-                };
-                if answer.trim().is_empty() {
-                    return;
-                }
-                match crate::table_filter::parse(kind, &answer) {
-                    Some(rule) => {
-                        self.table_step(target, TableOp::Filter { column, rule });
-                        return;
-                    }
-                    None => message = kind.retry().to_string(),
-                }
-            }
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = (target, column);
         }
     }
 
@@ -996,7 +738,6 @@ impl App {
     }
 
     fn cancel_table_job(&mut self) {
-        self.pending_combine = None;
         if let Some(run) = self.table_job.take() {
             run.cancel.store(true, Ordering::Relaxed);
         }
@@ -1018,10 +759,6 @@ impl App {
             );
         }
         self.stop_spinner_when_idle();
-        // A Join / Append waiting for this job: dropped whatever it brought, unless it goes on.
-        let pending = self
-            .pending_combine
-            .take_if(|pending| pending.generation == done.generation);
         match done.result {
             Ok(finished) => {
                 let generation = finished.generation();
@@ -1031,19 +768,8 @@ impl App {
                     self.history.table_awaiting(generation)
                 };
                 // No table waits for it when it was wiped meanwhile: the frame is dropped.
-                let taken_in = table.is_some_and(|table| table.finish(finished));
-                let waiting_for = pending.as_ref().map(|pending| pending.generation);
-                if let Some(pending) = pending
-                    && combine_goes_on(waiting_for, generation, taken_in)
-                {
-                    self.table_combine(
-                        pending.target,
-                        pending.entry,
-                        pending.check,
-                        pending.how,
-                        true,
-                    );
-                    return;
+                if let Some(table) = table {
+                    table.finish(finished);
                 }
             }
             Err(crate::table::TableError::Cancelled) => {
@@ -1051,7 +777,7 @@ impl App {
                 self.refresh_table_window();
                 return;
             }
-            // A step that changes nothing ("Types already fine"): a meta-line note, no version.
+            // A step that changes nothing ("Nothing to change"): a meta-line note, no version.
             Err(crate::table::TableError::Unchanged(note)) => {
                 self.set_table_note(target, note.to_string());
             }
@@ -1102,9 +828,6 @@ impl App {
         let text = Zeroizing::new(text.to_string());
         let running = self.table_job.as_ref().map(|run| run.generation);
         let error = self.table_error.clone();
-        let describing = dataframe_view && self.describe_for == Some(text_hash(&text));
-        let cached = self.describe_cache.take();
-        let combine = self.combine_choices(home);
         let Some(table) = self.table_at(home) else {
             return;
         };
@@ -1122,29 +845,17 @@ impl App {
             let width = frame.width();
             table.shown_with(width);
         }
-        let frame_id = table.frame_id();
-        let describe = match table.frame() {
-            Some(frame) if describing => match cached {
-                Some((id, description)) if id == frame_id => Some(description),
-                _ => crate::table_ops::describe(frame).ok(),
-            },
-            _ => None,
-        };
         let shown = commands::TableShown {
             frame: table.frame().cloned(),
-            frame_id,
+            frame_id: table.frame_id(),
             version: table.cursor(),
             labels: table.labels(),
             working,
             error,
-            describe: describe.clone(),
             options: table.options(),
             notes: table.notes(),
             overview: table.overview_choice(),
-            inherited: table.inherited(),
-            combine,
         };
-        self.describe_cache = describe.map(|description| (frame_id, description));
         data.table = Some(shown);
         if let Some(job) = load {
             // Outside the Dataframe view the card does not wait for it: no spinner.
@@ -1512,12 +1223,10 @@ impl App {
             .and_then(|text| self.history.text_index(text, self.history_cursor));
         // A table version's card changes with the version, its job and its errors.
         let versioned = data.view == CardView::Dataframe
-            && data.table.as_ref().is_some_and(|table| {
-                table.version > 0
-                    || table.working
-                    || table.error.is_some()
-                    || table.describe.is_some()
-            });
+            && data
+                .table
+                .as_ref()
+                .is_some_and(|table| table.version > 0 || table.working || table.error.is_some());
         let Some(index) = entry.filter(|_| !versioned) else {
             return commands::work_card(data);
         };
@@ -2305,8 +2014,6 @@ impl App {
         self.image_note = None;
         self.cancel_table_job();
         self.table_error = None;
-        self.describe_for = None;
-        self.describe_cache = None;
         self.close_table_window();
         self.history.clear();
         self.history_cursor = 0;
@@ -2370,8 +2077,6 @@ impl App {
         self.image_note = None;
         self.cancel_table_job();
         self.table_error = None;
-        self.describe_for = None;
-        self.describe_cache = None;
         self.full_card = None;
         self.history.clear();
         self.current_image = None;
@@ -2921,33 +2626,6 @@ fn dropped_image_save_job(
     )
 }
 
-/// The sensitivity labels of the version `table` shows (`frame`): the copied text's for the
-/// original, the version's own CSV otherwise, and those it inherited. `None` while a long
-/// copy is still being checked.
-fn version_labels(
-    table: &TableVersions,
-    frame: &polars::prelude::DataFrame,
-    source: &str,
-) -> Option<Vec<crate::sensitivity::Label>> {
-    let original =
-        table.cursor() == 0 && table.options() == crate::dataframe::ReadOptions::default();
-    let csv;
-    let classified: &str = if original {
-        source
-    } else {
-        csv = Zeroizing::new(crate::dataframe::frame_csv(frame).unwrap_or_default());
-        &csv
-    };
-    match crate::sensitivity::labeling(classified) {
-        crate::sensitivity::Labeling::Known(found) => {
-            let mut labels = found.labels;
-            labels.extend(table.inherited());
-            Some(labels)
-        }
-        crate::sensitivity::Labeling::Checking => None,
-    }
-}
-
 fn history_title(history: &ClipboardHistory, index: usize) -> String {
     match (history.mark(index), history.byte_len(index)) {
         (Some(mark), Some(len)) => commands::history_label(mark, len),
@@ -3096,11 +2774,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         history_minutes: crate::settings::load().history_minutes,
         opened_table: TableVersions::default(),
         table_job: None,
-        pending_combine: None,
         table_error: None,
         table_window: None,
-        describe_for: None,
-        describe_cache: None,
         opened_image: ImageVersions::default(),
         image_job: None,
         image_note: None,
@@ -3117,23 +2792,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipSig, combine_goes_on, history_due, icon_tip, status_labels, status_rows, tray_label,
-        version_label,
+        ClipSig, history_due, icon_tip, status_labels, status_rows, tray_label, version_label,
     };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use crate::hotkey;
     use zeroize::Zeroizing;
-
-    /// A Join / Append waiting for the other table goes on only after its own job, and only
-    /// when the frame went into that table: not after a wipe (nothing awaits it) or another job.
-    #[test]
-    fn a_waiting_combine_goes_on_only_after_its_own_job_was_taken_in() {
-        assert!(combine_goes_on(Some(7), 7, true));
-        assert!(!combine_goes_on(Some(7), 7, false));
-        assert!(!combine_goes_on(Some(7), 8, true));
-        assert!(!combine_goes_on(None, 7, true));
-    }
 
     #[test]
     fn history_is_forgotten_minutes_after_the_last_copy() {
