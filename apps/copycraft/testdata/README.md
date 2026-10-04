@@ -241,3 +241,7 @@ expectations; on Linux the test only checks size and EXIF.
       (⇧⌘5) and share the screen in a video call: card and window should be absent. Note per
       tool and macOS version where they still show (ScreenCaptureKit on macOS 15.4+ is reported
       to ignore the setting); a screenshot of the card should show only what is behind it.
+- [ ] Allow screenshots: in the menu bar menu turn on *Allow screenshots* (checkmark shows):
+      a ⇧⌘4 › Space screenshot of the card (and of an open table window) shows it, still
+      blurred until clicked. Turn it off: screenshots leave both out again. Turn it on,
+      quit and start Copycraft: the checkmark is off and screenshots exclude the card again.

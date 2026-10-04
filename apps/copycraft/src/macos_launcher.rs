@@ -534,6 +534,24 @@ pub fn is_open() -> bool {
     OPEN.with(Cell::get)
 }
 
+/// The sharing type for the card and the table window: none, or read-only while "Allow
+/// screenshots" is on ([`crate::launcher::capture`]).
+pub(crate) fn sharing_type() -> NSWindowSharingType {
+    match crate::launcher::capture() {
+        crate::launcher::Capture::Excluded => NSWindowSharingType::None,
+        crate::launcher::Capture::ReadOnly => NSWindowSharingType::ReadOnly,
+    }
+}
+
+/// Give the card (when made) the sharing type "Allow screenshots" asks for.
+pub(crate) fn apply_capture() {
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref() {
+            window.setSharingType(sharing_type());
+        }
+    });
+}
+
 /// Spin a busy wheel centered over the well (on top of the preview), or take it away.
 pub fn set_busy(busy: bool) {
     if !busy {
@@ -760,11 +778,11 @@ fn ensure_window(mtm: MainThreadMarker) {
     // Recalculating the key-view loop keeps Tab and Shift-Tab in on-screen order (top left to
     // bottom right) over the views that are actually shown.
     window.setAutorecalculatesKeyViewLoop(true);
-    // Out of screenshots, screen recordings and screen sharing where macOS honours it. Apple
-    // calls NSWindowSharingNone a legacy constant not meant to hide content from capture, and
-    // ScreenCaptureKit (macOS 15.4+) is reported to capture such windows anyway: the blur and
-    // the wipe stay the protection.
-    window.setSharingType(NSWindowSharingType::None);
+    // Out of screenshots, screen recordings and screen sharing where macOS honours it, unless
+    // "Allow screenshots" is on ([`sharing_type`]). Apple calls NSWindowSharingNone a legacy
+    // constant not meant to hide content from capture, and ScreenCaptureKit (macOS 15.4+) is
+    // reported to capture such windows anyway: the blur and the wipe stay the protection.
+    window.setSharingType(sharing_type());
 
     let delegate = LauncherDelegate::new(mtm);
     // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like WINDOW.

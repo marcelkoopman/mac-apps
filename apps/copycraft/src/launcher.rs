@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use mac_ui::winit::event_loop::EventLoopProxy;
 
@@ -194,6 +195,45 @@ pub fn order_front() {
 pub fn wipe_shown() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::wipe_shown();
+}
+
+/// "Allow screenshots" in the menu bar menu (for testing): off at every start, never stored.
+/// The card and the table window read it when they are made, and follow it when it changes.
+static ALLOW_SCREENSHOTS: AtomicBool = AtomicBool::new(false);
+
+/// How the card and the table window take part in screenshots, recordings and screen sharing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capture {
+    /// Left out (NSWindowSharingNone), the default.
+    Excluded,
+    /// Captured like other windows (NSWindowSharingReadOnly), while "Allow screenshots" is on.
+    ReadOnly,
+}
+
+pub fn capture_for(allow_screenshots: bool) -> Capture {
+    if allow_screenshots {
+        Capture::ReadOnly
+    } else {
+        Capture::Excluded
+    }
+}
+
+pub fn capture() -> Capture {
+    capture_for(allows_screenshots())
+}
+
+pub fn allows_screenshots() -> bool {
+    ALLOW_SCREENSHOTS.load(Ordering::Relaxed)
+}
+
+/// Turn "Allow screenshots" on or off; the open windows follow at once.
+pub fn set_allow_screenshots(on: bool) {
+    ALLOW_SCREENSHOTS.store(on, Ordering::Relaxed);
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_launcher::apply_capture();
+        crate::macos_table_window::apply_capture();
+    }
 }
 
 pub fn is_open() -> bool {

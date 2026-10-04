@@ -11,7 +11,7 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use mac_ui::tray;
 use mac_ui::tray_icon::{
     MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 use mac_ui::winit::{
     application::ApplicationHandler,
@@ -347,6 +347,15 @@ impl ApplicationHandler<UserEvent> for App {
                 tray::QUIT_ID => {
                     event_loop.exit();
                     return;
+                }
+                ALLOW_SCREENSHOTS_ID => {
+                    let on = !launcher::allows_screenshots();
+                    launcher::set_allow_screenshots(on);
+                    eprintln!(
+                        "copycraft: allow screenshots {}",
+                        if on { "on" } else { "off" }
+                    );
+                    self.refresh_status_menu();
                 }
                 id => {
                     if let Some(index) = id
@@ -2956,6 +2965,11 @@ fn version_label() -> String {
     tray::version_label("Copycraft", env!("CARGO_PKG_VERSION"))
 }
 
+/// "Allow screenshots" (testing): the card and the table window can be captured until it is
+/// switched off or Copycraft restarts.
+const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
+const ALLOW_SCREENSHOTS_LABEL: &str = "Allow screenshots";
+
 fn status_labels() -> [String; 3] {
     [
         hotkey::LABEL.to_string(),
@@ -2971,6 +2985,7 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     if !entries.is_empty() {
         rows.push("History".to_string());
     }
+    rows.push(ALLOW_SCREENSHOTS_LABEL.to_string());
     rows.push(version);
     rows.push(quit);
     rows
@@ -2992,6 +3007,13 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
         }
         let _ = menu.append(&history);
     }
+    let _ = menu.append(&CheckMenuItem::with_id(
+        ALLOW_SCREENSHOTS_ID,
+        ALLOW_SCREENSHOTS_LABEL,
+        true,
+        launcher::allows_screenshots(),
+        None,
+    ));
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::info_item(&version));
     let _ = menu.append(&tray::quit_item(&quit));
@@ -3196,6 +3218,17 @@ mod tests {
         assert!(!seen.is_new_copy(&history_only, false));
     }
 
+    /// "Allow screenshots" is off at every start; on, the card and the table window are
+    /// captured read-only, off again they are left out.
+    #[test]
+    fn allow_screenshots_starts_off_and_picks_the_sharing() {
+        use crate::launcher::{Capture, capture_for};
+        assert!(!crate::launcher::allows_screenshots());
+        assert_eq!(crate::launcher::capture(), Capture::Excluded);
+        assert_eq!(capture_for(false), Capture::Excluded);
+        assert_eq!(capture_for(true), Capture::ReadOnly);
+    }
+
     #[test]
     fn status_menu_lists_hotkey_then_version_then_quit() {
         assert_eq!(
@@ -3219,6 +3252,7 @@ mod tests {
             vec![
                 hotkey::LABEL.to_string(),
                 "History".to_string(),
+                "Allow screenshots".to_string(),
                 version_label(),
                 "Quit".to_string(),
             ]
