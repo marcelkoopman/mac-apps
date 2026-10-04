@@ -91,6 +91,7 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/small_table.csv` | Table: Transpose and Value counts | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Transpose=2x5; step:ValueCounts(color)=3x2; step:ValueCounts(color)~red |
 | `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open in window) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
 | `tables/window_payees_iban.csv` | Table: Open in window on a sensitive table (IBANs): the window opens blurred and names the labels | plain text | CSV | financial | Original, Dataframe, Table ▾ | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
+| `tables/sales_by_region.csv` | Table: Group by (Count by, Sum by, Mean by, Min by, Max by), dates kept as dates | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x5; dtypes=str,str,i64,f64,date; step:GroupBy(region,count)=3x2; step:GroupBy(region,count)~│ North  ┆ 3 ; step:GroupBy(region,sum)=3x3; step:GroupBy(region,sum)~223.45; step:GroupBy(region,mean):dtypes=str,f64,f64; step:GroupBy(region,max):dtypes=str,i64,f64,date; step:GroupBy(region,max)~2026-09-08; step:GroupBy(region+product,count)=6x3; step:Dedupe>GroupBy(product,min)~24.95 |
 | `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
@@ -138,7 +139,7 @@ Columns (fixed; the test parses this table between the markers):
 | `dtypes=…` | the table's column types, in order |
 | `dataframe~S` / `dfcard~S` / `dfmeta~S` | the Dataframe text / the Dataframe card / its meta line contains `S` |
 | `columns~S` | one shown column name (shared prefix shortened) is `S` |
-| `step:OPS=RxC`, `step:OPS~S`, `step:OPS:dtypes=…` | after the Table ▾ steps `OPS` (joined by `>`): the shape, the frame contains `S`, the types |
+| `step:OPS=RxC`, `step:OPS~S`, `step:OPS:dtypes=…` | after the Table ▾ steps `OPS` (joined by `>`): the shape, the frame contains `S`, the types. Steps: `Dedupe`, `DropEmpty`, `DropConstant`, `FixTypes`, `Transpose`, `ValueCounts(col)`, `GroupBy(col+col,count|sum|mean|min|max)` |
 | `mac-only` | Title, Labels and Chips are what macOS should show; Linux checks only the rest |
 | `size=WxH` | the image decodes (as stored) to W × H pixels |
 | `exif-orientation=N`, `exif-gps` | the JPEG carries EXIF Orientation N and a GPS block |

@@ -25,6 +25,46 @@ fn next_generation() -> u64 {
     NEXT_GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
+/// What Group by works out per group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Agg {
+    /// The number of rows.
+    Count,
+    /// Per number column.
+    Sum,
+    Mean,
+    /// Per number, date or time column.
+    Min,
+    Max,
+}
+
+impl Agg {
+    /// In the order of the Table ▾ submenus.
+    pub const ALL: [Agg; 5] = [Agg::Count, Agg::Sum, Agg::Mean, Agg::Min, Agg::Max];
+
+    /// The suffix of an aggregate column ("units (sum)").
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Count => "count",
+            Self::Sum => "sum",
+            Self::Mean => "mean",
+            Self::Min => "min",
+            Self::Max => "max",
+        }
+    }
+
+    /// The Table ▾ submenu of its steps, with a column per item.
+    pub fn group(self) -> &'static str {
+        match self {
+            Self::Count => "Count by",
+            Self::Sum => "Sum by",
+            Self::Mean => "Mean by",
+            Self::Min => "Min by",
+            Self::Max => "Max by",
+        }
+    }
+}
+
 /// One step from a version to the next.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableOp {
@@ -51,6 +91,9 @@ pub enum TableOp {
     },
     /// These columns dropped.
     DropColumns { columns: Vec<String> },
+    /// One row per value of the `keys` columns (first seen first) with the number of rows, or
+    /// the sum, mean, min or max of each other number (min, max: and date) column.
+    GroupBy { keys: Vec<String>, agg: Agg },
 }
 
 impl TableOp {
@@ -92,6 +135,7 @@ impl TableOp {
                     _ => format!("{} columns removed", columns.len()),
                 };
             }
+            Self::GroupBy { keys, agg } => return format!("{} {}", agg.group(), keys.join(", ")),
         }
         .to_string()
     }
@@ -102,6 +146,7 @@ impl TableOp {
         match self {
             Self::Sort { column, .. } | Self::ValueCounts { column } => return column.clone(),
             Self::DropColumns { columns } if columns.len() == 1 => return columns[0].clone(),
+            Self::GroupBy { keys, .. } => return keys.join(", "),
             Self::SelectColumns {
                 columns,
                 kept_of: Some(_),
@@ -118,7 +163,10 @@ impl TableOp {
             Self::FixTypes => "Fix types",
             Self::Transpose => "Transpose",
             Self::DropColumns { .. } => "Remove columns",
-            Self::Sort { .. } | Self::ValueCounts { .. } | Self::SelectColumns { .. } => {
+            Self::Sort { .. }
+            | Self::ValueCounts { .. }
+            | Self::SelectColumns { .. }
+            | Self::GroupBy { .. } => {
                 unreachable!("titled above")
             }
         }
@@ -137,6 +185,7 @@ impl TableOp {
             Self::ValueCounts { .. } => Some("Value counts"),
             Self::DropColumns { columns } if columns.len() == 1 => Some("Remove column"),
             Self::SelectColumns { kept_of: None, .. } => Some("Move column to front"),
+            Self::GroupBy { agg, .. } => Some(agg.group()),
             _ => None,
         }
     }
@@ -170,6 +219,27 @@ impl TableOp {
             .collect()
     }
 
+    /// The Group by steps on one column of `df`, by submenu (Count by, Sum by, …): a column
+    /// is offered for Sum, Mean, Min or Max only when another column has values for it.
+    pub fn group_steps(df: &DataFrame) -> Vec<TableOp> {
+        let columns = df.columns();
+        Agg::ALL
+            .iter()
+            .flat_map(|&agg| {
+                columns.iter().enumerate().filter_map(move |(at, key)| {
+                    let usable = agg == Agg::Count
+                        || columns.iter().enumerate().any(|(other, column)| {
+                            other != at && crate::table_ops::aggregates(agg, column.dtype())
+                        });
+                    usable.then(|| TableOp::GroupBy {
+                        keys: vec![key.name().to_string()],
+                        agg,
+                    })
+                })
+            })
+            .collect()
+    }
+
     /// Search words for [`title`](Self::title).
     pub fn keywords(&self) -> &'static str {
         match self {
@@ -182,6 +252,9 @@ impl TableOp {
             Self::ValueCounts { .. } => "value counts frequency count column table",
             Self::SelectColumns { .. } => "select move column front order table",
             Self::DropColumns { .. } => "drop remove delete column table",
+            Self::GroupBy { .. } => {
+                "group by aggregate count sum total mean average min max pivot column table"
+            }
         }
     }
 
@@ -203,6 +276,7 @@ impl TableOp {
             Self::ValueCounts { column } => table_ops::value_counts(df, column),
             Self::SelectColumns { columns, .. } => table_ops::select_columns(df, columns),
             Self::DropColumns { columns } => table_ops::drop_columns(df, columns),
+            Self::GroupBy { keys, agg } => table_ops::group_by(df, keys, *agg),
         };
         next.map(Some)
     }
@@ -551,7 +625,7 @@ impl TableVersions {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_VERSIONS, TableError, TableOp, TableVersions};
+    use super::{Agg, MAX_VERSIONS, TableError, TableOp, TableVersions};
     use crate::dataframe::ReadOptions;
     use std::sync::atomic::AtomicBool;
 
@@ -560,6 +634,48 @@ mod tests {
     fn run(versions: &mut TableVersions, job: super::Job) -> bool {
         let done = job.run(&AtomicBool::new(false)).expect("job");
         versions.finish(done)
+    }
+
+    #[test]
+    fn group_by_is_offered_per_column_where_there_is_something_to_add_up() {
+        let df = crate::dataframe::parse_table("city,name,n\nDelft,ann,1\nUtrecht,bob,2").unwrap();
+        let steps = TableOp::group_steps(&df);
+        let offered = |agg: Agg| -> Vec<String> {
+            steps
+                .iter()
+                .filter_map(|op| match op {
+                    TableOp::GroupBy { keys, agg: of } if *of == agg => Some(keys.join("+")),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(offered(Agg::Count), ["city", "name", "n"]);
+        // Grouping by n leaves no number to sum.
+        assert_eq!(offered(Agg::Sum), ["city", "name"]);
+        assert_eq!(offered(Agg::Max), ["city", "name"]);
+        let op = TableOp::GroupBy {
+            keys: vec!["city".into()],
+            agg: Agg::Sum,
+        };
+        assert_eq!(op.label(), "Sum by city");
+        assert_eq!(op.title(), "city");
+        assert_eq!(op.group(), Some("Sum by"));
+        let text = crate::dataframe::parse_table("a,b\nx,y").unwrap();
+        assert!(TableOp::group_steps(&text).iter().all(|op| matches!(
+            op,
+            TableOp::GroupBy {
+                agg: Agg::Count,
+                ..
+            }
+        )));
+        // A version like any other step.
+        let mut versions = TableVersions::default();
+        let job = versions
+            .push(op, "city,n\nDelft,1\nDelft,2\nUtrecht,5")
+            .expect("push");
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.labels(), ["Original", "Sum by city"]);
+        assert_eq!(versions.frame().unwrap().shape(), (2, 2));
     }
 
     #[test]

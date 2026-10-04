@@ -126,6 +126,21 @@ fn visit_url(text: &str) -> Option<String> {
 }
 
 fn table_op(name: &str) -> TableOp {
+    // GroupBy(region+product,sum): the keys joined with `+`, then count, sum, mean, min or max.
+    if let Some((keys, agg)) = name
+        .strip_prefix("GroupBy(")
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|rest| rest.rsplit_once(','))
+    {
+        let agg = crate::table::Agg::ALL
+            .into_iter()
+            .find(|of| of.name() == agg)
+            .unwrap_or_else(|| panic!("unknown aggregate {agg}"));
+        return TableOp::GroupBy {
+            keys: keys.split('+').map(str::to_string).collect(),
+            agg,
+        };
+    }
     if let Some(column) = name
         .strip_prefix("ValueCounts(")
         .and_then(|rest| rest.strip_suffix(')'))

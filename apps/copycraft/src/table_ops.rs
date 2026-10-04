@@ -353,14 +353,210 @@ pub fn value_counts(df: &DataFrame, column: &str) -> Result<DataFrame, String> {
     DataFrame::new(order.len(), vec![picked, counts.into_column()]).map_err(|e| e.to_string())
 }
 
+/// The rows of `df` grouped by the text of their `keys` cells, in the order each group is
+/// first seen: the first row of each group and all its rows. Empty key cells form a group.
+fn groups(df: &DataFrame, keys: &[String]) -> Result<Vec<Vec<IdxSize>>, String> {
+    let columns = keys
+        .iter()
+        .map(|key| df.column(key).map_err(|e| e.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut order: Vec<Vec<IdxSize>> = Vec::new();
+    let mut index: HashMap<Vec<Option<String>>, usize> = HashMap::new();
+    for row in 0..df.height() {
+        let key: Vec<Option<String>> = columns
+            .iter()
+            .map(|column| column.get(row).ok().and_then(cell_text))
+            .collect();
+        match index.get(&key) {
+            Some(&at) => order[at].push(row as IdxSize),
+            None => {
+                index.insert(key, order.len());
+                order.push(vec![row as IdxSize]);
+            }
+        }
+    }
+    Ok(order)
+}
+
+/// A column [`Agg`] works on: numbers for all, dates and times too for min and max.
+///
+/// [`Agg`]: crate::table::Agg
+pub fn aggregates(agg: crate::table::Agg, dtype: &DataType) -> bool {
+    use crate::table::Agg;
+    match agg {
+        Agg::Count => false,
+        Agg::Sum | Agg::Mean => dtype.is_primitive_numeric(),
+        Agg::Min | Agg::Max => {
+            dtype.is_primitive_numeric()
+                || (dtype.is_temporal() && !matches!(dtype, DataType::Duration(_)))
+        }
+    }
+}
+
+/// A name for a new column that no column of `df` has: `want`, else `want (2)`, ….
+fn free_name(df: &DataFrame, want: &str) -> String {
+    let taken = |name: &str| df.get_column_names().iter().any(|n| n.as_str() == name);
+    if !taken(want) {
+        return want.to_string();
+    }
+    (2..)
+        .map(|n| format!("{want} ({n})"))
+        .find(|name| !taken(name))
+        .expect("a free name")
+}
+
+/// Group by: one row per value (or combination) of the `keys` columns, in the order first
+/// seen, then the number of rows (Count) or, per other number column, its sum, mean, min or
+/// max (dates and times too for min and max, keeping their type). Empty cells are left out of
+/// a sum, mean, min or max; a group with no value there gets an empty cell.
+pub fn group_by(
+    df: &DataFrame,
+    keys: &[String],
+    agg: crate::table::Agg,
+) -> Result<DataFrame, String> {
+    use crate::table::Agg;
+    if keys.is_empty() {
+        return Err("Choose a column to group by".to_string());
+    }
+    let groups = groups(df, keys)?;
+    let firsts = IdxCa::from_vec(
+        PlSmallStr::EMPTY,
+        groups.iter().map(|rows| rows[0]).collect(),
+    );
+    let mut out: Vec<Column> = Vec::new();
+    for key in keys {
+        let column = df.column(key).map_err(|e| e.to_string())?;
+        out.push(column.take(&firsts).map_err(|e| e.to_string())?);
+    }
+    if agg == Agg::Count {
+        let counts = UInt64Chunked::from_vec(
+            free_name(df, "count").into(),
+            groups.iter().map(|rows| rows.len() as u64).collect(),
+        );
+        out.push(counts.into_column());
+        return DataFrame::new(groups.len(), out).map_err(|e| e.to_string());
+    }
+    let values: Vec<&Column> = df
+        .columns()
+        .iter()
+        .filter(|column| {
+            !keys
+                .iter()
+                .any(|key| key.as_str() == column.name().as_str())
+        })
+        .filter(|column| aggregates(agg, column.dtype()))
+        .collect();
+    if values.is_empty() {
+        return Err(match agg {
+            Agg::Sum => "No number column to sum",
+            Agg::Mean => "No number column to average",
+            _ => "No number or date column",
+        }
+        .to_string());
+    }
+    for column in values {
+        let name = format!("{} ({})", column.name(), agg.name());
+        out.push(aggregate(column, &groups, agg, name.into())?);
+    }
+    DataFrame::new(groups.len(), out).map_err(|e| e.to_string())
+}
+
+/// One aggregate column of [`group_by`], a value per group.
+fn aggregate(
+    column: &Column,
+    groups: &[Vec<IdxSize>],
+    agg: crate::table::Agg,
+    name: PlSmallStr,
+) -> Result<Column, String> {
+    use crate::table::Agg;
+    let fail = |e: PolarsError| e.to_string();
+    let as_f64 = |column: &Column| -> Result<Float64Chunked, String> {
+        let physical = column.to_physical_repr();
+        let floats = physical.cast(&DataType::Float64).map_err(fail)?;
+        Ok(floats.f64().map_err(fail)?.clone())
+    };
+    match agg {
+        Agg::Sum if column.dtype().is_integer() => {
+            let ints = column.cast(&DataType::Int64).map_err(fail)?;
+            let ints = ints.i64().map_err(fail)?;
+            let sums: Int64Chunked = groups
+                .iter()
+                .map(|rows| {
+                    let mut seen = false;
+                    let mut sum = 0i64;
+                    for &row in rows {
+                        if let Some(value) = ints.get(row as usize) {
+                            seen = true;
+                            sum = sum.saturating_add(value);
+                        }
+                    }
+                    seen.then_some(sum)
+                })
+                .collect();
+            Ok(sums.with_name(name).into_column())
+        }
+        Agg::Sum | Agg::Mean => {
+            let floats = as_f64(column)?;
+            let out: Float64Chunked = groups
+                .iter()
+                .map(|rows| {
+                    let values: Vec<f64> = rows
+                        .iter()
+                        .filter_map(|&row| floats.get(row as usize))
+                        .collect();
+                    if values.is_empty() {
+                        return None;
+                    }
+                    let sum: f64 = values.iter().sum();
+                    Some(if agg == Agg::Mean {
+                        sum / values.len() as f64
+                    } else {
+                        sum
+                    })
+                })
+                .collect();
+            Ok(out.with_name(name).into_column())
+        }
+        Agg::Min | Agg::Max => {
+            // The row with the least (or greatest) value, taken so the type stays.
+            let floats = as_f64(column)?;
+            let picks: Vec<Option<IdxSize>> = groups
+                .iter()
+                .map(|rows| {
+                    let mut best: Option<(IdxSize, f64)> = None;
+                    for &row in rows {
+                        let Some(value) = floats.get(row as usize) else {
+                            continue;
+                        };
+                        let better = match best {
+                            None => true,
+                            Some((_, current)) if agg == Agg::Min => value < current,
+                            Some((_, current)) => value > current,
+                        };
+                        if better {
+                            best = Some((row, value));
+                        }
+                    }
+                    best.map(|(row, _)| row)
+                })
+                .collect();
+            let picks: IdxCa = picks.into_iter().collect();
+            let taken = column.take(&picks).map_err(fail)?;
+            Ok(taken.with_name(name))
+        }
+        Agg::Count => unreachable!("counted in group_by"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        describe, drop_columns, drop_constant, drop_empty, fix_types, select_columns, sort,
-        transpose, value_counts,
+        describe, drop_columns, drop_constant, drop_empty, fix_types, group_by, select_columns,
+        sort, transpose, value_counts,
     };
     use crate::dataframe::parse_table;
     use crate::dataframe::tests::ENERGY_FIXTURE;
+    use crate::table::Agg;
     use polars::prelude::*;
 
     fn names(df: &DataFrame) -> Vec<String> {
@@ -504,6 +700,110 @@ mod tests {
         let names: Vec<Option<&str>> = down.column("name").unwrap().str().unwrap().iter().collect();
         assert_eq!(names, [Some("a"), Some("d"), Some("c"), Some("b")]);
         assert!(sort(&df, "missing", false).is_err());
+    }
+
+    #[test]
+    fn group_by_counts_sums_averages_and_keeps_the_type_of_min_and_max() {
+        let df = table(
+            "region,units,price,sold\nNorth,2,1.5,2026-09-02\nSouth,1,4.0,2026-09-01\nNorth,3,2.5,2026-09-05\n,4,1.0,2026-09-03\nNorth,,0.5,",
+        );
+        let count = group_by(&df, &["region".into()], Agg::Count).expect("count");
+        assert_eq!(names(&count), ["region", "count"]);
+        let regions: Vec<Option<&str>> = count
+            .column("region")
+            .unwrap()
+            .str()
+            .unwrap()
+            .iter()
+            .collect();
+        // The order first seen; the empty region is a group too.
+        assert_eq!(regions, [Some("North"), Some("South"), None]);
+        let counts: Vec<Option<u64>> = count
+            .column("count")
+            .unwrap()
+            .u64()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(counts, [Some(3), Some(1), Some(1)]);
+
+        let sum = group_by(&df, &["region".into()], Agg::Sum).expect("sum");
+        assert_eq!(names(&sum), ["region", "units (sum)", "price (sum)"]);
+        let units: Vec<Option<i64>> = sum
+            .column("units (sum)")
+            .unwrap()
+            .i64()
+            .unwrap()
+            .iter()
+            .collect();
+        // The empty cell is left out of North's sum.
+        assert_eq!(units, [Some(5), Some(1), Some(4)]);
+        let price: Vec<Option<f64>> = sum
+            .column("price (sum)")
+            .unwrap()
+            .f64()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(price, [Some(4.5), Some(4.0), Some(1.0)]);
+
+        let mean = group_by(&df, &["region".into()], Agg::Mean).expect("mean");
+        let units: Vec<Option<f64>> = mean
+            .column("units (mean)")
+            .unwrap()
+            .f64()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(units, [Some(2.5), Some(1.0), Some(4.0)]);
+
+        let min = group_by(&df, &["region".into()], Agg::Min).expect("min");
+        assert_eq!(
+            names(&min),
+            ["region", "units (min)", "price (min)", "sold (min)"]
+        );
+        assert_eq!(min.column("sold (min)").unwrap().dtype(), &DataType::Date);
+        assert_eq!(min.column("units (min)").unwrap().dtype(), &DataType::Int64);
+        let max = group_by(&df, &["region".into()], Agg::Max).expect("max");
+        let shown = max.to_string();
+        assert!(shown.contains("2026-09-05"), "{shown}");
+        let price: Vec<Option<f64>> = max
+            .column("price (max)")
+            .unwrap()
+            .f64()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(price, [Some(2.5), Some(4.0), Some(1.0)]);
+    }
+
+    #[test]
+    fn group_by_takes_several_keys_and_says_when_there_is_nothing_to_add_up() {
+        let df = table("a,b,n\nx,1,10\nx,2,20\nx,1,30\ny,1,40");
+        let sum = group_by(&df, &["a".into(), "b".into()], Agg::Sum).expect("sum");
+        assert_eq!(sum.shape(), (3, 3));
+        let n: Vec<Option<i64>> = sum
+            .column("n (sum)")
+            .unwrap()
+            .i64()
+            .unwrap()
+            .iter()
+            .collect();
+        assert_eq!(n, [Some(40), Some(20), Some(40)]);
+        let text = table("name,city\nann,Delft\nbob,Delft");
+        assert_eq!(
+            group_by(&text, &["city".into()], Agg::Sum).err().as_deref(),
+            Some("No number column to sum")
+        );
+        assert_eq!(
+            group_by(&text, &["city".into()], Agg::Max).err().as_deref(),
+            Some("No number or date column")
+        );
+        // A count column of its own name when "count" is taken.
+        let counted = table("count,x\n1,a\n1,b");
+        let out = group_by(&counted, &["count".into()], Agg::Count).expect("count");
+        assert_eq!(names(&out), ["count", "count (2)"]);
+        assert!(group_by(&counted, &["missing".into()], Agg::Count).is_err());
     }
 
     #[test]

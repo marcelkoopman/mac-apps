@@ -1819,6 +1819,11 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
                 .iter()
                 .map(table_step_command),
         );
+        commands.extend(
+            crate::table::TableOp::group_steps(frame)
+                .iter()
+                .map(table_step_command),
+        );
     }
     if table.can_undo() {
         let label = &table.labels[table.version];
