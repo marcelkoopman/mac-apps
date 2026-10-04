@@ -21,6 +21,8 @@ mod memo;
 mod menubar;
 mod open_file;
 mod page_preview;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod paste_access;
 mod python;
 mod recognize;
 mod sensitivity;

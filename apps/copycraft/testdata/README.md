@@ -202,3 +202,13 @@ expectations; on Linux the test only checks size and EXIF.
       with gives 4 rows; remove email and name and PII stays.
 - [ ] Show `tables/concat_more_orders.csv` once, then from the orders card Append rows of gives
       6 rows. Copy something new and join from the old menu: it refuses.
+- [ ] Pasteboard privacy, Always Deny (macOS with pasteboard privacy on; see
+      `docs/pasteboard-privacy/README.md` for the developer flag): set *Privacy & Security ›
+      Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says
+      "Clipboard access denied in Privacy & Security" (not "Nothing copied"), no alert shows,
+      and the log (Console or a terminal launch) has `pasteboard accessBehavior alwaysDeny`
+      at start-up. Set it back to Ask or Allow: the card shows the copy without a new copy.
+- [ ] Pasteboard privacy, Ask: copy text, answer the alert with Don't Allow, and wait a few
+      seconds with the card closed and open: no further alerts for that copy. Copy again: one
+      new alert. Copy a picture and open the card: every alert comes while the card opens or
+      the copy is noted, none later from the background scan (count them for step 6).

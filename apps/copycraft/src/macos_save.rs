@@ -29,8 +29,9 @@ pub enum SaveContent {
         source: Zeroizing<String>,
         view: CardView,
     },
-    /// The clipboard picture, decoded and encoded as PNG.
-    ClipboardPng,
+    /// The clipboard picture, decoded and encoded as PNG. Fetched from the pasteboard on the
+    /// main thread ([`crate::macos_pasteboard::card_image_input`]), decoded on the save thread.
+    ClipboardPng(Option<crate::macos_pasteboard::CardImageInput>),
     /// The table of the Dataframe view, as `format` (CSV unless Parquet is picked in the panel).
     Table { table: TableData, format: TableFile },
     /// A picture (the original or an Image ▾ version), as `file` (one of `files`, the Format
@@ -173,8 +174,9 @@ impl SaveContent {
                     )
                 }
             },
-            Self::ClipboardPng => {
-                let decoded = crate::macos_pasteboard::decode_preview()
+            Self::ClipboardPng(input) => {
+                let decoded = input
+                    .and_then(crate::macos_pasteboard::decode_card_input)
                     .context("no image on the clipboard")?;
                 Zeroizing::new(decoded.image.png_bytes().map_err(anyhow::Error::msg)?)
             }

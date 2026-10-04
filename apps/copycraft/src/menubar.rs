@@ -1661,6 +1661,7 @@ impl App {
         let (subject_kind, subject_text) = match view {
             ClipboardView::Empty => (SubjectKind::Empty, None),
             ClipboardView::NoText => (SubjectKind::NoText, None),
+            ClipboardView::Denied => (SubjectKind::Denied, None),
             ClipboardView::Hidden => (SubjectKind::Hidden, None),
             ClipboardView::Image => (SubjectKind::Image, None),
             ClipboardView::Text(text) => {
@@ -1771,8 +1772,11 @@ impl App {
                 return;
             }
             self.image_scan_for = Some(change);
+            // The picture is fetched here, on the main thread (a pasteboard read can show the
+            // privacy alert, which is modal); the thread only decodes and scans it.
+            let input = crate::macos_pasteboard::card_image_input();
             std::thread::spawn(move || {
-                let scan = crate::macos_pasteboard::scan_card_image();
+                let scan = input.and_then(crate::macos_pasteboard::scan_card_input);
                 launcher::emit(UserEvent::ImageScanned { change, scan });
             });
         }
@@ -2117,7 +2121,9 @@ impl App {
                 return job("clipboard.jpg", "jpg", SaveContent::Bytes(bytes));
             }
         }
-        job("clipboard.png", "png", SaveContent::ClipboardPng)
+        // Fetched here, on the main thread; the save thread only decodes it.
+        let input = crate::macos_pasteboard::card_image_input();
+        job("clipboard.png", "png", SaveContent::ClipboardPng(input))
     }
 
     fn visit_current(&self) {
@@ -2602,7 +2608,12 @@ impl App {
             self.polled_change = Some(change);
         }
         let view = ClipboardView::from_os();
-        self.poll_again = matches!(view, ClipboardView::Empty | ClipboardView::NoText);
+        // Looked at again every tick, but `current_view` reads the contents again only for other
+        // types or another access setting (`paste_access::read_again`): no reads per tick.
+        self.poll_again = matches!(
+            view,
+            ClipboardView::Empty | ClipboardView::NoText | ClipboardView::Denied
+        );
         self.record_current(&view);
         let signature = self.clip_signature(&view);
         let image_change = signature.image_change;
@@ -2677,6 +2688,7 @@ fn icon_tip(view: &ClipboardView) -> String {
     match view {
         ClipboardView::Image => "Image".to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
+        ClipboardView::Denied => crate::paste_access::DENIED_NOTE.to_string(),
         ClipboardView::Hidden => clipboard::HIDDEN_CONTENT.to_string(),
         ClipboardView::Text(text) => {
             if crate::youtube::video_id(text.as_str()).is_some() {
@@ -2951,6 +2963,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));
+    // Pasteboard privacy (macOS 15.4+): the access setting, in the local log only.
+    #[cfg(target_os = "macos")]
+    crate::macos_pasteboard::log_access_behavior();
     event_loop.run_app(&mut app)?;
     Ok(())
 }

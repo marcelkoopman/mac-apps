@@ -190,6 +190,8 @@ pub enum SubjectKind {
     Text,
     /// Another app marked the copy private; the card has no text for it.
     Hidden,
+    /// Clipboard access is set to Always Deny (pasteboard privacy): nothing is read.
+    Denied,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -816,6 +818,21 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             meta: String::new(),
             excerpt: String::new(),
             placeholder: "The app that copied this marked it private.\nCopycraft does not show it or keep it in history.".to_string(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::Denied => WorkCard {
+            title: "Clipboard".to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: format!(
+                "{}\nPaste from Other Apps is set to Deny for Copycraft.\n{DROP_HINT}",
+                crate::paste_access::DENIED_NOTE
+            ),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -1534,7 +1551,9 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             }
             chips
         }
-        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => Vec::new(),
+        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden | SubjectKind::Denied => {
+            Vec::new()
+        }
     }
 }
 
@@ -2639,10 +2658,12 @@ pub struct ContentActions {
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
     match data.subject_kind {
-        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden => ContentActions {
-            copy: false,
-            save: false,
-        },
+        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden | SubjectKind::Denied => {
+            ContentActions {
+                copy: false,
+                save: false,
+            }
+        }
         SubjectKind::Image => image_content_actions(data),
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
@@ -5102,6 +5123,22 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             "No text on the clipboard\nDrop a text file or image here to open it"
         );
         assert!(card.excerpt.is_empty());
+    }
+
+    #[test]
+    fn always_deny_says_so_instead_of_nothing_copied() {
+        let input = data(SubjectKind::Denied, None);
+        let card = work_card(&input);
+        assert!(
+            card.placeholder
+                .starts_with("Clipboard access denied in Privacy & Security\n"),
+            "{}",
+            card.placeholder
+        );
+        assert!(!card.placeholder.contains("Nothing copied"));
+        assert!(card.excerpt.is_empty() && card.meta.is_empty());
+        assert!(chips(&input).is_empty());
+        assert!(!content_actions(&input).copy);
     }
 
     #[test]
