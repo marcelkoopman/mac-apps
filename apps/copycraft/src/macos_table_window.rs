@@ -22,8 +22,8 @@ use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBox, NSButton,
     NSCellImagePosition, NSColor, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
     NSEventModifierFlags, NSFocusRingType, NSFont, NSMenu, NSMenuItem, NSScrollView,
-    NSTextAlignment, NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask,
-    NSWindowTabbingMode,
+    NSTextAlignment, NSTextField, NSTextView, NSView, NSWindow, NSWindowSharingType,
+    NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSNotification, NSPoint, NSRange, NSRect, NSSize, NSString,
@@ -366,6 +366,9 @@ fn ensure_views(mtm: MainThreadMarker) {
     window.setTitle(&NSString::from_str("Copycraft · Table"));
     window.setContentMinSize(MIN_SIZE);
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
+    // Like the card: out of screenshots, recordings and screen sharing where macOS honours it
+    // (not ScreenCaptureKit on macOS 15.4+, by reports; see `macos_launcher::ensure_window`).
+    window.setSharingType(NSWindowSharingType::None);
     window.center();
     let delegate = TableWindowDelegate::new(mtm);
     // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like VIEWS.

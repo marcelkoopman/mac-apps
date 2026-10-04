@@ -18,7 +18,7 @@ use mac_ui::objc2_app_kit::{
     NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
     NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode,
     NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
-    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
+    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
@@ -760,6 +760,11 @@ fn ensure_window(mtm: MainThreadMarker) {
     // Recalculating the key-view loop keeps Tab and Shift-Tab in on-screen order (top left to
     // bottom right) over the views that are actually shown.
     window.setAutorecalculatesKeyViewLoop(true);
+    // Out of screenshots, screen recordings and screen sharing where macOS honours it. Apple
+    // calls NSWindowSharingNone a legacy constant not meant to hide content from capture, and
+    // ScreenCaptureKit (macOS 15.4+) is reported to capture such windows anyway: the blur and
+    // the wipe stay the protection.
+    window.setSharingType(NSWindowSharingType::None);
 
     let delegate = LauncherDelegate::new(mtm);
     // SAFETY: DELEGATE keeps the delegate alive for the rest of the process, like WINDOW.

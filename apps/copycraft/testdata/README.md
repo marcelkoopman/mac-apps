@@ -222,3 +222,8 @@ expectations; on Linux the test only checks size and EXIF.
       the card stays responsive (no beach ball), the spinner shows when slow, and the 2-row
       joined version follows. Again with Append rows of: 32,002 rows. Wipe while the spinner
       turns: no version appears afterwards.
+- [ ] Out of screen capture: with the card open and the table window open (one revealed, one
+      blurred), take a screenshot (⇧⌘3 and ⇧⌘4 › Space on each window), a screen recording
+      (⇧⌘5) and share the screen in a video call: card and window should be absent. Note per
+      tool and macOS version where they still show (ScreenCaptureKit on macOS 15.4+ is reported
+      to ignore the setting); a screenshot of the card should show only what is behind it.
