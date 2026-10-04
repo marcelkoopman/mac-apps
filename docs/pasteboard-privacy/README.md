@@ -17,6 +17,8 @@ Bestanden:
   ad-hoc gesigneerd of met `SIGN_ID=…`, en toont CDHash en designated requirement.
 
 Log: stdout én `~/Library/Logs/PasteProbe.log` (`tail -f` in een tweede Terminal-venster).
+Elke regel begint (na de tijd) met het proces-id, `[pid 12345]`: staan er twee pids in één
+ronde, dan draaiden er twee probes tegelijk en telt die meting niet.
 Gekopieerde tekst wordt niet gelogd, alleen de lengte (tenzij `--show`).
 
 Niet getest op een Mac: het script is op Linux alleen op syntax gecontroleerd
@@ -58,9 +60,15 @@ controlegroep, niet het echte gedrag.
 ```sh
 ./build_app.sh
 defaults write nl.marcelkoopman.pasteprobe EnablePasteboardPrivacyDeveloperPreview -bool yes
-open -n build/PasteProbe.app --args --window
+pkill -x PasteProbe                         # vóór elke nieuwe ronde: geen oude probe laten draaien
+open build/PasteProbe.app --args --window   # zonder -n: één exemplaar
 tail -f ~/Library/Logs/PasteProbe.log
 ```
+
+Start de probe altijd met `open` **zonder** `-n`, en eerst `pkill -x PasteProbe`: `-n` start
+bij elke aanroep een extra exemplaar, en meerdere probes die tegelijk pollen geven meerdere
+meldingen en een onleesbaar log. (Zonder `-n` negeert `open` de `--args` als de probe al
+draait; daarom eerst `pkill`.)
 
 Kopieer telkens iets in een **andere** app (TextEdit, Safari) en kijk naar het log:
 
@@ -81,7 +89,8 @@ Kopieer telkens iets in een **andere** app (TextEdit, Safari) en kijk naar het l
 | 2m | `--detect-values` meenemen | Apple documenteert dat `detectedValues` bij een match leest en dus een melding kan geven: klopt dat? |
 
 Herhaal 2a–2f met `AGENT=1 ./build_app.sh` (LSUIElement, zoals copycraft: geen Dock-icoon,
-geen zichtbaar hoofdmenu) en `open -n build/PasteProbe.app` (zonder `--window`).
+geen zichtbaar hoofdmenu), `pkill -x PasteProbe` en `open build/PasteProbe.app` (zonder
+`--window`).
 
 ## Test 3: overleeft "Allow" een nieuwe build?
 
@@ -89,7 +98,8 @@ geen zichtbaar hoofdmenu) en `open -n build/PasteProbe.app` (zonder `--window`).
    `open "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Pasteboard"`),
    PasteProbe op **Allow** zetten. Probe herstarten: `accessBehavior` = `alwaysAllow (2)`,
    lezen geeft geen melding.
-2. `./build_app.sh` opnieuw (ad-hoc: nieuwe CDHash, zie de uitvoer), `open -n …`.
+2. `./build_app.sh` opnieuw (ad-hoc: nieuwe CDHash, zie de uitvoer), `pkill -x PasteProbe`,
+   `open build/PasteProbe.app`.
    Verwacht (TN3127: een ad-hoc designated requirement hoort bij die ene build): de
    toestemming geldt niet meer, terug naar `default`/`ask`, of Settings zegt "Allow" terwijl
    er wel een melding komt.

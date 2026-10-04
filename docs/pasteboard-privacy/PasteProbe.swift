@@ -56,8 +56,11 @@ let stampFormat: DateFormatter = {
     return f
 }()
 
+/// Every line carries the process id, so two probes running at once are told apart.
+let pidTag = "[pid \(ProcessInfo.processInfo.processIdentifier)]"
+
 func plog(_ message: String) {
-    let line = "\(stampFormat.string(from: Date())) \(message)"
+    let line = "\(stampFormat.string(from: Date())) \(pidTag) \(message)"
     print(line)
     fflush(stdout)
     if let data = (line + "\n").data(using: .utf8) {
@@ -232,7 +235,7 @@ if flag("--write-plain") || flag("--write-concealed") {
     if flag("--write-concealed") {
         pasteboard.setData(Data(), forType: concealedType)
     }
-    print("wrote \"\(text)\"\(flag("--write-concealed") ? " + org.nspasteboard.ConcealedType" : ""), changeCount \(pasteboard.changeCount)")
+    print("\(pidTag) wrote \"\(text)\"\(flag("--write-concealed") ? " + org.nspasteboard.ConcealedType" : ""), changeCount \(pasteboard.changeCount)")
     exit(0)
 }
 

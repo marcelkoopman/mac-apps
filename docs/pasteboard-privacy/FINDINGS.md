@@ -1,7 +1,8 @@
 # Pasteboard privacy op macOS: wat het betekent voor copycraft (stand 4 okt 2026)
 
 Labels: **BEVESTIGD** = staat in Apple-documentatie of release notes. **GEMELD** = waargenomen
-door ontwikkelaars (blog, issue), niet door Apple. **VERWACHT** = mijn afleiding.
+door ontwikkelaars (blog, issue), niet door Apple. **VERWACHT** = mijn afleiding. **GEMETEN** =
+zelf gemeten met PasteProbe.
 
 ## 1. Status, accessBehavior, welke aanroepen
 
@@ -20,6 +21,10 @@ door ontwikkelaars (blog, issue), niet door Apple. **VERWACHT** = mijn afleiding
 - Er is **geen bron** voor een fase waarin macOS 26 alleen logt of waarschuwt. Apple heeft niet
   gezegd of het weghalen van de vlag betekent dat de functie vervalt of straks voor iedereen aan
   gaat. Ook geen WWDC25/26-sessie gevonden.
+- **GEMETEN** (macOS 27.0.1, PasteProbe, 4 okt 2026) Zonder de vlag is `accessBehavior` =
+  `alwaysAllow`; met `EnablePasteboardPrivacyDeveloperPreview` is het `default` bij de start. Of
+  "Allow" in de melding onthouden wordt is niet bevestigd (er draaiden meerdere probes tegelijk,
+  door `open -n` in de README); de Deny-test staat nog open.
 - **BEVESTIGD** `NSPasteboard.accessBehavior` (alleen-lezen, macOS 15.4+), enum
   `NSPasteboard.AccessBehavior`: `default` (0), `ask` (1), `alwaysAllow` (2), `alwaysDeny` (3).
   `default` betekent: voor het general pasteboard bij programmatische toegang vragen (andere
