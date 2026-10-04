@@ -25,6 +25,8 @@ impl Default for Settings {
 
 const CLEAR_SENSITIVE_KEY: &str = "CopycraftClearSensitiveCopies";
 const HISTORY_MINUTES_KEY: &str = "CopycraftHistoryMinutes";
+/// The card has explained the pasteboard privacy alert once (Default or Ask).
+const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 
 /// Stored settings; a missing key keeps its default.
 pub fn load() -> Settings {
@@ -47,6 +49,15 @@ pub fn set_clear_sensitive(on: bool) {
 
 pub fn set_history_minutes(minutes: u32) {
     store_int(HISTORY_MINUTES_KEY, i64::from(minutes));
+}
+
+/// Whether the card has shown the one-time explanation of the pasteboard privacy alert.
+pub fn paste_alert_explained() -> bool {
+    load_bool(PASTE_ALERT_EXPLAINED_KEY).unwrap_or(false)
+}
+
+pub fn set_paste_alert_explained() {
+    store_bool(PASTE_ALERT_EXPLAINED_KEY, true);
 }
 
 #[cfg(target_os = "macos")]

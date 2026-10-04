@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use base64::Engine;
 use mac_ui::objc2::rc::{Retained, autoreleasepool};
@@ -18,7 +19,7 @@ use zeroize::{Zeroize, Zeroizing};
 use crate::clipboard::{ClipboardImage, ClipboardView};
 use crate::commands::{ImageFacts, ImageScan};
 use crate::image_ops;
-use crate::paste_access::{self, AccessBehavior, ReadKey};
+use crate::paste_access::{self, AccessBehavior, Kept, ReadKey, ReadPlan, ReadStrategy};
 
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "webp", "heic",
@@ -26,15 +27,44 @@ const IMAGE_EXTS: &[&str] = &[
 
 struct CachedView {
     change_count: isize,
-    /// The change count, types and access setting this reading was made for: it is made again
-    /// only when that changes ([`paste_access::read_again`]).
-    key: ReadKey,
+    /// The change count, types and read strategy this reading was made for, and whether it read
+    /// the contents: it is made again only as [`paste_access::plan`] says.
+    kept: Kept,
     view: ClipboardView,
     marks: PasteMarks,
     image_path: Option<PathBuf>,
+    /// A picture read in the same pass as the view when copies are read on showing
+    /// ([`ReadStrategy::WhenShown`]): history, the card, the well and the scan share it, so a
+    /// copy is read once (one alert under Ask).
+    image: Option<ImageGrab>,
 }
 
 static CACHE: Mutex<Option<CachedView>> = Mutex::new(None);
+
+/// The card is shown (or being opened): with Default or Ask a new copy is read now.
+static CARD_SHOWN: AtomicBool = AtomicBool::new(false);
+
+/// The access setting last seen, to log a change while Copycraft runs.
+static LAST_BEHAVIOR: Mutex<Option<Option<AccessBehavior>>> = Mutex::new(None);
+
+/// A picture as the pasteboard held it, read once.
+#[derive(Clone)]
+struct ImageGrab {
+    source: ImageSource,
+    /// TIFF for a copied file Copycraft cannot open (sandbox).
+    tiff: Option<Vec<u8>>,
+}
+
+impl ImageGrab {
+    fn zeroize(&mut self) {
+        if let ImageSource::Bytes { bytes, .. } = &mut self.source {
+            bytes.zeroize();
+        }
+        if let Some(tiff) = self.tiff.as_mut() {
+            tiff.zeroize();
+        }
+    }
+}
 
 #[derive(Clone)]
 struct CardSnap {
@@ -56,49 +86,137 @@ pub(crate) fn current_view() -> ClipboardView {
     let pasteboard = NSPasteboard::generalPasteboard();
     let change_count = pasteboard.changeCount();
     // The change count, the types and the access setting read no content (no privacy alert).
+    // The setting is looked at on every look, so a change in Settings is picked up.
     let types = type_names(&pasteboard);
-    let allowed = paste_access::may_read_content(access_behavior(&pasteboard));
-    let key = ReadKey::new(change_count, types.iter().map(String::as_str), allowed);
-    // Same key, same reading: also one that came back empty, failed or was denied, so a read
-    // is not tried (and an alert not shown) again on every tick. A promised file that puts its
-    // picture on the pasteboard later adds its types, which reads again.
-    let cached = CACHE.lock().ok().and_then(|guard| {
-        guard.as_ref().and_then(|cached| {
-            (!paste_access::read_again(Some(&cached.key), &key)).then(|| cached.view.clone())
-        })
-    });
+    let strategy = paste_access::strategy(current_behavior(&pasteboard));
+    let key = ReadKey::new(change_count, types.iter().map(String::as_str), strategy);
+    let shown = CARD_SHOWN.load(Ordering::Relaxed);
+    // The same copy is read once: also a reading that came back empty, failed or was denied,
+    // so a read is not tried (and an alert not shown) again on every tick. A promised file that
+    // puts its picture on the pasteboard later adds its types, which reads again.
+    let (step, cached) = {
+        let guard = CACHE.lock().ok();
+        let kept = guard.as_ref().and_then(|guard| guard.as_ref());
+        let step = paste_access::plan(kept.map(|cached| &cached.kept), &key, shown);
+        let view = kept
+            .filter(|_| step == ReadPlan::Reuse)
+            .map(|cached| cached.view.clone());
+        (step, view)
+    };
     if let Some(view) = cached {
         return view;
     }
     let marks = marks_of(types.iter().map(String::as_str));
-    let (view, image_path) = if marks.hides() {
-        (ClipboardView::Hidden, None)
-    } else if !allowed {
-        // Always Deny: no content reads at all.
-        (ClipboardView::Denied, None)
+    let mut image = None;
+    let (view, image_path, content_read) = if marks.hides() {
+        (ClipboardView::Hidden, None, true)
     } else {
-        let (view, image_path) = read_view(&pasteboard);
-        let text_declared = types.iter().any(|kind| kind == "public.utf8-plain-text");
-        if paste_access::text_read_failed(text_declared, view.text().is_some())
-            && matches!(view, ClipboardView::NoText)
-        {
-            eprintln!(
-                "copycraft: clipboard text could not be read (denied?); \
-                 not read again until the next copy"
-            );
+        match step {
+            // Always Deny: no content reads at all. (`Reuse` always has a reading, returned
+            // above.)
+            ReadPlan::Deny | ReadPlan::Reuse => (ClipboardView::Denied, None, false),
+            // Default or Ask with the card closed: only the change count and types.
+            ReadPlan::Wait => (ClipboardView::Pending, None, false),
+            ReadPlan::Read => {
+                let (view, image_path) = read_view(&pasteboard);
+                let text_declared = types.iter().any(|kind| kind == "public.utf8-plain-text");
+                if paste_access::text_read_failed(text_declared, view.text().is_some())
+                    && matches!(view, ClipboardView::NoText)
+                {
+                    eprintln!(
+                        "copycraft: clipboard text could not be read (denied?); \
+                         not read again until the next copy"
+                    );
+                }
+                if strategy == ReadStrategy::WhenShown && view.is_image() {
+                    image = grab_image(&pasteboard, image_path.as_deref());
+                }
+                (view, image_path, true)
+            }
         }
-        (view, image_path)
     };
     if let Ok(mut guard) = CACHE.lock() {
+        if let Some(old) = guard.as_mut() {
+            zeroize_cached(old);
+        }
         *guard = Some(CachedView {
             change_count,
-            key,
+            kept: Kept { key, content_read },
             view: view.clone(),
             marks,
             image_path,
+            image,
         });
     }
     view
+}
+
+/// Tell the pasteboard reader whether the card is shown (or about to be): with Default or Ask
+/// a copy is read only then.
+pub(crate) fn set_card_shown(shown: bool) {
+    CARD_SHOWN.store(shown, Ordering::Relaxed);
+}
+
+/// The read strategy for the access setting now (cheap: no content read).
+pub(crate) fn read_strategy() -> ReadStrategy {
+    paste_access::strategy(current_behavior(&NSPasteboard::generalPasteboard()))
+}
+
+/// The access setting, logged when it differs from the one seen before.
+fn current_behavior(pasteboard: &NSPasteboard) -> Option<AccessBehavior> {
+    let behavior = access_behavior(pasteboard);
+    if let Ok(mut last) = LAST_BEHAVIOR.lock() {
+        if let Some(seen) = *last
+            && seen != behavior
+        {
+            eprintln!("{}", paste_access::change_log_line(behavior));
+        }
+        *last = Some(behavior);
+    }
+    behavior
+}
+
+/// The picture on the pasteboard, read in the view's pass: only types the pasteboard declares
+/// are read. Main thread only.
+fn grab_image(
+    pasteboard: &NSPasteboard,
+    image_path: Option<&std::path::Path>,
+) -> Option<ImageGrab> {
+    autoreleasepool(|_| {
+        let source = image_source(pasteboard, image_path).or_else(|| {
+            // A picture only AppKit can draw: its TIFF, from the same pass.
+            let image = crate::macos_preview_image::nsimage_from_pasteboard(pasteboard)?;
+            let bytes = image.TIFFRepresentation()?.to_vec();
+            (!bytes.is_empty()).then_some(ImageSource::Bytes {
+                bytes,
+                is_png: false,
+            })
+        })?;
+        let tiff = match &source {
+            ImageSource::File(path) if std::fs::File::open(path).is_err() => {
+                pasteboard_data(pasteboard, unsafe { NSPasteboardTypeTIFF })
+            }
+            _ => None,
+        };
+        Some(ImageGrab { source, tiff })
+    })
+}
+
+/// How the pictures of the current copy are had: `Some` with the picture read in the view's
+/// pass (Default or Ask; `None` inside when there was none), `None` to read the pasteboard as
+/// before (Always Allow, macOS before 15.4).
+fn shared_image() -> Option<Option<ImageGrab>> {
+    let change_count = change_count();
+    let guard = CACHE.lock().ok()?;
+    let cached = guard
+        .as_ref()
+        .filter(|cached| cached.change_count == change_count);
+    match cached {
+        Some(cached) if cached.kept.key.strategy == ReadStrategy::Now => None,
+        Some(cached) => Some(cached.image.clone()),
+        // No reading of this copy yet: no content read now, unless copies are read at once.
+        None => (read_strategy() != ReadStrategy::Now).then_some(None),
+    }
 }
 
 /// The general pasteboard's access setting, or `None` before macOS 15.4 (no pasteboard
@@ -109,9 +227,13 @@ fn access_behavior(pasteboard: &NSPasteboard) -> Option<AccessBehavior> {
         .then(|| AccessBehavior::from_raw(pasteboard.accessBehavior().0))
 }
 
-/// Log the general pasteboard's access setting (once, at startup; stderr only).
+/// Log the general pasteboard's access setting (once, at startup; stderr only). A change is
+/// logged when it is seen ([`current_behavior`]).
 pub(crate) fn log_access_behavior() {
     let behavior = access_behavior(&NSPasteboard::generalPasteboard());
+    if let Ok(mut last) = LAST_BEHAVIOR.lock() {
+        *last = Some(behavior);
+    }
     eprintln!("{}", paste_access::startup_log_line(behavior));
 }
 
@@ -150,6 +272,12 @@ pub(crate) struct CardImageInput {
 
 /// Fetch the current picture for a scan. Main thread only.
 pub(crate) fn card_image_input() -> Option<CardImageInput> {
+    if let Some(shared) = shared_image() {
+        return shared.map(|grab| CardImageInput {
+            source: grab.source,
+            tiff: grab.tiff,
+        });
+    }
     let pasteboard = NSPasteboard::generalPasteboard();
     let change_count = pasteboard.changeCount();
     let cached_path = cached_image_path(change_count);
@@ -225,6 +353,13 @@ fn scan_decoded(decoded: DecodedPreview, data_url: Option<String>) -> Option<Ima
 }
 
 pub(crate) fn current_image_bytes() -> Option<Vec<u8>> {
+    if let Some(shared) = shared_image() {
+        let grab = shared?;
+        return match grab.source {
+            ImageSource::Bytes { bytes, .. } => Some(bytes),
+            ImageSource::File(path) => std::fs::read(path).ok().or(grab.tiff),
+        };
+    }
     let pasteboard = NSPasteboard::generalPasteboard();
     let change_count = pasteboard.changeCount();
     let cached_path = cached_image_path(change_count);
@@ -466,9 +601,24 @@ pub(crate) fn image_thumbnail() -> Option<ClipboardImage> {
 /// Picture for the card well. Prefers AppKit's pasteboard image over the thumbnail,
 /// which is blank when that decoder returns nothing.
 pub(crate) fn clipboard_picture() -> Option<Retained<NSImage>> {
-    let pasteboard = NSPasteboard::generalPasteboard();
-    if let Some(image) = crate::macos_preview_image::nsimage_from_pasteboard(&pasteboard) {
-        return Some(image);
+    if let Some(shared) = shared_image() {
+        let from_grab = shared.and_then(|grab| match &grab.source {
+            ImageSource::Bytes { bytes, .. } => mac_ui::image::from_bytes(bytes),
+            ImageSource::File(path) => path
+                .to_str()
+                .and_then(|path| {
+                    NSImage::initWithContentsOfFile(NSImage::alloc(), &NSString::from_str(path))
+                })
+                .or_else(|| grab.tiff.as_deref().and_then(mac_ui::image::from_bytes)),
+        });
+        if from_grab.is_some() {
+            return from_grab;
+        }
+    } else {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        if let Some(image) = crate::macos_preview_image::nsimage_from_pasteboard(&pasteboard) {
+            return Some(image);
+        }
     }
     let thumb = image_thumbnail()?;
     crate::macos_preview_image::nsimage_from_clipboard(&thumb)
@@ -493,6 +643,20 @@ fn cached_card(change_count: isize) -> Option<CardSnap> {
 }
 
 fn build_card(change_count: isize) -> Option<CardSnap> {
+    if let Some(shared) = shared_image() {
+        let grab = shared?;
+        let tiff = grab.tiff;
+        return snap_from_source(change_count, grab.source).or_else(|| {
+            let bytes = tiff?;
+            snap_from_source(
+                change_count,
+                ImageSource::Bytes {
+                    bytes,
+                    is_png: false,
+                },
+            )
+        });
+    }
     let pasteboard = NSPasteboard::generalPasteboard();
     let cached_path = cached_image_path(change_count);
     let source = autoreleasepool(|_| image_source(&pasteboard, cached_path.as_deref()));
@@ -624,12 +788,19 @@ fn export_from_source(source: &ImageSource) -> Option<ImageExport> {
     }
 }
 
+fn zeroize_cached(cached: &mut CachedView) {
+    if let ClipboardView::Text(text) = &mut cached.view {
+        text.zeroize();
+    }
+    if let Some(image) = cached.image.as_mut() {
+        image.zeroize();
+    }
+}
+
 pub(crate) fn zeroize_caches() {
     let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
-    if let Some(cached) = cache.as_mut()
-        && let ClipboardView::Text(text) = &mut cached.view
-    {
-        text.zeroize();
+    if let Some(cached) = cache.as_mut() {
+        zeroize_cached(cached);
     }
     *cache = None;
     drop(cache);
@@ -833,6 +1004,7 @@ fn has_image_data(pasteboard: &NSPasteboard) -> bool {
     pasteboard.availableTypeFromArray(&types).is_some()
 }
 
+#[derive(Clone)]
 enum ImageSource {
     Bytes { bytes: Vec<u8>, is_png: bool },
     File(PathBuf),
@@ -915,12 +1087,20 @@ fn decode_bytes(bytes: Vec<u8>, is_png: bool) -> Option<DecodedPreview> {
     Some(DecodedPreview { image, source_png })
 }
 
+/// A type the pasteboard does not declare is not read: a read is what can show the privacy
+/// alert, the check is not.
 fn pasteboard_string(pasteboard: &NSPasteboard, kind: &NSString) -> Option<String> {
+    if !type_available(pasteboard, kind) {
+        return None;
+    }
     let text = pasteboard.stringForType(kind)?;
     Some(text.to_string())
 }
 
 fn pasteboard_data(pasteboard: &NSPasteboard, kind: &NSString) -> Option<Vec<u8>> {
+    if !type_available(pasteboard, kind) {
+        return None;
+    }
     let data = pasteboard.dataForType(kind)?;
     let bytes = data.to_vec();
     (!bytes.is_empty()).then_some(bytes)

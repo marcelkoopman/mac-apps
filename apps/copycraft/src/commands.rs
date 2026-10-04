@@ -192,6 +192,11 @@ pub enum SubjectKind {
     Hidden,
     /// Clipboard access is set to Always Deny (pasteboard privacy): nothing is read.
     Denied,
+    /// Clipboard access is Default or Ask: a new copy, read once the card is shown.
+    Pending,
+    /// As [`SubjectKind::Pending`], the first time: the card explains the alert macOS shows
+    /// next (once; [`crate::paste_access::ASK_NOTE`]).
+    PasteAsk,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -833,6 +838,22 @@ fn compose_card(data: &LaunchData) -> WorkCard {
                 "{}\nPaste from Other Apps is set to Deny for Copycraft.\n{DROP_HINT}",
                 crate::paste_access::DENIED_NOTE
             ),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::Pending | SubjectKind::PasteAsk => WorkCard {
+            title: "Clipboard".to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: if data.subject_kind == SubjectKind::PasteAsk {
+                crate::paste_access::ASK_NOTE.to_string()
+            } else {
+                format!("{}\n{DROP_HINT}", crate::paste_access::PENDING_NOTE)
+            },
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -1551,9 +1572,12 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             }
             chips
         }
-        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden | SubjectKind::Denied => {
-            Vec::new()
-        }
+        SubjectKind::Empty
+        | SubjectKind::NoText
+        | SubjectKind::Hidden
+        | SubjectKind::Denied
+        | SubjectKind::Pending
+        | SubjectKind::PasteAsk => Vec::new(),
     }
 }
 
@@ -2658,12 +2682,15 @@ pub struct ContentActions {
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
     match data.subject_kind {
-        SubjectKind::Empty | SubjectKind::NoText | SubjectKind::Hidden | SubjectKind::Denied => {
-            ContentActions {
-                copy: false,
-                save: false,
-            }
-        }
+        SubjectKind::Empty
+        | SubjectKind::NoText
+        | SubjectKind::Hidden
+        | SubjectKind::Denied
+        | SubjectKind::Pending
+        | SubjectKind::PasteAsk => ContentActions {
+            copy: false,
+            save: false,
+        },
         SubjectKind::Image => image_content_actions(data),
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
@@ -5123,6 +5150,28 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             "No text on the clipboard\nDrop a text file or image here to open it"
         );
         assert!(card.excerpt.is_empty());
+    }
+
+    #[test]
+    fn a_copy_not_read_yet_says_so_and_the_first_one_explains_the_alert() {
+        let pending = data(SubjectKind::Pending, None);
+        let card = work_card(&pending);
+        assert!(
+            card.placeholder
+                .starts_with("New copy — open the card to view\n")
+        );
+        assert!(card.excerpt.is_empty() && card.meta.is_empty());
+        assert!(chips(&pending).is_empty());
+        assert!(!content_actions(&pending).copy);
+        let ask = data(SubjectKind::PasteAsk, None);
+        let card = work_card(&ask);
+        assert!(
+            card.placeholder.contains("Choose Allow"),
+            "{}",
+            card.placeholder
+        );
+        assert!(card.placeholder.contains("Paste from Other Apps"));
+        assert!(chips(&ask).is_empty());
     }
 
     #[test]

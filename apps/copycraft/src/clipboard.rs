@@ -74,6 +74,9 @@ pub enum ClipboardView {
     /// Pasteboard privacy is set to Always Deny for Copycraft: nothing is read
     /// ([`crate::paste_access`]).
     Denied,
+    /// Pasteboard privacy is Default or Ask: a new copy, not read until the card is shown
+    /// ([`crate::paste_access::ReadStrategy::WhenShown`]).
+    Pending,
 }
 
 impl ClipboardView {
@@ -93,7 +96,12 @@ impl ClipboardView {
     pub fn text(&self) -> Option<&str> {
         match self {
             Self::Text(text) => Some(text.as_str()),
-            Self::Empty | Self::NoText | Self::Image | Self::Hidden | Self::Denied => None,
+            Self::Empty
+            | Self::NoText
+            | Self::Image
+            | Self::Hidden
+            | Self::Denied
+            | Self::Pending => None,
         }
     }
 
@@ -111,7 +119,7 @@ impl ClipboardView {
         match self {
             Self::Text(text) => Some(menu_mark(text.as_str())),
             Self::Image => Some(format::FormatKind::Image.menu_symbol()),
-            Self::Empty | Self::NoText | Self::Hidden | Self::Denied => None,
+            Self::Empty | Self::NoText | Self::Hidden | Self::Denied | Self::Pending => None,
         }
     }
 
@@ -124,6 +132,7 @@ impl ClipboardView {
             Self::Image => format::FormatKind::Image.menu_symbol().to_string(),
             Self::Hidden => HIDDEN_CONTENT.to_string(),
             Self::Denied => crate::paste_access::DENIED_NOTE.to_string(),
+            Self::Pending => crate::paste_access::PENDING_NOTE.to_string(),
         }
     }
 }

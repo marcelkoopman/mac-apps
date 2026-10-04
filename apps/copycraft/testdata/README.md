@@ -208,11 +208,25 @@ expectations; on Linux the test only checks size and EXIF.
       Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says
       "Clipboard access denied in Privacy & Security" (not "Nothing copied"), no alert shows,
       and the log (Console or a terminal launch) has `pasteboard accessBehavior alwaysDeny`
-      at start-up. Set it back to Ask or Allow: the card shows the copy without a new copy.
-- [ ] Pasteboard privacy, Ask: copy text, answer the alert with Don't Allow, and wait a few
-      seconds with the card closed and open: no further alerts for that copy. Copy again: one
-      new alert. Copy a picture and open the card: every alert comes while the card opens or
-      the copy is noted, none later from the background scan (count them for step 6).
+      at start-up. Set it back to Allow (or Ask, after one alert): the card shows the copy without a new
+      copy.
+- [ ] Pasteboard privacy, first time under Ask (reset first: `tccutil reset Pasteboard
+      <bundle id>` and `defaults delete <bundle id> CopycraftPasteAlertExplained`): copy text
+      in another app: no alert while the card is closed, and the menu bar tooltip says "New
+      copy — open the card to view". Open the card: it explains that macOS asks and that
+      Allow shows the copy (Always Allow in Privacy & Security › Paste from Other Apps); then
+      exactly one alert. Choose Allow: the card shows the copy. Quit, start again, open the
+      card on a new copy: no explanation any more.
+- [ ] Pasteboard privacy, Ask: copy text with the card closed and wait a few seconds: no
+      alert. Open the card: exactly one alert; close and open it again: none. Copy a picture
+      (a screenshot to the clipboard, ⌃⇧⌘4) and open the card: exactly one alert for it, with
+      picture, Info and Text/QR chips and a history entry. Answer Don't Allow on a new copy:
+      no further alert for it (also with the card open), one alert for the next copy.
+- [ ] Pasteboard privacy, Always Allow: copies are read as they come (no alert, history fills
+      with the card closed), as before.
+- [ ] Pasteboard privacy, switch while running: with the card closed, switch Copycraft from
+      Allow to Ask to Deny and back in Privacy & Security; after each, copy and open the card:
+      it follows the setting (the log shows `pasteboard accessBehavior now …`).
 - [ ] `tables/datetime_first_column.csv` (datetimes in the first column): copied from a text
       editor, the card shows CSV with Dataframe and Table ▾, `measured at` as a datetime.
       `tables/ledger_filter.csv` (datetime first too): Filter: booked at… `2026-09-01` keeps 2 rows.

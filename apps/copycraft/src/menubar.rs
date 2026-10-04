@@ -90,6 +90,11 @@ struct App {
     polled_change: Option<isize>,
     /// The last poll found nothing or no text: look again even without a new change count.
     poll_again: bool,
+    /// The card shows the one-time explanation of the pasteboard privacy alert, before the
+    /// copy is read (Default or Ask; see [`crate::paste_access::ASK_NOTE`]).
+    paste_explaining: bool,
+    /// That explanation was shown once (stored in the user defaults).
+    paste_explained: bool,
     /// The history picture the pasteboard holds at that change count (a copy recorded, or an
     /// entry put back), so its scan can be kept with the entry and found there again.
     image_on_pasteboard: Option<(isize, SecretBytes)>,
@@ -1450,6 +1455,8 @@ impl App {
         if !launcher::is_open() {
             return;
         }
+        #[cfg(target_os = "macos")]
+        crate::macos_pasteboard::set_card_shown(true);
         if self.opened.is_none() {
             let view = ClipboardView::from_os();
             self.record_current(&view);
@@ -1566,11 +1573,34 @@ impl App {
 
     /// Clipboard launch, unless the card is holding a chosen file.
     fn launch_for_popup(&mut self) -> LaunchData {
+        #[cfg(target_os = "macos")]
+        self.card_opening();
         if self.opened.is_none() {
             let view = ClipboardView::from_os();
             self.record_current(&view);
         }
         self.current_launch_data()
+    }
+
+    /// The card is about to show: with Default or Ask the copy is read now, in one pass (one
+    /// alert). The first time, the card explains that alert instead and the copy is read on the
+    /// next tick, with the explanation on screen.
+    #[cfg(target_os = "macos")]
+    fn card_opening(&mut self) {
+        crate::macos_pasteboard::set_card_shown(false);
+        let waiting = self.opened.is_none()
+            && crate::paste_access::explain_first(
+                crate::macos_pasteboard::read_strategy(),
+                self.paste_explained,
+            )
+            && matches!(ClipboardView::from_os(), ClipboardView::Pending);
+        if waiting {
+            self.paste_explaining = true;
+            self.paste_explained = true;
+            crate::settings::set_paste_alert_explained();
+        } else {
+            crate::macos_pasteboard::set_card_shown(true);
+        }
     }
 
     fn current_launch_data(&mut self) -> LaunchData {
@@ -1733,6 +1763,8 @@ impl App {
             ClipboardView::Empty => (SubjectKind::Empty, None),
             ClipboardView::NoText => (SubjectKind::NoText, None),
             ClipboardView::Denied => (SubjectKind::Denied, None),
+            ClipboardView::Pending if self.paste_explaining => (SubjectKind::PasteAsk, None),
+            ClipboardView::Pending => (SubjectKind::Pending, None),
             ClipboardView::Hidden => (SubjectKind::Hidden, None),
             ClipboardView::Image => (SubjectKind::Image, None),
             ClipboardView::Text(text) => {
@@ -2616,6 +2648,8 @@ impl App {
 
     /// The history row stays a type mark. The card shows the copy that was chosen.
     fn show_restored(&mut self) {
+        #[cfg(target_os = "macos")]
+        crate::macos_pasteboard::set_card_shown(true);
         let view = ClipboardView::from_os();
         self.record_current(&view);
         let mut data = self.launch_data(&view);
@@ -2669,6 +2703,12 @@ impl App {
         // empty or textless reading is looked at again.
         #[cfg(target_os = "macos")]
         {
+            // With Default or Ask a copy is read only while the card is shown.
+            let open = launcher::is_open();
+            if !open {
+                self.paste_explaining = false;
+            }
+            crate::macos_pasteboard::set_card_shown(open);
             let change = crate::macos_pasteboard::change_count();
             if self.polled_change == Some(change)
                 && !self.poll_again
@@ -2679,12 +2719,19 @@ impl App {
             self.polled_change = Some(change);
         }
         let view = ClipboardView::from_os();
-        // Looked at again every tick, but `current_view` reads the contents again only for other
-        // types or another access setting (`paste_access::read_again`): no reads per tick.
+        // Looked at again every tick, but `current_view` reads a copy at most once
+        // (`paste_access::plan`): no reads per tick. A copy waiting for the card is read on the
+        // first tick the card is shown.
         self.poll_again = matches!(
             view,
-            ClipboardView::Empty | ClipboardView::NoText | ClipboardView::Denied
+            ClipboardView::Empty
+                | ClipboardView::NoText
+                | ClipboardView::Denied
+                | ClipboardView::Pending
         );
+        if !matches!(view, ClipboardView::Pending) {
+            self.paste_explaining = false;
+        }
         self.record_current(&view);
         let signature = self.clip_signature(&view);
         let image_change = signature.image_change;
@@ -2760,6 +2807,7 @@ fn icon_tip(view: &ClipboardView) -> String {
         ClipboardView::Image => "Image".to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
         ClipboardView::Denied => crate::paste_access::DENIED_NOTE.to_string(),
+        ClipboardView::Pending => crate::paste_access::PENDING_NOTE.to_string(),
         ClipboardView::Hidden => clipboard::HIDDEN_CONTENT.to_string(),
         ClipboardView::Text(text) => {
             if crate::youtube::video_id(text.as_str()).is_some() {
@@ -3019,6 +3067,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         conceal_when_checked: None,
         polled_change: None,
         poll_again: false,
+        paste_explaining: false,
+        paste_explained: crate::settings::paste_alert_explained(),
         image_on_pasteboard: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,
