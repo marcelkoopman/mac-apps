@@ -216,3 +216,9 @@ expectations; on Linux the test only checks size and EXIF.
 - [ ] `tables/datetime_first_column.csv` (datetimes in the first column): copied from a text
       editor, the card shows CSV with Dataframe and Table ▾, `measured at` as a datetime.
       `tables/ledger_filter.csv` (datetime first too): Filter: booked at… `2026-09-01` keeps 2 rows.
+- [ ] Large-table join: copy `large_1mb.csv` from `generate_large.sh` (open it in a text
+      editor, select all, copy) and show it once, copy two other items so its frames are let
+      go, then copy `id,site` / `1,North` / `2,South` and Join with › that large copy on id:
+      the card stays responsive (no beach ball), the spinner shows when slow, and the 2-row
+      joined version follows. Again with Append rows of: 32,002 rows. Wipe while the spinner
+      turns: no version appears afterwards.

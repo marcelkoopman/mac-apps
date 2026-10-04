@@ -102,6 +102,8 @@ struct App {
     opened_table: TableVersions,
     /// The table job on its thread. One at a time: a new one cancels it.
     table_job: Option<TableRun>,
+    /// A Join / Append waiting for the table job that works out the other table's version.
+    pending_combine: Option<PendingCombine>,
     /// Why the last table step failed, shown on the card until the next one.
     table_error: Option<String>,
     /// The entry the table window shows, while it is open.
@@ -144,6 +146,28 @@ fn text_hash(text: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut hasher);
     hasher.finish()
+}
+
+/// A Join / Append whose other table is being worked out by the table job `generation`: it
+/// goes on when that job is done ([`combine_goes_on`]), and is dropped with the job.
+struct PendingCombine {
+    generation: u64,
+    target: TableTarget,
+    entry: usize,
+    check: u64,
+    how: commands::CombineHow,
+}
+
+/// What [`App::combine_step`] gives: the step, or the job to run first for the other table.
+enum CombineStep {
+    Ready(TableOp),
+    LoadOther(crate::table::Job),
+}
+
+/// A finished table job lets the combine waiting for it go on only when it is that job and its
+/// version went into the other table (which was not wiped or forgotten meanwhile).
+fn combine_goes_on(waiting_for: Option<u64>, generation: u64, taken_in: bool) -> bool {
+    waiting_for == Some(generation) && taken_in
 }
 
 /// A table job running on its thread ([`crate::table::Job`]).
@@ -440,7 +464,7 @@ impl App {
             CommandId::TableOpenWindow => self.open_table_window(),
             CommandId::TableFilter(column) => self.filter_prompt(TableTarget::Card, column),
             CommandId::TableCombine { entry, check, how } => {
-                self.table_combine(TableTarget::Card, entry, check, how);
+                self.table_combine(TableTarget::Card, entry, check, how, false);
             }
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
@@ -588,7 +612,7 @@ impl App {
                     CommandId::TableStep(op) => self.table_step(target, op),
                     CommandId::TableFilter(column) => self.filter_prompt(target, column),
                     CommandId::TableCombine { entry, check, how } => {
-                        self.table_combine(target, entry, check, how);
+                        self.table_combine(target, entry, check, how, false);
                     }
                     CommandId::TableUndo => {
                         self.table_goto(target, |cursor| cursor.checked_sub(1));
@@ -747,18 +771,39 @@ impl App {
     }
 
     /// Join with / Left join with / Append rows of: the table of `target` combined with the
-    /// version the history entry `entry` shows, as one step. That table is worked out here
-    /// when its frame was forgotten. The step keeps both tables' sensitivity labels.
+    /// version the history entry `entry` shows, as one step. When that table's frame was
+    /// forgotten, a table job works it out first (with the spinner) and the step follows when it
+    /// is done ([`PendingCombine`]); `resumed` is that second go. The step keeps both tables'
+    /// sensitivity labels.
     fn table_combine(
         &mut self,
         target: TableTarget,
         entry: usize,
         check: u64,
         how: commands::CombineHow,
+        resumed: bool,
     ) {
-        let result = self.combine_step(target, entry, check, how);
+        let result = self.combine_step(target, entry, check, &how, resumed);
         match result {
-            Ok(op) => self.table_step(target, op),
+            Ok(CombineStep::Ready(op)) => self.table_step(target, op),
+            Ok(CombineStep::LoadOther(job)) => {
+                let generation = job.generation;
+                self.set_table_error(target, None);
+                self.run_table_job(job, false, target);
+                if self.table_job.is_some() {
+                    self.pending_combine = Some(PendingCombine {
+                        generation,
+                        target,
+                        entry,
+                        check,
+                        how,
+                    });
+                }
+                self.refresh_popup();
+                if target == TableTarget::Window {
+                    self.refresh_table_window();
+                }
+            }
             Err(error) => {
                 self.set_table_error(target, Some(error));
                 self.refresh_popup();
@@ -774,8 +819,9 @@ impl App {
         target: TableTarget,
         entry: usize,
         check: u64,
-        how: commands::CombineHow,
-    ) -> Result<TableOp, String> {
+        how: &commands::CombineHow,
+        resumed: bool,
+    ) -> Result<CombineStep, String> {
         let gone = || "That copy is no longer in history; open the menu again".to_string();
         let checking = || "Still checking for sensitive data; try again in a moment".to_string();
         let (text, home) = self.target_source(target).ok_or_else(gone)?;
@@ -789,13 +835,21 @@ impl App {
         if home == TableHome::History(entry) {
             return Err(gone());
         }
-        // The other table's version, worked out now when it is not there.
+        if self
+            .target_table(target, home)
+            .ok_or_else(gone)?
+            .frame()
+            .is_none()
+        {
+            return Err("Working on the table…".to_string());
+        }
+        // The other table's version, worked out on the table thread when it is not there.
         let other = self.history.table_mut_in_place(entry).ok_or_else(gone)?;
         if let Some(job) = other.load(&other_text) {
-            let done = job
-                .run(&std::sync::atomic::AtomicBool::new(false))
-                .map_err(|e| e.to_string())?;
-            other.finish(done);
+            if resumed {
+                return Err(gone());
+            }
+            return Ok(CombineStep::LoadOther(job));
         }
         let other_frame = other.frame().cloned().ok_or_else(gone)?;
         let mut labels = version_labels(other, &other_frame, &other_text).ok_or_else(checking)?;
@@ -806,10 +860,10 @@ impl App {
             .ok_or_else(|| "Working on the table…".to_string())?;
         labels.extend(version_labels(table, &frame, &text).ok_or_else(checking)?);
         let other = crate::table_combine::OtherTable::new(other_frame, labels);
-        Ok(match how {
+        Ok(CombineStep::Ready(match how.clone() {
             commands::CombineHow::Join { key, left } => TableOp::Join { other, key, left },
             commands::CombineHow::Concat => TableOp::Concat { other },
-        })
+        }))
     }
 
     /// Table ▾ › Filter › `column`: ask for a rule of the column's kind (text, numbers, dates),
@@ -928,6 +982,7 @@ impl App {
     }
 
     fn cancel_table_job(&mut self) {
+        self.pending_combine = None;
         if let Some(run) = self.table_job.take() {
             run.cancel.store(true, Ordering::Relaxed);
         }
@@ -949,6 +1004,10 @@ impl App {
             );
         }
         self.stop_spinner_when_idle();
+        // A Join / Append waiting for this job: dropped whatever it brought, unless it goes on.
+        let pending = self
+            .pending_combine
+            .take_if(|pending| pending.generation == done.generation);
         match done.result {
             Ok(finished) => {
                 let generation = finished.generation();
@@ -957,8 +1016,20 @@ impl App {
                 } else {
                     self.history.table_awaiting(generation)
                 };
-                if let Some(table) = table {
-                    table.finish(finished);
+                // No table waits for it when it was wiped meanwhile: the frame is dropped.
+                let taken_in = table.is_some_and(|table| table.finish(finished));
+                let waiting_for = pending.as_ref().map(|pending| pending.generation);
+                if let Some(pending) = pending
+                    && combine_goes_on(waiting_for, generation, taken_in)
+                {
+                    self.table_combine(
+                        pending.target,
+                        pending.entry,
+                        pending.check,
+                        pending.how,
+                        true,
+                    );
+                    return;
                 }
             }
             Err(crate::table::TableError::Cancelled) => {
@@ -2953,6 +3024,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         history_minutes: crate::settings::load().history_minutes,
         opened_table: TableVersions::default(),
         table_job: None,
+        pending_combine: None,
         table_error: None,
         table_window: None,
         describe_for: None,
@@ -2973,12 +3045,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipSig, history_due, icon_tip, status_labels, status_rows, tray_label, version_label,
+        ClipSig, combine_goes_on, history_due, icon_tip, status_labels, status_rows, tray_label,
+        version_label,
     };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use crate::hotkey;
     use zeroize::Zeroizing;
+
+    /// A Join / Append waiting for the other table goes on only after its own job, and only
+    /// when the frame went into that table: not after a wipe (nothing awaits it) or another job.
+    #[test]
+    fn a_waiting_combine_goes_on_only_after_its_own_job_was_taken_in() {
+        assert!(combine_goes_on(Some(7), 7, true));
+        assert!(!combine_goes_on(Some(7), 7, false));
+        assert!(!combine_goes_on(Some(7), 8, true));
+        assert!(!combine_goes_on(None, 7, true));
+    }
 
     #[test]
     fn history_is_forgotten_minutes_after_the_last_copy() {
