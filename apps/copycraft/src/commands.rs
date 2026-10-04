@@ -492,6 +492,9 @@ pub enum CommandId {
     TableChooseColumns,
     /// Open the table on the card in its own resizable window ([`table_window_view`]).
     TableOpenWindow,
+    /// Ask for a rule for this column (by its type), then filter the table as one step
+    /// ([`crate::table_filter`]).
+    TableFilter(String),
     Quit,
 }
 
@@ -1613,6 +1616,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::ImageStep(op) => op.group(),
         CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
         CommandId::TableHeaderLine(_) => Some("Header on line"),
+        CommandId::TableFilter(_) => Some(FILTER_GROUP),
         _ => None,
     }
 }
@@ -1824,6 +1828,7 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
                 .iter()
                 .map(table_step_command),
         );
+        commands.extend(filter_commands(frame));
     }
     if table.can_undo() {
         let label = &table.labels[table.version];
@@ -1844,6 +1849,28 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
         ));
     }
     commands
+}
+
+/// The Table ▾ submenu with a Filter item per column.
+pub const FILTER_GROUP: &str = "Filter";
+
+/// Table ▾ › Filter › a column, for the columns of a type a rule is typed for (text, numbers,
+/// dates); the item asks for the rule.
+fn filter_commands(frame: &polars::prelude::DataFrame) -> Vec<Command> {
+    frame
+        .columns()
+        .iter()
+        .filter(|column| crate::table_filter::FilterKind::of(column.dtype()).is_some())
+        .map(|column| {
+            let name = column.name().to_string();
+            command(
+                CommandId::TableFilter(name.clone()),
+                &format!("{name}…"),
+                FILTER_GROUP,
+                "filter rows where contains between range from to date column table",
+            )
+        })
+        .collect()
 }
 
 /// The Table ▾ item that opens the column picker.
@@ -2345,6 +2372,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableGrid(_)
             | CommandId::TableChooseColumns
             | CommandId::TableOpenWindow
+            | CommandId::TableFilter(_)
     )
 }
 
@@ -4020,6 +4048,29 @@ Id,Naam,Telefoonnummer,Salaris
         let mut wiped = view.clone();
         wiped.wipe();
         assert!(wiped.grid.is_empty() && wiped.meta.is_empty() && wiped.columns.is_empty());
+    }
+
+    #[test]
+    fn filter_is_offered_per_text_number_and_date_column_and_asks_first() {
+        let table = deduped("name,n,day\nann,1,2026-09-01\nann,1,2026-09-01\nbob,2,2026-09-02");
+        let filters: Vec<super::Command> = table_commands(&table)
+            .into_iter()
+            .filter(|c| matches!(c.id, CommandId::TableFilter(_)))
+            .collect();
+        let titles: Vec<&str> = filters.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(titles, ["name…", "n…", "day…"]);
+        assert_eq!(
+            menu_group(&CommandId::TableFilter("n".into())),
+            Some(super::FILTER_GROUP)
+        );
+        assert!(keeps_card_open(&CommandId::TableFilter("n".into())));
+        // In the window's menu too.
+        let view = table_window_view(&table, "name,n,day\nann,1,2026-09-01");
+        assert!(
+            view.menu
+                .iter()
+                .any(|(c, _)| c.id == CommandId::TableFilter("day".into()))
+        );
     }
 
     #[test]

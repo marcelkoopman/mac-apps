@@ -94,6 +94,11 @@ pub enum TableOp {
     /// One row per value of the `keys` columns (first seen first) with the number of rows, or
     /// the sum, mean, min or max of each other number (min, max: and date) column.
     GroupBy { keys: Vec<String>, agg: Agg },
+    /// The rows whose `column` fits `rule` (Table ▾ › Filter, [`crate::table_filter`]).
+    Filter {
+        column: String,
+        rule: crate::table_filter::FilterRule,
+    },
 }
 
 impl TableOp {
@@ -136,6 +141,10 @@ impl TableOp {
                 };
             }
             Self::GroupBy { keys, agg } => return format!("{} {}", agg.group(), keys.join(", ")),
+            // Not the typed text or bounds: they may quote the table.
+            Self::Filter { column, rule } => {
+                return format!("Filtered on {column} ({})", rule.kind());
+            }
         }
         .to_string()
     }
@@ -147,6 +156,7 @@ impl TableOp {
             Self::Sort { column, .. } | Self::ValueCounts { column } => return column.clone(),
             Self::DropColumns { columns } if columns.len() == 1 => return columns[0].clone(),
             Self::GroupBy { keys, .. } => return keys.join(", "),
+            Self::Filter { column, .. } => return column.clone(),
             Self::SelectColumns {
                 columns,
                 kept_of: Some(_),
@@ -166,7 +176,8 @@ impl TableOp {
             Self::Sort { .. }
             | Self::ValueCounts { .. }
             | Self::SelectColumns { .. }
-            | Self::GroupBy { .. } => {
+            | Self::GroupBy { .. }
+            | Self::Filter { .. } => {
                 unreachable!("titled above")
             }
         }
@@ -255,6 +266,7 @@ impl TableOp {
             Self::GroupBy { .. } => {
                 "group by aggregate count sum total mean average min max pivot column table"
             }
+            Self::Filter { .. } => "filter rows where contains between range from to date table",
         }
     }
 
@@ -277,6 +289,9 @@ impl TableOp {
             Self::SelectColumns { columns, .. } => table_ops::select_columns(df, columns),
             Self::DropColumns { columns } => table_ops::drop_columns(df, columns),
             Self::GroupBy { keys, agg } => table_ops::group_by(df, keys, *agg),
+            Self::Filter { column, rule } => {
+                return crate::table_filter::filter(df, column, rule);
+            }
         };
         next.map(Some)
     }
@@ -285,6 +300,7 @@ impl TableOp {
     pub fn unchanged_note(&self) -> &'static str {
         match self {
             Self::FixTypes => "Types already fine",
+            Self::Filter { .. } => "Every row matches",
             _ => "Nothing to change",
         }
     }

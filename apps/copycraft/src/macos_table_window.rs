@@ -192,6 +192,20 @@ pub fn show(view: TableWindowView) {
     }
 }
 
+/// The window in front and key again, when it is open.
+pub fn bring_to_front() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
+    if let Some(window) = window
+        && window.isVisible()
+    {
+        panel::activate_app(mtm);
+        panel::bring_to_front(&window);
+    }
+}
+
 /// Close the window and wipe what it shows (Wipe, Clear history, lock, sleep, its entry
 /// gone). Nothing when it is not open.
 pub fn close() {

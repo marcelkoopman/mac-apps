@@ -418,6 +418,7 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
+            CommandId::TableFilter(column) => self.filter_prompt(TableTarget::Card, column),
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
@@ -562,6 +563,7 @@ impl App {
                 let target = TableTarget::Window;
                 match id {
                     CommandId::TableStep(op) => self.table_step(target, op),
+                    CommandId::TableFilter(column) => self.filter_prompt(target, column),
                     CommandId::TableUndo => {
                         self.table_goto(target, |cursor| cursor.checked_sub(1));
                     }
@@ -690,6 +692,56 @@ impl App {
                     window.error = error;
                 }
             }
+        }
+    }
+
+    /// Table ▾ › Filter › `column`: ask for a rule of the column's kind (text, numbers, dates),
+    /// again until it reads as one or is cancelled, then filter as one step.
+    fn filter_prompt(&mut self, target: TableTarget, column: String) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let Some((_, home)) = self.target_source(target) else {
+                return;
+            };
+            let kind = self
+                .target_table(target, home)
+                .and_then(|table| table.frame())
+                .and_then(|frame| frame.column(&column).ok())
+                .and_then(|values| crate::table_filter::FilterKind::of(values.dtype()));
+            let Some(kind) = kind else {
+                self.set_table_error(target, Some(format!("{column} cannot be filtered")));
+                self.refresh_popup();
+                return;
+            };
+            let title = format!("Filter {column}");
+            let mut message = kind.prompt().to_string();
+            loop {
+                let answer = mac_ui::dialog::prompt_text(mtm, &title, &message, "");
+                match target {
+                    TableTarget::Card => launcher::order_front(),
+                    TableTarget::Window => launcher::front_table_window(),
+                }
+                let Some(answer) = answer.map(Zeroizing::new) else {
+                    return;
+                };
+                if answer.trim().is_empty() {
+                    return;
+                }
+                match crate::table_filter::parse(kind, &answer) {
+                    Some(rule) => {
+                        self.table_step(target, TableOp::Filter { column, rule });
+                        return;
+                    }
+                    None => message = kind.retry().to_string(),
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (target, column);
         }
     }
 

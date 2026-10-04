@@ -176,7 +176,7 @@ fn iso_column(text: &StringChunked) -> Option<Column> {
 }
 
 /// Days since 1970-01-01 of an ISO date `yyyy-mm-dd` that exists (no 2026-02-30).
-fn iso_days(value: &str) -> Option<i32> {
+pub(crate) fn iso_days(value: &str) -> Option<i32> {
     let bytes = value.as_bytes();
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
         return None;

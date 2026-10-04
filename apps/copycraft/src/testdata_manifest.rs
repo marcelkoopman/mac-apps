@@ -126,6 +126,29 @@ fn visit_url(text: &str) -> Option<String> {
 }
 
 fn table_op(name: &str) -> TableOp {
+    // Filter(units,number,2 to 4): the column, its kind (text, number, date), the rule as typed.
+    if let Some(rest) = name
+        .strip_prefix("Filter(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        let mut parts = rest.splitn(3, ',');
+        let (Some(column), Some(kind), Some(answer)) = (parts.next(), parts.next(), parts.next())
+        else {
+            panic!("bad filter step {name}");
+        };
+        let kind = match kind {
+            "text" => crate::table_filter::FilterKind::Text,
+            "number" => crate::table_filter::FilterKind::Number,
+            "date" => crate::table_filter::FilterKind::Date,
+            other => panic!("unknown filter kind {other}"),
+        };
+        let rule = crate::table_filter::parse(kind, answer)
+            .unwrap_or_else(|| panic!("filter rule {answer} does not read"));
+        return TableOp::Filter {
+            column: column.to_string(),
+            rule,
+        };
+    }
     // GroupBy(region+product,sum): the keys joined with `+`, then count, sum, mean, min or max.
     if let Some((keys, agg)) = name
         .strip_prefix("GroupBy(")
