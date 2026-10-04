@@ -454,6 +454,16 @@ impl ClipboardHistory {
             return None;
         }
         self.forget_derived_beyond(index);
+        self.table_mut_in_place(index)
+    }
+
+    /// [`table_mut`](Self::table_mut) for the table window: the other entries keep what they
+    /// have (the card's entry its frames), so the window and the card do not take turns
+    /// working their tables out again.
+    pub fn table_mut_in_place(&mut self, index: usize) -> Option<&mut TableVersions> {
+        if !matches!(self.entries.get(index)?.body, HistoryBody::Text(_)) {
+            return None;
+        }
         Some(
             self.entries[index]
                 .table

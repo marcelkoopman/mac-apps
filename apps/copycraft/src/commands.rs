@@ -490,6 +490,8 @@ pub enum CommandId {
     TableGrid(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.
     TableChooseColumns,
+    /// Open the table on the card in its own resizable window ([`table_window_view`]).
+    TableOpenWindow,
     Quit,
 }
 
@@ -974,13 +976,14 @@ fn add_table_note(card: &mut WorkCard, start: Option<dataframe::TableStart>) {
 
 /// `note` in the meta line after the size, before the sensitivity labels.
 fn add_meta_note(card: &mut WorkCard, note: &str) {
-    card.meta = match card.meta.find(META_SEPARATOR) {
-        Some(at) => format!(
-            "{}{META_SEPARATOR}{note}{}",
-            &card.meta[..at],
-            &card.meta[at..]
-        ),
-        None => format!("{}{META_SEPARATOR}{note}", card.meta),
+    add_note(&mut card.meta, note);
+}
+
+/// `note` right after the size in `meta`, before the labels and earlier notes.
+fn add_note(meta: &mut String, note: &str) {
+    *meta = match meta.find(META_SEPARATOR) {
+        Some(at) => format!("{}{META_SEPARATOR}{note}{}", &meta[..at], &meta[at..]),
+        None => format!("{meta}{META_SEPARATOR}{note}"),
     };
 }
 
@@ -1797,6 +1800,14 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
             "choose pick select keep remove columns table",
         ));
     }
+    if table.frame.is_some() {
+        commands.push(command(
+            CommandId::TableOpenWindow,
+            OPEN_WINDOW_TITLE,
+            "A larger, resizable table window",
+            "open window table larger resize sidebar",
+        ));
+    }
     if let Some(frame) = &table.frame {
         let columns: Vec<String> = frame
             .get_column_names()
@@ -1833,6 +1844,158 @@ pub fn table_commands(table: &TableShown) -> Vec<Command> {
 /// The Table ▾ item that opens the column picker.
 pub const CHOOSE_COLUMNS_TITLE: &str = "Choose columns…";
 
+/// The Table ▾ item that opens the table window.
+pub const OPEN_WINDOW_TITLE: &str = "Open in window";
+
+/// Rows the table window shows at most (the meta line says when there are more).
+pub const WINDOW_ROWS: usize = 1_000;
+
+/// What the table window shows of the entry's table ([`table_window_view`]): the grid of the
+/// version shown, its meta line, the columns for the sidebar, the versions for the version bar
+/// and its Table ▾ menu. Zeroized when dropped (the grid and meta quote the table).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TableWindowView {
+    /// The version's grid, its first [`WINDOW_ROWS`] rows; empty while it is worked out.
+    pub grid: String,
+    /// Said in place of the grid when there is none ("Working on the table…").
+    pub placeholder: String,
+    /// "4 rows × 6 columns  ·  PII  ·  Duplicates removed", as on the card's meta line.
+    pub meta: String,
+    /// The sidebar: every column's (shown) name and type. No cell values.
+    pub columns: Vec<crate::column_picker::PickerColumn>,
+    /// "Original", then each step's label, and the version shown.
+    pub versions: VersionBar,
+    /// The sensitivity labels are still being checked: it cannot be revealed yet.
+    pub checking: bool,
+    /// The window's Table ▾ menu ([`table_window_menu`]), with its check marks.
+    pub menu: Vec<(Command, bool)>,
+}
+
+impl TableWindowView {
+    pub fn can_undo(&self) -> bool {
+        self.versions.current > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.versions.current + 1 < self.versions.labels.len()
+    }
+
+    /// "v2/3".
+    pub fn version_title(&self) -> String {
+        format!(
+            "v{}/{}",
+            self.versions.current + 1,
+            self.versions.labels.len().max(1)
+        )
+    }
+
+    pub fn wipe(&mut self) {
+        self.grid.zeroize();
+        self.meta.zeroize();
+        self.placeholder.zeroize();
+        for column in &mut self.columns {
+            column.name.zeroize();
+            column.shown.zeroize();
+        }
+        self.columns.clear();
+        for label in &mut self.versions.labels {
+            label.zeroize();
+        }
+        for (command, _) in &mut self.menu {
+            command.wipe();
+        }
+        self.menu.clear();
+    }
+}
+
+impl Drop for TableWindowView {
+    fn drop(&mut self) {
+        self.wipe();
+    }
+}
+
+/// The table window's view of `table`, the table of the entry whose copied text is `source`.
+/// Like the card's Dataframe view: the version's size and sensitivity labels (the original's
+/// are the copied table's, as on the card), the read notes, the step of the version shown and
+/// the last error in the meta line.
+pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
+    let mut view = TableWindowView::default();
+    view.versions = VersionBar {
+        labels: table.labels.clone(),
+        current: table.version,
+    };
+    view.menu = table_window_menu(table);
+    view.columns = picker_columns(table).unwrap_or_default();
+    let Some(frame) = &table.frame else {
+        view.placeholder = "Working on the table…".to_string();
+        return view;
+    };
+    let Some(preview) = dataframe::frame_preview(frame, WINDOW_ROWS, Some(false)) else {
+        view.placeholder = "The table is empty".to_string();
+        return view;
+    };
+    let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
+    let original = table.version == 0 && table.options == dataframe::ReadOptions::default();
+    let classified: &str = if original { source } else { &csv };
+    let mut meta = text_meta_from(&csv, classified);
+    let (rows, columns) = frame.shape();
+    let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
+    meta.replace_range(
+        ..size_end,
+        &format!(
+            "{} {} × {columns} {}",
+            group_thousands(rows),
+            if rows == 1 { "row" } else { "rows" },
+            if columns == 1 { "column" } else { "columns" }
+        ),
+    );
+    let mut notes: Vec<String> = Vec::new();
+    // The step of the version shown reads first, as on the card.
+    if table.version > 0
+        && let Some(label) = table.labels.get(table.version)
+    {
+        notes.push(label.clone());
+    }
+    if preview.rows > preview.shown_rows {
+        notes.push(showing_note(preview.shown_rows, preview.rows, "rows"));
+    }
+    notes.extend(
+        table
+            .notes
+            .iter()
+            .flat_map(dataframe::ReadNotes::meta_notes),
+    );
+    notes.extend(table.error.clone());
+    // Each note goes right after the size: the last added reads first.
+    for note in notes.iter().rev() {
+        add_note(&mut meta, note);
+    }
+    view.checking = crate::sensitivity::meta_status(&meta).is_some();
+    view.meta = meta;
+    view.grid = preview.grid;
+    view
+}
+
+/// The table window's Table ▾ menu: the card's, without what is the card's own (Describe,
+/// Show columns, the column picker, Open in window) or on the window's version bar (undo,
+/// redo).
+pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
+    table_menu_items(Some(table))
+        .into_iter()
+        .filter(|(command, _)| {
+            !matches!(
+                command.id,
+                CommandId::TableDescribe
+                    | CommandId::TableChooseColumns
+                    | CommandId::TableOpenWindow
+                    | CommandId::TableGrid(_)
+                    | CommandId::TableUndo
+                    | CommandId::TableRedo
+            )
+        })
+        .collect()
+}
+
 /// The columns of the version shown, for the column picker: real and shown names (a long
 /// shared prefix shortened, as on the card) and friendly types. No cell values.
 pub fn picker_columns(table: &TableShown) -> Option<Vec<crate::column_picker::PickerColumn>> {
@@ -1862,7 +2025,7 @@ pub fn picker_columns(table: &TableShown) -> Option<Vec<crate::column_picker::Pi
 
 /// The version capsule in the chip row, left of the history capsule: shown in the Dataframe
 /// view while the table has more than one version.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VersionBar {
     /// "Original", then each step's label.
     pub labels: Vec<String>,
@@ -2176,6 +2339,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TableDateOrder(_)
             | CommandId::TableGrid(_)
             | CommandId::TableChooseColumns
+            | CommandId::TableOpenWindow
     )
 }
 
@@ -2529,6 +2693,7 @@ mod tests {
         stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
         work_card,
     };
+    use super::{OPEN_WINDOW_TITLE, WINDOW_ROWS, table_window_view};
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use super::{
         TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_commands, table_menu,
@@ -3807,6 +3972,75 @@ Id,Naam,Telefoonnummer,Salaris
         );
     }
 
+    #[test]
+    fn the_table_window_shows_the_version_with_its_meta_columns_versions_and_menu() {
+        let src =
+            "name,iban\nann,NL91ABNA0417164300\nann,NL91ABNA0417164300\nbob,NL20INGB0001234567";
+        let table = deduped(src);
+        let view = table_window_view(&table, src);
+        assert!(view.grid.contains("bob"), "{}", view.grid);
+        assert!(view.placeholder.is_empty());
+        assert!(view.meta.starts_with("2 rows × 2 columns"), "{}", view.meta);
+        assert!(view.meta.contains("Duplicates removed"), "{}", view.meta);
+        assert!(view.meta.contains("financial"), "{}", view.meta);
+        assert!(!view.checking);
+        let names: Vec<&str> = view.columns.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["name", "iban"]);
+        assert_eq!(view.version_title(), "v2/2");
+        assert!(view.can_undo() && !view.can_redo());
+        // The card's own items are not in the window's menu; the steps are.
+        let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
+        for card_only in [
+            CommandId::TableDescribe,
+            CommandId::TableChooseColumns,
+            CommandId::TableOpenWindow,
+            CommandId::TableUndo,
+            CommandId::TableRedo,
+        ] {
+            assert!(!ids.contains(&&card_only), "{card_only:?}");
+        }
+        assert!(ids.contains(&&CommandId::TableStep(crate::table::TableOp::Dedupe)));
+        // The card offers the window; it keeps the card open.
+        assert!(
+            table_commands(&table)
+                .iter()
+                .any(|c| c.id == CommandId::TableOpenWindow && c.title == OPEN_WINDOW_TITLE)
+        );
+        assert!(keeps_card_open(&CommandId::TableOpenWindow));
+        // Without a frame yet: a placeholder, no grid.
+        let mut working = table.clone();
+        working.frame = None;
+        let waiting = table_window_view(&working, src);
+        assert!(waiting.grid.is_empty() && waiting.placeholder == "Working on the table…");
+        let mut wiped = view.clone();
+        wiped.wipe();
+        assert!(wiped.grid.is_empty() && wiped.meta.is_empty() && wiped.columns.is_empty());
+    }
+
+    #[test]
+    fn the_table_window_says_when_it_shows_part_of_a_long_table() {
+        let mut src = String::from("n,m\n");
+        for i in 0..(WINDOW_ROWS + 5) {
+            src.push_str(&format!("{i},{}\n", i * 2));
+        }
+        let table = stepped(
+            &src,
+            crate::table::TableOp::Sort {
+                column: "n".to_string(),
+                descending: true,
+            },
+        );
+        let view = table_window_view(&table, &src);
+        assert!(
+            view.meta.contains(&format!(
+                "Showing 1,000 of {}",
+                group_thousands(WINDOW_ROWS + 5)
+            )),
+            "{}",
+            view.meta
+        );
+    }
+
     /// `src` after one Dedupe step, as the card gets it.
     fn deduped(src: &str) -> TableShown {
         stepped(src, crate::table::TableOp::Dedupe)
@@ -3911,11 +4145,13 @@ Id,Naam,Telefoonnummer,Salaris
         };
         let mut expected: Vec<CommandId> = steps().collect();
         expected.push(CommandId::TableChooseColumns);
+        expected.push(CommandId::TableOpenWindow);
         expected.push(CommandId::TableUndo);
         assert_eq!(ids(&table), expected);
         table.version = 0;
         let mut expected: Vec<CommandId> = steps().collect();
         expected.push(CommandId::TableChooseColumns);
+        expected.push(CommandId::TableOpenWindow);
         expected.push(CommandId::TableRedo);
         assert_eq!(ids(&table), expected);
         assert!(keeps_card_open(&CommandId::TableUndo));

@@ -44,46 +44,10 @@ fn refresh_frozen_column(body: &str, highlight: Option<FormatKind>, payload: boo
     let Some(text) = PREVIEW_TEXT.with(|slot| slot.borrow().clone()) else {
         return;
     };
-    // SAFETY: used right away, while the text view keeps it alive.
-    let Some(storage) = (unsafe { text.textStorage() }) else {
-        return;
-    };
     let Some(frozen) = frozen_view(mtm) else {
         return;
     };
-    let length = storage.length();
-    let column = mac_ui::objc2_foundation::NSMutableAttributedString::new();
-    let take = |location: usize, end: usize| {
-        if end > location && end <= length {
-            let part = storage.attributedSubstringFromRange(NSRange {
-                location,
-                length: end - location,
-            });
-            column.appendAttributedString(&part);
-        }
-    };
-    for line in &lines {
-        take(line.start, line.end);
-        if let Some(newline) = line.newline {
-            take(newline, newline + 1);
-        }
-    }
-    frozen.setTextContainerInset(text.textContainerInset());
-    if let (Some(from), Some(to)) = (unsafe { text.textContainer() }, unsafe {
-        frozen.textContainer()
-    }) {
-        to.setLineFragmentPadding(from.lineFragmentPadding());
-    }
-    if let Some(frozen_storage) = unsafe { frozen.textStorage() } {
-        frozen_storage.setAttributedString(&column);
-    }
-    widgets::fit_text_view(&frozen, None);
-    let size = frozen.frame().size;
-    // As tall as the grid, from its top: the same lines at the same heights.
-    frozen.setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(size.width, text.frame().size.height.max(size.height)),
-    ));
+    crate::macos_card_text::copy_frozen_column(&text, &frozen, &lines);
     frozen.setHidden(false);
     // The well's blur covers the frozen column too.
     if BLUR_ON.get()

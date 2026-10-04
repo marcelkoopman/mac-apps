@@ -133,6 +133,55 @@ fn color_for(kind: TokenKind) -> Retained<NSColor> {
     }
 }
 
+/// Fill `frozen` with the first column of the grid in `text` (`lines`, from
+/// [`crate::dataframe::frozen_column`]): the same characters and attributes, the same insets,
+/// as tall as `text` from its top, so each line sits where it sits in the grid.
+pub(crate) fn copy_frozen_column(
+    text: &NSTextView,
+    frozen: &NSTextView,
+    lines: &[crate::dataframe::FrozenLine],
+) {
+    // SAFETY (all three): used right away, while the text views keep them alive.
+    let Some(storage) = (unsafe { text.textStorage() }) else {
+        return;
+    };
+    let length = storage.length();
+    let column = NSMutableAttributedString::new();
+    let take = |location: usize, end: usize| {
+        if end > location && end <= length {
+            let part = storage.attributedSubstringFromRange(NSRange {
+                location,
+                length: end - location,
+            });
+            column.appendAttributedString(&part);
+        }
+    };
+    for line in lines {
+        take(line.start, line.end);
+        if let Some(newline) = line.newline {
+            take(newline, newline + 1);
+        }
+    }
+    frozen.setTextContainerInset(text.textContainerInset());
+    if let (Some(from), Some(to)) = (unsafe { text.textContainer() }, unsafe {
+        frozen.textContainer()
+    }) {
+        to.setLineFragmentPadding(from.lineFragmentPadding());
+    }
+    if let Some(frozen_storage) = unsafe { frozen.textStorage() } {
+        frozen_storage.setAttributedString(&column);
+    }
+    mac_ui::widgets::fit_text_view(frozen, None);
+    let size = frozen.frame().size;
+    frozen.setFrame(mac_ui::objc2_foundation::NSRect::new(
+        mac_ui::objc2_foundation::NSPoint::new(0.0, 0.0),
+        mac_ui::objc2_foundation::NSSize::new(
+            size.width,
+            text.frame().size.height.max(size.height),
+        ),
+    ));
+}
+
 #[cfg(test)]
 mod tests {
     use super::{HIGHLIGHT_CAP, highlight_split};

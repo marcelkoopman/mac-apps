@@ -89,7 +89,8 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column, constant column | plain text | CSV | — | Original, Dataframe, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropConstant=8x4; step:DropEmpty>Dedupe>DropConstant=4x3 |
 | `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Dataframe, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
 | `tables/small_table.csv` | Table: Transpose and Value counts | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x3; step:Transpose=2x5; step:ValueCounts(color)=3x2; step:ValueCounts(color)~red |
-| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company |
+| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open in window) | plain text | CSV | — | Original, Dataframe, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
+| `tables/window_payees_iban.csv` | Table: Open in window on a sensitive table (IBANs): the window opens blurred and names the labels | plain text | CSV | financial | Original, Dataframe, Table ▾ | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
 | `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Dataframe, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
@@ -130,6 +131,7 @@ Columns (fixed; the test parses this table between the markers):
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
 | `pretty=FILE` | the Format view (what the card opens with) is exactly the testdata file `FILE` (without its final newline) |
 | `frozen~S` | the frozen first column of the Dataframe grid (one line per grid line) contains `S` |
+| `window~S` / `windowmeta~S` / `windowcolumns=S` | Table ▾ › Open in window: its grid / its meta line / its column sidebar (names joined with `, `) |
 | `decode~S`, `schema~S`, `sample~S` | the Decode, Schema or Sample view contains `S` |
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |

@@ -42,6 +42,32 @@ pub enum UserEvent {
         image: crate::clipboard::SecretBytes,
         scan: Option<crate::commands::ImageScan>,
     },
+    /// Something in the table window ([`TableWindowEvent`]).
+    TableWindow(TableWindowEvent),
+}
+
+/// What the table window asks for: a command on its table (a step, undo, redo, a version,
+/// another reading), or it was closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableWindowEvent {
+    Run(CommandId),
+    Closed,
+}
+
+/// Show `view` in the table window, opening it the first time.
+pub fn show_table_window(view: crate::commands::TableWindowView) {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::show(view);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = view;
+    }
+}
+
+/// Close the table window and wipe what it shows (Wipe, lock, its entry gone).
+pub fn close_table_window() {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::close();
 }
 
 /// What a table job left: the generation it ran for and its frame, or why it stopped.

@@ -157,6 +157,29 @@ fn after_steps(text: &str, ops: &str) -> polars::prelude::DataFrame {
     versions.frame().expect("table frame").clone()
 }
 
+/// What "Open in window" shows for the original version of `text`.
+fn window_view(text: &str) -> crate::commands::TableWindowView {
+    let mut versions = crate::table::TableVersions::default();
+    let job = versions.load(text).expect("table load");
+    let done = job
+        .run(&std::sync::atomic::AtomicBool::new(false))
+        .expect("table job");
+    assert!(versions.finish(done), "the table was not loaded");
+    let shown = crate::commands::TableShown {
+        frame: versions.frame().cloned(),
+        frame_id: versions.frame_id(),
+        version: versions.cursor(),
+        labels: versions.labels(),
+        working: false,
+        error: None,
+        describe: None,
+        options: versions.options(),
+        notes: versions.notes(),
+        overview: None,
+    };
+    crate::commands::table_window_view(&shown, text)
+}
+
 fn shape(df: &polars::prelude::DataFrame) -> String {
     let (rows, cols) = df.shape();
     format!("{rows}x{cols}")
@@ -250,6 +273,17 @@ fn check(text: &str, check: &str) -> Result<(), String> {
                 .map(|line| String::from_utf16_lossy(&utf16[line.start..line.end]))
                 .collect::<Vec<_>>()
                 .join("\n")
+        }
+        // "Open in window": its grid, its meta line, its column sidebar.
+        "window" => window_view(text).grid.clone(),
+        "windowmeta" => window_view(text).meta.clone(),
+        "windowcolumns" => {
+            let view = window_view(text);
+            view.columns
+                .iter()
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
         }
         "read" => table().map(|(df, _)| shape(&df)).unwrap_or_default(),
         "dtypes" => table().map(|(df, _)| dtypes(&df)).unwrap_or_default(),

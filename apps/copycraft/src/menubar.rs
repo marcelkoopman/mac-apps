@@ -104,6 +104,8 @@ struct App {
     table_job: Option<TableRun>,
     /// Why the last table step failed, shown on the card until the next one.
     table_error: Option<String>,
+    /// The entry the table window shows, while it is open.
+    table_window: Option<TableWindow>,
     /// The Describe view is on for the table with this text ([`text_hash`]).
     describe_for: Option<u64>,
     /// The last description, for the frame with this id ([`TableVersions::frame_id`]).
@@ -139,6 +141,43 @@ struct TableRun {
     cancel: Arc<AtomicBool>,
     /// Loading a frame the card does not show yet: no spinner.
     quiet: bool,
+    /// Who asked for it: its error goes to that one's meta line.
+    target: TableTarget,
+}
+
+/// Where a table command comes from and goes to: the card's table, or the table window's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TableTarget {
+    Card,
+    Window,
+}
+
+/// The entry the table window shows: its copied text (found again in history by it, so the
+/// window stays with its entry while the card moves on), or the chosen file on the card.
+struct TableWindow {
+    text: Zeroizing<String>,
+    opened: bool,
+    /// Why the window's last step failed, for its meta line.
+    error: Option<String>,
+    /// What the window was last given ([`TableWindow::key`]); the view is built again only
+    /// when it changes, or while its labels are still being checked.
+    shown: Option<u64>,
+    checking: bool,
+}
+
+impl TableWindow {
+    fn key(table: &TableVersions, error: Option<&str>, working: bool) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (table.frame_id(), table.frame().is_some(), table.cursor()).hash(&mut hasher);
+        table.labels().hash(&mut hasher);
+        (
+            error,
+            working,
+            table.notes().map(|notes| notes.meta_notes()),
+        )
+            .hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 /// Where the table on the card keeps its versions.
@@ -241,6 +280,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::LabelsChecked => self.labels_checked(),
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),
+            UserEvent::TableWindow(event) => self.table_window_event(event),
             UserEvent::ImageDone(done) => self.finish_image_job(*done),
             UserEvent::VersionScanned { picture, scan } => {
                 self.finish_version_scan(&picture, scan);
@@ -292,6 +332,10 @@ impl ApplicationHandler<UserEvent> for App {
         if changed && launcher::is_open() {
             let data = self.current_launch_data();
             self.sync_popup(data);
+        }
+        if changed {
+            // A new copy can push the window's entry off the end of history.
+            self.refresh_table_window();
         }
         let wake = self.spin_slow_work(now);
         let blink_wake = self.show_blink(now);
@@ -372,7 +416,8 @@ impl App {
                 self.history_minutes = minutes;
                 self.refresh_popup();
             }
-            CommandId::TableStep(op) => self.table_step(op),
+            CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
+            CommandId::TableOpenWindow => self.open_table_window(),
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
@@ -383,9 +428,11 @@ impl App {
             CommandId::TableVersion(index) if self.shows_image() => {
                 self.image_goto(|_| Some(index))
             }
-            CommandId::TableUndo => self.table_goto(|cursor| cursor.checked_sub(1)),
-            CommandId::TableRedo => self.table_goto(|cursor| Some(cursor + 1)),
-            CommandId::TableVersion(index) => self.table_goto(|_| Some(index)),
+            CommandId::TableUndo => {
+                self.table_goto(TableTarget::Card, |cursor| cursor.checked_sub(1));
+            }
+            CommandId::TableRedo => self.table_goto(TableTarget::Card, |cursor| Some(cursor + 1)),
+            CommandId::TableVersion(index) => self.table_goto(TableTarget::Card, |_| Some(index)),
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),
             // The card pops the menu itself.
@@ -399,12 +446,14 @@ impl App {
                 }
                 self.refresh_popup();
             }
-            CommandId::TableHeaderLine(line) => self.table_reread(|options| {
+            CommandId::TableHeaderLine(line) => self.table_reread(TableTarget::Card, |options| {
                 options.header_line = Some(line);
             }),
-            CommandId::TableDateOrder(month_first) => self.table_reread(|options| {
-                options.month_first = month_first;
-            }),
+            CommandId::TableDateOrder(month_first) => {
+                self.table_reread(TableTarget::Card, |options| {
+                    options.month_first = month_first;
+                });
+            }
             CommandId::Quit => event_loop.exit(),
         }
     }
@@ -430,6 +479,164 @@ impl App {
         }
     }
 
+    /// The text and table of `target`: the card's ([`table_source`](Self::table_source)) or
+    /// the table window's ([`window_source`](Self::window_source)).
+    fn target_source(&self, target: TableTarget) -> Option<(Zeroizing<String>, TableHome)> {
+        match target {
+            TableTarget::Card => self.table_source(),
+            TableTarget::Window => self.window_source(),
+        }
+    }
+
+    /// The versions of `target`'s table. The window's leaves the other entries' frames alone.
+    fn target_table(&mut self, target: TableTarget, home: TableHome) -> Option<&mut TableVersions> {
+        match (target, home) {
+            (TableTarget::Window, TableHome::History(index)) => {
+                self.history.table_mut_in_place(index)
+            }
+            _ => self.table_at(home),
+        }
+    }
+
+    /// The entry the table window shows, while it is still there (in history, or the chosen
+    /// file still on the card).
+    fn window_source(&self) -> Option<(Zeroizing<String>, TableHome)> {
+        let window = self.table_window.as_ref()?;
+        let text = Zeroizing::new(window.text.to_string());
+        let home = if window.opened {
+            let opened = Zeroizing::new(self.opened_text()?);
+            (opened.as_str() == text.as_str()).then_some(TableHome::Opened)?
+        } else {
+            TableHome::History(self.history.text_index(&text, self.history_cursor)?)
+        };
+        Some((text, home))
+    }
+
+    /// "Open in window": the table on the card in the table window, which then stays with
+    /// that entry.
+    fn open_table_window(&mut self) {
+        let Some((text, home)) = self.table_source() else {
+            return;
+        };
+        self.close_table_window();
+        if let Some(table) = self.target_table(TableTarget::Window, home) {
+            table.pin(true);
+        }
+        self.table_window = Some(TableWindow {
+            text,
+            opened: home == TableHome::Opened,
+            error: None,
+            shown: None,
+            checking: false,
+        });
+        self.refresh_table_window();
+    }
+
+    /// Close the table window (Wipe, Clear history, lock, its entry gone): its table may forget
+    /// its frames again, and the window wipes what it showed.
+    fn close_table_window(&mut self) {
+        let had = self.table_window.is_some();
+        if let Some((_, home)) = self.window_source()
+            && let Some(table) = self.target_table(TableTarget::Window, home)
+        {
+            table.pin(false);
+        }
+        self.table_window = None;
+        if had {
+            launcher::close_table_window();
+        }
+    }
+
+    fn table_window_event(&mut self, event: launcher::TableWindowEvent) {
+        match event {
+            launcher::TableWindowEvent::Closed => {
+                // The window wiped itself; forget the entry.
+                if let Some((_, home)) = self.window_source()
+                    && let Some(table) = self.target_table(TableTarget::Window, home)
+                {
+                    table.pin(false);
+                }
+                self.table_window = None;
+            }
+            launcher::TableWindowEvent::Run(id) => {
+                let target = TableTarget::Window;
+                match id {
+                    CommandId::TableStep(op) => self.table_step(target, op),
+                    CommandId::TableUndo => {
+                        self.table_goto(target, |cursor| cursor.checked_sub(1));
+                    }
+                    CommandId::TableRedo => self.table_goto(target, |cursor| Some(cursor + 1)),
+                    CommandId::TableVersion(index) => self.table_goto(target, |_| Some(index)),
+                    CommandId::TableHeaderLine(line) => self.table_reread(target, |options| {
+                        options.header_line = Some(line);
+                    }),
+                    CommandId::TableDateOrder(month_first) => {
+                        self.table_reread(target, |options| {
+                            options.month_first = month_first;
+                        });
+                    }
+                    _ => {}
+                }
+                self.refresh_table_window();
+            }
+        }
+    }
+
+    /// Give the table window the version its entry shows, working its frame out first when it
+    /// is not there (not over another table job: the window waits for it to finish). Closes
+    /// the window when its entry is gone.
+    fn refresh_table_window(&mut self) {
+        if self.table_window.is_none() {
+            return;
+        }
+        let Some((text, home)) = self.window_source() else {
+            self.close_table_window();
+            return;
+        };
+        let running = self.table_job.as_ref().map(|run| run.generation);
+        let (error, shown, checking) = match self.table_window.as_ref() {
+            Some(window) => (window.error.clone(), window.shown, window.checking),
+            None => return,
+        };
+        let Some(table) = self.target_table(TableTarget::Window, home) else {
+            self.close_table_window();
+            return;
+        };
+        table.pin(true);
+        let running_here = running.is_some_and(|generation| table.awaits(generation));
+        let load = if running.is_some() {
+            None
+        } else {
+            table.load(&text)
+        };
+        let working = load.is_some() || running_here;
+        let key = TableWindow::key(table, error.as_deref(), working);
+        if shown == Some(key) && !checking && load.is_none() {
+            return;
+        }
+        let shown_table = commands::TableShown {
+            frame: table.frame().cloned(),
+            frame_id: table.frame_id(),
+            version: table.cursor(),
+            labels: table.labels(),
+            working,
+            error,
+            describe: None,
+            options: table.options(),
+            notes: table.notes(),
+            overview: Some(false),
+        };
+        let view = commands::table_window_view(&shown_table, &text);
+        if let Some(window) = self.table_window.as_mut() {
+            window.shown = Some(key);
+            window.checking = view.checking;
+        }
+        launcher::show_table_window(view);
+        if let Some(job) = load {
+            self.run_table_job(job, true, TableTarget::Window);
+        }
+    }
+
     /// Describe the table version shown (a view, not a version), or go back to the table.
     fn toggle_describe(&mut self) {
         let Some((text, _)) = self.table_source() else {
@@ -447,66 +654,83 @@ impl App {
 
     /// Read the table another way ("Header on line N", the date order): it starts over from
     /// the original.
-    fn table_reread(&mut self, change: impl FnOnce(&mut crate::dataframe::ReadOptions)) {
-        let Some((text, home)) = self.table_source() else {
+    fn table_reread(
+        &mut self,
+        target: TableTarget,
+        change: impl FnOnce(&mut crate::dataframe::ReadOptions),
+    ) {
+        let Some((text, home)) = self.target_source(target) else {
             return;
         };
-        let Some(table) = self.table_at(home) else {
+        let Some(table) = self.target_table(target, home) else {
             return;
         };
         let mut options = table.options();
         change(&mut options);
         if let Some(job) = table.reread(options, &text) {
-            self.table_error = None;
-            self.describe_for = None;
-            self.card_view = CardView::Dataframe;
-            self.run_table_job(job, false);
+            self.set_table_error(target, None);
+            self.run_table_job(job, false, target);
             self.refresh_popup();
         }
     }
 
+    /// A step's error (or none) for `target`'s meta line. A step from the card also brings the
+    /// card to the table (out of Describe, into the Dataframe view).
+    fn set_table_error(&mut self, target: TableTarget, error: Option<String>) {
+        match target {
+            TableTarget::Card => {
+                if error.is_none() {
+                    self.describe_for = None;
+                    self.card_view = CardView::Dataframe;
+                }
+                self.table_error = error;
+            }
+            TableTarget::Window => {
+                if let Some(window) = self.table_window.as_mut() {
+                    window.error = error;
+                }
+            }
+        }
+    }
+
     /// Run `op` on the version shown; the card shows the new version when it is done.
-    fn table_step(&mut self, op: TableOp) {
-        let Some((text, home)) = self.table_source() else {
+    fn table_step(&mut self, target: TableTarget, op: TableOp) {
+        let Some((text, home)) = self.target_source(target) else {
             return;
         };
-        let Some(table) = self.table_at(home) else {
+        let Some(table) = self.target_table(target, home) else {
             return;
         };
         match table.push(op, &text) {
             Ok(job) => {
-                self.table_error = None;
-                self.describe_for = None;
-                self.card_view = CardView::Dataframe;
-                self.run_table_job(job, false);
+                self.set_table_error(target, None);
+                self.run_table_job(job, false, target);
             }
-            Err(e) => self.table_error = Some(e.to_string()),
+            Err(e) => self.set_table_error(target, Some(e.to_string())),
         }
         self.refresh_popup();
     }
 
     /// Show the version `to` picks from the one shown (undo, redo, a version from the menu).
-    fn table_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
-        let Some((text, home)) = self.table_source() else {
+    fn table_goto(&mut self, target: TableTarget, to: impl FnOnce(usize) -> Option<usize>) {
+        let Some((text, home)) = self.target_source(target) else {
             return;
         };
-        let Some(table) = self.table_at(home) else {
+        let Some(table) = self.target_table(target, home) else {
             return;
         };
         let Some(index) = to(table.cursor()) else {
             return;
         };
         if let Some(job) = table.goto(index, &text) {
-            self.table_error = None;
-            self.describe_for = None;
-            self.card_view = CardView::Dataframe;
-            self.run_table_job(job, false);
+            self.set_table_error(target, None);
+            self.run_table_job(job, false, target);
             self.refresh_popup();
         }
     }
 
     /// Start `job` on a thread, cancelling the one running. A `quiet` job shows no spinner.
-    fn run_table_job(&mut self, job: crate::table::Job, quiet: bool) {
+    fn run_table_job(&mut self, job: crate::table::Job, quiet: bool, target: TableTarget) {
         self.cancel_table_job();
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&cancel);
@@ -527,6 +751,7 @@ impl App {
                     generation,
                     cancel,
                     quiet,
+                    target,
                 });
             }
             Err(e) => eprintln!("table job failed to start: {e}"),
@@ -543,10 +768,12 @@ impl App {
     /// Take a finished table job into the table it was made for (if that is still waiting for
     /// it), and show it.
     fn finish_table_job(&mut self, done: launcher::TableDone) {
+        let mut target = TableTarget::Card;
         if let Some(run) = self
             .table_job
             .take_if(|run| run.generation == done.generation)
         {
+            target = run.target;
             eprintln!(
                 "copycraft: table job done in {} ms",
                 run.started.elapsed_ms()
@@ -565,15 +792,32 @@ impl App {
                     table.finish(finished);
                 }
             }
-            Err(crate::table::TableError::Cancelled) => return,
+            Err(crate::table::TableError::Cancelled) => {
+                // A window waiting for another job can work its own table out now.
+                self.refresh_table_window();
+                return;
+            }
             // A step that changes nothing ("Types already fine"): a meta-line note, no version.
             Err(crate::table::TableError::Unchanged(note)) => {
-                self.table_error = Some(note.to_string());
+                self.set_table_note(target, note.to_string());
             }
-            Err(e) => self.table_error = Some(e.to_string()),
+            Err(e) => self.set_table_note(target, e.to_string()),
         }
         if launcher::is_open() {
             self.refresh_popup();
+        }
+        self.refresh_table_window();
+    }
+
+    /// Why a finished job made no version, on the meta line of the one that asked.
+    fn set_table_note(&mut self, target: TableTarget, note: String) {
+        match target {
+            TableTarget::Card => self.table_error = Some(note),
+            TableTarget::Window => {
+                if let Some(window) = self.table_window.as_mut() {
+                    window.error = Some(note);
+                }
+            }
         }
     }
 
@@ -647,7 +891,7 @@ impl App {
         data.table = Some(shown);
         if let Some(job) = load {
             // Outside the Dataframe view the card does not wait for it: no spinner.
-            self.run_table_job(job, !dataframe_view);
+            self.run_table_job(job, !dataframe_view, TableTarget::Card);
         }
     }
 
@@ -959,6 +1203,7 @@ impl App {
     }
 
     fn refresh_popup(&mut self) {
+        self.refresh_table_window();
         if !launcher::is_open() {
             return;
         }
@@ -1204,6 +1449,13 @@ impl App {
     /// The card follows the clipboard again. After a drop, the history position goes back to
     /// the clipboard's entry.
     fn leave_opened(&mut self) {
+        if self
+            .table_window
+            .as_ref()
+            .is_some_and(|window| window.opened)
+        {
+            self.close_table_window();
+        }
         self.opened = None;
         self.opened_table = TableVersions::default();
         self.opened_image = ImageVersions::default();
@@ -1216,6 +1468,13 @@ impl App {
     /// file gets onto the card goes through here, and the card labels and blurs it like the
     /// clipboard. A chosen file is not recorded in history; a drop is (see `show_dropped`).
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
+        if self
+            .table_window
+            .as_ref()
+            .is_some_and(|window| window.opened)
+        {
+            self.close_table_window();
+        }
         self.opened = Some(opened);
         self.opened_table = TableVersions::default();
         self.opened_image = ImageVersions::default();
@@ -1758,6 +2017,7 @@ impl App {
         self.table_error = None;
         self.describe_for = None;
         self.describe_cache = None;
+        self.close_table_window();
         self.history.clear();
         self.history_cursor = 0;
         self.clipboard_cursor = None;
@@ -1792,6 +2052,8 @@ impl App {
     fn session_ended(&mut self) {
         self.last_copy = None;
         self.full_card = None;
+        // Closed and wiped whatever history holds (a chosen file's window too).
+        self.close_table_window();
         if !self.history.is_empty() {
             self.clear_history();
             eprintln!("copycraft: history forgotten (lock, sleep or user switch)");
@@ -1810,6 +2072,7 @@ impl App {
     /// Overwrite clipboard text and image bytes still held in this process,
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
+        self.close_table_window();
         self.opened = None;
         self.opened_table = TableVersions::default();
         self.opened_image = ImageVersions::default();
@@ -2480,6 +2743,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         opened_table: TableVersions::default(),
         table_job: None,
         table_error: None,
+        table_window: None,
         describe_for: None,
         describe_cache: None,
         opened_image: ImageVersions::default(),

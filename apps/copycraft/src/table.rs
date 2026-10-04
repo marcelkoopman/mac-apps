@@ -339,6 +339,9 @@ pub struct TableVersions {
     /// The column overview (`true`) or the grid, for every version of this entry: picked from
     /// the width when it is first shown, then Show columns / Show table.
     overview: Option<bool>,
+    /// The table window shows this table: its frames stay when the card moves far away
+    /// ([`forget_frames`](Self::forget_frames)). They still go with the entry.
+    pinned: bool,
 }
 
 impl Clone for TableVersions {
@@ -352,6 +355,7 @@ impl Clone for TableVersions {
             options: self.options,
             notes: self.notes,
             overview: self.overview,
+            pinned: false,
         }
     }
 }
@@ -498,8 +502,19 @@ impl TableVersions {
         true
     }
 
-    /// Drop the frames (the steps stay). A pending job is stale from now on.
+    /// Keep the frames while the table window shows this table (`true`), or not any more.
+    pub fn pin(&mut self, pinned: bool) {
+        self.pinned = pinned;
+    }
+
+    /// Drop the frames (the steps stay), unless the table window shows them ([`pin`]). A
+    /// pending job is stale from now on.
+    ///
+    /// [`pin`]: Self::pin
     pub fn forget_frames(&mut self) {
+        if self.pinned {
+            return;
+        }
         self.frames = None;
         self.generation = next_generation();
     }
@@ -660,6 +675,23 @@ mod tests {
         let copy = versions.clone();
         assert!(copy.frame().is_none());
         assert_eq!(copy.labels(), versions.labels());
+    }
+
+    #[test]
+    fn a_pinned_table_keeps_its_frames() {
+        let mut versions = TableVersions::default();
+        let job = versions.push(TableOp::Dedupe, SRC).expect("push");
+        assert!(run(&mut versions, job));
+        versions.pin(true);
+        versions.forget_frames();
+        assert_eq!(versions.frame().map(|df| df.height()), Some(2));
+        // A copy of the entry is not shown in the window.
+        let mut copy = versions.clone();
+        copy.forget_frames();
+        assert!(copy.frame().is_none());
+        versions.pin(false);
+        versions.forget_frames();
+        assert!(versions.frame().is_none());
     }
 
     #[test]
