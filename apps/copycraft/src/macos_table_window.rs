@@ -481,6 +481,9 @@ fn ensure_views(mtm: MainThreadMarker) {
     frozen.setHidden(true);
     widgets::scroll_text_both_ways(&frozen);
     grid_scroll.addFloatingSubview_forAxis(&frozen, NSEventGestureAxis::Horizontal);
+    // Clipped to the grid's scroll view, as on the card (`macos_frozen_column::frozen_view`):
+    // the floating column is as tall as the whole grid.
+    grid_scroll.setClipsToBounds(true);
     let placeholder = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
     placeholder.setAlignment(NSTextAlignment::Center);
     placeholder.setFrame(NSRect::new(
