@@ -56,6 +56,14 @@ enum TextKind {
     IsoDates,
 }
 
+/// `007`, `0612345678`, `-01`: a zero followed by more digits (not `0`, `0.5` or `0,5`). A
+/// column with such a value holds codes, not numbers, and stays text.
+pub fn has_leading_zero(value: &str) -> bool {
+    let value = value.trim();
+    let digits = value.strip_prefix(['-', '+']).unwrap_or(value).as_bytes();
+    digits.len() > 1 && digits[0] == b'0' && digits[1].is_ascii_digit()
+}
+
 fn is_integer(value: &str) -> bool {
     let digits = value.strip_prefix(['-', '+']).unwrap_or(value);
     !digits.is_empty() && digits.len() <= 18 && digits.bytes().all(|b| b.is_ascii_digit())
@@ -91,6 +99,9 @@ fn text_kind(text: &StringChunked) -> Option<TextKind> {
             .filter(|value| !value.is_empty())
     };
     values().next()?;
+    if values().any(has_leading_zero) {
+        return None;
+    }
     [
         TextKind::Integers,
         TextKind::Decimals,
@@ -227,6 +238,32 @@ mod tests {
         assert_eq!(prices, [Some(1.5), Some(2.25)]);
         // Typed already: nothing to change.
         assert_eq!(type_text_columns(&mut out), 0);
+    }
+
+    #[test]
+    fn a_column_with_a_leading_zero_stays_text_others_are_typed() {
+        use super::has_leading_zero;
+        for code in ["007", "0612345678", "-01", " 012 "] {
+            assert!(has_leading_zero(code), "{code}");
+        }
+        for number in ["0", "0.5", "0,5", "10", "-0", "", "2026-03-01"] {
+            assert!(!has_leading_zero(number), "{number}");
+        }
+        // As read: unquoted `007` is no number either.
+        let df = table(
+            "id,phone,n,price,when\n007,0612345678,1,0.5,2026-03-01\n123,0201234567,0,1.25,2026-03-02",
+        );
+        assert_eq!(df.column("id").unwrap().dtype(), &DataType::String);
+        assert_eq!(df.column("phone").unwrap().dtype(), &DataType::String);
+        assert_eq!(df.column("n").unwrap().dtype(), &DataType::Int64);
+        assert_eq!(df.column("price").unwrap().dtype(), &DataType::Float64);
+        assert_eq!(df.column("when").unwrap().dtype(), &DataType::Date);
+        let ids: Vec<Option<&str>> = df.column("id").unwrap().str().unwrap().iter().collect();
+        assert_eq!(ids, [Some("007"), Some("123")]);
+        // Text columns (a `;` table, decimal commas) the same way.
+        let semi = table("code;prijs\n\"0012\";0,5\n\"34\";2,25");
+        assert_eq!(semi.column("code").unwrap().dtype(), &DataType::String);
+        assert_eq!(semi.column("prijs").unwrap().dtype(), &DataType::Float64);
     }
 
     #[test]

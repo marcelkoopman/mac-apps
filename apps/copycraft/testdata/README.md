@@ -86,6 +86,7 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Table ▾ | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
 | `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Table ▾ | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
 | `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Original, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
+| `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Original, Table ▾ | read=3x2; dtypes=str,str; dfcard~007 |
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Original, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
 | `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
 | `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Original, Table ▾ | read=4x3 |
@@ -197,6 +198,7 @@ expectations; on Linux the test only checks size and EXIF.
       the grid (Original goes back to the text). Find filters the rows; ⌘Z/⇧⌘Z step versions.
 - [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
       the date column as dates and the prices as numbers (24.95), with no step taken.
+- [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).
 - [ ] Pasteboard privacy, Always Deny (macOS with pasteboard privacy on; see
       `docs/pasteboard-privacy/README.md` for the developer flag): set *Privacy & Security ›
       Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says

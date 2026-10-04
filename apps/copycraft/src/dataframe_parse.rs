@@ -6,15 +6,40 @@ fn try_csv(text: &str) -> Option<(TableStart, DataFrame)> {
 
 /// The delimited table in `text` from the header at `start` down.
 fn csv_at(text: &str, start: TableStart) -> Option<DataFrame> {
-    let mut cursor = Cursor::new(start.body(text).as_bytes());
-    let parse = CsvParseOptions::default().with_separator(start.separator);
-    CsvReadOptions::default()
-        .with_has_header(true)
-        .with_parse_options(parse)
-        .into_reader_with_file_handle(&mut cursor)
-        .finish()
-        .ok()
-        .filter(|df| df.width() >= 2 && df.height() >= 1)
+    let read = |infer: Option<usize>| {
+        let mut cursor = Cursor::new(start.body(text).as_bytes());
+        let parse = CsvParseOptions::default().with_separator(start.separator);
+        CsvReadOptions::default()
+            .with_has_header(true)
+            .with_parse_options(parse)
+            .with_infer_schema_length(infer)
+            .into_reader_with_file_handle(&mut cursor)
+            .finish()
+            .ok()
+    };
+    let mut df = read(Some(100))?;
+    if !(df.width() >= 2 && df.height() >= 1) {
+        return None;
+    }
+    // Numbers with a leading zero (`007`, `0612345678`: codes, phone numbers) stay text: the
+    // number columns are read again as text only when there are any.
+    if df.columns().iter().any(|column| column.dtype().is_primitive_numeric())
+        && let Some(texts) = read(Some(0)).filter(|texts| texts.shape() == df.shape())
+    {
+        for (index, column) in texts.columns().iter().enumerate() {
+            let numeric = df
+                .columns()
+                .get(index)
+                .is_some_and(|read| read.dtype().is_primitive_numeric());
+            let zeros = column
+                .str()
+                .is_ok_and(|text| text.iter().flatten().any(crate::table_ops::has_leading_zero));
+            if numeric && zeros {
+                df.replace_column(index, column.clone()).ok()?;
+            }
+        }
+    }
+    Some(df)
 }
 
 fn try_json(text: &str) -> Option<DataFrame> {
