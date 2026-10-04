@@ -89,11 +89,14 @@ fn looks_like_key_value_blob(text: &str) -> bool {
         .iter()
         .filter(|line| {
             line.split_once(':')
-                // A key with a separator in it is cells of a row before a time (`…,14:05`).
+                // A key with a separator in it is cells of a row before a time (`…,14:05`); a
+                // colon between digits is a time itself (`2026-09-01 08:15,…`, a datetime in
+                // the first column), not the end of a key.
                 .map(|(k, v)| {
                     !k.trim().is_empty()
                         && !v.trim().is_empty()
                         && !k.contains([';', ',', '\t'])
+                        && !is_time_colon(k, v)
                 })
                 .unwrap_or(false)
         })
@@ -101,10 +104,38 @@ fn looks_like_key_value_blob(text: &str) -> bool {
     labeled * 2 >= lines.len()
 }
 
+/// The colon between `before` and `after` sits between two digits, as in `08:15`.
+fn is_time_colon(before: &str, after: &str) -> bool {
+    before.ends_with(|c: char| c.is_ascii_digit())
+        && after.starts_with(|c: char| c.is_ascii_digit())
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::try_format;
     use polars::prelude::{ParquetReader, SerReader};
+
+    /// A datetime in the first column (`2026-09-01 08:15,…`) used to make every row look like
+    /// `key: value` (the key `2026-09-01 08`), so the CSV was no table.
+    #[test]
+    fn a_datetime_in_the_first_column_is_still_a_table() {
+        let text = "booked at,description,amount\n\
+                    2026-09-01 08:15,Coffee beans,-12.40\n\
+                    2026-09-01 23:59,Refund desk lamp,24.95\n\
+                    2026-09-02 00:00,Monitor arm,-59.50";
+        assert!(!super::looks_like_key_value_blob(text));
+        assert!(super::looks_like_csv(text));
+        assert_eq!(crate::format::detect(text), crate::format::FormatKind::Csv);
+        let df = super::parse_table(text).expect("table");
+        assert_eq!(df.shape(), (3, 3));
+        assert_eq!(df.dtypes()[0].to_string(), "datetime[μs]");
+        // Key/value text with times in its values stays key/value text.
+        assert!(super::looks_like_key_value_blob(
+            "start: 08:15\nend: 17:30\nroom: 2.14"
+        ));
+        assert!(super::is_time_colon("2026-09-01 08", "15,Coffee"));
+        assert!(!super::is_time_colon("port", " 8080"));
+    }
 
     #[test]
     fn display_names_shorten_a_long_prefix_shared_per_group() {
