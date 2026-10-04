@@ -185,3 +185,20 @@ expectations; on Linux the test only checks size and EXIF.
       Remove metadata gives a version without GPS and camera data (check with Info or
       `exiftool` on a saved copy).
 - [ ] Large files from `generate_large.sh`: open or drop them on the card.
+- [ ] `tables/wide_six_columns.csv` › Table ▾ › Open in window: the window opens blurred with
+      "Click the table to reveal it"; a click reveals it, ⌘Tab away and back blurs it again.
+- [ ] In the window: Remove duplicate rows, then ↶/↷ and ⌘Z/⇧⌘Z and the version menu; the
+      card follows. Resize, scroll sideways (Product stays visible), ⌘W closes.
+- [ ] Reopen the window, then Wipe, lock (⌃⌘Q), sleep and Clear history: each closes it.
+      Copying new items until its entry leaves history also closes it.
+- [ ] `tables/window_payees_iban.csv` in the window: the meta line shows financial in red.
+- [ ] `tables/sales_by_region.csv`: Sum by › region gives 3 rows, Max by › region keeps the
+      date a date, Count by › product, then undo.
+- [ ] `tables/sales_by_region.csv` Filter: price… with `abc` asks again, `100 to 200` keeps 2
+      rows; sold on… `from 05/09/2026` keeps 2 rows; product… `LAMP` keeps 3 rows. Run a
+      filter from the window too.
+- [ ] Join: show `tables/join_customers_pii.csv` on the card, then copy `tables/join_orders.csv`.
+      Join with › "Copy 2 · … on customer" gives 3 rows with PII in the meta; undo, Left join
+      with gives 4 rows; remove email and name and PII stays.
+- [ ] Show `tables/concat_more_orders.csv` once, then from the orders card Append rows of gives
+      6 rows. Copy something new and join from the old menu: it refuses.
