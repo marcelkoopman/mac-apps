@@ -54,7 +54,7 @@ impl FormatKind {
             Self::Markdown => "Markdown",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
-            Self::Dataframe => "Dataframe",
+            Self::Dataframe => "Table",
             Self::Image => "Image",
             Self::Text | Self::Plain => "Content",
         }
@@ -72,7 +72,7 @@ impl FormatKind {
             Self::Markdown => "Formatted Markdown",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
-            Self::Dataframe => "Dataframe",
+            Self::Dataframe => "Table",
             Self::Image => "Image",
             _ => "Content",
         }
@@ -1546,7 +1546,7 @@ fn main() {
         assert_eq!(detect("hello\nworld"), FormatKind::Text);
         assert_eq!(FormatKind::Csv.preview_heading(), "CSV");
         assert_eq!(FormatKind::Tsv.preview_heading(), "TSV");
-        assert_eq!(FormatKind::Dataframe.preview_heading(), "Dataframe");
+        assert_eq!(FormatKind::Dataframe.preview_heading(), "Table");
         assert_eq!(FormatKind::Image.source_heading(), "Image");
         assert_eq!(FormatKind::Image.preview_heading(), "Image");
         assert_eq!(FormatKind::Rust.source_heading(), "Rust");

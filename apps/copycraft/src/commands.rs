@@ -1030,7 +1030,7 @@ fn show_dataframe(card: &mut WorkCard, source: &str, full: bool, overview: Optio
     let Some(preview) = dataframe::try_format_preview(source, max_rows, overview) else {
         return;
     };
-    card.title = "Dataframe".to_string();
+    card.title = crate::locale::t("table_view").to_string();
     card.highlight = Some(FormatKind::Dataframe);
     card.selectable = true;
     if let Some(overview) = preview.overview.as_ref() {
@@ -1071,7 +1071,7 @@ fn add_version_note(card: &mut WorkCard, table: &TableShown) {
 /// labels are the version's own (as CSV): a step can drop or keep a sensitive column. Which
 /// version it is shows in the version capsule ([`VersionBar`]), its step in the meta line.
 fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
-    card.title = "Dataframe".to_string();
+    card.title = crate::locale::t("table_view").to_string();
     card.highlight = Some(FormatKind::Dataframe);
     card.preview_note = None;
     let Some(frame) = &table.frame else {
@@ -1367,7 +1367,7 @@ fn text_title(text: &str) -> String {
 fn text_view_title(source: &str, view: CardView, body: &str) -> String {
     match view {
         CardView::Format => format::detect(source).preview_heading().to_string(),
-        CardView::Dataframe => "Dataframe".to_string(),
+        CardView::Dataframe => crate::locale::t("table_view").to_string(),
         CardView::Schema => if format::detect(source) == FormatKind::Xml {
             "XSD schema"
         } else {
@@ -3845,7 +3845,7 @@ Id,Naam,Telefoonnummer,Salaris
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = CardView::Dataframe;
         let card = work_card(&input);
-        assert_eq!(card.title, "Dataframe");
+        assert_eq!(card.title, "Table");
         assert_eq!(card.highlight, Some(crate::format::FormatKind::Dataframe));
         assert!(card.selectable);
         assert!(card.excerpt.contains("shape"), "{}", card.excerpt);
@@ -3878,7 +3878,7 @@ Id,Naam,Telefoonnummer,Salaris
         let table = read(src, crate::dataframe::ReadOptions::default());
         input.table = Some(table);
         let grid = work_card(&input);
-        assert_eq!(grid.title, "Dataframe");
+        assert_eq!(grid.title, "Table");
         assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
         assert!(grid.excerpt.contains("┆ … PV3"), "{}", grid.excerpt);
         assert!(!grid.excerpt.contains("Sunbox"), "{}", grid.excerpt);
@@ -4542,7 +4542,7 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         let mut grid = data(SubjectKind::Text, Some(src));
         grid.view = CardView::Dataframe;
         let card = work_card(&grid);
-        assert_eq!(card.title, "Dataframe");
+        assert_eq!(card.title, "Table");
         assert!(card.meta.contains("PII · financial"), "{}", card.meta);
     }
 

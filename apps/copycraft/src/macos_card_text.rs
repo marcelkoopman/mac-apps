@@ -173,13 +173,49 @@ pub(crate) fn copy_frozen_column(
     }
     mac_ui::widgets::fit_text_view(frozen, None);
     let size = frozen.frame().size;
+    let inset = text.textContainerInset();
+    // fit_text_view adds left+right inset; the pin only needs the left inset so its right edge
+    // lines up with the first column separator — the extra right inset was covering column 2.
+    let pin_w =
+        pin_width_from_grid(text, lines).unwrap_or_else(|| (size.width - inset.width).max(1.0));
     frozen.setFrame(mac_ui::objc2_foundation::NSRect::new(
         mac_ui::objc2_foundation::NSPoint::new(0.0, 0.0),
-        mac_ui::objc2_foundation::NSSize::new(
-            size.width,
-            text.frame().size.height.max(size.height),
-        ),
+        mac_ui::objc2_foundation::NSSize::new(pin_w, text.frame().size.height.max(size.height)),
     ));
+}
+
+/// Right edge of the first column in `text` (view coords), matching the floating pin's width.
+fn pin_width_from_grid(text: &NSTextView, lines: &[crate::dataframe::FrozenLine]) -> Option<f64> {
+    // SAFETY: layout objects are used immediately while the text view keeps them.
+    let layout = unsafe { text.layoutManager() }?;
+    let container = unsafe { text.textContainer() }?;
+    let inset = text.textContainerInset();
+    layout.ensureLayoutForTextContainer(&container);
+    let mut max_x = 0.0_f64;
+    for line in lines {
+        if line.end <= line.start {
+            continue;
+        }
+        let char_range = NSRange {
+            location: line.start,
+            length: line.end - line.start,
+        };
+        // SAFETY: actualCharacterRange null is allowed; layout/container live for this call.
+        let glyphs = unsafe {
+            layout
+                .glyphRangeForCharacterRange_actualCharacterRange(char_range, std::ptr::null_mut())
+        };
+        if glyphs.length == 0 {
+            continue;
+        }
+        let rect = layout.boundingRectForGlyphRange_inTextContainer(glyphs, &container);
+        max_x = max_x.max(rect.origin.x + rect.size.width);
+    }
+    if max_x <= 0.0 {
+        return None;
+    }
+    // Container coords → view coords (left inset).
+    Some((max_x + inset.width).max(1.0))
 }
 
 #[cfg(test)]

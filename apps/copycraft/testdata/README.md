@@ -195,9 +195,11 @@ expectations; on Linux the test only checks size and EXIF.
       columns, Choose columns…, Sort ascending ›, Sort descending ›, Open in window. The
       window's Table ▾ has the two Remove steps and the two Sort submenus.
 - [ ] There is no Dataframe chip and no Show columns chip: a table shows Original and Table ▾;
-      clicking Table ▾ shows the grid (Original goes back to the text). Column picking is only
-      Table ▾ › Choose columns…. Esc, Cancel and click-outside always dismiss the picker; Apply
-      with no change also closes. Find filters the rows; ⌘Z/⇧⌘Z step versions.
+      clicking Table ▾ shows the grid with card title *Table* / *Tabel* (not Dataframe). Column
+      picking is only Table ▾ › Choose columns…. Esc, Cancel and click-outside always dismiss the
+      picker; Apply with no change also closes. Find filters the rows; ⌘Z/⇧⌘Z step versions.
+- [ ] Frozen pin width: on a multi-column table the second column is fully visible to the right
+      of the pinned first column (not half-covered by the pin).
 - [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
       the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).
