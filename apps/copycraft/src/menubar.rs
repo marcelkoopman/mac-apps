@@ -608,6 +608,16 @@ impl App {
                         launcher::open_table_window_column_picker();
                         return;
                     }
+                    CommandId::Copy => {
+                        if let Err(e) = self.copy_table_window() {
+                            eprintln!("copy failed: {e:#}");
+                        }
+                        return;
+                    }
+                    CommandId::Save => {
+                        self.save_table_window();
+                        return;
+                    }
                     _ => {}
                 }
                 self.refresh_table_window();
@@ -1718,6 +1728,62 @@ impl App {
         self.card_view = CardView::Original;
         self.refresh_popup();
         Ok(())
+    }
+
+    /// Copy the table version shown in the table window (full grid, same as Dataframe Copy).
+    fn copy_table_window(&mut self) -> anyhow::Result<()> {
+        let Some(frame) = self.window_table_frame() else {
+            return Ok(());
+        };
+        let Some(body) = crate::dataframe::frame_grid(&frame).map(Zeroizing::new) else {
+            return Ok(());
+        };
+        self.write_own(body.as_str())?;
+        self.record_own_copy(body.as_str());
+        Ok(())
+    }
+
+    /// Save the table version shown in the table window (CSV / Parquet panel, as on the card).
+    fn save_table_window(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            if self.saving.is_some() {
+                return;
+            }
+            let Some(frame) = self.window_table_frame() else {
+                return;
+            };
+            let mut job = crate::macos_save::SaveJob::table(frame);
+            if let Some(opened) = self.opened.as_ref() {
+                job.filename = crate::open_file::save_name(&opened.name, job.extension);
+            }
+            let started = (|| -> anyhow::Result<()> {
+                let Some(path) = job.choose_path()? else {
+                    return Ok(());
+                };
+                let content = job.content;
+                std::thread::Builder::new()
+                    .name("copycraft-save".into())
+                    .spawn(move || {
+                        let result = content.write_to(&path).map_err(|e| format!("{e:#}"));
+                        launcher::emit(UserEvent::SaveFinished(result));
+                    })
+                    .context("cannot start the save thread")?;
+                self.saving = Some(Background::now());
+                Ok(())
+            })();
+            launcher::order_front();
+            if let Err(e) = started {
+                log_save_failure(&format!("{e:#}"));
+            }
+        }
+    }
+
+    /// The DataFrame of the version the table window shows, when it has a frame.
+    fn window_table_frame(&mut self) -> Option<polars::prelude::DataFrame> {
+        let (_, home) = self.window_source()?;
+        let table = self.target_table(TableTarget::Window, home)?;
+        table.frame().cloned()
     }
 
     fn copy_image_view(&mut self) -> anyhow::Result<()> {

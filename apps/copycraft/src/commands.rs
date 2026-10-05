@@ -1798,15 +1798,16 @@ pub const CHOOSE_COLUMNS_TITLE: &str = "Choose columns…";
 #[allow(dead_code)] // Was the Table ▾ item; Open table is the card chip now.
 pub const OPEN_WINDOW_TITLE: &str = "Open in window";
 
-/// Rows the table window shows at most (the meta line says when there are more).
-pub const WINDOW_ROWS: usize = 1_000;
+/// Soft ceiling only for pathological tables (millions of rows as one NSTextView string).
+/// Below this, Open table shows every row; above it the meta line says "Showing N of M rows".
+pub const WINDOW_ROWS: usize = 100_000;
 
 /// What the table window shows of the entry's table ([`table_window_view`]): the grid of the
 /// version shown, its meta line, the columns for the sidebar, the versions for the version bar
 /// and its Table ▾ menu. Zeroized when dropped (the grid and meta quote the table).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TableWindowView {
-    /// The version's grid, its first [`WINDOW_ROWS`] rows; empty while it is worked out.
+    /// The version's grid (every row up to [`WINDOW_ROWS`]); empty while it is worked out.
     pub grid: String,
     /// Said in place of the grid when there is none ("Working on the table…").
     pub placeholder: String,
@@ -1881,7 +1882,10 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         view.placeholder = "Working on the table…".to_string();
         return view;
     };
-    let Some(preview) = dataframe::frame_preview(frame, WINDOW_ROWS, Some(false)) else {
+    // Dedicated window: show every row (cap only for enormous tables — see WINDOW_ROWS).
+    let (height, _) = frame.shape();
+    let max_rows = height.clamp(1, WINDOW_ROWS);
+    let Some(preview) = dataframe::frame_preview(frame, max_rows, Some(false)) else {
         view.placeholder = "The table is empty".to_string();
         return view;
     };
@@ -2649,7 +2653,7 @@ mod tests {
         stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
         work_card,
     };
-    use super::{OPEN_TABLE_TITLE, WINDOW_ROWS, table_window_view};
+    use super::{OPEN_TABLE_TITLE, table_window_view};
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
     use super::{TableShown, VersionBar, menu_group, table_menu, undo_key};
     use crate::appearance::Theme;
@@ -3940,9 +3944,10 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     #[test]
-    fn the_table_window_says_when_it_shows_part_of_a_long_table() {
+    fn the_table_window_shows_every_row_of_a_normal_table() {
+        // Well under WINDOW_ROWS: the dedicated window shows all rows (no "Showing N of M").
         let mut src = String::from("n,m\n");
-        for i in 0..(WINDOW_ROWS + 5) {
+        for i in 0..1_005 {
             src.push_str(&format!("{i},{}\n", i * 2));
         }
         let table = stepped(
@@ -3954,13 +3959,11 @@ Id,Naam,Telefoonnummer,Salaris
         );
         let view = table_window_view(&table, &src);
         assert!(
-            view.meta.contains(&format!(
-                "Showing 1,000 of {}",
-                group_thousands(WINDOW_ROWS + 5)
-            )),
-            "{}",
+            !view.meta.contains("Showing "),
+            "expected every row, got meta {}",
             view.meta
         );
+        assert!(view.meta.contains("1,005 rows"), "{}", view.meta);
     }
 
     /// `src` after one Dedupe step, as the card gets it.

@@ -1,8 +1,8 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open table" on the card): the table of one entry in its own resizable
-// window. A toolbar with the window's Table ▾ menu and the version capsule (↶ v2/3 ↷), a
-// sidebar with the columns (names and types), the grid with its first column frozen, and the
-// meta line. What it shows comes from `commands::table_window_view`; what it asks for goes to
+// window. A toolbar with Table ▾, Copy, Save and the version capsule (↶ v2/3 ↷), a sidebar
+// with the columns (names and types), the grid (every row, soft-capped only for huge
+// tables) with its first column frozen, and the meta line. What it shows comes from `commands::table_window_view`; what it asks for goes to
 // the app as `UserEvent::TableWindow`.
 //
 // Opens with the grid and sidebar revealed (Open table from the card). Blurs again when
@@ -82,6 +82,8 @@ struct Views {
     placeholder: Retained<NSTextField>,
     hint: Retained<NSTextField>,
     table_button: GlassButton,
+    copy_button: GlassButton,
+    save_button: GlassButton,
     undo: GlassButton,
     title: Retained<NSButton>,
     redo: GlassButton,
@@ -148,6 +150,16 @@ define_class!(
         #[unsafe(method(tableWindowRedoClicked:))]
         fn redo_clicked(&self, _sender: Option<&NSButton>) {
             run(CommandId::TableRedo);
+        }
+
+        #[unsafe(method(tableWindowCopyClicked:))]
+        fn copy_clicked(&self, _sender: Option<&NSButton>) {
+            run(CommandId::Copy);
+        }
+
+        #[unsafe(method(tableWindowSaveClicked:))]
+        fn save_clicked(&self, _sender: Option<&NSButton>) {
+            run(CommandId::Save);
         }
 
         #[unsafe(method(tableWindowVersionsClicked:))]
@@ -554,7 +566,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     let (width, height) = (INITIAL_SIZE.width, INITIAL_SIZE.height);
     let body_h = height - TOOLBAR_H - META_H;
 
-    // The toolbar: Table ▾ at the left, the version capsule at the right, the hint between.
+    // The toolbar: Table ▾, Copy, Save; version capsule at the right; hint between.
     let toolbar_y = height - TOOLBAR_H + (TOOLBAR_H - commands::CHIP_PILL_H) / 2.0;
     let table_button = GlassButton::pill(mtm, "Table ▾", ButtonSize::Regular);
     table_button.set_accessibility_label("Table steps");
@@ -569,6 +581,41 @@ fn ensure_views(mtm: MainThreadMarker) {
         .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
     content.addSubview(table_button.view());
 
+    let copy_button = GlassButton::pill(mtm, crate::locale::t("copy"), ButtonSize::Regular);
+    copy_button.set_accessibility_label("Copy the table");
+    copy_button
+        .button()
+        .setToolTip(Some(&NSString::from_str("Copy the table shown")));
+    wire(copy_button.button(), sel!(tableWindowCopyClicked:));
+    let copy_w = copy_button.width_within(100.0);
+    let mut actions_x = PAD + table_w + 8.0;
+    copy_button.view().setFrame(NSRect::new(
+        NSPoint::new(actions_x, toolbar_y),
+        NSSize::new(copy_w, commands::CHIP_PILL_H),
+    ));
+    copy_button
+        .view()
+        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
+    content.addSubview(copy_button.view());
+    actions_x += copy_w + 6.0;
+
+    let save_button = GlassButton::pill(mtm, crate::locale::t("save"), ButtonSize::Regular);
+    save_button.set_accessibility_label("Save the table");
+    save_button
+        .button()
+        .setToolTip(Some(&NSString::from_str("Save the table shown")));
+    wire(save_button.button(), sel!(tableWindowSaveClicked:));
+    let save_w = save_button.width_within(100.0);
+    save_button.view().setFrame(NSRect::new(
+        NSPoint::new(actions_x, toolbar_y),
+        NSSize::new(save_w, commands::CHIP_PILL_H),
+    ));
+    save_button
+        .view()
+        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
+    content.addSubview(save_button.view());
+    actions_x += save_w + PAD;
+
     let capsule = NSView::initWithFrame(
         NSView::alloc(mtm),
         NSRect::new(
@@ -582,7 +629,7 @@ fn ensure_views(mtm: MainThreadMarker) {
 
     let hint = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
     hint.setAlignment(NSTextAlignment::Center);
-    let hint_x = PAD + table_w + PAD;
+    let hint_x = actions_x;
     hint.setFrame(NSRect::new(
         NSPoint::new(hint_x, toolbar_y + 5.0),
         NSSize::new(
@@ -699,6 +746,8 @@ fn ensure_views(mtm: MainThreadMarker) {
             placeholder,
             hint,
             table_button,
+            copy_button,
+            save_button,
             undo,
             title,
             redo,
@@ -797,6 +846,10 @@ fn paint_chrome(views: &Views, view: &TableWindowView) {
         .table_button
         .button()
         .setEnabled(!view.menu.is_empty());
+    // Enabled once the version's grid is there (not while "Working on the table…").
+    let ready = !view.grid.is_empty();
+    views.copy_button.button().setEnabled(ready);
+    views.save_button.button().setEnabled(ready);
     views.undo.button().setEnabled(view.can_undo());
     views.redo.button().setEnabled(view.can_redo());
     views

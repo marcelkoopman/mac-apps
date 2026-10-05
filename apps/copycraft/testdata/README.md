@@ -201,7 +201,7 @@ expectations; on Linux the test only checks size and EXIF.
 - [ ] Frozen pin width: on a multi-column table the second column is fully visible to the right
       of the pinned first column (not half-covered by the pin); no stray orange digits (e.g. "0)")
       above the header.
-- [ ] Open in window: the table window opens with content visible (not blurred); the card may close.
+- [ ] Open table: the window opens with content visible (not blurred); Copy and Save are on the toolbar; the card may close.
 - [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
       the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).
