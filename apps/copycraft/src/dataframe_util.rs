@@ -216,8 +216,9 @@ pub(crate) mod tests {
         // A narrow table has one too; it opens on its grid.
         let narrow = super::parse_table("a,b\n1,2").expect("table");
         assert!(super::overview(&narrow).is_some());
-        assert!(!super::shows_overview(None, 2) && super::shows_overview(None, 7));
-        assert!(super::shows_overview(Some(true), 2) && !super::shows_overview(Some(false), 20));
+        // Table always shows the grid; overview is unused for display.
+        assert!(!super::shows_overview(None, 2) && !super::shows_overview(None, 7));
+        assert!(!super::shows_overview(Some(true), 2) && !super::shows_overview(Some(false), 20));
         assert!(!super::shows_overview(Some(true), 0));
     }
 
@@ -720,9 +721,14 @@ Id;Naam;Salaris
         let shown = super::frame_preview(&df, 10, Some(false)).expect("preview").grid;
         assert!(shown.contains("2026-03-09 14:05:30.250"), "{shown}");
         assert!(shown.contains("2024-02-29 23:59:59"), "{shown}");
-        // The card's view of the copied text reads them the same way.
+        // Overview list still names the type; the card always shows the grid.
+        assert!(
+            super::overview(&df)
+                .as_deref()
+                .is_some_and(|o| o.contains("datetime"))
+        );
         let preview = super::try_format_preview(src, 10, Some(true)).expect("preview");
-        assert!(preview.overview.as_deref().is_some_and(|o| o.contains("datetime")));
+        assert!(preview.overview.is_none());
         // A saved CSV reads back the same.
         assert_csv_round_trip(&df);
         // One value that is not one (or does not exist), or dates mixed with datetimes: text.

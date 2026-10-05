@@ -1,14 +1,10 @@
 // How the card shows a table: column names with a long shared prefix shortened, and for wide
 // tables a column overview. Display only: Copy, Save and the conversions keep the real names.
 
-/// A table of this many columns or more opens on the column overview.
-pub const OVERVIEW_MIN_COLUMNS: usize = 7;
-
-/// Whether the Dataframe view shows the column overview: the entry's choice once there is one
-/// (made when the entry is first shown, or with Show columns / Show table), else the default
-/// for a table of `width` columns.
-pub fn shows_overview(choice: Option<bool>, width: usize) -> bool {
-    width > 0 && choice.unwrap_or(width >= OVERVIEW_MIN_COLUMNS)
+/// Whether the Dataframe view shows the column overview. Always off: Table shows the grid;
+/// column picking is *Choose columns…* only. `choice` / `width` kept for call-site compatibility.
+pub fn shows_overview(_choice: Option<bool>, _width: usize) -> bool {
+    false
 }
 /// Longest "values" summary in the overview, so a row stays short.
 pub const OVERVIEW_VALUES_CHARS: usize = 64;

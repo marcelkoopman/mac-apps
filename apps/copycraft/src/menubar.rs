@@ -453,14 +453,6 @@ impl App {
             CommandId::ImageResizeCustom => self.custom_resize(),
             // The card pops the menu itself.
             CommandId::TableMenu | CommandId::ImageMenu | CommandId::TableChooseColumns => {}
-            CommandId::TableGrid(grid) => {
-                if let Some((_, home)) = self.table_source()
-                    && let Some(table) = self.table_at(home)
-                {
-                    table.choose_overview(!grid);
-                }
-                self.refresh_popup();
-            }
             CommandId::TableDateOrder(month_first) => {
                 self.table_reread(TableTarget::Card, |options| {
                     options.month_first = month_first;

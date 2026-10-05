@@ -252,8 +252,7 @@ pub struct TableVersions {
     frames: Option<Frames>,
     options: crate::dataframe::ReadOptions,
     notes: Option<crate::dataframe::ReadNotes>,
-    /// The column overview (`true`) or the grid, for every version of this entry: picked from
-    /// the width when it is first shown, then Show columns / Show table.
+    /// Display preference once the entry was shown (`Some(false)` = grid). Overview UI removed.
     overview: Option<bool>,
     /// The table window shows this table: its frames stay when the card moves far away
     /// ([`forget_frames`](Self::forget_frames)). They still go with the entry.
@@ -292,17 +291,12 @@ impl TableVersions {
         self.overview
     }
 
-    /// The entry is shown with a version of `width` columns: the first time, that picks the
-    /// view; later versions keep it, however many columns they have.
+    /// The entry is shown with a version of `width` columns: the first time, lock to the grid
+    /// (Table always shows the grid; column picking is Choose columns… only).
     pub fn shown_with(&mut self, width: usize) {
         if self.overview.is_none() && width > 0 {
-            self.overview = Some(width >= crate::dataframe::OVERVIEW_MIN_COLUMNS);
+            self.overview = Some(false);
         }
-    }
-
-    /// Show columns (`true`) or Show table: kept for every version of the entry.
-    pub fn choose_overview(&mut self, overview: bool) {
-        self.overview = Some(overview);
     }
 
     /// "Original", then each step's label.
@@ -491,22 +485,17 @@ mod tests {
         assert_eq!(wide.overview_choice(), None);
         wide.shown_with(0);
         assert_eq!(wide.overview_choice(), None);
+        // Wide and narrow both lock to the grid (no Show columns chip).
         wide.shown_with(20);
-        assert_eq!(wide.overview_choice(), Some(true));
-        // A step down to 6 columns keeps the overview.
+        assert_eq!(wide.overview_choice(), Some(false));
         wide.shown_with(6);
-        assert_eq!(wide.overview_choice(), Some(true));
-        // Show table: the grid, also for wide versions after it, and in a copy of the entry.
-        wide.choose_overview(false);
+        assert_eq!(wide.overview_choice(), Some(false));
         wide.shown_with(20);
         assert_eq!(wide.overview_choice(), Some(false));
         assert_eq!(wide.clone().overview_choice(), Some(false));
         let mut narrow = TableVersions::default();
         narrow.shown_with(3);
         assert_eq!(narrow.overview_choice(), Some(false));
-        narrow.choose_overview(true);
-        narrow.shown_with(3);
-        assert_eq!(narrow.overview_choice(), Some(true));
     }
 
     #[test]

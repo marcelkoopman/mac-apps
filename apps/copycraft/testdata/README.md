@@ -88,7 +88,7 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Original, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
 | `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Original, Table ▾ | read=3x2; dtypes=str,str; dfcard~007 |
 | `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Original, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
-| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~20 columns · 6 rows |
+| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~shape: (6, 20) |
 | `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Original, Table ▾ | read=4x3 |
 | `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Original, Table ▾ | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
 | `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Original, Table ▾ | read=5x3; dtypes=datetime[μs],str,f64 |
@@ -194,8 +194,10 @@ expectations; on Linux the test only checks size and EXIF.
 - [ ] Table ▾ on any table shows exactly: Remove duplicate rows, Remove empty rows and
       columns, Choose columns…, Sort ascending ›, Sort descending ›, Open in window. The
       window's Table ▾ has the two Remove steps and the two Sort submenus.
-- [ ] There is no Dataframe chip: a table shows Original and Table ▾; clicking Table ▾ shows
-      the grid (Original goes back to the text). Find filters the rows; ⌘Z/⇧⌘Z step versions.
+- [ ] There is no Dataframe chip and no Show columns chip: a table shows Original and Table ▾;
+      clicking Table ▾ shows the grid (Original goes back to the text). Column picking is only
+      Table ▾ › Choose columns…. Esc, Cancel and click-outside always dismiss the picker; Apply
+      with no change also closes. Find filters the rows; ⌘Z/⇧⌘Z step versions.
 - [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
       the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).

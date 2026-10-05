@@ -92,16 +92,20 @@ impl ColumnPicker {
         format!("Keeping {} of {}", self.kept_count(), self.columns.len())
     }
 
-    /// Apply is there when at least one column is kept and at least one is left out.
+    /// Apply is enabled when at least one column is kept. With every column still
+    /// checked there is no step ([`step`](Self::step) is `None`) and Apply just closes.
     pub fn can_apply(&self) -> bool {
-        let kept = self.kept_count();
-        kept > 0 && kept < self.columns.len()
+        self.kept_count() > 0
     }
 
     /// The one step Apply takes: the kept columns in the table's order, labelled
-    /// "Kept 8 of 20 columns". `None` when Apply is off ([`can_apply`](Self::can_apply)).
+    /// "Kept 8 of 20 columns". `None` when nothing would change (all kept) or nothing is kept.
     pub fn step(&self) -> Option<TableOp> {
-        self.can_apply().then(|| TableOp::SelectColumns {
+        let kept = self.kept_count();
+        if kept == 0 || kept == self.columns.len() {
+            return None;
+        }
+        Some(TableOp::SelectColumns {
             columns: self
                 .columns
                 .iter()
@@ -142,9 +146,9 @@ mod tests {
     #[test]
     fn the_kept_columns_become_one_step_in_the_table_order() {
         let mut picker = picker(&["Date", "Sunbox 7 - PV1", "Sunbox 7 - PV2", "Home", "Grid"]);
-        // Opens with every column kept: nothing to apply.
+        // Opens with every column kept: Apply closes without a step.
         assert_eq!(picker.count_line(), "Keeping 5 of 5");
-        assert!(!picker.can_apply());
+        assert!(picker.can_apply());
         assert_eq!(picker.step(), None);
         // Unticked in any order; the step keeps the table's order.
         picker.set_kept(3, false);
@@ -161,10 +165,11 @@ mod tests {
         assert_eq!(step.label(), "Kept 3 of 5 columns");
         // Not in the Move column to front submenu.
         assert_eq!(step.group(), None);
-        // Ticked again: back to nothing changed.
+        // Ticked again: back to nothing changed (Apply still enabled, no step).
         picker.set_kept(1, true);
         picker.set_kept(3, true);
-        assert!(!picker.can_apply());
+        assert!(picker.can_apply());
+        assert_eq!(picker.step(), None);
     }
 
     #[test]

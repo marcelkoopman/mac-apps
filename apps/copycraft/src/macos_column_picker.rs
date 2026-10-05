@@ -24,6 +24,8 @@ thread_local! {
     /// The picker while it is open.
     static PICKER: RefCell<Option<ColumnPicker>> = const { RefCell::new(None) };
     static PICKER_VIEWS: RefCell<Option<PickerViews>> = const { RefCell::new(None) };
+    /// Full-card click catcher behind the picker: a click outside the panel dismisses it.
+    static PICKER_BACKDROP: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
 }
 
 struct PickerViews {
@@ -42,6 +44,45 @@ struct PickerViews {
 
 fn picker_open() -> bool {
     PICKER.with(|slot| slot.borrow().is_some())
+}
+
+fn show_picker_backdrop(mtm: MainThreadMarker) {
+    let window = WINDOW.with(|slot| slot.borrow().clone());
+    let Some(window) = window else {
+        return;
+    };
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    let bounds = content.bounds();
+    let button = PICKER_BACKDROP.with(|slot| {
+        if let Some(existing) = slot.borrow().clone() {
+            existing.setFrame(bounds);
+            existing.setHidden(false);
+            return existing;
+        }
+        let button = NSButton::initWithFrame(NSButton::alloc(mtm), bounds);
+        button.setBordered(false);
+        button.setTitle(&NSString::from_str(""));
+        button.setAccessibilityElement(false);
+        // Nearly invisible; catches clicks outside the panel so Cancel/Esc are not the only exits.
+        button.setAlphaValue(0.01);
+        wire_button(&button, sel!(pickerCancelClicked:));
+        slot.replace(Some(button.clone()));
+        button
+    });
+    button.setFrame(bounds);
+    // Backdrop above the card chrome; raise_picker puts the panel above the backdrop.
+    content.addSubview(&button);
+    raise_picker();
+}
+
+fn hide_picker_backdrop() {
+    PICKER_BACKDROP.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setHidden(true);
+        }
+    });
 }
 
 /// Called from [`store_with_card`]: the columns of the version shown. Another entry or
@@ -207,6 +248,7 @@ fn open_picker() {
             views.root.setHidden(false);
         }
     });
+    show_picker_backdrop(mtm);
     layout(false);
     rebuild_picker_rows(mtm);
     raise_picker();
@@ -247,44 +289,53 @@ fn close_picker() {
     dismiss_picker(true);
 }
 
-/// Close the picker and forget its filter and rows; `relayout` the open card (its well buttons
-/// come back). Nothing when it is closed.
-fn dismiss_picker(relayout: bool) {
+/// Close the picker and forget its filter and rows. Always lays the open card out again so
+/// well buttons and focus come back — even when the caller passed `relayout: false` (a version
+/// or entry change used to leave Copy/Save hidden and the card stuck).
+fn dismiss_picker(_relayout: bool) {
     let was_open = PICKER.with(|slot| slot.borrow_mut().take()).is_some();
-    if MainThreadMarker::new().is_none() {
-        return;
+    hide_picker_backdrop();
+    if MainThreadMarker::new().is_some() {
+        PICKER_VIEWS.with(|slot| {
+            let mut borrowed = slot.borrow_mut();
+            let Some(views) = borrowed.as_mut() else {
+                return;
+            };
+            widgets::wipe_field_editor(&views.field);
+            widgets::wipe_text_field(&views.field);
+            for (_, row) in views.rows.drain(..) {
+                row.setTitle(&NSString::from_str(""));
+            }
+            let subviews = views.list.subviews();
+            for view in subviews.iter() {
+                view.removeFromSuperview();
+            }
+            views.root.setHidden(true);
+        });
     }
-    PICKER_VIEWS.with(|slot| {
-        let mut borrowed = slot.borrow_mut();
-        let Some(views) = borrowed.as_mut() else {
-            return;
-        };
-        widgets::wipe_field_editor(&views.field);
-        widgets::wipe_text_field(&views.field);
-        for (_, row) in views.rows.drain(..) {
-            row.setTitle(&NSString::from_str(""));
-        }
-        let subviews = views.list.subviews();
-        for view in subviews.iter() {
-            view.removeFromSuperview();
-        }
-        views.root.setHidden(true);
-    });
-    if was_open && relayout && is_open() {
+    if was_open && is_open() {
         layout(false);
         focus_card();
     }
 }
 
-/// Apply: one step with the checked columns; the card shows the new version.
+/// Apply: one step with the checked columns when the set changed; when every column is still
+/// kept (Apply used to stay grey), just close — same as Cancel. Beep only when nothing is kept.
 fn apply_picker() {
-    let step = PICKER.with(|slot| slot.borrow().as_ref().and_then(ColumnPicker::step));
-    let Some(step) = step else {
+    let (step, kept) = PICKER.with(|slot| {
+        let Some(picker) = slot.borrow().clone() else {
+            return (None, 0);
+        };
+        (picker.step(), picker.kept_count())
+    });
+    if kept == 0 {
         NSBeep();
         return;
-    };
+    }
     close_picker();
-    launcher::emit(UserEvent::Run(CommandId::TableStep(step)));
+    if let Some(step) = step {
+        launcher::emit(UserEvent::Run(CommandId::TableStep(step)));
+    }
 }
 
 fn picker_update(change: impl FnOnce(&mut ColumnPicker)) {

@@ -485,8 +485,6 @@ pub enum CommandId {
     ImageResizeCustom,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
-    /// Show the table as its grid (`true`) or its column overview, for every version of the entry.
-    TableGrid(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.
     TableChooseColumns,
     /// Open the table on the card in its own resizable window ([`table_window_view`]).
@@ -1489,9 +1487,6 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         SubjectKind::Image => image_chips(data.image_scan.as_ref(), data.image_edit.is_some()),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
-            if let Some(toggle) = grid_command(data) {
-                chips.push(toggle);
-            }
             // The date question, in the Dataframe view while dates fit both orders.
             if data.view == CardView::Dataframe
                 && let Some(question) = data
@@ -1637,32 +1632,6 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
         _ => None,
     }
-}
-
-/// crate::locale::t("show_table") on the column overview, crate::locale::t("show_columns") on the grid (Dataframe view), for any
-/// table with a column. The width only picks the view an entry opens on.
-fn grid_command(data: &LaunchData) -> Option<Command> {
-    let table = data.table.as_ref()?;
-    let width = table.frame.as_ref().map_or(0, |frame| frame.width());
-    let text = data.subject_text.as_deref()?;
-    if width == 0 || presented_view(text, data.view) != CardView::Dataframe {
-        return None;
-    }
-    Some(if !dataframe::shows_overview(table.overview, width) {
-        command(
-            CommandId::TableGrid(false),
-            crate::locale::t("show_columns"),
-            "Column overview",
-            "columns overview table",
-        )
-    } else {
-        command(
-            CommandId::TableGrid(true),
-            crate::locale::t("show_table"),
-            "Every row",
-            "table grid rows",
-        )
-    })
 }
 
 /// The date question: when a date column fits both orders, a command to read it the other
@@ -2315,7 +2284,6 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageStep(_)
             | CommandId::ImageResizeCustom
             | CommandId::TableDateOrder(_)
-            | CommandId::TableGrid(_)
             | CommandId::TableChooseColumns
             | CommandId::TableOpenWindow
     )
@@ -3906,45 +3874,18 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(second.starts_with("Date"), "{:?}", second.get(..12));
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = CardView::Dataframe;
-        // 20 columns: the column overview first, with the shared product prefix shortened.
-        let overview = work_card(&input);
-        assert_eq!(overview.title, "Dataframe");
-        assert!(
-            overview
-                .excerpt
-                .starts_with("20 columns · 40 rows\n\ncolumn "),
-            "{}",
-            overview.excerpt
-        );
-        assert!(!overview.excerpt.contains("shape:"), "{}", overview.excerpt);
-        assert!(
-            overview.excerpt.contains("\n… PV4 Generation (kWh) "),
-            "{}",
-            overview.excerpt
-        );
-        assert!(!overview.excerpt.contains("Sunbox"), "{}", overview.excerpt);
-        assert!(
-            overview.meta.contains("40 rows × 20 columns"),
-            "{}",
-            overview.meta
-        );
-        assert!(
-            overview.meta.contains("Header on line 2"),
-            "{}",
-            overview.meta
-        );
-        assert!(overview.preview_note.is_none());
-        // crate::locale::t("show_table"): the grid, shortened names too; Copy keeps the real ones.
-        let mut table = read(src, crate::dataframe::ReadOptions::default());
-        input.table = Some(table.clone());
-        assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(true)));
-        table.overview = Some(false);
+        // 20 columns: Table shows the grid directly (shortened names); Copy keeps the real ones.
+        let table = read(src, crate::dataframe::ReadOptions::default());
         input.table = Some(table);
         let grid = work_card(&input);
+        assert_eq!(grid.title, "Dataframe");
         assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
         assert!(grid.excerpt.contains("┆ … PV3"), "{}", grid.excerpt);
+        assert!(!grid.excerpt.contains("Sunbox"), "{}", grid.excerpt);
         assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
-        assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(false)));
+        assert!(grid.preview_note.is_none());
+        // No Show columns / Show table chip — only Original and Table ▾.
+        assert!(ids(&super::chips(&input)).contains(&CommandId::TableMenu));
         let copied = transformed_text(src, CardView::Dataframe).expect("copy");
         assert!(copied.contains("Sunbox 7"), "{copied}");
         assert!(
@@ -4346,7 +4287,7 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     #[test]
-    fn show_columns_and_show_table_are_there_for_any_table_and_the_choice_holds() {
+    fn table_chip_row_is_original_and_table_only_no_show_columns() {
         use crate::table::TableOp;
         let src = crate::dataframe::tests::ENERGY_FIXTURE;
         let names: Vec<String> = crate::dataframe::parse_table(src)
@@ -4365,38 +4306,23 @@ Id,Naam,Telefoonnummer,Salaris
                 kept_of: None,
             },
         );
-        // Chosen (or picked) when the 20 columns were first shown: 6 columns keep the overview.
+        // Even if overview were requested, display is the grid.
         table.overview = Some(true);
         input.table = Some(table.clone());
         let card = work_card(&input);
-        assert!(
-            card.excerpt.starts_with("6 columns · 40 rows"),
-            "{}",
-            card.excerpt
-        );
-        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(true)));
-        // Show table: the grid, and Show columns to go back, at 6 columns too.
+        assert!(card.excerpt.contains("shape: (40, 6)"), "{}", card.excerpt);
+        assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
         table.overview = Some(false);
         input.table = Some(table);
         let card = work_card(&input);
         assert!(card.excerpt.contains("shape: (40, 6)"), "{}", card.excerpt);
-        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(false)));
-        // A narrow table opens on its grid and can show its columns.
         let narrow = "name,n\na,1\nb,2";
         let mut input = data(SubjectKind::Text, Some(narrow));
         input.view = CardView::Dataframe;
-        let mut table = read(narrow, crate::dataframe::ReadOptions::default());
-        input.table = Some(table.clone());
-        assert!(work_card(&input).excerpt.contains("shape: (2, 2)"));
-        assert!(ids(&chips(&input)).contains(&CommandId::TableGrid(false)));
-        table.overview = Some(true);
+        let table = read(narrow, crate::dataframe::ReadOptions::default());
         input.table = Some(table);
-        let card = work_card(&input);
-        assert!(
-            card.excerpt.starts_with("2 columns · 2 rows"),
-            "{}",
-            card.excerpt
-        );
+        assert!(work_card(&input).excerpt.contains("shape: (2, 2)"));
+        assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
     }
 
     /// The sensitivity labels a card's meta line shows.
@@ -4408,7 +4334,7 @@ Id,Naam,Telefoonnummer,Salaris
     }
 
     /// Every way one entry is shown again: each view and chip, the table while its job runs and
-    /// when it is done, steps, versions, Show columns / Show table, the picker's step.
+    /// when it is done, steps, versions, the picker's step.
     fn shown_again(src: &str) -> Vec<(String, LaunchData)> {
         use crate::table::TableOp;
         let plain = data(SubjectKind::Text, Some(src));
