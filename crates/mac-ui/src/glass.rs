@@ -1,6 +1,9 @@
 //! Window and panel backgrounds: Liquid Glass (`NSGlassEffectView`, macOS 26+) with a frosted
 //! `NSVisualEffectView` fallback on older macOS, and [`group`]s that let nearby glass controls
 //! (`NSGlassEffectContainerView`) render, merge and morph together.
+//!
+//! No separate macOS 27 API is bound in the current objc2 crates; when Apple ships one, extend
+//! this module rather than adding a new crate.
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyClass;
