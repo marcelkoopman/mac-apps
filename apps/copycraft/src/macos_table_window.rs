@@ -20,9 +20,10 @@ use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAutoresizingMaskOptions,
     NSBackingStoreType, NSBeep, NSBorderType, NSBox, NSButton, NSCellImagePosition, NSColor,
-    NSControlStateValueOn, NSEvent, NSEventGestureAxis, NSEventModifierFlags, NSFocusRingType,
-    NSFont, NSMenu, NSMenuItem, NSModalPanelWindowLevel, NSScrollView, NSTextAlignment,
-    NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
+    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
+    NSEventModifierFlags, NSFocusRingType, NSFont, NSMenu, NSMenuItem, NSModalPanelWindowLevel,
+    NSScrollView, NSTextAlignment, NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask,
+    NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSNotification, NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize,
@@ -65,6 +66,10 @@ thread_local! {
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The blur filter, built once; `None` inside when Core Image cannot build it.
     static BLUR: RefCell<Option<Option<Retained<AnyObject>>>> = const { RefCell::new(None) };
+    /// Choose columns… modal is up: do not blur on resign-key (the alert takes key).
+    static COLUMN_PICKER_OPEN: Cell<bool> = const { Cell::new(false) };
+    /// Checkboxes of the open Choose columns… alert (All / None toggle these).
+    static PICKER_CHECKS: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
 }
 
 struct Views {
@@ -168,6 +173,16 @@ define_class!(
         #[unsafe(method(tableWindowOpenColumnPicker:))]
         fn open_column_picker_clicked(&self, _sender: Option<&AnyObject>) {
             run_column_picker();
+        }
+
+        #[unsafe(method(tableWindowPickerAll:))]
+        fn picker_all_clicked(&self, _sender: Option<&NSButton>) {
+            set_picker_checks(true);
+        }
+
+        #[unsafe(method(tableWindowPickerNone:))]
+        fn picker_none_clicked(&self, _sender: Option<&NSButton>) {
+            set_picker_checks(false);
         }
     }
 );
@@ -282,6 +297,10 @@ fn reveal() {
 
 /// The window is no longer key: blurred again; the next click reveals it.
 fn mask_again() {
+    // Choose columns… is a modal alert: it steals key; keep the table revealed under it.
+    if COLUMN_PICKER_OPEN.with(Cell::get) {
+        return;
+    }
     if !REVEALED.with(Cell::get) {
         return;
     }
@@ -306,8 +325,9 @@ pub fn open_column_picker() {
     }
 }
 
-/// Modal Choose columns… for the table window: checkboxes, Apply / Cancel. Uses the same
-/// [`ColumnPicker`] model as the card; Apply emits one select step.
+/// Modal Choose columns… for the table window: All / None, checkboxes, Apply / Cancel.
+/// Uses the same [`ColumnPicker`] model as the card; Apply emits one select step. The table
+/// stays revealed (the alert steals key; we do not re-blur on Apply or Cancel).
 fn run_column_picker() {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -324,10 +344,35 @@ fn run_column_picker() {
     }
     let mut picker = ColumnPicker::new(columns);
     let row_h = 22.0;
+    let btn_h = 24.0;
     let width = 320.0;
+    let pad = 4.0;
     let visible_rows = 12.0_f64.min(picker.columns().len() as f64).max(3.0);
     let scroll_h = visible_rows * row_h + 8.0;
     let list_h = picker.columns().len() as f64 * row_h;
+    let accessory_h = btn_h + 8.0 + scroll_h;
+    let accessory = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, accessory_h)),
+    );
+
+    let all = GlassButton::pill(mtm, "All", ButtonSize::Small);
+    all.set_accessibility_label("Keep all columns");
+    wire(all.button(), sel!(tableWindowPickerAll:));
+    let none = GlassButton::pill(mtm, "None", ButtonSize::Small);
+    none.set_accessibility_label("Keep no columns");
+    wire(none.button(), sel!(tableWindowPickerNone:));
+    let mut x = pad;
+    for item in [&all, &none] {
+        let w = item.width_within(90.0);
+        item.view().setFrame(NSRect::new(
+            NSPoint::new(x, accessory_h - pad - btn_h),
+            NSSize::new(w, btn_h),
+        ));
+        accessory.addSubview(item.view());
+        x += w + 6.0;
+    }
+
     let scroll = NSScrollView::initWithFrame(
         NSScrollView::alloc(mtm),
         NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, scroll_h)),
@@ -360,6 +405,9 @@ fn run_column_picker() {
         checks.push(check);
     }
     scroll.setDocumentView(Some(&list));
+    accessory.addSubview(&scroll);
+    PICKER_CHECKS.with(|slot| slot.replace(checks.clone()));
+
     let alert = NSAlert::new(mtm);
     alert.setMessageText(&NSString::from_str(commands::CHOOSE_COLUMNS_TITLE));
     alert.setInformativeText(&NSString::from_str(
@@ -367,7 +415,11 @@ fn run_column_picker() {
     ));
     alert.addButtonWithTitle(&NSString::from_str("Apply"));
     alert.addButtonWithTitle(&NSString::from_str("Cancel"));
-    alert.setAccessoryView(Some(&scroll));
+    alert.setAccessoryView(Some(&accessory));
+
+    COLUMN_PICKER_OPEN.set(true);
+    // Stay revealed under the alert (mask_again is suppressed while open).
+    REVEALED.set(true);
     panel::activate_app(mtm);
     alert.layout();
     let window = alert.window();
@@ -377,19 +429,36 @@ fn run_column_picker() {
     window.makeKeyAndOrderFront(None);
     window.orderFrontRegardless();
     let response = alert.runModal();
-    if response != NSAlertFirstButtonReturn {
-        return;
+    COLUMN_PICKER_OPEN.set(false);
+    PICKER_CHECKS.with(|slot| slot.borrow_mut().clear());
+
+    let applied = response == NSAlertFirstButtonReturn;
+    if applied {
+        for (index, check) in checks.iter().enumerate() {
+            picker.set_kept(index, check.state() == NSControlStateValueOn);
+        }
+        if !picker.can_apply() {
+            NSBeep();
+        } else if let Some(step) = picker.step() {
+            run(CommandId::TableStep(step));
+        }
+        // Nothing kept or nothing changed: still keep the grid revealed.
     }
-    for (index, check) in checks.iter().enumerate() {
-        picker.set_kept(index, check.state() == NSControlStateValueOn);
-    }
-    if !picker.can_apply() {
-        NSBeep();
-        return;
-    }
-    if let Some(step) = picker.step() {
-        run(CommandId::TableStep(step));
-    }
+    // Alert stole key; always leave the table window revealed after Choose columns….
+    reveal();
+}
+
+fn set_picker_checks(kept: bool) {
+    let state = if kept {
+        NSControlStateValueOn
+    } else {
+        NSControlStateValueOff
+    };
+    PICKER_CHECKS.with(|slot| {
+        for check in slot.borrow().iter() {
+            check.setState(state);
+        }
+    });
 }
 
 fn run(id: CommandId) {
