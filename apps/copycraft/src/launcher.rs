@@ -87,6 +87,16 @@ pub fn close_settings() {
     crate::macos_settings::close();
 }
 
+pub fn show_about() {
+    #[cfg(target_os = "macos")]
+    crate::macos_about::show();
+}
+
+pub fn close_about() {
+    #[cfg(target_os = "macos")]
+    crate::macos_about::close();
+}
+
 /// What a table job left: the generation it ran for and its frame, or why it stopped.
 #[derive(Clone)]
 pub struct TableDone {

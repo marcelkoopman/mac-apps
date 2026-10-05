@@ -493,6 +493,8 @@ pub enum CommandId {
     TableOpenWindow,
     /// Open the Settings window (hotkey, date order, blur, Open at Login).
     Settings,
+    /// Open the About window (name, version, offline promise).
+    About,
     Quit,
 }
 
@@ -2144,6 +2146,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "settings preferences hotkey blur login",
     ));
     commands.push(command(
+        CommandId::About,
+        "About Copycraft",
+        "Version and offline promise",
+        "about version offline",
+    ));
+    commands.push(command(
         CommandId::Quit,
         "Quit",
         "Quit Copycraft",
@@ -2274,6 +2282,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ClearClipboard
             | CommandId::ClearHistory
             | CommandId::Settings
+            | CommandId::About
             | CommandId::Clear
             | CommandId::ChooseFile
             | CommandId::UseClipboard

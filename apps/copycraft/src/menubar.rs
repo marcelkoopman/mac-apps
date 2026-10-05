@@ -312,6 +312,9 @@ impl ApplicationHandler<UserEvent> for App {
                 SETTINGS_ID => {
                     self.run_command(event_loop, CommandId::Settings);
                 }
+                ABOUT_ID => {
+                    self.run_command(event_loop, CommandId::About);
+                }
                 id => {
                     if let Some(index) = id
                         .strip_prefix("hist-")
@@ -464,6 +467,7 @@ impl App {
                 });
             }
             CommandId::Settings => launcher::show_settings(),
+            CommandId::About => launcher::show_about(),
             CommandId::Quit => event_loop.exit(),
         }
     }
@@ -554,6 +558,7 @@ impl App {
         };
         self.close_table_window();
         launcher::close_settings();
+        launcher::close_about();
         if let Some(table) = self.target_table(TableTarget::Window, home) {
             table.pin(true);
         }
@@ -2684,6 +2689,7 @@ fn version_label() -> String {
 const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
 const ALLOW_SCREENSHOTS_LABEL: &str = "Allow screenshots";
 const SETTINGS_ID: &str = "settings";
+const ABOUT_ID: &str = "about";
 
 fn status_labels() -> [String; 3] {
     [
@@ -2702,6 +2708,7 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     }
     rows.push(ALLOW_SCREENSHOTS_LABEL.to_string());
     rows.push("Settings…".to_string());
+    rows.push("About Copycraft".to_string());
     rows.push(version);
     rows.push(quit);
     rows
@@ -2958,6 +2965,7 @@ mod tests {
                 "History".to_string(),
                 "Allow screenshots".to_string(),
                 "Settings…".to_string(),
+                "About Copycraft".to_string(),
                 version_label(),
                 "Quit".to_string(),
             ]

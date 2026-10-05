@@ -46,6 +46,8 @@ mod youtube;
 static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 
 #[cfg(target_os = "macos")]
+mod macos_about;
+#[cfg(target_os = "macos")]
 mod macos_card_text;
 #[cfg(target_os = "macos")]
 mod macos_image_edit;
