@@ -344,6 +344,7 @@ pub enum CardView {
     Format,
     Convert,
     Decode,
+    /// In-card table grid (Open table opens the window; this view remains for versions).
     Dataframe,
     Schema,
     Sample,
@@ -437,6 +438,8 @@ pub enum CommandId {
     Format,
     Convert,
     Decode,
+    /// Former chip that switched to [`CardView::Dataframe`]; Open table opens the window.
+    #[allow(dead_code)]
     Dataframe,
     Schema,
     Sample,
@@ -474,7 +477,8 @@ pub enum CommandId {
     TableRedo,
     /// Show table version `n` (0 is the original), from the version capsule's menu.
     TableVersion(usize),
-    /// The "Table ▾" chip: the card pops a menu of table steps ([`table_menu`]).
+    /// Former card chip; steps live in the table window's Table ▾.
+    #[allow(dead_code)]
     TableMenu,
     /// The "Image ▾" chip: the card pops a menu of picture steps ([`image_menu_items`]).
     ImageMenu,
@@ -1540,7 +1544,7 @@ pub fn forget_chips() {
 /// Chips, earlier copies, and appearance. Quit stays out.
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let mut commands = chips(data);
-    let offers_table = commands.iter().any(|c| c.id == CommandId::TableMenu);
+    let offers_table = commands.iter().any(|c| c.id == CommandId::TableOpenWindow);
     if offers_table || data.table.is_some() {
         commands.extend(table_menu(data.table.as_ref()));
         commands.extend(data.table.as_ref().map(table_undo_redo).unwrap_or_default());
@@ -1600,12 +1604,21 @@ pub fn line_range(text: &str, line: usize) -> Option<std::ops::Range<usize>> {
 pub const TO_JSON_TITLE: &str = "To JSON";
 
 /// Title of the chip that opens the table's menu.
+#[allow(dead_code)] // Window toolbar still says Table ▾ via locale directly where needed.
 pub fn table_menu_title() -> &'static str {
     crate::locale::t("table_menu")
 }
+/// English title of the window's Table ▾ control.
+#[allow(dead_code)]
+pub const TABLE_MENU_TITLE: &str = "Table ▾";
+
+/// Card chip that opens the table window ([`CommandId::TableOpenWindow`]).
+pub fn open_table_title() -> &'static str {
+    crate::locale::t("open_table")
+}
 /// English title kept for tests that pin the default language.
 #[cfg_attr(not(test), allow(dead_code))]
-pub const TABLE_MENU_TITLE: &str = "Table ▾";
+pub const OPEN_TABLE_TITLE: &str = "Open table";
 
 /// The steps a table can take, for the "Table ▾" menu and the search.
 pub fn table_steps() -> Vec<Command> {
@@ -1747,9 +1760,10 @@ pub fn table_menu_items(table: Option<&TableShown>) -> Vec<(Command, bool)> {
         .collect()
 }
 
-/// The "Table ▾" menu: Remove duplicate rows, Remove empty rows and columns, then, once the
-/// table is read, Choose columns… (more than one column), Sort ascending ›, Sort descending ›
-/// and Open in window. Undo and redo are ⌘Z and ⇧⌘Z and the version capsule.
+/// The table steps menu (window Table ▾ and command search): Remove duplicate rows, Remove
+/// empty rows and columns, then, once the table is read, Choose columns… (more than one
+/// column), Sort ascending › and Sort descending ›. Open table is the card chip. Undo and
+/// redo are ⌘Z and ⇧⌘Z and the version capsule.
 pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
     let mut commands = table_steps();
     let Some(frame) = table.and_then(|table| table.frame.as_ref()) else {
@@ -1773,12 +1787,7 @@ pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
             .iter()
             .map(table_step_command),
     );
-    commands.push(command(
-        CommandId::TableOpenWindow,
-        OPEN_WINDOW_TITLE,
-        "A larger, resizable table window",
-        "open window table larger resize sidebar",
-    ));
+    // Open table is the card chip ([`open_table_title`]), not a menu item.
     commands
 }
 
@@ -1786,6 +1795,7 @@ pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
 pub const CHOOSE_COLUMNS_TITLE: &str = "Choose columns…";
 
 /// The Table ▾ item that opens the table window.
+#[allow(dead_code)] // Was the Table ▾ item; Open table is the card chip now.
 pub const OPEN_WINDOW_TITLE: &str = "Open in window";
 
 /// Rows the table window shows at most (the meta line says when there are more).
@@ -1917,17 +1927,12 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     view
 }
 
-/// The table window's Table ▾ menu: the card's, without what is the card's own (the column
-/// picker, Open in window): the two one-click steps and the sorts.
+/// The table window's Table ▾ menu: the steps, Choose columns…, and the sorts (Open table is
+/// the card chip only).
 pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
     table_menu_items(Some(table))
         .into_iter()
-        .filter(|(command, _)| {
-            !matches!(
-                command.id,
-                CommandId::TableChooseColumns | CommandId::TableOpenWindow
-            )
-        })
+        .filter(|(command, _)| command.id != CommandId::TableOpenWindow)
         .collect()
 }
 
@@ -2388,11 +2393,12 @@ fn text_chips(text: &str) -> Vec<Command> {
         ));
     }
     if toolbar_visibility::shows_dataframe_button(kind, text) {
+        // Opens the table window (no in-card grid). Steps / Choose columns live there.
         commands.push(command(
-            CommandId::TableMenu,
-            table_menu_title(),
-            "Steps on the table",
-            "table steps dedupe duplicates undo redo",
+            CommandId::TableOpenWindow,
+            open_table_title(),
+            "A larger, resizable table window",
+            "open window table larger resize sidebar",
         ));
     }
     finish_modes(commands)
@@ -2643,9 +2649,9 @@ mod tests {
         stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
         work_card,
     };
-    use super::{OPEN_WINDOW_TITLE, WINDOW_ROWS, table_window_view};
+    use super::{OPEN_TABLE_TITLE, WINDOW_ROWS, table_window_view};
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
-    use super::{TABLE_MENU_TITLE, TableShown, VersionBar, menu_group, table_menu, undo_key};
+    use super::{TableShown, VersionBar, menu_group, table_menu, undo_key};
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
 
@@ -3116,7 +3122,7 @@ xmas-fifth-day:
             assert!(
                 chips(&input)
                     .iter()
-                    .any(|cmd| cmd.id == CommandId::TableMenu),
+                    .any(|cmd| cmd.id == CommandId::TableOpenWindow),
                 "{src}"
             );
             let file = text_save_file(src, presented_view(src, CardView::Original)).unwrap();
@@ -3157,7 +3163,7 @@ xmas-fifth-day:
                 "{src}"
             );
             assert!(
-                shown.iter().any(|cmd| cmd.id == CommandId::TableMenu),
+                shown.iter().any(|cmd| cmd.id == CommandId::TableOpenWindow),
                 "{src}"
             );
         }
@@ -3885,11 +3891,12 @@ Id,Naam,Telefoonnummer,Salaris
         assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
         assert!(grid.preview_note.is_none());
         // No Show columns / Show table chip — only Original and Table ▾.
-        assert!(ids(&super::chips(&input)).contains(&CommandId::TableMenu));
+        assert!(ids(&super::chips(&input)).contains(&CommandId::TableOpenWindow));
         let copied = transformed_text(src, CardView::Dataframe).expect("copy");
         assert!(copied.contains("Sunbox 7"), "{copied}");
         assert!(
-            ids(&super::chips(&data(SubjectKind::Text, Some(src)))).contains(&CommandId::TableMenu)
+            ids(&super::chips(&data(SubjectKind::Text, Some(src))))
+                .contains(&CommandId::TableOpenWindow)
         );
     }
 
@@ -3909,23 +3916,18 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(names, ["name", "iban"]);
         assert_eq!(view.version_title(), "v2/2");
         assert!(view.can_undo() && !view.can_redo());
-        // The card's own items are not in the window's menu; the steps are.
+        // Open table is the card chip only; Choose columns… is in the window menu; undo/redo
+        // stay on ⌘Z and the version capsule.
         let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
-        for card_only in [
-            CommandId::TableChooseColumns,
+        for not_in_menu in [
             CommandId::TableOpenWindow,
             CommandId::TableUndo,
             CommandId::TableRedo,
         ] {
-            assert!(!ids.contains(&&card_only), "{card_only:?}");
+            assert!(!ids.contains(&&not_in_menu), "{not_in_menu:?}");
         }
+        assert!(ids.contains(&&CommandId::TableChooseColumns));
         assert!(ids.contains(&&CommandId::TableStep(crate::table::TableOp::Dedupe)));
-        // The card offers the window; it keeps the card open.
-        assert!(
-            table_menu(Some(&table))
-                .iter()
-                .any(|c| c.id == CommandId::TableOpenWindow && c.title == OPEN_WINDOW_TITLE)
-        );
         assert!(!keeps_card_open(&CommandId::TableOpenWindow));
         // Without a frame yet: a placeholder, no grid.
         let mut working = table.clone();
@@ -4069,28 +4071,37 @@ Id,Naam,Telefoonnummer,Salaris
     fn a_table_gets_the_table_menu_chip_and_its_steps_in_search() {
         let input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
         let titles: Vec<String> = chips(&input).into_iter().map(|c| c.title).collect();
-        assert!(titles.iter().any(|t| t == TABLE_MENU_TITLE), "{titles:?}");
+        assert!(titles.iter().any(|t| t == OPEN_TABLE_TITLE), "{titles:?}");
         assert!(
             search_pool(&input)
                 .iter()
                 .any(|c| c.id == CommandId::TableStep(crate::table::TableOp::Dedupe))
         );
-        assert!(keeps_card_open(&CommandId::TableMenu));
+        assert!(!keeps_card_open(&CommandId::TableOpenWindow));
         let prose = data(SubjectKind::Text, Some("just some words"));
-        assert!(!chips(&prose).iter().any(|c| c.id == CommandId::TableMenu));
+        assert!(
+            !chips(&prose)
+                .iter()
+                .any(|c| c.id == CommandId::TableOpenWindow)
+        );
         // Before the table is read the menu has the one-click steps.
         let menu = table_menu(None);
         assert_eq!(menu.len(), crate::table::TableOp::ONE_CLICK.len());
-        // The Dataframe view has no chip: Table ▾ opens it.
+        // No Dataframe chip: Open table opens the window instead of an in-card grid.
         assert!(!chips(&input).iter().any(|c| c.id == CommandId::Dataframe));
+        assert!(
+            chips(&input)
+                .iter()
+                .any(|c| c.id == CommandId::TableOpenWindow)
+        );
     }
 
     #[test]
-    fn the_table_menu_has_six_items_and_sorts_by_each_column_in_submenus() {
+    fn the_table_menu_has_five_items_and_sorts_by_each_column_in_submenus() {
         use crate::table::TableOp;
         let table = deduped("name,n\na,1\na,1");
         let menu = table_menu(Some(&table));
-        // The top level, in order; the sorts are submenus.
+        // The top level, in order; the sorts are submenus. Open table is the card chip.
         let mut top: Vec<String> = Vec::new();
         for c in &menu {
             let item = menu_group(&c.id).map_or(c.title.clone(), |group| format!("{group} ›"));
@@ -4106,7 +4117,6 @@ Id,Naam,Telefoonnummer,Salaris
                 "Choose columns…",
                 "Sort ascending ›",
                 "Sort descending ›",
-                "Open in window"
             ]
         );
         let sort_up: Vec<&str> = menu
@@ -4307,7 +4317,7 @@ Id,Naam,Telefoonnummer,Salaris
         input.table = Some(table.clone());
         let card = work_card(&input);
         assert!(card.excerpt.contains("┌"), "{}", card.excerpt);
-        assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
+        assert!(ids(&chips(&input)).contains(&CommandId::TableOpenWindow));
         table.overview = Some(false);
         input.table = Some(table);
         let card = work_card(&input);
@@ -4318,7 +4328,7 @@ Id,Naam,Telefoonnummer,Salaris
         let table = read(narrow, crate::dataframe::ReadOptions::default());
         input.table = Some(table);
         assert!(work_card(&input).excerpt.contains("┌"));
-        assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
+        assert!(ids(&chips(&input)).contains(&CommandId::TableOpenWindow));
     }
 
     /// The sensitivity labels a card's meta line shows.

@@ -1,4 +1,4 @@
-// The column picker ("Choose columns…" in Table ▾), drawn over the well on the card: a filter
+// The column picker ("Choose columns…" from Table ▾), drawn over the well on the card: a filter
 // field, a scrolling list of checkboxes (one per column), All / None, "Keeping 8 of 20", and
 // Apply (Return) / Cancel (Esc). Part of `macos_launcher` (included there); the logic is
 // `crate::column_picker`. Column names and types only, never cell values. It closes with
@@ -66,8 +66,10 @@ fn show_picker_backdrop(mtm: MainThreadMarker) {
         button.setTitle(&NSString::from_str(""));
         button.setAccessibilityElement(false);
         // Nearly invisible; catches clicks outside the panel so Cancel/Esc are not the only exits.
+        // Own selector: if z-order ever puts this above the panel, clicks on the panel must not
+        // dismiss (All / None / Apply stay usable).
         button.setAlphaValue(0.01);
-        wire_button(&button, sel!(pickerCancelClicked:));
+        wire_button(&button, sel!(pickerBackdropClicked:));
         slot.replace(Some(button.clone()));
         button
     });
@@ -282,6 +284,41 @@ fn focus_picker_field() {
     if let (Some(field), Some(window)) = (field, window) {
         window.makeFirstResponder(Some(&field));
     }
+}
+
+/// Whether the current mouse event lands inside the picker panel (window coordinates).
+fn mouse_in_picker() -> bool {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let root = PICKER_VIEWS.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .filter(|views| !views.root.isHidden())
+            .map(|views| views.root.clone())
+    });
+    let Some(root) = root else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let Some(event) = app.currentEvent() else {
+        return false;
+    };
+    let loc = event.locationInWindow();
+    // convertPoint:fromView: with nil is the window's base coordinates.
+    let local = root.convertPoint_fromView(loc, None);
+    NSMouseInRect(local, root.bounds(), root.isFlipped())
+}
+
+/// Click on the full-card backdrop: dismiss only when it is outside the panel. A hit on the
+/// panel here means the backdrop was above the picker — raise the picker and keep it open so
+/// All / None / Apply work.
+fn picker_backdrop_clicked() {
+    if mouse_in_picker() {
+        raise_picker();
+        return;
+    }
+    close_picker();
 }
 
 /// Close the picker without a step (Cancel, Esc, focus loss) and lay the card out again.

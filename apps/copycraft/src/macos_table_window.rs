@@ -1,11 +1,11 @@
 #![cfg(target_os = "macos")]
-// The table window ("Open in window" in Table ▾): the table of one entry in its own resizable
+// The table window ("Open table" on the card): the table of one entry in its own resizable
 // window. A toolbar with the window's Table ▾ menu and the version capsule (↶ v2/3 ↷), a
 // sidebar with the columns (names and types), the grid with its first column frozen, and the
 // meta line. What it shows comes from `commands::table_window_view`; what it asks for goes to
 // the app as `UserEvent::TableWindow`.
 //
-// Opens with the grid and sidebar revealed (Open in window from the card). Blurs again when
+// Opens with the grid and sidebar revealed (Open table from the card). Blurs again when
 // the window stops being key (another window or app). The app closes the window and wipes it
 // on Wipe, Clear history, screen lock, sleep and when its entry is gone. Without a blur filter
 // they stay blank under an opaque cover when masked. No extra entitlements.
@@ -18,19 +18,21 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBox, NSButton,
-    NSCellImagePosition, NSColor, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
-    NSEventModifierFlags, NSFocusRingType, NSFont, NSMenu, NSMenuItem, NSScrollView,
-    NSTextAlignment, NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask,
-    NSWindowTabbingMode,
+    NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAutoresizingMaskOptions,
+    NSBackingStoreType, NSBeep, NSBorderType, NSBox, NSButton, NSCellImagePosition, NSColor,
+    NSControlStateValueOn, NSEvent, NSEventGestureAxis, NSEventModifierFlags, NSFocusRingType,
+    NSFont, NSMenu, NSMenuItem, NSModalPanelWindowLevel, NSScrollView, NSTextAlignment,
+    NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSNotification, NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSArray, NSNotification, NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize,
+    NSString,
 };
 use mac_ui::panel;
 use mac_ui::text::AttrText;
 use mac_ui::widgets;
 
+use crate::column_picker::ColumnPicker;
 use crate::commands::{self, Command, CommandId, TableWindowView, VersionBar};
 use crate::format::FormatKind;
 use crate::launcher::{self, TableWindowEvent, UserEvent};
@@ -161,6 +163,12 @@ define_class!(
                 run(id);
             }
         }
+
+        /// After the Table menu closes: show Choose columns… (modal).
+        #[unsafe(method(tableWindowOpenColumnPicker:))]
+        fn open_column_picker_clicked(&self, _sender: Option<&AnyObject>) {
+            run_column_picker();
+        }
     }
 );
 
@@ -279,6 +287,109 @@ fn mask_again() {
     }
     REVEALED.set(false);
     apply_mask();
+}
+
+/// Schedule Choose columns… after the Table menu finishes tracking (so the alert is not
+/// hidden behind it).
+pub fn open_column_picker() {
+    let delegate = DELEGATE.with(|slot| slot.borrow().clone());
+    let Some(delegate) = delegate else {
+        return;
+    };
+    // SAFETY: open_column_picker_clicked takes an optional sender; delay 0 runs after the menu.
+    unsafe {
+        delegate.performSelector_withObject_afterDelay(
+            sel!(tableWindowOpenColumnPicker:),
+            None,
+            0.0,
+        );
+    }
+}
+
+/// Modal Choose columns… for the table window: checkboxes, Apply / Cancel. Uses the same
+/// [`ColumnPicker`] model as the card; Apply emits one select step.
+fn run_column_picker() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let columns = SHOWN.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|view| view.columns.clone())
+            .unwrap_or_default()
+    });
+    if columns.len() < 2 {
+        NSBeep();
+        return;
+    }
+    let mut picker = ColumnPicker::new(columns);
+    let row_h = 22.0;
+    let width = 320.0;
+    let visible_rows = 12.0_f64.min(picker.columns().len() as f64).max(3.0);
+    let scroll_h = visible_rows * row_h + 8.0;
+    let list_h = picker.columns().len() as f64 * row_h;
+    let scroll = NSScrollView::initWithFrame(
+        NSScrollView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, scroll_h)),
+    );
+    scroll.setHasVerticalScroller(true);
+    scroll.setAutohidesScrollers(true);
+    scroll.setBorderType(NSBorderType::NoBorder);
+    let list = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width - 16.0, list_h)),
+    );
+    let mut checks: Vec<Retained<NSButton>> = Vec::new();
+    for (index, column) in picker.columns().iter().enumerate() {
+        let y = list_h - (index as f64 + 1.0) * row_h;
+        let check = unsafe {
+            NSButton::checkboxWithTitle_target_action(
+                &NSString::from_str(&column.shown),
+                None,
+                None,
+                mtm,
+            )
+        };
+        check.setState(NSControlStateValueOn);
+        check.setToolTip(Some(&NSString::from_str(&column.name)));
+        check.setFrame(NSRect::new(
+            NSPoint::new(4.0, y),
+            NSSize::new(width - 24.0, row_h),
+        ));
+        list.addSubview(&check);
+        checks.push(check);
+    }
+    scroll.setDocumentView(Some(&list));
+    let alert = NSAlert::new(mtm);
+    alert.setMessageText(&NSString::from_str(commands::CHOOSE_COLUMNS_TITLE));
+    alert.setInformativeText(&NSString::from_str(
+        "Keep the checked columns as one step. Apply needs at least one.",
+    ));
+    alert.addButtonWithTitle(&NSString::from_str("Apply"));
+    alert.addButtonWithTitle(&NSString::from_str("Cancel"));
+    alert.setAccessoryView(Some(&scroll));
+    panel::activate_app(mtm);
+    alert.layout();
+    let window = alert.window();
+    window.setHidesOnDeactivate(false);
+    window.setLevel(NSModalPanelWindowLevel);
+    window.center();
+    window.makeKeyAndOrderFront(None);
+    window.orderFrontRegardless();
+    let response = alert.runModal();
+    if response != NSAlertFirstButtonReturn {
+        return;
+    }
+    for (index, check) in checks.iter().enumerate() {
+        picker.set_kept(index, check.state() == NSControlStateValueOn);
+    }
+    if !picker.can_apply() {
+        NSBeep();
+        return;
+    }
+    if let Some(step) = picker.step() {
+        run(CommandId::TableStep(step));
+    }
 }
 
 fn run(id: CommandId) {

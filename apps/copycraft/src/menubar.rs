@@ -542,8 +542,8 @@ impl App {
         Some((text, home))
     }
 
-    /// "Open in window": the table on the card in the table window (revealed); the card may
-    /// close. The window then stays with that entry.
+    /// "Open table": the table on the card in the table window (revealed, no blur); the card
+    /// may close. The window then stays with that entry.
     fn open_table_window(&mut self) {
         let Some((text, home)) = self.table_source() else {
             return;
@@ -603,6 +603,10 @@ impl App {
                         self.table_reread(target, |options| {
                             options.month_first = month_first;
                         });
+                    }
+                    CommandId::TableChooseColumns => {
+                        launcher::open_table_window_column_picker();
+                        return;
                     }
                     _ => {}
                 }
@@ -851,10 +855,10 @@ impl App {
             None => return,
         };
         let dataframe_view = data.view == CardView::Dataframe;
-        // The chips are remembered per text, so this is cheap: a table has "Table ▾".
+        // The chips are remembered per text, so this is cheap: a table has "Open table".
         if !commands::chips(data)
             .iter()
-            .any(|chip| chip.id == CommandId::TableMenu)
+            .any(|chip| chip.id == CommandId::TableOpenWindow)
         {
             return;
         }
@@ -864,8 +868,8 @@ impl App {
         let Some(table) = self.table_at(home) else {
             return;
         };
-        // The frame is worked out for every table on the card (its columns fill the Table ▾
-        // menu), but not over a job already running for it.
+        // The frame is worked out for every table on the card (its columns fill the window
+        // Table ▾ menu), but not over a job already running for it.
         let running_here = running.is_some_and(|generation| table.awaits(generation));
         let load = if running_here {
             None

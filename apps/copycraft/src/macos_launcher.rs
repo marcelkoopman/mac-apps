@@ -14,15 +14,16 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplicationDidResignActiveNotification, NSBeep, NSBox, NSButton,
-    NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn,
-    NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode,
-    NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
-    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode, NSWindowSharingType,
+    NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification, NSBeep, NSBox,
+    NSButton, NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage,
+    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment,
+    NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
+    NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
-    NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSArray, NSEdgeInsets, NSMouseInRect, NSNotification, NSNotificationCenter,
+    NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
@@ -499,6 +500,11 @@ define_class!(
         #[unsafe(method(pickerNoneClicked:))]
         fn picker_none_clicked(&self, _sender: Option<&NSButton>) {
             picker_update(ColumnPicker::keep_none);
+        }
+
+        #[unsafe(method(pickerBackdropClicked:))]
+        fn picker_backdrop_clicked(&self, _sender: Option<&NSButton>) {
+            picker_backdrop_clicked();
         }
 
         #[unsafe(method(pickerCancelClicked:))]
@@ -989,6 +995,8 @@ fn layout(fresh_place: bool) {
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
     place_show_all(mtm, placed.preview_y);
+    // place_show_all / content actions may raise siblings; keep the picker on top.
+    raise_picker();
     META.with(|slot| {
         let borrowed = slot.borrow();
         let Some(label) = borrowed.as_ref() else {
@@ -2089,11 +2097,12 @@ fn activate_overflow(index: usize) {
 }
 
 fn run_command(cmd: Command) {
-    if matches!(cmd.id, CommandId::TableMenu | CommandId::ImageMenu) {
-        // There is no Dataframe chip: Table ▾ brings the card to the table's grid as well.
-        if cmd.id == CommandId::TableMenu {
-            launcher::emit(UserEvent::Run(CommandId::Dataframe));
-        }
+    if cmd.id == CommandId::ImageMenu {
+        pop_table_menu();
+        return;
+    }
+    // Table ▾ is no longer a chip; Choose columns stays for command search / legacy.
+    if cmd.id == CommandId::TableMenu {
         pop_table_menu();
         return;
     }
@@ -2650,8 +2659,6 @@ fn raise_content_actions() {
             }
         });
     }
-    // The column picker covers the well and its buttons while it is open.
-    raise_picker();
     SHOW_ALL.with(|slot| {
         if let Some(pill) = slot.borrow().as_ref()
             && !pill.button.view().isHidden()
@@ -2666,6 +2673,8 @@ fn raise_content_actions() {
             raise_view(spinner.view());
         }
     });
+    // Last: above Show all / spinner / well actions so All / None / Apply stay clickable.
+    raise_picker();
 }
 
 /// "Show all" pill, with the preview note in its title.
@@ -2680,7 +2689,9 @@ const SHOW_ALL_H: f64 = 24.0;
 /// not blurred. The pill title carries the note, e.g. "Showing 200 of 23,220 rows · Show all".
 fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
     let note = PREVIEW_NOTE.with(|slot| slot.borrow().clone());
-    let shown = !note.is_empty() && !well_is_masked() && !SHOWS_IMAGE.with(Cell::get);
+    // Under the column picker the pill would sit on All / None / Apply and steal clicks.
+    let shown =
+        !note.is_empty() && !well_is_masked() && !SHOWS_IMAGE.with(Cell::get) && !picker_open();
     let title = format!("{note}  ·  Show all");
     SHOW_ALL.with(|slot| {
         let mut slot = slot.borrow_mut();

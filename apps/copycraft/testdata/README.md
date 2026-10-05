@@ -80,23 +80,23 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Original, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |
-| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Original, Table ▾ | meta~Header on line 3; read=4x4; notes=Header on line 3 |
-| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Table ▾ | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
-| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Original, Table ▾ | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
-| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Table ▾ | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
-| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Table ▾ | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
-| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Original, Table ▾ | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
-| `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Original, Table ▾ | read=3x2; dtypes=str,str; dfcard~007 |
-| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Original, Table ▾ | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
-| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Table ▾ | read=6x20; columns~… PV1 Generation; dfcard~┌ |
-| `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Original, Table ▾ | read=4x3 |
-| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Original, Table ▾ | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
-| `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Original, Table ▾ | read=5x3; dtypes=datetime[μs],str,f64 |
-| `tables/small_table.csv` | Table: a small table | plain text | CSV | — | Original, Table ▾ | read=4x3 |
-| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open in window) | plain text | CSV | — | Original, Table ▾ | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
-| `tables/window_payees_iban.csv` | Table: Open in window on a sensitive table (IBANs): the window opens revealed and names the labels | plain text | CSV | financial | Original, Table ▾ | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
-| `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Original, Table ▾ | read=6x5; dtypes=str,str,i64,f64,date |
-| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Table ▾ | kind=Tsv; read=3x4; dataframe~Desk lamp |
+| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Original, Open table | meta~Header on line 3; read=4x4; notes=Header on line 3 |
+| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Original, Open table | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
+| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Original, Open table | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
+| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Original, Open table | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
+| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Original, Open table | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
+| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Original, Open table | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
+| `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Original, Open table | read=3x2; dtypes=str,str; dfcard~007 |
+| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Original, Open table | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
+| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Original, Open table | read=6x20; columns~… PV1 Generation; dfcard~┌ |
+| `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Original, Open table | read=4x3 |
+| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Original, Open table | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
+| `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Original, Open table | read=5x3; dtypes=datetime[μs],str,f64 |
+| `tables/small_table.csv` | Table: a small table | plain text | CSV | — | Original, Open table | read=4x3 |
+| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open table) | plain text | CSV | — | Original, Open table | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
+| `tables/window_payees_iban.csv` | Table: Open table on a sensitive table (IBANs): the window opens revealed and names the labels | plain text | CSV | financial | Original, Open table | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
+| `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Original, Open table | read=6x5; dtypes=str,str,i64,f64,date |
+| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Original, Open table | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | — | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | — | kind=Plain |
 | `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | — | kind=Plain |
@@ -104,10 +104,10 @@ Columns (fixed; the test parses this table between the markers):
 | `sensitivity/pii_email.txt` | PII: `example.com` email | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/pii_phone.txt` | PII: fake 06 number | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/pii_bsn.txt` | PII: test BSN 111222333 | plain text | Content | PII | — | kind=Plain |
-| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Original, Table ▾ | kind=Csv |
+| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Original, Open table | kind=Csv |
 | `sensitivity/financial_iban.txt` | Financial: test IBAN | plain text | Content | financial | — | kind=Plain |
 | `sensitivity/financial_card.txt` | Financial: test card 4111 1111 1111 1111 | plain text | Content | financial | — | kind=Plain |
-| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Original, Table ▾ | kind=Csv |
+| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Original, Open table | kind=Csv |
 | `sensitivity/leak_url_credentials.txt` | Leakguard: credentials in a URL | plain text | Content | credential | — | kind=Plain |
 | `sensitivity/leak_ip_address.txt` | Leakguard: IPs from 192.0.2.0/24 | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | — | kind=Plain |
@@ -136,7 +136,7 @@ Columns (fixed; the test parses this table between the markers):
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
 | `pretty=FILE` | the Format view (what the card opens with) is exactly the testdata file `FILE` (without its final newline) |
 | `frozen~S` | the frozen first column of the Dataframe grid (one line per grid line) contains `S` |
-| `window~S` / `windowmeta~S` / `windowcolumns=S` | Table ▾ › Open in window: its grid / its meta line / its column sidebar (names joined with `, `) |
+| `window~S` / `windowmeta~S` / `windowcolumns=S` | Open table: its grid / its meta line / its column sidebar (names joined with `, `) |
 | `decode~S`, `schema~S`, `sample~S` | the Decode, Schema or Sample view contains `S` |
 | `read=RxC` | the table reads as R rows × C columns |
 | `notes=…` | the table's reading notes (`Header on line N`, `Dates read as …`), `none` for none |
@@ -184,19 +184,19 @@ expectations; on Linux the test only checks size and EXIF.
       Remove metadata gives a version without GPS and camera data (check with Info or
       `exiftool` on a saved copy).
 - [ ] Large files from `generate_large.sh`: open or drop them on the card.
-- [ ] `tables/wide_six_columns.csv` › Table ▾ › Open in window: the window opens with the table
+- [ ] `tables/wide_six_columns.csv` › Open table: the window opens with the table
       visible (card may close); ⌘Tab away and back blurs it; a click reveals it again.
 - [ ] In the window: Remove duplicate rows, then ↶/↷ and ⌘Z/⇧⌘Z and the version menu; the
       card follows. Resize, scroll sideways (Product stays visible), ⌘W closes.
 - [ ] Reopen the window, then Wipe, lock (⌃⌘Q), sleep and Clear history: each closes it.
       Copying new items until its entry leaves history also closes it.
 - [ ] `tables/window_payees_iban.csv` in the window: the meta line shows financial in red.
-- [ ] Table ▾ on any table shows exactly: Remove duplicate rows, Remove empty rows and
-      columns, Choose columns…, Sort ascending ›, Sort descending ›, Open in window. The
+- [ ] Open table on any table opens the window; its Table ▾ shows exactly: Remove duplicate
+      rows, Remove empty rows and columns, Choose columns…, Sort ascending ›, Sort descending ›. The
       window's Table ▾ has the two Remove steps and the two Sort submenus.
 - [ ] There is no Dataframe chip and no Show columns chip: a table shows Original and Table ▾;
       clicking Table ▾ shows the grid with card title *Table* / *Tabel* (not Dataframe). Column
-      picking is only Table ▾ › Choose columns…. Esc, Cancel and click-outside always dismiss the
+      picking is Table ▾ › Choose columns… in the table window (and still on the card while its picker is open). Esc, Cancel and click-outside always dismiss the
       picker; Apply with no change also closes. Find filters the rows; ⌘Z/⇧⌘Z step versions.
 - [ ] Frozen pin width: on a multi-column table the second column is fully visible to the right
       of the pinned first column (not half-covered by the pin); no stray orange digits (e.g. "0)")
