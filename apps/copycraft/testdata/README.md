@@ -240,7 +240,8 @@ expectations; on Linux the test only checks size and EXIF.
       a ⇧⌘4 › Space screenshot of the card (and of an open table window) shows it, still
       blurred until clicked. Turn it off: screenshots leave both out again. Turn it on,
       quit and start Copycraft: the checkmark is off and screenshots exclude the card again.
-- [ ] Frozen column clipped: a wide table (`tables/wide_six_columns.csv`, or a long wide CSV)
-      in the Dataframe view, scroll right and down: the pinned first column stays inside the
-      table area, never over the meta line or the chips, and shows only the visible rows. The
-      same in Open in window (never over the version bar or below the grid).
+- [ ] Frozen column clipped + grid scrolls: a wide table (`tables/wide_six_columns.csv`, or a
+      long wide CSV) in the Dataframe view — trackpad/wheel scroll right and down: other columns
+      and rows move; the pinned first column stays inside the table area (never over the meta
+      line or the chips). The same in Open in window (never over the version bar or below the
+      grid).

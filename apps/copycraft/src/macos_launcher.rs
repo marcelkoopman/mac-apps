@@ -135,6 +135,9 @@ thread_local! {
     static WELL: RefCell<Option<Retained<NSBox>>> = const { RefCell::new(None) };
     static PREVIEW_TEXT: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
     static PREVIEW_SCROLL: RefCell<Option<Retained<NSScrollView>>> = const { RefCell::new(None) };
+    /// Parent of [`PREVIEW_SCROLL`]: clips the tall floating first column. Clipping on the
+    /// scroller itself breaks trackpad/wheel scrolling.
+    static PREVIEW_CLIP: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
     static PREVIEW_IMAGE: RefCell<Option<Retained<NSImageView>>> = const { RefCell::new(None) };
     /// Chip row: a glass group holding one GlassButton per shown command.
     static PILLS: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
@@ -836,6 +839,9 @@ fn ensure_window(mtm: MainThreadMarker) {
     let well = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
     let preview_text = payload_view(mtm);
     let preview_scroll = text_scroll(mtm, &preview_text);
+    let preview_clip = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
+    preview_clip.setClipsToBounds(true);
+    preview_clip.addSubview(&preview_scroll);
     let preview_image = image_view(mtm);
     let pills = glass::group(mtm, GLASS_MERGE);
     let (nav_capsule, previous, nav_count, next) = history_capsule(mtm);
@@ -872,7 +878,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&item_count);
     content.addSubview(header_group.view());
     content.addSubview(&well);
-    content.addSubview(&preview_scroll);
+    content.addSubview(&preview_clip);
     content.addSubview(&preview_image);
     content.addSubview(&reveal.root);
     content.addSubview(&meta);
@@ -891,6 +897,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     WELL.with(|slot| slot.replace(Some(well)));
     PREVIEW_TEXT.with(|slot| slot.replace(Some(preview_text)));
     PREVIEW_SCROLL.with(|slot| slot.replace(Some(preview_scroll)));
+    PREVIEW_CLIP.with(|slot| slot.replace(Some(preview_clip)));
     PREVIEW_IMAGE.with(|slot| slot.replace(Some(preview_image)));
     PILLS.with(|slot| slot.replace(Some(pills)));
     NAV_CAPSULE.with(|slot| slot.replace(Some(nav_capsule)));
@@ -1316,9 +1323,14 @@ fn apply_preview(y: f64) {
             view.setFrame(image_frame);
         }
     });
+    PREVIEW_CLIP.with(|slot| {
+        if let Some(clip) = slot.borrow().as_ref() {
+            clip.setFrame(text_frame);
+        }
+    });
     PREVIEW_SCROLL.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            view.setFrame(text_frame);
+            view.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), text_frame.size));
         }
     });
     place_reveal_cover(y);
@@ -1708,16 +1720,22 @@ fn set_preview_text_hidden(hidden: bool) {
             // backs it up: a layer-backed scroll view can keep painting after setHidden.
             view.setHidden(hidden);
             view.setAlphaValue(if hidden { 0.0 } else { 1.0 });
-            if let Some(parent) = unsafe { view.superview() } {
+        }
+    });
+    // Reorder the clip host (not the scroller): it is the card sibling that must sit behind
+    // the well for a picture, and in front when the text is shown.
+    PREVIEW_CLIP.with(|slot| {
+        if let Some(clip) = slot.borrow().as_ref() {
+            clip.setHidden(hidden);
+            if let Some(parent) = unsafe { clip.superview() } {
                 if hidden {
-                    // Keep the text scroller behind the well so it cannot cover the picture.
                     parent.addSubview_positioned_relativeTo(
-                        view,
+                        clip,
                         NSWindowOrderingMode::Below,
                         None,
                     );
                 } else {
-                    parent.addSubview(view);
+                    parent.addSubview(clip);
                     raise_content_actions();
                 }
             }

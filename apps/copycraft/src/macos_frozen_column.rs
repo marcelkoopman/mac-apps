@@ -24,10 +24,9 @@ fn frozen_view(mtm: MainThreadMarker) -> Option<Retained<NSTextView>> {
     view.setHidden(true);
     widgets::scroll_text_both_ways(&view);
     scroll.addFloatingSubview_forAxis(&view, mac_ui::objc2_app_kit::NSEventGestureAxis::Horizontal);
-    // The column is as tall as the whole grid. Floating subviews sit beside the clip view, not
-    // in it, and since macOS 14 a view does not clip its subviews by default: without this the
-    // column draws past the well, over the meta line and the chips.
-    scroll.setClipsToBounds(true);
+    // Do not setClipsToBounds on the NSScrollView: that stops trackpad/wheel scrolling (vertical
+    // and horizontal) while a floating column is present. The card/window wrap the scroller in a
+    // parent that clips instead, so the tall column still cannot paint over the meta line or chips.
     FROZEN.with(|slot| slot.replace(Some(view.clone())));
     Some(view)
 }

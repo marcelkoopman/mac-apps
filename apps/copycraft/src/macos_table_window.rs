@@ -455,10 +455,19 @@ fn ensure_views(mtm: MainThreadMarker) {
     grid.setSelectable(true);
     grid.setAccessibilityLabel(Some(&NSString::from_str("Table")));
     widgets::scroll_text_both_ways(&grid);
-    let grid_scroll = NSScrollView::initWithFrame(NSScrollView::alloc(mtm), grid_frame);
+    // Clip host around the scroller: clips the tall floating first column without
+    // setClipsToBounds on the NSScrollView (which breaks scrolling).
+    let grid_clip = NSView::initWithFrame(NSView::alloc(mtm), grid_frame);
+    grid_clip.setClipsToBounds(true);
+    grid_clip.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
+    content.addSubview(&grid_clip);
+    let grid_scroll = NSScrollView::initWithFrame(
+        NSScrollView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), grid_frame.size),
+    );
     widgets::configure_text_scroll(&grid_scroll, &grid);
     grid_scroll.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
-    content.addSubview(&grid_scroll);
+    grid_clip.addSubview(&grid_scroll);
     let frozen = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     frozen.setDrawsBackground(true);
     frozen.setBackgroundColor(&NSColor::controlBackgroundColor());
@@ -467,9 +476,6 @@ fn ensure_views(mtm: MainThreadMarker) {
     frozen.setHidden(true);
     widgets::scroll_text_both_ways(&frozen);
     grid_scroll.addFloatingSubview_forAxis(&frozen, NSEventGestureAxis::Horizontal);
-    // Clipped to the grid's scroll view, as on the card (`macos_frozen_column::frozen_view`):
-    // the floating column is as tall as the whole grid.
-    grid_scroll.setClipsToBounds(true);
     let placeholder = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
     placeholder.setAlignment(NSTextAlignment::Center);
     placeholder.setFrame(NSRect::new(
