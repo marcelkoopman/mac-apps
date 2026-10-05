@@ -311,9 +311,8 @@ pub struct FrozenLine {
 }
 
 /// The first column of a polars grid (the card's table view), line by line, so the card can
-/// keep it in view while the grid scrolls sideways. Lines outside the box ("shape: (4, 3)")
-/// keep nothing: they scroll like any text. `None` when `grid` has no box with at least two
-/// columns (one column has nothing to scroll past).
+/// keep it in view while the grid scrolls sideways. Lines outside the box keep nothing.
+/// `None` when `grid` has no box with at least two columns (one column has nothing to scroll past).
 pub fn frozen_column(grid: &str) -> Option<Vec<FrozenLine>> {
     let top = grid.lines().find(|line| line.starts_with('┌'))?;
     if !top.contains(COLUMN_SEPARATORS) {

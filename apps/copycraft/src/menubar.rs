@@ -542,8 +542,8 @@ impl App {
         Some((text, home))
     }
 
-    /// "Open in window": the table on the card in the table window, which then stays with
-    /// that entry.
+    /// "Open in window": the table on the card in the table window (revealed); the card may
+    /// close. The window then stays with that entry.
     fn open_table_window(&mut self) {
         let Some((text, home)) = self.table_source() else {
             return;

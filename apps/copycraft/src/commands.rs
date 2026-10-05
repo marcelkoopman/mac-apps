@@ -2285,7 +2285,6 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageResizeCustom
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
-            | CommandId::TableOpenWindow
     )
 }
 
@@ -3848,7 +3847,7 @@ Id,Naam,Telefoonnummer,Salaris
         assert_eq!(card.title, "Table");
         assert_eq!(card.highlight, Some(crate::format::FormatKind::Dataframe));
         assert!(card.selectable);
-        assert!(card.excerpt.contains("shape"), "{}", card.excerpt);
+        assert!(card.excerpt.contains("┌"), "{}", card.excerpt);
         assert!(card.excerpt.contains("Jan de Vries"), "{}", card.excerpt);
         assert!(card.excerpt.contains("Anja Bakker"), "{}", card.excerpt);
         assert!(card.excerpt.contains("Telefoonnummer"), "{}", card.excerpt);
@@ -3879,7 +3878,8 @@ Id,Naam,Telefoonnummer,Salaris
         input.table = Some(table);
         let grid = work_card(&input);
         assert_eq!(grid.title, "Table");
-        assert!(grid.excerpt.contains("shape: (40, 20)"), "{}", grid.excerpt);
+        assert!(!grid.excerpt.contains("shape:"), "{}", grid.excerpt);
+        assert!(grid.excerpt.contains("┌"), "{}", grid.excerpt);
         assert!(grid.excerpt.contains("┆ … PV3"), "{}", grid.excerpt);
         assert!(!grid.excerpt.contains("Sunbox"), "{}", grid.excerpt);
         assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
@@ -3926,7 +3926,7 @@ Id,Naam,Telefoonnummer,Salaris
                 .iter()
                 .any(|c| c.id == CommandId::TableOpenWindow && c.title == OPEN_WINDOW_TITLE)
         );
-        assert!(keeps_card_open(&CommandId::TableOpenWindow));
+        assert!(!keeps_card_open(&CommandId::TableOpenWindow));
         // Without a frame yet: a placeholder, no grid.
         let mut working = table.clone();
         working.frame = None;
@@ -3994,14 +3994,10 @@ Id,Naam,Telefoonnummer,Salaris
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = CardView::Dataframe;
         let original = work_card(&input);
-        assert!(
-            original.excerpt.contains("shape: (3, 2)"),
-            "{}",
-            original.excerpt
-        );
+        assert!(original.excerpt.contains("┌"), "{}", original.excerpt);
         input.table = Some(deduped(src));
         let card = work_card(&input);
-        assert!(card.excerpt.contains("shape: (2, 2)"), "{}", card.excerpt);
+        assert!(card.excerpt.contains("┌"), "{}", card.excerpt);
         assert!(card.meta.starts_with("3 lines"), "{}", card.meta);
         // The step of the version shown, right after the size.
         assert!(
@@ -4310,18 +4306,18 @@ Id,Naam,Telefoonnummer,Salaris
         table.overview = Some(true);
         input.table = Some(table.clone());
         let card = work_card(&input);
-        assert!(card.excerpt.contains("shape: (40, 6)"), "{}", card.excerpt);
+        assert!(card.excerpt.contains("┌"), "{}", card.excerpt);
         assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
         table.overview = Some(false);
         input.table = Some(table);
         let card = work_card(&input);
-        assert!(card.excerpt.contains("shape: (40, 6)"), "{}", card.excerpt);
+        assert!(card.excerpt.contains("┌"), "{}", card.excerpt);
         let narrow = "name,n\na,1\nb,2";
         let mut input = data(SubjectKind::Text, Some(narrow));
         input.view = CardView::Dataframe;
         let table = read(narrow, crate::dataframe::ReadOptions::default());
         input.table = Some(table);
-        assert!(work_card(&input).excerpt.contains("shape: (2, 2)"));
+        assert!(work_card(&input).excerpt.contains("┌"));
         assert!(ids(&chips(&input)).contains(&CommandId::TableMenu));
     }
 

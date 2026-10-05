@@ -292,8 +292,9 @@ pub(crate) mod tests {
         let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
         let preview = super::frame_preview(&df, 2, None).expect("preview");
         assert_eq!((preview.rows, preview.shown_rows), (3, 2));
-        assert!(preview.grid.contains("shape: (2, 2)"), "{}", preview.grid);
-        assert!(super::frame_grid(&df).expect("grid").contains("shape: (3, 2)"));
+        assert!(!preview.grid.contains("shape:"), "{}", preview.grid);
+        assert!(preview.grid.contains("┌"), "{}", preview.grid);
+        assert!(!super::frame_grid(&df).expect("grid").contains("shape:"));
         assert_eq!(super::frame_csv(&df).as_deref(), Some("name,n\na,1\nb,2\nc,3\n"));
         let parquet = super::frame_parquet(&df).expect("parquet");
         let back = ParquetReader::new(std::io::Cursor::new(parquet))
@@ -521,8 +522,8 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
         let part = |line: &super::FrozenLine| String::from_utf16(&utf16[line.start..line.end]).unwrap();
         let parts: Vec<String> = lines.iter().map(part).collect();
         assert_eq!(parts.len(), grid.lines().count());
-        assert_eq!(parts[0], "", "the shape line scrolls");
-        assert!(parts[1].starts_with('┌') && parts[1].ends_with('┬'), "{parts:?}");
+        // Grid no longer starts with Polars' shape line; first line is the top border.
+        assert!(parts[0].starts_with('┌') && parts[0].ends_with('┬'), "{parts:?}");
         assert!(parts.iter().any(|p| p == "│ fruit  ┆"), "{parts:?}");
         assert!(parts.iter().any(|p| p == "│ banana ┆"), "{parts:?}");
         assert!(parts.last().unwrap().ends_with('┴'));

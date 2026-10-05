@@ -5,11 +5,10 @@
 // meta line. What it shows comes from `commands::table_window_view`; what it asks for goes to
 // the app as `UserEvent::TableWindow`.
 //
-// Protected like the card's well: the sidebar and the grid are blurred (and hidden from
-// accessibility) until clicked, blurred again when the window stops being key (another
-// window or app), and the app closes the window and wipes it on Wipe, Clear history, screen
-// lock, sleep and when its entry is gone. Without a blur filter they stay blank under an
-// opaque cover until revealed. No extra entitlements: an ordinary in-process AppKit window.
+// Opens with the grid and sidebar revealed (Open in window from the card). Blurs again when
+// the window stops being key (another window or app). The app closes the window and wipes it
+// on Wipe, Clear history, screen lock, sleep and when its entry is gone. Without a blur filter
+// they stay blank under an opaque cover when masked. No extra entitlements.
 
 use std::cell::{Cell, RefCell};
 
@@ -184,8 +183,8 @@ pub fn show(view: TableWindowView) {
     if let Some(window) = window
         && !window.isVisible()
     {
-        // Opened (or opened again): blurred until clicked.
-        REVEALED.set(false);
+        // Opened (or opened again): content visible — user came from the card's table.
+        REVEALED.set(true);
         apply_mask();
         panel::activate_app(mtm);
         panel::bring_to_front(&window);

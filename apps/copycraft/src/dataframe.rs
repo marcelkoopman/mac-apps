@@ -275,7 +275,17 @@ fn render(df: DataFrame) -> Option<String> {
     if df.width() == 0 || df.height() == 0 {
         return None;
     }
-    Some(df.to_string())
+    // Drop Polars' leading "shape: (r, c)" line: the card meta already has rows × columns, and
+    // with a frozen first column that line peeked past the pin as a stray orange "0)".
+    Some(strip_polars_shape(&df.to_string()))
+}
+
+/// Remove a leading `shape: (…)` line from a Polars Debug grid.
+fn strip_polars_shape(grid: &str) -> String {
+    match grid.split_once('\n') {
+        Some((first, rest)) if first.starts_with("shape:") => rest.to_string(),
+        _ => grid.to_string(),
+    }
 }
 
 include!("dataframe_dates.rs");
