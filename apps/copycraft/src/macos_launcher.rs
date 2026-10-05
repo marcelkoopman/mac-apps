@@ -850,11 +850,17 @@ fn ensure_window(mtm: MainThreadMarker) {
     header_group.content().addSubview(clear.view());
     header_group.content().addSubview(more.view());
     header_group.content().addSubview(close.view());
-    let copy_button = well_action(mtm, "doc.on.doc", "Copy", "⎘", sel!(copyClicked:));
+    let copy_button = well_action(
+        mtm,
+        "doc.on.doc",
+        crate::locale::t("copy"),
+        "⎘",
+        sel!(copyClicked:),
+    );
     let save_button = well_action(
         mtm,
         "square.and.arrow.down",
-        "Save",
+        crate::locale::t("save"),
         "↓",
         sel!(saveClicked:),
     );

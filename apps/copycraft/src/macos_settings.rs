@@ -79,7 +79,7 @@ define_class!(
         #[unsafe(method(changeHotkey:))]
         fn change_hotkey(&self, _sender: Option<&NSButton>) {
             RECORDING.set(true);
-            set_hotkey_text("Press a shortcut… (Esc cancels)");
+            set_hotkey_text(crate::locale::t("press_shortcut"));
             WINDOW.with(|slot| {
                 if let Some(window) = slot.borrow().as_ref() {
                     window.makeKeyAndOrderFront(None);
@@ -180,7 +180,7 @@ fn handle_record_key(event: &NSEvent) {
     };
     let chord = HotKey::new(Some(mods), code);
     if !hotkey::is_safe(&chord) {
-        set_hotkey_text("Need ⌃ or ⌘ (not Option alone) — try again");
+        set_hotkey_text(crate::locale::t("hotkey_rejected"));
         return;
     }
     if settings::set_hotkey(&chord) {
@@ -217,7 +217,7 @@ fn build(mtm: MainThreadMarker) {
         ]
     };
     unsafe { window.setReleasedWhenClosed(false) };
-    window.setTitle(&NSString::from_str("Copycraft Settings"));
+    window.setTitle(&NSString::from_str(crate::locale::t("settings_title")));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
@@ -232,7 +232,7 @@ fn build(mtm: MainThreadMarker) {
 
     let mut y = HEIGHT - PAD - ROW;
 
-    place_label(mtm, &body, "Hotkey", PAD, y);
+    place_label(mtm, &body, crate::locale::t("hotkey"), PAD, y);
     let value = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
     value.setStringValue(&NSString::from_str(&settings::hotkey_label()));
     value.setFrame(NSRect::new(
@@ -241,8 +241,8 @@ fn build(mtm: MainThreadMarker) {
     ));
     body.addSubview(&value);
     HOTKEY_LABEL.with(|slot| *slot.borrow_mut() = Some(value));
-    let change = GlassButton::pill(mtm, "Change…", ButtonSize::Small);
-    change.set_accessibility_label("Change hotkey");
+    let change = GlassButton::pill(mtm, crate::locale::t("change_hotkey"), ButtonSize::Small);
+    change.set_accessibility_label(crate::locale::t("change_hotkey_a11y"));
     let change_w = change.width_within(100.0);
     change.view().setFrame(NSRect::new(
         NSPoint::new(WIDTH - PAD - change_w, y),
@@ -252,7 +252,7 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(change.view());
 
     y -= ROW + GAP;
-    place_label(mtm, &body, "Date order", PAD, y);
+    place_label(mtm, &body, crate::locale::t("date_order"), PAD, y);
     let popup = NSPopUpButton::initWithFrame_pullsDown(
         NSPopUpButton::alloc(mtm),
         NSRect::new(
@@ -272,7 +272,7 @@ fn build(mtm: MainThreadMarker) {
     y -= ROW + GAP;
     let blur = unsafe {
         NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str("Blur masked content"),
+            &NSString::from_str(crate::locale::t("blur_masked")),
             None,
             None,
             mtm,
@@ -294,7 +294,7 @@ fn build(mtm: MainThreadMarker) {
     y -= ROW + GAP;
     let login = unsafe {
         NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str("Open at Login"),
+            &NSString::from_str(crate::locale::t("open_at_login")),
             None,
             None,
             mtm,
@@ -361,12 +361,10 @@ fn refresh_login_row() {
         }
     });
     let note = match status {
-        macos_login::LoginStatus::RequiresApproval => {
-            "Waiting for approval in System Settings › Login Items"
-        }
-        macos_login::LoginStatus::Unavailable => "Open at Login needs macOS 13 or later",
-        macos_login::LoginStatus::NotFound => "Open at Login is not available for this build",
-        _ => "Starts Copycraft when you log in (off by default)",
+        macos_login::LoginStatus::RequiresApproval => crate::locale::t("login_approval"),
+        macos_login::LoginStatus::Unavailable => crate::locale::t("login_unavailable"),
+        macos_login::LoginStatus::NotFound => crate::locale::t("login_not_found"),
+        _ => crate::locale::t("login_note"),
     };
     LOGIN_NOTE.with(|slot| {
         if let Some(field) = slot.borrow().as_ref() {

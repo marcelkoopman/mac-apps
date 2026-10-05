@@ -2687,7 +2687,7 @@ fn version_label() -> String {
 /// "Allow screenshots" (testing): the card and the table window can be captured until it is
 /// switched off or Copycraft restarts.
 const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
-const ALLOW_SCREENSHOTS_LABEL: &str = "Allow screenshots";
+
 const SETTINGS_ID: &str = "settings";
 const ABOUT_ID: &str = "about";
 
@@ -2695,7 +2695,7 @@ fn status_labels() -> [String; 3] {
     [
         crate::settings::hotkey_label(),
         version_label(),
-        "Quit".to_string(),
+        crate::locale::t("quit").to_string(),
     ]
 }
 
@@ -2704,11 +2704,11 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     let [hotkey, version, quit] = status_labels();
     let mut rows = vec![hotkey];
     if !entries.is_empty() {
-        rows.push("History".to_string());
+        rows.push(crate::locale::t("history").to_string());
     }
-    rows.push(ALLOW_SCREENSHOTS_LABEL.to_string());
-    rows.push("Settings…".to_string());
-    rows.push("About Copycraft".to_string());
+    rows.push(crate::locale::t("allow_screenshots").to_string());
+    rows.push(crate::locale::t("settings").to_string());
+    rows.push(crate::locale::t("about").to_string());
     rows.push(version);
     rows.push(quit);
     rows
@@ -2719,7 +2719,7 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
     if !entries.is_empty() {
-        let history = Submenu::new("History", true);
+        let history = Submenu::new(crate::locale::t("history"), true);
         for (index, title) in entries {
             let _ = history.append(&MenuItem::with_id(
                 format!("hist-{index}"),
@@ -2732,12 +2732,23 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
     }
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
-        ALLOW_SCREENSHOTS_LABEL,
+        crate::locale::t("allow_screenshots"),
         true,
         launcher::allows_screenshots(),
         None,
     ));
-    let _ = menu.append(&MenuItem::with_id(SETTINGS_ID, "Settings…", true, None));
+    let _ = menu.append(&MenuItem::with_id(
+        SETTINGS_ID,
+        crate::locale::t("settings"),
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        ABOUT_ID,
+        crate::locale::t("about"),
+        true,
+        None,
+    ));
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::info_item(&version));
     let _ = menu.append(&tray::quit_item(&quit));
@@ -2962,12 +2973,12 @@ mod tests {
             status_rows(&entries),
             vec![
                 crate::settings::hotkey_label(),
-                "History".to_string(),
-                "Allow screenshots".to_string(),
-                "Settings…".to_string(),
-                "About Copycraft".to_string(),
+                crate::locale::t("history").to_string(),
+                crate::locale::t("allow_screenshots").to_string(),
+                crate::locale::t("settings").to_string(),
+                crate::locale::t("about").to_string(),
                 version_label(),
-                "Quit".to_string(),
+                crate::locale::t("quit").to_string(),
             ]
         );
     }

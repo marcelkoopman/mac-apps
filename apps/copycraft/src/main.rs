@@ -17,6 +17,7 @@ mod image_edit;
 mod image_ops;
 mod item_find;
 mod launcher;
+mod locale;
 mod memo;
 mod menubar;
 mod open_file;

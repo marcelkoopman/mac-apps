@@ -1605,6 +1605,11 @@ pub fn line_range(text: &str, line: usize) -> Option<std::ops::Range<usize>> {
 pub const TO_JSON_TITLE: &str = "To JSON";
 
 /// Title of the chip that opens the table's menu.
+pub fn table_menu_title() -> &'static str {
+    crate::locale::t("table_menu")
+}
+/// English title kept for tests that pin the default language.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const TABLE_MENU_TITLE: &str = "Table ▾";
 
 /// The steps a table can take, for the "Table ▾" menu and the search.
@@ -1634,7 +1639,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
     }
 }
 
-/// "Show table" on the column overview, "Show columns" on the grid (Dataframe view), for any
+/// crate::locale::t("show_table") on the column overview, crate::locale::t("show_columns") on the grid (Dataframe view), for any
 /// table with a column. The width only picks the view an entry opens on.
 fn grid_command(data: &LaunchData) -> Option<Command> {
     let table = data.table.as_ref()?;
@@ -1646,14 +1651,14 @@ fn grid_command(data: &LaunchData) -> Option<Command> {
     Some(if !dataframe::shows_overview(table.overview, width) {
         command(
             CommandId::TableGrid(false),
-            "Show columns",
+            crate::locale::t("show_columns"),
             "Column overview",
             "columns overview table",
         )
     } else {
         command(
             CommandId::TableGrid(true),
-            "Show table",
+            crate::locale::t("show_table"),
             "Every row",
             "table grid rows",
         )
@@ -1680,7 +1685,9 @@ fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command> {
 }
 
 /// The "Image ▾" chip.
-pub const IMAGE_MENU_TITLE: &str = "Image ▾";
+pub fn image_menu_title() -> &'static str {
+    crate::locale::t("image_menu")
+}
 /// Resize › Custom….
 pub const CUSTOM_RESIZE_TITLE: &str = "Custom…";
 
@@ -2097,7 +2104,7 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     let mut commands = source_commands(data);
     commands.push(command(
         CommandId::ClearClipboard,
-        "Empty pasteboard",
+        crate::locale::t("empty_pasteboard"),
         "Pasteboard only",
         "empty pasteboard clear",
     ));
@@ -2112,14 +2119,14 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     if data.can_clear_history {
         commands.push(command(
             CommandId::ClearHistory,
-            "Clear history",
+            crate::locale::t("clear_history"),
             "Forget copies",
             "clear history forget",
         ));
     }
     commands.push(command(
         CommandId::ClearSensitive,
-        "Clear sensitive copies after 60 s",
+        crate::locale::t("clear_sensitive"),
         "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
         "clear sensitive pasteboard timer",
     ));
@@ -2135,25 +2142,25 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         commands.push(command(
             CommandId::Appearance(theme),
             theme_name(theme),
-            "Appearance",
+            crate::locale::t("appearance"),
             "appearance theme",
         ));
     }
     commands.push(command(
         CommandId::Settings,
-        "Settings…",
+        crate::locale::t("settings"),
         "Hotkey, date order, blur, Open at Login",
         "settings preferences hotkey blur login",
     ));
     commands.push(command(
         CommandId::About,
-        "About Copycraft",
+        crate::locale::t("about"),
         "Version and offline promise",
         "about version offline",
     ));
     commands.push(command(
         CommandId::Quit,
-        "Quit",
+        crate::locale::t("quit"),
         "Quit Copycraft",
         "quit exit",
     ));
@@ -2416,7 +2423,7 @@ fn text_chips(text: &str) -> Vec<Command> {
     if toolbar_visibility::shows_dataframe_button(kind, text) {
         commands.push(command(
             CommandId::TableMenu,
-            TABLE_MENU_TITLE,
+            table_menu_title(),
             "Steps on the table",
             "table steps dedupe duplicates undo redo",
         ));
@@ -2452,7 +2459,7 @@ fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command> {
     if edits {
         modes.push(command(
             CommandId::ImageMenu,
-            IMAGE_MENU_TITLE,
+            image_menu_title(),
             "Steps on the picture",
             "image picture resize rotate flip grayscale metadata undo redo",
         ));
@@ -2472,7 +2479,12 @@ fn finish_modes(modes: Vec<Command>) -> Vec<Command> {
 }
 
 fn original_command() -> Command {
-    command(CommandId::Original, "Original", "Source", "original source")
+    command(
+        CommandId::Original,
+        crate::locale::t("original"),
+        "Source",
+        "original source",
+    )
 }
 
 /// Copy and Save sit on the well, on the view that is showing.
@@ -2636,9 +2648,9 @@ fn clip_chars(text: &str, max: usize) -> String {
 
 fn theme_name(theme: Theme) -> &'static str {
     match theme {
-        Theme::System => "System",
-        Theme::Light => "Light",
-        Theme::Dark => "Dark",
+        Theme::System => crate::locale::t("theme_system"),
+        Theme::Light => crate::locale::t("theme_light"),
+        Theme::Dark => crate::locale::t("theme_dark"),
     }
 }
 
@@ -3922,7 +3934,7 @@ Id,Naam,Telefoonnummer,Salaris
             overview.meta
         );
         assert!(overview.preview_note.is_none());
-        // "Show table": the grid, shortened names too; Copy keeps the real ones.
+        // crate::locale::t("show_table"): the grid, shortened names too; Copy keeps the real ones.
         let mut table = read(src, crate::dataframe::ReadOptions::default());
         input.table = Some(table.clone());
         assert!(ids(&super::chips(&input)).contains(&CommandId::TableGrid(true)));

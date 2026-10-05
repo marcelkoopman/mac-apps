@@ -87,7 +87,7 @@ fn build(mtm: MainThreadMarker) {
     };
     let window: Retained<NSWindow> = window;
     unsafe { window.setReleasedWhenClosed(false) };
-    window.setTitle(&NSString::from_str("About Copycraft"));
+    window.setTitle(&NSString::from_str(crate::locale::t("about_title")));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
@@ -112,7 +112,8 @@ fn build(mtm: MainThreadMarker) {
     y -= 28.0;
     let version = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
     version.setStringValue(&NSString::from_str(&format!(
-        "Version {}",
+        "{} {}",
+        crate::locale::t("version"),
         bundle_version()
     )));
     version.setFrame(NSRect::new(
@@ -123,9 +124,7 @@ fn build(mtm: MainThreadMarker) {
 
     y -= 40.0;
     let promise = widgets::label(mtm, 13.0, &NSColor::labelColor());
-    promise.setStringValue(&NSString::from_str(
-        "Works offline. Copied text and pictures stay on this Mac — Copycraft never opens a network connection.",
-    ));
+    promise.setStringValue(&NSString::from_str(crate::locale::t("offline_promise")));
     promise.setUsesSingleLineMode(false);
     promise.setLineBreakMode(mac_ui::objc2_app_kit::NSLineBreakMode::ByWordWrapping);
     promise.setFrame(NSRect::new(
