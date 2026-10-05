@@ -43,7 +43,12 @@ pub fn try_format_preview(
 ) -> Option<DataframePreview> {
     let mut df = parse(text)?;
     read_iso_dates(&mut df);
-    let dates = read_dates(&mut df, DateOrder::DayFirst);
+    let order = if crate::settings::load().date_month_first {
+        DateOrder::MonthFirst
+    } else {
+        DateOrder::DayFirst
+    };
+    let dates = read_dates(&mut df, order);
     crate::table_ops::type_text_columns(&mut df);
     let mut preview = frame_preview(&df, max_rows, overview)?;
     preview.dates = dates;

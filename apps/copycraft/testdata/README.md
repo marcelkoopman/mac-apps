@@ -199,6 +199,7 @@ expectations; on Linux the test only checks size and EXIF.
 - [ ] `tables/semicolon_decimal_comma.csv` (numbers and dates stored as text): the grid shows
       the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).
+- [ ] Settings window (menu bar *Settings…* or card `⋯`): change the hotkey to Control-Option-C (not Option-C alone — that is rejected); the tray tip and menu show the new label and the hotkey summons the card. Set date order to mm/dd/yyyy, copy a table with `01/02/2026`, and check the dates read month-first (chip still switches). Turn blur off: a masked well uses the shade instead of gaussian blur; turn it back on. Open at Login: switch on (may open System Settings › Login Items for approval); switch off.
 - [ ] Pasteboard privacy, Always Deny (macOS with pasteboard privacy on; see
       `docs/pasteboard-privacy/README.md` for the developer flag): set *Privacy & Security ›
       Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says

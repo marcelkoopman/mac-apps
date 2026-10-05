@@ -1,7 +1,10 @@
 //! Copycraft's own settings in the standard user defaults. None of them holds clipboard data.
 
-/// Settings the `⋯` menu changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use crate::dataframe::ReadOptions;
+use crate::hotkey;
+
+/// Settings the Settings window and the `⋯` menu change.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     /// Empty the pasteboard a minute after copycraft wrote a copy labelled sensitive, unless
     /// something else was copied meanwhile. On by default.
@@ -9,6 +12,13 @@ pub struct Settings {
     /// Forget history this many minutes after the last copy (one of [`HISTORY_MINUTES`]); 0
     /// keeps it until it is cleared, the screen locks, the Mac sleeps or the user switches.
     pub history_minutes: u32,
+    /// Gaussian blur over a masked well. Off falls back to the opaque shade. On by default.
+    pub blur: bool,
+    /// Prefer `mm/dd/yyyy` when a date column fits both orders. Off (dd/mm) by default.
+    pub date_month_first: bool,
+    /// Global hotkey as a [`global_hotkey::hotkey::HotKey`] string (`control+alt+super+KeyC`).
+    /// `None` means the default ([`hotkey::open`]).
+    pub hotkey: Option<String>,
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -19,12 +29,18 @@ impl Default for Settings {
         Self {
             clear_sensitive: true,
             history_minutes: 15,
+            blur: true,
+            date_month_first: false,
+            hotkey: None,
         }
     }
 }
 
 const CLEAR_SENSITIVE_KEY: &str = "CopycraftClearSensitiveCopies";
 const HISTORY_MINUTES_KEY: &str = "CopycraftHistoryMinutes";
+const BLUR_KEY: &str = "CopycraftBlurMaskedWell";
+const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
+const HOTKEY_KEY: &str = "CopycraftHotkey";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 
@@ -40,7 +56,30 @@ pub fn load() -> Settings {
     {
         settings.history_minutes = minutes;
     }
+    if let Some(value) = load_bool(BLUR_KEY) {
+        settings.blur = value;
+    }
+    if let Some(value) = load_bool(DATE_MONTH_FIRST_KEY) {
+        settings.date_month_first = value;
+    }
+    if let Some(text) = load_string(HOTKEY_KEY).filter(|text| !text.is_empty()) {
+        settings.hotkey = Some(text);
+    }
     settings
+}
+
+/// How a new table is read: the stored date-order preference.
+pub fn preferred_read_options() -> ReadOptions {
+    ReadOptions {
+        month_first: load().date_month_first,
+    }
+}
+
+/// A fresh [`crate::table::TableVersions`] that starts with the preferred date order.
+pub fn preferred_table() -> crate::table::TableVersions {
+    let mut table = crate::table::TableVersions::default();
+    table.set_options(preferred_read_options());
+    table
 }
 
 pub fn set_clear_sensitive(on: bool) {
@@ -49,6 +88,33 @@ pub fn set_clear_sensitive(on: bool) {
 
 pub fn set_history_minutes(minutes: u32) {
     store_int(HISTORY_MINUTES_KEY, i64::from(minutes));
+}
+
+pub fn set_blur(on: bool) {
+    store_bool(BLUR_KEY, on);
+}
+
+pub fn set_date_month_first(on: bool) {
+    store_bool(DATE_MONTH_FIRST_KEY, on);
+}
+
+/// Store `chord` when it is safe ([`hotkey::is_safe`]); otherwise keep the previous value.
+pub fn set_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
+    if !hotkey::is_safe(chord) {
+        return false;
+    }
+    store_string(HOTKEY_KEY, &hotkey::to_storage(chord));
+    true
+}
+
+/// The stored chord, or the default.
+pub fn hotkey() -> global_hotkey::hotkey::HotKey {
+    hotkey::from_storage(load().hotkey.as_deref())
+}
+
+/// Compact label of the stored chord (`⌃⌥⌘C`).
+pub fn hotkey_label() -> String {
+    hotkey::label(&hotkey())
 }
 
 /// Whether the card has shown the one-time explanation of the pasteboard privacy alert.
@@ -91,6 +157,25 @@ fn store_int(key: &str, value: i64) {
         .setInteger_forKey(value as isize, &NSString::from_str(key));
 }
 
+#[cfg(target_os = "macos")]
+fn load_string(key: &str) -> Option<String> {
+    use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
+    let defaults = NSUserDefaults::standardUserDefaults();
+    let key = NSString::from_str(key);
+    let value = defaults.stringForKey(&key)?;
+    Some(value.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn store_string(key: &str, value: &str) {
+    use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
+    // SAFETY: NSString is a valid NSObject for the defaults dictionary.
+    unsafe {
+        NSUserDefaults::standardUserDefaults()
+            .setObject_forKey(Some(&*NSString::from_str(value)), &NSString::from_str(key));
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 fn load_bool(_key: &str) -> Option<bool> {
     None
@@ -107,18 +192,31 @@ fn load_int(_key: &str) -> Option<i64> {
 #[cfg(not(target_os = "macos"))]
 fn store_int(_key: &str, _value: i64) {}
 
+#[cfg(not(target_os = "macos"))]
+fn load_string(_key: &str) -> Option<String> {
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn store_string(_key: &str, _value: &str) {}
+
 #[cfg(test)]
 mod tests {
     use super::Settings;
 
     #[test]
-    fn sensitive_copies_are_cleared_by_default() {
-        assert!(Settings::default().clear_sensitive);
+    fn defaults_match_the_previous_behaviour() {
+        let settings = Settings::default();
+        assert!(settings.clear_sensitive);
+        assert_eq!(settings.history_minutes, 15);
+        assert!(settings.blur);
+        assert!(!settings.date_month_first);
+        assert!(settings.hotkey.is_none());
+        assert!(super::HISTORY_MINUTES.contains(&settings.history_minutes));
     }
 
     #[test]
-    fn history_is_kept_fifteen_minutes_by_default() {
-        assert_eq!(Settings::default().history_minutes, 15);
-        assert!(super::HISTORY_MINUTES.contains(&Settings::default().history_minutes));
+    fn preferred_read_options_follow_the_date_setting() {
+        assert!(!super::preferred_read_options().month_first);
     }
 }

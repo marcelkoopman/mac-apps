@@ -23,7 +23,6 @@ use crate::appearance;
 use crate::clipboard::{self, ClipboardHistory, ClipboardView, SecretBytes};
 use crate::commands::{self, CardView, CommandId, Hist, LaunchData, SubjectKind};
 use crate::format;
-use crate::hotkey;
 use crate::icon;
 use crate::image_edit::{ImageOp, ImageVersions};
 use crate::launcher::{self, UserEvent};
@@ -80,7 +79,9 @@ struct App {
     blink: tray::Blink,
     /// The glyph and its blink frame, both templates, built once.
     icons: tray::Glyphs,
-    _hotkeys: GlobalHotKeyManager,
+    hotkeys: GlobalHotKeyManager,
+    /// The currently registered chord (for unregister on change).
+    format_hotkey: global_hotkey::hotkey::HotKey,
     format_hotkey_id: u32,
     /// The sensitive copy copycraft wrote last, to clear when its minute is up.
     sensitive_clear: Option<SensitiveClear>,
@@ -275,6 +276,12 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),
             UserEvent::TableWindow(event) => self.table_window_event(event),
+            UserEvent::SettingsChanged => {
+                if launcher::is_open() {
+                    self.refresh_popup();
+                }
+            }
+            UserEvent::HotkeyChanged => self.rebind_hotkey(),
             UserEvent::ImageDone(done) => self.finish_image_job(*done),
             UserEvent::VersionScanned { picture, scan } => {
                 self.finish_version_scan(&picture, scan);
@@ -301,6 +308,9 @@ impl ApplicationHandler<UserEvent> for App {
                         if on { "on" } else { "off" }
                     );
                     self.refresh_status_menu();
+                }
+                SETTINGS_ID => {
+                    self.run_command(event_loop, CommandId::Settings);
                 }
                 id => {
                     if let Some(index) = id
@@ -453,7 +463,32 @@ impl App {
                     options.month_first = month_first;
                 });
             }
+            CommandId::Settings => launcher::show_settings(),
             CommandId::Quit => event_loop.exit(),
+        }
+    }
+
+    /// Unregister the old chord and register the one stored in Settings.
+    fn rebind_hotkey(&mut self) {
+        let next = crate::settings::hotkey();
+        if next.id() == self.format_hotkey_id {
+            return;
+        }
+        if let Err(e) = self.hotkeys.unregister(self.format_hotkey) {
+            eprintln!("copycraft: unregister hotkey: {e}");
+        }
+        match self.hotkeys.register(next) {
+            Ok(()) => {
+                self.format_hotkey = next;
+                self.format_hotkey_id = next.id();
+                self.refresh_status_menu();
+                eprintln!("copycraft: hotkey {}", crate::settings::hotkey_label());
+            }
+            Err(e) => {
+                eprintln!("copycraft: register hotkey: {e}");
+                // Best effort: put the previous chord back.
+                let _ = self.hotkeys.register(self.format_hotkey);
+            }
         }
     }
 
@@ -518,6 +553,7 @@ impl App {
             return;
         };
         self.close_table_window();
+        launcher::close_settings();
         if let Some(table) = self.target_table(TableTarget::Window, home) {
             table.pin(true);
         }
@@ -1448,7 +1484,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
-        self.opened_table = TableVersions::default();
+        self.opened_table = crate::settings::preferred_table();
         self.opened_image = ImageVersions::default();
         if let Some(cursor) = self.clipboard_cursor.take() {
             self.history_cursor = cursor;
@@ -1467,7 +1503,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = Some(opened);
-        self.opened_table = TableVersions::default();
+        self.opened_table = crate::settings::preferred_table();
         self.opened_image = ImageVersions::default();
         self.card_view = CardView::Original;
         self.refresh_popup();
@@ -2071,7 +2107,7 @@ impl App {
     fn clear_secrets(&mut self) {
         self.close_table_window();
         self.opened = None;
-        self.opened_table = TableVersions::default();
+        self.opened_table = crate::settings::preferred_table();
         self.opened_image = ImageVersions::default();
         self.cancel_image_job();
         self.image_note = None;
@@ -2647,10 +2683,11 @@ fn version_label() -> String {
 /// switched off or Copycraft restarts.
 const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
 const ALLOW_SCREENSHOTS_LABEL: &str = "Allow screenshots";
+const SETTINGS_ID: &str = "settings";
 
 fn status_labels() -> [String; 3] {
     [
-        hotkey::LABEL.to_string(),
+        crate::settings::hotkey_label(),
         version_label(),
         "Quit".to_string(),
     ]
@@ -2664,6 +2701,7 @@ fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
         rows.push("History".to_string());
     }
     rows.push(ALLOW_SCREENSHOTS_LABEL.to_string());
+    rows.push("Settings…".to_string());
     rows.push(version);
     rows.push(quit);
     rows
@@ -2692,18 +2730,20 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
         launcher::allows_screenshots(),
         None,
     ));
+    let _ = menu.append(&MenuItem::with_id(SETTINGS_ID, "Settings…", true, None));
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::info_item(&version));
     let _ = menu.append(&tray::quit_item(&quit));
     menu
 }
 
-fn register_format_hotkey() -> Result<(GlobalHotKeyManager, u32), Box<dyn std::error::Error>> {
+fn register_format_hotkey()
+-> Result<(GlobalHotKeyManager, global_hotkey::hotkey::HotKey, u32), Box<dyn std::error::Error>> {
     let manager = GlobalHotKeyManager::new()?;
-    let hotkey = hotkey::open();
+    let hotkey = crate::settings::hotkey();
     let id = hotkey.id();
     manager.register(hotkey)?;
-    Ok((manager, id))
+    Ok((manager, hotkey, id))
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -2720,7 +2760,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         eprintln!("background start-up skipped: {e}");
     }
-    let (hotkeys, format_hotkey_id) = register_format_hotkey()?;
+    let (hotkeys, hotkey, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.
     let icons = tray::Glyphs {
@@ -2761,7 +2801,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         spinner_on: false,
         blink: tray::Blink::default(),
         icons,
-        _hotkeys: hotkeys,
+        hotkeys,
+        format_hotkey: hotkey,
         format_hotkey_id,
         sensitive_clear: None,
         conceal_when_checked: None,
@@ -2772,7 +2813,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_on_pasteboard: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,
-        opened_table: TableVersions::default(),
+        opened_table: crate::settings::preferred_table(),
         table_job: None,
         table_error: None,
         table_window: None,
@@ -2796,7 +2837,6 @@ mod tests {
     };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
-    use crate::hotkey;
     use zeroize::Zeroizing;
 
     #[test]
@@ -2898,7 +2938,7 @@ mod tests {
         assert_eq!(
             status_labels(),
             [
-                hotkey::LABEL.to_string(),
+                crate::settings::hotkey_label(),
                 version_label(),
                 "Quit".to_string(),
             ]
@@ -2914,9 +2954,10 @@ mod tests {
         assert_eq!(
             status_rows(&entries),
             vec![
-                hotkey::LABEL.to_string(),
+                crate::settings::hotkey_label(),
                 "History".to_string(),
                 "Allow screenshots".to_string(),
+                "Settings…".to_string(),
                 version_label(),
                 "Quit".to_string(),
             ]

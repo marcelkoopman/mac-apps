@@ -491,6 +491,8 @@ pub enum CommandId {
     TableChooseColumns,
     /// Open the table on the card in its own resizable window ([`table_window_view`]).
     TableOpenWindow,
+    /// Open the Settings window (hotkey, date order, blur, Open at Login).
+    Settings,
     Quit,
 }
 
@@ -2136,6 +2138,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         ));
     }
     commands.push(command(
+        CommandId::Settings,
+        "Settings…",
+        "Hotkey, date order, blur, Open at Login",
+        "settings preferences hotkey blur login",
+    ));
+    commands.push(command(
         CommandId::Quit,
         "Quit",
         "Quit Copycraft",
@@ -2265,6 +2273,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::KeepHistory(_)
             | CommandId::ClearClipboard
             | CommandId::ClearHistory
+            | CommandId::Settings
             | CommandId::Clear
             | CommandId::ChooseFile
             | CommandId::UseClipboard

@@ -45,6 +45,10 @@ pub enum UserEvent {
     },
     /// Something in the table window ([`TableWindowEvent`]).
     TableWindow(TableWindowEvent),
+    /// Settings changed (blur, date order): refresh the open card.
+    SettingsChanged,
+    /// The global hotkey was changed in Settings: unregister the old one, register the new.
+    HotkeyChanged,
 }
 
 /// What the table window asks for: a command on its table (a step, undo, redo, a version,
@@ -69,6 +73,18 @@ pub fn show_table_window(view: crate::commands::TableWindowView) {
 pub fn close_table_window() {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::close();
+}
+
+/// Open the Settings window.
+pub fn show_settings() {
+    #[cfg(target_os = "macos")]
+    crate::macos_settings::show();
+}
+
+/// Close the Settings window.
+pub fn close_settings() {
+    #[cfg(target_os = "macos")]
+    crate::macos_settings::close();
 }
 
 /// What a table job left: the generation it ran for and its frame, or why it stopped.

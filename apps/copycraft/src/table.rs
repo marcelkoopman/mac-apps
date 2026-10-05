@@ -440,6 +440,13 @@ impl TableVersions {
         self.options
     }
 
+    /// Set how the next read of the original starts (the Settings date order), before any notes.
+    pub fn set_options(&mut self, options: crate::dataframe::ReadOptions) {
+        if self.notes.is_none() {
+            self.options = options;
+        }
+    }
+
     /// What reading the copied text found, once it was read.
     pub fn notes(&self) -> Option<crate::dataframe::ReadNotes> {
         self.notes

@@ -480,7 +480,7 @@ impl ClipboardHistory {
         Some(
             self.entries[index]
                 .table
-                .get_or_insert_with(TableVersions::default),
+                .get_or_insert_with(crate::settings::preferred_table),
         )
     }
 

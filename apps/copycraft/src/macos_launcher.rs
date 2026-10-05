@@ -48,7 +48,6 @@ const WELL_GAP: f64 = 6.0;
 /// space that keeps lines clear of the icons.
 const TEXT_INSET_X: f64 = 12.0;
 const ITEM_COUNT_W: f64 = 56.0;
-const HOTKEY: &str = crate::hotkey::LABEL;
 /// Gaussian blur (`CIGaussianBlur` radius, in points) over masked text in the well. The privacy
 /// tradeoff: the blur should show the shape of what was copied (how many lines, their indentation
 /// and length, where code blocks are) so you recognise it, but never the text. At 6 pt each glyph
@@ -1207,7 +1206,11 @@ fn set_well_blur(on: bool) {
         clear_blur();
         return;
     }
-    let filters = gaussian_blurs();
+    let filters = if crate::settings::load().blur {
+        gaussian_blurs()
+    } else {
+        None
+    };
     let plan = commands::well_mask(true, filters.is_some());
     SHADE_ON.set(plan.shade);
     show_mask_shade(plan.shade);
@@ -2128,6 +2131,9 @@ fn pop_overflow() {
             menu.addItem(&NSMenuItem::separatorItem(mtm));
             saw_appearance = true;
         }
+        if matches!(cmd.id, CommandId::Settings) {
+            menu.addItem(&NSMenuItem::separatorItem(mtm));
+        }
         if !saw_quit && matches!(cmd.id, CommandId::Quit) {
             menu.addItem(&NSMenuItem::separatorItem(mtm));
             saw_quit = true;
@@ -2399,7 +2405,7 @@ fn set_label(
 
 /// The card title (kind, plus any check such as `missing }`) and the open hotkey.
 fn header_title(kind: &str) -> String {
-    format!("{kind} · {HOTKEY}")
+    format!("{kind} · {}", crate::settings::hotkey_label())
 }
 
 /// Place a header button at `x` inside the header group (which is `HEADER_BUTTON` tall).

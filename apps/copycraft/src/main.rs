@@ -54,6 +54,8 @@ mod macos_image_io;
 #[cfg(target_os = "macos")]
 mod macos_launcher;
 #[cfg(target_os = "macos")]
+mod macos_login;
+#[cfg(target_os = "macos")]
 mod macos_open;
 #[cfg(target_os = "macos")]
 mod macos_pasteboard;
@@ -63,6 +65,8 @@ mod macos_preview_image;
 mod macos_save;
 #[cfg(target_os = "macos")]
 mod macos_session;
+#[cfg(target_os = "macos")]
+mod macos_settings;
 #[cfg(target_os = "macos")]
 mod macos_table_window;
 #[cfg(target_os = "macos")]
