@@ -948,7 +948,12 @@ fn apply_text_view(
     } else {
         text_view_title(source, view, &body)
     };
-    card.meta = text_meta(&body);
+    card.meta = if view == CardView::Decode {
+        // The decoded text keeps the copy's labels: a JWT stays a credential once decoded.
+        text_meta_joined(&body, source)
+    } else {
+        text_meta(&body)
+    };
     if matches!(view, CardView::Schema | CardView::Sample) {
         set_excerpt(card, &body, full);
         card.highlight = Some(if view == CardView::Sample || kind == FormatKind::Xml {
@@ -1379,6 +1384,10 @@ fn text_view_title(source: &str, view: CardView, body: &str) -> String {
         }
         .to_string(),
         CardView::Sample => "Sample XML".to_string(),
+        CardView::Decode => match decode::detect(source) {
+            Some(found) => found.label().to_string(),
+            None => format::detect(body).source_heading().to_string(),
+        },
         _ => format::detect(body).source_heading().to_string(),
     }
 }
@@ -1389,7 +1398,7 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
         CardView::Original => Some(source.to_string()),
         CardView::Format => Some(clipboard::formatted(source)),
         CardView::Convert => convert::try_convert(source).map(|body| clipboard::formatted(&body)),
-        CardView::Decode => decode::try_decode(source).map(|body| clipboard::formatted(&body)),
+        CardView::Decode => decode::decode(source).map(|decoded| decoded.body),
         CardView::Dataframe => dataframe::try_format(source),
         CardView::Schema => {
             if format::detect(source) == FormatKind::Xml {
@@ -2388,12 +2397,15 @@ fn text_chips(text: &str) -> Vec<Command> {
             "convert json key value",
         ));
     }
-    if toolbar_visibility::shows_decode(kind) && decode::try_decode(text).is_some() {
+    // One decoder chip, titled with what the copy decodes as (JWT, Base64, URL, …).
+    if toolbar_visibility::shows_decode(kind)
+        && let Some(found) = decode::detect(text)
+    {
         commands.push(command(
             CommandId::Decode,
-            "Decode",
-            "Encoded text",
-            "decode jwt base64 percent",
+            found.label(),
+            "Decoded, read-only",
+            found.keywords(),
         ));
     }
     if toolbar_visibility::shows_dataframe_button(kind, text) {
@@ -2543,6 +2555,29 @@ fn image_meta(facts: &ImageFacts) -> String {
 
 fn text_meta(text: &str) -> String {
     text_meta_from(text, text)
+}
+
+/// [`text_meta`] for `body`, with the labels of `body` and of `source` together (a decoded
+/// view: the copy's labels stay, and what decoding reveals is labelled too).
+fn text_meta_joined(body: &str, source: &str) -> String {
+    use crate::sensitivity::{Labeling, labeling};
+    let size = text_meta_from(body, "");
+    let mut labels = Vec::new();
+    for text in [source, body] {
+        match labeling(text) {
+            Labeling::Known(found) => labels.extend(found.labels),
+            Labeling::Checking => {
+                return format!("{size}  ·  {}", crate::sensitivity::CHECKING);
+            }
+        }
+    }
+    labels.sort();
+    labels.dedup();
+    if labels.is_empty() {
+        size
+    } else {
+        format!("{size}  ·  {}", crate::sensitivity::label_line(&labels))
+    }
 }
 
 /// Size and line count come from `measured`. Classification comes from
@@ -3180,6 +3215,26 @@ xmas-fifth-day:
             Some("eyJuYW1lIjoiY29weWNyYWZ0In0="),
         ));
         assert!(shown.iter().any(|cmd| cmd.id == CommandId::Decode));
+    }
+
+    #[test]
+    fn decoded_jwt_stays_a_masked_credential() {
+        let token = crate::decode::testdata("jwt_expired.txt");
+        let original = data(SubjectKind::Text, Some(&token));
+        let decoder: Vec<_> = chips(&original)
+            .into_iter()
+            .filter(|cmd| cmd.id == CommandId::Decode)
+            .collect();
+        assert_eq!(decoder.len(), 1);
+        assert_eq!(decoder[0].title, "JWT");
+        assert!(work_card(&original).meta.contains("credential"));
+        let mut decoded = original.clone();
+        decoded.view = CardView::Decode;
+        let card = work_card(&decoded);
+        assert_eq!(card.title, "JWT");
+        assert!(card.meta.contains("credential"), "{}", card.meta);
+        assert!(card.excerpt.starts_with("Signature not verified"));
+        assert!(masks_content(&card, CardView::Decode));
     }
 
     #[test]

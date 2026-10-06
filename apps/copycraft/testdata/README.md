@@ -73,10 +73,15 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/yaml_to_json_multi_document.yaml` | To JSON: two documents (`---`) become an array | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json=[{"kind":"Service","metadata":{"app":"copycraft-demo"}},{"kind":"Deployment","spec":{"replicas":2}}] |
 | `convert/yaml_invalid.yaml` | To JSON: invalid YAML gets no chip | yaml | Content | — | — | kind=Text |
 | `convert/key_value.txt` | Convert `key: value` → JSON | plain text | Content | — | Original, Convert | kind=Text; convert=Json; convert~"project": "Copycraft" |
-| `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Original, Decode | decode~"name": "John Doe"; decode~"alg": "HS256" |
-| `convert/base64.txt` | Decode Base64 | plain text | Content | — | Original, Decode | decode~Hello from Copycraft! This is synthetic test data. |
-| `convert/data_uri.txt` | Decode a `data:` URI | plain text | Content | — | Original, Decode | decode~Copycraft data URI demo |
-| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Original, Decode | decode~https://example.com/search?q=copy%20craft&lang=en |
+| `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Original, JWT | decode~"name": "John Doe"; decode~"alg": "HS256"; decodetitle=JWT; decodemeta~credential |
+| `convert/base64.txt` | Decode Base64 | plain text | Content | — | Original, Base64 | decode~Hello from Copycraft! This is synthetic test data. |
+| `convert/data_uri.txt` | Decode a `data:` URI | plain text | Content | — | Original, Base64 | decode~Copycraft data URI demo |
+| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Original, URL | decode~https://example.com/search?q=copy craft&lang=en |
+| `decode/jwt_expired.txt` | JWT chip: test token (dummy secret), `exp` in the past | plain text | Content | credential | Original, JWT | decode~Signature not verified; decode~Expires (exp): expired (; decode~"name": "Copycraft Test"; decodetitle=JWT; decodemeta~credential |
+| `decode/jwt_valid_until_2099.txt` | JWT chip: `exp` in 2099, still valid | plain text | Content | credential | Original, JWT | decode~Expires (exp): valid for; decode~Issued (iat):; decodemeta~credential |
+| `decode/jwt_not_before_future.txt` | JWT chip: `nbf` in 2098, not valid yet | plain text | Content | credential | Original, JWT | decode~Not before (nbf): not valid yet (in |
+| `decode/jwt_invalid_no_alg.txt` | No JWT chip: header without `alg` (still labelled by the secret detector) | plain text | Content | credential | — | kind=Plain |
+| `decode/jwt_invalid_not_json.txt` | No JWT chip: three dotted parts that are not base64 JSON | plain text | Content | — | — | kind=Plain |
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Original, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |

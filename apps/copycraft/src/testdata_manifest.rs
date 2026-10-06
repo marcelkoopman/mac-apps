@@ -270,6 +270,9 @@ fn check(text: &str, check: &str) -> Result<(), String> {
             return if got == expected { Ok(()) } else { fail(&got) };
         }
         "decode" => view_text(text, CardView::Decode),
+        // The decoded view's card: its title (the chip's type) and meta line (labels kept).
+        "decodetitle" => work_card(&data(text, CardView::Decode)).title,
+        "decodemeta" => work_card(&data(text, CardView::Decode)).meta,
         "schema" => view_text(text, CardView::Schema),
         "sample" => view_text(text, CardView::Sample),
         "dataframe" => view_text(text, CardView::Dataframe),
