@@ -32,7 +32,7 @@ Text that decodes gets exactly one extra chip next to *Original*, named after wh
 
 - **JWT** (`header.payload.signature`, header JSON with `alg`): *Signature not verified* / *Handtekening niet gecontroleerd* first (the signature is never checked), then `iat`, `nbf` and `exp` as dates in local time and UTC (Settings date order) with a status: *expired (4 days ago)* / *verlopen (4 dagen geleden)*, *valid for 30 minutes* / *nog 30 minuten geldig* (minutes up to two hours, then hours, days, years), *not valid yet (in 2 hours)* / *nog niet geldig (over 2 uur)*; then header and payload as pretty JSON.
 - **URL**: percent-escapes decoded.
-- **Base64**: Base64, Base64URL and `data:` URIs whose content is readable text.
+- **Base64**: Base64 and Base64URL, with or without padding, and `data:…;base64,` URIs. Only offered when the bytes are readable UTF-8 text (shown as is), JSON (shown pretty) or a picture: PNG, JPEG, GIF, WebP or HEIC is recognised by its magic bytes and described as type, size in pixels (read from the header) and byte count; the picture itself is not drawn in the card. Ordinary words (*hello*, *Test*, *password*) are not Base64: at least 8 characters, one alphabet, padding only where the length needs it, and decoded text must read as text.
 
 Manual checks on the Mac (copy the text, press ⌃⌥⌘C):
 
@@ -40,6 +40,8 @@ Manual checks on the Mac (copy the text, press ⌃⌥⌘C):
 2. `testdata/decode/jwt_valid_until_2099.txt`: *valid for 72 years* (or 73); `jwt_not_before_future.txt`: *not valid yet (in …)*. With the Mac in Dutch: *nog … geldig*, *nog niet geldig (over …)*.
 3. Settings › Date order `mm/dd`: the JWT dates switch to `mm/dd/yyyy`. Local time shows your offset (`UTC+02:00` in summer in Amsterdam).
 4. `jwt_invalid_no_alg.txt` and `jwt_invalid_not_json.txt`: no decoder chip.
+5. `base64_text.txt`: chip *Base64*, the sentence with *café ✓*; `base64url_json_no_padding.txt`: pretty JSON. `base64_png.txt`, `base64_jpeg_data_uri.txt`, `base64_webp.txt`: *PNG image* / *JPEG image* / *WebP image* with pixels and bytes. Copy a real picture as Base64 (`base64 -i photo.heic | pbcopy`): *HEIC image* with its size.
+6. Each word in `base64_negative_words.txt` copied alone, and `base64_negative_binary.txt`: no decoder chip.
 
 ## Privacy
 

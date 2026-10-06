@@ -3,15 +3,11 @@
 //! with the other chips ([`crate::commands::warm_chips`] off the main thread for a large copy).
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
+mod base64;
 mod clock;
 mod jwt;
 
-use base64::Engine;
-use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
-
 pub use clock::Env;
-
-const MIN_BASE64_LEN: usize = 8;
 
 /// What a copy decodes as, in precedence order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,23 +62,11 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
     let found = |kind: DecodeKind, body: Option<String>| body.map(|body| Decoded { kind, body });
     let decoded = found(DecodeKind::Jwt, jwt::decode(peeled, env))
         .or_else(|| found(DecodeKind::Url, try_percent(text.trim())))
-        .or_else(|| {
-            found(
-                DecodeKind::Base64,
-                try_data_uri(peeled)
-                    .or_else(|| try_base64(peeled))
-                    .map(pretty),
-            )
-        })?;
+        .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;
     if decoded.body == peeled || decoded.body == text.trim() {
         return None;
     }
     Some(decoded)
-}
-
-/// Decoded text that is itself JSON, XML, … is shown formatted, as the Format view would.
-fn pretty(text: String) -> String {
-    crate::format::format_text(&text)
 }
 
 /// Detection does not depend on the clock or the locale: a fixed, pure environment, so the
@@ -112,51 +96,6 @@ fn peel(text: &str) -> &str {
     }
 }
 
-fn try_data_uri(text: &str) -> Option<String> {
-    let marker = ";base64,";
-    let lower = text.to_ascii_lowercase();
-    if !lower.starts_with("data:") {
-        return None;
-    }
-    let idx = lower.find(marker)?;
-    try_base64(text.get(idx + marker.len()..)?)
-}
-
-fn try_base64(text: &str) -> Option<String> {
-    let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact.len() < MIN_BASE64_LEN || compact.len() % 4 == 1 || !is_base64_alphabet(&compact) {
-        return None;
-    }
-    bytes_to_text(&b64_bytes(&compact)?)
-}
-
-pub(crate) fn b64_bytes(input: &str) -> Option<Vec<u8>> {
-    [STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD]
-        .into_iter()
-        .find_map(|engine| engine.decode(input).ok())
-}
-
-fn is_base64_alphabet(text: &str) -> bool {
-    let mut padding = 0usize;
-    for c in text.chars() {
-        match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '+' | '/' | '-' | '_' => {
-                if padding > 0 {
-                    return false;
-                }
-            }
-            '=' => {
-                padding += 1;
-                if padding > 2 {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-    }
-    true
-}
-
 fn bytes_to_text(bytes: &[u8]) -> Option<String> {
     let text = std::str::from_utf8(bytes)
         .ok()?
@@ -165,6 +104,20 @@ fn bytes_to_text(bytes: &[u8]) -> Option<String> {
         return None;
     }
     Some(text.to_string())
+}
+
+/// Text a person can read: [`is_mostly_printable`], and at least half letters, digits or
+/// white space (decoded noise is mostly punctuation and symbols).
+fn is_readable(text: &str) -> bool {
+    if !is_mostly_printable(text) {
+        return false;
+    }
+    let total = text.chars().count();
+    let wordy = text
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .count();
+    wordy * 2 >= total
 }
 
 fn is_mostly_printable(text: &str) -> bool {

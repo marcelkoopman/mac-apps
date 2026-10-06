@@ -82,6 +82,15 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/jwt_not_before_future.txt` | JWT chip: `nbf` in 2098, not valid yet | plain text | Content | credential | Original, JWT | decode~Not before (nbf): not valid yet (in |
 | `decode/jwt_invalid_no_alg.txt` | No JWT chip: header without `alg` (still labelled by the secret detector) | plain text | Content | credential | — | kind=Plain |
 | `decode/jwt_invalid_not_json.txt` | No JWT chip: three dotted parts that are not base64 JSON | plain text | Content | — | — | kind=Plain |
+| `decode/base64_text.txt` | Base64 chip: UTF-8 text (padded, standard alphabet) | plain text | Content | — | Original, Base64 | decode~Second line: café ✓; decodetitle=Base64 |
+| `decode/base64url_json_no_padding.txt` | Base64 chip: Base64URL JSON without padding, shown pretty | plain text | Content | — | Original, Base64 | decode~"roles": [ |
+| `decode/base64_png.txt` | Base64 chip: a 3×2 PNG (type, pixels, bytes) | plain text | Content | — | Original, Base64 | decode~PNG image; decode~3 × 2 pixels |
+| `decode/base64_gif.txt` | Base64 chip: a 5×4 GIF | plain text | Content | — | Original, Base64 | decode~GIF image; decode~5 × 4 pixels |
+| `decode/base64_jpeg_data_uri.txt` | Base64 chip: an 8×6 JPEG as a `data:` URI | plain text | Content | — | Original, Base64 | decode~JPEG image; decode~8 × 6 pixels |
+| `decode/base64_webp.txt` | Base64 chip: a 7×9 WebP | plain text | Content | — | Original, Base64 | decode~WebP image; decode~7 × 9 pixels |
+| `decode/base64_heic_header.txt` | Base64 chip: a synthetic HEIC header (`ftyp heic`, `ispe` 4032×3024) | plain text | Content | — | Original, Base64 | decode~HEIC image; decode~4032 × 3024 pixels |
+| `decode/base64_negative_binary.txt` | No chip: Base64 of random bytes | plain text | Content | — | — | kind=Plain |
+| `decode/base64_negative_words.txt` | No chip: ordinary words (each line is checked on its own in `decode/base64.rs`) | plain text | Content | — | — | kind=Text |
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Original, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |

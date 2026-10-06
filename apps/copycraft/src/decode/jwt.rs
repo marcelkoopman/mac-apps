@@ -57,7 +57,7 @@ fn is_b64url(part: &str) -> bool {
 }
 
 fn json_object(part: &str) -> Option<Map<String, JsonValue>> {
-    match serde_json::from_slice(&super::b64_bytes(part)?).ok()? {
+    match serde_json::from_slice(&super::base64::bytes(part)?).ok()? {
         JsonValue::Object(map) => Some(map),
         _ => None,
     }
