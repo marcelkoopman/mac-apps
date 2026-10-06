@@ -1,4 +1,4 @@
-//! Settings window: hotkey, date order, blur, Open at Login.
+//! Settings window: hotkey, date order, blur, Open at Login, and the symbol list.
 
 use std::cell::{Cell, RefCell};
 
@@ -7,11 +7,13 @@ use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
-    NSEventModifierFlags, NSPopUpButton, NSTextField, NSView, NSWindow, NSWindowDelegate,
-    NSWindowStyleMask, NSWindowTabbingMode,
+    NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSTextField, NSView,
+    NSWindow, NSWindowDelegate, NSWindowStyleMask, NSWindowTabbingMode,
 };
-use mac_ui::objc2_foundation::{NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use mac_ui::objc2_foundation::{
+    NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+};
 use mac_ui::{panel, widgets};
 
 use crate::hotkey;
@@ -20,7 +22,7 @@ use crate::macos_login;
 use crate::settings;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 300.0;
+const HEIGHT: f64 = 380.0;
 const PAD: f64 = 20.0;
 const ROW: f64 = 28.0;
 const GAP: f64 = 16.0;
@@ -34,6 +36,7 @@ thread_local! {
     static BLUR_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
 }
 
@@ -69,6 +72,8 @@ define_class!(
     unsafe impl NSWindowDelegate for SettingsDelegate {
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSObject) {
+            // Closing ends editing, but save here too so a list left in the field is kept.
+            save_symbols_field();
             RECORDING.set(false);
             WINDOW.with(|slot| *slot.borrow_mut() = None);
             clear_controls();
@@ -105,6 +110,18 @@ define_class!(
             launcher::emit(UserEvent::SettingsChanged);
         }
 
+        #[unsafe(method(controlTextDidEndEditing:))]
+        fn symbols_edited(&self, _notification: &NSNotification) {
+            save_symbols_field();
+        }
+
+        #[unsafe(method(restoreSymbols:))]
+        fn restore_symbols(&self, _sender: Option<&NSButton>) {
+            settings::restore_symbol_catalog();
+            show_symbol_catalog();
+            crate::macos_symbols::reload();
+        }
+
         #[unsafe(method(loginToggled:))]
         fn login_toggled(&self, sender: Option<&NSButton>) {
             let Some(button) = sender else {
@@ -132,6 +149,7 @@ fn clear_controls() {
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_NOTE.with(|s| *s.borrow_mut() = None);
+    SYMBOLS_FIELD.with(|s| *s.borrow_mut() = None);
 }
 
 fn wire(control: &NSButton, action: mac_ui::objc2::runtime::Sel) {
@@ -318,6 +336,42 @@ fn build(mtm: MainThreadMarker) {
     LOGIN_NOTE.with(|slot| *slot.borrow_mut() = Some(note));
     refresh_login_row();
 
+    y -= GAP + ROW;
+    place_label(mtm, &body, crate::locale::t("symbols"), PAD, y);
+    y -= ROW;
+    let field = widgets::plain_field(mtm, 13.0, "");
+    field.setBezeled(true);
+    field.setDrawsBackground(true);
+    field.setStringValue(&NSString::from_str(&settings::symbol_catalog_text()));
+    field.setFrame(NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(WIDTH - PAD * 2.0, ROW),
+    ));
+    field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "symbols_field_a11y",
+    ))));
+    DELEGATE.with(|slot| {
+        if let Some(delegate) = slot.borrow().as_ref() {
+            // SAFETY: SettingsDelegate implements controlTextDidEndEditing: with the protocol
+            // signature. DELEGATE keeps it alive while the window is open; the field holds it
+            // weakly.
+            unsafe { widgets::set_text_delegate(&field, delegate) };
+        }
+    });
+    body.addSubview(&field);
+    SYMBOLS_FIELD.with(|slot| *slot.borrow_mut() = Some(field));
+
+    y -= GAP + ROW;
+    let restore = GlassButton::pill(mtm, crate::locale::t("symbols_restore"), ButtonSize::Small);
+    restore.set_accessibility_label(crate::locale::t("symbols_restore"));
+    let restore_w = restore.width_within(240.0);
+    restore.view().setFrame(NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(restore_w, ROW),
+    ));
+    wire(restore.button(), sel!(restoreSymbols:));
+    body.addSubview(restore.view());
+
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     panel::bring_to_front(&window);
 }
@@ -346,6 +400,32 @@ fn refresh_all() {
         }
     });
     refresh_login_row();
+    show_symbol_catalog();
+}
+
+fn save_symbols_field() {
+    let raw = SYMBOLS_FIELD.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|field| field.stringValue().to_string())
+    });
+    let Some(raw) = raw else {
+        return;
+    };
+    settings::set_symbol_catalog(&raw);
+    show_symbol_catalog();
+    crate::macos_symbols::reload();
+}
+
+fn show_symbol_catalog() {
+    SYMBOLS_FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            let text = settings::symbol_catalog_text();
+            if field.stringValue().to_string() != text {
+                field.setStringValue(&NSString::from_str(&text));
+            }
+        }
+    });
 }
 
 fn refresh_login_row() {

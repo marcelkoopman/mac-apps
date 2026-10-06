@@ -45,6 +45,8 @@ const HOTKEY_KEY: &str = "CopycraftHotkey";
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Newest symbol first, at most [`crate::symbols::MAX_RECENT`], separated by spaces.
 const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
+/// The symbol list, space-separated. Missing, empty or invalid means the standard list.
+const SYMBOLS_KEY: &str = "CopycraftSymbols";
 
 /// Stored settings; a missing key keeps its default.
 pub fn load() -> Settings {
@@ -139,6 +141,32 @@ pub fn symbol_recent() -> Vec<String> {
 pub fn remember_symbol(symbol: &str) {
     let next = crate::symbols::note_used(&symbol_recent(), symbol);
     store_string(SYMBOL_RECENT_KEY, &crate::symbols::format_list(&next));
+}
+
+/// The symbol list. A missing, empty or invalid stored value is the standard list.
+pub fn symbol_catalog() -> Vec<String> {
+    load_string(SYMBOLS_KEY)
+        .and_then(|raw| crate::symbols::parse_catalog(&raw))
+        .unwrap_or_else(crate::symbols::default_list)
+}
+
+/// The list as one line, for the settings field.
+pub fn symbol_catalog_text() -> String {
+    crate::symbols::format_list(&symbol_catalog())
+}
+
+/// Store `raw`. Empty or invalid input is stored as the standard list.
+pub fn set_symbol_catalog(raw: &str) {
+    let list = crate::symbols::parse_catalog(raw).unwrap_or_else(crate::symbols::default_list);
+    store_string(SYMBOLS_KEY, &crate::symbols::format_list(&list));
+}
+
+/// Put the standard list back.
+pub fn restore_symbol_catalog() {
+    store_string(
+        SYMBOLS_KEY,
+        &crate::symbols::format_list(&crate::symbols::default_list()),
+    );
 }
 
 #[cfg(target_os = "macos")]

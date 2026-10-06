@@ -131,7 +131,25 @@ fn copy_symbol(delegate: &SymbolsDelegate, symbol: &str) {
 }
 
 fn offered() -> Vec<String> {
-    symbols::display_order(&symbols::default_list(), &crate::settings::symbol_recent())
+    symbols::display_order(
+        &crate::settings::symbol_catalog(),
+        &crate::settings::symbol_recent(),
+    )
+}
+
+/// Rebuild an open popover after the list changes in Settings.
+pub(crate) fn reload() {
+    let popover = POPOVER.with(|slot| slot.borrow().clone());
+    let Some(popover) = popover else {
+        return;
+    };
+    if !popover.isShown() {
+        return;
+    }
+    let Some(delegate) = DELEGATE.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    fill(&delegate, &popover);
 }
 
 fn fill(delegate: &SymbolsDelegate, popover: &NSPopover) {

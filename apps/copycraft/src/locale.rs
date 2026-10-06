@@ -123,6 +123,10 @@ pub fn t(key: &str) -> &'static str {
         (Lang::En, "symbols_a11y") => "Special characters",
         (Lang::Nl, "symbols_tip") => "Kopieer een teken",
         (Lang::En, "symbols_tip") => "Copy a character",
+        (Lang::Nl, "symbols_restore") => "Standaard herstellen",
+        (Lang::En, "symbols_restore") => "Restore defaults",
+        (Lang::Nl, "symbols_field_a11y") => "Lijst met speciale tekens",
+        (Lang::En, "symbols_field_a11y") => "Special character list",
 
         // Fallback: English (every key above has an En arm; this is for typos).
         (_, _) => {
@@ -178,6 +182,8 @@ fn key_en(key: &str) -> &'static str {
         "symbols" => "Symbols",
         "symbols_a11y" => "Special characters",
         "symbols_tip" => "Copy a character",
+        "symbols_restore" => "Restore defaults",
+        "symbols_field_a11y" => "Special character list",
         _ => "?",
     }
 }

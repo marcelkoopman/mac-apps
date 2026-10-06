@@ -11,6 +11,9 @@ pub const DEFAULT: &[&str] = &[
 /// Recently used characters kept in front of the list.
 pub const MAX_RECENT: usize = 8;
 
+/// How many characters the settings field may hold. More than this is not a character list.
+const MAX_CATALOG: usize = 48;
+
 /// No ignored change yet. A real `NSPasteboard.changeCount` is never this.
 const NO_CHANGE: isize = isize::MIN;
 
@@ -66,9 +69,49 @@ pub(crate) fn parse_recent(raw: &str) -> Vec<String> {
     recent
 }
 
-/// One line for the user defaults.
+/// One line for the user defaults and the settings field.
 pub(crate) fn format_list(symbols: &[String]) -> String {
     symbols.join(" ")
+}
+
+/// The settings field. `None` when it is empty or not a list of characters: the caller uses
+/// [`default_list`]. Whitespace, commas and semicolons separate characters. A repeat is kept
+/// once, in the first position. A character is one to four Unicode scalars and not a word of
+/// letters or digits, so a sentence does not become the list.
+pub(crate) fn parse_catalog(raw: &str) -> Option<Vec<String>> {
+    if raw.trim().is_empty() {
+        return None;
+    }
+    let mut catalog = Vec::new();
+    for token in raw.split(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | '|')) {
+        if token.is_empty() {
+            continue;
+        }
+        let symbol = valid_symbol(token)?;
+        if catalog.len() == MAX_CATALOG {
+            return None;
+        }
+        if !catalog.iter().any(|item| item == &symbol) {
+            catalog.push(symbol);
+        }
+    }
+    if catalog.is_empty() {
+        None
+    } else {
+        Some(catalog)
+    }
+}
+
+/// One special character, not a word and not a control character.
+fn valid_symbol(token: &str) -> Option<String> {
+    let count = token.chars().count();
+    if !(1..=4).contains(&count) {
+        return None;
+    }
+    if token.chars().any(char::is_control) || token.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some(token.to_string())
 }
 
 /// Remember `change` as copycraft's own symbol write. The next poll must not record or scan it.
