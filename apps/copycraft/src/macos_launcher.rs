@@ -16,9 +16,9 @@ use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification, NSBeep, NSBox,
     NSButton, NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage,
-    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment,
-    NSFloatingWindowLevel, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType,
+    NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField,
+    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
     NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
