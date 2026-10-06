@@ -1,12 +1,12 @@
 //! About Copycraft: name, bundle version, offline promise, GitHub URL as plain text (not opened).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use mac_ui::objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask,
-    NSWindowTabbingMode,
+    NSBackingStoreType, NSColor, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
+    NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSBundle, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
@@ -24,6 +24,8 @@ pub const GITHUB_URL: &str = "https://github.com/marcelkoopman/mac-apps";
 thread_local! {
     static WINDOW: RefCell<Option<Retained<NSWindow>>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<AboutDelegate>>> = const { RefCell::new(None) };
+    /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
+    static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
 }
 
 struct DelegateIvars;
@@ -40,7 +42,12 @@ define_class!(
     unsafe impl NSWindowDelegate for AboutDelegate {
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSObject) {
-            WINDOW.with(|slot| *slot.borrow_mut() = None);
+            WINDOW.with(|slot| {
+                if let Some(window) = slot.borrow().as_ref() {
+                    restore_level(window);
+                }
+                *slot.borrow_mut() = None;
+            });
         }
     }
 );
@@ -67,6 +74,7 @@ pub fn show() {
     };
     panel::activate_app(mtm);
     if let Some(window) = WINDOW.with(|slot| slot.borrow().clone()) {
+        raise_above_card(&window);
         panel::bring_to_front(&window);
         return;
     }
@@ -144,12 +152,22 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(&url);
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
+    raise_above_card(&window);
     panel::bring_to_front(&window);
+}
+
+fn raise_above_card(window: &NSWindow) {
+    LEVEL_BEFORE.with(|previous| crate::macos_launcher::raise_above_card(window, previous));
+}
+
+fn restore_level(window: &NSWindow) {
+    LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
 /// Close the About window (Wipe, Quit).
 pub fn close() {
     if let Some(window) = WINDOW.with(|slot| slot.borrow_mut().take()) {
+        restore_level(&window);
         window.close();
     }
     DELEGATE.with(|slot| *slot.borrow_mut() = None);

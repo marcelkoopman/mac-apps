@@ -18,8 +18,8 @@ use mac_ui::objc2_app_kit::{
     NSButton, NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFocusRingType, NSFont, NSImage,
     NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField, NSTextAlignment,
-    NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowOrderingMode,
-    NSWindowSharingType,
+    NSFloatingWindowLevel, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
+    NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSNotification, NSNotificationCenter,
@@ -553,6 +553,34 @@ impl LauncherDelegate {
 
 pub fn is_open() -> bool {
     OPEN.with(Cell::get)
+}
+
+/// One above the card. The card stays at [`NSFloatingWindowLevel`] (above other apps). A window
+/// at the same level loses the next time the card calls `orderFront`.
+pub(crate) fn level_above_card() -> NSWindowLevel {
+    WINDOW
+        .with(|slot| slot.borrow().as_ref().map(|window| window.level()))
+        .unwrap_or(NSFloatingWindowLevel)
+        .saturating_add(1)
+}
+
+/// Raise `window` above the floating card. The first call stores `window`'s level in `previous`.
+pub(crate) fn raise_above_card(window: &NSWindow, previous: &Cell<Option<NSWindowLevel>>) {
+    if previous.get().is_none() {
+        previous.set(Some(window.level()));
+    }
+    let above = level_above_card();
+    if window.level() < above {
+        window.setLevel(above);
+    }
+}
+
+/// Put back the level saved by [`raise_above_card`]. A second call does nothing.
+pub(crate) fn restore_above_card(window: &NSWindow, previous: &Cell<Option<NSWindowLevel>>) {
+    let Some(level) = previous.take() else {
+        return;
+    };
+    window.setLevel(level);
 }
 
 /// The sharing type for the card and the table window: none, or read-only while "Allow

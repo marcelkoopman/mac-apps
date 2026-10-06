@@ -9,7 +9,7 @@ use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, se
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowStyleMask, NSWindowTabbingMode,
+    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
@@ -38,6 +38,8 @@ thread_local! {
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
+    /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
+    static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
 }
 
 define_class!(
@@ -75,7 +77,12 @@ define_class!(
             // Closing ends editing, but save here too so a list left in the field is kept.
             save_symbols_field();
             RECORDING.set(false);
-            WINDOW.with(|slot| *slot.borrow_mut() = None);
+            WINDOW.with(|slot| {
+                if let Some(window) = slot.borrow().as_ref() {
+                    restore_level(window);
+                }
+                *slot.borrow_mut() = None;
+            });
             clear_controls();
         }
     }
@@ -215,6 +222,7 @@ pub fn show() {
     };
     panel::activate_app(mtm);
     if let Some(window) = WINDOW.with(|slot| slot.borrow().clone()) {
+        raise_above_card(&window);
         panel::bring_to_front(&window);
         refresh_all();
         return;
@@ -373,7 +381,16 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(restore.view());
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
+    raise_above_card(&window);
     panel::bring_to_front(&window);
+}
+
+fn raise_above_card(window: &NSWindow) {
+    LEVEL_BEFORE.with(|previous| crate::macos_launcher::raise_above_card(window, previous));
+}
+
+fn restore_level(window: &NSWindow) {
+    LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
 fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, x: f64, y: f64) {
@@ -457,6 +474,7 @@ fn refresh_login_row() {
 pub fn close() {
     RECORDING.set(false);
     if let Some(window) = WINDOW.with(|slot| slot.borrow_mut().take()) {
+        restore_level(&window);
         window.close();
     }
     clear_controls();
