@@ -5,7 +5,7 @@ code block) and open Copycraft: the card should show what the manifest below say
 here is real: tokens are documented example or test values (AWS `AKIAIOSFODNN7EXAMPLE`,
 a Stripe-style example key, the jwt.io example token, the test IBAN `NL91ABNA0417164300`,
 the test card `4111 1111 1111 1111`, test BSN `111222333`, SSN `078-05-1120`, IPs from
-`192.0.2.0/24`, `example.com` addresses).
+`192.0.2.0/24`, `example.com` addresses). The JWTs in `decode/` are test-only tokens signed (HS256) with the dummy secret `copycraft-test-only-not-a-secret`; the hashes there are digests of a synthetic sentence.
 
 The manifest is checked by `src/testdata_manifest.rs` (`cargo test -p copycraft
 testdata_manifest`, runs on Linux). Each row describes the card for the text a Notion code
@@ -95,6 +95,13 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/uuid_v1.txt` | UUID chip: version 1 with its 100 ns timestamp (2026-10-06 08:00:00.123 UTC) | plain text | Content | — | Original, UUID | decode~Version 1 (time and node); decode~06/10/2026 08:00:00.123  UTC |
 | `decode/uuid_v7_urn.txt` | UUID chip: `urn:uuid:` version 7 with its Unix-millisecond timestamp | plain text | Content | — | Original, UUID | decode~Version 7 (Unix time); decode~06/10/2026 08:00:00.123  UTC |
 | `decode/uuid_negative.txt` | No UUID: 32 hex without dashes, wrong groups, a `g`, inside a sentence, an open brace (each line checked in `decode/uuid.rs`) | plain text | Content | — | — | kind=Text |
+| `decode/hash_md5.txt` | Hash chip: 32 hex, probably MD5 (or a UUID without dashes) | plain text | Content | — | Original, Hash | decode~Probably MD5; decode~Or a UUID without dashes; decodetitle=Hash |
+| `decode/hash_sha1.txt` | Hash chip: 40 hex, probably SHA-1 | plain text | Content | — | Original, Hash | decode~Probably SHA-1 |
+| `decode/hash_sha224.txt` | Hash chip: 56 hex, probably SHA-224 | plain text | Content | — | Original, Hash | decode~Probably SHA-224 |
+| `decode/hash_sha256.txt` | Hash chip: 64 hex (upper case), probably SHA-256 | plain text | Content | — | Original, Hash | decode~Probably SHA-256 |
+| `decode/hash_sha384.txt` | Hash chip: 96 hex, probably SHA-384 | plain text | Content | — | Original, Hash | decode~Probably SHA-384 |
+| `decode/hash_sha512.txt` | Hash chip: 128 hex, probably SHA-512 | plain text | Content | — | Original, Hash | decode~Probably SHA-512; decode~A hash cannot be reversed. |
+| `decode/hash_negative.txt` | No hash: 31 and 33 hex, a `g`, digits only, letters only (each line checked in `decode/hash.rs`) | plain text | Content | — | — | kind=Text |
 | `decode/unix_seconds.txt` | Unix time chip: 10 digits (seconds) in local time, UTC, relative, ISO 8601 | plain text | Content | — | Original, Unix time | decode~14/11/2023 22:13:20  UTC; decode~ago; decode~ISO 8601: 2023-11-14T22:13:20Z; decodetitle=Unix time |
 | `decode/unix_milliseconds.txt` | Unix time chip: 13 digits (milliseconds) | plain text | Content | — | Original, Unix time | decode~06/10/2026 08:00:00.123  UTC; decode~Unix time in milliseconds |
 | `decode/unix_negative_numbers.txt` | No chip: a phone-like `06…` number, out of range (2282), 9, 11 and 16 digits, grouped digits (each line checked in `decode/unix_time.rs`) | plain text | Content | PII | — | kind=Text |

@@ -1,10 +1,11 @@
 //! The decoder chip: one chip next to Original, titled with what the copy decodes as (JWT,
-//! UUID, Unix time, URL, Base64), that shows the decoded text read-only. Detection is string work only and runs
+//! UUID, Unix time, URL, Hash, Base64), that shows the decoded text read-only. Detection is string work only and runs
 //! with the other chips ([`crate::commands::warm_chips`] off the main thread for a large copy).
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
 mod base64;
 mod clock;
+mod hash;
 mod jwt;
 mod unix_time;
 mod url;
@@ -19,6 +20,7 @@ pub enum DecodeKind {
     Uuid,
     UnixTime,
     Url,
+    Hash,
     Base64,
 }
 
@@ -30,6 +32,7 @@ impl DecodeKind {
             Self::Uuid => "UUID",
             Self::UnixTime => crate::locale::t("decode_unix_time"),
             Self::Url => "URL",
+            Self::Hash => "Hash",
             Self::Base64 => "Base64",
         }
     }
@@ -41,6 +44,7 @@ impl DecodeKind {
             Self::Uuid => "decode uuid guid version",
             Self::UnixTime => "decode unix time timestamp epoch date",
             Self::Url => "decode url percent query",
+            Self::Hash => "decode hash md5 sha digest",
             Self::Base64 => "decode base64",
         }
     }
@@ -73,6 +77,7 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
         .or_else(|| found(DecodeKind::Uuid, uuid::decode(peeled, env)))
         .or_else(|| found(DecodeKind::UnixTime, unix_time::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Url, url::decode(peeled, env)))
+        .or_else(|| found(DecodeKind::Hash, hash::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;
     if decoded.body == peeled || decoded.body == text.trim() {
         return None;
@@ -222,6 +227,25 @@ mod tests {
     }
 
     #[test]
+    fn negative_samples_get_no_chip() {
+        for file in [
+            "base64_negative_words.txt",
+            "base64_negative_binary.txt",
+            "hash_negative.txt",
+            "jwt_invalid_no_alg.txt",
+            "jwt_invalid_not_json.txt",
+            "unix_negative_numbers.txt",
+            "url_negative.txt",
+            "uuid_negative.txt",
+        ] {
+            for line in testdata(file).lines() {
+                let want = (line == "6f9619ff8b864011b42d00c04fc964ff").then_some(DecodeKind::Hash);
+                assert_eq!(detect(line), want, "{file}: {line}");
+            }
+        }
+    }
+
+    #[test]
     fn chip_kind_follows_precedence() {
         assert_eq!(detect(&testdata("jwt_expired.txt")), Some(DecodeKind::Jwt));
         assert_eq!(detect("hello%20world"), Some(DecodeKind::Url));
@@ -229,6 +253,17 @@ mod tests {
         assert_eq!(detect(&testdata("jwt_invalid_no_alg.txt")), None);
         assert_eq!(detect(&testdata("jwt_invalid_not_json.txt")), None);
         assert_eq!(detect("hello"), None);
+        // 32 hex digits: a hash (MD5), not a UUID and not Base64; with dashes a UUID.
+        assert_eq!(
+            detect("6f9619ff8b864011b42d00c04fc964ff"),
+            Some(DecodeKind::Hash)
+        );
+        assert_eq!(
+            detect("6f9619ff-8b86-4011-b42d-00c04fc964ff"),
+            Some(DecodeKind::Uuid)
+        );
+        assert_eq!(detect("1700000000"), Some(DecodeKind::UnixTime));
+        assert_eq!(detect(&testdata("hash_sha256.txt")), Some(DecodeKind::Hash));
     }
 
     #[test]
