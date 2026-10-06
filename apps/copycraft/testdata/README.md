@@ -91,6 +91,9 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/base64_heic_header.txt` | Base64 chip: a synthetic HEIC header (`ftyp heic`, `ispe` 4032×3024) | plain text | Content | — | Original, Base64 | decode~HEIC image; decode~4032 × 3024 pixels |
 | `decode/base64_negative_binary.txt` | No chip: Base64 of random bytes | plain text | Content | — | — | kind=Plain |
 | `decode/base64_negative_words.txt` | No chip: ordinary words (each line is checked on its own in `decode/base64.rs`) | plain text | Content | — | — | kind=Text |
+| `decode/unix_seconds.txt` | Unix time chip: 10 digits (seconds) in local time, UTC, relative, ISO 8601 | plain text | Content | — | Original, Unix time | decode~14/11/2023 22:13:20  UTC; decode~ago; decode~ISO 8601: 2023-11-14T22:13:20Z; decodetitle=Unix time |
+| `decode/unix_milliseconds.txt` | Unix time chip: 13 digits (milliseconds) | plain text | Content | — | Original, Unix time | decode~06/10/2026 08:00:00.123  UTC; decode~Unix time in milliseconds |
+| `decode/unix_negative_numbers.txt` | No chip: a phone-like `06…` number, out of range (2282), 9, 11 and 16 digits, grouped digits (each line checked in `decode/unix_time.rs`) | plain text | Content | PII | — | kind=Text |
 | `decode/url_query.txt` | URL chip on a link: scheme, host, path and each query parameter decoded (`%xx`, `+`) | plain text | Link | — | Visit, Original, URL | decode~Path: /zoek/fietsen & zo; decode~q = rode fiets; decode~city = Den Haag; decode~Fragment: top; decodetitle=URL |
 | `decode/url_encoded_whole.txt` | URL chip: a URL encoded as a whole, decoded and split | plain text | Content | — | Original, URL | decode~q = copy craft |
 | `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | — | kind=Text |

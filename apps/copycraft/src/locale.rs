@@ -112,6 +112,9 @@ pub fn t(key: &str) -> &'static str {
         (Lang::En, "show_columns") => "Show columns",
         (Lang::Nl, "show_table") => "Toon tabel",
         (Lang::En, "show_table") => "Show table",
+        // Decoder chip titles that differ per language (JWT, URL, … are the same).
+        (Lang::Nl, "decode_unix_time") => "Unix-tijd",
+        (Lang::En, "decode_unix_time") => "Unix time",
 
         // Fallback: English (every key above has an En arm; this is for typos).
         (_, _) => {
@@ -163,6 +166,7 @@ fn key_en(key: &str) -> &'static str {
         "image_menu" => "Image ▾",
         "show_columns" => "Show columns",
         "show_table" => "Show table",
+        "decode_unix_time" => "Unix time",
         _ => "?",
     }
 }
