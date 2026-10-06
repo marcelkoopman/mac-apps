@@ -732,11 +732,14 @@ fn compose_card(data: &LaunchData) -> WorkCard {
         SubjectKind::Image => image_card(data),
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
-            if let Some(card) = youtube_card(text) {
-                return card;
-            }
-            if let Some(card) = page_card(text) {
-                return card;
+            // A link's decoder view (URL) is a text view; the Link card is its Original.
+            if data.view != CardView::Decode {
+                if let Some(card) = youtube_card(text) {
+                    return card;
+                }
+                if let Some(card) = page_card(text) {
+                    return card;
+                }
             }
             let (excerpt, preview_note) = excerpt_for(text, data.full);
             let mut card = WorkCard {
@@ -2339,7 +2342,24 @@ fn link_chips(text: &str) -> Vec<Command> {
             "format url uri",
         ));
     }
+    // A page link with a query or escapes: Original and the URL decoder after Visit (which
+    // stays first, the default action). Not on a YouTube video, whose query is its id.
+    if crate::youtube::video_id(text).is_none()
+        && let Some(found) = decode::detect(text)
+    {
+        commands.push(original_command());
+        commands.push(decoder_command(found));
+    }
     commands
+}
+
+fn decoder_command(found: decode::DecodeKind) -> Command {
+    command(
+        CommandId::Decode,
+        found.label(),
+        "Decoded, read-only",
+        found.keywords(),
+    )
 }
 
 fn text_chips(text: &str) -> Vec<Command> {
@@ -2401,12 +2421,7 @@ fn text_chips(text: &str) -> Vec<Command> {
     if toolbar_visibility::shows_decode(kind)
         && let Some(found) = decode::detect(text)
     {
-        commands.push(command(
-            CommandId::Decode,
-            found.label(),
-            "Decoded, read-only",
-            found.keywords(),
-        ));
+        commands.push(decoder_command(found));
     }
     if toolbar_visibility::shows_dataframe_button(kind, text) {
         // Opens the table window (no in-card grid). Steps / Choose columns live there.
@@ -3866,8 +3881,30 @@ fn main() {
         let messy = "https://example.com/search?q=a/b";
         assert_eq!(
             titles(&chips(&data(SubjectKind::Text, Some(messy)))),
-            vec!["Visit", "Format"]
+            vec!["Visit", "Format", "Original", "URL"]
         );
+    }
+
+    #[test]
+    fn link_with_a_query_shows_its_url_view() {
+        let link = "https://example.com/docs?page=2&sort=name";
+        let input = data(SubjectKind::Text, Some(link));
+        assert_eq!(work_card(&input).title, "Link");
+        assert_eq!(titles(&chips(&input)), vec!["Visit", "Original", "URL"]);
+        let mut decoded = input.clone();
+        decoded.view = CardView::Decode;
+        let card = work_card(&decoded);
+        assert_eq!(card.title, "URL");
+        assert!(card.link_page.is_none());
+        assert!(
+            card.excerpt.contains("page = 2\nsort = name"),
+            "{}",
+            card.excerpt
+        );
+        assert!(masks_content(&card, CardView::Decode));
+        // A link without a query or escapes has no decoder chip.
+        let plain = data(SubjectKind::Text, Some("https://example.com/docs"));
+        assert_eq!(titles(&chips(&plain)), vec!["Visit"]);
     }
 
     #[test]

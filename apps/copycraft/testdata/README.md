@@ -65,7 +65,7 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/python_one_liner.txt` | Detection: one Python-like line stays plain text | plain text | Content | — | — | kind=Plain |
 | `detect/link.txt` | Link | plain text | Link | — | Visit | kind=Url; link=https://example.com/docs/getting-started; visit=https://example.com/docs/getting-started |
 | `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Visit | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
-| `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it) | plain text | Link | credential | Visit | kind=Url; visit=https://example.com/private/report?id=7 |
+| `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it; the URL view leaves it out) | plain text | Link | credential | Visit, Original, URL | kind=Url; visit=https://example.com/private/report?id=7; decode~id = 7; decodetitle=URL; decodemeta~credential |
 | `detect/plain_text.txt` | Plain text | plain text | Content | — | — | kind=Text |
 | `convert/yaml_to_json_simple.yaml` | To JSON: simple YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","features":["format","decode"]} |
 | `convert/yaml_to_json_nested.yaml` | To JSON: nested YAML | yaml | YAML | — | Original, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","version":3,"features":["format","convert","decode"],"owner":{"team":"demo","active":true}} |
@@ -76,7 +76,7 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Original, JWT | decode~"name": "John Doe"; decode~"alg": "HS256"; decodetitle=JWT; decodemeta~credential |
 | `convert/base64.txt` | Decode Base64 | plain text | Content | — | Original, Base64 | decode~Hello from Copycraft! This is synthetic test data. |
 | `convert/data_uri.txt` | Decode a `data:` URI | plain text | Content | — | Original, Base64 | decode~Copycraft data URI demo |
-| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Original, URL | decode~https://example.com/search?q=copy craft&lang=en |
+| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Original, URL | decode~https://example.com/search?q=copy craft&lang=en; decode~q = copy craft |
 | `decode/jwt_expired.txt` | JWT chip: test token (dummy secret), `exp` in the past | plain text | Content | credential | Original, JWT | decode~Signature not verified; decode~Expires (exp): expired (; decode~"name": "Copycraft Test"; decodetitle=JWT; decodemeta~credential |
 | `decode/jwt_valid_until_2099.txt` | JWT chip: `exp` in 2099, still valid | plain text | Content | credential | Original, JWT | decode~Expires (exp): valid for; decode~Issued (iat):; decodemeta~credential |
 | `decode/jwt_not_before_future.txt` | JWT chip: `nbf` in 2098, not valid yet | plain text | Content | credential | Original, JWT | decode~Not before (nbf): not valid yet (in |
@@ -91,6 +91,9 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/base64_heic_header.txt` | Base64 chip: a synthetic HEIC header (`ftyp heic`, `ispe` 4032×3024) | plain text | Content | — | Original, Base64 | decode~HEIC image; decode~4032 × 3024 pixels |
 | `decode/base64_negative_binary.txt` | No chip: Base64 of random bytes | plain text | Content | — | — | kind=Plain |
 | `decode/base64_negative_words.txt` | No chip: ordinary words (each line is checked on its own in `decode/base64.rs`) | plain text | Content | — | — | kind=Text |
+| `decode/url_query.txt` | URL chip on a link: scheme, host, path and each query parameter decoded (`%xx`, `+`) | plain text | Link | — | Visit, Original, URL | decode~Path: /zoek/fietsen & zo; decode~q = rode fiets; decode~city = Den Haag; decode~Fragment: top; decodetitle=URL |
+| `decode/url_encoded_whole.txt` | URL chip: a URL encoded as a whole, decoded and split | plain text | Content | — | Original, URL | decode~q = copy craft |
+| `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | — | kind=Text |
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Original, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Original, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Original, Sample | sample~<customer>sample</customer> |

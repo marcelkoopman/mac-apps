@@ -1,0 +1,6 @@
+https://example.com/docs/getting-started
+100% done
+hello world
+example.com
+LIKE %ab%
+mailto:test@example.com

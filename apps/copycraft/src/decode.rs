@@ -6,6 +6,7 @@
 mod base64;
 mod clock;
 mod jwt;
+mod url;
 
 pub use clock::Env;
 
@@ -61,7 +62,7 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
     }
     let found = |kind: DecodeKind, body: Option<String>| body.map(|body| Decoded { kind, body });
     let decoded = found(DecodeKind::Jwt, jwt::decode(peeled, env))
-        .or_else(|| found(DecodeKind::Url, try_percent(text.trim())))
+        .or_else(|| found(DecodeKind::Url, url::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;
     if decoded.body == peeled || decoded.body == text.trim() {
         return None;
@@ -96,16 +97,6 @@ fn peel(text: &str) -> &str {
     }
 }
 
-fn bytes_to_text(bytes: &[u8]) -> Option<String> {
-    let text = std::str::from_utf8(bytes)
-        .ok()?
-        .trim_start_matches('\u{feff}');
-    if text.is_empty() || !is_mostly_printable(text) {
-        return None;
-    }
-    Some(text.to_string())
-}
-
 /// Text a person can read: [`is_mostly_printable`], and at least half letters, digits or
 /// white space (decoded noise is mostly punctuation and symbols).
 fn is_readable(text: &str) -> bool {
@@ -120,7 +111,7 @@ fn is_readable(text: &str) -> bool {
     wordy * 2 >= total
 }
 
-fn is_mostly_printable(text: &str) -> bool {
+pub(crate) fn is_mostly_printable(text: &str) -> bool {
     if text.contains('\0') {
         return false;
     }
@@ -133,45 +124,6 @@ fn is_mostly_printable(text: &str) -> bool {
         .filter(|c| *c == '\n' || *c == '\r' || *c == '\t' || !c.is_control())
         .count();
     printable * 20 >= total * 19
-}
-
-fn try_percent(text: &str) -> Option<String> {
-    if text.is_empty() || !has_percent_escape(text) {
-        return None;
-    }
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            if i + 2 >= bytes.len() {
-                return None;
-            }
-            let hi = from_hex(bytes[i + 1])?;
-            let lo = from_hex(bytes[i + 2])?;
-            out.push((hi << 4) | lo);
-            i += 3;
-        } else {
-            out.push(bytes[i]);
-            i += 1;
-        }
-    }
-    bytes_to_text(&out).filter(|decoded| decoded.as_str() != text)
-}
-
-fn has_percent_escape(text: &str) -> bool {
-    text.as_bytes().windows(3).any(|window| {
-        window[0] == b'%' && window[1].is_ascii_hexdigit() && window[2].is_ascii_hexdigit()
-    })
-}
-
-fn from_hex(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }
 
 /// A file from `testdata/decode/`, without its final newline (as a Notion code block copies).
@@ -239,10 +191,8 @@ mod tests {
     #[test]
     fn decodes_percent_encoding() {
         assert_eq!(try_decode("hello%20world").as_deref(), Some("hello world"));
-        assert_eq!(
-            try_decode("https://example.com/q?x=hello%2Fworld").as_deref(),
-            Some("https://example.com/q?x=hello/world")
-        );
+        let url = try_decode("https://example.com/q?x=hello%2Fworld").expect("url");
+        assert!(url.ends_with("Query parameters\nx = hello/world"), "{url}");
     }
 
     #[test]

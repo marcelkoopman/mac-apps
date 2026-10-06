@@ -31,7 +31,7 @@ Part of the [mac-apps](../../README.md) monorepo.
 Text that decodes gets exactly one extra chip next to *Original*, named after what it is. When several fit, the first of JWT > URL > Base64 wins. Detection is string work only (no network, no new rights) and runs with the other chips, off the main thread for a large copy. The decoded view is blurred until clicked and keeps the copy's sensitivity labels (a decoded JWT still says *credential*), plus any labels of what decoding reveals. Labels in the view follow the system language (English or Dutch).
 
 - **JWT** (`header.payload.signature`, header JSON with `alg`): *Signature not verified* / *Handtekening niet gecontroleerd* first (the signature is never checked), then `iat`, `nbf` and `exp` as dates in local time and UTC (Settings date order) with a status: *expired (4 days ago)* / *verlopen (4 dagen geleden)*, *valid for 30 minutes* / *nog 30 minuten geldig* (minutes up to two hours, then hours, days, years), *not valid yet (in 2 hours)* / *nog niet geldig (over 2 uur)*; then header and payload as pretty JSON.
-- **URL**: percent-escapes decoded.
+- **URL**: offered when the copy has `%xx` escapes or is a full URL with a query. A URL is shown in parts: scheme, host (with port), path, then the query parameters one `key = value` per line, each decoded (`%xx`, and `+` as a space in the query), then the fragment; `user:password@` is left out. A URL encoded as a whole (`https%3A%2F%2F…`) shows the decoded URL and then its parts; other text shows decoded. A page link with a query gets *Original* and *URL* after *Visit* (*Visit* stays first); a YouTube video link does not.
 - **Base64**: Base64 and Base64URL, with or without padding, and `data:…;base64,` URIs. Only offered when the bytes are readable UTF-8 text (shown as is), JSON (shown pretty) or a picture: PNG, JPEG, GIF, WebP or HEIC is recognised by its magic bytes and described as type, size in pixels (read from the header) and byte count; the picture itself is not drawn in the card. Ordinary words (*hello*, *Test*, *password*) are not Base64: at least 8 characters, one alphabet, padding only where the length needs it, and decoded text must read as text.
 
 Manual checks on the Mac (copy the text, press ⌃⌥⌘C):
@@ -42,6 +42,7 @@ Manual checks on the Mac (copy the text, press ⌃⌥⌘C):
 4. `jwt_invalid_no_alg.txt` and `jwt_invalid_not_json.txt`: no decoder chip.
 5. `base64_text.txt`: chip *Base64*, the sentence with *café ✓*; `base64url_json_no_padding.txt`: pretty JSON. `base64_png.txt`, `base64_jpeg_data_uri.txt`, `base64_webp.txt`: *PNG image* / *JPEG image* / *WebP image* with pixels and bytes. Copy a real picture as Base64 (`base64 -i photo.heic | pbcopy`): *HEIC image* with its size.
 6. Each word in `base64_negative_words.txt` copied alone, and `base64_negative_binary.txt`: no decoder chip.
+7. `url_query.txt`: Link card with *Visit*, *Original*, *URL*. *URL*: *Path: /zoek/fietsen & zo*, *q = rode fiets*, *city = Den Haag*, *note = 50% off*, *Fragment: top*; *Original* shows the Link card again and *Visit* still opens the browser. `convert/percent.txt` / `url_encoded_whole.txt`: decoded URL, then its parameters. `detect/link_userinfo.txt`: the URL view has no password and still says *credential*.
 
 ## Privacy
 
