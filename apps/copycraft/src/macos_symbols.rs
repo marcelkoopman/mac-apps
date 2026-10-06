@@ -89,17 +89,11 @@ pub(crate) fn toggle(mtm: MainThreadMarker, anchor: &NSView) {
             .get_or_insert_with(|| SymbolsDelegate::new(mtm))
             .clone()
     });
-    let symbols = symbols::default_list();
-    let (view, note, size) = build_grid(mtm, &delegate, &symbols);
-    NOTE.with(|slot| *slot.borrow_mut() = Some(note));
-    let controller = NSViewController::new(mtm);
-    controller.setView(&view);
     let popover = NSPopover::init(NSPopover::alloc(mtm));
     popover.setBehavior(NSPopoverBehavior::Transient);
     popover.setAnimates(true);
-    popover.setContentSize(size);
-    popover.setContentViewController(Some(&controller));
     POPOVER.with(|slot| *slot.borrow_mut() = Some(popover.clone()));
+    fill(&delegate, &popover);
     // An empty rect anchors to the button's bounds. MinY hangs the popover below the header.
     popover.showRelativeToRect_ofView_preferredEdge(NSRect::ZERO, anchor, NSRectEdge::MinY);
 }
@@ -128,8 +122,29 @@ fn copy_symbol(delegate: &SymbolsDelegate, symbol: &str) {
     };
     // Before any further AppKit work, so the poller cannot observe the change first.
     symbols::ignore_change(change);
+    crate::settings::remember_symbol(symbol);
+    if let Some(popover) = POPOVER.with(|slot| slot.borrow().clone()) {
+        fill(delegate, &popover);
+    }
     set_note(&locale::copied_symbol(locale::lang(), symbol));
     schedule_clear(delegate);
+}
+
+fn offered() -> Vec<String> {
+    symbols::display_order(&symbols::default_list(), &crate::settings::symbol_recent())
+}
+
+fn fill(delegate: &SymbolsDelegate, popover: &NSPopover) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let symbols = offered();
+    let (view, note, size) = build_grid(mtm, delegate, &symbols);
+    NOTE.with(|slot| *slot.borrow_mut() = Some(note));
+    let controller = NSViewController::new(mtm);
+    controller.setView(&view);
+    popover.setContentSize(size);
+    popover.setContentViewController(Some(&controller));
 }
 
 fn build_grid(

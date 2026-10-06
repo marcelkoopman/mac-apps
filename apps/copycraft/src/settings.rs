@@ -43,6 +43,8 @@ const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
+/// Newest symbol first, at most [`crate::symbols::MAX_RECENT`], separated by spaces.
+const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 
 /// Stored settings; a missing key keeps its default.
 pub fn load() -> Settings {
@@ -124,6 +126,19 @@ pub fn paste_alert_explained() -> bool {
 
 pub fn set_paste_alert_explained() {
     store_bool(PASTE_ALERT_EXPLAINED_KEY, true);
+}
+
+/// Recently copied symbols, newest first. Missing or blank means none yet.
+pub fn symbol_recent() -> Vec<String> {
+    load_string(SYMBOL_RECENT_KEY)
+        .map(|raw| crate::symbols::parse_recent(&raw))
+        .unwrap_or_default()
+}
+
+/// Remember `symbol` as the newest one (at most [`crate::symbols::MAX_RECENT`], no duplicate).
+pub fn remember_symbol(symbol: &str) {
+    let next = crate::symbols::note_used(&symbol_recent(), symbol);
+    store_string(SYMBOL_RECENT_KEY, &crate::symbols::format_list(&next));
 }
 
 #[cfg(target_os = "macos")]

@@ -8,6 +8,9 @@ pub const DEFAULT: &[&str] = &[
     "✓", "✗", "€", "→", "←", "•", "…", "–", "—", "°", "±", "×", "≠", "≤", "≥", "©",
 ];
 
+/// Recently used characters kept in front of the list.
+pub const MAX_RECENT: usize = 8;
+
 /// No ignored change yet. A real `NSPasteboard.changeCount` is never this.
 const NO_CHANGE: isize = isize::MIN;
 
@@ -17,6 +20,55 @@ static IGNORED_CHANGE: AtomicIsize = AtomicIsize::new(NO_CHANGE);
 /// The standard list, owned, for the popover and for a restored setting.
 pub(crate) fn default_list() -> Vec<String> {
     DEFAULT.iter().copied().map(str::to_string).collect()
+}
+
+/// Characters in the popover: `recent` first (newest first, each once, at most [`MAX_RECENT`]),
+/// then the catalog. A recent character that is not in the catalog stays stored but is not shown,
+/// so removing it from the list stays removed.
+pub(crate) fn display_order(catalog: &[String], recent: &[String]) -> Vec<String> {
+    let mut shown = Vec::with_capacity(catalog.len().saturating_add(recent.len()));
+    for symbol in recent.iter().take(MAX_RECENT) {
+        if catalog.iter().any(|item| item == symbol) && !shown.iter().any(|item| item == symbol) {
+            shown.push(symbol.clone());
+        }
+    }
+    for symbol in catalog {
+        if !shown.iter().any(|item| item == symbol) {
+            shown.push(symbol.clone());
+        }
+    }
+    shown
+}
+
+/// Put `symbol` first. A repeat moves up, and the list stays at [`MAX_RECENT`] with no duplicates.
+pub(crate) fn note_used(recent: &[String], symbol: &str) -> Vec<String> {
+    let mut next = Vec::with_capacity(MAX_RECENT.min(recent.len().saturating_add(1)));
+    next.push(symbol.to_string());
+    for item in recent {
+        if item != symbol && next.len() < MAX_RECENT {
+            next.push(item.clone());
+        }
+    }
+    next
+}
+
+/// Recent characters as stored: whitespace-separated, newest first, at most [`MAX_RECENT`].
+pub(crate) fn parse_recent(raw: &str) -> Vec<String> {
+    let mut recent = Vec::new();
+    for token in raw.split_whitespace() {
+        if recent.len() == MAX_RECENT {
+            break;
+        }
+        if !recent.iter().any(|item| item == token) {
+            recent.push(token.to_string());
+        }
+    }
+    recent
+}
+
+/// One line for the user defaults.
+pub(crate) fn format_list(symbols: &[String]) -> String {
+    symbols.join(" ")
 }
 
 /// Remember `change` as copycraft's own symbol write. The next poll must not record or scan it.
