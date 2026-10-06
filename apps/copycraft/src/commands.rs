@@ -2418,7 +2418,7 @@ fn text_chips(text: &str) -> Vec<Command> {
         ));
     }
     // One decoder chip, titled with what the copy decodes as (JWT, Base64, URL, …).
-    if toolbar_visibility::shows_decode(kind)
+    if toolbar_visibility::tries_decode(kind, text)
         && let Some(found) = decode::detect(text)
     {
         commands.push(decoder_command(found));

@@ -1,5 +1,5 @@
 //! The decoder chip: one chip next to Original, titled with what the copy decodes as (JWT,
-//! Unix time, URL, Base64), that shows the decoded text read-only. Detection is string work only and runs
+//! UUID, Unix time, URL, Base64), that shows the decoded text read-only. Detection is string work only and runs
 //! with the other chips ([`crate::commands::warm_chips`] off the main thread for a large copy).
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
@@ -8,6 +8,7 @@ mod clock;
 mod jwt;
 mod unix_time;
 mod url;
+mod uuid;
 
 pub use clock::Env;
 
@@ -15,6 +16,7 @@ pub use clock::Env;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecodeKind {
     Jwt,
+    Uuid,
     UnixTime,
     Url,
     Base64,
@@ -25,6 +27,7 @@ impl DecodeKind {
     pub fn label(self) -> &'static str {
         match self {
             Self::Jwt => "JWT",
+            Self::Uuid => "UUID",
             Self::UnixTime => crate::locale::t("decode_unix_time"),
             Self::Url => "URL",
             Self::Base64 => "Base64",
@@ -35,6 +38,7 @@ impl DecodeKind {
     pub fn keywords(self) -> &'static str {
         match self {
             Self::Jwt => "decode jwt token",
+            Self::Uuid => "decode uuid guid version",
             Self::UnixTime => "decode unix time timestamp epoch date",
             Self::Url => "decode url percent query",
             Self::Base64 => "decode base64",
@@ -66,6 +70,7 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
     }
     let found = |kind: DecodeKind, body: Option<String>| body.map(|body| Decoded { kind, body });
     let decoded = found(DecodeKind::Jwt, jwt::decode(peeled, env))
+        .or_else(|| found(DecodeKind::Uuid, uuid::decode(peeled, env)))
         .or_else(|| found(DecodeKind::UnixTime, unix_time::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Url, url::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;

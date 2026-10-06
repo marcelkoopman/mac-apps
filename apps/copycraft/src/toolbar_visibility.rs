@@ -27,6 +27,15 @@ pub fn shows_decode(kind: FormatKind) -> bool {
     matches!(kind, FormatKind::Plain | FormatKind::Text | FormatKind::Url)
 }
 
+/// The decoder chip is tried on prose, plain text and links, and on any copy that is one
+/// token without white space (a braced GUID `{…}` reads as YAML, a quoted token as JSON).
+pub fn tries_decode(kind: FormatKind, source: &str) -> bool {
+    shows_decode(kind) || {
+        let token = source.trim();
+        !token.is_empty() && !token.contains(char::is_whitespace)
+    }
+}
+
 /// Convert: flat `key: value` text to JSON. JSON, CSV and TSV have no conversion
 /// ([`crate::convert::try_convert`]); YAML opens formatted.
 pub fn shows_convert(source: &str) -> bool {
@@ -38,6 +47,7 @@ pub fn shows_convert(source: &str) -> bool {
 mod tests {
     use super::{
         shows_convert, shows_dataframe, shows_dataframe_button, shows_decode, shows_format,
+        tries_decode,
     };
     use crate::format::FormatKind;
 
@@ -166,6 +176,15 @@ Id;Naam;Salaris
             "mod appearance;\nmod clipboard;\nfn main() {}"
         ));
         assert!(!shows_convert("<root><item/></root>"));
+    }
+
+    #[test]
+    fn decoder_is_tried_on_tokens_of_any_kind() {
+        let guid = "{6F9619FF-8B86-4011-B42D-00C04FC964FF}";
+        assert!(tries_decode(FormatKind::Yaml, guid));
+        assert!(!tries_decode(FormatKind::Yaml, "name: copycraft\nitems: 3"));
+        assert!(!tries_decode(FormatKind::Json, "{\n  \"a\": 1\n}"));
+        assert!(tries_decode(FormatKind::Text, "hello world"));
     }
 
     #[test]
