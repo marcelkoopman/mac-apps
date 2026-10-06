@@ -162,6 +162,8 @@ thread_local! {
     static MORE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
     static CLEAR: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
     static CLOSE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
+    /// "Tekens" / "Symbols", left of Wipe. Opens the character popover.
+    static SYMBOLS: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
     static CONTENT_ACTIONS: Cell<commands::ContentActions> = const {
         Cell::new(commands::ContentActions {
             copy: false,
@@ -388,6 +390,17 @@ define_class!(
         #[unsafe(method(moreClicked:))]
         fn more_clicked(&self, _sender: Option<&NSButton>) {
             pop_overflow();
+        }
+
+        #[unsafe(method(symbolsClicked:))]
+        fn symbols_clicked(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            let Some(mtm) = MainThreadMarker::new() else {
+                return;
+            };
+            crate::macos_symbols::toggle(mtm, button);
         }
 
         #[unsafe(method(closeClicked:))]
@@ -753,6 +766,7 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
 
 fn hide() {
     dismiss_picker(false);
+    crate::macos_symbols::close();
     set_item_find(false);
     if !is_open() && !window_is_visible() {
         return;
@@ -858,6 +872,12 @@ fn ensure_window(mtm: MainThreadMarker) {
         .button()
         .setToolTip(Some(&NSString::from_str("Wipe copied data from memory")));
     let close = header_symbol(mtm, "xmark", "Close", "✕", sel!(closeClicked:));
+    let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Small);
+    symbols.set_accessibility_label(crate::locale::t("symbols_a11y"));
+    symbols
+        .button()
+        .setToolTip(Some(&NSString::from_str(crate::locale::t("symbols_tip"))));
+    wire_button(symbols.button(), sel!(symbolsClicked:));
     let header_group = glass::group(mtm, GLASS_MERGE);
     header_group.content().addSubview(clear.view());
     header_group.content().addSubview(more.view());
@@ -883,6 +903,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&item_find);
     content.addSubview(&item_count);
     content.addSubview(header_group.view());
+    content.addSubview(symbols.view());
     content.addSubview(&well);
     content.addSubview(&preview_clip);
     content.addSubview(&preview_image);
@@ -914,6 +935,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     MORE.with(|slot| slot.replace(Some(more)));
     CLEAR.with(|slot| slot.replace(Some(clear)));
     CLOSE.with(|slot| slot.replace(Some(close)));
+    SYMBOLS.with(|slot| slot.replace(Some(symbols)));
     COPY_BUTTON.with(|slot| slot.replace(Some(copy_button)));
     SAVE_BUTTON.with(|slot| slot.replace(Some(save_button)));
     REVEAL.with(|slot| slot.replace(Some(reveal)));
@@ -975,7 +997,9 @@ fn layout(fresh_place: bool) {
     let close_x = WIDTH - PAD - 24.0;
     let more_x = close_x - 6.0 - HEADER_BUTTON;
     let clear_x = more_x - 6.0 - CLEAR_BUTTON_W;
-    let title_w = (clear_x - PAD - 8.0).max(40.0);
+    let symbols_w = symbols_button_width();
+    let symbols_x = clear_x - 8.0 - symbols_w;
+    let title_w = (symbols_x - PAD - 8.0).max(40.0);
     HEADER.with(|slot| {
         set_label(slot, PAD, placed.header_y, title_w, HEADER_H, &title);
     });
@@ -990,6 +1014,17 @@ fn layout(fresh_place: bool) {
     CLEAR.with(|slot| place_header_button(slot, 0.0, CLEAR_BUTTON_W));
     MORE.with(|slot| place_header_button(slot, more_x - clear_x, HEADER_BUTTON));
     CLOSE.with(|slot| place_header_button(slot, close_x - clear_x, HEADER_BUTTON));
+    SYMBOLS.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.view().setFrame(NSRect::new(
+                NSPoint::new(
+                    symbols_x,
+                    placed.header_y + (HEADER_H - HEADER_BUTTON) / 2.0,
+                ),
+                NSSize::new(symbols_w, HEADER_BUTTON),
+            ));
+        }
+    });
     place_item_find(placed.find_y, item_find);
     place_well(placed.preview_y);
     apply_preview(placed.preview_y);
@@ -2439,6 +2474,15 @@ fn set_label(
 /// The card title (kind, plus any check such as `missing }`) and the open hotkey.
 fn header_title(kind: &str) -> String {
     format!("{kind} · {}", crate::settings::hotkey_label())
+}
+
+fn symbols_button_width() -> f64 {
+    SYMBOLS.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|button| button.width_within(120.0).max(64.0))
+            .unwrap_or(72.0)
+    })
 }
 
 /// Place a header button at `x` inside the header group (which is `HEADER_BUTTON` tall).

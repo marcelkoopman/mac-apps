@@ -474,6 +474,25 @@ pub(crate) fn current_marks() -> PasteMarks {
     cached.unwrap_or_else(|| read_marks(&NSPasteboard::generalPasteboard()))
 }
 
+/// Put `text` on the pasteboard as `public.utf8-plain-text` and nothing else.
+///
+/// A symbol copy uses this instead of [`write_text`]: no copycraft type and no concealed
+/// type. The caller ignores the returned change count, so the poller does not record or scan it.
+pub(crate) fn write_plain_text(text: &str) -> Result<isize, String> {
+    let pasteboard = NSPasteboard::generalPasteboard();
+    let plain = NSString::from_str("public.utf8-plain-text");
+    let ok = autoreleasepool(|_| {
+        pasteboard.clearContents();
+        pasteboard.setString_forType(&NSString::from_str(text), &plain)
+    });
+    invalidate_caches();
+    if ok {
+        Ok(pasteboard.changeCount())
+    } else {
+        Err("could not write text".into())
+    }
+}
+
 /// Put `text` on the pasteboard as plain text, marked as copycraft's own write, and as
 /// concealed when it is labelled sensitive, so other clipboard managers leave it out.
 pub(crate) fn write_text(text: &str, concealed: bool) -> Result<(), String> {

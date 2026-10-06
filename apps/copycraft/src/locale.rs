@@ -116,6 +116,14 @@ pub fn t(key: &str) -> &'static str {
         (Lang::Nl, "decode_unix_time") => "Unix-tijd",
         (Lang::En, "decode_unix_time") => "Unix time",
 
+        // Symbols popover
+        (Lang::Nl, "symbols") => "Tekens",
+        (Lang::En, "symbols") => "Symbols",
+        (Lang::Nl, "symbols_a11y") => "Speciale tekens",
+        (Lang::En, "symbols_a11y") => "Special characters",
+        (Lang::Nl, "symbols_tip") => "Kopieer een teken",
+        (Lang::En, "symbols_tip") => "Copy a character",
+
         // Fallback: English (every key above has an En arm; this is for typos).
         (_, _) => {
             eprintln!("copycraft: missing locale key {key}");
@@ -167,7 +175,26 @@ fn key_en(key: &str) -> &'static str {
         "show_columns" => "Show columns",
         "show_table" => "Show table",
         "decode_unix_time" => "Unix time",
+        "symbols" => "Symbols",
+        "symbols_a11y" => "Special characters",
+        "symbols_tip" => "Copy a character",
         _ => "?",
+    }
+}
+
+/// "Gekopieerd: €" / "Copied: €". The character is not a catalog key, so it is not in [`t`].
+pub fn copied_symbol(lang: Lang, symbol: &str) -> String {
+    match lang {
+        Lang::Nl => format!("Gekopieerd: {symbol}"),
+        Lang::En => format!("Copied: {symbol}"),
+    }
+}
+
+/// Tooltip on a character button: "Kopieer €" / "Copy €".
+pub fn copy_symbol(lang: Lang, symbol: &str) -> String {
+    match lang {
+        Lang::Nl => format!("Kopieer {symbol}"),
+        Lang::En => format!("Copy {symbol}"),
     }
 }
 

@@ -2479,6 +2479,18 @@ impl App {
     }
 
     fn record_current(&mut self, view: &ClipboardView) {
+        // A symbol copy is plain text without copycraft's own pasteboard type. The change count
+        // is what keeps it out of history, and out of a scan: callers that already read the
+        // pasteboard still must not record it.
+        #[cfg(target_os = "macos")]
+        if crate::symbols::gate(
+            crate::symbols::ignored_change(),
+            crate::macos_pasteboard::change_count(),
+        )
+        .ignore()
+        {
+            return;
+        }
         // Copycraft's own write: what belongs in history was recorded when it was written (see
         // `record_own_copy`), and a history step stays where it is.
         #[cfg(target_os = "macos")]
@@ -2527,6 +2539,13 @@ impl App {
             }
             crate::macos_pasteboard::set_card_shown(open);
             let change = crate::macos_pasteboard::change_count();
+            // Symbol copy: do not read the pasteboard. A read would classify and label it, and
+            // recording it would put the character in history. The card keeps what it showed.
+            if crate::symbols::gate(crate::symbols::ignored_change(), change).ignore() {
+                self.polled_change = Some(change);
+                self.poll_again = false;
+                return false;
+            }
             if self.polled_change == Some(change)
                 && !self.poll_again
                 && self.signature.history_len == self.history.len()
