@@ -280,3 +280,10 @@ expectations; on Linux the test only checks size and EXIF.
       and rows move; the pinned first column stays inside the table area (never over the meta
       line or the chips). The same in Open in window (never over the version bar or below the
       grid).
+- [ ] Symbols: open the card, click Tekens / Symbols, click €, and paste in TextEdit with ⌘V.
+      € appears. The popover briefly says "Gekopieerd: €" / "Copied: €".
+- [ ] That character is not in history.
+- [ ] Click a few characters: those move to the front of the list (at most eight, no duplicates).
+- [ ] Settings → Tekens: add, remove and reorder characters, quit Copycraft and start it again.
+      The change is still there.
+- [ ] Standaard herstellen / Restore defaults puts the standard list back.
