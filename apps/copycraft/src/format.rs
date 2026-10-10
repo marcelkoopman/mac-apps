@@ -1515,6 +1515,27 @@ fn main() {
     }
 
     #[test]
+    fn marcel_prose_sentence_is_not_yaml() {
+        let sentence = "Base64-afbeeldingen: die worden beschreven, niet getoond.";
+        assert_ne!(detect(sentence), FormatKind::Yaml);
+        for prose in [
+            "Note: this is a test",
+            "Let op: dit werkt niet.",
+            "Time: 10:30",
+        ] {
+            assert_ne!(detect(prose), FormatKind::Yaml, "{prose}");
+        }
+        for yaml in [
+            "version: 1.2",
+            "name: copycraft",
+            "key: value",
+            "port: 8080",
+        ] {
+            assert_eq!(detect(yaml), FormatKind::Yaml, "{yaml}");
+        }
+    }
+
+    #[test]
     fn detects_yaml() {
         let src = "name: copycraft\nitems:\n  - one\n";
         assert_eq!(detect(src), FormatKind::Yaml);

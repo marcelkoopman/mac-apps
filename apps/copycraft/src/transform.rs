@@ -87,7 +87,7 @@ fn yaml_key(key: YamlValue) -> Option<String> {
 }
 
 pub fn looks_like_yaml(text: &str) -> bool {
-    if looks_like_labeled_record(text) {
+    if looks_like_labeled_record(text) || looks_like_prose_pair(text) {
         return false;
     }
     parse_yaml_documents(text).is_ok() && parse_json(text).is_err()
@@ -108,6 +108,49 @@ fn looks_like_labeled_record(text: &str) -> bool {
         .filter(|line| line_is_label_value(line.trim()))
         .count();
     labeled * 2 >= lines.len()
+}
+
+/// One line of prose with a single colon (`Let op: dit werkt niet.`), not a one-pair mapping.
+/// Only a lone `key: value` line is judged; anything longer is left to the YAML parser. A
+/// pair is YAML when its key is a plain token (letters, digits, `_`, `-`, `.`) and its value
+/// does not read as a sentence: three or more words, two or more words with a comma or a
+/// closing `.`/`!`/`?`, or a clock time (`Time: 10:30`). Quoted values and flow collections
+/// (`{...}`, `[...]`) are kept as YAML.
+fn looks_like_prose_pair(text: &str) -> bool {
+    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
+    let (Some(line), None) = (lines.next(), lines.next()) else {
+        return false;
+    };
+    let line = line.trim();
+    let Some((key, value)) = line.split_once(':') else {
+        return false;
+    };
+    if line.starts_with(['-', '{', '[', '#', '"', '\'', '!', '&', '*', '?']) {
+        return false;
+    }
+    let value = value.trim();
+    // `key:value` and `key:` are not the `key: value` shape of prose.
+    if value.is_empty()
+        || !key.is_empty() && !line[key.len() + 1..].starts_with(char::is_whitespace)
+    {
+        return false;
+    }
+    let plain_key = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'));
+    if !plain_key {
+        return true;
+    }
+    if value.starts_with(['"', '\'', '[', '{', '|', '>', '&', '*', '!']) {
+        return false;
+    }
+    let words = value.split_whitespace().count();
+    let sentence_end = value.ends_with(['.', '!', '?']);
+    let clock = value.split(':').all(|part| {
+        !part.is_empty() && part.len() <= 2 && part.chars().all(|c| c.is_ascii_digit())
+    }) && value.contains(':');
+    words >= 3 || (words >= 2 && (sentence_end || value.contains(','))) || clock
 }
 
 fn yaml_structure_line(line: &str) -> bool {
@@ -201,6 +244,39 @@ mod tests {
     fn detects_yaml_not_json() {
         assert!(looks_like_yaml("name: copycraft\nitems:\n  - one\n"));
         assert!(!looks_like_yaml("{\"a\":1}"));
+    }
+
+    #[test]
+    fn single_pairs_are_yaml_but_prose_is_not() {
+        for yaml in [
+            "name: copycraft",
+            "key: value",
+            "version: 1.2",
+            "port: 8080",
+            "enabled: true",
+            "image: nginx:1.25",
+            "a.b-c_d: x",
+            "title: \"Hello big world.\"",
+            "tags: [a, b, c]",
+            "- one\n- two\n",
+            "items:\n  - one\n",
+            "---\nname: x\n",
+            "name: copycraft\nitems:\n  - one\n",
+        ] {
+            assert!(looks_like_yaml(yaml), "{yaml:?}");
+        }
+        for prose in [
+            "Base64-afbeeldingen: die worden beschreven, niet getoond.",
+            "Note: this is a test",
+            "Let op: dit werkt niet.",
+            "Time: 10:30",
+            "Let op: klaar.",
+            "Hi there: how are you?",
+            "Note: yes, no",
+            "Note: dit werkt niet",
+        ] {
+            assert!(!looks_like_yaml(prose), "{prose:?}");
+        }
     }
 
     #[test]
