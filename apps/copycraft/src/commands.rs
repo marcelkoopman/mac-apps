@@ -991,6 +991,10 @@ fn apply_text_view(
     } else if view == CardView::Format && opens_formatted(source) {
         set_excerpt(card, &body, full);
         card.highlight = Some(kind);
+    } else if view == CardView::Decode && decode::detect(source) == Some(decode::DecodeKind::Jwt) {
+        // A decoded JWT: its Header and Payload JSON in color, the notes above as text.
+        set_excerpt(card, &body, full);
+        card.highlight = Some(FormatKind::Jwt);
     } else {
         set_excerpt(card, &body, full);
     }
@@ -3327,6 +3331,18 @@ xmas-fifth-day:
         let card = work_card(&decoded);
         assert_eq!(card.title, "JWT");
         assert!(card.meta.contains("credential"), "{}", card.meta);
+        // Header and payload JSON are drawn in color; the notes stay in the view.
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Jwt));
+        let toks = crate::highlight::tokens(&card.excerpt, crate::format::FormatKind::Jwt);
+        assert!(toks.iter().any(|(kind, text)| {
+            *kind == crate::highlight::TokenKind::Key && text == "\"alg\""
+        }));
+        assert!(card.excerpt.starts_with("Signature not verified"));
+        // Original goes back, uncolored by the JWT highlighter.
+        assert_ne!(
+            work_card(&original).highlight,
+            Some(crate::format::FormatKind::Jwt)
+        );
         assert!(card.excerpt.starts_with("Signature not verified"));
         assert!(masks_content(&card, CardView::Decode));
     }

@@ -16,6 +16,9 @@ pub enum FormatKind {
     Tsv,
     Dataframe,
     Image,
+    /// A decoded JWT (the Decode view): highlight only, never the result of [`detect`]. Its
+    /// Header and Payload JSON is colored like [`FormatKind::Json`].
+    Jwt,
     Text,
     Plain,
 }
@@ -36,6 +39,7 @@ impl FormatKind {
             Self::Tsv => "tsv",
             Self::Dataframe => "DF",
             Self::Image => "img",
+            Self::Jwt => "JWT",
             Self::Text => "¶",
             Self::Plain => "Aa",
         }
@@ -56,6 +60,7 @@ impl FormatKind {
             Self::Tsv => "TSV",
             Self::Dataframe => crate::locale::t("table_view"),
             Self::Image => crate::locale::t("title_image"),
+            Self::Jwt => "JWT",
             Self::Text | Self::Plain => crate::locale::t("title_content"),
         }
     }
@@ -95,6 +100,7 @@ impl FormatKind {
             // ([`crate::dataframe::TableFile`]).
             Self::Dataframe => "csv",
             Self::Image => "png",
+            Self::Jwt => "json",
             Self::Text | Self::Plain => "txt",
         }
     }
@@ -186,6 +192,7 @@ pub fn format_text(text: &str) -> String {
         | FormatKind::Tsv
         | FormatKind::Dataframe
         | FormatKind::Image
+        | FormatKind::Jwt
         | FormatKind::Text
         | FormatKind::Plain => text.to_string(),
     }

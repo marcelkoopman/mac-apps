@@ -17,6 +17,7 @@ pub enum TokenKind {
 pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
     match kind {
         FormatKind::Json => tokenize_json(source),
+        FormatKind::Jwt => tokenize_jwt(source),
         FormatKind::Yaml => tokenize_yaml(source),
         FormatKind::Rust => tokenize_rust(source),
         FormatKind::Java => tokenize_code(source, kind),
@@ -165,6 +166,38 @@ fn tokenize_json(source: &str) -> Vec<(TokenKind, String)> {
         }
         out.push((TokenKind::Text, ch.to_string()));
         i += 1;
+    }
+    out
+}
+
+/// The decoded JWT view ([`crate::decode`]): notes and date lines as text, the `Header` and
+/// `Payload` labels as types, and the JSON under each label colored like [`FormatKind::Json`].
+/// The tokens always join back to `source`.
+fn tokenize_jwt(source: &str) -> Vec<(TokenKind, String)> {
+    let mut out: Vec<(TokenKind, String)> = Vec::new();
+    let mut json = String::new();
+    let mut in_json = false;
+    for line in source.split_inclusive('\n') {
+        let name = line.trim_end_matches('\n');
+        if in_json && !name.is_empty() {
+            json.push_str(line);
+            continue;
+        }
+        if !json.is_empty() {
+            out.extend(tokenize_json(&std::mem::take(&mut json)));
+        }
+        in_json = matches!(name, "Header" | "Payload");
+        if in_json {
+            out.push((TokenKind::Type, name.to_string()));
+            if line.len() > name.len() {
+                out.push((TokenKind::Text, "\n".to_string()));
+            }
+        } else {
+            out.push((TokenKind::Text, line.to_string()));
+        }
+    }
+    if !json.is_empty() {
+        out.extend(tokenize_json(&json));
     }
     out
 }
@@ -852,6 +885,28 @@ mod tests {
                 .any(|(k, v)| *k == TokenKind::String && v.contains('1'))
         );
         assert!(toks.iter().any(|(k, _)| *k == TokenKind::Comment));
+    }
+
+    #[test]
+    fn decoded_jwt_colors_header_and_payload_json() {
+        let src = "Signature not verified\nalg: HS256\n\nExpires (exp): expired (4 days ago)\n  2026-10-06 12:00 UTC+02:00\n\nHeader\n{\n  \"alg\": \"HS256\",\n  \"typ\": \"JWT\"\n}\n\nPayload\n{\n  \"exp\": 1700000000,\n  \"admin\": true\n}";
+        let toks = tokens(src, FormatKind::Jwt);
+        let joined: String = toks.iter().map(|(_, text)| text.as_str()).collect();
+        assert_eq!(joined, src);
+        let has = |kind: TokenKind, text: &str| toks.iter().any(|(k, v)| *k == kind && v == text);
+        assert!(has(TokenKind::Type, "Header"));
+        assert!(has(TokenKind::Type, "Payload"));
+        assert!(has(TokenKind::Key, "\"alg\""));
+        assert!(has(TokenKind::String, "\"HS256\""));
+        assert!(has(TokenKind::Number, "1700000000"));
+        assert!(has(TokenKind::Keyword, "true"));
+        // The notes and the date lines stay plain: no colored number in the dates.
+        assert!(
+            !toks
+                .iter()
+                .any(|(k, v)| *k == TokenKind::Number && v.starts_with("2026"))
+        );
+        assert_eq!(tokens("no sections\n", FormatKind::Jwt).len(), 1);
     }
 
     #[test]

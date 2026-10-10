@@ -19,7 +19,8 @@ pub fn try_convert(text: &str) -> Option<String> {
         | FormatKind::Python
         | FormatKind::Markdown
         | FormatKind::Url
-        | FormatKind::Image => {
+        | FormatKind::Image
+        | FormatKind::Jwt => {
             return None;
         }
     };

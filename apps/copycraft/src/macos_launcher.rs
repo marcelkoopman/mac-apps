@@ -1892,8 +1892,9 @@ fn paint_preview_text(body: &str, payload: bool) {
             return;
         };
         crate::macos_card_text::paint(view, body, highlight, payload, error_line);
-        let wrap = (highlight.is_none() || highlight == Some(FormatKind::Markdown))
-            .then(preview_wrap_width);
+        let wrap = (highlight.is_none()
+            || matches!(highlight, Some(FormatKind::Markdown | FormatKind::Jwt)))
+        .then(preview_wrap_width);
         widgets::fit_text_view(view, wrap);
         view.scrollRangeToVisible(NSRange {
             location: 0,
