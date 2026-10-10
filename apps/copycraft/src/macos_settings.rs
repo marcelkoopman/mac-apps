@@ -1,4 +1,5 @@
-//! Settings window: hotkey, date order, privacy filter, blur, Open at Login, and the symbol list.
+//! Settings window: hotkey, date order, language, privacy filter, blur, Open at Login, and the
+//! symbol list.
 
 use std::cell::{Cell, RefCell};
 
@@ -22,7 +23,7 @@ use crate::macos_login;
 use crate::settings;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 424.0;
+const HEIGHT: f64 = 468.0;
 const PAD: f64 = 20.0;
 const ROW: f64 = 28.0;
 const GAP: f64 = 16.0;
@@ -107,6 +108,24 @@ define_class!(
             };
             settings::set_date_month_first(popup.indexOfSelectedItem() == 1);
             launcher::emit(UserEvent::SettingsChanged);
+        }
+
+        #[unsafe(method(languageChanged:))]
+        fn language_changed(&self, sender: Option<&NSPopUpButton>) {
+            let Some(popup) = sender else {
+                return;
+            };
+            let choice = match popup.indexOfSelectedItem() {
+                1 => settings::Language::Nl,
+                2 => settings::Language::En,
+                _ => settings::Language::System,
+            };
+            if choice == settings::language() {
+                return;
+            }
+            settings::set_language(choice);
+            crate::locale::apply();
+            launcher::emit(UserEvent::LanguageChanged);
         }
 
         #[unsafe(method(privacyFilterToggled:))]
@@ -314,6 +333,24 @@ fn build(mtm: MainThreadMarker) {
     DATE_POPUP.with(|slot| *slot.borrow_mut() = Some(popup));
 
     y -= ROW + GAP;
+    place_label(mtm, &body, crate::locale::t("language"), PAD, y);
+    let language = NSPopUpButton::initWithFrame_pullsDown(
+        NSPopUpButton::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(PAD + 110.0, y - 2.0),
+            NSSize::new(200.0, ROW + 4.0),
+        ),
+        false,
+    );
+    language.removeAllItems();
+    language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_system")));
+    language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_nl")));
+    language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_en")));
+    language.selectItemAtIndex(language_index(settings::language()));
+    wire(language.as_ref(), sel!(languageChanged:));
+    body.addSubview(&language);
+
+    y -= ROW + GAP;
     let privacy = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str(crate::locale::t("privacy_filter")),
@@ -434,6 +471,14 @@ fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, x: f64, y: f
     parent.addSubview(&field);
 }
 
+fn language_index(language: settings::Language) -> isize {
+    match language {
+        settings::Language::System => 0,
+        settings::Language::Nl => 1,
+        settings::Language::En => 2,
+    }
+}
+
 fn state_of(on: bool) -> isize {
     if on {
         NSControlStateValueOn
@@ -512,6 +557,15 @@ fn refresh_login_row() {
             field.setStringValue(&NSString::from_str(note));
         }
     });
+}
+
+/// Close and open Settings again so every label follows the new language.
+pub fn reopen() {
+    if WINDOW.with(|slot| slot.borrow().is_none()) {
+        return;
+    }
+    close();
+    show();
 }
 
 /// Close the Settings window (Wipe, Quit).

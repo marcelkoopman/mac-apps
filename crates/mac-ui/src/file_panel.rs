@@ -8,6 +8,9 @@
 //! surrounding whitespace are ignored, empty entries are skipped). Each one is mapped to its
 //! content type (`UTType`); extensions the system has no type for are skipped. An empty list, or
 //! one where no extension maps to a type, allows every file type.
+//!
+//! The default button (`Open` / `Bewaar`) and the format label follow [`crate::lang`]. The
+//! panel's Cancel button stays the system button: `NSSavePanel` has no title for it.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -20,6 +23,8 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 use objc2_uniform_type_identifiers::UTType;
+
+use crate::lang;
 
 /// Why [`choose_file`] or [`choose_save_path`] failed.
 #[derive(Debug)]
@@ -55,6 +60,7 @@ pub fn choose_file(
     panel.setCanChooseDirectories(false);
     panel.setAllowsMultipleSelection(false);
     panel.setTitle(Some(&NSString::from_str(title)));
+    panel.setPrompt(Some(&NSString::from_str(lang::t("open"))));
     set_allowed_extensions(&panel, allowed_extensions);
     run(&panel)
 }
@@ -78,6 +84,7 @@ pub fn choose_save_path(
     panel.setExtensionHidden(false);
     panel.setNameFieldStringValue(&NSString::from_str(suggested_name));
     panel.setTitle(Some(&NSString::from_str(title)));
+    panel.setPrompt(Some(&NSString::from_str(lang::t("save"))));
     // Only declared types: for a type the system made up from the extension (dynamic, such as
     // `parquet`), the panel adds the extension again to a name that has it ("x.parquet.parquet").
     // Without a restriction it keeps the name as suggested or typed.
@@ -119,11 +126,12 @@ pub fn choose_save_path_with_format(
     panel.setCanCreateDirectories(true);
     panel.setExtensionHidden(false);
     panel.setTitle(Some(&NSString::from_str(title)));
+    panel.setPrompt(Some(&NSString::from_str(lang::t("save"))));
     let extensions: Vec<String> = formats.iter().map(|f| f.extension.to_string()).collect();
     restrict_to(&panel, first.extension);
     panel.setNameFieldStringValue(&NSString::from_str(suggested_name));
 
-    let label = NSTextField::labelWithString(&NSString::from_str("Format:"), mtm);
+    let label = NSTextField::labelWithString(&NSString::from_str(lang::t("format")), mtm);
     label.sizeToFit();
     let popup = NSPopUpButton::initWithFrame_pullsDown(
         NSPopUpButton::alloc(mtm),

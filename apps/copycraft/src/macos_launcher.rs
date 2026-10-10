@@ -1017,6 +1017,141 @@ fn ensure_window(mtm: MainThreadMarker) {
     WINDOW.with(|slot| slot.replace(Some(window)));
 }
 
+/// Point the card's fixed labels at the current language. The window is built once and stays
+/// for the process; chips, the header and the well are filled again by the next layout. An
+/// open column picker closes: its rows were built in the previous language.
+pub fn relabel() {
+    let t = crate::locale::t;
+    CLEAR.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.set_title(t("wipe"));
+            button
+                .button()
+                .setToolTip(Some(&NSString::from_str(t("wipe_tip"))));
+        }
+    });
+    SYMBOLS.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.set_title(t("symbols"));
+            button.set_accessibility_label(t("symbols_a11y"));
+            button
+                .button()
+                .setToolTip(Some(&NSString::from_str(t("symbols_tip"))));
+        }
+    });
+    MORE.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_symbol(button, t("more"));
+        }
+    });
+    CLOSE.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_symbol(button, t("close"));
+        }
+    });
+    COPY_BUTTON.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_symbol(button, t("copy"));
+        }
+    });
+    SAVE_BUTTON.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_symbol(button, t("save"));
+        }
+    });
+    PREVIOUS.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_nav(button, commands::PREVIOUS_CHEVRON);
+        }
+    });
+    NEXT.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_nav(button, commands::NEXT_CHEVRON);
+        }
+    });
+    VERSION_ROW.with(|slot| {
+        if let Some(row) = slot.borrow().as_ref() {
+            label_step(&row.undo, t("undo_table_step"), "⌘Z");
+            label_step(&row.redo, t("redo_table_step"), "⇧⌘Z");
+        }
+    });
+    FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            field.setPlaceholderString(Some(&NSString::from_str(t("search"))));
+            field.setAccessibilityLabel(Some(&NSString::from_str(t("search_commands"))));
+        }
+    });
+    ITEM_FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            field.setPlaceholderString(Some(&NSString::from_str(t("find"))));
+            field.setAccessibilityLabel(Some(&NSString::from_str(t("find_in_item"))));
+        }
+    });
+    REVEAL.with(|slot| {
+        if let Some(cover) = slot.borrow().as_ref() {
+            cover
+                .hit
+                .setAccessibilityLabel(Some(&NSString::from_str(t("reveal_hidden"))));
+        }
+    });
+    PREVIEW_TEXT.with(|slot| {
+        if let Some(text) = slot.borrow().as_ref() {
+            text.setAccessibilityLabel(Some(&NSString::from_str(t("clipboard_content"))));
+        }
+    });
+    PREVIEW_IMAGE.with(|slot| {
+        if let Some(image) = slot.borrow().as_ref() {
+            image.setAccessibilityLabel(Some(&NSString::from_str(t("image_preview"))));
+        }
+    });
+    NO_MATCHES.with(|slot| {
+        if let Some(empty) = slot.borrow().as_ref() {
+            empty.setStringValue(&NSString::from_str(t("no_matching_commands")));
+        }
+    });
+    SHOW_ALL.with(|slot| {
+        if let Some(pill) = slot.borrow().as_ref() {
+            pill.button
+                .button()
+                .setToolTip(Some(&NSString::from_str(t("show_all_tip"))));
+        }
+    });
+    SPINNER.with(|slot| {
+        if let Some(spinner) = slot.borrow().as_ref() {
+            spinner.set_accessibility_label(t("loading"));
+        }
+    });
+    if picker_open() {
+        close_picker();
+    }
+}
+
+/// VoiceOver name of a symbol button. The image stays; the title is hidden by the image-only
+/// position, as at construction.
+fn label_symbol(button: &GlassButton, label: &str) {
+    button.set_accessibility_label(label);
+    button.button().setTitle(&NSString::from_str(label));
+}
+
+/// History chevron: name, tooltip and hint. The drawn title stays the glyph (or empty).
+fn label_nav(button: &GlassButton, chevron: commands::Chevron) {
+    button.set_accessibility_label(chevron.name());
+    button
+        .button()
+        .setToolTip(Some(&NSString::from_str(&chevron.tooltip())));
+    button
+        .button()
+        .setAccessibilityHelp(Some(&NSString::from_str(&chevron.spoken_shortcut())));
+}
+
+/// Undo or redo in the version capsule. The drawn title stays the arrow.
+fn label_step(button: &GlassButton, name: &str, keys: &str) {
+    button.set_accessibility_label(name);
+    button
+        .button()
+        .setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
+}
+
 fn layout(fresh_place: bool) {
     let searching = SEARCHING.with(Cell::get);
     let query = if searching {

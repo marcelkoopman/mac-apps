@@ -48,6 +48,66 @@ pub fn can_run_modal() -> bool {
     native::can_run_modal()
 }
 
+/// Ticker's own alert buttons, in the macOS language ([`mac_ui::lang`]). `cancel` is the shared
+/// word, so Escape matches both "Cancel" and "Annuleer".
+const BUTTONS: &[(&str, &str, &str)] = &[
+    ("close", "Sluit", "Close"),
+    ("reset", "Herstel", "Reset"),
+    ("clear_all", "Wis alles", "Clear All"),
+];
+
+/// Button title for `key` (`cancel`, `close`, `reset`, `clear_all`).
+pub fn button(key: &str) -> &'static str {
+    if key == "cancel" {
+        return mac_ui::lang::t("cancel");
+    }
+    let Some((_, nl, en)) = BUTTONS.iter().find(|(name, _, _)| *name == key) else {
+        eprintln!("ticker: missing dialog key {key}");
+        return "?";
+    };
+    match mac_ui::lang::lang() {
+        mac_ui::lang::Lang::Nl => nl,
+        mac_ui::lang::Lang::En => en,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BUTTONS;
+
+    #[test]
+    fn every_button_has_dutch_and_english() {
+        let mut seen = std::collections::HashSet::new();
+        for (key, nl, en) in BUTTONS {
+            assert!(seen.insert(*key), "duplicate key {key}");
+            assert!(!nl.is_empty() && !en.is_empty(), "{key}");
+        }
+        let previous = mac_ui::lang::lang();
+        struct Restore(mac_ui::lang::Lang);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                mac_ui::lang::set_lang(self.0);
+            }
+        }
+        let _restore = Restore(previous);
+        mac_ui::lang::set_lang(mac_ui::lang::Lang::Nl);
+        assert_eq!(super::button("cancel"), "Annuleer");
+        assert_eq!(super::button("close"), "Sluit");
+        assert_eq!(super::button("reset"), "Herstel");
+        assert_eq!(super::button("clear_all"), "Wis alles");
+        assert!(mac_ui::lang::is_cancel(super::button("cancel")));
+        mac_ui::lang::set_lang(mac_ui::lang::Lang::En);
+        assert_eq!(super::button("cancel"), "Cancel");
+        assert_eq!(super::button("reset"), "Reset");
+        assert_eq!(super::button("clear_all"), "Clear All");
+        assert!(mac_ui::lang::is_cancel(super::button("cancel")));
+        assert!(!mac_ui::lang::is_cancel(super::button("close")));
+        assert!(!mac_ui::lang::is_cancel(super::button("reset")));
+        assert!(!mac_ui::lang::is_cancel(super::button("clear_all")));
+        assert_eq!(super::button("missing"), "?");
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod native {
     use crate::log_message;

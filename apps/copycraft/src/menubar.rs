@@ -306,6 +306,7 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::PrivacyFilterChanged => launcher::privacy_filter_changed(),
             UserEvent::HotkeyChanged => self.rebind_hotkey(),
+            UserEvent::LanguageChanged => self.language_changed(),
             UserEvent::ImageDone(done) => self.finish_image_job(*done),
             UserEvent::VersionScanned { picture, scan } => {
                 self.finish_version_scan(&picture, scan);
@@ -1422,6 +1423,23 @@ impl App {
             self.full_card = None;
         }
         launcher::toggle_under_icon(self.launch_for_popup(), &self.tray);
+    }
+
+    /// The language setting changed. Cached cards keep the old words, so they are dropped and
+    /// the open surfaces are built again.
+    fn language_changed(&mut self) {
+        crate::locale::apply();
+        self.history.forget_cards();
+        self.full_card = None;
+        self.refresh_status_menu();
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_launcher::relabel();
+            crate::macos_table_window::relabel();
+            crate::macos_settings::reopen();
+            crate::macos_about::reopen();
+        }
+        self.refresh_popup();
     }
 
     fn refresh_popup(&mut self) {
@@ -3190,6 +3208,7 @@ fn register_format_hotkey()
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    crate::locale::apply();
     appearance::apply(appearance::load());
     // Nothing heavy on the main thread at launch: the sensitivity recognizers are built, and
     // the temporary files older versions left for history pictures removed, in the background.

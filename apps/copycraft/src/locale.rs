@@ -1,6 +1,6 @@
-//! User-facing strings follow the system language (English or Dutch). No language picker.
-//! Every string the user can see goes through [`t`] / [`tf`] with a key from `locale/strings.rs`,
-//! which holds the Dutch and the English text side by side.
+//! User-facing strings follow Settings › Language: System (the macOS preferred language),
+//! Nederlands or English. Every string the user can see goes through [`t`] / [`tf`] with a key
+//! from `locale/strings.rs`, which holds the Dutch and the English text side by side.
 
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -8,33 +8,25 @@ use std::sync::OnceLock;
 
 mod strings;
 
-/// Supported UI languages. Anything other than Dutch uses English.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Lang {
-    En,
-    Nl,
+pub use mac_ui::lang::Lang;
+
+/// The macOS preferred language (English when that is not Dutch). English off macOS.
+pub fn system_lang() -> Lang {
+    mac_ui::lang::system_lang()
 }
 
-/// The language for labels this launch (from the preferred language list).
+/// The language for labels: the stored choice, or [`system_lang`] when that choice is System.
 pub fn lang() -> Lang {
-    static LANG: OnceLock<Lang> = OnceLock::new();
-    *LANG.get_or_init(detect)
+    match crate::settings::language() {
+        crate::settings::Language::Nl => Lang::Nl,
+        crate::settings::Language::En => Lang::En,
+        crate::settings::Language::System => system_lang(),
+    }
 }
 
-fn detect() -> Lang {
-    #[cfg(target_os = "macos")]
-    {
-        use mac_ui::objc2_foundation::{NSLocale, NSString};
-        let preferred = NSLocale::preferredLanguages();
-        if preferred
-            .firstObject()
-            .and_then(|value| value.downcast_ref::<NSString>().map(|s| s.to_string()))
-            .is_some_and(|code| code.to_ascii_lowercase().starts_with("nl"))
-        {
-            return Lang::Nl;
-        }
-    }
-    Lang::En
+/// Point shared panels ([`mac_ui::lang`]) at the same language as [`lang`].
+pub fn apply() {
+    mac_ui::lang::set_lang(lang());
 }
 
 /// Look up a catalog entry by key.
@@ -65,7 +57,7 @@ pub fn t_in(lang: Lang, key: &str) -> &'static str {
     }
 }
 
-/// Translate a UI key into the system language.
+/// Translate a UI key into the chosen language.
 pub fn t(key: &str) -> &'static str {
     t_in(lang(), key)
 }
@@ -103,7 +95,7 @@ pub fn tf_in(lang: Lang, key: &str, args: &[&dyn Display]) -> String {
     fill(t_in(lang, key), args)
 }
 
-/// Translate a UI key into the system language and fill its `{0}`, `{1}`, … placeholders.
+/// Translate a UI key into the chosen language and fill its `{0}`, `{1}`, … placeholders.
 pub fn tf(key: &str, args: &[&dyn Display]) -> String {
     tf_in(lang(), key, args)
 }
@@ -126,15 +118,33 @@ pub fn copy_symbol(lang: Lang, symbol: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lang, lang, strings::STRINGS, t, t_in, tf_in};
+    use super::{Lang, lang, strings::STRINGS, system_lang, t, t_in, tf_in};
     use std::collections::HashSet;
     use std::path::Path;
 
     #[test]
-    fn linux_and_unknown_prefer_english() {
+    fn system_follows_the_platform_language_and_a_choice_overrides_it() {
+        let _lock = crate::settings::language_test_lock();
+        let previous = crate::settings::load().language;
+        struct Restore(crate::settings::Language);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                crate::settings::set_language(self.0);
+                crate::settings::clear_language_choice();
+                super::apply();
+            }
+        }
+        let _restore = Restore(previous);
+        crate::settings::clear_language_choice();
+        assert_eq!(lang(), system_lang());
+        assert_eq!(t("settings"), t_in(system_lang(), "settings"));
+        crate::settings::set_language(crate::settings::Language::Nl);
+        assert_eq!(lang(), Lang::Nl);
+        assert_eq!(t("settings"), "Instellingen…");
+        assert_eq!(t("about"), "Over Copycraft");
+        crate::settings::set_language(crate::settings::Language::En);
         assert_eq!(lang(), Lang::En);
         assert_eq!(t("settings"), "Settings…");
-        assert_eq!(t("about"), "About Copycraft");
         assert_eq!(t("quit"), "Quit");
     }
 
@@ -182,6 +192,8 @@ mod tests {
             "chip_info",
             "image_pixels_line",
             "overview_type",
+            "language_nl",
+            "language_en",
         ];
         for (key, nl, en) in STRINGS {
             if nl == en {

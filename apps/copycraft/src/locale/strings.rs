@@ -43,6 +43,10 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Need ⌃ or ⌘ (not Option alone) — try again",
     ),
     ("date_order", "Datumvolgorde", "Date order"),
+    ("language", "Taal", "Language"),
+    ("language_system", "Systeem", "System"),
+    ("language_nl", "Nederlands", "Nederlands"),
+    ("language_en", "English", "English"),
     (
         "privacy_filter",
         "Gebruik privacyfilter",
@@ -766,6 +770,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Voorbeeld van de afbeelding",
         "Image preview",
     ),
+    ("loading", "Laden", "Loading"),
     ("show_all_title", "{0}  ·  Toon alles", "{0}  ·  Show all"),
     (
         "show_all_tip",

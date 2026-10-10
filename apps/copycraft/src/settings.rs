@@ -3,6 +3,35 @@
 use crate::dataframe::ReadOptions;
 use crate::hotkey;
 
+/// Which language the interface uses. [`Language::System`] follows the Mac.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Language {
+    /// The macOS preferred language (English when that is not Dutch).
+    #[default]
+    System,
+    Nl,
+    En,
+}
+
+impl Language {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Nl => "nl",
+            Self::En => "en",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "system" => Some(Self::System),
+            "nl" => Some(Self::Nl),
+            "en" => Some(Self::En),
+            _ => None,
+        }
+    }
+}
+
 /// Settings the Settings window and the `⋯` menu change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -22,6 +51,8 @@ pub struct Settings {
     /// Global hotkey as a [`global_hotkey::hotkey::HotKey`] string (`control+alt+super+KeyC`).
     /// `None` means the default ([`hotkey::open`]).
     pub hotkey: Option<String>,
+    /// Interface language. [`Language::System`] until a choice is stored.
+    pub language: Language,
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -36,6 +67,7 @@ impl Default for Settings {
             blur: true,
             date_month_first: false,
             hotkey: None,
+            language: Language::System,
         }
     }
 }
@@ -46,6 +78,7 @@ const PRIVACY_FILTER_KEY: &str = "CopycraftPrivacyFilter";
 const BLUR_KEY: &str = "CopycraftBlurMaskedWell";
 const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
+const LANGUAGE_KEY: &str = "CopycraftLanguage";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Newest symbol first, at most [`crate::symbols::MAX_RECENT`], separated by spaces.
@@ -76,6 +109,9 @@ pub fn load() -> Settings {
     }
     if let Some(text) = load_string(HOTKEY_KEY).filter(|text| !text.is_empty()) {
         settings.hotkey = Some(text);
+    }
+    if let Some(language) = load_string(LANGUAGE_KEY).and_then(|text| Language::parse(&text)) {
+        settings.language = language;
     }
     settings
 }
@@ -118,6 +154,48 @@ pub fn set_blur(on: bool) {
 
 pub fn set_date_month_first(on: bool) {
     store_bool(DATE_MONTH_FIRST_KEY, on);
+}
+
+// Choice set by `set_language` on this test thread. Unset means `Language::System`, so a
+// round-trip that writes the user defaults cannot change the strings another test asserts.
+#[cfg(test)]
+thread_local! {
+    static LANGUAGE_CHOICE: std::cell::Cell<Option<Language>> = const { std::cell::Cell::new(None) };
+}
+
+/// The stored language. A missing or unknown value is [`Language::System`].
+pub fn language() -> Language {
+    #[cfg(test)]
+    {
+        LANGUAGE_CHOICE
+            .with(std::cell::Cell::get)
+            .unwrap_or(Language::System)
+    }
+    #[cfg(not(test))]
+    {
+        load_string(LANGUAGE_KEY)
+            .and_then(|text| Language::parse(&text))
+            .unwrap_or(Language::System)
+    }
+}
+
+pub fn set_language(language: Language) {
+    store_string(LANGUAGE_KEY, language.as_str());
+    #[cfg(test)]
+    LANGUAGE_CHOICE.with(|choice| choice.set(Some(language)));
+}
+
+/// Drop this thread's test choice so [`language`] is [`Language::System`] again.
+#[cfg(test)]
+pub(crate) fn clear_language_choice() {
+    LANGUAGE_CHOICE.with(|choice| choice.set(None));
+}
+
+/// One language round-trip at a time: the tests write the same user-defaults key.
+#[cfg(test)]
+pub(crate) fn language_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
 /// Store `chord` when it is safe ([`hotkey::is_safe`]); otherwise keep the previous value.
@@ -270,13 +348,29 @@ fn load_int(_key: &str) -> Option<i64> {
 #[cfg(not(target_os = "macos"))]
 fn store_int(_key: &str, _value: i64) {}
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn load_string(_key: &str) -> Option<String> {
     None
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn store_string(_key: &str, _value: &str) {}
+
+#[cfg(all(not(target_os = "macos"), test))]
+thread_local! {
+    static MEMORY_STRING: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+#[cfg(all(not(target_os = "macos"), test))]
+fn load_string(key: &str) -> Option<String> {
+    MEMORY_STRING.with(|map| map.borrow().get(key).cloned())
+}
+
+#[cfg(all(not(target_os = "macos"), test))]
+fn store_string(key: &str, value: &str) {
+    MEMORY_STRING.with(|map| map.borrow_mut().insert(key.to_owned(), value.to_owned()));
+}
 
 #[cfg(test)]
 mod tests {
@@ -291,7 +385,37 @@ mod tests {
         assert!(settings.blur);
         assert!(!settings.date_month_first);
         assert!(settings.hotkey.is_none());
+        assert_eq!(settings.language, super::Language::System);
         assert!(super::HISTORY_MINUTES.contains(&settings.history_minutes));
+    }
+
+    #[test]
+    fn language_round_trips_system_nl_and_en() {
+        let _lock = super::language_test_lock();
+        let previous = super::load().language;
+        struct Restore(super::Language);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                super::set_language(self.0);
+                super::clear_language_choice();
+            }
+        }
+        let _restore = Restore(previous);
+        super::clear_language_choice();
+        assert_eq!(super::language(), super::Language::System);
+        super::set_language(super::Language::Nl);
+        assert_eq!(super::language(), super::Language::Nl);
+        assert_eq!(super::load().language, super::Language::Nl);
+        super::set_language(super::Language::En);
+        assert_eq!(super::language(), super::Language::En);
+        assert_eq!(super::load().language, super::Language::En);
+        super::set_language(super::Language::System);
+        assert_eq!(super::language(), super::Language::System);
+        assert_eq!(super::load().language, super::Language::System);
+        // An unknown stored value falls back to system.
+        super::store_string(super::LANGUAGE_KEY, "fr");
+        assert_eq!(super::load().language, super::Language::System);
+        assert!(super::Language::parse("fr").is_none());
     }
 
     #[test]

@@ -449,12 +449,12 @@ impl App {
     }
 
     fn handle_reset_assets(&mut self) {
-        // Cancel is the default button (Return).
+        // Cancel is the first button. AppKit binds Escape to it (Return is not also bound).
         let confirmed = dialogs::buttons(
             "Reset assets to defaults?",
             "This deletes your edited asset settings (~/.ticker_config.toml) and goes back to the \
              bundled assets. Price watches are kept.",
-            &["Cancel", "Reset"],
+            &[dialogs::button("cancel"), dialogs::button("reset")],
         ) == Some(1);
         if !confirmed {
             return;
@@ -741,8 +741,13 @@ impl App {
         lines.push_str(
             "\nRe-arm or remove a single watch from its submenu in the menu, or choose Clear All.",
         );
-        // "Close" stays the default button (Return), as in the old osascript dialog.
-        if dialogs::buttons("Current watches:", &lines, &["Close", "Clear All"]) != Some(1) {
+        // "Close" stays the first button (Return), as in the old osascript dialog.
+        if dialogs::buttons(
+            "Current watches:",
+            &lines,
+            &[dialogs::button("close"), dialogs::button("clear_all")],
+        ) != Some(1)
+        {
             return;
         }
         let count = self.watch_list.watches.len();
@@ -752,7 +757,7 @@ impl App {
                 "This removes all {count} price watch{}.",
                 if count == 1 { "" } else { "es" }
             ),
-            &["Cancel", "Clear All"],
+            &[dialogs::button("cancel"), dialogs::button("clear_all")],
         ) == Some(1);
         if confirmed {
             let removed = self.update_watches(|list| std::mem::take(&mut list.watches).len());

@@ -226,6 +226,98 @@ pub fn show(view: TableWindowView) {
     }
 }
 
+/// Point the window's fixed labels at the current language and lay the toolbar out again.
+/// Pill titles change width (`Kopieer` is wider than `Copy`); the hint moves with them.
+/// Nothing when the window has not been built. The meta line, sidebar title and hint text
+/// are filled by the next paint.
+pub fn relabel() {
+    VIEWS.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(views) = borrowed.as_ref() else {
+            return;
+        };
+        let t = crate::locale::t;
+        views
+            .window
+            .setTitle(&NSString::from_str(t("table_window_title")));
+        views.table_button.set_title(t("table_menu"));
+        views
+            .table_button
+            .set_accessibility_label(t("table_steps_a11y"));
+        views.copy_button.set_title(t("copy"));
+        views
+            .copy_button
+            .set_accessibility_label(t("copy_table_a11y"));
+        views
+            .copy_button
+            .button()
+            .setToolTip(Some(&NSString::from_str(t("copy_table_tip"))));
+        views.save_button.set_title(t("save"));
+        views
+            .save_button
+            .set_accessibility_label(t("save_table_a11y"));
+        views
+            .save_button
+            .button()
+            .setToolTip(Some(&NSString::from_str(t("save_table_tip"))));
+
+        let width = views
+            .window
+            .contentView()
+            .map(|view| view.frame().size.width)
+            .unwrap_or(INITIAL_SIZE.width);
+        let toolbar_y = views.table_button.view().frame().origin.y;
+        let height = commands::CHIP_PILL_H;
+        let table_w = views.table_button.width_within(120.0);
+        views.table_button.view().setFrame(NSRect::new(
+            NSPoint::new(PAD, toolbar_y),
+            NSSize::new(table_w, height),
+        ));
+        let mut x = PAD + table_w + 8.0;
+        let copy_w = views.copy_button.width_within(100.0);
+        views.copy_button.view().setFrame(NSRect::new(
+            NSPoint::new(x, toolbar_y),
+            NSSize::new(copy_w, height),
+        ));
+        x += copy_w + 6.0;
+        let save_w = views.save_button.width_within(100.0);
+        views.save_button.view().setFrame(NSRect::new(
+            NSPoint::new(x, toolbar_y),
+            NSSize::new(save_w, height),
+        ));
+        x += save_w + PAD;
+        let hint = views.hint.frame();
+        let hint_w = (width - PAD - commands::VERSION_SPAN - PAD - x).max(10.0);
+        views.hint.setFrame(NSRect::new(
+            NSPoint::new(x, hint.origin.y),
+            NSSize::new(hint_w, hint.size.height),
+        ));
+
+        label_step(&views.undo, t("undo_table_step"), "⌘Z");
+        label_step(&views.redo, t("redo_table_step"), "⇧⌘Z");
+        views
+            .sidebar
+            .setAccessibilityLabel(Some(&NSString::from_str(t("columns_title"))));
+        views
+            .grid
+            .setAccessibilityLabel(Some(&NSString::from_str(t("table_view"))));
+        views
+            .cover
+            .setAccessibilityLabel(Some(&NSString::from_str(t("reveal_table"))));
+        views
+            .cover
+            .setToolTip(Some(&NSString::from_str(t("click_to_reveal"))));
+    });
+}
+
+/// Undo or redo. The drawn title stays the arrow; VoiceOver and the tooltip follow the language.
+fn label_step(button: &GlassButton, name: &str, keys: &str) {
+    button.set_accessibility_label(name);
+    button
+        .button()
+        .setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
+}
+
 /// Give the window (when made) the sharing type "Allow screenshots" asks for.
 pub fn apply_capture() {
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
@@ -437,6 +529,12 @@ fn run_column_picker() {
     alert.setInformativeText(&NSString::from_str(crate::locale::t("picker_alert_info")));
     alert.addButtonWithTitle(&NSString::from_str(crate::locale::t("picker_apply")));
     alert.addButtonWithTitle(&NSString::from_str(crate::locale::t("cancel")));
+    // AppKit binds Escape only to the English title "Cancel". "Annuleer" needs the key set.
+    for button in alert.buttons().iter() {
+        if mac_ui::lang::is_cancel(&button.title().to_string()) {
+            button.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+        }
+    }
     alert.setAccessoryView(Some(&accessory));
 
     COLUMN_PICKER_OPEN.set(true);

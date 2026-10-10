@@ -39,7 +39,8 @@ pub struct Spinner {
 
 impl Spinner {
     /// Create a stopped spinner of `size`, sized to fit and not yet in any view. VoiceOver reads
-    /// it as "Loading" ([`Spinner::set_accessibility_label`] to change that).
+    /// it as "Loading" / "Laden" ([`crate::lang`], [`Spinner::set_accessibility_label`] to change
+    /// that).
     pub fn new(mtm: MainThreadMarker, size: SpinnerSize) -> Self {
         let view =
             NSProgressIndicator::initWithFrame(NSProgressIndicator::alloc(mtm), NSRect::ZERO);
@@ -48,7 +49,7 @@ impl Spinner {
         view.setControlSize(size.control_size());
         view.setDisplayedWhenStopped(false);
         view.sizeToFit();
-        view.setAccessibilityLabel(Some(&NSString::from_str("Loading")));
+        view.setAccessibilityLabel(Some(&NSString::from_str(crate::lang::t("loading"))));
         Self { view }
     }
 

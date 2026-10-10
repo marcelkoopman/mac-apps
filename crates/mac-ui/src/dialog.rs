@@ -3,7 +3,9 @@
 //! Every call needs the main thread, activates the app first (so the alert also comes to the
 //! front in a menu bar / `LSUIElement` app) and blocks in `runModal` until it is answered.
 //! `title` is the bold message text, `message` the informative text under it (may be empty).
-//! Prompts and picks have "OK" (default, Return) and "Cancel" (Escape) buttons.
+//! Prompts and picks have OK (default, Return) and Cancel (Escape) buttons. The titles follow
+//! [`crate::lang`]. A button whose title is the cancel label in either language ("Cancel" or
+//! "Annuleer") answers Escape, marked on the button rather than left to AppKit's English title.
 //!
 //! Do not start one while a menu is still tracking (see [`can_run_modal`]): run it from the
 //! event loop once the run loop is back in its default mode.
@@ -17,15 +19,22 @@ use objc2_app_kit::{
 use objc2_foundation::{NSDefaultRunLoopMode, NSPoint, NSRect, NSRunLoop, NSSize, NSString};
 
 use crate::activation::activate_app;
+use crate::lang;
 
-const OK: &str = "OK";
-const CANCEL: &str = "Cancel";
+fn ok() -> &'static str {
+    lang::t("ok")
+}
+
+fn cancel() -> &'static str {
+    lang::t("cancel")
+}
+
 /// Width of the text field and pop-up button under the message.
 const ACCESSORY_WIDTH: f64 = 300.0;
 
-/// Show `title` and `message` with a single "OK" button.
+/// Show `title` and `message` with a single OK button.
 pub fn alert(mtm: MainThreadMarker, title: &str, message: &str) {
-    let alert = new_alert(mtm, title, message, &[OK]);
+    let alert = new_alert(mtm, title, message, &[ok()]);
     run(mtm, &alert);
 }
 
@@ -35,8 +44,9 @@ pub fn confirm(mtm: MainThreadMarker, title: &str, message: &str, ok: &str, canc
 }
 
 /// Show `labels` as buttons and return the index of the clicked one. The first label is the
-/// default button (Return, rightmost); a button titled "Cancel" also answers Escape. Without
-/// labels AppKit shows a single "OK" button, reported as index 0.
+/// default button (Return, rightmost). A button titled with the cancel label in either language
+/// also answers Escape ([`lang::is_cancel`]). Without labels AppKit shows a single OK button,
+/// reported as index 0.
 pub fn buttons(
     mtm: MainThreadMarker,
     title: &str,
@@ -48,14 +58,14 @@ pub fn buttons(
 }
 
 /// Ask for a line of text, pre-filled with `default`. Returns the text as typed (untrimmed, may
-/// be empty) on "OK", `None` on "Cancel".
+/// be empty) on OK, `None` on Cancel.
 pub fn prompt_text(
     mtm: MainThreadMarker,
     title: &str,
     message: &str,
     default: &str,
 ) -> Option<String> {
-    let alert = new_alert(mtm, title, message, &[OK, CANCEL]);
+    let alert = new_alert(mtm, title, message, &[ok(), cancel()]);
     let field = NSTextField::initWithFrame(NSTextField::alloc(mtm), accessory_frame(24.0));
     field.setStringValue(&NSString::from_str(default));
     // VoiceOver names the field after the question.
@@ -71,7 +81,7 @@ pub fn prompt_text(
 }
 
 /// Let the user pick one of `options` from a pop-up button, starting at `selected`. Returns the
-/// picked index on "OK", `None` on "Cancel" or without options.
+/// picked index on OK, `None` on Cancel or without options.
 pub fn choose(
     mtm: MainThreadMarker,
     title: &str,
@@ -82,7 +92,7 @@ pub fn choose(
     if options.is_empty() {
         return None;
     }
-    let alert = new_alert(mtm, title, message, &[OK, CANCEL]);
+    let alert = new_alert(mtm, title, message, &[ok(), cancel()]);
     let popup = NSPopUpButton::initWithFrame_pullsDown(
         NSPopUpButton::alloc(mtm),
         accessory_frame(26.0),
@@ -130,7 +140,23 @@ fn new_alert(
     for label in labels {
         alert.addButtonWithTitle(&NSString::from_str(label));
     }
+    // AppKit only binds Escape to a button titled "Cancel". Mark every cancel label ourselves
+    // ("Annuleer" included) so the key follows the language, not that English title.
+    mark_cancel(&alert);
     alert
+}
+
+/// Escape on each button whose title is [`lang::is_cancel`].
+///
+/// AppKit binds Escape only when the title is the English word "Cancel", and that binding
+/// replaces Return even when Cancel is the first button. Setting the same key here keeps that
+/// for "Cancel" and gives "Annuleer" the same key.
+fn mark_cancel(alert: &NSAlert) {
+    for button in alert.buttons().iter() {
+        if lang::is_cancel(&button.title().to_string()) {
+            button.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+        }
+    }
 }
 
 /// Mode the main run loop is currently in (e.g. `kCFRunLoopDefaultMode`,

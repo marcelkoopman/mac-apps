@@ -164,6 +164,15 @@ fn restore_level(window: &NSWindow) {
     LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
+/// Close and open About again so its text follows the new language.
+pub fn reopen() {
+    if WINDOW.with(|slot| slot.borrow().is_none()) {
+        return;
+    }
+    close();
+    show();
+}
+
 /// Close the About window (Wipe, Quit).
 pub fn close() {
     if let Some(window) = WINDOW.with(|slot| slot.borrow_mut().take()) {

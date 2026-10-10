@@ -58,6 +58,8 @@ pub enum UserEvent {
     PrivacyFilterChanged,
     /// The global hotkey was changed in Settings: unregister the old one, register the new.
     HotkeyChanged,
+    /// The language setting changed: open windows, the menu and shared panels follow it now.
+    LanguageChanged,
     /// The diff thread finished. A mismatched `generation` is dropped (Wipe, swap, a newer diff).
     DiffReady {
         generation: u64,

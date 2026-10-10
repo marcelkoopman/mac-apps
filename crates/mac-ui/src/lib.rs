@@ -28,8 +28,9 @@
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
 //! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
-//! steps), `icon`, `keys` (named key codes), `tray` (menu rows, icon set, blink timing) and
-//! `wake` (next event-loop deadline). The AppKit modules exist on macOS only.
+//! steps), `icon`, `keys` (named key codes), `lang` (Dutch or English labels for shared panels),
+//! `tray` (menu rows, icon set, blink timing) and `wake` (next event-loop deadline). The AppKit
+//! modules exist on macOS only.
 
 pub use tray_icon;
 pub use winit;
@@ -63,6 +64,7 @@ pub mod icon;
 #[cfg(all(target_os = "macos", feature = "image"))]
 pub mod image;
 pub mod keys;
+pub mod lang;
 #[cfg(target_os = "macos")]
 pub mod layer;
 #[cfg(all(target_os = "macos", feature = "notify"))]

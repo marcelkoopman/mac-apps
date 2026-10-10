@@ -476,6 +476,16 @@ impl ClipboardHistory {
             .map(|(_, card)| card)
     }
 
+    /// Drop cached preview cards. The next card is built in the current language.
+    pub fn forget_cards(&mut self) {
+        for entry in &mut self.entries {
+            for (_, card) in &mut entry.cards {
+                card.wipe();
+            }
+            entry.cards.clear();
+        }
+    }
+
     /// Keep `card` (the preview card of the text entry at `index` in `view`) with that entry.
     /// Image entries keep none: their card follows the scan, which arrives later.
     pub fn remember_card(&mut self, index: usize, view: CardView, mut card: WorkCard) {
