@@ -9,6 +9,7 @@ mod commands;
 mod convert;
 mod dataframe;
 mod decode;
+mod diff;
 mod format;
 mod highlight;
 mod hotkey;

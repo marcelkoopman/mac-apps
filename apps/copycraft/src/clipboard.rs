@@ -222,6 +222,8 @@ enum HistoryBody {
 /// Only the entries near the one shown keep them ([`DERIVED_NEAR`]).
 #[derive(Clone)]
 struct HistoryEntry {
+    /// Stable while the entry stays in history. A re-copy replaces the entry and gets a new id.
+    id: u64,
     body: HistoryBody,
     kind: format::FormatKind,
     cards: Vec<(CardView, WorkCard)>,
@@ -236,9 +238,10 @@ struct HistoryEntry {
 }
 
 impl HistoryEntry {
-    fn text(text: String) -> Self {
+    fn text(id: u64, text: String) -> Self {
         let kind = format::detect(&text);
         Self {
+            id,
             body: HistoryBody::Text(Zeroizing::new(text)),
             kind,
             cards: Vec::new(),
@@ -248,8 +251,9 @@ impl HistoryEntry {
         }
     }
 
-    fn image(bytes: SecretBytes) -> Self {
+    fn image(id: u64, bytes: SecretBytes) -> Self {
         Self {
+            id,
             body: HistoryBody::Image(bytes),
             kind: format::FormatKind::Image,
             cards: Vec::new(),
@@ -296,6 +300,7 @@ impl Drop for ClipboardImage {
 #[derive(Default, Clone)]
 pub struct ClipboardHistory {
     entries: Vec<HistoryEntry>,
+    next_id: u64,
 }
 
 impl ClipboardHistory {
@@ -314,7 +319,8 @@ impl ClipboardHistory {
             HistoryBody::Text(existing) => existing.as_str() != text,
             HistoryBody::Image(_) => true,
         });
-        self.entries.insert(0, HistoryEntry::text(text));
+        let id = self.alloc_id();
+        self.entries.insert(0, HistoryEntry::text(id, text));
         self.entries.truncate(MAX_HISTORY);
     }
 
@@ -388,9 +394,44 @@ impl ClipboardHistory {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
         });
-        self.entries.insert(0, HistoryEntry::image(bytes.clone()));
+        let id = self.alloc_id();
+        self.entries
+            .insert(0, HistoryEntry::image(id, bytes.clone()));
         self.entries.truncate(MAX_HISTORY);
         bytes
+    }
+
+    fn alloc_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id = self.next_id.wrapping_add(1);
+        id
+    }
+
+    /// The stable id of the entry at `index`.
+    pub fn id_at(&self, index: usize) -> Option<u64> {
+        self.entries.get(index).map(|entry| entry.id)
+    }
+
+    pub fn contains_id(&self, id: u64) -> bool {
+        self.entries.iter().any(|entry| entry.id == id)
+    }
+
+    /// The text of entry `id`, copied so a diff thread can keep it. `None` for a picture.
+    pub fn text_of(&self, id: u64) -> Option<Zeroizing<String>> {
+        self.entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .and_then(|entry| match &entry.body {
+                HistoryBody::Text(text) => Some(Zeroizing::new(text.as_str().to_string())),
+                HistoryBody::Image(_) => None,
+            })
+    }
+
+    /// Entry `id` is text, so it can be added to a diff.
+    pub fn is_text_id(&self, id: u64) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| entry.id == id && matches!(entry.body, HistoryBody::Text(_)))
     }
 
     pub fn get(&self, index: usize) -> Option<&str> {
@@ -442,7 +483,8 @@ impl ClipboardHistory {
             card.wipe();
             return;
         };
-        if !matches!(entry.body, HistoryBody::Text(_)) {
+        // A diff is not a view of one entry, and it is not kept.
+        if view == CardView::Diff || !matches!(entry.body, HistoryBody::Text(_)) {
             card.wipe();
             return;
         }
@@ -1147,6 +1189,41 @@ mod tests {
             history.mark(0),
             Some(crate::format::FormatKind::Image.menu_symbol())
         );
+    }
+
+    #[test]
+    fn re_copying_an_older_text_gets_a_new_id_and_moving_keeps_it() {
+        use crate::commands::CardView;
+        let mut history = ClipboardHistory::default();
+        history.record("one".into());
+        let one = history.id_at(0).expect("one");
+        history.record("two".into());
+        let two = history.id_at(0).expect("two");
+        assert_ne!(one, two);
+        assert_eq!(history.id_at(1), Some(one));
+        history.move_to_front(1);
+        assert_eq!(history.id_at(0), Some(one));
+        history.record("one".into());
+        assert_eq!(
+            history.id_at(0),
+            Some(one),
+            "the newest copy is left as it is"
+        );
+        history.record("two".into());
+        let replaced = history.id_at(0).expect("replaced");
+        assert_ne!(replaced, two);
+        assert!(!history.contains_id(two));
+        assert!(history.is_text_id(one));
+        assert_eq!(
+            history.text_of(one).as_deref().map(String::as_str),
+            Some("one")
+        );
+        history.record_image(vec![9]).expect("image");
+        let image = history.id_at(0).expect("image");
+        assert!(!history.is_text_id(image));
+        assert!(history.text_of(image).is_none());
+        history.remember_card(1, CardView::Diff, card("secret diff"));
+        assert!(history.card(1, CardView::Diff).is_none());
     }
 
     #[test]

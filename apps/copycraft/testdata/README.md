@@ -150,6 +150,11 @@ Columns (fixed; the test parses this table between the markers):
 | `edge/empty.txt` | Edge: empty input | plain text | Clipboard | — | — | placeholder~Nothing copied |
 | `edge/unicode_emoji.txt` | Edge: Unicode and emoji | plain text | Content | — | — | kind=Text |
 | `edge/long_line.txt` | Edge: one very long line (5,399 characters) | plain text | Content | — | — | kind=Plain; meta~5.4 KB |
+| `diff/a.txt` | Two history copies, left side | plain text | Content | — | — | kind=Text |
+| `diff/b.txt` | Two history copies, right side (bravo removed, delta and echo added) | plain text | Content | — | — | kind=Text |
+| `diff/a.json` | JSON whose only difference from b.json is key order | json | Valid JSON | — | Original, Schema | kind=Json |
+| `diff/b.json` | Same object as a.json, keys sorted a then b | json | Valid JSON | — | Original, Schema | kind=Json |
+| `diff/c.json` | Same shape as a.json with a real value change | json | Valid JSON | — | Original, Schema | kind=Json |
 | `images/qr_code.png` | Image: QR code ("Copycraft QR test 2026") | — | Image | — | Original, Info, QR, Image ▾ | mac-only; size=264x264 |
 | `images/ocr_text.png` | Image: text for OCR | — | Image | — | Original, Info, Text, Image ▾ | mac-only; size=520x200 |
 | `images/exif_rotated_gps.jpg` | Image: EXIF rotation and fake GPS, for Remove metadata | — | Image | — | Original, Info, Image ▾ | mac-only; size=320x240; exif-orientation=6; exif-gps |
@@ -200,6 +205,18 @@ sh apps/copycraft/testdata/generate_large.sh /tmp/cc    # or any folder
 `images/make_images.py` regenerates the three images (python3 with Pillow and qrcode). QR and
 OCR use macOS Vision, and the picture steps use ImageIO, so their Title/Chips are macOS
 expectations; on Linux the test only checks size and EXIF.
+
+## Diff
+
+The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, above History. The same action sits under each row in History. No new button on the card. *Wissel* / *Swap* is on that `⋯` menu once two copies are chosen. A and B are prefixes on the history row and on the meta line.
+
+- [ ] Copy `diff/a.txt` and `diff/b.txt`. Add both (*Toevoegen aan diff* / *Add to diff*). The card shows a *Diff* chip beside *Origineel* / *Original* and grows wider. The well is two columns, A on the left and B on the right. Removed `bravo` is red on the left, added `delta` and `echo` are green on the right, unchanged lines are gray. The summary is `+2 / −1` lines.
+- [ ] Copy `diff/a.json` and `diff/b.json` (same object, different key order). The summary says *Geen verschillen* / *No differences*. Both copies stay in the well, A on the left and B on the right, so the key order can be read. Copy still puts that “no differences” line on the clipboard.
+- [ ] With *Use privacy filter* on, the diff is masked until reveal. If either copy is sensitive, it stays masked even with the filter off, until reveal.
+- [ ] Copy on the diff puts `+` and `-` lines on the clipboard (ASCII plus and minus). The diff is not added to history.
+- [ ] *Wissel* / *Swap* turns A and B around (left was old, right was new).
+- [ ] A third *Add to diff* replaces the oldest pick. *Verwijder uit diff* / *Remove from diff* drops a pick. Wipe, lock or restart clears the selection.
+- [ ] A picture's *Add to diff* item is dimmed.
 
 ## Manual checks (Mac only, no data)
 

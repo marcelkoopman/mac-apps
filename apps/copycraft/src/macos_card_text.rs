@@ -47,6 +47,79 @@ pub(crate) fn paint(
     }
 }
 
+/// A side-by-side diff. Each row is A, [`crate::diff::COLUMN_SEP`], then B. A side that
+/// starts with `+` is green, one that starts with `-` is red, and the rest stays gray.
+pub(crate) fn paint_diff(text: &NSTextView, body: &str) {
+    let font = editor_font();
+    let mut display = String::new();
+    let mut marks: Vec<(NSRange, bool)> = Vec::new();
+    let mut location = 0usize;
+    for line in body.split_inclusive('\n') {
+        let newline = line.ends_with('\n');
+        let line = line.trim_end_matches('\n');
+        let (left, right) = line
+            .split_once(crate::diff::COLUMN_SEP)
+            .unwrap_or((line, ""));
+        push_side(&mut display, &mut marks, &mut location, left);
+        push_plain(&mut display, &mut location, " │ ");
+        push_side(&mut display, &mut marks, &mut location, right);
+        if newline {
+            push_plain(&mut display, &mut location, "\n");
+        }
+    }
+    let attr = AttrText::new(&display, &font, &NSColor::secondaryLabelColor());
+    let green = NSColor::systemGreenColor();
+    let red = NSColor::systemRedColor();
+    for (range, added) in &marks {
+        attr.color_utf16(*range, if *added { &green } else { &red });
+    }
+    let attr = attr.into_attributed();
+    let green_bg = green.colorWithAlphaComponent(0.16);
+    let red_bg = red.colorWithAlphaComponent(0.16);
+    for (range, added) in &marks {
+        let bg: &NSColor = if *added { &green_bg } else { &red_bg };
+        // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
+        unsafe {
+            attr.addAttribute_value_range(
+                mac_ui::objc2_app_kit::NSBackgroundColorAttributeName,
+                bg,
+                *range,
+            );
+        }
+    }
+    if let Some(storage) = unsafe { text.textStorage() } {
+        storage.setAttributedString(&attr);
+    } else {
+        text.setString(&NSString::from_str(&display));
+    }
+}
+
+fn push_plain(display: &mut String, location: &mut usize, text: &str) {
+    display.push_str(text);
+    *location += text.encode_utf16().count();
+}
+
+/// Color a column when it starts with `+` or `-`. `added` is true for `+`.
+fn push_side(
+    display: &mut String,
+    marks: &mut Vec<(NSRange, bool)>,
+    location: &mut usize,
+    side: &str,
+) {
+    let start = *location;
+    push_plain(display, location, side);
+    let added = side.starts_with('+');
+    if added || side.starts_with('-') {
+        marks.push((
+            NSRange {
+                location: start,
+                length: *location - start,
+            },
+            added,
+        ));
+    }
+}
+
 fn editor_font() -> Retained<NSFont> {
     const NAMES: [&str; 5] = [
         "Zed Mono",

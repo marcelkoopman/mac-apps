@@ -214,6 +214,10 @@ pub struct Hist {
     pub index: usize,
     pub title: String,
     pub mark: String,
+    /// Stable id of the history entry ([`crate::clipboard::ClipboardHistory::id_at`]).
+    pub id: u64,
+    /// The entry is text, so it can be added to a diff.
+    pub text: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -255,6 +259,25 @@ pub struct LaunchData {
     /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
     /// have them. Absent: no Image ▾.
     pub image_edit: Option<ImageShown>,
+    /// History entry on screen, when the card follows history. Absent for a chosen file.
+    pub shown_id: Option<u64>,
+    /// "A" or "B" when that entry is chosen for the diff. Not set on the diff card.
+    pub shown_mark: Option<&'static str>,
+    /// Chosen history ids, oldest first: index 0 is A, index 1 is B.
+    pub diff_picks: Vec<u64>,
+    /// The diff of those two, when both are chosen.
+    pub diff: Option<DiffShown>,
+}
+
+/// The diff the card is showing. Not stored with a history entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffShown {
+    /// Ordered pair and phase ([`crate::diff::token`]). Swap and a finished result change it.
+    pub token: u64,
+    /// Either side already has a sensitivity label.
+    pub sensitive: bool,
+    pub labels: crate::sensitivity::Labeling,
+    pub phase: crate::diff::Phase,
 }
 
 /// The versions of a picture for the card. When a step's version is shown, [`LaunchData`]'s
@@ -361,6 +384,8 @@ pub enum CardView {
     Info,
     Ocr,
     Qr,
+    /// Line diff of two history copies. Not a view of one entry, and not stored.
+    Diff,
 }
 
 impl CardView {
@@ -376,6 +401,7 @@ impl CardView {
             CommandId::Info => Self::Info,
             CommandId::Ocr => Self::Ocr,
             CommandId::Qr => Self::Qr,
+            CommandId::Diff => Self::Diff,
             _ => return None,
         })
     }
@@ -456,6 +482,14 @@ pub enum CommandId {
     Info,
     Ocr,
     Qr,
+    /// Show the diff of the two chosen history copies.
+    Diff,
+    /// Add, compare, or remove history entry `id` ([`crate::diff::menu_for`]).
+    DiffToggle(u64),
+    /// The same action for the copy on screen. It stays on the `⋯` menu itself.
+    DiffShown,
+    /// Turn A and B around.
+    DiffSwap,
     Copy,
     Save,
     History(usize),
@@ -516,6 +550,8 @@ pub struct Command {
     pub title: String,
     pub detail: String,
     keywords: String,
+    /// `false` dims the menu item (a non-text copy cannot be added to a diff).
+    pub enabled: bool,
 }
 
 impl Command {
@@ -627,6 +663,10 @@ pub fn masks_content(card: &WorkCard, view: CardView) -> bool {
     if view == CardView::Info {
         return false;
     }
+    // A diff is copied text even while it is still being built (the excerpt is empty then).
+    if view == CardView::Diff {
+        return true;
+    }
     card.shows_image || card.link_page.is_some() || !card.excerpt.is_empty()
 }
 
@@ -671,6 +711,15 @@ pub fn well_mask(masked: bool, blur_ready: bool) -> WellMask {
 /// Identity of the copied item. Chips on that item share one reveal.
 pub fn content_key(data: &LaunchData) -> u64 {
     use std::hash::{Hash, Hasher};
+    // The diff is its own item: revealing the copy on screen does not reveal it, and a swap
+    // or a finished result masks it again.
+    if data.view == CardView::Diff
+        && let Some(diff) = &data.diff
+    {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        diff.token.hash(&mut hasher);
+        return hasher.finish();
+    }
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     data.subject_kind.hash(&mut hasher);
     data.subject_text.hash(&mut hasher);
@@ -719,6 +768,9 @@ pub fn payload_excerpt(text: &str) -> String {
 }
 
 pub fn work_card(data: &LaunchData) -> WorkCard {
+    if data.view == CardView::Diff {
+        return diff_card(data);
+    }
     if let Some(note) = &data.source_note {
         return WorkCard {
             title: data
@@ -744,7 +796,92 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             format!("{name}  ·  {}", card.meta)
         };
     }
+    if let Some(mark) = data.shown_mark {
+        card.meta = if card.meta.is_empty() {
+            mark.to_string()
+        } else {
+            format!("{mark}  ·  {}", card.meta)
+        };
+    }
     card
+}
+
+/// The diff view. The well shows A and B side by side. Copy and Save take the `+` / `-` lines.
+fn diff_card(data: &LaunchData) -> WorkCard {
+    let Some(diff) = &data.diff else {
+        return WorkCard {
+            title: crate::locale::t("chip_diff").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: crate::locale::t("diff_working").to_string(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        };
+    };
+    let (excerpt, placeholder, meta, selectable) = match &diff.phase {
+        crate::diff::Phase::Working => (
+            String::new(),
+            crate::locale::t("diff_working").to_string(),
+            String::new(),
+            false,
+        ),
+        crate::diff::Phase::TooLarge => {
+            let message = crate::locale::t("diff_too_large").to_string();
+            (message.clone(), String::new(), message, true)
+        }
+        crate::diff::Phase::Same(pane) => (
+            pane.as_str().to_string(),
+            String::new(),
+            crate::locale::t("diff_none").to_string(),
+            true,
+        ),
+        crate::diff::Phase::Lines(lines) => {
+            let added = lines.added();
+            let removed = lines.removed();
+            (
+                lines.view().to_string(),
+                String::new(),
+                crate::locale::tf("diff_counts", &[&added, &removed]),
+                true,
+            )
+        }
+    };
+    let mut card = WorkCard {
+        title: crate::locale::t("chip_diff").to_string(),
+        meta,
+        excerpt,
+        placeholder,
+        shows_image: false,
+        highlight: None,
+        selectable,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    };
+    with_diff_labels(&mut card, &diff.labels);
+    card
+}
+
+/// Sensitivity labels of both sides, after the summary. "Checking…" stays at the end so the
+/// card cannot be revealed until the check is done.
+fn with_diff_labels(card: &mut WorkCard, labels: &crate::sensitivity::Labeling) {
+    let line = match labels {
+        crate::sensitivity::Labeling::Checking => crate::sensitivity::checking().to_string(),
+        crate::sensitivity::Labeling::Known(found) if !found.labels.is_empty() => {
+            crate::sensitivity::label_line(&found.labels)
+        }
+        crate::sensitivity::Labeling::Known(_) => return,
+    };
+    if card.meta.is_empty() {
+        card.meta = format!("  ·  {line}");
+    } else {
+        card.meta.push_str("  ·  ");
+        card.meta.push_str(&line);
+    }
 }
 
 fn compose_card(data: &LaunchData) -> WorkCard {
@@ -1386,6 +1523,9 @@ fn render_row(cells: &[String], widths: &[usize], sep: char) -> String {
 
 /// JSON, YAML, XML, Markdown, and code open already formatted, so Original is not a separate card state.
 pub fn presented_view(source: &str, view: CardView) -> CardView {
+    if view == CardView::Diff {
+        return CardView::Diff;
+    }
     if view == CardView::Original && opens_formatted(source) {
         CardView::Format
     } else {
@@ -1482,7 +1622,7 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
             }
         }
         CardView::Sample => crate::xsd_schema::try_sample(source),
-        CardView::Info | CardView::Ocr | CardView::Qr => None,
+        CardView::Info | CardView::Ocr | CardView::Qr | CardView::Diff => None,
     }
 }
 
@@ -1570,7 +1710,7 @@ fn youtube_card(text: &str) -> Option<WorkCard> {
 
 /// Actions for the thing on the clipboard. Housekeeping stays in [`overflow`].
 pub fn chips(data: &LaunchData) -> Vec<Command> {
-    match data.subject_kind {
+    let mut chips = match data.subject_kind {
         SubjectKind::Image => image_chips(data.image_scan.as_ref(), data.image_edit.is_some()),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
@@ -1592,7 +1732,32 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         | SubjectKind::Denied
         | SubjectKind::Pending
         | SubjectKind::PasteAsk => Vec::new(),
+    };
+    // Not part of the text memo: the chip follows the two chosen copies, not the text.
+    if data.diff.is_some() {
+        insert_diff_chip(&mut chips);
     }
+    chips
+}
+
+/// "Diff" next to Original. A card without Original (plain text, or a link) gets both.
+fn insert_diff_chip(chips: &mut Vec<Command>) {
+    let diff = command(
+        CommandId::Diff,
+        crate::locale::t("chip_diff"),
+        crate::locale::t("detail_diff"),
+        "diff compare",
+    );
+    if let Some(at) = chips.iter().position(|cmd| cmd.id == CommandId::Original) {
+        chips.insert(at + 1, diff);
+        return;
+    }
+    let at = chips
+        .iter()
+        .position(|cmd| cmd.id == CommandId::Visit)
+        .map_or(0, |index| index + 1);
+    chips.insert(at, original_command());
+    chips.insert(at + 1, diff);
 }
 
 /// The chips of a copied text, which follow from the text alone. Working them out tries the
@@ -1646,6 +1811,17 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
             &item.mark,
             "history",
         ));
+    }
+    if let Some(shown) = shown_history(data) {
+        commands.push(diff_action(
+            CommandId::DiffShown,
+            &data.diff_picks,
+            shown.id,
+            shown.text,
+        ));
+    }
+    if data.diff_picks.len() == 2 {
+        commands.push(diff_swap_command());
     }
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         let name = theme_name(theme);
@@ -2183,6 +2359,41 @@ pub fn matching(commands: &[Command], query: &str) -> Vec<Command> {
         .collect()
 }
 
+/// The history entry on screen, when the card is showing one.
+fn shown_history(data: &LaunchData) -> Option<&Hist> {
+    let id = data.shown_id?;
+    data.history.iter().find(|item| item.id == id)
+}
+
+fn diff_swap_command() -> Command {
+    command(
+        CommandId::DiffSwap,
+        crate::locale::t("diff_swap"),
+        crate::locale::t("detail_diff_swap"),
+        "diff swap",
+    )
+}
+
+/// "Toevoegen aan diff", "Vergelijk met A", or "Verwijder uit diff" for entry `entry`.
+fn diff_action(id: CommandId, picks: &[u64], entry: u64, is_text: bool) -> Command {
+    let menu = crate::diff::menu_for(picks, entry, is_text);
+    let (title, detail) = match menu.kind {
+        crate::diff::MenuKind::Add => (
+            crate::locale::t("diff_add"),
+            crate::locale::t("detail_diff"),
+        ),
+        crate::diff::MenuKind::Compare => (
+            crate::locale::t("diff_compare"),
+            crate::locale::t("detail_diff"),
+        ),
+        crate::diff::MenuKind::Remove => (
+            crate::locale::t("diff_remove"),
+            crate::locale::t("detail_diff"),
+        ),
+    };
+    command_enabled(id, title, detail, "diff compare", menu.enabled)
+}
+
 /// Quit, earlier copies, and housekeeping. Copies stay out of [`chips`].
 pub fn overflow(data: &LaunchData) -> Vec<Command> {
     let mut commands = source_commands(data);
@@ -2192,12 +2403,34 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         crate::locale::t("detail_pasteboard_only"),
         "empty pasteboard clear",
     ));
+    // The copy on screen, above History, so the action is visible while stepping with the arrows.
+    if let Some(shown) = shown_history(data) {
+        commands.push(diff_action(
+            CommandId::DiffShown,
+            &data.diff_picks,
+            shown.id,
+            shown.text,
+        ));
+    }
+    if data.diff_picks.len() == 2 {
+        commands.push(diff_swap_command());
+    }
     for item in &data.history {
+        let title = match crate::diff::side_label(&data.diff_picks, item.id) {
+            Some(mark) => format!("{mark}  {}", item.title),
+            None => item.title.clone(),
+        };
         commands.push(command(
             CommandId::History(item.index),
-            &item.title,
+            &title,
             &item.mark,
             "history",
+        ));
+        commands.push(diff_action(
+            CommandId::DiffToggle(item.id),
+            &data.diff_picks,
+            item.id,
+            item.text,
         ));
     }
     if data.can_clear_history {
@@ -2388,6 +2621,10 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Info
             | CommandId::Ocr
             | CommandId::Qr
+            | CommandId::Diff
+            | CommandId::DiffToggle(_)
+            | CommandId::DiffShown
+            | CommandId::DiffSwap
             | CommandId::Copy
             | CommandId::Save
             | CommandId::TableStep(_)
@@ -2593,6 +2830,13 @@ pub struct ContentActions {
 }
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
+    if data.view == CardView::Diff {
+        let ready = data.diff.as_ref().is_some_and(|diff| diff.phase.copyable());
+        return ContentActions {
+            copy: ready,
+            save: ready,
+        };
+    }
     match data.subject_kind {
         SubjectKind::Empty
         | SubjectKind::NoText
@@ -2779,11 +3023,22 @@ fn theme_name(theme: Theme) -> &'static str {
 }
 
 fn command(id: CommandId, title: &str, detail: &str, keywords: &str) -> Command {
+    command_enabled(id, title, detail, keywords, true)
+}
+
+fn command_enabled(
+    id: CommandId,
+    title: &str,
+    detail: &str,
+    keywords: &str,
+    enabled: bool,
+) -> Command {
     Command {
         id,
         title: title.to_string(),
         detail: detail.to_string(),
         keywords: keywords.to_string(),
+        enabled,
     }
 }
 
@@ -2793,9 +3048,9 @@ mod tests {
     use super::{ArrowAction, ArrowFocus, arrow_action};
     use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
     use super::{
-        CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
-        NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
-        deferred_save_name, effective_mask, history_label, history_nav, keeps_card_open,
+        CardView, CommandId, ContentActions, DiffShown, Hist, ImageFacts, ImageScan, LaunchData,
+        NAV_RESERVE, NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key,
+        copy_tip, deferred_save_name, effective_mask, history_label, history_nav, keeps_card_open,
         layout_chips, masks_content, matching, overflow, payload_excerpt, presented_view, save_tip,
         search_pool, stays_revealed, step_chip, step_history, text_save_file, transformed_text,
         well_mask, work_card,
@@ -2824,6 +3079,10 @@ mod tests {
             picture: None,
             table: None,
             image_edit: None,
+            shown_id: None,
+            shown_mark: None,
+            diff_picks: Vec::new(),
+            diff: None,
         }
     }
 
@@ -5043,6 +5302,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             index: 3,
             title: "notes from yesterday".into(),
             mark: "¶".into(),
+            id: 3,
+            text: true,
         });
         let pool = search_pool(&input);
         assert!(matching(&pool, "quit").is_empty());
@@ -5069,6 +5330,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
                 index,
                 title: format!("older {index}"),
                 mark: "¶".into(),
+                id: index as u64,
+                text: true,
             });
         }
         input.can_clear_history = true;
@@ -5574,5 +5837,189 @@ Kleinste opdracht die de change dekt.
             d.view = view;
             assert!(work_card(&d).preview_note.is_none(), "{view:?}");
         }
+    }
+
+    fn diff_shown(phase: crate::diff::Phase) -> DiffShown {
+        DiffShown {
+            token: 7,
+            sensitive: false,
+            labels: crate::sensitivity::Labeling::Known(crate::sensitivity::Found::default()),
+            phase,
+        }
+    }
+
+    fn history_item(index: usize, title: &str, text: bool) -> Hist {
+        Hist {
+            index,
+            title: title.to_string(),
+            mark: "¶".into(),
+            id: index as u64,
+            text,
+        }
+    }
+
+    #[test]
+    fn two_picks_offer_a_diff_and_a_third_menu_says_add() {
+        let mut input = data(SubjectKind::Text, Some("hello"));
+        input.history.push(history_item(0, "first", true));
+        input.history.push(history_item(1, "second", false));
+        input.shown_id = Some(0);
+        input.diff_picks = vec![0];
+        let menu = overflow(&input);
+        let shown_at = menu
+            .iter()
+            .position(|cmd| cmd.id == CommandId::DiffShown)
+            .expect("on the menu");
+        let history_at = menu
+            .iter()
+            .position(|cmd| cmd.id == CommandId::History(0))
+            .expect("history");
+        assert!(shown_at < history_at);
+        assert_eq!(menu[shown_at].title, crate::locale::t("diff_remove"));
+        assert!(menu[shown_at].enabled);
+        assert!(
+            matching(&search_pool(&input), "diff")
+                .iter()
+                .any(|cmd| cmd.id == CommandId::DiffShown)
+        );
+        let second = menu
+            .iter()
+            .find(|cmd| cmd.id == CommandId::DiffToggle(1))
+            .expect("image row");
+        assert_eq!(second.title, crate::locale::t("diff_compare"));
+        assert!(!second.enabled);
+        let first = menu
+            .iter()
+            .find(|cmd| cmd.id == CommandId::DiffToggle(0))
+            .expect("text row");
+        assert_eq!(first.title, crate::locale::t("diff_remove"));
+        assert!(first.enabled);
+        assert!(menu.iter().any(|cmd| cmd.title.starts_with("A  ")));
+        assert!(menu.iter().all(|cmd| cmd.id != CommandId::DiffSwap));
+
+        input.history.push(history_item(2, "third", true));
+        input.diff_picks = vec![0, 2];
+        let menu = overflow(&input);
+        assert!(menu.iter().any(|cmd| {
+            cmd.id == CommandId::DiffSwap && cmd.title == crate::locale::t("diff_swap")
+        }));
+        let third = menu
+            .iter()
+            .find(|cmd| cmd.id == CommandId::History(2))
+            .expect("third");
+        assert!(third.title.starts_with("B  "));
+        let idle = menu
+            .iter()
+            .find(|cmd| cmd.id == CommandId::DiffToggle(1))
+            .expect("not chosen");
+        assert_eq!(idle.title, crate::locale::t("diff_add"));
+        assert!(!idle.enabled);
+    }
+
+    #[test]
+    fn a_diff_chip_sits_beside_original_and_waits_to_be_copied() {
+        let mut input = data(SubjectKind::Text, Some("hello"));
+        input.diff = Some(diff_shown(crate::diff::Phase::Working));
+        let titles: Vec<_> = chips(&input).iter().map(|cmd| cmd.title.clone()).collect();
+        assert_eq!(
+            titles,
+            [crate::locale::t("original"), crate::locale::t("chip_diff")]
+        );
+        // The spinner text is the diff view. The chip is already there on the source view.
+        input.view = CardView::Diff;
+        let card = work_card(&input);
+        assert_eq!(card.placeholder, crate::locale::t("diff_working"));
+        assert!(card.excerpt.is_empty());
+        assert!(masks_content(&card, CardView::Diff));
+        assert!(!content_actions(&input).copy && !content_actions(&input).save);
+
+        input.diff = Some(diff_shown(crate::diff::Phase::Same(Default::default())));
+        let card = work_card(&input);
+        assert_eq!(card.meta, crate::locale::t("diff_none"));
+        assert!(content_actions(&input).copy && content_actions(&input).save);
+
+        let lines = match crate::diff::compare("alpha\n", "alpha\nbeta\n") {
+            crate::diff::Outcome::Lines(lines) => lines,
+            other => panic!("expected lines, got {other:?}"),
+        };
+        input.diff = Some(diff_shown(crate::diff::Phase::Lines(lines)));
+        let card = work_card(&input);
+        assert_eq!(card.meta, crate::locale::tf("diff_counts", &[&1, &0]));
+        assert!(card.excerpt.contains("+beta"));
+
+        input.diff = Some(diff_shown(crate::diff::Phase::TooLarge));
+        assert_eq!(
+            work_card(&input).excerpt,
+            crate::locale::t("diff_too_large")
+        );
+    }
+
+    #[test]
+    fn json_keeps_its_chips_and_the_diff_view() {
+        let mut input = data(SubjectKind::Text, Some("{\"a\":1}"));
+        input.diff = Some(diff_shown(crate::diff::Phase::Working));
+        let titles: Vec<_> = chips(&input).iter().map(|cmd| cmd.title.clone()).collect();
+        assert_eq!(
+            titles[..2],
+            [crate::locale::t("original"), crate::locale::t("chip_diff")]
+        );
+        assert!(
+            titles
+                .iter()
+                .any(|title| title == crate::locale::t("chip_schema"))
+        );
+        input.view = CardView::Diff;
+        assert_eq!(presented_view("{\"a\":1}", input.view), CardView::Diff);
+    }
+
+    #[test]
+    fn the_shown_mark_prefixes_the_meta_line_except_on_the_diff() {
+        let mut input = data(SubjectKind::Text, Some("hello"));
+        input.shown_mark = Some("A");
+        let card = work_card(&input);
+        assert!(card.meta.starts_with("A  ·  "), "{}", card.meta);
+        input.view = CardView::Diff;
+        input.diff = Some(diff_shown(crate::diff::Phase::Same(Default::default())));
+        let card = work_card(&input);
+        assert!(!card.meta.starts_with("A"), "{}", card.meta);
+    }
+
+    #[test]
+    fn diff_labels_and_a_running_check_stay_on_the_meta_line() {
+        let mut input = data(SubjectKind::Text, Some("hello"));
+        input.view = CardView::Diff;
+        let mut shown = diff_shown(crate::diff::Phase::Same(Default::default()));
+        shown.labels = crate::sensitivity::Labeling::Known(crate::sensitivity::Found {
+            labels: vec![crate::sensitivity::Label::Pii],
+        });
+        shown.sensitive = true;
+        input.diff = Some(shown);
+        let card = work_card(&input);
+        assert!(card.meta.contains("PII"), "{}", card.meta);
+        assert!(!super::is_checking(&card));
+
+        let mut shown = diff_shown(crate::diff::Phase::Working);
+        shown.labels = crate::sensitivity::Labeling::Checking;
+        input.diff = Some(shown);
+        let card = work_card(&input);
+        assert!(super::is_checking(&card), "{}", card.meta);
+    }
+
+    #[test]
+    fn a_diff_has_its_own_content_key_and_keeps_the_card_open() {
+        let mut left = data(SubjectKind::Text, Some("hello"));
+        left.view = CardView::Diff;
+        left.diff = Some(diff_shown(crate::diff::Phase::Same(Default::default())));
+        let mut right = left.clone();
+        right.diff.as_mut().expect("diff").token = 8;
+        assert_ne!(content_key(&left), content_key(&right));
+        assert_ne!(
+            content_key(&left),
+            content_key(&data(SubjectKind::Text, Some("hello")))
+        );
+        assert!(keeps_card_open(&CommandId::Diff));
+        assert!(keeps_card_open(&CommandId::DiffToggle(1)));
+        assert!(keeps_card_open(&CommandId::DiffShown));
+        assert!(keeps_card_open(&CommandId::DiffSwap));
     }
 }

@@ -58,6 +58,11 @@ pub enum UserEvent {
     PrivacyFilterChanged,
     /// The global hotkey was changed in Settings: unregister the old one, register the new.
     HotkeyChanged,
+    /// The diff thread finished. A mismatched `generation` is dropped (Wipe, swap, a newer diff).
+    DiffReady {
+        generation: u64,
+        outcome: Box<crate::diff::Outcome>,
+    },
 }
 
 /// What the table window asks for: a command on its table (a step, undo, redo, a version,

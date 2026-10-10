@@ -178,6 +178,7 @@ mod tests {
             "title_qr",
             "detail_uri",
             "chip_schema",
+            "chip_diff",
             "chip_info",
             "image_pixels_line",
             "overview_type",

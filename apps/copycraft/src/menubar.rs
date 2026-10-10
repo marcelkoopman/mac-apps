@@ -126,6 +126,14 @@ struct App {
     image_note: Option<(usize, String)>,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.
     decoded_picture: Option<DecodedPicture>,
+    /// History entries chosen for a diff, oldest first. Not stored.
+    diff_sel: crate::diff::Selection,
+    /// Bumped when a diff is dropped, so a late result is ignored.
+    diff_generation: u64,
+    /// The last finished diff, while both picks are still chosen.
+    diff_outcome: Option<crate::diff::Outcome>,
+    /// The diff thread. One at a time.
+    diffing: Option<Background>,
 }
 
 /// A Base64 picture on its way to the card ([`UserEvent::DecodedPicture`]): the hash of the
@@ -302,6 +310,10 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::VersionScanned { picture, scan } => {
                 self.finish_version_scan(&picture, scan);
             }
+            UserEvent::DiffReady {
+                generation,
+                outcome,
+            } => self.finish_diff(generation, *outcome),
         }
     }
 
@@ -476,8 +488,190 @@ impl App {
             }
             CommandId::Settings => launcher::show_settings(),
             CommandId::About => launcher::show_about(),
+            CommandId::Diff => {
+                if self.diff_sel.pair().is_some() {
+                    self.card_view = CardView::Diff;
+                    if self.diff_outcome.is_none() && self.diffing.is_none() && !self.kick_diff() {
+                        self.card_view = CardView::Original;
+                    }
+                    self.refresh_popup();
+                }
+            }
+            CommandId::DiffToggle(id) => self.toggle_diff(id),
+            CommandId::DiffShown => {
+                if self.opened.is_none()
+                    && let Some(id) = self.history.id_at(self.history_cursor)
+                {
+                    self.toggle_diff(id);
+                }
+            }
+            CommandId::DiffSwap => self.swap_diff(),
             CommandId::Quit => event_loop.exit(),
         }
+    }
+
+    /// Add or remove history entry `id`. Two picks, or a third that replaces the oldest, start
+    /// the diff. A non-text entry stays out.
+    fn toggle_diff(&mut self, id: u64) {
+        if self.diff_sel.contains(id) {
+            self.diff_sel.remove(id);
+            self.invalidate_diff();
+            if self.card_view == CardView::Diff {
+                self.card_view = CardView::Original;
+            }
+            self.refresh_popup();
+            return;
+        }
+        if !self.history.is_text_id(id) {
+            return;
+        }
+        let added = self.diff_sel.add(id);
+        if matches!(
+            added,
+            crate::diff::AddResult::Start | crate::diff::AddResult::Replace
+        ) {
+            self.card_view = CardView::Diff;
+            if !self.kick_diff() {
+                self.card_view = CardView::Original;
+            }
+        }
+        self.refresh_popup();
+    }
+
+    /// A becomes B and B becomes A. The diff runs again.
+    fn swap_diff(&mut self) {
+        if !self.diff_sel.swap() {
+            return;
+        }
+        self.card_view = CardView::Diff;
+        if !self.kick_diff() {
+            self.card_view = CardView::Original;
+        }
+        self.refresh_popup();
+    }
+
+    /// Compare the two chosen texts on a background thread. The texts are copied here, on the
+    /// main thread; the worker does not read the pasteboard. `false` when there is no pair, a
+    /// side is gone, or the thread cannot start (the caller then leaves the diff view).
+    fn kick_diff(&mut self) -> bool {
+        let Some((left_id, right_id)) = self.diff_sel.pair() else {
+            return false;
+        };
+        let Some(left) = self.history.text_of(left_id) else {
+            return false;
+        };
+        let Some(right) = self.history.text_of(right_id) else {
+            return false;
+        };
+        self.diff_generation = self.diff_generation.wrapping_add(1);
+        let generation = self.diff_generation;
+        self.diff_outcome = None;
+        self.diffing = Some(Background::now());
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-diff".into())
+            .spawn(move || {
+                let outcome = crate::diff::compare(left.as_str(), right.as_str());
+                launcher::emit(UserEvent::DiffReady {
+                    generation,
+                    outcome: Box::new(outcome),
+                });
+            });
+        match spawned {
+            Ok(_) => true,
+            Err(err) => {
+                eprintln!("copycraft: diff skipped: {err}");
+                self.diffing = None;
+                self.stop_spinner_when_idle();
+                false
+            }
+        }
+    }
+
+    fn finish_diff(&mut self, generation: u64, outcome: crate::diff::Outcome) {
+        if generation != self.diff_generation || self.diff_sel.pair().is_none() {
+            return;
+        }
+        if let Some(run) = self.diffing.take() {
+            eprintln!("copycraft: diff built in {} ms", run.elapsed_ms());
+        }
+        self.diff_outcome = Some(outcome);
+        self.stop_spinner_when_idle();
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    /// Drop a running or finished diff. The picks stay.
+    fn invalidate_diff(&mut self) {
+        self.diff_generation = self.diff_generation.wrapping_add(1);
+        self.diff_outcome = None;
+        self.diffing = None;
+        self.stop_spinner_when_idle();
+    }
+
+    /// Wipe, lock and a cleared history drop the picks as well. Nothing is written to disk.
+    fn clear_diff(&mut self) {
+        self.diff_sel.clear();
+        self.invalidate_diff();
+        if self.card_view == CardView::Diff {
+            self.card_view = CardView::Original;
+        }
+    }
+
+    /// Drop picks whose entries have fallen off. One side gone leaves the diff view.
+    fn sync_diff_picks(&mut self) {
+        let dropped = self.diff_sel.retain(|id| self.history.contains_id(id));
+        if !dropped {
+            return;
+        }
+        self.invalidate_diff();
+        let restarted = self.diff_sel.pair().is_some() && self.kick_diff();
+        if !restarted && self.card_view == CardView::Diff {
+            self.card_view = CardView::Original;
+        }
+    }
+
+    fn fill_diff(&self, data: &mut LaunchData) {
+        data.diff_picks = self.diff_sel.ids().to_vec();
+        data.shown_id = if self.opened.is_some() {
+            None
+        } else {
+            self.history.id_at(self.history_cursor)
+        };
+        data.shown_mark = data
+            .shown_id
+            .filter(|_| data.view != CardView::Diff)
+            .and_then(|id| self.diff_sel.label(id));
+        let Some((left, right)) = self.diff_sel.pair() else {
+            data.diff = None;
+            return;
+        };
+        let (sensitive, labels) =
+            crate::diff::combine_labels(&self.side_labeling(left), &self.side_labeling(right));
+        let phase = match &self.diff_outcome {
+            Some(outcome) => crate::diff::Phase::from_outcome(outcome),
+            None => crate::diff::Phase::Working,
+        };
+        data.diff = Some(commands::DiffShown {
+            token: crate::diff::token(left, right, phase.tag()),
+            sensitive,
+            labels,
+            phase,
+        });
+    }
+
+    fn side_labeling(&self, id: u64) -> crate::sensitivity::Labeling {
+        match self.history.text_of(id) {
+            Some(text) => crate::sensitivity::labeling(text.as_str()),
+            None => crate::sensitivity::Labeling::Known(crate::sensitivity::Found::default()),
+        }
+    }
+
+    /// The diff as text, for Copy and Save. Main thread only.
+    fn diff_text(&self) -> Option<Zeroizing<String>> {
+        self.diff_outcome
+            .as_ref()
+            .map(crate::diff::Outcome::copy_text)
     }
 
     /// Unregister the old chord and register the one stored in Settings.
@@ -1293,7 +1487,9 @@ impl App {
                 .subject_text
                 .as_deref()
                 .is_some_and(crate::decode::picture_candidate);
-        let Some(index) = entry.filter(|_| !versioned && !picture) else {
+        // A diff is not kept with the entry: it is not one view of that copy.
+        let diff_view = data.view == CardView::Diff;
+        let Some(index) = entry.filter(|_| !versioned && !picture && !diff_view) else {
             return commands::work_card(data);
         };
         if let Some(card) = self.history.card(index, data.view) {
@@ -1388,6 +1584,7 @@ impl App {
     }
 
     fn current_launch_data(&mut self) -> LaunchData {
+        self.sync_diff_picks();
         let mut data = if self.opened.is_some() {
             self.launch_from_opened()
         } else {
@@ -1397,6 +1594,7 @@ impl App {
         self.attach_table(&mut data);
         self.attach_image(&mut data);
         self.attach_decoded_picture(&mut data);
+        self.fill_diff(&mut data);
         data
     }
 
@@ -1670,6 +1868,8 @@ impl App {
                 index,
                 title: history_title(&self.history, index),
                 mark: self.history.mark(index).unwrap_or("").to_string(),
+                id: self.history.id_at(index).unwrap_or(0),
+                text: self.history.get(index).is_some(),
             })
             .collect();
         LaunchData {
@@ -1689,6 +1889,10 @@ impl App {
             picture: None,
             table: None,
             image_edit: None,
+            shown_id: None,
+            shown_mark: None,
+            diff_picks: Vec::new(),
+            diff: None,
         }
     }
 
@@ -1764,6 +1968,14 @@ impl App {
     }
 
     fn copy_current(&mut self) -> anyhow::Result<()> {
+        if self.card_view == CardView::Diff {
+            // The diff stays on the card and out of history. The poller sees copycraft's own
+            // pasteboard type and does not record it.
+            if let Some(text) = self.diff_text() {
+                self.write_own(text.as_str())?;
+            }
+            return Ok(());
+        }
         let from_file = self.opened.is_some();
         let version = self.shown_image_version();
         if let Some(version) = version.as_ref()
@@ -1942,6 +2154,18 @@ impl App {
     /// panel and a card with nothing to save.
     #[cfg(target_os = "macos")]
     fn start_save(&mut self) -> anyhow::Result<()> {
+        if self.card_view == CardView::Diff {
+            let Some(text) = self.diff_text() else {
+                return Ok(());
+            };
+            return self.spawn_save(crate::macos_save::SaveJob {
+                filename: "diff.txt".to_string(),
+                extension: "txt",
+                content: crate::macos_save::SaveContent::Bytes(Zeroizing::new(
+                    text.as_bytes().to_vec(),
+                )),
+            });
+        }
         let version = (self.card_view == CardView::Dataframe)
             .then(|| self.shown_table_version())
             .flatten();
@@ -1960,9 +2184,15 @@ impl App {
             None if self.opened.is_some() => self.opened_save_job(),
             None => self.clipboard_save_job(),
         };
-        let Some(mut job) = job else {
+        let Some(job) = job else {
             return Ok(());
         };
+        self.spawn_save(job)
+    }
+
+    /// Ask for a path, then write `job` on the save thread.
+    #[cfg(target_os = "macos")]
+    fn spawn_save(&mut self, mut job: crate::macos_save::SaveJob) -> anyhow::Result<()> {
         let Some(path) = job.choose_path()? else {
             return Ok(());
         };
@@ -1991,7 +2221,7 @@ impl App {
             .filter(|run| !run.quiet)
             .map(|run| run.started);
         let image = self.image_job.as_ref().map(|run| run.started);
-        let Some(started) = [self.saving, self.loading_all, table, image]
+        let Some(started) = [self.saving, self.loading_all, table, image, self.diffing]
             .into_iter()
             .flatten()
             .map(|run| run.started)
@@ -2020,6 +2250,7 @@ impl App {
             && self.loading_all.is_none()
             && self.table_job.as_ref().is_none_or(|run| run.quiet)
             && self.image_job.is_none()
+            && self.diffing.is_none()
         {
             self.spinner_on = false;
             launcher::set_busy(false);
@@ -2188,6 +2419,7 @@ impl App {
     }
 
     fn clear_history(&mut self) {
+        self.clear_diff();
         self.forget_decoded_picture();
         let view = ClipboardView::from_os();
         self.skip_record = view.text().map(|text| Zeroizing::new(text.to_string()));
@@ -2240,9 +2472,12 @@ impl App {
         self.full_card = None;
         // Closed and wiped whatever history holds (a chosen file's window too).
         self.close_table_window();
+        self.clear_diff();
         if !self.history.is_empty() {
             self.clear_history();
             eprintln!("copycraft: history forgotten (lock, sleep or user switch)");
+        } else if launcher::is_open() {
+            self.refresh_popup();
         }
     }
 
@@ -2258,6 +2493,7 @@ impl App {
     /// Overwrite clipboard text and image bytes still held in this process,
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
+        self.clear_diff();
         self.forget_decoded_picture();
         self.close_table_window();
         self.opened = None;
@@ -2674,7 +2910,11 @@ impl App {
         }
         // A chosen file stays on the card while the clipboard keeps its own history.
         if self.opened.is_none() {
-            self.card_view = CardView::Original;
+            // Copy of a diff is copycraft's own write. Stay on the diff; anything else
+            // returns the card to the copy itself.
+            if !(own && self.card_view == CardView::Diff) {
+                self.card_view = CardView::Original;
+            }
             if self
                 .image_scan_change
                 .is_some_and(|seen| seen != image_change)
@@ -3024,6 +3264,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         decoded_picture: None,
         image_job: None,
         image_note: None,
+        diff_sel: crate::diff::Selection::default(),
+        diff_generation: 0,
+        diff_outcome: None,
+        diffing: None,
     };
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));

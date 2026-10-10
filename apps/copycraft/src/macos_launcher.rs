@@ -39,6 +39,8 @@ use crate::item_find;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 440.0;
+/// The diff well is two columns, so the card grows while that view is showing.
+const DIFF_WIDTH: f64 = 820.0;
 use crate::card_layout::{HEADER_H, ITEM_FIND_H, META_H, PAD, PREVIEW_H, place_sections};
 const HEADER_BUTTON: f64 = 22.0;
 const CLEAR_BUTTON_W: f64 = 64.0;
@@ -89,6 +91,16 @@ const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
 };
 /// The drop outline sits this far inside the panel edge, concentric with it.
 const DROP_INSET: f64 = 4.0;
+
+/// What the well was last painted with: the text, its highlight, whether it was the excerpt
+/// (not a placeholder), and whether it was a line diff (green and red lines).
+struct Painted {
+    text: String,
+    highlight: Option<FormatKind>,
+    payload: bool,
+    diff_lines: bool,
+}
+
 fn drop_highlight() -> mac_ui::drop::Highlight {
     mac_ui::drop::Highlight {
         inset: DROP_INSET,
@@ -128,8 +140,7 @@ thread_local! {
     static CARD_ERROR_LINE: Cell<Option<usize>> = const { Cell::new(None) };
     /// The error line the well was last painted with (with [`PAINTED`]).
     static PAINTED_ERROR_LINE: Cell<Option<usize>> = const { Cell::new(None) };
-    static PAINTED: RefCell<Option<(String, Option<FormatKind>, bool)>> =
-        const { RefCell::new(None) };
+    static PAINTED: RefCell<Option<Painted>> = const { RefCell::new(None) };
     static LINK_PAGE: RefCell<Option<String>> = const { RefCell::new(None) };
     static WINDOW: RefCell<Option<Retained<LauncherWindow>>> = const { RefCell::new(None) };
     static FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -206,6 +217,13 @@ thread_local! {
         const { RefCell::new(None) };
     static SHADE_ON: Cell<bool> = const { Cell::new(false) };
     static MASKS: Cell<bool> = const { Cell::new(false) };
+    /// The well is a side-by-side diff, so the columns are drawn and `+` / `-` sides are colored.
+    static CARD_DIFF: Cell<bool> = const { Cell::new(false) };
+    /// The diff well is showing both copies, so the card uses [`DIFF_WIDTH`].
+    static DIFF_WIDE: Cell<bool> = const { Cell::new(false) };
+    /// A diff stays masked until reveal when either side is sensitive, even with the privacy
+    /// filter off. Other views keep the filter as the master switch.
+    static DIFF_LOCK: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
     /// The table's version capsule ([`commands::VersionBar`]); `None` hides it.
@@ -221,6 +239,10 @@ thread_local! {
     /// The window's one field editor, made on first use. It takes no drops (see
     /// `windowWillReturnFieldEditor:toObject:`).
     static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
+}
+
+fn card_width() -> f64 {
+    if DIFF_WIDE.get() { DIFF_WIDTH } else { WIDTH }
 }
 
 #[cfg(test)]
@@ -761,7 +783,17 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         set_item_find(false);
     }
     PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
-    MASKS.set(commands::masks_content(&card, data.view));
+    let diff_lock = data.view == commands::CardView::Diff
+        && data.diff.as_ref().is_some_and(|diff| diff.sensitive);
+    DIFF_LOCK.set(diff_lock);
+    let columns = data.view == commands::CardView::Diff
+        && matches!(
+            data.diff.as_ref().map(|diff| &diff.phase),
+            Some(crate::diff::Phase::Same(_) | crate::diff::Phase::Lines(_))
+        );
+    CARD_DIFF.set(columns);
+    DIFF_WIDE.set(columns);
+    MASKS.set(commands::masks_content(&card, data.view) || diff_lock);
     CARD_TITLE.with(|slot| set_secret(slot, card.title));
     CARD_META.with(|slot| set_secret(slot, card.meta));
     CARD_EXCERPT.with(|slot| set_secret(slot, card.excerpt));
@@ -1015,7 +1047,7 @@ fn layout(fresh_place: bool) {
         .iter()
         .map(|chip| commands::chip_width(chip.fitted_size().width))
         .collect();
-    let inner = WIDTH - PAD * 2.0;
+    let inner = card_width() - PAD * 2.0;
     let nav = HISTORY_NAV.with(|slot| *slot.borrow());
     let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
     let reserve = commands::trailing_reserve(nav.is_some(), version_bar.is_some());
@@ -1036,7 +1068,7 @@ fn layout(fresh_place: bool) {
     );
     place_window(mtm, placed.height, fresh_place);
     let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
-    let close_x = WIDTH - PAD - 24.0;
+    let close_x = card_width() - PAD - 24.0;
     let more_x = close_x - 6.0 - HEADER_BUTTON;
     let clear_x = more_x - 6.0 - CLEAR_BUTTON_W;
     let symbols_w = symbols_button_width();
@@ -1156,7 +1188,7 @@ fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
         let Some(window) = borrowed.as_ref() else {
             return;
         };
-        let size = NSSize::new(WIDTH, height);
+        let size = NSSize::new(card_width(), height);
         let frame = if fresh {
             match ICON_FRAME.get() {
                 Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),
@@ -1172,7 +1204,7 @@ fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
 fn place_well(y: f64) {
     let frame = NSRect::new(
         NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, PREVIEW_H),
+        NSSize::new(card_width() - PAD * 2.0, PREVIEW_H),
     );
     WELL.with(|slot| {
         if let Some(well) = slot.borrow().as_ref() {
@@ -1191,7 +1223,7 @@ struct RevealCover {
 }
 
 fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
-    let width = WIDTH - PAD * 2.0;
+    let width = card_width() - PAD * 2.0;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H));
     let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
     let shade = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
@@ -1212,7 +1244,7 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
 }
 
 fn place_reveal_cover(y: f64) {
-    let width = WIDTH - PAD * 2.0;
+    let width = card_width() - PAD * 2.0;
     REVEAL.with(|slot| {
         let borrowed = slot.borrow();
         let Some(cover) = borrowed.as_ref() else {
@@ -1275,6 +1307,9 @@ fn mask_again() {
 /// The one place the card decides the well is masked: the privacy filter setting (read live, so
 /// a change in Settings counts at once), whether this content masks, and whether it was revealed.
 fn well_is_masked() -> bool {
+    if DIFF_LOCK.with(Cell::get) && !REVEALED.with(Cell::get) {
+        return true;
+    }
     commands::effective_mask(
         crate::settings::privacy_filter(),
         MASKS.with(Cell::get),
@@ -1400,13 +1435,7 @@ fn blank_masked_well() {
     });
     hide_frozen_column();
     set_preview_image_hidden(true);
-    PAINTED.with(|slot| {
-        if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
-            text.zeroize();
-        }
-        *slot.borrow_mut() = None;
-    });
-    PAINTED_ITEM.set(None);
+    clear_painted();
 }
 
 fn card_meta() -> String {
@@ -1420,11 +1449,11 @@ fn apply_preview(y: f64) {
     }
     let image_frame = NSRect::new(
         NSPoint::new(PAD + 8.0, y + 8.0),
-        NSSize::new(WIDTH - PAD * 2.0 - 16.0, PREVIEW_H - 16.0),
+        NSSize::new(card_width() - PAD * 2.0 - 16.0, PREVIEW_H - 16.0),
     );
     let text_frame = NSRect::new(
         NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, PREVIEW_H),
+        NSSize::new(card_width() - PAD * 2.0, PREVIEW_H),
     );
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
@@ -1804,13 +1833,7 @@ fn clear_preview_text() {
         }
     });
     hide_frozen_column();
-    PAINTED.with(|slot| {
-        if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
-            text.zeroize();
-        }
-        *slot.borrow_mut() = None;
-    });
-    PAINTED_ITEM.set(None);
+    clear_painted();
 }
 
 fn set_preview_image_hidden(hidden: bool) {
@@ -1883,7 +1906,7 @@ fn preview_wrap_width() -> f64 {
             .as_ref()
             .map(|view| view.contentSize().width)
             .filter(|width| *width > 1.0)
-            .unwrap_or(WIDTH - PAD * 2.0)
+            .unwrap_or(card_width() - PAD * 2.0)
     })
 }
 
@@ -1898,12 +1921,14 @@ fn paint_preview_text(body: &str, payload: bool) {
             view.setSelectable(selectable);
         }
     });
+    let diff_lines = CARD_DIFF.with(Cell::get) && payload;
     let unchanged = PAINTED.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .is_some_and(|(text, kind, was_payload)| {
-                text == body && *kind == highlight && *was_payload == payload
-            })
+        slot.borrow().as_ref().is_some_and(|painted| {
+            painted.text == body
+                && painted.highlight == highlight
+                && painted.payload == payload
+                && painted.diff_lines == diff_lines
+        })
     }) && PAINTED_ERROR_LINE.get() == error_line;
     if unchanged {
         PAINTED_ITEM.set(Some(ITEM_GEN.get()));
@@ -1914,10 +1939,20 @@ fn paint_preview_text(body: &str, payload: bool) {
         let Some(view) = borrowed.as_ref() else {
             return;
         };
-        crate::macos_card_text::paint(view, body, highlight, payload, error_line);
-        let wrap = (highlight.is_none()
-            || matches!(highlight, Some(FormatKind::Markdown | FormatKind::Jwt)))
-        .then(preview_wrap_width);
+        if diff_lines {
+            crate::macos_card_text::paint_diff(view, body);
+        } else {
+            crate::macos_card_text::paint(view, body, highlight, payload, error_line);
+        }
+        // A side-by-side row stays on one line and scrolls sideways. Wrapping would
+        // break the two columns.
+        let wrap = if diff_lines {
+            None
+        } else {
+            (highlight.is_none()
+                || matches!(highlight, Some(FormatKind::Markdown | FormatKind::Jwt)))
+            .then(preview_wrap_width)
+        };
         widgets::fit_text_view(view, wrap);
         view.scrollRangeToVisible(NSRange {
             location: 0,
@@ -1926,10 +1961,15 @@ fn paint_preview_text(body: &str, payload: bool) {
     });
     refresh_frozen_column(body, highlight, payload);
     PAINTED.with(|slot| {
-        if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
-            text.zeroize();
+        if let Some(painted) = slot.borrow_mut().as_mut() {
+            painted.text.zeroize();
         }
-        slot.replace(Some((body.to_string(), highlight, payload)));
+        slot.replace(Some(Painted {
+            text: body.to_string(),
+            highlight,
+            payload,
+            diff_lines,
+        }));
     });
     PAINTED_ERROR_LINE.set(error_line);
     // `set_item_text(body)` above: the view shows the item.
@@ -2234,7 +2274,10 @@ fn pop_overflow() {
     let mut saw_quit = false;
     let mut history_menu: Option<Retained<NSMenu>> = None;
     for (index, cmd) in items.iter().enumerate() {
-        let in_history = matches!(cmd.id, CommandId::History(_) | CommandId::ClearHistory);
+        let in_history = matches!(
+            cmd.id,
+            CommandId::History(_) | CommandId::ClearHistory | CommandId::DiffToggle(_)
+        );
         if in_history {
             let submenu = history_menu.get_or_insert_with(|| {
                 let parent = unsafe {
@@ -2255,6 +2298,7 @@ fn pop_overflow() {
                 submenu
             });
             let item = overflow_item(mtm, &cmd.title, index);
+            item.setEnabled(cmd.enabled);
             submenu.addItem(&item);
             continue;
         }
@@ -2277,6 +2321,7 @@ fn pop_overflow() {
             saw_quit = true;
         }
         let item = overflow_item(mtm, &cmd.title, index);
+        item.setEnabled(cmd.enabled);
         if let CommandId::Appearance(item_theme) = cmd.id {
             let state = if item_theme == theme {
                 NSControlStateValueOn
@@ -2408,19 +2453,27 @@ pub fn wipe_shown() {
     for slot in [&ACTIONS, &POOL, &OVERFLOW, &SHOWN] {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
-    PAINTED.with(|slot| {
-        if let Some((text, _, _)) = slot.borrow_mut().as_mut() {
-            text.zeroize();
-        }
-        *slot.borrow_mut() = None;
-    });
-    PAINTED_ITEM.set(None);
+    clear_painted();
+    DIFF_LOCK.set(false);
+    CARD_DIFF.set(false);
+    DIFF_WIDE.set(false);
     wipe_shown_views();
     SEARCHING.set(false);
 }
 
 fn wipe_string_slot(slot: &RefCell<String>) {
     slot.borrow_mut().zeroize();
+}
+
+/// Drop the remembered well paint and zero the text it held.
+fn clear_painted() {
+    PAINTED.with(|slot| {
+        if let Some(painted) = slot.borrow_mut().as_mut() {
+            painted.text.zeroize();
+        }
+        *slot.borrow_mut() = None;
+    });
+    PAINTED_ITEM.set(None);
 }
 
 fn set_secret(slot: &RefCell<String>, next: String) {
@@ -2605,7 +2658,7 @@ fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
 }
 
 fn place_item_find(y: f64, shown: bool) {
-    let inner = WIDTH - PAD * 2.0;
+    let inner = card_width() - PAD * 2.0;
     let field_w = (inner - ITEM_COUNT_W - 6.0).max(40.0);
     ITEM_FIELD.with(|slot| {
         if let Some(field) = slot.borrow().as_ref() {
@@ -2663,7 +2716,7 @@ fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
         };
         capsule.setHidden(nav.is_none());
         capsule.setFrame(NSRect::new(
-            NSPoint::new(WIDTH - PAD - commands::NAV_SPAN, y),
+            NSPoint::new(card_width() - PAD - commands::NAV_SPAN, y),
             NSSize::new(commands::NAV_SPAN, commands::CHIP_PILL_H),
         ));
         if nav.is_some() {
@@ -2717,7 +2770,7 @@ fn raise_history_nav() {
 fn place_content_actions(preview_y: f64) {
     let actions = CONTENT_ACTIONS.get();
     let title = CARD_TITLE.with(|slot| slot.borrow().clone());
-    let right = WIDTH - PAD - WELL_INSET - WELL_ACTION;
+    let right = card_width() - PAD - WELL_INSET - WELL_ACTION;
     let top = preview_y + PREVIEW_H - WELL_INSET - WELL_ACTION;
     let copy_x = if actions.save {
         right - WELL_GAP - WELL_ACTION
@@ -2847,11 +2900,11 @@ fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
             pill.button.set_title(&title);
             pill.title = title;
         }
-        let inner = WIDTH - PAD * 2.0 - WELL_INSET * 2.0;
+        let inner = card_width() - PAD * 2.0 - WELL_INSET * 2.0;
         let width = pill.button.width_within(inner);
         pill.button.view().setFrame(NSRect::new(
             NSPoint::new(
-                PAD + (WIDTH - PAD * 2.0 - width) / 2.0,
+                PAD + (card_width() - PAD * 2.0 - width) / 2.0,
                 preview_y + WELL_INSET,
             ),
             NSSize::new(width, SHOW_ALL_H),
@@ -3108,7 +3161,7 @@ fn place_version_row(y: f64, nav: bool, bar: Option<&commands::VersionBar>) {
             return;
         };
         row.capsule.setFrame(NSRect::new(
-            NSPoint::new(commands::version_capsule_x(WIDTH - PAD, nav), y),
+            NSPoint::new(commands::version_capsule_x(card_width() - PAD, nav), y),
             NSSize::new(commands::VERSION_SPAN, commands::CHIP_PILL_H),
         ));
         row.undo.button().setEnabled(bar.can_undo());
@@ -3340,6 +3393,9 @@ mod tests {
     impl Drop for ResetFind {
         fn drop(&mut self) {
             super::MASKS.set(false);
+            super::DIFF_LOCK.set(false);
+            super::CARD_DIFF.set(false);
+            super::DIFF_WIDE.set(false);
             super::REVEALED.set(false);
             super::FIND_ON.set(false);
             super::FIND_INDEX.set(0);
@@ -3371,6 +3427,10 @@ mod tests {
             picture: None,
             table: None,
             image_edit: None,
+            shown_id: None,
+            shown_mark: None,
+            diff_picks: Vec::new(),
+            diff: None,
         }
     }
 
@@ -3415,7 +3475,22 @@ mod tests {
             picture: None,
             table: None,
             image_edit: None,
+            shown_id: None,
+            shown_mark: None,
+            diff_picks: Vec::new(),
+            diff: None,
         }
+    }
+
+    #[test]
+    fn a_sensitive_diff_stays_masked_with_the_filter_off() {
+        let _reset = ResetFind::arm();
+        super::DIFF_LOCK.set(true);
+        super::REVEALED.set(false);
+        super::MASKS.set(false);
+        assert!(super::well_is_masked());
+        super::REVEALED.set(true);
+        assert!(!super::well_is_masked());
     }
 
     #[test]
