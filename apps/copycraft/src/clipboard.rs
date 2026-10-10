@@ -126,13 +126,13 @@ impl ClipboardView {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn label(&self) -> String {
         match self {
-            Self::Empty => "(clipboard is empty)".to_string(),
-            Self::NoText => "(clipboard has no text)".to_string(),
+            Self::Empty => crate::locale::t("clipboard_empty_label").to_string(),
+            Self::NoText => crate::locale::t("clipboard_no_text_label").to_string(),
             Self::Text(text) => one_line(text.as_str()),
             Self::Image => format::FormatKind::Image.menu_symbol().to_string(),
-            Self::Hidden => HIDDEN_CONTENT.to_string(),
-            Self::Denied => crate::paste_access::DENIED_NOTE.to_string(),
-            Self::Pending => crate::paste_access::PENDING_NOTE.to_string(),
+            Self::Hidden => hidden_content().to_string(),
+            Self::Denied => crate::paste_access::denied_note().to_string(),
+            Self::Pending => crate::paste_access::pending_note().to_string(),
         }
     }
 }
@@ -609,7 +609,9 @@ impl ClipboardHistory {
 }
 
 /// Card title and tooltip of a copy another app marked private.
-pub const HIDDEN_CONTENT: &str = "Hidden content";
+pub fn hidden_content() -> &'static str {
+    crate::locale::t("hidden_content")
+}
 
 /// Put `text` on the clipboard. On macOS the write carries copycraft's own pasteboard type, so
 /// the poller does not take it for a new copy (see [`crate::macos_pasteboard::SELF_TYPE`]), and

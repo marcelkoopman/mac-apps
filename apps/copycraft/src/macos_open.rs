@@ -11,7 +11,7 @@ use mac_ui::objc2_foundation::{NSString, NSURL};
 /// is logged).
 pub fn choose_path() -> Option<PathBuf> {
     let mtm = MainThreadMarker::new()?;
-    file_panel::choose_file(mtm, "Choose file", &[]).unwrap_or_else(|e| {
+    file_panel::choose_file(mtm, crate::locale::t("chip_choose_file"), &[]).unwrap_or_else(|e| {
         eprintln!("open panel failed: {e}");
         None
     })

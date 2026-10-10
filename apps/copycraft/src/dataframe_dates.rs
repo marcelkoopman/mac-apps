@@ -267,7 +267,7 @@ pub fn dates_note(dates: &[DateColumn]) -> Option<String> {
         .find(|column| column.ambiguous)
         .or_else(|| dates.iter().find(|column| column.forced_month_first()))?;
     Some(match column.order {
-        DateOrder::DayFirst => "Dates read as dd/mm/yyyy".to_string(),
-        DateOrder::MonthFirst => "Dates read as mm/dd/yyyy".to_string(),
+        DateOrder::DayFirst => crate::locale::t("dates_read_dmy").to_string(),
+        DateOrder::MonthFirst => crate::locale::t("dates_read_mdy").to_string(),
     })
 }

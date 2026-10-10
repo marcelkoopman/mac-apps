@@ -23,7 +23,7 @@ impl TableStart {
 
     /// "Header on line N" when lines above the header were skipped.
     pub fn note(&self) -> Option<String> {
-        (self.skipped > 0).then(|| format!("Header on line {}", self.header_line + 1))
+        (self.skipped > 0).then(|| crate::locale::tf("header_on_line", &[&(self.header_line + 1)]))
     }
 }
 

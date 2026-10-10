@@ -160,19 +160,25 @@ fn tokenize_df_line(out: &mut Vec<(TokenKind, String)>, line: &str, first: bool)
 fn tokenize_overview(source: &str) -> Option<Vec<(TokenKind, String)>> {
     let mut lines = source.split_inclusive('\n');
     let head = lines.next()?;
-    let (columns, rows) = head.trim_end().split_once(" columns · ")?;
-    let count = |text: &str| !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || c == ',');
-    let rows = rows.strip_suffix(" rows").or_else(|| rows.strip_suffix(" row"))?;
+    let (columns, rows) = head
+        .trim_end()
+        .split_once(&format!(" {} · ", crate::locale::t("columns")))?;
+    let count =
+        |text: &str| !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || c == ',' || c == '.');
+    let rows = rows
+        .strip_suffix(&format!(" {}", crate::locale::t("rows")))
+        .or_else(|| rows.strip_suffix(&format!(" {}", crate::locale::t("row"))))?;
     if !count(columns) || !count(rows) {
         return None;
     }
     let blank = lines.next()?;
     let headings = lines.next()?;
-    if !headings.starts_with("column ") {
+    let (column_head, type_head, values_head) = crate::dataframe::overview_headings();
+    if !headings.starts_with(&format!("{column_head} ")) {
         return None;
     }
-    let type_at = headings.find("type")?;
-    let values_at = headings.find("values")?;
+    let type_at = headings.find(type_head)?;
+    let values_at = headings.find(values_head)?;
     let mut out = Vec::new();
     for part in head.split_inclusive(' ') {
         let kind = if count(part.trim()) {

@@ -11,14 +11,28 @@ pub const MAX_FILE_BYTES: u64 = 8_000_000;
 /// easily over 8 MB, and a picture dragged from a web page often comes as uncompressed TIFF.
 pub const MAX_IMAGE_BYTES: u64 = 32_000_000;
 
-const NOT_TEXT: &str = "This file is not text";
-const TOO_LARGE: &str = "File is larger than 8 MB";
-const UNREADABLE: &str = "Can't read this file";
-const TEXT_TOO_LARGE: &str = "Text is larger than 8 MB";
-const EMPTY_TEXT: &str = "The dropped text is empty";
-const IMAGE_TOO_LARGE: &str = "Image is larger than 32 MB";
+fn not_text() -> &'static str {
+    crate::locale::t("file_not_text")
+}
+fn too_large() -> &'static str {
+    crate::locale::t("file_too_large")
+}
+pub fn unreadable() -> &'static str {
+    crate::locale::t("file_unreadable")
+}
+fn text_too_large() -> &'static str {
+    crate::locale::t("text_too_large")
+}
+fn empty_text() -> &'static str {
+    crate::locale::t("dropped_text_empty")
+}
+fn image_too_large() -> &'static str {
+    crate::locale::t("image_too_large")
+}
 /// For a dropped picture the system cannot draw.
-pub const UNREADABLE_IMAGE: &str = "Can't read this image";
+pub fn unreadable_image() -> &'static str {
+    crate::locale::t("image_unreadable")
+}
 
 /// A file the card is showing instead of the clipboard.
 #[derive(Clone)]
@@ -48,7 +62,7 @@ pub fn load_dropped(path: &Path) -> OpenedFile {
         return load_image(path);
     }
     let opened = load(path);
-    if opened.note.as_deref() == Some(NOT_TEXT) {
+    if opened.note.as_deref() == Some(not_text()) {
         return load_image(path);
     }
     opened
@@ -57,24 +71,24 @@ pub fn load_dropped(path: &Path) -> OpenedFile {
 fn load_image(path: &Path) -> OpenedFile {
     let name = file_name(path);
     let Ok(meta) = std::fs::metadata(path) else {
-        return noted(name, UNREADABLE);
+        return noted(name, unreadable());
     };
     if !meta.is_file() {
-        return noted(name, UNREADABLE);
+        return noted(name, unreadable());
     }
     if meta.len() > MAX_IMAGE_BYTES {
-        return noted(name, IMAGE_TOO_LARGE);
+        return noted(name, image_too_large());
     }
     match std::fs::read(path) {
         Ok(bytes) => from_image_bytes(name, bytes),
-        Err(_) => noted(name, UNREADABLE),
+        Err(_) => noted(name, unreadable()),
     }
 }
 
 /// Image data dropped on the card, shown like a file called `name`.
 pub fn from_image_data(name: &str, mut bytes: Zeroizing<Vec<u8>>) -> OpenedFile {
     if bytes.len() as u64 > MAX_IMAGE_BYTES {
-        return noted(name.to_string(), IMAGE_TOO_LARGE);
+        return noted(name.to_string(), image_too_large());
     }
     // Moved, not copied, into the zeroizing history buffer.
     from_image_bytes(name.to_string(), std::mem::take(&mut *bytes))
@@ -92,7 +106,7 @@ fn from_image_bytes(name: String, bytes: Vec<u8>) -> OpenedFile {
                 scan: None,
             }),
         },
-        None => noted(name, UNREADABLE_IMAGE),
+        None => noted(name, unreadable_image()),
     }
 }
 
@@ -114,18 +128,18 @@ fn file_name(path: &Path) -> String {
 pub fn load(path: &Path) -> OpenedFile {
     let name = file_name(path);
     let Ok(meta) = std::fs::metadata(path) else {
-        return noted(name, UNREADABLE);
+        return noted(name, unreadable());
     };
     if !meta.is_file() {
-        return noted(name, UNREADABLE);
+        return noted(name, unreadable());
     }
     if meta.len() > MAX_FILE_BYTES {
-        return noted(name, TOO_LARGE);
+        return noted(name, too_large());
     }
     // Zeroizing from the first byte, so the file contents are overwritten on every path out.
     let bytes = match std::fs::read(path) {
         Ok(bytes) => Zeroizing::new(bytes),
-        Err(_) => return noted(name, UNREADABLE),
+        Err(_) => return noted(name, unreadable()),
     };
     match classify(&bytes) {
         Classified::Text(text) => OpenedFile {
@@ -134,8 +148,8 @@ pub fn load(path: &Path) -> OpenedFile {
             note: None,
             image: None,
         },
-        Classified::NotText => noted(name, NOT_TEXT),
-        Classified::TooLarge => noted(name, TOO_LARGE),
+        Classified::NotText => noted(name, not_text()),
+        Classified::TooLarge => noted(name, too_large()),
     }
 }
 
@@ -143,10 +157,10 @@ pub fn load(path: &Path) -> OpenedFile {
 pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
     let name = name.to_string();
     if text.len() as u64 > MAX_FILE_BYTES {
-        return noted(name, TEXT_TOO_LARGE);
+        return noted(name, text_too_large());
     }
     if text.trim().is_empty() {
-        return noted(name, EMPTY_TEXT);
+        return noted(name, empty_text());
     }
     OpenedFile {
         name,

@@ -298,8 +298,8 @@ impl Problem {
     pub fn label(self) -> String {
         match self {
             Self::Bracket(problem) => problem.label(),
-            Self::ExpectedIndent => "expected indent".to_string(),
-            Self::MixedIndent => "mixed tabs and spaces".to_string(),
+            Self::ExpectedIndent => crate::locale::t("python_expected_indent").to_string(),
+            Self::MixedIndent => crate::locale::t("python_mixed_indent").to_string(),
         }
     }
 }

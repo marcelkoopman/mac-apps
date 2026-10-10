@@ -18,8 +18,8 @@ impl Problem {
     /// Short title suffix: `missing }` or `unbalanced )`.
     pub fn label(self) -> String {
         match self {
-            Self::Missing(closer) => format!("missing {closer}"),
-            Self::Unbalanced(closer) => format!("unbalanced {closer}"),
+            Self::Missing(closer) => crate::locale::tf("code_missing", &[&closer]),
+            Self::Unbalanced(closer) => crate::locale::tf("code_unbalanced", &[&closer]),
         }
     }
 }

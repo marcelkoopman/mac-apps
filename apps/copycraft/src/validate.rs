@@ -12,17 +12,19 @@ pub struct Report {
 pub fn title(text: &str) -> Option<String> {
     let report = check(text)?;
     if report.language == "JSON" && !report.ok {
-        return broken_json(text).map(|_| BROKEN_JSON_TITLE.to_string());
+        return broken_json(text).map(|_| broken_json_title().to_string());
     }
-    Some(format!(
-        "{} {}",
-        if report.ok { "Valid" } else { "Invalid" },
-        report.language
-    ))
+    Some(if report.ok {
+        crate::locale::tf("valid_language", &[&report.language])
+    } else {
+        crate::locale::tf("invalid_language", &[&report.language])
+    })
 }
 
 /// Title of a copy meant as JSON that does not parse.
-pub const BROKEN_JSON_TITLE: &str = "JSON · Invalid";
+pub fn broken_json_title() -> &'static str {
+    crate::locale::t("broken_json_title")
+}
 
 /// Where a copy meant as JSON stops parsing: 1-based line and column in the copied text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,9 +37,9 @@ pub struct JsonProblem {
 impl JsonProblem {
     /// For the meta line: `Line 4, column 3: trailing comma`.
     pub fn note(&self) -> String {
-        format!(
-            "Line {}, column {}: {}",
-            self.line, self.column, self.message
+        crate::locale::tf(
+            "json_problem_note",
+            &[&self.line, &self.column, &self.message],
         )
     }
 }
@@ -63,11 +65,11 @@ pub fn broken_json(text: &str) -> Option<JsonProblem> {
         .to_string();
     let message = match err.classify() {
         serde_json::error::Category::Eof if start.starts_with('[') && message.contains("list") => {
-            "missing ]".to_string()
+            crate::locale::t("json_missing_bracket").to_string()
         }
-        serde_json::error::Category::Eof => "missing } or ]".to_string(),
+        serde_json::error::Category::Eof => crate::locale::t("json_missing_brace").to_string(),
         _ if message == "key must be a string" && text.contains('\'') => {
-            "key must be a string in double quotes".to_string()
+            crate::locale::t("json_key_quotes").to_string()
         }
         _ => message,
     };

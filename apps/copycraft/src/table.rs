@@ -49,19 +49,19 @@ impl TableOp {
     /// Name of the version this step makes, for the version capsule.
     pub fn label(&self) -> String {
         match self {
-            Self::Dedupe => "Duplicates removed".to_string(),
-            Self::DropEmpty => "Empty rows and columns removed".to_string(),
+            Self::Dedupe => crate::locale::t("table_label_dedupe").to_string(),
+            Self::DropEmpty => crate::locale::t("table_label_drop_empty").to_string(),
             Self::Sort { column, descending } => {
                 let arrow = if *descending { "↓" } else { "↑" };
-                format!("Sorted by {column} {arrow}")
+                crate::locale::tf("table_label_sorted", &[&column, &arrow])
             }
             Self::SelectColumns {
                 columns,
                 kept_of: Some(total),
-            } => format!("Kept {} of {total} columns", columns.len()),
+            } => crate::locale::tf("table_label_kept", &[&columns.len(), &total]),
             Self::SelectColumns { columns, .. } => match columns.as_slice() {
-                [one] => format!("Only {one}"),
-                _ => format!("{} columns chosen", columns.len()),
+                [one] => crate::locale::tf("table_label_only", &[one]),
+                _ => crate::locale::tf("table_label_chosen", &[&columns.len()]),
             },
         }
     }
@@ -70,10 +70,12 @@ impl TableOp {
     /// column's name (it sits in that step's submenu, [`group`](Self::group)).
     pub fn title(&self) -> String {
         match self {
-            Self::Dedupe => "Remove duplicate rows".to_string(),
-            Self::DropEmpty => "Remove empty rows and columns".to_string(),
+            Self::Dedupe => crate::locale::t("table_remove_duplicates").to_string(),
+            Self::DropEmpty => crate::locale::t("table_remove_empty").to_string(),
             Self::Sort { column, .. } => column.clone(),
-            Self::SelectColumns { columns, .. } => format!("Keep {} columns", columns.len()),
+            Self::SelectColumns { columns, .. } => {
+                crate::locale::tf("table_keep_columns", &[&columns.len()])
+            }
         }
     }
 
@@ -82,10 +84,10 @@ impl TableOp {
         match self {
             Self::Sort {
                 descending: false, ..
-            } => Some("Sort ascending"),
+            } => Some(crate::locale::t("sort_ascending")),
             Self::Sort {
                 descending: true, ..
-            } => Some("Sort descending"),
+            } => Some(crate::locale::t("sort_descending")),
             _ => None,
         }
     }
@@ -128,7 +130,7 @@ impl TableOp {
 
     /// The meta-line note when this step would change nothing ([`apply`](Self::apply)).
     pub fn unchanged_note(&self) -> &'static str {
-        "Nothing to change"
+        crate::locale::t("nothing_to_change")
     }
 }
 
@@ -150,9 +152,9 @@ pub enum TableError {
 impl std::fmt::Display for TableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Full => write!(f, "{MAX_VERSIONS} versions at most"),
-            Self::NotATable => write!(f, "Not a table"),
-            Self::Cancelled => write!(f, "Cancelled"),
+            Self::Full => write!(f, "{}", crate::locale::tf("max_versions", &[&MAX_VERSIONS])),
+            Self::NotATable => write!(f, "{}", crate::locale::t("not_a_table")),
+            Self::Cancelled => write!(f, "{}", crate::locale::t("cancelled")),
             Self::Failed(message) => write!(f, "{message}"),
             Self::Unchanged(note) => write!(f, "{note}"),
         }
@@ -301,7 +303,7 @@ impl TableVersions {
 
     /// "Original", then each step's label.
     pub fn labels(&self) -> Vec<String> {
-        std::iter::once("Original".to_string())
+        std::iter::once(crate::locale::t("original").to_string())
             .chain(self.steps.iter().map(TableOp::label))
             .collect()
     }

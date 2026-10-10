@@ -1,4 +1,12 @@
 //! User-facing strings follow the system language (English or Dutch). No language picker.
+//! Every string the user can see goes through [`t`] / [`tf`] with a key from `locale/strings.rs`,
+//! which holds the Dutch and the English text side by side.
+
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::sync::OnceLock;
+
+mod strings;
 
 /// Supported UI languages. Anything other than Dutch uses English.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -9,6 +17,11 @@ pub enum Lang {
 
 /// The language for labels this launch (from the preferred language list).
 pub fn lang() -> Lang {
+    static LANG: OnceLock<Lang> = OnceLock::new();
+    *LANG.get_or_init(detect)
+}
+
+fn detect() -> Lang {
     #[cfg(target_os = "macos")]
     {
         use mac_ui::objc2_foundation::{NSLocale, NSString};
@@ -24,168 +37,75 @@ pub fn lang() -> Lang {
     Lang::En
 }
 
-/// Translate a UI key into the system language.
-pub fn t(key: &str) -> &'static str {
-    match (lang(), key) {
-        // Tray / overflow
-        (Lang::Nl, "settings") => "Instellingen…",
-        (Lang::En, "settings") => "Settings…",
-        (Lang::Nl, "about") => "Over Copycraft",
-        (Lang::En, "about") => "About Copycraft",
-        (Lang::Nl, "quit") => "Stop",
-        (Lang::En, "quit") => "Quit",
-        (Lang::Nl, "history") => "Geschiedenis",
-        (Lang::En, "history") => "History",
-        (Lang::Nl, "allow_screenshots") => "Schermafbeeldingen toestaan",
-        (Lang::En, "allow_screenshots") => "Allow screenshots",
-        (Lang::Nl, "empty_pasteboard") => "Klembord legen",
-        (Lang::En, "empty_pasteboard") => "Empty pasteboard",
-        (Lang::Nl, "clear_history") => "Geschiedenis wissen",
-        (Lang::En, "clear_history") => "Clear history",
-        (Lang::Nl, "clear_sensitive") => "Gevoelige kopieën na 60 s wissen",
-        (Lang::En, "clear_sensitive") => "Clear sensitive copies after 60 s",
-        (Lang::Nl, "appearance") => "Weergave",
-        (Lang::En, "appearance") => "Appearance",
-        (Lang::Nl, "theme_system") => "Systeem",
-        (Lang::En, "theme_system") => "System",
-        (Lang::Nl, "theme_light") => "Licht",
-        (Lang::En, "theme_light") => "Light",
-        (Lang::Nl, "theme_dark") => "Donker",
-        (Lang::En, "theme_dark") => "Dark",
+/// Look up a catalog entry by key.
+fn entry(key: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
+    static INDEX: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    let index = INDEX.get_or_init(|| {
+        strings::STRINGS
+            .iter()
+            .enumerate()
+            .map(|(at, (key, _, _))| (*key, at))
+            .collect()
+    });
+    index.get(key).map(|at| &strings::STRINGS[*at])
+}
 
-        // Settings window
-        (Lang::Nl, "settings_title") => "Copycraft-instellingen",
-        (Lang::En, "settings_title") => "Copycraft Settings",
-        (Lang::Nl, "hotkey") => "Sneltoets",
-        (Lang::En, "hotkey") => "Hotkey",
-        (Lang::Nl, "change_hotkey") => "Wijzigen…",
-        (Lang::En, "change_hotkey") => "Change…",
-        (Lang::Nl, "change_hotkey_a11y") => "Sneltoets wijzigen",
-        (Lang::En, "change_hotkey_a11y") => "Change hotkey",
-        (Lang::Nl, "press_shortcut") => "Druk een sneltoets… (Esc annuleert)",
-        (Lang::En, "press_shortcut") => "Press a shortcut… (Esc cancels)",
-        (Lang::Nl, "hotkey_rejected") => "⌃ of ⌘ nodig (niet alleen Option) — opnieuw",
-        (Lang::En, "hotkey_rejected") => "Need ⌃ or ⌘ (not Option alone) — try again",
-        (Lang::Nl, "date_order") => "Datumvolgorde",
-        (Lang::En, "date_order") => "Date order",
-        (Lang::Nl, "blur_masked") => "Gemaskeerde inhoud vervagen",
-        (Lang::En, "blur_masked") => "Blur masked content",
-        (Lang::Nl, "open_at_login") => "Openen bij inloggen",
-        (Lang::En, "open_at_login") => "Open at Login",
-        (Lang::Nl, "login_note") => "Start Copycraft wanneer je inlogt (standaard uit)",
-        (Lang::En, "login_note") => "Starts Copycraft when you log in (off by default)",
-        (Lang::Nl, "login_approval") => "Wacht op goedkeuring in Systeeminstellingen › Inloggen",
-        (Lang::En, "login_approval") => "Waiting for approval in System Settings › Login Items",
-        (Lang::Nl, "login_unavailable") => "Open at Login niet beschikbaar",
-        (Lang::En, "login_unavailable") => "Open at Login is not available",
-        (Lang::Nl, "login_not_found") => "Openen bij inloggen is niet beschikbaar voor deze build",
-        (Lang::En, "login_not_found") => "Open at Login is not available for this build",
-
-        // About
-        (Lang::Nl, "about_title") => "Over Copycraft",
-        (Lang::En, "about_title") => "About Copycraft",
-        (Lang::Nl, "version") => "Versie",
-        (Lang::En, "version") => "Version",
-        (Lang::Nl, "offline_promise") => {
-            "Werkt offline. Gekopieerde tekst en afbeeldingen blijven op deze Mac — Copycraft opent nooit een netwerkverbinding."
-        }
-        (Lang::En, "offline_promise") => {
-            "Works offline. Copied text and pictures stay on this Mac — Copycraft never opens a network connection."
-        }
-
-        // Card chips (common)
-        (Lang::Nl, "copy") => "Kopieer",
-        (Lang::En, "copy") => "Copy",
-        (Lang::Nl, "save") => "Bewaar",
-        (Lang::En, "save") => "Save",
-        (Lang::Nl, "original") => "Origineel",
-        (Lang::En, "original") => "Original",
-        (Lang::Nl, "table_menu") => "Tabel ▾",
-        (Lang::En, "table_menu") => "Table ▾",
-        (Lang::Nl, "open_table") => "Open tabel",
-        (Lang::En, "open_table") => "Open table",
-        (Lang::Nl, "table_view") => "Tabel",
-        (Lang::En, "table_view") => "Table",
-        (Lang::Nl, "image_menu") => "Beeld ▾",
-        (Lang::En, "image_menu") => "Image ▾",
-        (Lang::Nl, "show_columns") => "Toon kolommen",
-        (Lang::En, "show_columns") => "Show columns",
-        (Lang::Nl, "show_table") => "Toon tabel",
-        (Lang::En, "show_table") => "Show table",
-        // Decoder chip titles that differ per language (JWT, URL, … are the same).
-        (Lang::Nl, "decode_unix_time") => "Unix-tijd",
-        (Lang::En, "decode_unix_time") => "Unix time",
-
-        // Symbols popover
-        (Lang::Nl, "symbols") => "Tekens",
-        (Lang::En, "symbols") => "Symbols",
-        (Lang::Nl, "symbols_a11y") => "Speciale tekens",
-        (Lang::En, "symbols_a11y") => "Special characters",
-        (Lang::Nl, "symbols_tip") => "Kopieer een teken",
-        (Lang::En, "symbols_tip") => "Copy a character",
-        (Lang::Nl, "symbols_restore") => "Standaard herstellen",
-        (Lang::En, "symbols_restore") => "Restore defaults",
-        (Lang::Nl, "symbols_field_a11y") => "Lijst met speciale tekens",
-        (Lang::En, "symbols_field_a11y") => "Special character list",
-
-        // Fallback: English (every key above has an En arm; this is for typos).
-        (_, _) => {
+/// Translate a UI key into `lang`. An unknown key is a typo: it is logged and shows as `?`
+/// (a unit test checks that every key used in the sources is in the catalog).
+pub fn t_in(lang: Lang, key: &str) -> &'static str {
+    match entry(key) {
+        Some((_, nl, en)) => match lang {
+            Lang::Nl => nl,
+            Lang::En => en,
+        },
+        None => {
             eprintln!("copycraft: missing locale key {key}");
-            key_en(key)
+            "?"
         }
     }
 }
 
-fn key_en(key: &str) -> &'static str {
-    // Known keys only — never return the borrowed `key`.
-    match key {
-        "settings" => "Settings…",
-        "about" => "About Copycraft",
-        "quit" => "Quit",
-        "history" => "History",
-        "allow_screenshots" => "Allow screenshots",
-        "empty_pasteboard" => "Empty pasteboard",
-        "clear_history" => "Clear history",
-        "clear_sensitive" => "Clear sensitive copies after 60 s",
-        "appearance" => "Appearance",
-        "theme_system" => "System",
-        "theme_light" => "Light",
-        "theme_dark" => "Dark",
-        "settings_title" => "Copycraft Settings",
-        "hotkey" => "Hotkey",
-        "change_hotkey" => "Change…",
-        "change_hotkey_a11y" => "Change hotkey",
-        "press_shortcut" => "Press a shortcut… (Esc cancels)",
-        "hotkey_rejected" => "Need ⌃ or ⌘ (not Option alone) — try again",
-        "date_order" => "Date order",
-        "blur_masked" => "Blur masked content",
-        "open_at_login" => "Open at Login",
-        "login_note" => "Starts Copycraft when you log in (off by default)",
-        "login_approval" => "Waiting for approval in System Settings › Login Items",
-        "login_unavailable" => "Open at Login is not available",
-        "login_not_found" => "Open at Login is not available for this build",
-        "about_title" => "About Copycraft",
-        "version" => "Version",
-        "offline_promise" => {
-            "Works offline. Copied text and pictures stay on this Mac — Copycraft never opens a network connection."
+/// Translate a UI key into the system language.
+pub fn t(key: &str) -> &'static str {
+    t_in(lang(), key)
+}
+
+/// Fill `{0}`, `{1}`, … of `template` with `args`.
+fn fill(template: &str, args: &[&dyn Display]) -> String {
+    // One pass, so an argument that looks like `{1}` is never filled in again.
+    let mut out = String::with_capacity(template.len() + 16);
+    let mut rest = template;
+    while let Some(at) = rest.find('{') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let filled = rest
+            .strip_prefix('{')
+            .and_then(|tail| tail.split_once('}'))
+            .and_then(|(index, tail)| Some((index.parse::<usize>().ok()?, tail)))
+            .and_then(|(index, tail)| Some((args.get(index)?, tail)));
+        match filled {
+            Some((arg, tail)) => {
+                out.push_str(&arg.to_string());
+                rest = tail;
+            }
+            None => {
+                out.push('{');
+                rest = &rest[1..];
+            }
         }
-        "copy" => "Copy",
-        "save" => "Save",
-        "original" => "Original",
-        "table_menu" => "Table ▾",
-        "open_table" => "Open table",
-        "table_view" => "Table",
-        "image_menu" => "Image ▾",
-        "show_columns" => "Show columns",
-        "show_table" => "Show table",
-        "decode_unix_time" => "Unix time",
-        "symbols" => "Symbols",
-        "symbols_a11y" => "Special characters",
-        "symbols_tip" => "Copy a character",
-        "symbols_restore" => "Restore defaults",
-        "symbols_field_a11y" => "Special character list",
-        _ => "?",
     }
+    out.push_str(rest);
+    out
+}
+
+/// Translate a UI key into `lang` and fill its `{0}`, `{1}`, … placeholders.
+pub fn tf_in(lang: Lang, key: &str, args: &[&dyn Display]) -> String {
+    fill(t_in(lang, key), args)
+}
+
+/// Translate a UI key into the system language and fill its `{0}`, `{1}`, … placeholders.
+pub fn tf(key: &str, args: &[&dyn Display]) -> String {
+    tf_in(lang(), key, args)
 }
 
 /// "Gekopieerd: €" / "Copied: €". The character is not a catalog key, so it is not in [`t`].
@@ -206,7 +126,9 @@ pub fn copy_symbol(lang: Lang, symbol: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lang, lang, t};
+    use super::{Lang, lang, strings::STRINGS, t, t_in, tf_in};
+    use std::collections::HashSet;
+    use std::path::Path;
 
     #[test]
     fn linux_and_unknown_prefer_english() {
@@ -214,5 +136,127 @@ mod tests {
         assert_eq!(t("settings"), "Settings…");
         assert_eq!(t("about"), "About Copycraft");
         assert_eq!(t("quit"), "Quit");
+    }
+
+    #[test]
+    fn every_key_has_dutch_and_english() {
+        let mut seen = HashSet::new();
+        for (key, nl, en) in STRINGS {
+            assert!(seen.insert(*key), "duplicate key {key}");
+            assert!(!key.is_empty() && !nl.is_empty() && !en.is_empty(), "{key}");
+            assert_eq!(t_in(Lang::Nl, key), *nl, "{key}");
+            assert_eq!(t_in(Lang::En, key), *en, "{key}");
+            // The same placeholders in both languages.
+            for index in 0..6 {
+                let tag = format!("{{{index}}}");
+                assert_eq!(
+                    nl.contains(&tag),
+                    en.contains(&tag),
+                    "{key}: placeholder {tag}"
+                );
+            }
+            assert_eq!(nl.matches('{').count(), en.matches('{').count(), "{key}");
+            // Filled in either language, no placeholder is left over.
+            let args: [&dyn std::fmt::Display; 6] = [&"A", &"B", &"C", &"D", &"E", &"F"];
+            for lang in [Lang::Nl, Lang::En] {
+                let filled = tf_in(lang, key, &args);
+                assert!(
+                    !(0..6).any(|i| filled.contains(&format!("{{{i}}}"))),
+                    "{key}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dutch_differs_from_english_unless_listed() {
+        // Words and names that are the same in both languages.
+        const SAME: &[&str] = &[
+            "label_pii",
+            "title_link",
+            "title_youtube",
+            "title_qr",
+            "detail_uri",
+            "chip_schema",
+            "chip_info",
+            "image_pixels_line",
+            "overview_type",
+        ];
+        for (key, nl, en) in STRINGS {
+            if nl == en {
+                assert!(
+                    SAME.contains(key),
+                    "{key} is the same in Dutch and English: {nl}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn placeholders_are_filled() {
+        assert_eq!(tf_in(Lang::En, "item_of", &[&2, &5]), "Item 2 of 5");
+        assert_eq!(tf_in(Lang::Nl, "item_of", &[&2, &5]), "Item 2 van 5");
+    }
+
+    /// Every `t("key")` / `tf("key", …)` in the sources names a catalog key, and every catalog
+    /// key is used by some call (so no translation is left behind unused).
+    #[test]
+    fn keys_in_sources_are_in_the_catalog() {
+        let keys: HashSet<&str> = STRINGS.iter().map(|(key, _, _)| *key).collect();
+        let mut used = HashSet::new();
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = vec![dir];
+        while let Some(path) = files.pop() {
+            if path.is_dir() {
+                for entry in std::fs::read_dir(&path).expect("read dir") {
+                    files.push(entry.expect("entry").path());
+                }
+                continue;
+            }
+            if path.extension().is_none_or(|ext| ext != "rs")
+                || path.ends_with("strings.rs")
+                || path.ends_with("locale.rs")
+            {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("read source");
+            for call in ["t(", "tf(", "t_in(lang,", "tf_in(lang,", "_key:"] {
+                let mut rest = text.as_str();
+                while let Some(at) = rest.find(call) {
+                    let before = rest[..at].chars().next_back();
+                    rest = &rest[at + call.len()..];
+                    // `format(\"`, `set(\"` and the like are not catalog calls.
+                    if call != "_key:" && before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                        continue;
+                    }
+                    // The key may sit on the next line.
+                    let Some(quoted) = rest.trim_start().strip_prefix('"') else {
+                        continue;
+                    };
+                    rest = quoted;
+                    let Some(end) = rest.find('"') else { break };
+                    let key = &rest[..end];
+                    if key
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+                    {
+                        assert!(
+                            keys.contains(key),
+                            "{}: unknown locale key {key}",
+                            path.display()
+                        );
+                        used.insert(key.to_string());
+                    }
+                }
+            }
+        }
+        // Translated ahead of the table window's sidebar and table toggles.
+        const RESERVED: &[&str] = &["show_columns", "show_table"];
+        for key in keys {
+            assert!(
+                used.contains(key) || RESERVED.contains(&key),
+                "locale key {key} is never used"
+            );
+        }
     }
 }

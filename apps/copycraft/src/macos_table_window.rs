@@ -368,11 +368,11 @@ fn run_column_picker() {
         NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, accessory_h)),
     );
 
-    let all = GlassButton::pill(mtm, "All", ButtonSize::Small);
-    all.set_accessibility_label("Keep all columns");
+    let all = GlassButton::pill(mtm, crate::locale::t("picker_all"), ButtonSize::Small);
+    all.set_accessibility_label(crate::locale::t("picker_keep_all"));
     wire(all.button(), sel!(tableWindowPickerAll:));
-    let none = GlassButton::pill(mtm, "None", ButtonSize::Small);
-    none.set_accessibility_label("Keep no columns");
+    let none = GlassButton::pill(mtm, crate::locale::t("picker_none"), ButtonSize::Small);
+    none.set_accessibility_label(crate::locale::t("picker_keep_none"));
     wire(none.button(), sel!(tableWindowPickerNone:));
     let mut x = pad;
     for item in [&all, &none] {
@@ -421,12 +421,10 @@ fn run_column_picker() {
     PICKER_CHECKS.with(|slot| slot.replace(checks.clone()));
 
     let alert = NSAlert::new(mtm);
-    alert.setMessageText(&NSString::from_str(commands::CHOOSE_COLUMNS_TITLE));
-    alert.setInformativeText(&NSString::from_str(
-        "Keep the checked columns as one step. Apply needs at least one.",
-    ));
-    alert.addButtonWithTitle(&NSString::from_str("Apply"));
-    alert.addButtonWithTitle(&NSString::from_str("Cancel"));
+    alert.setMessageText(&NSString::from_str(commands::choose_columns_title()));
+    alert.setInformativeText(&NSString::from_str(crate::locale::t("picker_alert_info")));
+    alert.addButtonWithTitle(&NSString::from_str(crate::locale::t("picker_apply")));
+    alert.addButtonWithTitle(&NSString::from_str(crate::locale::t("cancel")));
     alert.setAccessoryView(Some(&accessory));
 
     COLUMN_PICKER_OPEN.set(true);
@@ -548,7 +546,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     // SAFETY: VIEWS holds a `Retained` to the window, so AppKit must not also release it on
     // close.
     unsafe { window.setReleasedWhenClosed(false) };
-    window.setTitle(&NSString::from_str("Copycraft · Table"));
+    window.setTitle(&NSString::from_str(crate::locale::t("table_window_title")));
     window.setContentMinSize(MIN_SIZE);
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     // Like the card: out of screenshots, recordings and screen sharing where macOS honours it
@@ -568,8 +566,8 @@ fn ensure_views(mtm: MainThreadMarker) {
 
     // The toolbar: Table ▾, Copy, Save; version capsule at the right; hint between.
     let toolbar_y = height - TOOLBAR_H + (TOOLBAR_H - commands::CHIP_PILL_H) / 2.0;
-    let table_button = GlassButton::pill(mtm, "Table ▾", ButtonSize::Regular);
-    table_button.set_accessibility_label("Table steps");
+    let table_button = GlassButton::pill(mtm, crate::locale::t("table_menu"), ButtonSize::Regular);
+    table_button.set_accessibility_label(crate::locale::t("table_steps_a11y"));
     wire(table_button.button(), sel!(tableWindowMenuClicked:));
     let table_w = table_button.width_within(120.0);
     table_button.view().setFrame(NSRect::new(
@@ -582,10 +580,12 @@ fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(table_button.view());
 
     let copy_button = GlassButton::pill(mtm, crate::locale::t("copy"), ButtonSize::Regular);
-    copy_button.set_accessibility_label("Copy the table");
+    copy_button.set_accessibility_label(crate::locale::t("copy_table_a11y"));
     copy_button
         .button()
-        .setToolTip(Some(&NSString::from_str("Copy the table shown")));
+        .setToolTip(Some(&NSString::from_str(crate::locale::t(
+            "copy_table_tip",
+        ))));
     wire(copy_button.button(), sel!(tableWindowCopyClicked:));
     let copy_w = copy_button.width_within(100.0);
     let mut actions_x = PAD + table_w + 8.0;
@@ -600,10 +600,12 @@ fn ensure_views(mtm: MainThreadMarker) {
     actions_x += copy_w + 6.0;
 
     let save_button = GlassButton::pill(mtm, crate::locale::t("save"), ButtonSize::Regular);
-    save_button.set_accessibility_label("Save the table");
+    save_button.set_accessibility_label(crate::locale::t("save_table_a11y"));
     save_button
         .button()
-        .setToolTip(Some(&NSString::from_str("Save the table shown")));
+        .setToolTip(Some(&NSString::from_str(crate::locale::t(
+            "save_table_tip",
+        ))));
     wire(save_button.button(), sel!(tableWindowSaveClicked:));
     let save_w = save_button.width_within(100.0);
     save_button.view().setFrame(NSRect::new(
@@ -659,7 +661,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     sidebar_title.setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
     content.addSubview(&sidebar_title);
     let sidebar = widgets::read_only_text_view(mtm, NSSize::new(4.0, 4.0));
-    sidebar.setAccessibilityLabel(Some(&NSString::from_str("Columns")));
+    sidebar.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("columns_title"))));
     let sidebar_scroll = widgets::passive_text_scroll(mtm, &sidebar);
     sidebar_scroll.setFrame(NSRect::new(
         NSPoint::new(PAD - 4.0, META_H),
@@ -679,7 +681,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(&well);
     let grid = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     grid.setSelectable(true);
-    grid.setAccessibilityLabel(Some(&NSString::from_str("Table")));
+    grid.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("table_view"))));
     widgets::scroll_text_both_ways(&grid);
     // Clip host around the scroller: clips the tall floating first column without
     // setClipsToBounds on the NSScrollView (which breaks scrolling).
@@ -729,8 +731,10 @@ fn ensure_views(mtm: MainThreadMarker) {
     cover.setTransparent(true);
     cover.setTitle(&NSString::from_str(""));
     cover.setFocusRingType(NSFocusRingType::Default);
-    cover.setAccessibilityLabel(Some(&NSString::from_str("Reveal the table")));
-    cover.setToolTip(Some(&NSString::from_str("Click to reveal")));
+    cover.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("reveal_table"))));
+    cover.setToolTip(Some(&NSString::from_str(crate::locale::t(
+        "click_to_reveal",
+    ))));
     cover.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     wire(&cover, sel!(tableWindowRevealClicked:));
     content.addSubview(&cover);
@@ -783,14 +787,14 @@ fn version_capsule(
     };
     let undo = step_button(
         "arrow.uturn.backward",
-        "Undo table step",
+        crate::locale::t("undo_table_step"),
         "↶",
         "⌘Z",
         sel!(tableWindowUndoClicked:),
     );
     let redo = step_button(
         "arrow.uturn.forward",
-        "Redo table step",
+        crate::locale::t("redo_table_step"),
         "↷",
         "⇧⌘Z",
         sel!(tableWindowRedoClicked:),
@@ -869,9 +873,9 @@ fn paint_chrome(views: &Views, view: &TableWindowView) {
     views
         .sidebar_title
         .setStringValue(&NSString::from_str(&match columns {
-            0 => "Columns".to_string(),
-            1 => "1 column".to_string(),
-            n => format!("{n} columns"),
+            0 => crate::locale::t("columns_title").to_string(),
+            1 => crate::locale::t("one_column").to_string(),
+            n => crate::locale::tf("n_columns", &[&n]),
         }));
     views
         .placeholder
@@ -986,9 +990,9 @@ fn apply_mask() {
         let hint = if !masked {
             ""
         } else if checking {
-            "Checking for sensitive data…"
+            crate::locale::t("checking_sensitive")
         } else {
-            "Click the table to reveal it"
+            crate::locale::t("click_table_to_reveal")
         };
         views.hint.setStringValue(&NSString::from_str(hint));
     });

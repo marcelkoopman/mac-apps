@@ -54,27 +54,27 @@ impl FormatKind {
             Self::Markdown => "Markdown",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
-            Self::Dataframe => "Table",
-            Self::Image => "Image",
-            Self::Text | Self::Plain => "Content",
+            Self::Dataframe => crate::locale::t("table_view"),
+            Self::Image => crate::locale::t("title_image"),
+            Self::Text | Self::Plain => crate::locale::t("title_content"),
         }
     }
 
     pub fn preview_heading(self) -> &'static str {
         match self {
-            Self::Json => "Formatted JSON",
+            Self::Json => crate::locale::t("formatted_json"),
             Self::Yaml => "YAML",
-            Self::Rust => "Formatted Rust",
-            Self::Java => "Formatted Java",
+            Self::Rust => crate::locale::t("formatted_rust"),
+            Self::Java => crate::locale::t("formatted_java"),
             Self::Python => "Python",
-            Self::Xml => "Formatted XML",
+            Self::Xml => crate::locale::t("formatted_xml"),
             Self::Html => "HTML",
-            Self::Markdown => "Formatted Markdown",
+            Self::Markdown => crate::locale::t("formatted_markdown"),
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
-            Self::Dataframe => "Table",
-            Self::Image => "Image",
-            _ => "Content",
+            Self::Dataframe => crate::locale::t("table_view"),
+            Self::Image => crate::locale::t("title_image"),
+            _ => crate::locale::t("title_content"),
         }
     }
 

@@ -17,10 +17,10 @@ pub fn info_with_sizes(
 ) -> String {
     let (width, height) = display_size(image);
     let mut lines = vec![
-        "Image".to_string(),
-        format!("Size: {width}×{height}"),
-        format!("Aspect: {}", aspect_ratio(width, height)),
-        format!("Pixels: {}", width.saturating_mul(height)),
+        crate::locale::t("title_image").to_string(),
+        crate::locale::tf("image_size_line", &[&width, &height]),
+        crate::locale::tf("image_aspect_line", &[&aspect_ratio(width, height)]),
+        crate::locale::tf("image_pixels_line", &[&width.saturating_mul(height)]),
     ];
     if let Some(len) = png_len {
         lines.push(format!("PNG: {}", format_bytes(len)));

@@ -112,7 +112,7 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     root.setAccessibilityRole(Some(unsafe {
         mac_ui::objc2_app_kit::NSAccessibilityGroupRole
     }));
-    root.setAccessibilityLabel(Some(&NSString::from_str("Choose columns")));
+    root.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("picker_title"))));
     // Opaque, so nothing of the well shows through.
     let fill = filled_box(mtm, WELL_RADIUS, &NSColor::windowBackgroundColor());
     fill.setFrame(root.bounds());
@@ -121,7 +121,7 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     let top = PREVIEW_H - PICKER_PAD - PICKER_TITLE_H;
     let title = widgets::label(mtm, 13.0, &NSColor::labelColor());
     title.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
-    title.setStringValue(&NSString::from_str("Choose columns"));
+    title.setStringValue(&NSString::from_str(crate::locale::t("picker_title")));
     title.setFrame(NSRect::new(
         NSPoint::new(PICKER_PAD, top),
         NSSize::new(width / 2.0, PICKER_TITLE_H),
@@ -137,8 +137,8 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     root.addSubview(&count);
 
     let field_y = top - 6.0 - PICKER_FIELD_H;
-    let field = widgets::search_field(mtm, 13.0, "Filter columns");
-    field.setAccessibilityLabel(Some(&NSString::from_str("Filter columns")));
+    let field = widgets::search_field(mtm, 13.0, crate::locale::t("filter_columns"));
+    field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("filter_columns"))));
     field.setFrame(NSRect::new(
         NSPoint::new(PICKER_PAD, field_y),
         NSSize::new(width - PICKER_PAD * 2.0, PICKER_FIELD_H),
@@ -161,12 +161,29 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
         root.addSubview(button.view());
         button
     };
-    let all = button("All", "Keep all columns", sel!(pickerAllClicked:));
-    all.button().setToolTip(Some(&NSString::from_str("Keep all columns (⌘A)")));
-    let none = button("None", "Keep no columns", sel!(pickerNoneClicked:));
-    let cancel = button("Cancel", "Cancel", sel!(pickerCancelClicked:));
+    let all = button(
+        crate::locale::t("picker_all"),
+        crate::locale::t("picker_keep_all"),
+        sel!(pickerAllClicked:),
+    );
+    all.button()
+        .setToolTip(Some(&NSString::from_str(crate::locale::t("picker_keep_all_tip"))));
+    let none = button(
+        crate::locale::t("picker_none"),
+        crate::locale::t("picker_keep_none"),
+        sel!(pickerNoneClicked:),
+    );
+    let cancel = button(
+        crate::locale::t("cancel"),
+        crate::locale::t("cancel"),
+        sel!(pickerCancelClicked:),
+    );
     cancel.button().setKeyEquivalent(&NSString::from_str("\u{1b}"));
-    let apply = button("Apply", "Apply: keep the checked columns", sel!(pickerApplyClicked:));
+    let apply = button(
+        crate::locale::t("picker_apply"),
+        crate::locale::t("picker_apply_a11y"),
+        sel!(pickerApplyClicked:),
+    );
     apply.button().setKeyEquivalent(&NSString::from_str("\r"));
     apply.set_prominent(true);
     let mut x = PICKER_PAD;
@@ -202,7 +219,7 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     scroll.setAutohidesScrollers(true);
     scroll.setAutomaticallyAdjustsContentInsets(false);
     scroll.contentView().setDrawsBackground(false);
-    scroll.setAccessibilityLabel(Some(&NSString::from_str("Columns")));
+    scroll.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("columns_title"))));
     let list = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
     scroll.setDocumentView(Some(&list));
     root.addSubview(&scroll);

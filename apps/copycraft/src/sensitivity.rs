@@ -14,20 +14,24 @@ pub enum Label {
 }
 
 impl Label {
-    pub const fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
-            Self::Credential => "credential",
-            Self::Pii => "PII",
-            Self::Financial => "financial",
+            Self::Credential => crate::locale::t("label_credential"),
+            Self::Pii => crate::locale::t("label_pii"),
+            Self::Financial => crate::locale::t("label_financial"),
         }
     }
+
+    const ALL: [Self; 3] = [Self::Credential, Self::Pii, Self::Financial];
 }
 
 /// Copies shorter than this are checked while the card is built. Longer ones go to the
-/// background checker, and the card says [`CHECKING`] until their labels arrive.
+/// background checker, and the card says [`checking`] until their labels arrive.
 pub const SYNC_LIMIT: usize = 32 * 1024;
 /// Meta-line status while the labels are not known yet. The card cannot be revealed meanwhile.
-pub const CHECKING: &str = "Checking…";
+pub fn checking() -> &'static str {
+    crate::locale::t("checking")
+}
 
 /// The labels found in a copy.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -61,10 +65,10 @@ pub fn on_checked(hook: fn()) {
     checker::on_ready(hook);
 }
 
-/// The meta-line status at the end of `meta`, if any: [`CHECKING`].
+/// The meta-line status at the end of `meta`, if any: [`checking`].
 pub fn meta_status(meta: &str) -> Option<&'static str> {
-    meta.ends_with(&format!("  ·  {CHECKING}"))
-        .then_some(CHECKING)
+    meta.ends_with(&format!("  ·  {}", checking()))
+        .then(checking)
 }
 
 pub fn label_line(labels: &[Label]) -> String {
@@ -112,12 +116,18 @@ pub fn warning_marks(meta: &str) -> Vec<WarningMark> {
 }
 
 fn label_named(name: &str) -> Option<Label> {
-    match name {
-        "credential" => Some(Label::Credential),
-        "PII" => Some(Label::Pii),
-        "financial" => Some(Label::Financial),
-        _ => None,
-    }
+    // A meta line is built in the launch language; both names are accepted all the same.
+    use crate::locale::{Lang, t_in};
+    let key = |label: Label| match label {
+        Label::Credential => "label_credential",
+        Label::Pii => "label_pii",
+        Label::Financial => "label_financial",
+    };
+    Label::ALL.into_iter().find(|label| {
+        [Lang::En, Lang::Nl]
+            .iter()
+            .any(|lang| t_in(*lang, key(*label)) == name)
+    })
 }
 
 /// Kinds present in `text`, one label each, in [`Label`] order.

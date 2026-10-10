@@ -67,41 +67,41 @@ impl ImageOp {
     pub fn title(&self) -> String {
         match self {
             Self::Resize(Resize::Percent(percent)) => format!("{percent}%"),
-            Self::Resize(Resize::Longest(side)) => format!("Longest side {side}"),
-            Self::Resize(Resize::Width(width)) => format!("Width {width}"),
-            Self::Resize(Resize::Height(height)) => format!("Height {height}"),
-            Self::RotateLeft => "Rotate 90° left".to_string(),
-            Self::RotateRight => "Rotate 90° right".to_string(),
-            Self::FlipHorizontal => "Flip horizontal".to_string(),
-            Self::FlipVertical => "Flip vertical".to_string(),
-            Self::RemoveMetadata => "Remove metadata".to_string(),
-            Self::Grayscale => "Grayscale".to_string(),
+            Self::Resize(Resize::Longest(side)) => crate::locale::tf("image_longest_side", &[side]),
+            Self::Resize(Resize::Width(width)) => crate::locale::tf("image_width", &[width]),
+            Self::Resize(Resize::Height(height)) => crate::locale::tf("image_height", &[height]),
+            Self::RotateLeft => crate::locale::t("image_rotate_left").to_string(),
+            Self::RotateRight => crate::locale::t("image_rotate_right").to_string(),
+            Self::FlipHorizontal => crate::locale::t("image_flip_horizontal").to_string(),
+            Self::FlipVertical => crate::locale::t("image_flip_vertical").to_string(),
+            Self::RemoveMetadata => crate::locale::t("image_remove_metadata").to_string(),
+            Self::Grayscale => crate::locale::t("image_grayscale").to_string(),
         }
     }
 
     /// The submenu the step is in, if any.
     pub fn group(&self) -> Option<&'static str> {
-        matches!(self, Self::Resize(_)).then_some(RESIZE_GROUP)
+        matches!(self, Self::Resize(_)).then_some(resize_group())
     }
 
     /// The version's label, once its size (`width` × `height`) is known.
     pub fn label(&self, width: usize, height: usize) -> String {
         match self {
-            Self::Resize(_) => format!("Resized to {width}×{height}"),
-            Self::RotateLeft => "Rotated 90° left".to_string(),
-            Self::RotateRight => "Rotated 90° right".to_string(),
-            Self::FlipHorizontal => "Flipped horizontally".to_string(),
-            Self::FlipVertical => "Flipped vertically".to_string(),
-            Self::RemoveMetadata => "Metadata removed".to_string(),
-            Self::Grayscale => "Grayscale".to_string(),
+            Self::Resize(_) => crate::locale::tf("image_resized_to", &[&width, &height]),
+            Self::RotateLeft => crate::locale::t("image_rotated_left").to_string(),
+            Self::RotateRight => crate::locale::t("image_rotated_right").to_string(),
+            Self::FlipHorizontal => crate::locale::t("image_flipped_horizontally").to_string(),
+            Self::FlipVertical => crate::locale::t("image_flipped_vertically").to_string(),
+            Self::RemoveMetadata => crate::locale::t("image_metadata_removed").to_string(),
+            Self::Grayscale => crate::locale::t("image_grayscale").to_string(),
         }
     }
 
     /// The meta-line note when the step would change nothing (a Resize that would enlarge).
     pub fn unchanged_note(&self) -> &'static str {
         match self {
-            Self::Resize(_) => "Already that size or smaller",
-            _ => "Nothing to change",
+            Self::Resize(_) => crate::locale::t("image_already_that_size"),
+            _ => crate::locale::t("nothing_to_change"),
         }
     }
 
@@ -124,7 +124,9 @@ impl ImageOp {
 }
 
 /// The Resize submenu.
-pub const RESIZE_GROUP: &str = "Resize";
+pub fn resize_group() -> &'static str {
+    crate::locale::t("image_resize")
+}
 
 /// `Custom…` in the Resize submenu: "1200" or "w 1200" is a width, "h 800" a height (also
 /// "1200w", "width 1200", "800 px high"…). `None` for anything else, or 0.
@@ -351,10 +353,10 @@ impl ImageFile {
     /// The popup item.
     pub fn title(&self) -> String {
         match self {
-            Self::AsIs { label, .. } => format!("{label} (as it is)"),
+            Self::AsIs { label, .. } => crate::locale::tf("image_file_as_is", &[label]),
             Self::Png => "PNG".to_string(),
-            Self::Jpeg(90) => "JPEG — high (0.9)".to_string(),
-            Self::Jpeg(70) => "JPEG — medium (0.7)".to_string(),
+            Self::Jpeg(90) => crate::locale::t("image_jpeg_high").to_string(),
+            Self::Jpeg(70) => crate::locale::t("image_jpeg_medium").to_string(),
             Self::Jpeg(quality) => format!("JPEG ({:.2})", f64::from(*quality) / 100.0),
             Self::Heic => "HEIC".to_string(),
         }
@@ -413,8 +415,8 @@ pub enum ImageError {
 impl std::fmt::Display for ImageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Full => write!(f, "{MAX_VERSIONS} versions at most"),
-            Self::Cancelled => write!(f, "Cancelled"),
+            Self::Full => write!(f, "{}", crate::locale::tf("max_versions", &[&MAX_VERSIONS])),
+            Self::Cancelled => write!(f, "{}", crate::locale::t("cancelled")),
             Self::Failed(message) => write!(f, "{message}"),
             Self::Unchanged(note) => write!(f, "{note}"),
         }
@@ -476,7 +478,7 @@ impl Job {
     /// Decode the original, replay the steps (`cancel` is checked before each) and encode the
     /// version as PNG.
     pub fn run(self, cancel: &AtomicBool, codec: &dyn Codec) -> Result<JobDone, ImageError> {
-        let unreadable = || ImageError::Failed("Can't read this picture".to_string());
+        let unreadable = || ImageError::Failed(crate::locale::t("image_cannot_read").to_string());
         let bytes = Zeroizing::new(self.original.with(<[u8]>::to_vec));
         let mut image = codec.decode(&bytes).ok_or_else(unreadable)?;
         drop(bytes);
@@ -496,17 +498,18 @@ impl Job {
         if cancel.load(Ordering::Relaxed) {
             return Err(ImageError::Cancelled);
         }
-        let png = codec
-            .encode_png(&image)
-            .ok_or_else(|| ImageError::Failed("Can't write this picture".to_string()))?;
+        let png = codec.encode_png(&image).ok_or_else(|| {
+            ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
+        })?;
         let facts = ImageFacts {
             format: "PNG".to_string(),
             width: image.width,
             height: image.height,
             byte_len: png.len(),
         };
-        let picture = SecretBytes::new(png)
-            .ok_or_else(|| ImageError::Failed("Can't write this picture".to_string()))?;
+        let picture = SecretBytes::new(png).ok_or_else(|| {
+            ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
+        })?;
         Ok(JobDone {
             generation: self.generation,
             target: self.target,
@@ -564,7 +567,7 @@ impl ImageVersions {
 
     /// "Original", then each step's label.
     pub fn labels(&self) -> Vec<String> {
-        std::iter::once("Original".to_string())
+        std::iter::once(crate::locale::t("original").to_string())
             .chain(self.steps.iter().map(|(_, label)| label.clone()))
             .collect()
     }

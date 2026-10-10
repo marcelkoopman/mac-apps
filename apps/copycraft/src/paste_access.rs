@@ -51,16 +51,20 @@ impl AccessBehavior {
 }
 
 /// The card's placeholder while Always Deny is set.
-pub const DENIED_NOTE: &str = "Clipboard access denied in Privacy & Security";
+pub fn denied_note() -> &'static str {
+    crate::locale::t("paste_denied_note")
+}
 
 /// The card's placeholder (and the icon's tooltip) for a copy not read yet: with Default or Ask
 /// the copy is read once the card is shown.
-pub const PENDING_NOTE: &str = "New copy — open the card to view";
+pub fn pending_note() -> &'static str {
+    crate::locale::t("paste_pending_note")
+}
 
 /// The card's one-time explanation the first time Copycraft reads with Default or Ask.
-pub const ASK_NOTE: &str = "macOS asks before Copycraft may read a copy from another app.\n\
-Choose Allow to see the copy here.\n\
-Privacy & Security › Paste from Other Apps can set Copycraft to Always Allow.";
+pub fn ask_note() -> &'static str {
+    crate::locale::t("paste_ask_note")
+}
 
 /// How Copycraft reads the pasteboard's contents for an access setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -86,7 +90,7 @@ pub fn strategy(behavior: Option<AccessBehavior>) -> ReadStrategy {
     }
 }
 
-/// The card shows [`ASK_NOTE`] (once, before the first read) when copies are read on showing
+/// The card shows [`ask_note`] (once, before the first read) when copies are read on showing
 /// and it was not shown before.
 pub fn explain_first(strategy: ReadStrategy, explained: bool) -> bool {
     strategy == ReadStrategy::WhenShown && !explained
@@ -150,7 +154,7 @@ pub enum ReadPlan {
     Reuse,
     /// Read the contents, once for this key.
     Read,
-    /// A copy not read yet: wait until the card is shown ([`PENDING_NOTE`]).
+    /// A copy not read yet: wait until the card is shown ([`pending_note`]).
     Wait,
     /// Always Deny: no content reads.
     Deny,

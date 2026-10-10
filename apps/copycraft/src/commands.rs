@@ -28,35 +28,42 @@ pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_COUNT_W + NAV_BUTTON;
 pub struct Chevron {
     pub symbol: &'static str,
     pub glyph: &'static str,
-    pub name: &'static str,
+    /// Locale key of the name (`Previous`, `Next`).
+    pub name_key: &'static str,
     /// Steps to an older copy (the position number goes up).
     pub older: bool,
     /// Its arrow key ([`arrow_action`]), drawn (`←`) and spoken (`Left Arrow`).
     pub arrow: &'static str,
-    pub spoken_arrow: &'static str,
+    /// Locale key of the spoken arrow (`Left Arrow`).
+    pub spoken_arrow_key: &'static str,
 }
 
 /// `‹` on the left: the previous number, toward 1 (the newest copy).
 pub const PREVIOUS_CHEVRON: Chevron = Chevron {
     symbol: "chevron.left",
     glyph: "‹",
-    name: "Previous",
+    name_key: "previous",
     older: false,
     arrow: "←",
-    spoken_arrow: "Left Arrow",
+    spoken_arrow_key: "left_arrow",
 };
 
 /// `›` on the right: the next number, toward N (the oldest copy).
 pub const NEXT_CHEVRON: Chevron = Chevron {
     symbol: "chevron.right",
     glyph: "›",
-    name: "Next",
+    name_key: "next",
     older: true,
     arrow: "→",
-    spoken_arrow: "Right Arrow",
+    spoken_arrow_key: "right_arrow",
 };
 
 impl Chevron {
+    /// The spoken name of the button: `Previous`.
+    pub fn name(&self) -> &'static str {
+        crate::locale::t(self.name_key)
+    }
+
     /// The command a click runs.
     pub fn command(&self) -> CommandId {
         if self.older {
@@ -81,14 +88,15 @@ impl Chevron {
         if has_image { "" } else { self.glyph }
     }
 
-    /// Tooltip: the name and its keys, `Previous (← or ⌘←)`.
+    /// Tooltip: the name and its keys, `Previous (← or ⌘←)` (`Vorige (← of ⌘←)`).
     pub fn tooltip(&self) -> String {
-        format!("{} ({} or ⌘{})", self.name, self.arrow, self.arrow)
+        crate::locale::tf("chevron_tooltip", &[&self.name(), &self.arrow, &self.arrow])
     }
 
     /// VoiceOver hint: `Left Arrow, or Command-Left Arrow`.
     pub fn spoken_shortcut(&self) -> String {
-        format!("{0}, or Command-{0}", self.spoken_arrow)
+        let arrow = crate::locale::t(self.spoken_arrow_key);
+        crate::locale::tf("chevron_spoken", &[&arrow])
     }
 }
 
@@ -180,7 +188,9 @@ pub const PREVIEW_ROWS: usize = 200;
 /// Characters a card shows before "Show all", for text with very long lines.
 pub const PREVIEW_CHARS: usize = 20_000;
 /// Second line of an empty card: a file or text can be dropped on it instead.
-const DROP_HINT: &str = "Drop a text file or image here to open it";
+fn drop_hint() -> &'static str {
+    crate::locale::t("drop_hint")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SubjectKind {
@@ -195,7 +205,7 @@ pub enum SubjectKind {
     /// Clipboard access is Default or Ask: a new copy, read once the card is shown.
     Pending,
     /// As [`SubjectKind::Pending`], the first time: the card explains the alert macOS shows
-    /// next (once; [`crate::paste_access::ASK_NOTE`]).
+    /// next (once; [`crate::paste_access::ask_note`]).
     PasteAsk,
 }
 
@@ -427,7 +437,7 @@ impl HistoryNav {
 
     /// What VoiceOver reads for the position: `Item 1 of 3`.
     pub fn spoken(&self) -> String {
-        format!("Item {} of {}", self.position, self.total)
+        crate::locale::tf("item_of", &[&self.position, &self.total])
     }
 }
 
@@ -704,7 +714,7 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             title: data
                 .source_name
                 .clone()
-                .unwrap_or_else(|| "File".to_string()),
+                .unwrap_or_else(|| crate::locale::t("title_file").to_string()),
             meta: String::new(),
             excerpt: String::new(),
             placeholder: note.clone(),
@@ -766,10 +776,10 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             card
         }
         SubjectKind::Empty => WorkCard {
-            title: "Clipboard".to_string(),
+            title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: format!("Nothing copied\n{DROP_HINT}"),
+            placeholder: format!("{}\n{}", crate::locale::t("nothing_copied"), drop_hint()),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -778,10 +788,10 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             error_line: None,
         },
         SubjectKind::Hidden => WorkCard {
-            title: crate::clipboard::HIDDEN_CONTENT.to_string(),
+            title: crate::clipboard::hidden_content().to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: "The app that copied this marked it private.\nCopycraft does not show it or keep it in history.".to_string(),
+            placeholder: crate::locale::t("private_copy_note").to_string(),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -790,12 +800,14 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             error_line: None,
         },
         SubjectKind::Denied => WorkCard {
-            title: "Clipboard".to_string(),
+            title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
             placeholder: format!(
-                "{}\nPaste from Other Apps is set to Deny for Copycraft.\n{DROP_HINT}",
-                crate::paste_access::DENIED_NOTE
+                "{}\n{}\n{}",
+                crate::paste_access::denied_note(),
+                crate::locale::t("paste_denied_detail"),
+                drop_hint()
             ),
             shows_image: false,
             highlight: None,
@@ -805,13 +817,13 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             error_line: None,
         },
         SubjectKind::Pending | SubjectKind::PasteAsk => WorkCard {
-            title: "Clipboard".to_string(),
+            title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
             placeholder: if data.subject_kind == SubjectKind::PasteAsk {
-                crate::paste_access::ASK_NOTE.to_string()
+                crate::paste_access::ask_note().to_string()
             } else {
-                format!("{}\n{DROP_HINT}", crate::paste_access::PENDING_NOTE)
+                format!("{}\n{}", crate::paste_access::pending_note(), drop_hint())
             },
             shows_image: false,
             highlight: None,
@@ -821,10 +833,14 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             error_line: None,
         },
         SubjectKind::NoText => WorkCard {
-            title: "Clipboard".to_string(),
+            title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: format!("No text on the clipboard\n{DROP_HINT}"),
+            placeholder: format!(
+                "{}\n{}",
+                crate::locale::t("no_text_on_clipboard"),
+                drop_hint()
+            ),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -848,7 +864,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
             parts.push(label);
         }
         if edit.working {
-            parts.push("Working…");
+            parts.push(crate::locale::t("working"));
         } else if let Some(note) = &edit.note {
             parts.push(note);
         }
@@ -867,9 +883,9 @@ fn image_card(data: &LaunchData) -> WorkCard {
         };
         return WorkCard {
             title: match data.view {
-                CardView::Ocr => "Text".to_string(),
-                CardView::Qr => "QR".to_string(),
-                _ => "Image info".to_string(),
+                CardView::Ocr => crate::locale::t("title_text").to_string(),
+                CardView::Qr => crate::locale::t("title_qr").to_string(),
+                _ => crate::locale::t("title_image_info").to_string(),
             },
             meta,
             excerpt: shown_body(&text),
@@ -883,7 +899,7 @@ fn image_card(data: &LaunchData) -> WorkCard {
         };
     }
     WorkCard {
-        title: "Image".to_string(),
+        title: crate::locale::t("title_image").to_string(),
         meta: facts,
         excerpt: String::new(),
         placeholder: String::new(),
@@ -1006,7 +1022,7 @@ fn show_copied_table(card: &mut WorkCard, source: &str, full: bool) {
 
 /// "40 rows × 20 columns" for the column overview, which shows no rows.
 fn overview_note(preview: &dataframe::DataframePreview) -> String {
-    format!("{} rows × {} columns", preview.rows, preview.columns)
+    crate::locale::tf("rows_by_columns", &[&preview.rows, &preview.columns])
 }
 
 /// "Header on line N" in the meta line, after the size, when lines above a table's header
@@ -1088,7 +1104,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     card.preview_note = None;
     let Some(frame) = &table.frame else {
         card.excerpt.clear();
-        card.placeholder = "Working on the table…".to_string();
+        card.placeholder = crate::locale::t("working_on_table").to_string();
         card.selectable = false;
         card.meta.clear();
         return;
@@ -1096,7 +1112,7 @@ fn show_table_version(card: &mut WorkCard, table: &TableShown, full: bool) {
     let max_rows = if full { usize::MAX } else { PREVIEW_ROWS };
     let Some(preview) = dataframe::frame_preview(frame, max_rows, table.overview) else {
         card.excerpt.clear();
-        card.placeholder = "The table is empty".to_string();
+        card.placeholder = crate::locale::t("table_empty").to_string();
         card.selectable = false;
         card.meta.clear();
         return;
@@ -1174,19 +1190,28 @@ pub fn preview_cut(text: &str, lines: usize) -> Option<usize> {
 
 /// "Showing 200 of 23,220 rows".
 pub fn showing_note(shown: usize, total: usize, unit: &str) -> String {
-    format!(
-        "Showing {} of {} {unit}",
-        group_thousands(shown),
-        group_thousands(total)
+    let unit = match unit {
+        "rows" => crate::locale::t("rows"),
+        "lines" => crate::locale::t("lines"),
+        "characters" => crate::locale::t("characters"),
+        other => other,
+    };
+    crate::locale::tf(
+        "showing_note",
+        &[&group_thousands(shown), &group_thousands(total), &unit],
     )
 }
 
 pub(crate) fn group_thousands(n: usize) -> String {
     let digits = n.to_string();
+    let separator = match crate::locale::lang() {
+        crate::locale::Lang::Nl => '.',
+        crate::locale::Lang::En => ',',
+    };
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (index, digit) in digits.chars().enumerate() {
         if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
+            out.push(separator);
         }
         out.push(digit);
     }
@@ -1341,14 +1366,13 @@ fn image_info_text(data: &LaunchData) -> String {
         parts.push(info);
     } else if let Some(facts) = &data.image {
         parts.push(format!(
-            "{}\nSize: {}×{}\n{}",
+            "{}\n{}\n{}",
             facts.format,
-            facts.width,
-            facts.height,
+            crate::locale::tf("image_size_line", &[&facts.width, &facts.height]),
             format_bytes(facts.byte_len)
         ));
     } else {
-        parts.push("Image".to_string());
+        parts.push(crate::locale::t("title_image").to_string());
     }
     if let Some(url) = data
         .image_scan
@@ -1381,12 +1405,12 @@ fn text_view_title(source: &str, view: CardView, body: &str) -> String {
         CardView::Format => format::detect(source).preview_heading().to_string(),
         CardView::Dataframe => crate::locale::t("table_view").to_string(),
         CardView::Schema => if format::detect(source) == FormatKind::Xml {
-            "XSD schema"
+            crate::locale::t("xsd_schema")
         } else {
-            "Avro schema"
+            crate::locale::t("avro_schema")
         }
         .to_string(),
-        CardView::Sample => "Sample XML".to_string(),
+        CardView::Sample => crate::locale::t("sample_xml").to_string(),
         CardView::Decode => match decode::detect(source) {
             Some(found) => found.label().to_string(),
             None => format::detect(body).source_heading().to_string(),
@@ -1467,7 +1491,7 @@ pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
 fn page_card(text: &str) -> Option<WorkCard> {
     let page = crate::page_preview::page_url(text)?;
     Some(WorkCard {
-        title: "Link".to_string(),
+        title: crate::locale::t("title_link").to_string(),
         meta: text_meta(text),
         excerpt: payload_excerpt(text),
         placeholder: String::new(),
@@ -1484,7 +1508,7 @@ fn page_card(text: &str) -> Option<WorkCard> {
 fn youtube_card(text: &str) -> Option<WorkCard> {
     crate::youtube::video_id(text)?;
     Some(WorkCard {
-        title: "YouTube".to_string(),
+        title: crate::locale::t("title_youtube").to_string(),
         meta: text_meta(text),
         excerpt: payload_excerpt(text),
         placeholder: String::new(),
@@ -1579,9 +1603,9 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         let name = theme_name(theme);
         let detail = if data.theme == theme {
-            "Appearance · current"
+            crate::locale::t("appearance_current")
         } else {
-            "Appearance"
+            crate::locale::t("appearance")
         };
         let keywords = match theme {
             Theme::System => "appearance theme system",
@@ -1613,7 +1637,9 @@ pub fn line_range(text: &str, line: usize) -> Option<std::ops::Range<usize>> {
 }
 
 /// Title of the chip that shows a YAML entry as JSON.
-pub const TO_JSON_TITLE: &str = "To JSON";
+pub fn to_json_title() -> &'static str {
+    crate::locale::t("chip_to_json")
+}
 
 /// Title of the chip that opens the table's menu.
 #[allow(dead_code)] // Window toolbar still says Table ▾ via locale directly where needed.
@@ -1644,7 +1670,7 @@ fn table_step_command(op: &crate::table::TableOp) -> Command {
     command(
         CommandId::TableStep(op.clone()),
         &op.title(),
-        op.group().unwrap_or("Table"),
+        op.group().unwrap_or(crate::locale::t("table_view")),
         op.keywords(),
     )
 }
@@ -1654,7 +1680,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
     match id {
         CommandId::TableStep(op) => op.group(),
         CommandId::ImageStep(op) => op.group(),
-        CommandId::ImageResizeCustom => Some(crate::image_edit::RESIZE_GROUP),
+        CommandId::ImageResizeCustom => Some(crate::image_edit::resize_group()),
         _ => None,
     }
 }
@@ -1666,14 +1692,14 @@ fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command> {
         return None;
     }
     let (title, month_first) = if notes.month_first {
-        ("Dates are dd/mm/yyyy", false)
+        (crate::locale::t("dates_are_dmy"), false)
     } else {
-        ("Dates are mm/dd/yyyy", true)
+        (crate::locale::t("dates_are_mdy"), true)
     };
     Some(command(
         CommandId::TableDateOrder(month_first),
         title,
-        "Dates fit both orders",
+        crate::locale::t("dates_fit_both"),
         "dates order day month us european ambiguous",
     ))
 }
@@ -1683,14 +1709,16 @@ pub fn image_menu_title() -> &'static str {
     crate::locale::t("image_menu")
 }
 /// Resize › Custom….
-pub const CUSTOM_RESIZE_TITLE: &str = "Custom…";
+pub fn custom_resize_title() -> &'static str {
+    crate::locale::t("custom_resize")
+}
 
 /// The "Image ▾" menu: Resize (a submenu), the other steps, then undo and redo when there is
 /// a version to go to. No check marks.
 pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
     use crate::image_edit::ImageOp;
     let step = |op: &ImageOp| {
-        let detail = op.group().unwrap_or("Image");
+        let detail = op.group().unwrap_or(crate::locale::t("title_image"));
         command(
             CommandId::ImageStep(*op),
             &op.title(),
@@ -1703,15 +1731,15 @@ pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
     let mut commands: Vec<Command> = resizes.iter().map(step).collect();
     commands.push(command(
         CommandId::ImageResizeCustom,
-        CUSTOM_RESIZE_TITLE,
-        crate::image_edit::RESIZE_GROUP,
+        custom_resize_title(),
+        crate::image_edit::resize_group(),
         "resize custom width height size image",
     ));
     commands.extend(others.iter().map(step));
     if edit.can_undo() {
         commands.push(command(
             CommandId::TableUndo,
-            "Undo image step",
+            crate::locale::t("undo_image_step"),
             &edit.labels[edit.version],
             "undo image version back",
         ));
@@ -1719,7 +1747,7 @@ pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
     if edit.can_redo() {
         commands.push(command(
             CommandId::TableRedo,
-            "Redo image step",
+            crate::locale::t("redo_image_step"),
             &edit.labels[edit.version + 1],
             "redo image version forward",
         ));
@@ -1748,7 +1776,7 @@ fn table_undo_redo(table: &TableShown) -> Vec<Command> {
     if table.can_undo() {
         commands.push(command(
             CommandId::TableUndo,
-            "Undo table step",
+            crate::locale::t("undo_table_step"),
             &table.labels[table.version],
             "undo table version back",
         ));
@@ -1756,7 +1784,7 @@ fn table_undo_redo(table: &TableShown) -> Vec<Command> {
     if table.can_redo() {
         commands.push(command(
             CommandId::TableRedo,
-            "Redo table step",
+            crate::locale::t("redo_table_step"),
             &table.labels[table.version + 1],
             "redo table version forward",
         ));
@@ -1784,8 +1812,8 @@ pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
     if frame.width() > 1 {
         commands.push(command(
             CommandId::TableChooseColumns,
-            CHOOSE_COLUMNS_TITLE,
-            "Keep some columns, as one step",
+            choose_columns_title(),
+            crate::locale::t("choose_columns_detail"),
             "choose pick select keep remove columns table",
         ));
     }
@@ -1804,11 +1832,15 @@ pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
 }
 
 /// The Table ▾ item that opens the column picker.
-pub const CHOOSE_COLUMNS_TITLE: &str = "Choose columns…";
+pub fn choose_columns_title() -> &'static str {
+    crate::locale::t("choose_columns_title")
+}
 
 /// The Table ▾ item that opens the table window.
 #[allow(dead_code)] // Was the Table ▾ item; Open table is the card chip now.
-pub const OPEN_WINDOW_TITLE: &str = "Open in window";
+pub fn open_window_title() -> &'static str {
+    crate::locale::t("open_in_window")
+}
 
 /// Soft ceiling only for pathological tables (millions of rows as one NSTextView string).
 /// Below this, Open table shows every row; above it the meta line says "Showing N of M rows".
@@ -1891,14 +1923,14 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     view.menu = table_window_menu(table);
     view.columns = picker_columns(table).unwrap_or_default();
     let Some(frame) = &table.frame else {
-        view.placeholder = "Working on the table…".to_string();
+        view.placeholder = crate::locale::t("working_on_table").to_string();
         return view;
     };
     // Dedicated window: show every row (cap only for enormous tables — see WINDOW_ROWS).
     let (height, _) = frame.shape();
     let max_rows = height.clamp(1, WINDOW_ROWS);
     let Some(preview) = dataframe::frame_preview(frame, max_rows, Some(false)) else {
-        view.placeholder = "The table is empty".to_string();
+        view.placeholder = crate::locale::t("table_empty").to_string();
         return view;
     };
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
@@ -1912,8 +1944,16 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         &format!(
             "{} {} × {columns} {}",
             group_thousands(rows),
-            if rows == 1 { "row" } else { "rows" },
-            if columns == 1 { "column" } else { "columns" }
+            if rows == 1 {
+                crate::locale::t("row")
+            } else {
+                crate::locale::t("rows")
+            },
+            if columns == 1 {
+                crate::locale::t("column")
+            } else {
+                crate::locale::t("columns")
+            }
         ),
     );
     let mut notes: Vec<String> = Vec::new();
@@ -2015,11 +2055,13 @@ impl VersionBar {
 
     /// "Version 2 of 3, Duplicates removed": the capsule's tooltip and VoiceOver label.
     pub fn spoken(&self) -> String {
-        format!(
-            "Version {} of {}, {}",
-            self.current + 1,
-            self.labels.len(),
-            self.labels[self.current]
+        crate::locale::tf(
+            "version_spoken",
+            &[
+                &(self.current + 1),
+                &self.labels.len(),
+                &self.labels[self.current],
+            ],
         )
     }
 
@@ -2039,7 +2081,12 @@ impl VersionBar {
             .map(|(index, label)| {
                 let title = format!("{}. {label}", index + 1);
                 (
-                    command(CommandId::TableVersion(index), &title, "Version", "version"),
+                    command(
+                        CommandId::TableVersion(index),
+                        &title,
+                        crate::locale::t("version"),
+                        "version",
+                    ),
                     index == self.current,
                 )
             })
@@ -2070,9 +2117,9 @@ pub fn undo_key(
 /// The `⋯` row of a [`CommandId::KeepHistory`] choice.
 pub fn keep_history_title(minutes: u32) -> String {
     if minutes == 0 {
-        "Keep history until cleared".to_string()
+        crate::locale::t("keep_history_forever").to_string()
     } else {
-        format!("Keep history {minutes} min after the last copy")
+        crate::locale::tf("keep_history_minutes", &[&minutes])
     }
 }
 
@@ -2095,7 +2142,7 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     commands.push(command(
         CommandId::ClearClipboard,
         crate::locale::t("empty_pasteboard"),
-        "Pasteboard only",
+        crate::locale::t("detail_pasteboard_only"),
         "empty pasteboard clear",
     ));
     for item in &data.history {
@@ -2110,21 +2157,21 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         commands.push(command(
             CommandId::ClearHistory,
             crate::locale::t("clear_history"),
-            "Forget copies",
+            crate::locale::t("detail_forget_copies"),
             "clear history forget",
         ));
     }
     commands.push(command(
         CommandId::ClearSensitive,
         crate::locale::t("clear_sensitive"),
-        "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
+        crate::locale::t("detail_clear_sensitive"),
         "clear sensitive pasteboard timer",
     ));
     for minutes in crate::settings::HISTORY_MINUTES {
         commands.push(command(
             CommandId::KeepHistory(minutes),
             &keep_history_title(minutes),
-            "History is always forgotten when the screen locks, the Mac sleeps or you switch users",
+            crate::locale::t("detail_history_forgotten"),
             "keep history forget minutes",
         ));
     }
@@ -2139,19 +2186,19 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     commands.push(command(
         CommandId::Settings,
         crate::locale::t("settings"),
-        "Hotkey, date order, blur, Open at Login",
+        crate::locale::t("detail_settings"),
         "settings preferences hotkey blur login",
     ));
     commands.push(command(
         CommandId::About,
         crate::locale::t("about"),
-        "Version and offline promise",
+        crate::locale::t("detail_about"),
         "about version offline",
     ));
     commands.push(command(
         CommandId::Quit,
         crate::locale::t("quit"),
-        "Quit Copycraft",
+        crate::locale::t("detail_quit"),
         "quit exit",
     ));
     commands
@@ -2312,15 +2359,15 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
 fn source_commands(data: &LaunchData) -> Vec<Command> {
     let mut commands = vec![command(
         CommandId::ChooseFile,
-        "Choose file",
-        "Open a file on the card",
+        crate::locale::t("chip_choose_file"),
+        crate::locale::t("detail_choose_file"),
         "choose file open",
     )];
     if data.source_name.is_some() {
         commands.push(command(
             CommandId::UseClipboard,
-            "Clipboard",
-            "Show the clipboard",
+            crate::locale::t("title_clipboard"),
+            crate::locale::t("detail_show_clipboard"),
             "clipboard pasteboard",
         ));
     }
@@ -2330,15 +2377,15 @@ fn source_commands(data: &LaunchData) -> Vec<Command> {
 fn link_chips(text: &str) -> Vec<Command> {
     let mut commands = vec![command(
         CommandId::Visit,
-        "Visit",
-        "Open in browser",
+        crate::locale::t("chip_visit"),
+        crate::locale::t("detail_visit"),
         "visit open browser",
     )];
     if toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,
-            "Format",
-            "URI",
+            crate::locale::t("chip_format"),
+            crate::locale::t("detail_uri"),
             "format url uri",
         ));
     }
@@ -2357,7 +2404,7 @@ fn decoder_command(found: decode::DecodeKind) -> Command {
     command(
         CommandId::Decode,
         found.label(),
-        "Decoded, read-only",
+        crate::locale::t("detail_decoded"),
         found.keywords(),
     )
 }
@@ -2370,7 +2417,7 @@ fn text_chips(text: &str) -> Vec<Command> {
     if !opens_formatted(text) && toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,
-            "Format",
+            crate::locale::t("chip_format"),
             kind.source_heading(),
             "format pretty print",
         ));
@@ -2378,24 +2425,24 @@ fn text_chips(text: &str) -> Vec<Command> {
     if kind == FormatKind::Json && crate::validate::broken_json(text).is_none() {
         commands.push(command(
             CommandId::Schema,
-            "Schema",
-            "Avro schema",
+            crate::locale::t("chip_schema"),
+            crate::locale::t("avro_schema"),
             "schema avro",
         ));
     } else if kind == FormatKind::Xml && crate::xsd_schema::is_xsd(text) {
         if crate::xsd_schema::try_sample(text).is_some() {
             commands.push(command(
                 CommandId::Sample,
-                "Sample",
-                "Sample XML",
+                crate::locale::t("chip_sample"),
+                crate::locale::t("sample_xml"),
                 "sample xml example",
             ));
         }
     } else if kind == FormatKind::Xml && crate::xsd_schema::try_schema(text).is_some() {
         commands.push(command(
             CommandId::Schema,
-            "Schema",
-            "XSD schema",
+            crate::locale::t("chip_schema"),
+            crate::locale::t("xsd_schema"),
             "schema xsd xml",
         ));
     }
@@ -2404,16 +2451,16 @@ fn text_chips(text: &str) -> Vec<Command> {
     if kind == FormatKind::Yaml && crate::transform::yaml_to_json(text).is_some() {
         commands.push(command(
             CommandId::Convert,
-            TO_JSON_TITLE,
-            "YAML as JSON",
+            to_json_title(),
+            crate::locale::t("detail_yaml_as_json"),
             "to json convert yaml",
         ));
     }
     if toolbar_visibility::shows_convert(text) {
         commands.push(command(
             CommandId::Convert,
-            "Convert",
-            "Another format",
+            crate::locale::t("chip_convert"),
+            crate::locale::t("detail_convert"),
             "convert json key value",
         ));
     }
@@ -2428,7 +2475,7 @@ fn text_chips(text: &str) -> Vec<Command> {
         commands.push(command(
             CommandId::TableOpenWindow,
             open_table_title(),
-            "A larger, resizable table window",
+            crate::locale::t("detail_table_window"),
             "open window table larger resize sidebar",
         ));
     }
@@ -2438,24 +2485,24 @@ fn text_chips(text: &str) -> Vec<Command> {
 fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command> {
     let mut modes = vec![command(
         CommandId::Info,
-        "Info",
-        "Size and data URL",
+        crate::locale::t("chip_info"),
+        crate::locale::t("detail_info"),
         "info data url size",
     )];
     if let Some(scan) = scan {
         if scan.ocr.is_some() {
             modes.push(command(
                 CommandId::Ocr,
-                "Text",
-                "Recognized text",
+                crate::locale::t("title_text"),
+                crate::locale::t("detail_ocr"),
                 "text ocr recognize",
             ));
         }
         if scan.qr.is_some() {
             modes.push(command(
                 CommandId::Qr,
-                "QR",
-                "Barcode payload",
+                crate::locale::t("title_qr"),
+                crate::locale::t("detail_qr"),
                 "qr barcode",
             ));
         }
@@ -2464,7 +2511,7 @@ fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command> {
         modes.push(command(
             CommandId::ImageMenu,
             image_menu_title(),
-            "Steps on the picture",
+            crate::locale::t("detail_image_steps"),
             "image picture resize rotate flip grayscale metadata undo redo",
         ));
     }
@@ -2486,7 +2533,7 @@ fn original_command() -> Command {
     command(
         CommandId::Original,
         crate::locale::t("original"),
-        "Source",
+        crate::locale::t("detail_original"),
         "original source",
     )
 }
@@ -2547,11 +2594,11 @@ pub fn wipe_commands(commands: &mut [Command]) {
 }
 
 pub fn copy_tip(title: &str) -> String {
-    format!("Copy {title}")
+    crate::locale::tf("copy_tip", &[&title])
 }
 
 pub fn save_tip(title: &str) -> String {
-    format!("Save {title}")
+    crate::locale::tf("save_tip", &[&title])
 }
 
 fn image_meta(facts: &ImageFacts) -> String {
@@ -2582,7 +2629,7 @@ fn text_meta_joined(body: &str, source: &str) -> String {
         match labeling(text) {
             Labeling::Known(found) => labels.extend(found.labels),
             Labeling::Checking => {
-                return format!("{size}  ·  {}", crate::sensitivity::CHECKING);
+                return format!("{size}  ·  {}", crate::sensitivity::checking());
             }
         }
     }
@@ -2601,7 +2648,7 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
-        format!("{lines} lines  {size}")
+        crate::locale::tf("lines_size", &[&lines, &size])
     } else {
         size
     };
@@ -2615,7 +2662,7 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
         }
         crate::sensitivity::Labeling::Checking => {
             meta.push_str("  ·  ");
-            meta.push_str(crate::sensitivity::CHECKING);
+            meta.push_str(crate::sensitivity::checking());
         }
     }
     meta
@@ -2624,7 +2671,7 @@ fn text_meta_from(measured: &str, classified: &str) -> String {
 /// The card's labels are still being checked: it cannot be revealed, and it is not kept with
 /// its history entry (the next build has the labels).
 pub fn is_checking(card: &WorkCard) -> bool {
-    crate::sensitivity::meta_status(&card.meta) == Some(crate::sensitivity::CHECKING)
+    crate::sensitivity::meta_status(&card.meta) == Some(crate::sensitivity::checking())
 }
 
 /// Pasted size. Megabytes from 0.01 MB up; kilobytes below that.
@@ -5176,10 +5223,10 @@ Kleinste opdracht die de change dekt.
             assert_eq!(chevron.title(true), "", "{chevron:?}: image only");
             assert_eq!(chevron.title(false), chevron.glyph);
             assert_eq!(chevron.glyph.chars().count(), 1);
-            assert!(!chevron.title(false).contains(chevron.name));
+            assert!(!chevron.title(false).contains(chevron.name()));
         }
-        assert_eq!(PREVIOUS_CHEVRON.name, "Previous");
-        assert_eq!(NEXT_CHEVRON.name, "Next");
+        assert_eq!(PREVIOUS_CHEVRON.name(), "Previous");
+        assert_eq!(NEXT_CHEVRON.name(), "Next");
         assert_eq!(PREVIOUS_CHEVRON.symbol, "chevron.left");
         assert_eq!(NEXT_CHEVRON.symbol, "chevron.right");
     }

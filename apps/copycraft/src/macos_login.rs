@@ -112,7 +112,7 @@ pub fn set_enabled(on: bool) -> Result<LoginStatus, String> {
     };
     if !ok.as_bool() {
         let message = if error.is_null() {
-            "Could not change Open at Login".into()
+            crate::locale::t("login_change_failed").into()
         } else {
             // SAFETY: error is a non-null NSError* from the call above.
             let err: &NSError = unsafe { &*error };

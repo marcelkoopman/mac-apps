@@ -98,14 +98,14 @@ pub fn cell_text(value: AnyValue) -> Option<String> {
 /// yes/no; polars' name for the others.
 pub fn friendly_type(dtype: &DataType) -> String {
     match dtype {
-        DataType::Float32 | DataType::Float64 => "number".to_string(),
-        dtype if dtype.is_integer() => "whole number".to_string(),
-        dtype if dtype.is_decimal() => "number".to_string(),
-        DataType::Date => "date".to_string(),
-        DataType::Datetime(_, _) => "datetime".to_string(),
-        DataType::String => "text".to_string(),
-        DataType::Boolean => "yes/no".to_string(),
-        DataType::Null => "empty".to_string(),
+        DataType::Float32 | DataType::Float64 => crate::locale::t("type_number").to_string(),
+        dtype if dtype.is_integer() => crate::locale::t("type_whole_number").to_string(),
+        dtype if dtype.is_decimal() => crate::locale::t("type_number").to_string(),
+        DataType::Date => crate::locale::t("type_date").to_string(),
+        DataType::Datetime(_, _) => crate::locale::t("type_datetime").to_string(),
+        DataType::String => crate::locale::t("type_text").to_string(),
+        DataType::Boolean => crate::locale::t("type_yes_no").to_string(),
+        DataType::Null => crate::locale::t("type_empty").to_string(),
         other => other.to_string(),
     }
 }
@@ -169,7 +169,7 @@ fn clipped(text: &str, max: usize) -> String {
 pub fn values_summary(column: &Column) -> String {
     let empty = column.null_count();
     let filled = column.len() - empty;
-    let empty_note = (empty > 0).then(|| format!("{empty} empty"));
+    let empty_note = (empty > 0).then(|| crate::locale::tf("values_empty", &[&empty]));
     if filled == 0 {
         return empty_note.unwrap_or_default();
     }
@@ -202,7 +202,7 @@ fn range_summary(column: &Column, show: impl Fn(&AnyValue) -> Option<String>) ->
     let low = show(low.value())?;
     let high = show(high.value())?;
     Some(if low == high {
-        format!("always {low}")
+        crate::locale::tf("values_always", &[&low])
     } else {
         format!("{low} – {high}")
     })
@@ -213,9 +213,9 @@ fn bool_summary(column: &Column) -> Option<String> {
     let yes = values.sum().unwrap_or(0) as usize;
     let no = values.len() - values.null_count() - yes;
     Some(match (yes, no) {
-        (_, 0) => "always true".to_string(),
-        (0, _) => "always false".to_string(),
-        _ => format!("true {yes} · false {no}"),
+        (_, 0) => crate::locale::t("values_always_true").to_string(),
+        (0, _) => crate::locale::t("values_always_false").to_string(),
+        _ => crate::locale::tf("values_true_false", &[&yes, &no]),
     })
 }
 
@@ -237,13 +237,13 @@ fn text_summary(column: &Column) -> String {
         .map(|(value, (count, _))| (value.as_str(), *count));
     match common {
         Some((value, _)) if distinct == 1 => {
-            format!("always {}", clipped(value, OVERVIEW_COMMON_CHARS))
+            crate::locale::tf("values_always", &[&clipped(value, OVERVIEW_COMMON_CHARS)])
         }
-        Some((value, count)) if count > 1 => format!(
-            "{distinct} distinct · most common: {}",
-            clipped(value, OVERVIEW_COMMON_CHARS)
+        Some((value, count)) if count > 1 => crate::locale::tf(
+            "values_distinct_common",
+            &[&distinct, &clipped(value, OVERVIEW_COMMON_CHARS)],
         ),
-        _ => format!("{distinct} distinct"),
+        _ => crate::locale::tf("values_distinct", &[&distinct]),
     }
 }
 
@@ -264,13 +264,25 @@ pub fn overview(df: &DataFrame) -> Option<String> {
     let types: Vec<String> = df.columns().iter().map(|c| friendly_type(c.dtype())).collect();
     let values: Vec<String> = df.columns().iter().map(values_summary).collect();
     let rows = df.height();
-    let head = format!(
-        "{} columns · {} {}",
-        crate::commands::group_thousands(names.len()),
-        crate::commands::group_thousands(rows),
-        if rows == 1 { "row" } else { "rows" }
-    );
+    let counts: [&dyn std::fmt::Display; 2] = [
+        &crate::commands::group_thousands(names.len()),
+        &crate::commands::group_thousands(rows),
+    ];
+    let head = if rows == 1 {
+        crate::locale::tf("overview_head_one_row", &counts)
+    } else {
+        crate::locale::tf("overview_head", &counts)
+    };
     Some(overview_list(&head, &display_names(&names), &types, &values))
+}
+
+/// The overview's headings: column, type, values.
+pub fn overview_headings() -> (&'static str, &'static str, &'static str) {
+    (
+        crate::locale::t("overview_column"),
+        crate::locale::t("overview_type"),
+        crate::locale::t("overview_values"),
+    )
 }
 
 /// `head`, a blank line, the headings and one line per column, padded to align.
@@ -283,13 +295,14 @@ fn overview_list(head: &str, names: &[String], types: &[String], values: &[Strin
             .max()
             .unwrap_or(0)
     };
-    let name_w = width(names, "column");
-    let type_w = width(types, "type");
+    let (column_head, type_head, values_head) = overview_headings();
+    let name_w = width(names, column_head);
+    let type_w = width(types, type_head);
     let line = |name: &str, kind: &str, value: &str| {
         let text = format!("{name:<name_w$}{OVERVIEW_GAP}{kind:<type_w$}{OVERVIEW_GAP}{value}");
         text.trim_end().to_string()
     };
-    let mut out = vec![head.to_string(), String::new(), line("column", "type", "values")];
+    let mut out = vec![head.to_string(), String::new(), line(column_head, type_head, values_head)];
     for ((name, kind), value) in names.iter().zip(types).zip(values) {
         out.push(line(name, kind, value));
     }

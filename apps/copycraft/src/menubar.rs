@@ -41,9 +41,13 @@ const SPINNER_DELAY: Duration = Duration::from_millis(180);
 /// card opens without scanning them first.
 const PREWARM_LEN: usize = 64 * 1024;
 /// Card title for text dropped on it (a dropped file shows its name).
-const DROPPED_TEXT: &str = "Dropped text";
+fn dropped_text() -> &'static str {
+    crate::locale::t("dropped_text")
+}
 /// Card name for image data dropped on it (a picture from Safari or Preview).
-const DROPPED_IMAGE: &str = "Dropped image";
+fn dropped_image() -> &'static str {
+    crate::locale::t("dropped_image")
+}
 
 struct App {
     tray: TrayIcon,
@@ -92,7 +96,7 @@ struct App {
     /// The last poll found nothing or no text: look again even without a new change count.
     poll_again: bool,
     /// The card shows the one-time explanation of the pasteboard privacy alert, before the
-    /// copy is read (Default or Ask; see [`crate::paste_access::ASK_NOTE`]).
+    /// copy is read (Default or Ask; see [`crate::paste_access::ask_note`]).
     paste_explaining: bool,
     /// That explanation was shown once (stored in the user defaults).
     paste_explained: bool,
@@ -264,10 +268,10 @@ impl ApplicationHandler<UserEvent> for App {
                 self.show_dropped(opened);
             }
             UserEvent::DroppedImage(bytes) => {
-                self.show_dropped(crate::open_file::from_image_data(DROPPED_IMAGE, bytes));
+                self.show_dropped(crate::open_file::from_image_data(dropped_image(), bytes));
             }
             UserEvent::DroppedText(text) => {
-                self.show_dropped(crate::open_file::from_text(DROPPED_TEXT, text));
+                self.show_dropped(crate::open_file::from_text(dropped_text(), text));
             }
             UserEvent::DroppedImageScanned { image, scan } => {
                 self.finish_dropped_scan(&image, scan);
@@ -996,11 +1000,10 @@ impl App {
             let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
                 return;
             };
-            let mut message = "A width (1200 or w 1200) or a height (h 800), in pixels. \
-                               The picture keeps its proportions and never gets larger."
-                .to_string();
+            let mut message = crate::locale::t("resize_prompt").to_string();
             loop {
-                let answer = mac_ui::dialog::prompt_text(mtm, "Resize to", &message, "");
+                let answer =
+                    mac_ui::dialog::prompt_text(mtm, crate::locale::t("resize_to"), &message, "");
                 launcher::order_front();
                 let Some(answer) = answer.map(Zeroizing::new) else {
                     return;
@@ -1014,9 +1017,7 @@ impl App {
                         return;
                     }
                     None => {
-                        message = "That is not a size. Type a width like 1200 or w 1200, or a \
-                                   height like h 800."
-                            .to_string();
+                        message = crate::locale::t("resize_invalid").to_string();
                     }
                 }
             }
@@ -1439,7 +1440,7 @@ impl App {
         if facts.is_none() {
             return crate::open_file::noted(
                 std::mem::take(&mut opened.name),
-                crate::open_file::UNREADABLE_IMAGE,
+                crate::open_file::unreadable_image(),
             );
         }
         image.facts = facts;
@@ -1549,7 +1550,7 @@ impl App {
             .opened
             .as_ref()
             .map(|file| file.name.clone())
-            .unwrap_or_else(|| "File".to_string());
+            .unwrap_or_else(|| crate::locale::t("title_file").to_string());
         let text = self.opened_text();
         let note = self.opened.as_ref().and_then(|file| file.note.clone());
         let image = self.opened.as_ref().and_then(|file| file.image.clone());
@@ -1571,7 +1572,8 @@ impl App {
             data.subject_text = Some(text);
         } else {
             data.subject_kind = SubjectKind::NoText;
-            data.source_note = Some(note.unwrap_or_else(|| "Can't read this file".to_string()));
+            data.source_note =
+                Some(note.unwrap_or_else(|| crate::open_file::unreadable().to_string()));
         }
         data
     }
@@ -2640,14 +2642,14 @@ impl App {
 
 fn icon_tip(view: &ClipboardView) -> String {
     match view {
-        ClipboardView::Image => "Image".to_string(),
+        ClipboardView::Image => crate::locale::t("title_image").to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
-        ClipboardView::Denied => crate::paste_access::DENIED_NOTE.to_string(),
-        ClipboardView::Pending => crate::paste_access::PENDING_NOTE.to_string(),
-        ClipboardView::Hidden => clipboard::HIDDEN_CONTENT.to_string(),
+        ClipboardView::Denied => crate::paste_access::denied_note().to_string(),
+        ClipboardView::Pending => crate::paste_access::pending_note().to_string(),
+        ClipboardView::Hidden => clipboard::hidden_content().to_string(),
         ClipboardView::Text(text) => {
             if crate::youtube::video_id(text.as_str()).is_some() {
-                "YouTube".to_string()
+                crate::locale::t("title_youtube").to_string()
             } else if let Some(host) =
                 crate::page_preview::page_url(text.as_str()).and_then(crate::page_preview::host)
             {

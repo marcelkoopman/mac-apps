@@ -33,7 +33,7 @@ pub fn drop_empty(df: &DataFrame) -> Result<DataFrame, String> {
         .cloned()
         .collect();
     if kept.is_empty() {
-        return Err("Every column is empty".to_string());
+        return Err(crate::locale::t("every_column_empty").to_string());
     }
     let mut any = BooleanChunked::full(PlSmallStr::EMPTY, false, height);
     for column in &kept {
@@ -174,7 +174,7 @@ pub fn type_text_columns(df: &mut DataFrame) -> usize {
 /// Select columns: `columns`, in that order. At least one.
 pub fn select_columns(df: &DataFrame, columns: &[String]) -> Result<DataFrame, String> {
     if columns.is_empty() {
-        return Err("Choose at least one column".to_string());
+        return Err(crate::locale::t("choose_one_column").to_string());
     }
     df.select(columns.iter().map(String::as_str))
         .map_err(|e| e.to_string())

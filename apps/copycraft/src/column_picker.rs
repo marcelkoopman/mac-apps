@@ -89,7 +89,7 @@ impl ColumnPicker {
 
     /// "Keeping 8 of 20".
     pub fn count_line(&self) -> String {
-        format!("Keeping {} of {}", self.kept_count(), self.columns.len())
+        crate::locale::tf("keeping_of", &[&self.kept_count(), &self.columns.len()])
     }
 
     /// Apply is enabled when at least one column is kept. With every column still

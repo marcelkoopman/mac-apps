@@ -205,12 +205,12 @@ impl ReadNotes {
             .collect();
         if self.ambiguous_dates {
             notes.push(if self.month_first {
-                "Dates read as mm/dd/yyyy".to_string()
+                crate::locale::t("dates_read_mdy").to_string()
             } else {
-                "Dates read as dd/mm/yyyy".to_string()
+                crate::locale::t("dates_read_dmy").to_string()
             });
         }
-        let forced = "Dates read as mm/dd/yyyy".to_string();
+        let forced = crate::locale::t("dates_read_mdy").to_string();
         if self.forced_month_first && !notes.contains(&forced) {
             notes.push(forced);
         }

@@ -194,7 +194,7 @@ pub fn choose_path(filename: &str, extension: &str) -> anyhow::Result<Option<Pat
     let name = crate::open_file::save_name(filename, extension);
     Ok(file_panel::choose_save_path(
         mtm,
-        "Save clipboard",
+        crate::locale::t("save_panel_clipboard"),
         &name,
         &[extension],
     )?)
@@ -219,8 +219,13 @@ fn choose_image_path(
         })
         .collect();
     let selected = files.iter().position(|item| *item == file).unwrap_or(0);
-    let chosen =
-        file_panel::choose_save_path_with_format(mtm, "Save picture", &name, &formats, selected)?;
+    let chosen = file_panel::choose_save_path_with_format(
+        mtm,
+        crate::locale::t("save_panel_picture"),
+        &name,
+        &formats,
+        selected,
+    )?;
     Ok(chosen.map(|(path, index)| (path, files.get(index).copied().unwrap_or(file))))
 }
 
@@ -243,7 +248,12 @@ pub fn choose_table_path(
         .iter()
         .position(|file| *file == format)
         .unwrap_or(0);
-    let chosen =
-        file_panel::choose_save_path_with_format(mtm, "Save table", &name, &formats, selected)?;
+    let chosen = file_panel::choose_save_path_with_format(
+        mtm,
+        crate::locale::t("save_panel_table"),
+        &name,
+        &formats,
+        selected,
+    )?;
     Ok(chosen.map(|(path, index)| (path, TableFile::ALL[index.min(TableFile::ALL.len() - 1)])))
 }

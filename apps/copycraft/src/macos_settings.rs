@@ -288,8 +288,8 @@ fn build(mtm: MainThreadMarker) {
         false,
     );
     popup.removeAllItems();
-    popup.addItemWithTitle(&NSString::from_str("dd/mm/yyyy"));
-    popup.addItemWithTitle(&NSString::from_str("mm/dd/yyyy"));
+    popup.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_dmy")));
+    popup.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_mdy")));
     popup.selectItemAtIndex(isize::from(settings::load().date_month_first));
     wire(popup.as_ref(), sel!(dateOrderChanged:));
     body.addSubview(&popup);

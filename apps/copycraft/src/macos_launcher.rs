@@ -89,11 +89,13 @@ const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
 };
 /// The drop outline sits this far inside the panel edge, concentric with it.
 const DROP_INSET: f64 = 4.0;
-const DROP_HIGHLIGHT: mac_ui::drop::Highlight = mac_ui::drop::Highlight {
-    inset: DROP_INSET,
-    corner_radius: corners::concentric_radius(PANEL_RADIUS, DROP_INSET),
-    announcement: "Drop to open",
-};
+fn drop_highlight() -> mac_ui::drop::Highlight {
+    mac_ui::drop::Highlight {
+        inset: DROP_INSET,
+        corner_radius: corners::concentric_radius(PANEL_RADIUS, DROP_INSET),
+        announcement: crate::locale::t("drop_to_open"),
+    }
+}
 
 thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
@@ -449,7 +451,7 @@ define_class!(
                 return;
             }
             // Not before the labels are known: the meta line says "Checking…" meanwhile.
-            if crate::sensitivity::meta_status(&card_meta()) == Some(crate::sensitivity::CHECKING) {
+            if crate::sensitivity::meta_status(&card_meta()) == Some(crate::sensitivity::checking()) {
                 NSBeep();
                 return;
             }
@@ -851,7 +853,7 @@ fn ensure_window(mtm: MainThreadMarker) {
 
     // The content view takes drops (mac_ui::drop). Everything on the card is inside it, so a
     // drag anywhere over the card reaches it unless an editable text view takes it first.
-    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(DROP_HIGHLIGHT), |dropped| {
+    let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(drop_highlight()), |dropped| {
         launcher::emit(match dropped {
             mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
             mac_ui::drop::Dropped::Promised(path) => UserEvent::DroppedPromisedFile(path),
@@ -893,13 +895,25 @@ fn ensure_window(mtm: MainThreadMarker) {
     let preview_image = image_view(mtm);
     let pills = glass::group(mtm, GLASS_MERGE);
     let (nav_capsule, previous, nav_count, next) = history_capsule(mtm);
-    let more = header_symbol(mtm, "ellipsis", "More", "⋯", sel!(moreClicked:));
-    let clear = GlassButton::pill(mtm, "Wipe", ButtonSize::Small);
+    let more = header_symbol(
+        mtm,
+        "ellipsis",
+        crate::locale::t("more"),
+        "⋯",
+        sel!(moreClicked:),
+    );
+    let clear = GlassButton::pill(mtm, crate::locale::t("wipe"), ButtonSize::Small);
     wire_button(clear.button(), sel!(clearClicked:));
     clear
         .button()
-        .setToolTip(Some(&NSString::from_str("Wipe copied data from memory")));
-    let close = header_symbol(mtm, "xmark", "Close", "✕", sel!(closeClicked:));
+        .setToolTip(Some(&NSString::from_str(crate::locale::t("wipe_tip"))));
+    let close = header_symbol(
+        mtm,
+        "xmark",
+        crate::locale::t("close"),
+        "✕",
+        sel!(closeClicked:),
+    );
     let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Small);
     symbols.set_accessibility_label(crate::locale::t("symbols_a11y"));
     symbols
@@ -1189,7 +1203,7 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     hit.setTitle(&NSString::from_str(""));
     // Keyboard users can Tab to the cover and press Space to reveal, so keep the focus ring.
     hit.setFocusRingType(NSFocusRingType::Default);
-    hit.setAccessibilityLabel(Some(&NSString::from_str("Reveal hidden content")));
+    hit.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("reveal_hidden"))));
     wire_button(&hit, sel!(revealClicked:));
     root.addSubview(&shade);
     root.addSubview(&hit);
@@ -2009,7 +2023,9 @@ fn rebuild_pills(
         let mut slot = slot.borrow_mut();
         if show_empty && slot.is_none() {
             let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
-            empty.setStringValue(&NSString::from_str("No matching commands"));
+            empty.setStringValue(&NSString::from_str(crate::locale::t(
+                "no_matching_commands",
+            )));
             list.addSubview(&empty);
             *slot = Some(empty);
         }
@@ -2200,13 +2216,15 @@ fn pop_overflow() {
                 let parent = unsafe {
                     NSMenuItem::initWithTitle_action_keyEquivalent(
                         NSMenuItem::alloc(mtm),
-                        &NSString::from_str("History"),
+                        &NSString::from_str(crate::locale::t("history")),
                         None,
                         &NSString::from_str(""),
                     )
                 };
-                let submenu =
-                    NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("History"));
+                let submenu = NSMenu::initWithTitle(
+                    NSMenu::alloc(mtm),
+                    &NSString::from_str(crate::locale::t("history")),
+                );
                 submenu.setAutoenablesItems(false);
                 parent.setSubmenu(Some(&submenu));
                 menu.addItem(&parent);
@@ -2526,14 +2544,16 @@ fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) 
 }
 
 fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
-    let field = widgets::plain_field(mtm, 16.0, "Search");
+    let field = widgets::plain_field(mtm, 16.0, crate::locale::t("search"));
     // Native rounded border, background and focus ring while the field is shown.
     field.setBezeled(true);
     field.setBezelStyle(NSTextFieldBezelStyle::RoundedBezel);
     field.setDrawsBackground(true);
     field.setFocusRingType(NSFocusRingType::Default);
     field.setAlphaValue(0.0);
-    field.setAccessibilityLabel(Some(&NSString::from_str("Search commands")));
+    field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "search_commands",
+    ))));
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
             // SAFETY: LauncherDelegate implements controlTextDidChange: and
@@ -2546,8 +2566,8 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
 }
 
 fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
-    let field = widgets::search_field(mtm, 13.0, "Find");
-    field.setAccessibilityLabel(Some(&NSString::from_str("Find in item")));
+    let field = widgets::search_field(mtm, 13.0, crate::locale::t("find"));
+    field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("find_in_item"))));
     field.setHidden(true);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
@@ -2586,7 +2606,9 @@ fn place_item_find(y: f64, shown: bool) {
 fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
     let text = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     widgets::scroll_text_both_ways(&text);
-    text.setAccessibilityLabel(Some(&NSString::from_str("Clipboard content")));
+    text.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "clipboard_content",
+    ))));
     text
 }
 
@@ -2601,7 +2623,7 @@ fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     let view = widgets::image_view(mtm);
     view.setHidden(true);
     // Copied and dropped pictures show here.
-    view.setAccessibilityLabel(Some(&NSString::from_str("Image preview")));
+    view.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("image_preview"))));
     view
 }
 
@@ -2764,7 +2786,7 @@ fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
     // Under the column picker the pill would sit on All / None / Apply and steal clicks.
     let shown =
         !note.is_empty() && !well_is_masked() && !SHOWS_IMAGE.with(Cell::get) && !picker_open();
-    let title = format!("{note}  ·  Show all");
+    let title = crate::locale::tf("show_all_title", &[&note]);
     SHOW_ALL.with(|slot| {
         let mut slot = slot.borrow_mut();
         if !shown {
@@ -2778,7 +2800,7 @@ fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
             wire_button(button.button(), sel!(showAllClicked:));
             button
                 .button()
-                .setToolTip(Some(&NSString::from_str("Load and show the whole text")));
+                .setToolTip(Some(&NSString::from_str(crate::locale::t("show_all_tip"))));
             let parent = WELL.with(|well| {
                 well.borrow()
                     .as_ref()
@@ -2852,7 +2874,13 @@ fn well_action(
 /// glyph), centred in its slot. The name ("Previous", "Next") is the VoiceOver label; the tooltip
 /// and the VoiceOver hint name its arrow keys.
 fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
-    let button = GlassButton::symbol(mtm, chevron.symbol, chevron.name, chevron.glyph, NAV_SYMBOL);
+    let button = GlassButton::symbol(
+        mtm,
+        chevron.symbol,
+        chevron.name(),
+        chevron.glyph,
+        NAV_SYMBOL,
+    );
     let ns = button.button();
     // The capsule is the glass; a second glass bezel inside it would stack glass on glass.
     ns.setBordered(false);
@@ -2864,7 +2892,7 @@ fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
         ns.setImagePosition(NSCellImagePosition::ImageOnly);
     }
     ns.setAlignment(NSTextAlignment::Center);
-    ns.setAccessibilityLabel(Some(&NSString::from_str(chevron.name)));
+    ns.setAccessibilityLabel(Some(&NSString::from_str(chevron.name())));
     // The keys: "Previous (← or ⌘←)", and VoiceOver's hint "Left Arrow, or Command-Left Arrow".
     ns.setToolTip(Some(&NSString::from_str(&chevron.tooltip())));
     ns.setAccessibilityHelp(Some(&NSString::from_str(&chevron.spoken_shortcut())));
@@ -2998,14 +3026,14 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
     };
     let undo = step_button(
         "arrow.uturn.backward",
-        "Undo table step",
+        crate::locale::t("undo_table_step"),
         "↶",
         "⌘Z",
         sel!(tableUndoClicked:),
     );
     let redo = step_button(
         "arrow.uturn.forward",
-        "Redo table step",
+        crate::locale::t("redo_table_step"),
         "↷",
         "⇧⌘Z",
         sel!(tableRedoClicked:),
