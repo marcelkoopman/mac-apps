@@ -124,6 +124,16 @@ struct App {
     /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
     /// shown on that picture's card until the next step.
     image_note: Option<(usize, String)>,
+    /// The Base64 picture the Decode chip draws, for the copy it was decoded from.
+    decoded_picture: Option<DecodedPicture>,
+}
+
+/// A Base64 picture on its way to the card ([`UserEvent::DecodedPicture`]): the hash of the
+/// copied text it is of, and its bytes once the thread has decoded them (`None` while it runs,
+/// and for a picture the card cannot or may not draw).
+struct DecodedPicture {
+    key: u64,
+    bytes: Option<SecretBytes>,
 }
 
 /// An Image ▾ job running on its thread ([`crate::image_edit::Job`]).
@@ -273,6 +283,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DroppedText(text) => {
                 self.show_dropped(crate::open_file::from_text(dropped_text(), text));
             }
+            UserEvent::DecodedPicture { key, picture } => self.finish_decoded_picture(key, picture),
             UserEvent::DroppedImageScanned { image, scan } => {
                 self.finish_dropped_scan(&image, scan);
             }
@@ -1275,7 +1286,13 @@ impl App {
                 .table
                 .as_ref()
                 .is_some_and(|table| table.version > 0 || table.working || table.error.is_some());
-        let Some(index) = entry.filter(|_| !versioned) else {
+        // A decoded picture arrives after the card is first built.
+        let picture = data.view == CardView::Decode
+            && data
+                .subject_text
+                .as_deref()
+                .is_some_and(crate::decode::picture_candidate);
+        let Some(index) = entry.filter(|_| !versioned && !picture) else {
             return commands::work_card(data);
         };
         if let Some(card) = self.history.card(index, data.view) {
@@ -1378,7 +1395,72 @@ impl App {
         };
         self.attach_table(&mut data);
         self.attach_image(&mut data);
+        self.attach_decoded_picture(&mut data);
         data
+    }
+
+    /// The Decode chip on a Base64 picture draws the picture: its bytes are decoded on a thread
+    /// (the first time for this copy; the card describes the picture until they arrive) and then
+    /// kept for the copy, so the card shows them like a dropped picture's.
+    fn attach_decoded_picture(&mut self, data: &mut LaunchData) {
+        if data.view != CardView::Decode || data.subject_kind != SubjectKind::Text {
+            return;
+        }
+        let Some(text) = data
+            .subject_text
+            .as_deref()
+            .filter(|text| crate::decode::picture_candidate(text))
+        else {
+            return;
+        };
+        let key = hash_text(text);
+        if let Some(shown) = self
+            .decoded_picture
+            .as_ref()
+            .filter(|shown| shown.key == key)
+        {
+            data.picture = shown.bytes.clone();
+            return;
+        }
+        self.forget_decoded_picture();
+        // Kept even if the thread cannot start: the card keeps describing the picture.
+        self.decoded_picture = Some(DecodedPicture { key, bytes: None });
+        let text = Zeroizing::new(text.to_string());
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-decode-picture".into())
+            .spawn(move || {
+                let picture = decoded_picture_bytes(&text);
+                launcher::emit(UserEvent::DecodedPicture { key, picture });
+            });
+        if let Err(e) = spawned {
+            eprintln!("decode picture skipped: {e}");
+        }
+    }
+
+    fn finish_decoded_picture(&mut self, key: u64, picture: Option<SecretBytes>) {
+        let Some(shown) = self
+            .decoded_picture
+            .as_mut()
+            .filter(|shown| shown.key == key)
+        else {
+            // The card moved on (another copy, Wipe) while the thread ran.
+            if let Some(picture) = picture {
+                picture.zeroize();
+            }
+            return;
+        };
+        let drawn = picture.is_some();
+        shown.bytes = picture;
+        if drawn && launcher::is_open() && self.card_view == CardView::Decode {
+            self.refresh_popup();
+        }
+    }
+
+    /// Overwrite the Base64 picture's decoded bytes and forget them.
+    fn forget_decoded_picture(&mut self) {
+        if let Some(bytes) = self.decoded_picture.take().and_then(|shown| shown.bytes) {
+            bytes.zeroize();
+        }
     }
 
     fn choose_file(&mut self) {
@@ -2105,6 +2187,7 @@ impl App {
     }
 
     fn clear_history(&mut self) {
+        self.forget_decoded_picture();
         let view = ClipboardView::from_os();
         self.skip_record = view.text().map(|text| Zeroizing::new(text.to_string()));
         if view.is_image() {
@@ -2174,6 +2257,7 @@ impl App {
     /// Overwrite clipboard text and image bytes still held in this process,
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
+        self.forget_decoded_picture();
         self.close_table_window();
         self.opened = None;
         self.opened_table = crate::settings::preferred_table();
@@ -2757,6 +2841,23 @@ fn history_title(history: &ClipboardHistory, index: usize) -> String {
     }
 }
 
+/// The bytes of a Base64 picture for the card to draw ([`crate::decode::picture_bytes`]: capped),
+/// on the thread. On the Mac the system must also be able to read them, the way it reads a
+/// dropped picture ([`crate::macos_pasteboard::image_bytes_facts`]); otherwise the card keeps
+/// describing it, and nothing blank is drawn.
+fn decoded_picture_bytes(text: &str) -> Option<SecretBytes> {
+    use zeroize::Zeroize;
+    let mut bytes = crate::decode::picture_bytes(text)?;
+    #[cfg(target_os = "macos")]
+    if crate::macos_pasteboard::image_bytes_facts(&bytes).is_none() {
+        bytes.zeroize();
+        return None;
+    }
+    let picture = SecretBytes::new(std::mem::take(&mut bytes));
+    bytes.zeroize();
+    picture
+}
+
 fn hash_text(text: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut hasher);
@@ -2919,6 +3020,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         table_error: None,
         table_window: None,
         opened_image: ImageVersions::default(),
+        decoded_picture: None,
         image_job: None,
         image_note: None,
     };

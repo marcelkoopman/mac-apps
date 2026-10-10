@@ -85,6 +85,7 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/base64_text.txt` | Base64 chip: UTF-8 text (padded, standard alphabet) | plain text | Content | — | Original, Base64 | decode~Second line: café ✓; decodetitle=Base64 |
 | `decode/base64url_json_no_padding.txt` | Base64 chip: Base64URL JSON without padding, shown pretty | plain text | Content | — | Original, Base64 | decode~"roles": [ |
 | `decode/base64_png.txt` | Base64 chip: a 3×2 PNG (type, pixels, bytes) | plain text | Content | — | Original, Base64 | decode~PNG image; decode~3 × 2 pixels |
+| `decode/base64_png_image.txt` | Base64 chip: a valid 4×4 PNG (fake, harmless) the card draws, not just describes | plain text | Content | — | Original, Base64 | decode~PNG image; decode~4 × 4 pixels; decodetitle=Base64 |
 | `decode/base64_gif.txt` | Base64 chip: a 5×4 GIF | plain text | Content | — | Original, Base64 | decode~GIF image; decode~5 × 4 pixels |
 | `decode/base64_jpeg_data_uri.txt` | Base64 chip: an 8×6 JPEG as a `data:` URI | plain text | Content | — | Original, Base64 | decode~JPEG image; decode~8 × 6 pixels |
 | `decode/base64_webp.txt` | Base64 chip: a 7×9 WebP | plain text | Content | — | Original, Base64 | decode~WebP image; decode~7 × 9 pixels |

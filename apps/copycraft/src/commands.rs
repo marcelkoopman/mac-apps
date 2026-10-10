@@ -678,8 +678,11 @@ pub fn content_key(data: &LaunchData) -> u64 {
             image.height.hash(&mut hasher);
             image.byte_len.hash(&mut hasher);
         }
-        // Two dropped pictures alike in name, format and size are still different items.
-        if let Some(picture) = &data.picture {
+        // Two dropped pictures alike in name, format and size are still different items. (A text
+        // that decodes to a picture is the text's item, with or without its picture yet.)
+        if data.subject_kind == SubjectKind::Image
+            && let Some(picture) = &data.picture
+        {
             picture.allocation_id().hash(&mut hasher);
         }
     }
@@ -766,6 +769,10 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             };
             let view = presented_view(text, data.view);
             apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
+            if view == CardView::Decode && data.picture.is_some() && decode::picture_candidate(text)
+            {
+                show_decoded_picture(&mut card, text);
+            }
             // JSON with a mistake stays as copied; the meta line says where, the well marks it.
             if view == CardView::Format
                 && let Some(problem) = crate::validate::broken_json(text)
@@ -987,6 +994,28 @@ fn apply_text_view(
     } else {
         set_excerpt(card, &body, full);
     }
+}
+
+/// The Decode view of a Base64 picture whose bytes the card holds ([`LaunchData::picture`]): the
+/// well draws the picture (blurred like any picture until clicked) and the meta line keeps the
+/// description (type, pixels, bytes), then the labels of the copy.
+fn show_decoded_picture(card: &mut WorkCard, source: &str) {
+    let Some(body) = transformed_text(source, CardView::Decode) else {
+        return;
+    };
+    card.shows_image = true;
+    card.excerpt.zeroize();
+    card.preview_note = None;
+    card.highlight = None;
+    card.selectable = false;
+    card.error_line = None;
+    let description: Vec<&str> = body.lines().collect();
+    let mut meta = description.join("  ·  ");
+    if let Some(labels) = joined_label_line(&body, source) {
+        meta.push_str("  ·  ");
+        meta.push_str(&labels);
+    }
+    card.meta = meta;
 }
 
 /// A copied CSV or TSV opens aligned and colored as that table.
@@ -2622,24 +2651,27 @@ fn text_meta(text: &str) -> String {
 /// [`text_meta`] for `body`, with the labels of `body` and of `source` together (a decoded
 /// view: the copy's labels stay, and what decoding reveals is labelled too).
 fn text_meta_joined(body: &str, source: &str) -> String {
-    use crate::sensitivity::{Labeling, labeling};
     let size = text_meta_from(body, "");
+    match joined_label_line(body, source) {
+        Some(labels) => format!("{size}  ·  {labels}"),
+        None => size,
+    }
+}
+
+/// The labels of `source` and of `body` together as one line, "checking" while a check runs,
+/// `None` without labels.
+fn joined_label_line(body: &str, source: &str) -> Option<String> {
+    use crate::sensitivity::{Labeling, labeling};
     let mut labels = Vec::new();
     for text in [source, body] {
         match labeling(text) {
             Labeling::Known(found) => labels.extend(found.labels),
-            Labeling::Checking => {
-                return format!("{size}  ·  {}", crate::sensitivity::checking());
-            }
+            Labeling::Checking => return Some(crate::sensitivity::checking().to_string()),
         }
     }
     labels.sort();
     labels.dedup();
-    if labels.is_empty() {
-        size
-    } else {
-        format!("{size}  ·  {}", crate::sensitivity::label_line(&labels))
-    }
+    (!labels.is_empty()).then(|| crate::sensitivity::label_line(&labels))
 }
 
 /// Size and line count come from `measured`. Classification comes from
@@ -3297,6 +3329,62 @@ xmas-fifth-day:
         assert!(card.meta.contains("credential"), "{}", card.meta);
         assert!(card.excerpt.starts_with("Signature not verified"));
         assert!(masks_content(&card, CardView::Decode));
+    }
+
+    #[test]
+    fn decoded_picture_is_drawn_blurred_with_its_description() {
+        let text = crate::decode::testdata("base64_png_image.txt");
+        let mut input = data(SubjectKind::Text, Some(&text));
+        input.view = CardView::Decode;
+        // Until the picture is decoded (on its thread) the card describes it.
+        let pending = work_card(&input);
+        assert!(!pending.shows_image);
+        assert!(pending.excerpt.starts_with("PNG image\n4 × 4 pixels"));
+        let bytes = crate::decode::picture_bytes(&text).expect("picture bytes");
+        input.picture = crate::clipboard::SecretBytes::new(bytes);
+        let card = work_card(&input);
+        assert!(card.shows_image);
+        assert!(card.excerpt.is_empty());
+        assert_eq!(card.title, "Base64");
+        assert!(
+            card.meta.starts_with("PNG image  ·  4 × 4 pixels  ·  "),
+            "{}",
+            card.meta
+        );
+        assert!(card.meta.contains("bytes"), "{}", card.meta);
+        // Blurred until clicked, like any picture; the same item in every view.
+        assert!(masks_content(&card, CardView::Decode));
+        let mut original = input.clone();
+        original.view = CardView::Original;
+        let back = work_card(&original);
+        assert!(!back.shows_image);
+        assert_eq!(back.excerpt, text.trim());
+        assert_eq!(content_key(&input), content_key(&original));
+        let mut without = input.clone();
+        without.picture = None;
+        assert_eq!(content_key(&input), content_key(&without));
+        // Copy and Save still take the description, never the picture.
+        assert!(
+            transformed_text(&text, CardView::Decode)
+                .expect("text")
+                .starts_with("PNG image")
+        );
+    }
+
+    #[test]
+    fn only_a_base64_picture_is_drawn_in_the_decode_view() {
+        let words = crate::decode::testdata("base64_text.txt");
+        let mut other = data(SubjectKind::Text, Some(&words));
+        other.view = CardView::Decode;
+        other.picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]);
+        let card = work_card(&other);
+        assert!(!card.shows_image);
+        assert!(card.excerpt.starts_with("Copycraft decodes"));
+        // Nor in another view of a picture copy.
+        let text = crate::decode::testdata("base64_png_image.txt");
+        let mut picture = data(SubjectKind::Text, Some(&text));
+        picture.picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]);
+        assert!(!work_card(&picture).shows_image);
     }
 
     #[test]

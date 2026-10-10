@@ -85,6 +85,24 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
     Some(decoded)
 }
 
+/// Whether `text` is Base64 that starts like a picture, from its first characters alone. The card
+/// asks this on the main thread; [`picture_bytes`] does the work on a thread.
+pub fn picture_candidate(text: &str) -> bool {
+    let peeled = peel(text);
+    !peeled.is_empty() && base64::picture_candidate(peeled)
+}
+
+/// The bytes of a Base64 picture (also a `data:` URI) for the card to draw, or `None` when it is
+/// not one or is over the caps (20 MiB decoded, 50 megapixels: still described
+/// by [`decode`]). The caller owns, and zeroizes, the bytes.
+pub fn picture_bytes(text: &str) -> Option<Vec<u8>> {
+    let peeled = peel(text);
+    if peeled.is_empty() {
+        return None;
+    }
+    base64::picture_bytes(peeled)
+}
+
 /// Detection does not depend on the clock or the locale: a fixed, pure environment, so the
 /// chip check touches no system API.
 fn neutral_env() -> Env {

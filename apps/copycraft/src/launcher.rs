@@ -43,6 +43,12 @@ pub enum UserEvent {
         image: crate::clipboard::SecretBytes,
         scan: Option<crate::commands::ImageScan>,
     },
+    /// The Base64 picture of the copy with hash `key` is decoded on its thread (`None`: not one
+    /// the card may or can draw).
+    DecodedPicture {
+        key: u64,
+        picture: Option<crate::clipboard::SecretBytes>,
+    },
     /// Something in the table window ([`TableWindowEvent`]).
     TableWindow(TableWindowEvent),
     /// Settings changed (blur, date order): refresh the open card.

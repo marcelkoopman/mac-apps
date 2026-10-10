@@ -88,6 +88,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("show_columns", "Toon kolommen", "Show columns"),
     ("show_table", "Toon tabel", "Show table"),
     ("decode_unix_time", "Unix-tijd", "Unix time"),
+    (
+        "decode_picture_over_bytes",
+        "Niet getoond: groter dan {0} MB",
+        "Not shown: larger than {0} MB",
+    ),
+    (
+        "decode_picture_over_pixels",
+        "Niet getoond: meer dan {0} megapixel",
+        "Not shown: more than {0} megapixels",
+    ),
     // Symbols popover
     ("symbols", "Tekens", "Symbols"),
     ("symbols_a11y", "Speciale tekens", "Special characters"),
