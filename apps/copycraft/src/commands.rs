@@ -995,6 +995,13 @@ fn apply_text_view(
         // A decoded JWT: its Header and Payload JSON in color, the notes above as text.
         set_excerpt(card, &body, full);
         card.highlight = Some(FormatKind::Jwt);
+    } else if matches!(view, CardView::Convert | CardView::Decode)
+        && format::detect(&body) == FormatKind::Json
+    {
+        // JSON that a step produced (To JSON / Convert, a decoded Base64 JSON) is colored like
+        // the JSON card; the theme and light/dark handling are the highlighter's.
+        set_excerpt(card, &body, full);
+        card.highlight = Some(FormatKind::Json);
     } else {
         set_excerpt(card, &body, full);
     }
@@ -3134,6 +3141,19 @@ mod tests {
         assert_eq!(value["user"]["id"], 7);
         assert_eq!(card.excerpt, body);
         assert_eq!(card.title, "JSON");
+        // The result is colored like the JSON card, not shown as plain text.
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Json));
+        let toks = crate::highlight::tokens(&card.excerpt, crate::format::FormatKind::Json);
+        assert!(toks.iter().any(|(kind, text)| {
+            *kind == crate::highlight::TokenKind::Key && text == "\"user\""
+        }));
+        // Original goes back to the YAML, highlighted as YAML.
+        let mut original = data(SubjectKind::Text, Some(src));
+        original.view = CardView::Original;
+        assert_eq!(
+            work_card(&original).highlight,
+            Some(crate::format::FormatKind::Yaml)
+        );
         // The labels are the result's; the well is masked like any copied text.
         assert!(card.meta.ends_with("  ·  PII"), "{}", card.meta);
         assert!(masks_content(&card, CardView::Convert));
@@ -3345,6 +3365,15 @@ xmas-fifth-day:
         );
         assert!(card.excerpt.starts_with("Signature not verified"));
         assert!(masks_content(&card, CardView::Decode));
+    }
+
+    #[test]
+    fn decoded_base64_json_is_colored_like_the_json_card() {
+        let text = crate::decode::testdata("base64url_json_no_padding.txt");
+        let mut input = data(SubjectKind::Text, Some(&text));
+        input.view = CardView::Decode;
+        let card = work_card(&input);
+        assert_eq!(card.highlight, Some(crate::format::FormatKind::Json));
     }
 
     #[test]
