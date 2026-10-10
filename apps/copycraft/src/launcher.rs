@@ -53,6 +53,9 @@ pub enum UserEvent {
     TableWindow(TableWindowEvent),
     /// Settings changed (blur, date order): refresh the open card.
     SettingsChanged,
+    /// The privacy filter was switched in Settings: mask or unmask the open card and table
+    /// window now.
+    PrivacyFilterChanged,
     /// The global hotkey was changed in Settings: unregister the old one, register the new.
     HotkeyChanged,
 }
@@ -85,6 +88,16 @@ pub fn close_table_window() {
 pub fn open_table_window_column_picker() {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::open_column_picker();
+}
+
+/// The privacy filter setting changed: forget reveals and re-mask or unmask the open card and
+/// table window.
+pub fn privacy_filter_changed() {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_launcher::privacy_filter_changed();
+        crate::macos_table_window::privacy_filter_changed();
+    }
 }
 
 /// Open the Settings window.

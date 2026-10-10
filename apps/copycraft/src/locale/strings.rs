@@ -44,6 +44,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("date_order", "Datumvolgorde", "Date order"),
     (
+        "privacy_filter",
+        "Gebruik privacyfilter",
+        "Use privacy filter",
+    ),
+    (
         "blur_masked",
         "Gemaskeerde inhoud vervagen",
         "Blur masked content",
@@ -316,8 +321,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "detail_settings",
-        "Sneltoets, datumvolgorde, vervagen, Openen bij inloggen",
-        "Hotkey, date order, blur, Open at Login",
+        "Sneltoets, datumvolgorde, privacyfilter, vervagen, Openen bij inloggen",
+        "Hotkey, date order, privacy filter, blur, Open at Login",
     ),
     (
         "detail_about",

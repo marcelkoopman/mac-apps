@@ -1,4 +1,4 @@
-//! Settings window: hotkey, date order, blur, Open at Login, and the symbol list.
+//! Settings window: hotkey, date order, privacy filter, blur, Open at Login, and the symbol list.
 
 use std::cell::{Cell, RefCell};
 
@@ -22,7 +22,7 @@ use crate::macos_login;
 use crate::settings;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 380.0;
+const HEIGHT: f64 = 424.0;
 const PAD: f64 = 20.0;
 const ROW: f64 = 28.0;
 const GAP: f64 = 16.0;
@@ -33,6 +33,7 @@ thread_local! {
     static DELEGATE: RefCell<Option<Retained<SettingsDelegate>>> = const { RefCell::new(None) };
     static HOTKEY_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static DATE_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
+    static PRIVACY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static BLUR_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -108,6 +109,22 @@ define_class!(
             launcher::emit(UserEvent::SettingsChanged);
         }
 
+        #[unsafe(method(privacyFilterToggled:))]
+        fn privacy_filter_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            let on = button.state() == NSControlStateValueOn;
+            settings::set_privacy_filter(on);
+            BLUR_BOX.with(|slot| {
+                if let Some(blur) = slot.borrow().as_ref() {
+                    blur.setEnabled(on);
+                }
+            });
+            // The open card and table window mask (on) or unmask (off) at once.
+            launcher::emit(UserEvent::PrivacyFilterChanged);
+        }
+
         #[unsafe(method(blurToggled:))]
         fn blur_toggled(&self, sender: Option<&NSButton>) {
             let Some(button) = sender else {
@@ -154,6 +171,7 @@ fn clear_controls() {
     HOTKEY_LABEL.with(|s| *s.borrow_mut() = None);
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
+    PRIVACY_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_NOTE.with(|s| *s.borrow_mut() = None);
     SYMBOLS_FIELD.with(|s| *s.borrow_mut() = None);
@@ -296,6 +314,24 @@ fn build(mtm: MainThreadMarker) {
     DATE_POPUP.with(|slot| *slot.borrow_mut() = Some(popup));
 
     y -= ROW + GAP;
+    let privacy = unsafe {
+        NSButton::checkboxWithTitle_target_action(
+            &NSString::from_str(crate::locale::t("privacy_filter")),
+            None,
+            None,
+            mtm,
+        )
+    };
+    privacy.setState(state_of(settings::privacy_filter()));
+    privacy.setFrame(NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(WIDTH - PAD * 2.0, ROW),
+    ));
+    wire(&privacy, sel!(privacyFilterToggled:));
+    body.addSubview(&privacy);
+    PRIVACY_BOX.with(|slot| *slot.borrow_mut() = Some(privacy));
+
+    y -= ROW + GAP;
     let blur = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str(crate::locale::t("blur_masked")),
@@ -304,11 +340,9 @@ fn build(mtm: MainThreadMarker) {
             mtm,
         )
     };
-    blur.setState(if settings::load().blur {
-        NSControlStateValueOn
-    } else {
-        NSControlStateValueOff
-    });
+    blur.setState(state_of(settings::load().blur));
+    // The blur only styles the privacy filter's mask.
+    blur.setEnabled(settings::privacy_filter());
     blur.setFrame(NSRect::new(
         NSPoint::new(PAD, y),
         NSSize::new(WIDTH - PAD * 2.0, ROW),
@@ -400,6 +434,14 @@ fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, x: f64, y: f
     parent.addSubview(&field);
 }
 
+fn state_of(on: bool) -> isize {
+    if on {
+        NSControlStateValueOn
+    } else {
+        NSControlStateValueOff
+    }
+}
+
 fn refresh_all() {
     set_hotkey_text(&settings::hotkey_label());
     DATE_POPUP.with(|slot| {
@@ -407,13 +449,15 @@ fn refresh_all() {
             popup.selectItemAtIndex(isize::from(settings::load().date_month_first));
         }
     });
+    PRIVACY_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(state_of(settings::privacy_filter()));
+        }
+    });
     BLUR_BOX.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            button.setState(if settings::load().blur {
-                NSControlStateValueOn
-            } else {
-                NSControlStateValueOff
-            });
+            button.setState(state_of(settings::load().blur));
+            button.setEnabled(settings::privacy_filter());
         }
     });
     refresh_login_row();

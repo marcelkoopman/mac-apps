@@ -447,7 +447,7 @@ define_class!(
 
         #[unsafe(method(revealClicked:))]
         fn reveal_clicked(&self, _sender: Option<&NSButton>) {
-            if !MASKS.with(Cell::get) || REVEALED.with(Cell::get) {
+            if !well_is_masked() {
                 return;
             }
             // Not before the labels are known: the meta line says "Checking…" meanwhile.
@@ -1272,8 +1272,31 @@ fn mask_again() {
     raise_content_actions();
 }
 
+/// The one place the card decides the well is masked: the privacy filter setting (read live, so
+/// a change in Settings counts at once), whether this content masks, and whether it was revealed.
 fn well_is_masked() -> bool {
-    MASKS.with(Cell::get) && !REVEALED.with(Cell::get)
+    commands::effective_mask(
+        crate::settings::privacy_filter(),
+        MASKS.with(Cell::get),
+        REVEALED.with(Cell::get),
+    )
+}
+
+/// The privacy filter was switched in Settings. Any reveal is forgotten, so switching on masks
+/// what is shown at once (a click reveals it again); switching off shows it unmasked. Nothing is
+/// stored again: the open card is only laid out anew.
+pub fn privacy_filter_changed() {
+    REVEALED.set(false);
+    if !is_open() {
+        return;
+    }
+    layout(false);
+    if well_is_masked() {
+        // As in `present`: the blur, then `<` `>` and the well icons, on top.
+        show_reveal_cover(true);
+    }
+    raise_history_nav();
+    raise_content_actions();
 }
 
 /// The blurs for the well's text and its picture, or `None` when Core Image cannot build them.

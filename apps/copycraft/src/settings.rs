@@ -12,6 +12,9 @@ pub struct Settings {
     /// Forget history this many minutes after the last copy (one of [`HISTORY_MINUTES`]); 0
     /// keeps it until it is cleared, the screen locks, the Mac sleeps or the user switches.
     pub history_minutes: u32,
+    /// The privacy filter: copied content stays masked (blurred or blank) until it is clicked.
+    /// Off shows content directly, unmasked. On by default.
+    pub privacy_filter: bool,
     /// Gaussian blur over a masked well. Off falls back to the opaque shade. On by default.
     pub blur: bool,
     /// Prefer `mm/dd/yyyy` when a date column fits both orders. Off (dd/mm) by default.
@@ -29,6 +32,7 @@ impl Default for Settings {
         Self {
             clear_sensitive: true,
             history_minutes: 15,
+            privacy_filter: true,
             blur: true,
             date_month_first: false,
             hotkey: None,
@@ -38,6 +42,7 @@ impl Default for Settings {
 
 const CLEAR_SENSITIVE_KEY: &str = "CopycraftClearSensitiveCopies";
 const HISTORY_MINUTES_KEY: &str = "CopycraftHistoryMinutes";
+const PRIVACY_FILTER_KEY: &str = "CopycraftPrivacyFilter";
 const BLUR_KEY: &str = "CopycraftBlurMaskedWell";
 const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
@@ -59,6 +64,9 @@ pub fn load() -> Settings {
         .filter(|minutes| HISTORY_MINUTES.contains(minutes))
     {
         settings.history_minutes = minutes;
+    }
+    if let Some(value) = load_bool(PRIVACY_FILTER_KEY) {
+        settings.privacy_filter = value;
     }
     if let Some(value) = load_bool(BLUR_KEY) {
         settings.blur = value;
@@ -92,6 +100,16 @@ pub fn set_clear_sensitive(on: bool) {
 
 pub fn set_history_minutes(minutes: u32) {
     store_int(HISTORY_MINUTES_KEY, i64::from(minutes));
+}
+
+/// Whether the privacy filter is on: the one place that decides if copied content may be masked
+/// (see [`crate::commands::effective_mask`]). A missing key means on.
+pub fn privacy_filter() -> bool {
+    load_bool(PRIVACY_FILTER_KEY).unwrap_or(Settings::default().privacy_filter)
+}
+
+pub fn set_privacy_filter(on: bool) {
+    store_bool(PRIVACY_FILTER_KEY, on);
 }
 
 pub fn set_blur(on: bool) {
@@ -219,13 +237,30 @@ fn store_string(key: &str, value: &str) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn load_bool(_key: &str) -> Option<bool> {
     None
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn store_bool(_key: &str, _value: bool) {}
+
+// Tests off macOS keep booleans in memory (per test thread), so a setting can round-trip.
+#[cfg(all(not(target_os = "macos"), test))]
+thread_local! {
+    static MEMORY: std::cell::RefCell<std::collections::HashMap<String, bool>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+#[cfg(all(not(target_os = "macos"), test))]
+fn load_bool(key: &str) -> Option<bool> {
+    MEMORY.with(|map| map.borrow().get(key).copied())
+}
+
+#[cfg(all(not(target_os = "macos"), test))]
+fn store_bool(key: &str, value: bool) {
+    MEMORY.with(|map| map.borrow_mut().insert(key.to_owned(), value));
+}
 
 #[cfg(not(target_os = "macos"))]
 fn load_int(_key: &str) -> Option<i64> {
@@ -252,10 +287,25 @@ mod tests {
         let settings = Settings::default();
         assert!(settings.clear_sensitive);
         assert_eq!(settings.history_minutes, 15);
+        assert!(settings.privacy_filter);
         assert!(settings.blur);
         assert!(!settings.date_month_first);
         assert!(settings.hotkey.is_none());
         assert!(super::HISTORY_MINUTES.contains(&settings.history_minutes));
+    }
+
+    #[test]
+    fn privacy_filter_is_on_until_stored_off_and_round_trips() {
+        assert!(super::privacy_filter());
+        assert!(super::load().privacy_filter);
+        super::set_privacy_filter(false);
+        assert!(!super::privacy_filter());
+        assert!(!super::load().privacy_filter);
+        // The other settings are untouched.
+        assert!(super::load().blur);
+        super::set_privacy_filter(true);
+        assert!(super::privacy_filter());
+        assert!(super::load().privacy_filter);
     }
 
     #[test]

@@ -630,6 +630,13 @@ pub fn masks_content(card: &WorkCard, view: CardView) -> bool {
     card.shows_image || card.link_page.is_some() || !card.excerpt.is_empty()
 }
 
+/// Whether content is masked now. The privacy filter setting is the master switch: with it off
+/// nothing is masked, whatever was revealed before. With it on, content that [`masks_content`]
+/// stays masked until it is revealed. The card's well and the table window both decide here.
+pub fn effective_mask(privacy_filter: bool, content_masks: bool, revealed: bool) -> bool {
+    privacy_filter && content_masks && !revealed
+}
+
 /// How a masked well hides the copy. A blur that cannot be installed covers
 /// the well and drops the excerpt. The transparent click target is not a mask.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2227,7 +2234,7 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         CommandId::Settings,
         crate::locale::t("settings"),
         crate::locale::t("detail_settings"),
-        "settings preferences hotkey blur login",
+        "settings preferences hotkey privacy filter blur login",
     ));
     commands.push(command(
         CommandId::About,
@@ -2788,10 +2795,10 @@ mod tests {
     use super::{
         CardView, CommandId, ContentActions, Hist, ImageFacts, ImageScan, LaunchData, NAV_RESERVE,
         NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
-        deferred_save_name, history_label, history_nav, keeps_card_open, layout_chips,
-        masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
-        stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
-        work_card,
+        deferred_save_name, effective_mask, history_label, history_nav, keeps_card_open,
+        layout_chips, masks_content, matching, overflow, payload_excerpt, presented_view, save_tip,
+        search_pool, stays_revealed, step_chip, step_history, text_save_file, transformed_text,
+        well_mask, work_card,
     };
     use super::{OPEN_TABLE_TITLE, table_window_view};
     use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
@@ -3496,6 +3503,18 @@ fn main() {
                 .collect::<Vec<_>>(),
             vec!["Visit"]
         );
+    }
+
+    #[test]
+    fn privacy_filter_decides_whether_content_is_masked() {
+        // On: masked until revealed, only for content that masks.
+        assert!(effective_mask(true, true, false));
+        assert!(!effective_mask(true, true, true));
+        assert!(!effective_mask(true, false, false));
+        // Off: never masked, even when nothing was revealed.
+        assert!(!effective_mask(false, true, false));
+        assert!(!effective_mask(false, true, true));
+        assert!(!effective_mask(false, false, false));
     }
 
     #[test]

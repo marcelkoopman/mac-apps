@@ -292,8 +292,20 @@ fn blur_filter() -> Option<Retained<AnyObject>> {
     })
 }
 
+/// Masked now: the privacy filter setting (read live) is on and the window is not revealed.
 fn masked() -> bool {
-    !REVEALED.with(Cell::get)
+    commands::effective_mask(
+        crate::settings::privacy_filter(),
+        true,
+        REVEALED.with(Cell::get),
+    )
+}
+
+/// The privacy filter was switched in Settings. The reveal is forgotten, so switching on blurs
+/// an open window at once (a click reveals it again); switching off shows it unmasked.
+pub fn privacy_filter_changed() {
+    REVEALED.set(false);
+    apply_mask();
 }
 
 /// A click on the blurred grid or sidebar: sharp, unless the labels are still being checked.

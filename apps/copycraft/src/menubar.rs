@@ -296,6 +296,7 @@ impl ApplicationHandler<UserEvent> for App {
                     self.refresh_popup();
                 }
             }
+            UserEvent::PrivacyFilterChanged => launcher::privacy_filter_changed(),
             UserEvent::HotkeyChanged => self.rebind_hotkey(),
             UserEvent::ImageDone(done) => self.finish_image_job(*done),
             UserEvent::VersionScanned { picture, scan } => {
