@@ -963,9 +963,13 @@ fn extension_kind(path: &std::path::Path) -> ContentKind {
 fn read_view(pasteboard: &NSPasteboard) -> (ClipboardView, Option<PathBuf>) {
     autoreleasepool(|_| {
         let text = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeString });
-        // Copying a PNG file also puts its name on the pasteboard. That name is
-        // the file, so it still counts as an image. Other text stays text. Only text that
-        // could be a name or path is checked against the file URL types.
+        // ⌘C of a file in Finder puts the file's name on the pasteboard next to its URL.
+        // The card shows that file the way a drop does: a picture as a picture, text (CSV,
+        // JSON, …) as that text. Real copied text, and a name that is not this file, stays
+        // text. Only a short single line is checked against the file URL.
+        if let Some(found) = copied_file_view(pasteboard, text.as_deref()) {
+            return found;
+        }
         let copied_file = text
             .as_deref()
             .is_none_or(could_name_a_file)
@@ -1001,9 +1005,11 @@ fn could_name_a_file(text: &str) -> bool {
 }
 
 fn names_copied_image(text: &str, path: Option<&std::path::Path>) -> bool {
-    let Some(path) = path else {
-        return false;
-    };
+    path.is_some_and(|path| names_copied_file(text, path))
+}
+
+/// `text` is the pasteboard's label for `path`: the file name, the full path, or a `file://` URL.
+fn names_copied_file(text: &str, path: &std::path::Path) -> bool {
     let full = path.to_string_lossy();
     if text == full {
         return true;
@@ -1125,6 +1131,51 @@ fn pasteboard_data(pasteboard: &NSPasteboard, kind: &NSString) -> Option<Vec<u8>
     (!bytes.is_empty()).then_some(bytes)
 }
 
+/// A Finder copy of one file, when `text` is that file's name (or there is no text). `Some`
+/// is the card for its contents: an image file stays a picture, text is the file's text.
+/// `None` when this pasteboard is not that file, so the string is shown as copied.
+fn copied_file_view(
+    pasteboard: &NSPasteboard,
+    text: Option<&str>,
+) -> Option<(ClipboardView, Option<PathBuf>)> {
+    if !text.is_none_or(could_name_a_file) {
+        return None;
+    }
+    let url = file_url(pasteboard)?;
+    let path = PathBuf::from(url.path()?.to_string());
+    if text.is_some_and(|text| !names_copied_file(text.trim(), &path)) {
+        return None;
+    }
+    let started = unsafe { url.startAccessingSecurityScopedResource() };
+    let found = if is_image_file(&path) {
+        Some((ClipboardView::Image, Some(path)))
+    } else {
+        crate::open_file::load(&path)
+            .text
+            .map(|body| (ClipboardView::Text(body), None))
+    };
+    if started {
+        unsafe { url.stopAccessingSecurityScopedResource() };
+    }
+    found
+}
+
+/// The one file on the pasteboard, image or not. A `file://` URL keeps the security scope
+/// Finder put on it; an older file-name list is a plain path.
+fn file_url(pasteboard: &NSPasteboard) -> Option<Retained<NSURL>> {
+    if type_available(pasteboard, unsafe { NSPasteboardTypeFileURL })
+        && let Some(raw) = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeFileURL })
+        && let Some(url) = NSURL::URLWithString(&NSString::from_str(&raw))
+        && url.path().is_some()
+    {
+        return Some(url);
+    }
+    let path = filenames_path(pasteboard)?;
+    Some(NSURL::fileURLWithPath(&NSString::from_str(
+        &path.to_string_lossy(),
+    )))
+}
+
 fn image_file(pasteboard: &NSPasteboard) -> Option<PathBuf> {
     if type_available(pasteboard, unsafe { NSPasteboardTypeFileURL })
         && let Some(path) = path_from_file_url(pasteboard).filter(|path| is_image_file(path))
@@ -1150,20 +1201,27 @@ fn path_from_file_url(pasteboard: &NSPasteboard) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
-fn filenames_image(pasteboard: &NSPasteboard) -> Option<PathBuf> {
+fn filenames_path(pasteboard: &NSPasteboard) -> Option<PathBuf> {
     let kind = NSString::from_str("NSFilenamesPboardType");
+    if !type_available(pasteboard, &kind) {
+        return None;
+    }
     let list = pasteboard.propertyListForType(&kind)?;
     let array = list.downcast::<NSArray>().ok()?;
     if array.count() != 1 {
         return None;
     }
-    let path = PathBuf::from(
+    Some(PathBuf::from(
         array
             .objectAtIndex(0)
             .downcast::<NSString>()
             .ok()?
             .to_string(),
-    );
+    ))
+}
+
+fn filenames_image(pasteboard: &NSPasteboard) -> Option<PathBuf> {
+    let path = filenames_path(pasteboard)?;
     is_image_file(&path).then_some(path)
 }
 
@@ -1193,7 +1251,7 @@ mod tests {
 
     use super::{
         PasteMarks, detect_image_bytes, extension_kind, image_uti, is_image_file,
-        is_stale_history_file, marks_of, names_copied_image,
+        is_stale_history_file, marks_of, names_copied_file, names_copied_image,
     };
 
     #[test]
@@ -1293,6 +1351,17 @@ mod tests {
         assert!(is_image_file(&png.0));
         let pdf = write_temp("copycraft-infer-pdf.png", b"%PDF-1.4\n");
         assert!(!is_image_file(&pdf.0));
+    }
+
+    #[test]
+    fn a_copied_text_file_is_named_the_same_way_as_a_picture() {
+        let path = Path::new("/tmp/people.csv");
+        assert!(names_copied_file("people.csv", path));
+        assert!(names_copied_file("/tmp/people.csv", path));
+        assert!(names_copied_file("file:///tmp/people.csv", path));
+        // The file's contents are not its name, so they stay a normal copy.
+        assert!(!names_copied_file("name,age\nann,1\n", path));
+        assert!(names_copied_image("people.csv", Some(path)));
     }
 
     #[test]

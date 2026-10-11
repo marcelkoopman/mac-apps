@@ -40,12 +40,12 @@ pub struct OpenedFile {
     pub name: String,
     pub text: Option<Zeroizing<String>>,
     pub note: Option<String>,
-    /// A dropped picture, shown like a copied one.
+    /// A picture from a drop or the open panel, shown like a copied one.
     pub image: Option<OpenedImage>,
 }
 
-/// A dropped picture: its encoded bytes (shared with its history entry), and what the image
-/// card shows about it once the app has looked.
+/// A picture from a drop or the open panel: its encoded bytes (shared with its history entry
+/// when a drop recorded it), and what the image card shows about it once the app has looked.
 #[derive(Clone)]
 pub struct OpenedImage {
     pub bytes: SecretBytes,
@@ -53,10 +53,11 @@ pub struct OpenedImage {
     pub scan: Option<ImageScan>,
 }
 
-/// A dropped file: a picture when its contents are one (see [`is_image_file`]), else read as
-/// text like [`load`]. A binary file that is not text either is tried as a picture too: the
-/// drop only lets text and image files through, and the system draws formats the sniffer does
-/// not know (camera RAW, …). Whether it can is up to the card ([`UNREADABLE_IMAGE`]).
+/// A dropped or chosen file: a picture when its contents are one (see [`is_image_file`]), else
+/// read as text like [`load`]. A binary file that is not text either is tried as a picture too:
+/// the system draws formats the sniffer does not know (camera RAW, …). Whether it can is up to
+/// the card ([`unreadable_image`]). Kies bestand uses this too; the app then records it in
+/// history the same way as a drop.
 pub fn load_dropped(path: &Path) -> OpenedFile {
     if is_image_file(path) {
         return load_image(path);

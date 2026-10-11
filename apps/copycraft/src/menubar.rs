@@ -107,8 +107,8 @@ struct App {
     last_copy: Option<Instant>,
     /// [`crate::settings::Settings::history_minutes`], read once and kept in step with the menu.
     history_minutes: u32,
-    /// The table versions of a chosen file, which is not in history (a history entry keeps its
-    /// own). Dropped with the file.
+    /// Table versions for a file on the card whose text is not in history. A drop, Kies bestand
+    /// and a copied file are recorded, and then use that history entry's table.
     opened_table: TableVersions,
     /// The table job on its thread. One at a time: a new one cancels it.
     table_job: Option<TableRun>,
@@ -116,8 +116,8 @@ struct App {
     table_error: Option<String>,
     /// The entry the table window shows, while it is open.
     table_window: Option<TableWindow>,
-    /// The picture versions of a chosen file, which is not in history (a history entry,
-    /// a dropped picture's too, keeps its own). Dropped with the file.
+    /// Picture versions for a file on the card whose bytes are not in history. A drop, Kies
+    /// bestand and a copied picture are recorded, and then use that history entry's versions.
     opened_image: ImageVersions,
     /// The Image ▾ job on its thread. One at a time: a new one cancels it.
     image_job: Option<ImageRun>,
@@ -320,7 +320,14 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // A closed card forgets the file, so the next hotkey shows the clipboard.
-        if self.opened.is_some() && !launcher::is_open() {
+        // Open table closes the card on purpose; that window keeps the file until it closes.
+        if forget_opened_file(
+            launcher::is_open(),
+            self.opened.is_some(),
+            self.table_window
+                .as_ref()
+                .is_some_and(|window| window.opened),
+        ) {
             self.leave_opened();
         }
         while let Ok(event) = MenuEvent::receiver().try_recv() {
@@ -1684,14 +1691,16 @@ impl App {
         #[cfg(target_os = "macos")]
         {
             if let Some(path) = crate::macos_open::choose_path() {
-                self.show_source(crate::open_file::load(&path));
+                // Same as a drop: history, the well, and a picture scan. The clipboard stays.
+                self.show_dropped(crate::open_file::load_dropped(&path));
             }
             launcher::order_front();
         }
     }
 
-    /// A dropped file, text or picture: into history like a copy (newest first, the same limit,
-    /// zeroized when it falls off or on Wipe), then onto the card. The clipboard is left as it is.
+    /// A dropped or chosen file, text or picture: into history like a copy (newest first, the
+    /// same limit, zeroized when it falls off or on Wipe), then onto the card. The clipboard is
+    /// left as it is.
     fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
         let opened = self.look_at_dropped_image(opened);
         let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
@@ -1804,7 +1813,7 @@ impl App {
 
     /// Show `opened` on the card instead of the clipboard, from its original view. Every way a
     /// file gets onto the card goes through here, and the card labels and blurs it like the
-    /// clipboard. A chosen file is not recorded in history; a drop is (see `show_dropped`).
+    /// clipboard. A drop and Kies bestand are recorded in history first ([`Self::show_dropped`]).
     fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
         if self
             .table_window
@@ -3027,6 +3036,12 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     }
 }
 
+/// A closed card drops a chosen file. Not while the table window still shows that file:
+/// Open table closes the card, and the window stays with the file until the window closes.
+fn forget_opened_file(card_open: bool, file_open: bool, window_shows_file: bool) -> bool {
+    file_open && !card_open && !window_shows_file
+}
+
 /// When history is due to be forgotten: `minutes` after the last copy. `None` with no time
 /// limit (0) or nothing to forget.
 fn history_due(last_copy: Option<Instant>, minutes: u32, empty: bool) -> Option<Instant> {
@@ -3300,11 +3315,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipSig, history_due, icon_tip, status_labels, status_rows, tray_label, version_label,
+        ClipSig, forget_opened_file, history_due, icon_tip, status_labels, status_rows, tray_label,
+        version_label,
     };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use zeroize::Zeroizing;
+
+    #[test]
+    fn a_closed_card_keeps_a_file_while_its_table_window_is_open() {
+        assert!(!forget_opened_file(true, true, false));
+        assert!(forget_opened_file(false, true, false));
+        // Open table hides the card and the window shows the chosen file.
+        assert!(!forget_opened_file(false, true, true));
+        assert!(!forget_opened_file(false, false, true));
+    }
 
     #[test]
     fn history_is_forgotten_minutes_after_the_last_copy() {
