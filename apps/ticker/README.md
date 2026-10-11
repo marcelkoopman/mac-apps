@@ -105,6 +105,20 @@ scripts/tag_release.sh ticker
 
 This bumps the patch version and tags `ticker-vX.Y.Z`. GitHub Actions then builds an ad-hoc signed `ticker-X.Y.Z.dmg` (Apple silicon) and publishes it on [Releases](https://github.com/marcelkoopman/mac-apps/releases). See the [root README](../../README.md#release) for details.
 
+## App Store readiness
+
+Preparation only: Ticker is not submitted to the Mac App Store, and none of this was run through App Store review. What is in the repo:
+
+- **Privacy manifest**: `apps/ticker/PrivacyInfo.xcprivacy`, shipped as `Contents/Resources/PrivacyInfo.xcprivacy` through `resources` in `[package.metadata.bundle]`. No tracking, no tracking domains, no collected data: Ticker requests the asset URLs from `config.toml` with plain GETs (fixed user agent, no identifiers, no watch list or other user data in the request), and the third-party price servers see the device's IP address as any web server does. Required-reason APIs, from reading the sources and the dependencies:
+  - `FileTimestamp` **C617.1**: `std::fs::metadata` and `modified()` (stat) on its own files in the app container (watch list change detection in `src/price_watch.rs`, config and history files).
+  - `SystemBootTime` **35F9.1**: `std::time::Instant` (the monotonic uptime clock on macOS) for elapsed time between events inside the app (poll timing, menu retry, request timing).
+  - Not declared: `UserDefaults` (no NSUserDefaults call in Ticker or in the mac-ui features it enables), disk space, active keyboard APIs.
+  - These are my reading, not an Apple verdict; App Store Connect reports missing declarations on upload.
+- **Export compliance, undecided**: `ITSAppUsesNonExemptEncryption` is deliberately **not** set in `assets/Info.plist.ext`. Ticker talks HTTPS through reqwest's default TLS, which here is the bundled `rustls` with `aws-lc-rs` (checked with `cargo tree`; `rustls-platform-verifier` only verifies certificates through the system), not Apple's TLS. Standard protocols such as HTTPS are generally treated as exempt, but Apple's questionnaire distinguishes standard algorithms used through the operating system from ones the app brings itself, so setting `false` here is not obviously right. Decide (and set the key, or answer the questions in App Store Connect) before upload. Switching to the system TLS would need a different reqwest feature set.
+- **Checks**: `apps/ticker/tests/privacy_manifest.rs` (needs the macOS build, like Ticker's other tests); `scripts/check_privacy_manifest.sh` (macOS: `plutil -lint`, the file is in the bundle), called by `scripts/sign_app.sh`, the release workflow (before and after signing) and CI (source file). To check by hand on a built app: `plutil -lint Ticker.app/Contents/Resources/PrivacyInfo.xcprivacy` and `plutil -p Ticker.app/Contents/Resources/PrivacyInfo.xcprivacy`.
+
+Still missing for the Store: distribution signing (an Apple Distribution and a Mac Installer Distribution certificate; releases are ad-hoc signed or Developer ID, which the Store does not take), a provisioning profile embedded in the app (`embedded.provisionprofile`) and the application and team identifier entitlements, a signed `.pkg` for upload, the export compliance answer above, and the App Store Connect record: description, screenshots, category, age rating and privacy answers (these must match the manifest). The sandbox entitlements already exist; whether they suffice for review has not been tested.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

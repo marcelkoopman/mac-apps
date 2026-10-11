@@ -122,6 +122,21 @@ scripts/tag_release.sh copycraft
 
 This bumps the patch version and tags `copycraft-vX.Y.Z`. GitHub Actions then builds an ad-hoc signed `copycraft-X.Y.Z.dmg` (Apple silicon) and publishes it on [Releases](https://github.com/marcelkoopman/mac-apps/releases). See the [root README](../../README.md#release) for details.
 
+## App Store readiness
+
+Preparation only: Copycraft is not submitted to the Mac App Store, and none of this was run through App Store review. What is in the repo:
+
+- **Privacy manifest**: `apps/copycraft/PrivacyInfo.xcprivacy`, shipped as `Contents/Resources/PrivacyInfo.xcprivacy` through `resources` in `[package.metadata.bundle]`. It declares no tracking, no tracking domains and no collected data (Copycraft is offline). Required-reason APIs, from reading the sources and the dependencies:
+  - `UserDefaults` **CA92.1**: the app's own settings and appearance, in its own defaults domain (`src/settings.rs`, `mac_ui::theme`).
+  - `FileTimestamp` **C617.1**: `std::fs::metadata` (stat) on its own files in the app container (preview files in the temporary directory). **3B52.1**: stat on files you picked with the open panel, dropped on the card or copied from Finder (`src/open_file.rs`, `src/macos_pasteboard.rs`).
+  - `SystemBootTime` **35F9.1**: `std::time::Instant` (the monotonic uptime clock on macOS) for elapsed time between events inside the app.
+  - Not declared: disk space (no statvfs or volume-capacity calls in Copycraft; `sysinfo` is in the tree through polars but without its disk feature) and active keyboard APIs (Apple lists the UIKit call; winit's keyboard-layout lookup is not on the list).
+  - These are my reading, not an Apple verdict; App Store Connect reports missing declarations on upload.
+- **Export compliance**: `ITSAppUsesNonExemptEncryption` is `false` in `assets/Info.plist.ext`. Copycraft has no network code and no encryption of its own; the dependency tree holds hashing for deduplication (std `DefaultHasher`, not cryptographic) and `rand` with `chacha20` as a random number generator (via polars), not used to encrypt anything. `scripts/check_copycraft_offline.sh` keeps TLS and HTTP crates out. The declaration to Apple is the owner's to make; check it before upload.
+- **Checks**: `apps/copycraft/tests/privacy_manifest.rs` (runs everywhere); `scripts/check_privacy_manifest.sh` (macOS: `plutil -lint`, the file is in the bundle, the export key is in `Info.plist`), called by `scripts/sign_app.sh`, the release workflow (before and after signing) and CI (source file). To check by hand on a built app: `plutil -lint Copycraft.app/Contents/Resources/PrivacyInfo.xcprivacy` and `plutil -p Copycraft.app/Contents/Info.plist | grep ITSApps`.
+
+Still missing for the Store: distribution signing (an Apple Distribution and a Mac Installer Distribution certificate; releases are ad-hoc signed or Developer ID, which the Store does not take), a provisioning profile embedded in the app (`embedded.provisionprofile`) and the application and team identifier entitlements, a signed `.pkg` for upload, and the App Store Connect record: description, screenshots, category, age rating, privacy answers (these must match the manifest) and review notes. The sandbox entitlements already exist; whether they suffice for review (for example the global hotkey and pasteboard polling) has not been tested.
+
 ## License
 
 Apache-2.0, see [LICENSE](LICENSE).
