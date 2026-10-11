@@ -27,7 +27,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── import_signing_cert.sh # CI: Developer ID .p12 into a temporary keychain
 │   ├── notarize.sh         # notarytool submit --wait + staple + Gatekeeper check (.app/.dmg)
 │   ├── check_copycraft_offline.sh # CI: no network crates in copycraft's tree, no osascript
-│   └── tag_release.sh      # bump + tag + push a release for one app
+│   └── tag_release.sh      # maintainer only: bump + tag + push a release for one app
 └── .github/workflows/
     ├── ci.yml              # fmt+clippy (macos-26), tests on macos-26 and macos-15, app icon check; cargo audit weekly/manual
     ├── release-copycraft.yml
@@ -75,20 +75,7 @@ CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04`
 
 ## Release
 
-```bash
-scripts/tag_release.sh copycraft   # or: ticker
-```
-
-The script needs a clean working tree. It switches to `main` (override with `BRANCH=...`), pulls, and bumps the patch version in `apps/<app>/Cargo.toml` (both the package and bundle `version`). After you confirm, it commits `<app>: bump version to X.Y.Z` with `Cargo.lock`, tags `<app>-vX.Y.Z`, and pushes the branch and tag. It uses BSD `sed -i ''`, so run it on macOS.
-
-The tag triggers `release-<app>.yml`:
-
-1. check that the tag matches the version in `Cargo.toml`
-2. `cargo bundle --release --target aarch64-apple-darwin`
-3. compile the app icon with `scripts/build_app_icon.sh` (actool: `Assets.car` + `AppIcon.icns`, `CFBundleIconName`/`CFBundleIconFile`). The source is the first of `apps/<app>/assets/AppIcon.icon` (Icon Composer, macOS 26; needs Xcode 26), `AppIcon.appiconset/`, or the existing `icon.icns`; without any of them the step is skipped
-4. sign the app: ad-hoc (`codesign --sign -`, also `scripts/sign_app.sh`), or with Developer ID when the signing secrets exist (see below), then notarize and staple it
-5. build a DMG with `create-dmg` (with Developer ID: sign, notarize and staple the DMG as well)
-6. publish `<app>-X.Y.Z.dmg` with `gh release create` (auto-generated notes)
+Releases are made only by the maintainer. Contributions are welcome as issues and pull requests; please do not tag, publish or distribute builds. A pull request is reviewed and merged by the maintainer, and the maintainer decides when a release is made. The release workflows run for the maintainer's release tags only.
 
 Downloads: [Releases](https://github.com/marcelkoopman/mac-apps/releases).
 

@@ -116,11 +116,7 @@ cd apps/copycraft && cargo bundle --release
 
 ## Release
 
-```bash
-scripts/tag_release.sh copycraft
-```
-
-This bumps the patch version and tags `copycraft-vX.Y.Z`. GitHub Actions then builds an ad-hoc signed `copycraft-X.Y.Z.dmg` (Apple silicon) and publishes it on [Releases](https://github.com/marcelkoopman/mac-apps/releases). See the [root README](../../README.md#release) for details.
+Releases are made only by the maintainer (see the [root README](../../README.md#release)). Issues and pull requests are welcome; please do not tag or publish builds.
 
 ## App Store readiness
 
