@@ -7,7 +7,8 @@ edition.workspace = true
 name = "Ticker"
 identifier = "com.github.marcelkoopman.ticker"
 icon = ["assets/icon.icns"]
-resources = ["config.toml"]
+# config.toml and the privacy manifest land in Contents/Resources/.
+resources = ["config.toml", "PrivacyInfo.xcprivacy"]
 version = "0.1.45"
 category = "Utilities"
 short_description = "Price Ticker"

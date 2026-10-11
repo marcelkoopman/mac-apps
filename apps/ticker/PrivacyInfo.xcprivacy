@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ticker privacy manifest. Shipped as Contents/Resources/PrivacyInfo.xcprivacy through
+  `resources` in apps/ticker/Cargo.toml; checked by scripts/check_privacy_manifest.sh and
+  apps/ticker/tests/privacy_manifest.rs.
+  No tracking, no collected data: Ticker sends plain GET requests for the asset URLs in its
+  config (no identifiers, no watchlist or other user data in the request) and keeps everything
+  else on the device.
+  Required-reason APIs actually used (found by reading the sources, std and dependencies):
+  - FileTimestamp C617.1: std::fs::metadata / modified() (stat) on its own files in the app
+    container (watch list change detection in src/price_watch.rs, config and history files).
+  - SystemBootTime 35F9.1: std::time::Instant (macOS: monotonic uptime clock) for elapsed time
+    between events inside the app (poll timing, menu retry, request timing).
+  Not used: UserDefaults (no NSUserDefaults call in ticker or in the mac-ui features it
+  enables), disk space, active keyboard APIs.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

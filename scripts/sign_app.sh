@@ -14,6 +14,9 @@
 #     target/aarch64-apple-darwin/release/bundle/osx/<Name>.app  (CI / --target build)
 #     target/release/bundle/osx/<Name>.app                       (plain `cargo bundle --release`)
 #
+# It also checks that Contents/Resources/PrivacyInfo.xcprivacy is in the bundle and parses
+# (scripts/check_privacy_manifest.sh).
+#
 # Run it AFTER everything is copied into the bundle (including scripts/build_app_icon.sh):
 # changing the bundle after signing breaks the signature.
 set -euo pipefail
@@ -58,6 +61,8 @@ if [ "$PKG" = "ticker" ] && [ ! -f "$APP/Contents/Resources/assets/normal.png" ]
 fi
 
 plutil -lint "$ENTITLEMENTS" >/dev/null
+# The privacy manifest must be in the bundle (and the export key in Info.plist) before sealing.
+"$ROOT/scripts/check_privacy_manifest.sh" "$PKG" "$APP" || die "Privacy manifest check failed for $APP"
 
 IDENTITY="${MACOS_SIGN_IDENTITY:-}"
 # No --deep: the bundle holds one executable and no nested frameworks/helpers,
@@ -75,6 +80,9 @@ else
     --options runtime --timestamp --entitlements "$ENTITLEMENTS" "$APP"
 fi
 codesign --verify --strict --verbose=2 "$APP"
+# Still in the signed bundle (the seal covers Resources, so --verify above would also fail if
+# it had changed).
+"$ROOT/scripts/check_privacy_manifest.sh" "$PKG" "$APP" || die "Privacy manifest check failed after signing"
 
 echo "=== Signature ==="
 SIG="$(codesign -dvv "$APP" 2>&1)"

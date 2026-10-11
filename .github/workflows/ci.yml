@@ -64,6 +64,13 @@ jobs:
       - name: Copycraft offline guards
         run: scripts/check_copycraft_offline.sh
 
+      # plutil -lint and key checks on both source manifests (the release workflows check the
+      # built bundles).
+      - name: Privacy manifests
+        run: |
+          scripts/check_privacy_manifest.sh copycraft
+          scripts/check_privacy_manifest.sh ticker
+
   # Tests on the pinned macOS 26 runner and on macOS 15, where the pre-26 fallbacks run for real
   # (FlexiblePush instead of the Glass bezel, frosted background, plain view instead of the glass
   # group). Each runner uses its image's Xcode (keep 26.6 in step with XCODE_VERSION).

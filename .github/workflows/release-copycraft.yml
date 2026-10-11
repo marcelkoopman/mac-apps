@@ -122,6 +122,12 @@ jobs:
       - name: Compile app icon (actool)
         run: scripts/build_app_icon.sh "$PKG" "$APP"
 
+      # PrivacyInfo.xcprivacy comes from `resources` in Cargo.toml (cargo-bundle copies it to
+      # Contents/Resources). Fails the build when it is missing, does not parse (plutil -lint),
+      # differs from the source, or the export-compliance key is missing from Info.plist.
+      - name: Check privacy manifest in the bundle
+        run: scripts/check_privacy_manifest.sh "$PKG" "$APP"
+
       - name: Verify app bundle
         run: |
           echo "=== App bundle ==="
@@ -204,6 +210,10 @@ jobs:
             echo "::error::unexpected entitlements in the signed app: $KEYS"
             exit 1
           fi
+
+      # Signing must not have lost the manifest (the seal covers Contents/Resources).
+      - name: Verify privacy manifest in the signed app
+        run: scripts/check_privacy_manifest.sh "$PKG" "$APP"
 
       # Before the DMG is built, so the DMG holds the stapled app (also opens offline).
       - name: Notarize and staple the app
