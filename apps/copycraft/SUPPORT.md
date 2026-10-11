@@ -14,10 +14,10 @@ Heb je een vraag of een bug gevonden? Open een issue op [GitHub](https://github.
 2. **Waarom is mijn tekst vaag?** Dat is het privacyfilter. Klik op de tekst om hem te tonen. Wil je het uit, zet dan "Gebruik privacyfilter" uit in Instellingen.
 3. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of Copycraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Privacy en beveiliging, Plakken vanuit andere apps.
 4. **Gaat mijn data het internet op?** Nee. Copycraft werkt volledig offline en heeft geen netwerktoegang.
-5. **Hoe wis ik wat ik gekopieerd heb?** Gebruik Wis of Wis geschiedenis in de kaart of in het menu.
-6. **Hoe maak ik een schermafbeelding van de kaart?** Standaard blokkeert Copycraft dat. Kies in het menu "Allow screenshots" om het voor deze sessie toe te staan.
+5. **Hoe wis ik wat ik gekopieerd heb?** Gebruik Wis of Geschiedenis wissen in de kaart of in het menu.
+6. **Hoe maak ik een schermafbeelding van de kaart?** Standaard blokkeert Copycraft dat. Kies in het menu "Schermafbeeldingen toestaan" om het voor deze sessie toe te staan.
 7. **Een app moet genegeerd worden.** Voeg die toe bij Genegeerde apps in Instellingen.
-8. **Hoe start ik Copycraft bij inloggen?** Zet "Open at Login" aan in Instellingen.
+8. **Hoe start ik Copycraft bij inloggen?** Zet "Openen bij inloggen" aan in Instellingen.
 
 ## English
 
