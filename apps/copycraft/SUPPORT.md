@@ -6,7 +6,7 @@ Draft texts for the support page and the App Store listing. Check the setting na
 
 ### Support
 
-Heb je een vraag of een bug gevonden? Open een issue op [GitHub](https://github.com/marcelkoopman/mac-apps/issues). Bugs los ik zo goed mogelijk op, maar zonder vaste reactietijd, zonder garantie en zonder terugbetaling door mij. Terugbetalingen lopen via Apple.
+Heb je een vraag of een bug gevonden? Mail naar mac-apps-support@proton.me of open een issue op [GitHub](https://github.com/marcelkoopman/mac-apps/issues). Bugs los ik zo goed mogelijk op, maar zonder vaste reactietijd, zonder garantie en zonder terugbetaling door mij. Terugbetalingen lopen via Apple.
 
 ### Veelgestelde vragen
 
@@ -23,7 +23,7 @@ Heb je een vraag of een bug gevonden? Open een issue op [GitHub](https://github.
 
 ### Support
 
-Question or found a bug? Open an issue on [GitHub](https://github.com/marcelkoopman/mac-apps/issues). I fix bugs as best I can, but with no fixed response time, no warranty and no refunds from me. Refunds go through Apple.
+Question or found a bug? Email mac-apps-support@proton.me or open an issue on [GitHub](https://github.com/marcelkoopman/mac-apps/issues). I fix bugs as best I can, but with no fixed response time, no warranty and no refunds from me. Refunds go through Apple.
 
 ### FAQ
 
