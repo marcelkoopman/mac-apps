@@ -14,6 +14,12 @@ pub enum UserEvent {
     },
     /// The save thread is done: `Err` holds the message to log.
     SaveFinished(Result<(), String>),
+    /// The preview thread wrote the picture. `Err` holds the message to log. A stale
+    /// `generation` (Wipe, lock, a newer click) is shredded instead of opened.
+    PreviewReady {
+        generation: u64,
+        result: Result<std::path::PathBuf, String>,
+    },
     /// The "Show all" thread built the whole-text card.
     FullCardReady(Box<FullCard>),
     /// A file was dropped on the card.

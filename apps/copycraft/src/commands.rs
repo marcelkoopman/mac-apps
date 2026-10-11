@@ -492,6 +492,9 @@ pub enum CommandId {
     DiffSwap,
     Copy,
     Save,
+    /// Open the picture in Preview (Voorvertoning). The card closes: it floats above other
+    /// windows and would cover Preview.
+    OpenPreview,
     History(usize),
     /// Step to the previous copy. The history order stays put.
     HistoryOlder,
@@ -1804,6 +1807,9 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
                 .map(|(command, _)| command),
         );
     }
+    if content_actions(data).preview {
+        commands.push(preview_command());
+    }
     for item in &data.history {
         commands.push(command(
             CommandId::History(item.index),
@@ -2822,11 +2828,13 @@ fn original_command() -> Command {
     )
 }
 
-/// Copy and Save sit on the well, on the view that is showing.
+/// Copy, Save and Preview sit on the well, on the view that is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContentActions {
     pub copy: bool,
     pub save: bool,
+    /// Open the picture in Preview. The picture itself, or a Base64 picture in the Decode view.
+    pub preview: bool,
 }
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
@@ -2835,6 +2843,7 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
         return ContentActions {
             copy: ready,
             save: ready,
+            preview: false,
         };
     }
     match data.subject_kind {
@@ -2846,10 +2855,13 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
         | SubjectKind::PasteAsk => ContentActions {
             copy: false,
             save: false,
+            preview: false,
         },
         SubjectKind::Image => image_content_actions(data),
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
+            // A Base64 picture drawn in the Decode view. The description text is not a picture.
+            let preview = data.view == CardView::Decode && data.picture.is_some();
             if crate::youtube::video_id(text).is_some()
                 || crate::page_preview::page_url(text).is_some()
             {
@@ -2857,11 +2869,13 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
                 ContentActions {
                     copy: true,
                     save: false,
+                    preview,
                 }
             } else {
                 ContentActions {
                     copy: true,
                     save: true,
+                    preview,
                 }
             }
         }
@@ -2875,7 +2889,21 @@ fn image_content_actions(data: &LaunchData) -> ContentActions {
         CardView::Ocr | CardView::Qr => image_view_text(scan, data.view).is_some(),
         _ => false,
     };
-    ContentActions { copy, save: true }
+    // Info, Text and QR are the scan's text. Preview opens the picture itself.
+    ContentActions {
+        copy,
+        save: true,
+        preview: data.view == CardView::Original,
+    }
+}
+
+fn preview_command() -> Command {
+    command(
+        CommandId::OpenPreview,
+        crate::locale::t("open_preview"),
+        crate::locale::t("detail_open_preview"),
+        "preview voorvertoning quick look open image picture",
+    )
 }
 
 pub fn wipe_commands(commands: &mut [Command]) {
@@ -2890,6 +2918,10 @@ pub fn copy_tip(title: &str) -> String {
 
 pub fn save_tip(title: &str) -> String {
     crate::locale::tf("save_tip", &[&title])
+}
+
+pub fn preview_tip(title: &str) -> String {
+    crate::locale::tf("preview_tip", &[&title])
 }
 
 fn image_meta(facts: &ImageFacts) -> String {
@@ -3153,7 +3185,8 @@ mod tests {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
@@ -3192,7 +3225,8 @@ mod tests {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         assert_eq!(card.excerpt, body);
@@ -3284,7 +3318,8 @@ mod tests {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         assert_eq!(card.excerpt, body);
@@ -3812,7 +3847,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
     }
@@ -3826,7 +3862,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         assert_eq!(presented_view(src, CardView::Original), CardView::Format);
@@ -3977,7 +4014,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: false,
-                save: true
+                save: true,
+                preview: true,
             }
         );
         input.view = CardView::Info;
@@ -3985,7 +4023,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: false,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         let info = work_card(&input);
@@ -4119,6 +4158,33 @@ fn main() {
     }
 
     #[test]
+    fn a_picture_opens_in_preview() {
+        let input = data(SubjectKind::Image, None);
+        assert!(content_actions(&input).preview);
+        assert!(!keeps_card_open(&CommandId::OpenPreview));
+        let found = matching(&search_pool(&input), "voorvertoning");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, CommandId::OpenPreview);
+        assert_eq!(found[0].title, crate::locale::t("open_preview"));
+        assert_eq!(found[0].detail, crate::locale::t("detail_open_preview"));
+        let mut info = input.clone();
+        info.view = CardView::Info;
+        assert!(!content_actions(&info).preview);
+        assert!(matching(&search_pool(&info), "preview").is_empty());
+        let text = data(SubjectKind::Text, Some("hello"));
+        assert!(!content_actions(&text).preview);
+        let mut decoded = text;
+        decoded.view = CardView::Decode;
+        decoded.picture = crate::clipboard::SecretBytes::new(vec![1]);
+        assert!(content_actions(&decoded).preview);
+        assert!(
+            matching(&search_pool(&decoded), "preview")
+                .iter()
+                .any(|cmd| cmd.id == CommandId::OpenPreview)
+        );
+    }
+
+    #[test]
     fn plain_text_offers_copy_and_save_on_the_content() {
         let input = data(SubjectKind::Text, Some("Emmi Silvennoinen"));
         assert!(chips(&input).is_empty());
@@ -4129,7 +4195,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
     }
@@ -4172,7 +4239,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
     }
@@ -4247,7 +4315,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: false,
-                save: true
+                save: true,
+                preview: true,
             }
         );
         input.view = CardView::Info;
@@ -4255,7 +4324,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         assert_eq!(copy_tip("Image info"), "Copy Image info");
@@ -4264,7 +4334,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         input.view = CardView::Qr;
@@ -4272,7 +4343,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
         input.view = CardView::Info;
@@ -4299,7 +4371,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: false
+                save: false,
+                preview: false,
             }
         );
     }
@@ -4320,7 +4393,8 @@ fn main() {
             content_actions(&input),
             ContentActions {
                 copy: true,
-                save: false
+                save: false,
+                preview: false,
             }
         );
     }
@@ -4387,7 +4461,8 @@ fn main() {
             )),
             ContentActions {
                 copy: true,
-                save: true
+                save: true,
+                preview: false,
             }
         );
     }
@@ -5277,7 +5352,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             content_actions(&input),
             ContentActions {
                 copy: false,
-                save: false
+                save: false,
+                preview: false,
             }
         );
         let quiet = data(SubjectKind::NoText, None);
@@ -5285,7 +5361,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             content_actions(&quiet),
             ContentActions {
                 copy: false,
-                save: false
+                save: false,
+                preview: false,
             }
         );
         let menu = overflow(&input);

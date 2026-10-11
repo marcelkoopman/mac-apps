@@ -276,6 +276,9 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Run(id) => self.run_command(event_loop, id),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
+            UserEvent::PreviewReady { generation, result } => {
+                self.finish_preview(generation, result);
+            }
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
             UserEvent::DroppedFile(path) => {
                 self.show_dropped(crate::open_file::load_dropped(&path));
@@ -333,6 +336,7 @@ impl ApplicationHandler<UserEvent> for App {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
                 tray::QUIT_ID => {
+                    discard_preview_files();
                     event_loop.exit();
                     return;
                 }
@@ -412,6 +416,7 @@ impl App {
                 }
             }
             CommandId::Save => self.save_current(),
+            CommandId::OpenPreview => self.open_preview(),
             CommandId::ShowAll => self.show_all(),
             CommandId::Original
             | CommandId::Format
@@ -514,7 +519,10 @@ impl App {
                 }
             }
             CommandId::DiffSwap => self.swap_diff(),
-            CommandId::Quit => event_loop.exit(),
+            CommandId::Quit => {
+                discard_preview_files();
+                event_loop.exit();
+            }
         }
     }
 
@@ -2162,6 +2170,59 @@ impl App {
         Ok(())
     }
 
+    /// Open the picture on the card in Preview. The card has already closed (it floats above
+    /// Preview). The write runs off the main thread; opening Preview stays on it.
+    fn open_preview(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(bytes) = self.preview_bytes() else {
+                eprintln!("preview: no picture to open");
+                return;
+            };
+            let generation = crate::macos_open::begin_preview();
+            let spawned = std::thread::Builder::new()
+                .name("copycraft-preview".into())
+                .spawn(move || {
+                    let result =
+                        crate::macos_open::write_preview(bytes).map_err(|err| format!("{err:#}"));
+                    launcher::emit(UserEvent::PreviewReady { generation, result });
+                });
+            if let Err(err) = spawned {
+                eprintln!("preview failed: {err}");
+            }
+        }
+    }
+
+    /// The picture the Preview button opens: the version shown, else the original, else the
+    /// pasteboard. `None` for text views and for a version that is not worked out yet.
+    #[cfg(target_os = "macos")]
+    fn preview_bytes(&mut self) -> Option<crate::macos_open::PreviewBytes> {
+        use crate::macos_open::PreviewBytes;
+        if self.card_view == CardView::Decode {
+            let bytes = self.decoded_picture.as_ref()?.bytes.clone()?;
+            return Some(PreviewBytes::Shared(bytes));
+        }
+        if self.card_view != CardView::Original || !self.shows_image() {
+            return None;
+        }
+        if let Some(source) = self.image_source() {
+            let stepped = self
+                .image_versions(&source)
+                .is_some_and(|versions| versions.cursor() > 0);
+            if stepped {
+                let picture = self.image_versions(&source)?.shown()?.picture.clone();
+                return Some(PreviewBytes::Shared(picture));
+            }
+            return Some(PreviewBytes::Shared(source));
+        }
+        if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
+            return Some(PreviewBytes::Owned(Zeroizing::new(bytes)));
+        }
+        Some(PreviewBytes::Clipboard(
+            crate::macos_pasteboard::card_image_input()?,
+        ))
+    }
+
     fn save_current(&mut self) {
         #[cfg(target_os = "macos")]
         {
@@ -2283,6 +2344,31 @@ impl App {
             launcher::set_busy(false);
             eprintln!("copycraft: spinner hidden");
         }
+    }
+
+    fn finish_preview(&mut self, generation: u64, result: Result<std::path::PathBuf, String>) {
+        #[cfg(target_os = "macos")]
+        {
+            if !crate::macos_open::preview_is_current(generation) {
+                if let Ok(path) = result {
+                    crate::macos_open::shred_preview(&path);
+                }
+                return;
+            }
+            match result {
+                Ok(path) => {
+                    if crate::macos_open::open_in_preview(&path) {
+                        crate::macos_open::keep_preview(path);
+                    } else {
+                        crate::macos_open::shred_preview(&path);
+                        eprintln!("preview: could not open Voorvertoning");
+                    }
+                }
+                Err(message) => eprintln!("preview failed: {message}"),
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (generation, result);
     }
 
     fn finish_save(&mut self, result: Result<(), String>) {
@@ -2446,6 +2532,7 @@ impl App {
     }
 
     fn clear_history(&mut self) {
+        discard_preview_files();
         self.clear_diff();
         self.forget_decoded_picture();
         let view = ClipboardView::from_os();
@@ -2495,6 +2582,7 @@ impl App {
     /// The screen locked, the Mac is going to sleep or another user took over: forget history
     /// whatever the setting says.
     fn session_ended(&mut self) {
+        discard_preview_files();
         self.last_copy = None;
         self.full_card = None;
         // Closed and wiped whatever history holds (a chosen file's window too).
@@ -2520,6 +2608,7 @@ impl App {
     /// Overwrite clipboard text and image bytes still held in this process,
     /// then empty the pasteboard.
     fn clear_secrets(&mut self) {
+        discard_preview_files();
         self.clear_diff();
         self.forget_decoded_picture();
         self.close_table_window();
@@ -3036,6 +3125,12 @@ fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> {
     }
 }
 
+/// Overwrite and delete pictures handed to Preview (Wipe, lock, sleep, quit, Clear history).
+fn discard_preview_files() {
+    #[cfg(target_os = "macos")]
+    crate::macos_open::discard_previews();
+}
+
 /// A closed card drops a chosen file. Not while the table window still shows that file:
 /// Open table closes the card, and the window stays with the file until the window closes.
 fn forget_opened_file(card_open: bool, file_open: bool, window_shows_file: bool) -> bool {
@@ -3224,6 +3319,9 @@ fn register_format_hotkey()
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     crate::locale::apply();
+    // Before the event loop, so a click cannot race this wipe of a previous run's pictures.
+    #[cfg(target_os = "macos")]
+    crate::macos_open::remove_stale_preview_files();
     appearance::apply(appearance::load());
     // Nothing heavy on the main thread at launch: the sensitivity recognizers are built, and
     // the temporary files older versions left for history pictures removed, in the background.

@@ -403,6 +403,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("diff_working", "Bezig met vergelijken…", "Comparing…"),
     ("copy_tip", "Kopieer {0}", "Copy {0}"),
     ("save_tip", "Bewaar {0}", "Save {0}"),
+    ("open_preview", "Voorvertoning", "Preview"),
+    (
+        "detail_open_preview",
+        "Open in Voorvertoning",
+        "Open in Preview",
+    ),
+    (
+        "preview_tip",
+        "Open {0} in Voorvertoning",
+        "Open {0} in Preview",
+    ),
     (
         "appearance_current",
         "Weergave · huidig",

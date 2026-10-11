@@ -181,12 +181,14 @@ thread_local! {
         Cell::new(commands::ContentActions {
             copy: false,
             save: false,
+            preview: false,
         })
     };
-    /// Right and bottom insets of the text: room for the Copy/Save buttons and the Show all pill.
+    /// Right and bottom insets of the text: room for the Copy/Save/Preview buttons and the Show all pill.
     static TEXT_GUTTER: Cell<(f64, f64)> = const { Cell::new((-1.0, -1.0)) };
     static COPY_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     static SAVE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+    static PREVIEW_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     /// Busy wheel over the well while a save runs. Created on first use.
     static SPINNER: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
     /// "Showing 200 of 23,220 rows" when the well holds a preview. Empty otherwise.
@@ -455,6 +457,11 @@ define_class!(
         #[unsafe(method(saveClicked:))]
         fn save_clicked(&self, _sender: Option<&NSButton>) {
             launcher::emit(UserEvent::Run(CommandId::Save));
+        }
+
+        #[unsafe(method(previewClicked:))]
+        fn preview_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::OpenPreview));
         }
 
         #[unsafe(method(showAllClicked:))]
@@ -970,6 +977,13 @@ fn ensure_window(mtm: MainThreadMarker) {
         "↓",
         sel!(saveClicked:),
     );
+    let preview_button = well_action(
+        mtm,
+        "eye",
+        crate::locale::t("open_preview"),
+        "◉",
+        sel!(previewClicked:),
+    );
     let reveal = reveal_cover(mtm);
     let version_row = version_row(mtm);
 
@@ -989,6 +1003,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&version_row.capsule);
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
+    content.addSubview(preview_button.view());
 
     HEADER.with(|slot| slot.replace(Some(header)));
     META.with(|slot| slot.replace(Some(meta)));
@@ -1012,6 +1027,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     SYMBOLS.with(|slot| slot.replace(Some(symbols)));
     COPY_BUTTON.with(|slot| slot.replace(Some(copy_button)));
     SAVE_BUTTON.with(|slot| slot.replace(Some(save_button)));
+    PREVIEW_BUTTON.with(|slot| slot.replace(Some(preview_button)));
     REVEAL.with(|slot| slot.replace(Some(reveal)));
     VERSION_ROW.with(|slot| slot.replace(Some(version_row)));
     WINDOW.with(|slot| slot.replace(Some(window)));
@@ -1057,6 +1073,11 @@ pub fn relabel() {
     SAVE_BUTTON.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             label_symbol(button, t("save"));
+        }
+    });
+    PREVIEW_BUTTON.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            label_symbol(button, t("open_preview"));
         }
     });
     PREVIOUS.with(|slot| {
@@ -2905,18 +2926,20 @@ fn raise_history_nav() {
 fn place_content_actions(preview_y: f64) {
     let actions = CONTENT_ACTIONS.get();
     let title = CARD_TITLE.with(|slot| slot.borrow().clone());
-    let right = card_width() - PAD - WELL_INSET - WELL_ACTION;
     let top = preview_y + PREVIEW_H - WELL_INSET - WELL_ACTION;
-    let copy_x = if actions.save {
-        right - WELL_GAP - WELL_ACTION
-    } else {
-        right
-    };
-    COPY_BUTTON.with(|slot| {
-        place_well_action(slot, copy_x, top, actions.copy, &commands::copy_tip(&title));
-    });
+    // Right to left: Save, Copy, Preview. A hidden one does not leave a gap.
+    let mut x = card_width() - PAD - WELL_INSET - WELL_ACTION;
+    let save_tip = commands::save_tip(&title);
+    let copy_tip = commands::copy_tip(&title);
+    let preview_tip = commands::preview_tip(&title);
     SAVE_BUTTON.with(|slot| {
-        place_well_action(slot, right, top, actions.save, &commands::save_tip(&title));
+        place_action_from_right(slot, &mut x, top, actions.save, &save_tip);
+    });
+    COPY_BUTTON.with(|slot| {
+        place_action_from_right(slot, &mut x, top, actions.copy, &copy_tip);
+    });
+    PREVIEW_BUTTON.with(|slot| {
+        place_action_from_right(slot, &mut x, top, actions.preview, &preview_tip);
     });
     // A preview keeps its last rows scrollable above the Show all pill.
     let previewing = PREVIEW_NOTE.with(|slot| !slot.borrow().is_empty()) && !well_is_masked();
@@ -2928,8 +2951,22 @@ fn place_content_actions(preview_y: f64) {
     set_text_gutter(text_gutter(actions), bottom);
 }
 
+fn place_action_from_right(
+    slot: &RefCell<Option<WellAction>>,
+    x: &mut f64,
+    y: f64,
+    shown: bool,
+    tip: &str,
+) {
+    place_well_action(slot, *x, y, shown, tip);
+    if shown {
+        *x -= WELL_GAP + WELL_ACTION;
+    }
+}
+
 fn text_gutter(actions: commands::ContentActions) -> f64 {
-    let count = usize::from(actions.copy) + usize::from(actions.save);
+    let count =
+        usize::from(actions.copy) + usize::from(actions.save) + usize::from(actions.preview);
     if count == 0 {
         return 0.0;
     }
@@ -2956,7 +2993,7 @@ fn place_well_action(slot: &RefCell<Option<WellAction>>, x: f64, y: f64, shown: 
 }
 
 fn raise_content_actions() {
-    for slot in [&COPY_BUTTON, &SAVE_BUTTON] {
+    for slot in [&COPY_BUTTON, &SAVE_BUTTON, &PREVIEW_BUTTON] {
         slot.with(|slot| {
             if let Some(button) = slot.borrow().as_ref()
                 && !button.view().isHidden()
