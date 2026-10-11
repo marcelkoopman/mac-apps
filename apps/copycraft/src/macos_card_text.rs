@@ -146,7 +146,7 @@ fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString
         display.push_str(&token);
         spans.push((token_kind, token.encode_utf16().count()));
     }
-    let attr = AttrText::new(&display, &font, &color_for(TokenKind::Text));
+    let attr = AttrText::new(&display, &font, &tone_color(kind, TokenKind::Text));
     let mut offset = 0usize;
     for (token_kind, len) in spans {
         attr.color_utf16(
@@ -154,7 +154,7 @@ fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString
                 location: offset,
                 length: len,
             },
-            &color_for(token_kind),
+            &tone_color(kind, token_kind),
         );
         offset += len;
     }
@@ -203,6 +203,34 @@ fn color_for(kind: TokenKind) -> Retained<NSColor> {
         TokenKind::Comment => NSColor::secondaryLabelColor(),
         TokenKind::Punct => NSColor::tertiaryLabelColor(),
         TokenKind::Text => NSColor::labelColor(),
+    }
+}
+
+/// How a CSV or TSV cell is drawn. Headers take the system accent, separators the secondary
+/// label, and every value (dates, numbers, text) the ordinary label colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CsvTone {
+    Accent,
+    Secondary,
+    Label,
+}
+
+fn csv_tone(kind: TokenKind) -> CsvTone {
+    match kind {
+        TokenKind::Key => CsvTone::Accent,
+        TokenKind::Punct => CsvTone::Secondary,
+        _ => CsvTone::Label,
+    }
+}
+
+fn tone_color(format: FormatKind, kind: TokenKind) -> Retained<NSColor> {
+    if !matches!(format, FormatKind::Csv | FormatKind::Tsv) {
+        return color_for(kind);
+    }
+    match csv_tone(kind) {
+        CsvTone::Accent => NSColor::controlAccentColor(),
+        CsvTone::Secondary => NSColor::secondaryLabelColor(),
+        CsvTone::Label => NSColor::labelColor(),
     }
 }
 
@@ -315,5 +343,16 @@ mod tests {
         let split = highlight_split(&body);
         assert!(body.is_char_boundary(split));
         assert!(split <= HIGHLIGHT_CAP);
+    }
+
+    #[test]
+    fn csv_headers_use_the_accent_and_values_stay_plain() {
+        use super::{CsvTone, csv_tone};
+        use crate::highlight::TokenKind;
+        assert_eq!(csv_tone(TokenKind::Key), CsvTone::Accent);
+        assert_eq!(csv_tone(TokenKind::Number), CsvTone::Label);
+        assert_eq!(csv_tone(TokenKind::String), CsvTone::Label);
+        assert_eq!(csv_tone(TokenKind::Text), CsvTone::Label);
+        assert_eq!(csv_tone(TokenKind::Punct), CsvTone::Secondary);
     }
 }

@@ -3096,6 +3096,59 @@ fn image_meta(facts: &ImageFacts) -> String {
     parts.join("  ")
 }
 
+/// Fit `line` into `max_width` (measured by `width_of`). The part before the first `  ·  `
+/// is shortened in the middle so the rest (format, dimensions) stays. When that rest alone
+/// is wider than the line, the name goes on the first line and the rest on the second.
+pub(crate) fn fit_leading_name(line: &str, max_width: f64, width_of: impl Fn(&str) -> f64) -> String {
+    if width_of(line) <= max_width {
+        return line.to_string();
+    }
+    let Some((name, tail)) = line.split_once("  ·  ") else {
+        return shrink_middle(line, |candidate| width_of(candidate) <= max_width);
+    };
+    if width_of(tail) > max_width {
+        let name = shrink_middle(name, |candidate| width_of(candidate) <= max_width);
+        return format!("{name}\n{tail}");
+    }
+    let sep = "  ·  ";
+    let name = shrink_middle(name, |candidate| {
+        width_of(&format!("{candidate}{sep}{tail}")) <= max_width
+    });
+    format!("{name}{sep}{tail}")
+}
+
+/// Shorten `text` from the middle with `…` until `fits` accepts it.
+fn shrink_middle(text: &str, fits: impl Fn(&str) -> bool) -> String {
+    if fits(text) {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    for keep in (0..chars.len()).rev() {
+        let candidate = middle_keep(&chars, keep);
+        if fits(&candidate) {
+            return candidate;
+        }
+    }
+    "…".to_string()
+}
+
+fn middle_keep(chars: &[char], keep: usize) -> String {
+    if keep == 0 || chars.is_empty() {
+        return "…".to_string();
+    }
+    if chars.len() <= keep {
+        return chars.iter().collect();
+    }
+    let left = keep / 2;
+    let right = keep - left;
+    let mut out: String = chars[..left].iter().collect();
+    out.push('…');
+    if right > 0 {
+        out.extend(chars[chars.len() - right..].iter());
+    }
+    out
+}
+
 fn text_meta(text: &str) -> String {
     text_meta_from(text, text)
 }
@@ -6300,5 +6353,23 @@ Kleinste opdracht die de change dekt.
         assert!(keeps_card_open(&CommandId::DiffToggle(1)));
         assert!(keeps_card_open(&CommandId::DiffShown));
         assert!(keeps_card_open(&CommandId::DiffSwap));
+    }
+
+    #[test]
+    fn a_long_image_name_keeps_its_dimensions() {
+        fn width(text: &str) -> f64 {
+            text.chars().count() as f64
+        }
+        let tail = "HEIC  4032×3024  2.00 MB";
+        let line = format!("{}  ·  {tail}", "n".repeat(80));
+        assert_eq!(super::fit_leading_name(&line, 200.0, width), line);
+        let fitted = super::fit_leading_name(&line, 40.0, width);
+        assert!(fitted.contains("4032×3024"), "{fitted}");
+        assert!(fitted.contains('…'), "{fitted}");
+        assert!(!fitted.contains('\n'), "{fitted}");
+        assert!(width(&fitted) <= 40.0, "{fitted}");
+        let tight = super::fit_leading_name(&line, 10.0, width);
+        assert!(tight.contains('\n'), "{tight}");
+        assert!(tight.contains("4032×3024"), "{tight}");
     }
 }

@@ -14,10 +14,11 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification, NSBeep, NSBox,
-    NSButton, NSCellImagePosition, NSColor, NSControl, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType,
-    NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSScrollView, NSSearchField,
+    NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification,
+    NSAttributedStringNSStringDrawing, NSBeep, NSBox, NSButton, NSCellImagePosition, NSColor,
+    NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags,
+    NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu,
+    NSMenuItem, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSScrollView, NSSearchField,
     NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
     NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
@@ -41,15 +42,14 @@ use crate::launcher::{self, UserEvent};
 const WIDTH: f64 = 440.0;
 /// The diff well is two columns, so the card grows while that view is showing.
 const DIFF_WIDTH: f64 = 820.0;
-use crate::card_layout::{HEADER_H, ITEM_FIND_H, META_H, PAD, PREVIEW_H, place_sections};
+use crate::card_layout::{
+    HEADER_H, ITEM_FIND_H, PAD, PREVIEW_H, meta_block_height, place_sections,
+};
 const HEADER_BUTTON: f64 = 22.0;
 const CLEAR_BUTTON_W: f64 = 64.0;
 const WELL_ACTION: f64 = 26.0;
 const WELL_INSET: f64 = 8.0;
 const WELL_GAP: f64 = 6.0;
-/// Horizontal padding already inside the text view. The gutter is the extra
-/// space that keeps lines clear of the icons.
-const TEXT_INSET_X: f64 = 12.0;
 const ITEM_COUNT_W: f64 = 56.0;
 /// Gaussian blur (`CIGaussianBlur` radius, in points) over masked text in the well. The privacy
 /// tradeoff: the blur should show the shape of what was copied (how many lines, their indentation
@@ -1189,7 +1189,7 @@ fn layout(fresh_place: bool) {
     } else {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
-    let meta = card_meta();
+    let mut meta = card_meta();
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -1208,6 +1208,9 @@ fn layout(fresh_place: bool) {
         .map(|chip| commands::chip_width(chip.fitted_size().width))
         .collect();
     let inner = card_width() - PAD * 2.0;
+    if SHOWS_IMAGE.with(Cell::get) && !meta.is_empty() {
+        meta = display_image_meta(&meta, (inner - 10.0).max(40.0));
+    }
     let nav = HISTORY_NAV.with(|slot| *slot.borrow());
     let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
     let reserve = commands::trailing_reserve(nav.is_some(), version_bar.is_some());
@@ -1264,6 +1267,7 @@ fn layout(fresh_place: bool) {
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
     place_show_all(mtm, placed.preview_y);
+    fit_text_well(placed.preview_y);
     // place_show_all / content actions may raise siblings; keep the picker on top.
     raise_picker();
     META.with(|slot| {
@@ -1273,7 +1277,7 @@ fn layout(fresh_place: bool) {
         };
         label.setFrame(NSRect::new(
             NSPoint::new(PAD + 2.0, placed.meta_y),
-            NSSize::new(inner - 4.0, META_H),
+            NSSize::new(inner - 4.0, meta_block_height(&meta)),
         ));
         label.setHidden(meta.is_empty());
         if !meta.is_empty() {
@@ -2743,7 +2747,35 @@ fn paint_warning_meta(label: &NSTextField, meta: &str) {
             .color(&range, &ink)
             .background(&range, &wash);
     }
-    label.setAttributedStringValue(&attr.into_attributed());
+    let two_lines = meta.contains('\n');
+    label.setUsesSingleLineMode(!two_lines);
+    label.setMaximumNumberOfLines(if two_lines { 2 } else { 1 });
+    let style = NSMutableParagraphStyle::new();
+    style.setLineBreakMode(if two_lines {
+        NSLineBreakMode::ByWordWrapping
+    } else {
+        NSLineBreakMode::ByTruncatingMiddle
+    });
+    let built = attr.into_attributed();
+    let range = NSRange {
+        location: 0,
+        length: built.length(),
+    };
+    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
+    unsafe {
+        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
+    }
+    label.setAttributedStringValue(&built);
+}
+
+/// The image footer: shorten the filename in the middle so format and pixel size stay visible.
+fn display_image_meta(meta: &str, max_width: f64) -> String {
+    let font = NSFont::systemFontOfSize(12.0);
+    let width_of = |text: &str| {
+        let attr = AttrText::new(text, &font, &NSColor::secondaryLabelColor()).into_attributed();
+        attr.size().width
+    };
+    commands::fit_leading_name(meta, max_width, width_of)
 }
 
 fn warning_colors(label: crate::sensitivity::Label) -> (Retained<NSColor>, Retained<NSColor>) {
@@ -2962,14 +2994,51 @@ fn place_content_actions(preview_y: f64) {
     PREVIEW_BUTTON.with(|slot| {
         place_action_from_right(slot, &mut x, top, actions.preview, &preview_tip);
     });
-    // A preview keeps its last rows scrollable above the Show all pill.
-    let previewing = PREVIEW_NOTE.with(|slot| !slot.borrow().is_empty()) && !well_is_masked();
-    let bottom = if previewing {
-        SHOW_ALL_H + WELL_INSET * 2.0
+}
+
+/// Keep the well's text clear of the copy and save buttons, and of the Show all footer.
+/// The text view itself is narrowed and raised; content insets stay at zero so the padding
+/// is not applied twice.
+fn fit_text_well(preview_y: f64) {
+    if SHOWS_IMAGE.with(Cell::get) {
+        set_text_gutter(0.0, 0.0);
+        return;
+    }
+    let actions = CONTENT_ACTIONS.get();
+    let count = if picker_open() {
+        0
+    } else {
+        usize::from(actions.copy) + usize::from(actions.save) + usize::from(actions.preview)
+    };
+    let reserve = if count == 0 {
+        0.0
+    } else {
+        WELL_INSET + count as f64 * WELL_ACTION + (count as f64 - 1.0) * WELL_GAP + 6.0
+    };
+    let note = PREVIEW_NOTE.with(|slot| !slot.borrow().is_empty());
+    let footer = if note && !well_is_masked() && !picker_open() {
+        SHOW_ALL_H + WELL_INSET + 6.0
     } else {
         0.0
     };
-    set_text_gutter(text_gutter(actions), bottom);
+    let full_w = card_width() - PAD * 2.0;
+    let text_w = (full_w - reserve).max(80.0);
+    let text_h = (PREVIEW_H - footer).max(40.0);
+    let frame = NSRect::new(
+        NSPoint::new(PAD, preview_y + footer),
+        NSSize::new(text_w, text_h),
+    );
+    PREVIEW_CLIP.with(|slot| {
+        if let Some(clip) = slot.borrow().as_ref() {
+            clip.setFrame(frame);
+        }
+    });
+    PREVIEW_SCROLL.with(|slot| {
+        if let Some(scroll) = slot.borrow().as_ref() {
+            scroll.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), frame.size));
+        }
+    });
+    set_text_gutter(0.0, 0.0);
 }
 
 fn place_action_from_right(
@@ -2983,16 +3052,6 @@ fn place_action_from_right(
     if shown {
         *x -= WELL_GAP + WELL_ACTION;
     }
-}
-
-fn text_gutter(actions: commands::ContentActions) -> f64 {
-    let count =
-        usize::from(actions.copy) + usize::from(actions.save) + usize::from(actions.preview);
-    if count == 0 {
-        return 0.0;
-    }
-    let cluster = WELL_INSET + count as f64 * WELL_ACTION + (count - 1) as f64 * WELL_GAP + 6.0;
-    (cluster - TEXT_INSET_X).max(0.0)
 }
 
 fn place_well_action(slot: &RefCell<Option<WellAction>>, x: f64, y: f64, shown: bool, tip: &str) {

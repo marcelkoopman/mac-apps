@@ -358,3 +358,289 @@ pub fn frozen_column(grid: &str) -> Option<Vec<FrozenLine>> {
     Some(lines)
 }
 
+/// One polars grid, split into columns for the table window. The window paints this itself
+/// (aligned columns, no box drawing). `None` when `grid` is not that box, so the window can
+/// keep the plain grid.
+#[derive(Debug)]
+pub(crate) struct GridSheet {
+    pub headers: Vec<String>,
+    pub numeric: Vec<bool>,
+    pub rows: Vec<Vec<String>>,
+}
+
+/// Column widths and the tab-stopped header and body. `stops` are `(location, right_aligned)`
+/// in text-container points, strictly increasing. A numeric column, including the first, is a
+/// right stop; a text column after the first is a left stop. The first text column has no stop.
+#[derive(Debug)]
+pub(crate) struct TableLayout {
+    pub widths: Vec<f64>,
+    pub stops: Vec<(f64, bool)>,
+    pub header: String,
+    pub body: String,
+}
+
+impl TableLayout {
+    /// Width of the cells, including the gaps between columns, in the same points as [`Self::stops`].
+    pub(crate) fn content_width(&self) -> f64 {
+        let gaps = COL_GAP * self.widths.len().saturating_sub(1) as f64;
+        self.widths.iter().copied().sum::<f64>() + gaps
+    }
+}
+
+const COL_GAP: f64 = 16.0;
+const TEXT_MIN: f64 = 36.0;
+const TEXT_MAX: f64 = 240.0;
+const TEXT_PAD: f64 = 4.0;
+const NUM_PAD: f64 = 8.0;
+
+/// Parse a polars UTF8 grid: names from the first `│` row above `╞`, dtypes from the last
+/// non-dash row of that header, then one `│` row per record until the bottom border.
+pub(crate) fn grid_sheet(grid: &str) -> Option<GridSheet> {
+    let mut header_lines: Vec<Vec<String>> = Vec::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut in_body = false;
+    let mut saw_rule = false;
+    for line in grid.lines() {
+        let line = line.trim_end().trim_end_matches('\r');
+        if line.is_empty() || line.starts_with("shape:") {
+            continue;
+        }
+        if line.starts_with('╞') {
+            saw_rule = true;
+            in_body = true;
+            continue;
+        }
+        if line.starts_with('└') {
+            break;
+        }
+        if !line.starts_with('│') {
+            continue;
+        }
+        let cells = split_grid_cells(line);
+        if in_body {
+            rows.push(cells);
+        } else {
+            header_lines.push(cells);
+        }
+    }
+    if !saw_rule || header_lines.is_empty() {
+        return None;
+    }
+    let headers = header_lines.first()?.clone();
+    if headers.is_empty() || headers.iter().all(String::is_empty) {
+        return None;
+    }
+    let width = headers.len();
+    let dtype = header_lines.iter().enumerate().rev().find(|(index, line)| {
+        *index > 0 && line.iter().any(|cell| !cell.is_empty() && !is_dash_cell(cell))
+    });
+    let mut numeric = vec![false; width];
+    if let Some((_, dtype)) = dtype {
+        for (index, cell) in dtype.iter().enumerate().take(width) {
+            numeric[index] = dtype_is_numeric(cell);
+        }
+    } else {
+        for (index, slot) in numeric.iter_mut().enumerate() {
+            *slot = column_is_numeric(&rows, index);
+        }
+    }
+    for row in &mut rows {
+        if row.len() < width {
+            row.resize(width, String::new());
+        } else {
+            row.truncate(width);
+        }
+    }
+    Some(GridSheet {
+        headers,
+        numeric,
+        rows,
+    })
+}
+
+/// Fixed column widths from `em` (a wide letter) and `digit` (a figure). Text is clipped to
+/// [`TEXT_MAX`]; a number keeps its full width. Cells that do not fit gain a tail ellipsis.
+pub(crate) fn layout_table(sheet: &GridSheet, em: f64, digit: f64) -> TableLayout {
+    let em = em.max(1.0);
+    let digit = digit.max(1.0);
+    let width_count = sheet.headers.len();
+    let mut widths = Vec::with_capacity(width_count);
+    for index in 0..width_count {
+        let numeric = sheet.numeric.get(index).copied().unwrap_or(false);
+        let header_chars = sheet
+            .headers
+            .get(index)
+            .map(|cell| cell.chars().count())
+            .unwrap_or(0);
+        let mut cell_chars = 0usize;
+        for row in &sheet.rows {
+            let count = row.get(index).map(|cell| cell.chars().count()).unwrap_or(0);
+            cell_chars = cell_chars.max(count);
+        }
+        let width = if numeric {
+            let number = cell_chars as f64 * digit + NUM_PAD;
+            let header = (header_chars as f64 * em + TEXT_PAD).min(TEXT_MAX);
+            number.max(header).max(TEXT_MIN)
+        } else {
+            let chars = cell_chars.max(header_chars);
+            (chars as f64 * em + TEXT_PAD).clamp(TEXT_MIN, TEXT_MAX)
+        };
+        widths.push(width);
+    }
+
+    let mut headers = Vec::with_capacity(width_count);
+    let mut clipped_rows = vec![vec![String::new(); width_count]; sheet.rows.len()];
+    for index in 0..width_count {
+        let numeric = sheet.numeric.get(index).copied().unwrap_or(false);
+        let header = sheet.headers.get(index).map(String::as_str).unwrap_or("");
+        let header_fit = chars_that_fit(widths[index], em, TEXT_PAD);
+        headers.push(clip_tail(header, header_fit));
+        let cell_fit = if numeric {
+            usize::MAX
+        } else {
+            chars_that_fit(widths[index], em, TEXT_PAD)
+        };
+        for (row_index, row) in sheet.rows.iter().enumerate() {
+            let cell = row.get(index).map(String::as_str).unwrap_or("");
+            clipped_rows[row_index][index] = if numeric {
+                cell.to_string()
+            } else {
+                clip_tail(cell, cell_fit)
+            };
+        }
+    }
+
+    let mut stops = Vec::new();
+    let mut x = 0.0;
+    let mut last = 0.0;
+    for (index, column_width) in widths.iter().enumerate() {
+        let is_numeric = sheet.numeric.get(index).copied().unwrap_or(false);
+        if is_numeric {
+            let mut location = x + column_width;
+            if location <= last {
+                location = last + 0.5;
+            }
+            stops.push((location, true));
+            last = location;
+        } else if index > 0 {
+            let mut location = x;
+            if location <= last {
+                location = last + 0.5;
+            }
+            stops.push((location, false));
+            last = location;
+        }
+        x += column_width + COL_GAP;
+    }
+    let header = join_tab_row(&headers, &sheet.numeric);
+    let body = clipped_rows
+        .iter()
+        .map(|row| join_tab_row(row, &sheet.numeric))
+        .collect::<Vec<_>>()
+        .join("\n");
+    TableLayout {
+        widths,
+        stops,
+        header,
+        body,
+    }
+}
+
+fn split_grid_cells(line: &str) -> Vec<String> {
+    let line = line.trim().strip_prefix('│').unwrap_or(line.trim());
+    let line = line.strip_suffix('│').unwrap_or(line);
+    line.split('┆')
+        .map(|cell| cell.trim().to_string())
+        .collect()
+}
+
+fn is_dash_cell(cell: &str) -> bool {
+    cell.chars().any(|c| c == '-') && cell.chars().all(|c| c == '-' || c.is_whitespace())
+}
+
+/// Polars dtype names: `i64`, `u32`, `f64`, `decimal[p,s]`. Dates, text and bool stay on the left.
+fn dtype_is_numeric(dtype: &str) -> bool {
+    let dtype = dtype.trim();
+    if dtype.starts_with("decimal") {
+        return true;
+    }
+    let mut chars = dtype.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    matches!(first, 'i' | 'u' | 'f') && chars.all(|c| c.is_ascii_digit()) && dtype.len() > 1
+}
+
+fn column_is_numeric(rows: &[Vec<String>], index: usize) -> bool {
+    let mut any = false;
+    for row in rows {
+        let cell = row.get(index).map(String::as_str).unwrap_or("");
+        if cell.is_empty() {
+            continue;
+        }
+        if !plain_number(cell) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
+fn plain_number(cell: &str) -> bool {
+    let mut chars = cell.chars().peekable();
+    if matches!(chars.peek(), Some('+' | '-')) {
+        chars.next();
+    }
+    let mut digits = 0usize;
+    let mut separator = false;
+    for ch in chars {
+        if ch.is_ascii_digit() {
+            digits += 1;
+            continue;
+        }
+        if (ch == '.' || ch == ',') && !separator {
+            separator = true;
+            continue;
+        }
+        return false;
+    }
+    digits > 0
+}
+
+fn chars_that_fit(width: f64, unit: f64, pad: f64) -> usize {
+    let room = (width - pad) / unit.max(1.0);
+    if room.is_sign_negative() {
+        0
+    } else {
+        room.floor() as usize
+    }
+}
+
+fn clip_tail(text: &str, max_chars: usize) -> String {
+    let count = text.chars().count();
+    if count <= max_chars {
+        return text.to_string();
+    }
+    if max_chars == 0 {
+        return String::new();
+    }
+    let keep = max_chars - 1;
+    let mut out: String = text.chars().take(keep).collect();
+    out.push('…');
+    out
+}
+
+/// A row of cells. A numeric first cell starts with a tab (its right stop); every later cell
+/// starts with a tab. No trailing newline.
+fn join_tab_row(cells: &[String], numeric: &[bool]) -> String {
+    let mut line = String::new();
+    for (index, cell) in cells.iter().enumerate() {
+        let is_numeric = numeric.get(index).copied().unwrap_or(false);
+        if index > 0 || is_numeric {
+            line.push('\t');
+        }
+        line.push_str(cell);
+    }
+    line
+}
+

@@ -767,4 +767,66 @@ Id;Naam;Salaris
         assert_eq!(super::iso_micros("1970-01-02 00:00"), Some(86_400_000_000));
         assert_eq!(super::iso_micros("1970-01-01T00:00."), None);
     }
+
+    #[test]
+    fn a_grid_splits_into_columns_without_comma_separators() {
+        let grid = "\
+┌────────┬────────┐
+│ name   ┆ amount │
+│ ---    ┆ ---    │
+│ str    ┆ f64    │
+╞════════╪════════╡
+│ alice  ┆ 12.5   │
+└────────┴────────┘
+";
+        let sheet = super::grid_sheet(grid).expect("sheet");
+        assert_eq!(sheet.headers, ["name", "amount"]);
+        assert_eq!(sheet.numeric, [false, true]);
+        assert_eq!(sheet.rows, [vec!["alice".to_string(), "12.5".to_string()]]);
+        assert!(super::grid_sheet("just words").is_none());
+        let layout = super::layout_table(&sheet, 10.0, 8.0);
+        assert!(layout.body.starts_with("alice\t"), "{}", layout.body);
+        assert!(!layout.body.contains(','));
+        assert!(layout.stops.iter().any(|(_, right)| *right));
+        assert!(layout.stops.windows(2).all(|pair| pair[1].0 > pair[0].0));
+    }
+
+    #[test]
+    fn a_real_table_keeps_dates_on_the_left_and_numbers_on_the_right() {
+        let src = "name,when,amount\nalice,2026-03-09,12.5\nbob,2026-04-01,3";
+        let preview = super::try_format_preview(src, 20, None).expect("preview");
+        let sheet = super::grid_sheet(&preview.grid)
+            .unwrap_or_else(|| panic!("grid was not a sheet:\n{}", preview.grid));
+        assert_eq!(sheet.headers, ["name", "when", "amount"], "{}", preview.grid);
+        assert_eq!(sheet.numeric, [false, false, true], "{}", preview.grid);
+        let layout = super::layout_table(&sheet, 8.0, 7.0);
+        assert!(layout.body.contains('\t'), "{}", layout.body);
+        assert!(!layout.body.contains(','), "{}", layout.body);
+        assert!(layout.stops.windows(2).all(|pair| pair[1].0 > pair[0].0));
+        assert!(layout.header.contains("name") && layout.header.contains("amount"));
+    }
+
+    #[test]
+    fn a_long_text_column_is_clipped_and_a_short_one_is_not() {
+        let sheet = super::GridSheet {
+            headers: vec!["name".into(), "amount".into()],
+            numeric: vec![false, true],
+            rows: vec![vec!["a".repeat(40), "12".into()]],
+        };
+        let layout = super::layout_table(&sheet, 10.0, 8.0);
+        assert!(layout.body.contains('…'), "{}", layout.body);
+        assert!(layout.body.contains('1'), "{}", layout.body);
+        assert!(!layout.body.contains(','));
+        assert!(layout.widths[0] <= 240.0);
+        assert!(layout.content_width() > layout.widths[0]);
+        assert!(layout.stops.last().is_some_and(|(_, right)| *right));
+        let short = super::GridSheet {
+            headers: vec!["name".into(), "amount".into()],
+            numeric: vec![false, true],
+            rows: vec![vec!["alice".into(), "12".into()]],
+        };
+        let layout = super::layout_table(&short, 10.0, 8.0);
+        assert!(!layout.body.contains('…'), "{}", layout.body);
+        assert!(layout.body.contains("alice"));
+    }
 }

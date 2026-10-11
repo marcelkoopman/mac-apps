@@ -2,7 +2,9 @@
 // The table window ("Open table" on the card): the table of one entry in its own resizable
 // window. A toolbar with Table ▾, Copy, Save and the version capsule (↶ v2/3 ↷), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
-// tables) with its first column frozen, and the meta line. What it shows comes from `commands::table_window_view`; what it asks for goes to
+// tables) and the meta line. A parsed grid is drawn as aligned columns with a fixed header
+// (`macos_table_paint`); a grid that does not parse keeps the boxed text and a frozen first
+// column. What it shows comes from `commands::table_window_view`; what it asks for goes to
 // the app as `UserEvent::TableWindow`.
 //
 // Opens with the grid and sidebar revealed (Open table from the card). Blurs again when
@@ -15,19 +17,22 @@ use std::cell::{Cell, RefCell};
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::glass;
 use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2::AnyThread;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAutoresizingMaskOptions,
-    NSBackingStoreType, NSBeep, NSBorderType, NSBox, NSButton, NSCellImagePosition, NSColor,
-    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
-    NSEventModifierFlags, NSFocusRingType, NSFont, NSMenu, NSMenuItem, NSModalPanelWindowLevel,
-    NSScrollView, NSTextAlignment, NSTextField, NSTextView, NSView, NSWindow, NSWindowStyleMask,
+    NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAttributedStringNSStringDrawing,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
+    NSButton, NSCellImagePosition, NSColor, NSControlStateValueOff, NSControlStateValueOn,
+    NSEvent, NSEventGestureAxis, NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode,
+    NSMenu, NSMenuItem, NSModalPanelWindowLevel, NSMutableParagraphStyle,
+    NSParagraphStyleAttributeName, NSScrollView, NSTextAlignment, NSTextField, NSTextTab,
+    NSTextView, NSView, NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask,
     NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSNotification, NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize,
-    NSString,
+    NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
+    NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::text::AttrText;
@@ -37,6 +42,7 @@ use crate::column_picker::ColumnPicker;
 use crate::commands::{self, Command, CommandId, TableWindowView, VersionBar};
 use crate::format::FormatKind;
 use crate::launcher::{self, TableWindowEvent, UserEvent};
+use zeroize::Zeroize;
 
 /// The window's first size; it is resizable down to [`MIN_SIZE`].
 const INITIAL_SIZE: NSSize = NSSize::new(900.0, 560.0);
@@ -76,6 +82,11 @@ struct Views {
     window: Retained<TableWindowPanel>,
     grid: Retained<NSTextView>,
     frozen: Retained<NSTextView>,
+    /// Column names, kept at the top of the grid while the body scrolls.
+    header: Retained<NSTextView>,
+    header_clip: Retained<NSView>,
+    header_back: Retained<NSBox>,
+    header_rule: Retained<NSBox>,
     sidebar: Retained<NSTextView>,
     sidebar_title: Retained<NSTextField>,
     meta: Retained<NSTextField>,
@@ -195,6 +206,27 @@ define_class!(
         #[unsafe(method(tableWindowPickerNone:))]
         fn picker_none_clicked(&self, _sender: Option<&NSButton>) {
             set_picker_checks(false);
+        }
+
+        /// The grid scrolled sideways: slide the header row with it.
+        #[unsafe(method(tableWindowGridScrolled:))]
+        fn grid_scrolled(&self, _note: &NSNotification) {
+            on_grid_scrolled();
+        }
+    }
+);
+
+define_class!(
+    /// Grid text view that paints full-width row stripes behind the glyphs.
+    #[unsafe(super(NSTextView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "CopycraftTableGrid"]
+    struct TableGridView;
+
+    impl TableGridView {
+        #[unsafe(method(drawViewBackgroundInRect:))]
+        fn draw_view_background(&self, rect: NSRect) {
+            draw_table_background(self, rect);
         }
     }
 );
@@ -373,6 +405,7 @@ fn wipe_content(views: &Views) {
     widgets::wipe_text_view(&views.frozen);
     views.frozen.setHidden(true);
     widgets::wipe_text_view(&views.sidebar);
+    clear_sheet_chrome(views);
     PAINTED.set(false);
 }
 
@@ -789,8 +822,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     well.setFrame(grid_frame);
     well.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     content.addSubview(&well);
-    let grid = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
-    grid.setSelectable(true);
+    let grid = table_grid_view(mtm);
     grid.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("table_view"))));
     widgets::scroll_text_both_ways(&grid);
     // Clip host around the scroller: clips the tall floating first column without
@@ -806,6 +838,23 @@ fn ensure_views(mtm: MainThreadMarker) {
     widgets::configure_text_scroll(&grid_scroll, &grid);
     grid_scroll.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     grid_clip.addSubview(&grid_scroll);
+    let clip_view = grid_scroll.contentView();
+    clip_view.setPostsBoundsChangedNotifications(true);
+    if let Some(delegate) = DELEGATE.with(|slot| slot.borrow().clone()) {
+        let observer: &AnyObject = &delegate;
+        let object: &AnyObject = &clip_view;
+        // SAFETY: tableWindowGridScrolled: is a TableWindowDelegate method taking the
+        // notification. DELEGATE keeps the observer alive. The clip view is the object and
+        // stays in this window.
+        unsafe {
+            NSNotificationCenter::defaultCenter().addObserver_selector_name_object(
+                observer,
+                sel!(tableWindowGridScrolled:),
+                Some(NSViewBoundsDidChangeNotification),
+                Some(object),
+            );
+        }
+    }
     let frozen = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     frozen.setDrawsBackground(true);
     frozen.setBackgroundColor(&NSColor::controlBackgroundColor());
@@ -814,6 +863,25 @@ fn ensure_views(mtm: MainThreadMarker) {
     frozen.setHidden(true);
     widgets::scroll_text_both_ways(&frozen);
     grid_scroll.addFloatingSubview_forAxis(&frozen, NSEventGestureAxis::Horizontal);
+    // Header strip above the scroller (non-flipped: pinned to the top of the clip). The body
+    // scroll view keeps a top margin of the same height while the sheet is showing.
+    let header_clip = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
+    header_clip.setClipsToBounds(true);
+    header_clip.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewMinYMargin]));
+    header_clip.setHidden(true);
+    let header_back = widgets::filled_box(mtm, 0.0, &NSColor::controlBackgroundColor());
+    header_back.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
+    header_clip.addSubview(&header_back);
+    let header = widgets::read_only_text_view(mtm, NSSize::new(12.0, 4.0));
+    header.setDrawsBackground(true);
+    header.setBackgroundColor(&NSColor::controlBackgroundColor());
+    widgets::scroll_text_both_ways(&header);
+    header_clip.addSubview(&header);
+    let header_rule = widgets::filled_box(mtm, 0.0, &NSColor::separatorColor());
+    header_rule.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewMaxYMargin]));
+    header_rule.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 1.0)));
+    header_clip.addSubview(&header_rule);
+    grid_clip.addSubview(&header_clip);
     let placeholder = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
     placeholder.setAlignment(NSTextAlignment::Center);
     placeholder.setFrame(NSRect::new(
@@ -854,6 +922,10 @@ fn ensure_views(mtm: MainThreadMarker) {
             window,
             grid,
             frozen,
+            header,
+            header_clip,
+            header_back,
+            header_rule,
             sidebar,
             sidebar_title,
             meta,
@@ -943,14 +1015,21 @@ fn paint() {
         let Some(views) = borrowed.as_ref() else {
             return;
         };
-        SHOWN.with(|shown| {
+        let empty = SHOWN.with(|shown| {
             let shown = shown.borrow();
             let Some(view) = shown.as_ref() else {
-                return;
+                return true;
             };
             paint_chrome(views, view);
+            view.grid.is_empty()
         });
-        wipe_content(views);
+        // Replace the text in place. Wiping first flashes an empty well when the window
+        // repaints for appearance or a new table.
+        if empty {
+            wipe_content(views);
+        } else {
+            PAINTED.set(false);
+        }
     });
     apply_mask();
 }
@@ -995,28 +1074,7 @@ fn paint_chrome(views: &Views, view: &TableWindowView) {
 
 /// The grid (with its frozen column) and the sidebar from the view shown.
 fn paint_content(views: &Views, view: &TableWindowView) {
-    crate::macos_card_text::paint(
-        &views.grid,
-        &view.grid,
-        Some(FormatKind::Dataframe),
-        true,
-        None,
-    );
-    widgets::fit_text_view(&views.grid, None);
-    views.grid.scrollRangeToVisible(NSRange {
-        location: 0,
-        length: 0,
-    });
-    match crate::dataframe::frozen_column(&view.grid) {
-        Some(lines) => {
-            crate::macos_card_text::copy_frozen_column(&views.grid, &views.frozen, &lines);
-            views.frozen.setHidden(false);
-        }
-        None => {
-            widgets::wipe_text_view(&views.frozen);
-            views.frozen.setHidden(true);
-        }
-    }
+    paint_table_grid(views, view);
     let mut text = String::new();
     let mut kinds = Vec::new();
     for column in &view.columns {
@@ -1091,7 +1149,7 @@ fn apply_mask() {
             Some(filter) => NSArray::from_slice(&[&**filter]),
             None => NSArray::from_slice(&[]),
         };
-        for text in [&views.grid, &views.frozen, &views.sidebar] {
+        for text in [&views.grid, &views.frozen, &views.sidebar, &views.header] {
             mac_ui::blur::set_content_filters(text, &filters);
             text.setAccessibilityElement(!masked);
         }
@@ -1213,3 +1271,5 @@ fn pop_versions_menu() {
         pop_menu(bar.menu(), &anchor);
     }
 }
+
+include!("macos_table_paint.rs");

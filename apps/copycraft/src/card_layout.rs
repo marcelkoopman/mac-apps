@@ -25,6 +25,17 @@ pub struct Sections {
     pub chips_h: f64,
 }
 
+/// Height of the meta row. One line is [`META_H`]; each extra line (a filename that did not fit
+/// beside its dimensions) adds 16 pt. Empty meta takes no row.
+pub fn meta_block_height(meta: &str) -> f64 {
+    if meta.is_empty() {
+        0.0
+    } else {
+        let extra = meta.chars().filter(|c| *c == '\n').count();
+        META_H + extra as f64 * 16.0
+    }
+}
+
 /// Rows from the top: header, in-item find (`item_find`), the well, the meta line (when `meta`
 /// is not empty), the search field (`searching`) and the chips. `show_capsule` (the history or
 /// the table's version capsule) keeps a chip row even without chips.
@@ -36,7 +47,7 @@ pub fn place_sections(
     show_capsule: bool,
     item_find: bool,
 ) -> Sections {
-    let meta_h = if meta.is_empty() { 0.0 } else { META_H };
+    let meta_h = meta_block_height(meta);
     let search_h = if searching { SEARCH_H } else { 0.0 };
     let find_h = if item_find { ITEM_FIND_H } else { 0.0 };
     let gap_after_find = if find_h > 0.0 { 6.0 } else { 0.0 };
@@ -118,6 +129,30 @@ mod tests {
         assert_eq!(plain.chips_y, PAD);
         assert_eq!(plain.meta_y, plain.chips_y + plain.chips_h + GAP);
         assert_eq!(plain.preview_y, plain.meta_y + META_H + GAP);
+    }
+
+    #[test]
+    fn a_two_line_meta_grows_the_card_and_keeps_one_line_where_it_was() {
+        let one = place_sections(
+            "photo.heic  ·  HEIC  4032×3024",
+            false,
+            &one_row(),
+            false,
+            false,
+            false,
+        );
+        let two = place_sections(
+            "photo…ic\nHEIC  4032×3024",
+            false,
+            &one_row(),
+            false,
+            false,
+            false,
+        );
+        assert_eq!(one.preview_y, one.meta_y + META_H + GAP);
+        assert_eq!(two.height, one.height + 16.0);
+        assert_eq!(two.meta_y, one.meta_y);
+        assert_eq!(two.preview_y, one.preview_y + 16.0);
     }
 
     #[test]
