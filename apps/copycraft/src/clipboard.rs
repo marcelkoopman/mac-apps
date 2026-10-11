@@ -11,6 +11,12 @@ use crate::image_edit::ImageVersions;
 use crate::table::TableVersions;
 
 pub const MAX_HISTORY: usize = 20;
+/// Pins on top of the unpinned cap. A further pin does nothing.
+pub const PIN_MAX: usize = 20;
+/// Prefix on a history row. It is not copied text.
+pub const PIN_MARK: &str = "• ";
+/// Search looks at this many bytes of an entry. A match only past it is missed.
+pub const SEARCH_CAP: usize = 64 * 1024;
 
 /// Derived data (cards, image scans) is kept for the entry being shown and this many entries on
 /// either side; further away it is zeroized and worked out again when needed.
@@ -77,6 +83,9 @@ pub enum ClipboardView {
     /// Pasteboard privacy is Default or Ask: a new copy, not read until the card is shown
     /// ([`crate::paste_access::ReadStrategy::WhenShown`]).
     Pending,
+    /// Recording is paused, the next copy was ignored, or the frontmost app is ignored.
+    /// The pasteboard was not read.
+    Held,
 }
 
 impl ClipboardView {
@@ -101,7 +110,8 @@ impl ClipboardView {
             | Self::Image
             | Self::Hidden
             | Self::Denied
-            | Self::Pending => None,
+            | Self::Pending
+            | Self::Held => None,
         }
     }
 
@@ -119,7 +129,12 @@ impl ClipboardView {
         match self {
             Self::Text(text) => Some(menu_mark(text.as_str())),
             Self::Image => Some(format::FormatKind::Image.menu_symbol()),
-            Self::Empty | Self::NoText | Self::Hidden | Self::Denied | Self::Pending => None,
+            Self::Empty
+            | Self::NoText
+            | Self::Hidden
+            | Self::Denied
+            | Self::Pending
+            | Self::Held => None,
         }
     }
 
@@ -133,6 +148,7 @@ impl ClipboardView {
             Self::Hidden => hidden_content().to_string(),
             Self::Denied => crate::paste_access::denied_note().to_string(),
             Self::Pending => crate::paste_access::pending_note().to_string(),
+            Self::Held => String::new(),
         }
     }
 }
@@ -235,6 +251,9 @@ struct HistoryEntry {
     /// A picture's versions (the Image ▾ steps), once the card worked on it. Like a table's,
     /// its pictures are derived data; its steps stay with the entry.
     images: Option<ImageVersions>,
+    /// Skips the unpinned cap and the minute timer. Still dropped by Wipe, lock, sleep,
+    /// user switch and quit.
+    pinned: bool,
 }
 
 impl HistoryEntry {
@@ -248,6 +267,7 @@ impl HistoryEntry {
             scan: None,
             table: None,
             images: None,
+            pinned: false,
         }
     }
 
@@ -260,6 +280,7 @@ impl HistoryEntry {
             scan: None,
             table: None,
             images: None,
+            pinned: false,
         }
     }
 
@@ -305,13 +326,19 @@ pub struct ClipboardHistory {
 
 impl ClipboardHistory {
     /// `text` as the newest copy. Already the newest: nothing changes (`text` is zeroized), so
-    /// the entry keeps its cards. Further down: that entry is replaced by a new one in front.
+    /// the entry keeps its cards. A pinned copy of the same text moves to the front and stays
+    /// pinned. An unpinned one further down is replaced by a new entry in front.
     pub fn record(&mut self, mut text: String) {
-        let newest = self.entries.first().is_some_and(|entry| match &entry.body {
-            HistoryBody::Text(existing) => existing.as_str() == text,
-            HistoryBody::Image(_) => false,
-        });
-        if newest || text.trim().is_empty() {
+        if text.trim().is_empty() {
+            text.zeroize();
+            return;
+        }
+        if let Some(index) = self.text_pos(&text)
+            && (index == 0 || self.entries[index].pinned)
+        {
+            if index != 0 {
+                self.move_to_front(index);
+            }
             text.zeroize();
             return;
         }
@@ -321,7 +348,14 @@ impl ClipboardHistory {
         });
         let id = self.alloc_id();
         self.entries.insert(0, HistoryEntry::text(id, text));
-        self.entries.truncate(MAX_HISTORY);
+        self.trim_unpinned();
+    }
+
+    fn text_pos(&self, text: &str) -> Option<usize> {
+        self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Text(existing) => existing.as_str() == text,
+            HistoryBody::Image(_) => false,
+        })
     }
 
     /// Move entry `index` to the front without dropping it: dropping zeroizes the entry, and a
@@ -390,6 +424,17 @@ impl ClipboardHistory {
             self.move_to_front(index);
             return bytes;
         }
+        if let Some(index) = self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Image(existing) => existing == &bytes,
+            HistoryBody::Text(_) => false,
+        }) && self.entries[index].pinned
+        {
+            self.move_to_front(index);
+            let HistoryBody::Image(existing) = &self.entries[0].body else {
+                return bytes;
+            };
+            return existing.clone();
+        }
         self.entries.retain(|existing| match &existing.body {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
@@ -397,8 +442,18 @@ impl ClipboardHistory {
         let id = self.alloc_id();
         self.entries
             .insert(0, HistoryEntry::image(id, bytes.clone()));
-        self.entries.truncate(MAX_HISTORY);
+        self.trim_unpinned();
         bytes
+    }
+
+    /// Drop the oldest unpinned entry until at most [`MAX_HISTORY`] unpinned entries remain.
+    fn trim_unpinned(&mut self) {
+        while self.unpinned_count() > MAX_HISTORY {
+            let Some(index) = self.entries.iter().rposition(|entry| !entry.pinned) else {
+                break;
+            };
+            self.entries.remove(index);
+        }
     }
 
     fn alloc_id(&mut self) -> u64 {
@@ -647,6 +702,78 @@ impl ClipboardHistory {
             .collect()
     }
 
+    pub fn is_pinned(&self, index: usize) -> bool {
+        self.entries.get(index).is_some_and(|entry| entry.pinned)
+    }
+
+    pub fn pin_count(&self) -> usize {
+        self.entries.iter().filter(|entry| entry.pinned).count()
+    }
+
+    fn unpinned_count(&self) -> usize {
+        self.entries.len() - self.pin_count()
+    }
+
+    pub fn has_unpinned(&self) -> bool {
+        self.entries.iter().any(|entry| !entry.pinned)
+    }
+
+    pub fn index_of(&self, id: u64) -> Option<usize> {
+        self.entries.iter().position(|entry| entry.id == id)
+    }
+
+    /// Pin entry `id`. Already pinned: stays pinned. At [`PIN_MAX`] pins, a new one is refused.
+    pub fn pin(&mut self, id: u64) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        if self.entries[index].pinned {
+            return true;
+        }
+        if self.pin_count() >= PIN_MAX {
+            return false;
+        }
+        self.entries[index].pinned = true;
+        true
+    }
+
+    /// Unpin entry `id`. Always works. If that pushes the unpinned list past the cap, the
+    /// oldest unpinned entry is dropped. `false` when the entry is gone afterwards.
+    pub fn unpin(&mut self, id: u64) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        self.entries[index].pinned = false;
+        self.trim_unpinned();
+        self.contains_id(id)
+    }
+
+    /// Drop one entry. The body's [`Drop`] zeroizes it. The index it had, when it was there.
+    pub fn remove_id(&mut self, id: u64) -> Option<usize> {
+        let index = self.index_of(id)?;
+        self.entries.remove(index);
+        Some(index)
+    }
+
+    /// Drop every entry that is not pinned.
+    pub fn clear_unpinned(&mut self) {
+        self.entries.retain(|entry| entry.pinned);
+    }
+
+    /// Drop every pin. Unpinned entries stay.
+    pub fn clear_pins(&mut self) {
+        self.entries.retain(|entry| !entry.pinned);
+    }
+
+    /// The text search looks at: the start of the entry, capped at [`SEARCH_CAP`]. Empty for
+    /// a picture.
+    pub fn search_text(&self, index: usize) -> Zeroizing<String> {
+        let Some(text) = self.get(index) else {
+            return Zeroizing::new(String::new());
+        };
+        Zeroizing::new(prefix_chars(text, SEARCH_CAP))
+    }
+
     pub fn clear(&mut self) {
         self.entries.clear();
     }
@@ -724,6 +851,29 @@ pub fn menu_mark(text: &str) -> &'static str {
 
 pub fn one_line(text: &str) -> String {
     menu_mark(text).to_string()
+}
+
+/// Where the cursor sits after the entry at `removed` is gone.
+pub fn cursor_after_remove(removed: usize, cursor: usize, len_after: usize) -> usize {
+    if len_after == 0 {
+        return 0;
+    }
+    let next = if removed < cursor {
+        cursor.saturating_sub(1)
+    } else if removed == cursor {
+        if removed == 0 { 0 } else { removed - 1 }
+    } else {
+        cursor
+    };
+    next.min(len_after - 1)
+}
+
+fn prefix_chars(text: &str, max: usize) -> String {
+    let mut end = max.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_string()
 }
 
 #[cfg(test)]
@@ -1245,5 +1395,84 @@ mod tests {
         assert!(shown.title.is_empty() && shown.meta.is_empty() && shown.excerpt.is_empty());
         assert_eq!(shown.link_page.as_deref(), Some(""));
         assert_eq!(shown.preview_note.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn a_pin_skips_the_cap_and_clearing_unpinned_leaves_it() {
+        let mut history = ClipboardHistory::default();
+        history.record("pinned".into());
+        let id = history.id_at(0).expect("id");
+        assert!(history.pin(id));
+        assert!(history.is_pinned(0));
+        for i in 0..super::MAX_HISTORY {
+            history.record(format!("copy {i}"));
+        }
+        assert_eq!(history.len(), super::MAX_HISTORY + 1);
+        assert!(history.contains_id(id));
+        assert!(!history.is_pinned(0));
+        history.record("one more".into());
+        assert_eq!(history.len() - history.pin_count(), super::MAX_HISTORY);
+        assert!(history.contains_id(id));
+        history.clear_unpinned();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history.get(0), Some("pinned"));
+        assert!(history.is_pinned(0));
+        history.clear();
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn pinning_stops_at_the_cap_and_recopying_keeps_the_pin() {
+        let mut history = ClipboardHistory::default();
+        let mut ids = Vec::new();
+        for i in 0..super::PIN_MAX {
+            history.record(format!("pin {i}"));
+            let id = history.id_at(0).expect("id");
+            assert!(history.pin(id));
+            ids.push(id);
+        }
+        history.record("extra".into());
+        let extra = history.id_at(0).expect("extra");
+        assert!(!history.pin(extra));
+        assert!(!history.is_pinned(0));
+        assert_eq!(history.pin_count(), super::PIN_MAX);
+        let oldest = *ids.first().expect("oldest");
+        history.record("pin 0".into());
+        assert_eq!(history.get(0), Some("pin 0"));
+        assert!(history.is_pinned(0));
+        assert_eq!(history.id_at(0), Some(oldest));
+        history.unpin(oldest);
+        assert!(history.contains_id(oldest));
+        assert!(!history.is_pinned(0));
+    }
+
+    #[test]
+    fn removing_an_entry_reports_its_index_and_the_cursor_settles() {
+        let mut history = ClipboardHistory::default();
+        history.record("old".into());
+        history.record("mid".into());
+        history.record("new".into());
+        let mid = history.id_at(1).expect("mid");
+        assert_eq!(history.remove_id(mid), Some(1));
+        assert_eq!(history.get(0), Some("new"));
+        assert_eq!(history.get(1), Some("old"));
+        assert_eq!(super::cursor_after_remove(0, 2, 2), 1);
+        assert_eq!(super::cursor_after_remove(2, 2, 2), 1);
+        assert_eq!(super::cursor_after_remove(1, 0, 2), 0);
+        assert_eq!(super::cursor_after_remove(0, 0, 0), 0);
+    }
+
+    #[test]
+    fn search_text_is_capped_and_empty_for_a_picture() {
+        let mut history = ClipboardHistory::default();
+        let mut body = "ä".repeat(super::SEARCH_CAP);
+        body.push('z');
+        history.record(body);
+        let found = history.search_text(0);
+        assert!(found.len() <= super::SEARCH_CAP);
+        assert!(!found.contains('z'));
+        assert!(found.is_char_boundary(found.len()));
+        history.record_image(vec![1, 2, 3]).expect("image");
+        assert!(history.search_text(0).is_empty());
     }
 }

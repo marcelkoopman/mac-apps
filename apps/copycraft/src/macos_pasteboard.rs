@@ -10,7 +10,7 @@ use mac_ui::objc2::runtime::NSObjectProtocol;
 use mac_ui::objc2::{AnyThread, sel};
 use mac_ui::objc2_app_kit::{
     NSImage, NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeString,
-    NSPasteboardTypeTIFF,
+    NSPasteboardTypeTIFF, NSWorkspace,
 };
 use mac_ui::objc2_foundation::{NSArray, NSData, NSString, NSURL};
 
@@ -107,6 +107,26 @@ pub(crate) fn current_view() -> ClipboardView {
         return view;
     }
     let marks = marks_of(types.iter().map(String::as_str));
+    if !marks.own && !marks.hides() && foreign_skipped(change_count) {
+        let view = ClipboardView::Held;
+        if let Ok(mut guard) = CACHE.lock() {
+            if let Some(old) = guard.as_mut() {
+                zeroize_cached(old);
+            }
+            *guard = Some(CachedView {
+                change_count,
+                kept: Kept {
+                    key,
+                    content_read: true,
+                },
+                view: view.clone(),
+                marks,
+                image_path: None,
+                image: None,
+            });
+        }
+        return view;
+    }
     let mut image = None;
     let (view, image_path, content_read) = if marks.hides() {
         (ClipboardView::Hidden, None, true)
@@ -259,6 +279,35 @@ pub(crate) fn change_count() -> isize {
     NSPasteboard::generalPasteboard().changeCount()
 }
 
+/// Frontmost app's bundle id. No pasteboard read. `None` when there is none.
+pub(crate) fn front_bundle() -> Option<String> {
+    let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+    Some(app.bundleIdentifier()?.to_string())
+}
+
+/// A foreign change that must not be read. Own writes and concealed copies are left to
+/// their own paths. Asking twice about one change does not consume ignore-next again.
+fn foreign_skipped(change: isize) -> bool {
+    let bundle = front_bundle();
+    crate::capture::observe_front(bundle.as_deref());
+    let ignored = bundle
+        .as_deref()
+        .is_some_and(crate::settings::bundle_ignored);
+    crate::capture::consider(change, bundle.as_deref(), ignored).is_some()
+}
+
+/// Refuse a pasteboard picture read for a suppressed foreign change, or for a concealed copy.
+fn foreign_blocked() -> bool {
+    let marks = current_marks();
+    if marks.own {
+        return false;
+    }
+    if marks.hides() {
+        return true;
+    }
+    foreign_skipped(change_count())
+}
+
 /// The current picture as the pasteboard holds it, fetched on the main thread for a scan that
 /// decodes on a background thread ([`scan_card_input`]). Pasteboard reads stay on the main
 /// thread: with pasteboard privacy a read can show a modal alert, which must not come from a
@@ -272,6 +321,9 @@ pub(crate) struct CardImageInput {
 
 /// Fetch the current picture for a scan. Main thread only.
 pub(crate) fn card_image_input() -> Option<CardImageInput> {
+    if foreign_blocked() {
+        return None;
+    }
     if let Some(shared) = shared_image() {
         return shared.map(|grab| CardImageInput {
             source: grab.source,
@@ -353,6 +405,9 @@ fn scan_decoded(decoded: DecodedPreview, data_url: Option<String>) -> Option<Ima
 }
 
 pub(crate) fn current_image_bytes() -> Option<Vec<u8>> {
+    if foreign_blocked() {
+        return None;
+    }
     if let Some(shared) = shared_image() {
         let grab = shared?;
         return match grab.source {

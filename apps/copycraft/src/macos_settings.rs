@@ -1,12 +1,12 @@
-//! Settings window: hotkey, date order, language, privacy filter, blur, Open at Login, and the
-//! symbol list.
+//! Settings window: hotkey, date order, language, privacy filter, blur, Open at Login, the
+//! symbol list and ignored apps.
 
 use std::cell::{Cell, RefCell};
 
 use global_hotkey::hotkey::{HotKey, Modifiers};
 use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSTextField, NSView,
@@ -23,7 +23,7 @@ use crate::macos_login;
 use crate::settings;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 468.0;
+const HEIGHT: f64 = 584.0;
 const PAD: f64 = 20.0;
 const ROW: f64 = 28.0;
 const GAP: f64 = 16.0;
@@ -39,6 +39,8 @@ thread_local! {
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static IGNORED_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static IGNORED_ADD: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
@@ -78,6 +80,7 @@ define_class!(
         fn window_will_close(&self, _notification: &NSObject) {
             // Closing ends editing, but save here too so a list left in the field is kept.
             save_symbols_field();
+            save_ignored_field();
             RECORDING.set(false);
             WINDOW.with(|slot| {
                 if let Some(window) = slot.borrow().as_ref() {
@@ -156,6 +159,7 @@ define_class!(
         #[unsafe(method(controlTextDidEndEditing:))]
         fn symbols_edited(&self, _notification: &NSNotification) {
             save_symbols_field();
+            save_ignored_field();
         }
 
         #[unsafe(method(restoreSymbols:))]
@@ -163,6 +167,16 @@ define_class!(
             settings::restore_symbol_catalog();
             show_symbol_catalog();
             crate::macos_symbols::reload();
+        }
+
+        #[unsafe(method(addFrontmostApp:))]
+        fn add_frontmost(&self, _sender: Option<&NSButton>) {
+            // Keep an id the user just typed, then append the last other frontmost app.
+            save_ignored_field();
+            if let Some(bundle) = crate::capture::last_foreign() {
+                let _ = settings::ignore_app(&bundle);
+            }
+            refresh_ignored_field();
         }
 
         #[unsafe(method(loginToggled:))]
@@ -194,6 +208,8 @@ fn clear_controls() {
     LOGIN_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_NOTE.with(|s| *s.borrow_mut() = None);
     SYMBOLS_FIELD.with(|s| *s.borrow_mut() = None);
+    IGNORED_FIELD.with(|s| *s.borrow_mut() = None);
+    IGNORED_ADD.with(|s| *s.borrow_mut() = None);
 }
 
 fn wire(control: &NSButton, action: mac_ui::objc2::runtime::Sel) {
@@ -451,6 +467,47 @@ fn build(mtm: MainThreadMarker) {
     wire(restore.button(), sel!(restoreSymbols:));
     body.addSubview(restore.view());
 
+    y -= GAP + ROW;
+    let ignored_label = widgets::label(mtm, 13.0, &NSColor::labelColor());
+    ignored_label.setStringValue(&NSString::from_str(crate::locale::t("ignored_apps")));
+    ignored_label.setFrame(NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(WIDTH - PAD * 2.0, ROW),
+    ));
+    body.addSubview(&ignored_label);
+
+    y -= ROW;
+    let ignored = widgets::plain_field(mtm, 13.0, "");
+    ignored.setBezeled(true);
+    ignored.setDrawsBackground(true);
+    ignored.setStringValue(&NSString::from_str(&settings::ignored_apps_text()));
+    ignored.setFrame(NSRect::new(
+        NSPoint::new(PAD, y),
+        NSSize::new(WIDTH - PAD * 2.0, ROW),
+    ));
+    ignored.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("ignored_apps"))));
+    DELEGATE.with(|slot| {
+        if let Some(delegate) = slot.borrow().as_ref() {
+            // SAFETY: SettingsDelegate implements controlTextDidEndEditing:. DELEGATE keeps it
+            // alive while the window is open; the field holds it weakly.
+            unsafe { widgets::set_text_delegate(&ignored, delegate) };
+        }
+    });
+    body.addSubview(&ignored);
+    IGNORED_FIELD.with(|slot| *slot.borrow_mut() = Some(ignored));
+
+    y -= GAP + ROW;
+    let add = GlassButton::pill(mtm, crate::locale::t("ignored_apps_add"), ButtonSize::Small);
+    add.set_accessibility_label(crate::locale::t("ignored_apps_add"));
+    let add_w = add.width_within(280.0);
+    add.view()
+        .setFrame(NSRect::new(NSPoint::new(PAD, y), NSSize::new(add_w, ROW)));
+    wire(add.button(), sel!(addFrontmostApp:));
+    let add_button = add.button().retain();
+    body.addSubview(add.view());
+    IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
+    refresh_ignore_button();
+
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);
     panel::bring_to_front(&window);
@@ -507,6 +564,7 @@ fn refresh_all() {
     });
     refresh_login_row();
     show_symbol_catalog();
+    refresh_ignored_field();
 }
 
 fn save_symbols_field() {
@@ -521,6 +579,45 @@ fn save_symbols_field() {
     settings::set_symbol_catalog(&raw);
     show_symbol_catalog();
     crate::macos_symbols::reload();
+}
+
+/// The ignore field follows the stored list, and Add follows the last other frontmost app.
+pub fn refresh_ignored_field() {
+    show_ignored_apps();
+    refresh_ignore_button();
+}
+
+fn save_ignored_field() {
+    let raw = IGNORED_FIELD.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|field| field.stringValue().to_string())
+    });
+    let Some(raw) = raw else {
+        return;
+    };
+    settings::set_ignored_apps(&raw);
+    show_ignored_apps();
+}
+
+fn show_ignored_apps() {
+    IGNORED_FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            let text = settings::ignored_apps_text();
+            if field.stringValue().to_string() != text {
+                field.setStringValue(&NSString::from_str(&text));
+            }
+        }
+    });
+}
+
+fn refresh_ignore_button() {
+    let enabled = crate::capture::last_foreign().is_some();
+    IGNORED_ADD.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setEnabled(enabled);
+        }
+    });
 }
 
 fn show_symbol_catalog() {

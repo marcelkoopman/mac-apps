@@ -218,6 +218,10 @@ pub struct Hist {
     pub id: u64,
     /// The entry is text, so it can be added to a diff.
     pub text: bool,
+    /// Capped text the search matches. Empty for a picture. Not drawn on the menu bar.
+    pub search: Zeroizing<String>,
+    /// The entry is pinned. The mark on [`Self::title`] is not copied text.
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +239,16 @@ pub struct LaunchData {
     pub image: Option<ImageFacts>,
     pub history: Vec<Hist>,
     pub can_clear_history: bool,
+    /// Pins are held, so *Clear pins* is offered.
+    pub can_clear_pins: bool,
+    /// Recording is paused for this session.
+    pub paused: bool,
+    /// The next foreign copy will be skipped.
+    pub ignore_next: bool,
+    /// A frontmost app other than Copycraft was seen, so it can be ignored.
+    pub can_ignore_app: bool,
+    /// One line for the card meta, such as a full pin list.
+    pub notice: Option<String>,
     /// `<` older and `>` newer, when an earlier copy exists. Absent hides both.
     pub history_nav: Option<HistoryNav>,
     pub theme: Theme,
@@ -544,6 +558,20 @@ pub enum CommandId {
     Settings,
     /// Open the About window (name, version, offline promise).
     About,
+    /// Stop recording foreign copies until it is switched off. Not stored.
+    Pause,
+    /// Skip the next foreign copy, then record again.
+    IgnoreNext,
+    /// Add the last other frontmost app to the ignore list.
+    IgnoreFrontApp,
+    /// Pin the entry on screen.
+    Pin,
+    /// Unpin the entry on screen.
+    Unpin,
+    /// Delete the entry on screen.
+    DeleteHistory,
+    /// Drop every pin. Unpinned entries stay.
+    ClearPins,
     Quit,
 }
 
@@ -565,10 +593,18 @@ impl Command {
     }
 
     fn matches(&self, needle: &str) -> bool {
-        self.title.to_lowercase().contains(needle)
-            || self.detail.to_lowercase().contains(needle)
-            || self.keywords.to_lowercase().contains(needle)
+        field_has(&self.title, needle)
+            || field_has(&self.detail, needle)
+            || field_has(&self.keywords, needle)
     }
+}
+
+/// Case-insensitive substring. The lowercase copy is zeroized; it can hold clipboard text.
+fn field_has(haystack: &str, needle: &str) -> bool {
+    let mut lower = haystack.to_lowercase();
+    let hit = lower.contains(needle);
+    lower.zeroize();
+    hit
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -617,6 +653,10 @@ impl Drop for LaunchData {
         for item in &mut self.history {
             item.title.zeroize();
             item.mark.zeroize();
+            item.search.zeroize();
+        }
+        if let Some(notice) = self.notice.as_mut() {
+            notice.zeroize();
         }
         if let Some(name) = self.source_name.as_mut() {
             name.zeroize();
@@ -804,6 +844,13 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             mark.to_string()
         } else {
             format!("{mark}  ·  {}", card.meta)
+        };
+    }
+    if let Some(notice) = &data.notice {
+        card.meta = if card.meta.is_empty() {
+            notice.clone()
+        } else {
+            format!("{}  ·  {notice}", card.meta)
         };
     }
     card
@@ -1811,13 +1858,16 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         commands.push(preview_command());
     }
     for item in &data.history {
+        let keywords = history_keywords(item);
         commands.push(command(
             CommandId::History(item.index),
-            &item.title,
+            &history_chip_title(item, data.settings.privacy_filter),
             &item.mark,
-            "history",
+            &keywords,
         ));
     }
+    commands.extend(entry_commands(data));
+    commands.extend(capture_commands(data));
     if let Some(shown) = shown_history(data) {
         commands.push(diff_action(
             CommandId::DiffShown,
@@ -2353,16 +2403,107 @@ pub fn keep_history_title(minutes: u32) -> String {
 }
 
 pub fn matching(commands: &[Command], query: &str) -> Vec<Command> {
-    let needle = query.trim().to_lowercase();
+    let mut needle = query.trim().to_lowercase();
     if needle.is_empty() {
         return Vec::new();
     }
-    commands
+    let found: Vec<Command> = commands
         .iter()
         .filter(|cmd| cmd.matches(&needle))
         .take(MAX_VISIBLE)
         .cloned()
-        .collect()
+        .collect();
+    needle.zeroize();
+    found
+}
+
+/// Title of a history hit. With the privacy filter on, or for a picture, this is the type
+/// and size (and the pin mark). With the filter off it is one line of the text, cut at about
+/// 80 characters. The match can sit outside that line: keywords hold the capped text.
+pub fn history_chip_title(item: &Hist, privacy: bool) -> String {
+    if privacy || item.search.is_empty() {
+        return item.title.clone();
+    }
+    const EXCERPT: usize = 80;
+    let line = item.search.lines().next().unwrap_or("").trim();
+    let mut end = EXCERPT.min(line.len());
+    while end > 0 && !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut title = line[..end].to_string();
+    if line.len() > end {
+        title.push('…');
+    }
+    if item.pinned {
+        format!("{}{title}", crate::clipboard::PIN_MARK)
+    } else {
+        title
+    }
+}
+
+fn history_keywords(item: &Hist) -> String {
+    let mut keywords = String::from("history");
+    if !item.search.is_empty() {
+        keywords.push(' ');
+        keywords.push_str(item.search.as_str());
+    }
+    keywords
+}
+
+/// Pin, unpin and remove, for the entry on screen.
+fn entry_commands(data: &LaunchData) -> Vec<Command> {
+    let Some(shown) = shown_history(data) else {
+        return Vec::new();
+    };
+    let pin = if shown.pinned {
+        command(
+            CommandId::Unpin,
+            crate::locale::t("unpin"),
+            crate::locale::t("detail_unpin"),
+            "unpin pin history",
+        )
+    } else {
+        command(
+            CommandId::Pin,
+            crate::locale::t("pin"),
+            crate::locale::t("detail_pin"),
+            "pin history",
+        )
+    };
+    vec![
+        pin,
+        command(
+            CommandId::DeleteHistory,
+            crate::locale::t("remove_history"),
+            crate::locale::t("detail_remove_history"),
+            "delete remove history",
+        ),
+    ]
+}
+
+/// Pause, ignore-next and ignore-frontmost. Quit stays out of search.
+fn capture_commands(data: &LaunchData) -> Vec<Command> {
+    vec![
+        command(
+            CommandId::Pause,
+            crate::locale::t("pause_recording"),
+            crate::locale::t("detail_pause"),
+            "pause recording history",
+        ),
+        command(
+            CommandId::IgnoreNext,
+            crate::locale::t("ignore_next"),
+            crate::locale::t("detail_ignore_next"),
+            "ignore next copy",
+        ),
+        command_enabled(
+            CommandId::IgnoreFrontApp,
+            crate::locale::t("ignore_front_app"),
+            crate::locale::t("detail_ignore_app"),
+            "ignore app frontmost",
+            data.can_ignore_app,
+        ),
+    ]
 }
 
 /// The history entry on screen, when the card is showing one.
@@ -2421,6 +2562,7 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
     if data.diff_picks.len() == 2 {
         commands.push(diff_swap_command());
     }
+    commands.extend(entry_commands(data));
     for item in &data.history {
         let title = match crate::diff::side_label(&data.diff_picks, item.id) {
             Some(mark) => format!("{mark}  {}", item.title),
@@ -2447,6 +2589,15 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             "clear history forget",
         ));
     }
+    if data.can_clear_pins {
+        commands.push(command(
+            CommandId::ClearPins,
+            crate::locale::t("clear_pins"),
+            crate::locale::t("detail_clear_pins"),
+            "clear pins history",
+        ));
+    }
+    commands.extend(capture_commands(data));
     commands.push(command(
         CommandId::ClearSensitive,
         crate::locale::t("clear_sensitive"),
@@ -2473,7 +2624,7 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         CommandId::Settings,
         crate::locale::t("settings"),
         crate::locale::t("detail_settings"),
-        "settings preferences hotkey privacy filter blur login",
+        "settings preferences hotkey privacy filter blur login ignored apps",
     ));
     commands.push(command(
         CommandId::About,
@@ -2611,6 +2762,13 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::KeepHistory(_)
             | CommandId::ClearClipboard
             | CommandId::ClearHistory
+            | CommandId::Pause
+            | CommandId::IgnoreNext
+            | CommandId::IgnoreFrontApp
+            | CommandId::Pin
+            | CommandId::Unpin
+            | CommandId::DeleteHistory
+            | CommandId::ClearPins
             | CommandId::Settings
             | CommandId::About
             | CommandId::Clear
@@ -3092,6 +3250,7 @@ mod tests {
     use super::{TableShown, VersionBar, menu_group, table_menu, undo_key};
     use crate::appearance::Theme;
     use mac_ui::keys::Key;
+    use zeroize::Zeroizing;
 
     fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         LaunchData {
@@ -3100,6 +3259,11 @@ mod tests {
             image: None,
             history: Vec::new(),
             can_clear_history: false,
+            can_clear_pins: false,
+            paused: false,
+            ignore_next: false,
+            can_ignore_app: false,
+            notice: None,
             history_nav: None,
             theme: Theme::System,
             settings: crate::settings::Settings::default(),
@@ -5381,6 +5545,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             mark: "¶".into(),
             id: 3,
             text: true,
+            search: Zeroizing::new(String::new()),
+            pinned: false,
         });
         let pool = search_pool(&input);
         assert!(matching(&pool, "quit").is_empty());
@@ -5409,6 +5575,8 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
                 mark: "¶".into(),
                 id: index as u64,
                 text: true,
+                search: Zeroizing::new(String::new()),
+                pinned: false,
             });
         }
         input.can_clear_history = true;
@@ -5433,6 +5601,38 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
                 .iter()
                 .any(|cmd| cmd.id == CommandId::History(9))
         );
+    }
+
+    #[test]
+    fn search_hits_the_body_while_a_masked_title_stays_a_label() {
+        let mut input = data(SubjectKind::Text, Some("hello world"));
+        let phrase = "secret phrase past the label";
+        input.history.push(Hist {
+            index: 1,
+            title: "¶  28 B".into(),
+            mark: "¶".into(),
+            id: 4,
+            text: true,
+            search: Zeroizing::new(phrase.into()),
+            pinned: true,
+        });
+        input.settings.privacy_filter = true;
+        let masked = matching(&search_pool(&input), "phrase");
+        assert_eq!(ids(&masked), vec![CommandId::History(1)]);
+        assert_eq!(masked[0].title, "¶  28 B");
+        assert!(!masked[0].title.contains("secret"));
+        assert!(!masked[0].title.contains("phrase"));
+        input.settings.privacy_filter = false;
+        let open = matching(&search_pool(&input), "phrase");
+        assert_eq!(open[0].title, format!("• {phrase}"));
+        let mut long = "a".repeat(90);
+        long.push_str("unique-needle");
+        input.history[0].search = Zeroizing::new(long);
+        input.history[0].pinned = false;
+        let hit = matching(&search_pool(&input), "unique-needle");
+        assert_eq!(ids(&hit), vec![CommandId::History(1)]);
+        assert!(!hit[0].title.contains("unique-needle"));
+        assert!(hit[0].title.ends_with('…'));
     }
 
     #[test]
@@ -5932,6 +6132,8 @@ Kleinste opdracht die de change dekt.
             mark: "¶".into(),
             id: index as u64,
             text,
+            search: Zeroizing::new(String::new()),
+            pinned: false,
         }
     }
 

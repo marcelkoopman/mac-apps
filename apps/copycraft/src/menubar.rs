@@ -124,6 +124,8 @@ struct App {
     /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
     /// shown on that picture's card until the next step.
     image_note: Option<(usize, String)>,
+    /// The last pin was refused because the pin list is full. Shown on the card meta line.
+    pin_refused: bool,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.
     decoded_picture: Option<DecodedPicture>,
     /// History entries chosen for a diff, oldest first. Not stored.
@@ -349,6 +351,8 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                     self.refresh_status_menu();
                 }
+                PAUSE_ID => self.run_command(event_loop, CommandId::Pause),
+                IGNORE_NEXT_ID => self.run_command(event_loop, CommandId::IgnoreNext),
                 SETTINGS_ID => {
                     self.run_command(event_loop, CommandId::Settings);
                 }
@@ -519,6 +523,35 @@ impl App {
                 }
             }
             CommandId::DiffSwap => self.swap_diff(),
+            CommandId::Pause => {
+                crate::capture::set_paused(!crate::capture::paused());
+                self.refresh_status_menu();
+                self.sync_tooltip(&ClipboardView::from_os());
+                if launcher::is_open() {
+                    self.refresh_popup();
+                }
+            }
+            CommandId::IgnoreNext => {
+                crate::capture::set_ignore_next(!crate::capture::ignore_next());
+                self.refresh_status_menu();
+                if launcher::is_open() {
+                    self.refresh_popup();
+                }
+            }
+            CommandId::IgnoreFrontApp => {
+                if let Some(bundle) = crate::capture::last_foreign() {
+                    crate::settings::ignore_app(&bundle);
+                    #[cfg(target_os = "macos")]
+                    crate::macos_settings::refresh_ignored_field();
+                    if launcher::is_open() {
+                        self.refresh_popup();
+                    }
+                }
+            }
+            CommandId::Pin => self.pin_shown(true),
+            CommandId::Unpin => self.pin_shown(false),
+            CommandId::DeleteHistory => self.delete_shown(),
+            CommandId::ClearPins => self.clear_pins(),
             CommandId::Quit => {
                 discard_preview_files();
                 event_loop.exit();
@@ -1150,10 +1183,31 @@ impl App {
             .flatten()
     }
 
+    /// The pasteboard's current change is not read: paused, ignore-next, or an ignored app.
+    /// Copycraft's own write is never suppressed.
+    fn pasteboard_suppressed(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            if crate::macos_pasteboard::current_marks().own {
+                return false;
+            }
+            let change = crate::macos_pasteboard::change_count();
+            matches!(ClipboardView::from_os(), ClipboardView::Held)
+                || crate::capture::blocks(change)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
     /// The card shows a picture (copied or dropped).
     fn shows_image(&self) -> bool {
         match &self.opened {
             Some(opened) => opened.image.is_some(),
+            None if self.pasteboard_suppressed() => {
+                self.history.image(self.history_cursor).is_some()
+            }
             None => ClipboardView::from_os().is_image(),
         }
     }
@@ -1166,6 +1220,9 @@ impl App {
         }
         #[cfg(target_os = "macos")]
         {
+            if self.pasteboard_suppressed() {
+                return self.history.image(self.history_cursor);
+            }
             if !ClipboardView::from_os().is_image() {
                 return None;
             }
@@ -1622,7 +1679,11 @@ impl App {
             self.launch_from_opened()
         } else {
             let view = ClipboardView::from_os();
-            self.launch_data(&view)
+            if matches!(view, ClipboardView::Held) {
+                self.launch_from_history()
+            } else {
+                self.launch_data(&view)
+            }
         };
         self.attach_table(&mut data);
         self.attach_image(&mut data);
@@ -1849,6 +1910,7 @@ impl App {
             ClipboardView::Pending => (SubjectKind::Pending, None),
             ClipboardView::Hidden => (SubjectKind::Hidden, None),
             ClipboardView::Image => (SubjectKind::Image, None),
+            ClipboardView::Held => (SubjectKind::Empty, None),
             ClipboardView::Text(text) => {
                 self.card_view = commands::presented_view(text.as_str(), self.card_view);
                 (SubjectKind::Text, Some(text.as_str().to_string()))
@@ -1905,6 +1967,8 @@ impl App {
                 mark: self.history.mark(index).unwrap_or("").to_string(),
                 id: self.history.id_at(index).unwrap_or(0),
                 text: self.history.get(index).is_some(),
+                search: self.history.search_text(index),
+                pinned: self.history.is_pinned(index),
             })
             .collect();
         LaunchData {
@@ -1912,7 +1976,14 @@ impl App {
             subject_text: None,
             image: None,
             history,
-            can_clear_history: !self.history.is_empty(),
+            can_clear_history: self.history.has_unpinned(),
+            can_clear_pins: self.history.pin_count() > 0,
+            paused: crate::capture::paused(),
+            ignore_next: crate::capture::ignore_next(),
+            can_ignore_app: crate::capture::last_foreign().is_some(),
+            notice: self
+                .pin_refused
+                .then(|| crate::locale::t("pin_list_full").to_string()),
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
             theme: appearance::load(),
             settings: crate::settings::load(),
@@ -1931,6 +2002,29 @@ impl App {
         }
     }
 
+    /// The entry on screen, when the pasteboard itself is not being read.
+    fn launch_from_history(&mut self) -> LaunchData {
+        let mut data = self.launch_shell();
+        if let Some(text) = self.history.get(self.history_cursor) {
+            let text = text.to_string();
+            self.card_view = commands::presented_view(&text, self.card_view);
+            data.view = self.card_view;
+            data.subject_kind = SubjectKind::Text;
+            data.subject_text = Some(text);
+        } else if let Some(bytes) = self.history.image(self.history_cursor) {
+            data.subject_kind = SubjectKind::Image;
+            data.picture = Some(bytes.clone());
+            data.image_scan = self.history.image_scan(&bytes);
+            #[cfg(target_os = "macos")]
+            {
+                data.image = bytes.with(crate::macos_pasteboard::image_bytes_facts);
+            }
+        } else {
+            data.subject_kind = SubjectKind::Empty;
+        }
+        data
+    }
+
     /// Text the card is showing: the chosen file, or the clipboard.
     fn opened_text(&self) -> Option<String> {
         self.opened
@@ -1941,6 +2035,8 @@ impl App {
     fn source_text(&self) -> Option<String> {
         if self.opened.is_some() {
             self.opened_text()
+        } else if self.pasteboard_suppressed() {
+            self.history.get(self.history_cursor).map(str::to_string)
         } else {
             ClipboardView::from_os().text().map(str::to_string)
         }
@@ -1949,6 +2045,12 @@ impl App {
     fn ensure_image_scan(&mut self) {
         #[cfg(target_os = "macos")]
         {
+            if self.pasteboard_suppressed() {
+                if let Some(bytes) = self.history.image(self.history_cursor) {
+                    self.image_scan = self.history.image_scan(&bytes);
+                }
+                return;
+            }
             let change = crate::macos_pasteboard::change_count();
             if self.image_scan_change == Some(change) || self.image_scan_for == Some(change) {
                 return;
@@ -2031,7 +2133,7 @@ impl App {
             }
             return Ok(());
         }
-        if !from_file && ClipboardView::from_os().is_image() {
+        if !from_file && self.shows_image() {
             return self.copy_image_view();
         }
         let Some(source) = self.source_text().map(Zeroizing::new) else {
@@ -2436,6 +2538,18 @@ impl App {
 
     #[cfg(target_os = "macos")]
     fn clipboard_save_job(&self) -> Option<crate::macos_save::SaveJob> {
+        if self.pasteboard_suppressed() {
+            if let Some(text) = self.history.get(self.history_cursor) {
+                return crate::macos_save::SaveJob::text(
+                    text,
+                    commands::presented_view(text, self.card_view),
+                );
+            }
+            if self.history.image(self.history_cursor).is_some() {
+                return Some(self.image_save_job());
+            }
+            return None;
+        }
         let view = ClipboardView::from_os();
         if view.is_image() {
             return Some(self.image_save_job());
@@ -2532,8 +2646,13 @@ impl App {
     }
 
     fn clear_history(&mut self) {
+        self.forget_entries(false);
+    }
+
+    /// `full` drops every entry (Wipe's history half, lock, sleep, user switch). Otherwise
+    /// only unpinned entries go; pins stay and diff picks whose entry remains stay too.
+    fn forget_entries(&mut self, full: bool) {
         discard_preview_files();
-        self.clear_diff();
         self.forget_decoded_picture();
         let view = ClipboardView::from_os();
         self.skip_record = view.text().map(|text| Zeroizing::new(text.to_string()));
@@ -2543,19 +2662,112 @@ impl App {
                 self.skip_image_change = Some(crate::macos_pasteboard::change_count());
             }
         }
-        self.current_image = None;
-        self.image_on_pasteboard = None;
-        self.cancel_image_job();
-        self.image_note = None;
-        self.cancel_table_job();
-        self.table_error = None;
-        self.close_table_window();
-        self.history.clear();
+        self.pin_refused = false;
+        if full {
+            self.clear_diff();
+            self.current_image = None;
+            self.image_on_pasteboard = None;
+            self.cancel_image_job();
+            self.image_note = None;
+            self.cancel_table_job();
+            self.table_error = None;
+            self.close_table_window();
+            self.history.clear();
+        } else {
+            self.history.clear_unpinned();
+            if self
+                .current_image
+                .as_ref()
+                .is_some_and(|bytes| !self.history.holds_image(bytes))
+            {
+                self.current_image = None;
+                self.image_on_pasteboard = None;
+                self.cancel_image_job();
+                self.image_note = None;
+            }
+            self.sync_diff_picks();
+            self.refresh_table_window();
+            if self.table_window.is_none() {
+                self.cancel_table_job();
+                self.table_error = None;
+            }
+        }
         self.history_cursor = 0;
         self.clipboard_cursor = None;
         self.refresh_status_menu();
         if launcher::is_open() {
             self.refresh_popup();
+        }
+    }
+
+    fn pin_shown(&mut self, pin: bool) {
+        let Some(id) = self.history.id_at(self.history_cursor) else {
+            return;
+        };
+        if self.opened.is_some() {
+            return;
+        }
+        if pin {
+            self.pin_refused = !self.history.pin(id);
+        } else {
+            self.pin_refused = false;
+            if !self.history.unpin(id) {
+                self.history_cursor = 0;
+            }
+            self.settle_cursor();
+            self.sync_diff_picks();
+            self.refresh_table_window();
+        }
+        self.refresh_status_menu();
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    fn delete_shown(&mut self) {
+        if self.opened.is_some() {
+            return;
+        }
+        let Some(id) = self.history.id_at(self.history_cursor) else {
+            return;
+        };
+        let Some(removed) = self.history.remove_id(id) else {
+            return;
+        };
+        self.pin_refused = false;
+        let len = self.history.len();
+        self.history_cursor = clipboard::cursor_after_remove(removed, self.history_cursor, len);
+        if let Some(cursor) = self.clipboard_cursor {
+            self.clipboard_cursor =
+                (len > 0).then(|| clipboard::cursor_after_remove(removed, cursor, len));
+        }
+        self.sync_diff_picks();
+        self.refresh_table_window();
+        self.refresh_status_menu();
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    fn clear_pins(&mut self) {
+        let kept = self.history.id_at(self.history_cursor);
+        self.history.clear_pins();
+        self.pin_refused = false;
+        self.history_cursor = kept.and_then(|id| self.history.index_of(id)).unwrap_or(0);
+        self.clipboard_cursor = None;
+        self.sync_diff_picks();
+        self.refresh_table_window();
+        self.refresh_status_menu();
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    fn settle_cursor(&mut self) {
+        if self.history.is_empty() {
+            self.history_cursor = 0;
+        } else if self.history_cursor >= self.history.len() {
+            self.history_cursor = self.history.len() - 1;
         }
     }
 
@@ -2565,7 +2777,7 @@ impl App {
         let due = history_due(
             self.last_copy,
             self.history_minutes,
-            self.history.is_empty(),
+            self.history.has_unpinned(),
         )?;
         if now < due {
             return Some(due);
@@ -2582,14 +2794,17 @@ impl App {
     /// The screen locked, the Mac is going to sleep or another user took over: forget history
     /// whatever the setting says.
     fn session_ended(&mut self) {
+        crate::capture::on_session_end();
+        #[cfg(target_os = "macos")]
+        crate::macos_settings::refresh_ignored_field();
         discard_preview_files();
         self.last_copy = None;
         self.full_card = None;
-        // Closed and wiped whatever history holds (a chosen file's window too).
+        // Closed and wiped whatever history holds (a chosen file's window too), pins included.
         self.close_table_window();
         self.clear_diff();
         if !self.history.is_empty() {
-            self.clear_history();
+            self.forget_entries(true);
             eprintln!("copycraft: history forgotten (lock, sleep or user switch)");
         } else if launcher::is_open() {
             self.refresh_popup();
@@ -2621,6 +2836,7 @@ impl App {
         self.table_error = None;
         self.full_card = None;
         self.history.clear();
+        self.pin_refused = false;
         self.current_image = None;
         self.image_on_pasteboard = None;
         self.history_cursor = 0;
@@ -2918,6 +3134,9 @@ impl App {
     }
 
     fn record_current(&mut self, view: &ClipboardView) {
+        if matches!(view, ClipboardView::Held) {
+            return;
+        }
         // A symbol copy is plain text without copycraft's own pasteboard type. The change count
         // is what keeps it out of history, and out of a scan: callers that already read the
         // pasteboard still must not record it.
@@ -2978,6 +3197,7 @@ impl App {
             }
             crate::macos_pasteboard::set_card_shown(open);
             let change = crate::macos_pasteboard::change_count();
+            crate::capture::observe_front(crate::macos_pasteboard::front_bundle().as_deref());
             // Symbol copy: do not read the pasteboard. A read would classify and label it, and
             // recording it would put the character in history. The card keeps what it showed.
             if crate::symbols::gate(crate::symbols::ignored_change(), change).ignore() {
@@ -2994,6 +3214,12 @@ impl App {
             self.polled_change = Some(change);
         }
         let view = ClipboardView::from_os();
+        if matches!(view, ClipboardView::Held) {
+            self.poll_again = false;
+            self.paste_explaining = false;
+            self.sync_tooltip(&view);
+            return false;
+        }
         // Looked at again every tick, but `current_view` reads a copy at most once
         // (`paste_access::plan`): no reads per tick. A copy waiting for the card is read on the
         // first tick the card is shown.
@@ -3073,7 +3299,11 @@ impl App {
     /// The icon is always the same template (apart from the blink), so the tooltip and the VoiceOver label are where
     /// the detected kind shows.
     fn sync_tooltip(&self, view: &ClipboardView) {
-        let tip = icon_tip(view);
+        let tip = if crate::capture::paused() {
+            crate::locale::t("tip_paused").to_string()
+        } else {
+            icon_tip(view)
+        };
         if let Err(e) = self.tray.set_tooltip(Some(&tip)) {
             eprintln!("menu bar tooltip failed: {e}");
         }
@@ -3083,6 +3313,13 @@ impl App {
 
 fn icon_tip(view: &ClipboardView) -> String {
     match view {
+        ClipboardView::Held => {
+            if crate::capture::paused() {
+                crate::locale::t("tip_paused").to_string()
+            } else {
+                crate::locale::t("tip_copy_ignored").to_string()
+            }
+        }
         ClipboardView::Image => crate::locale::t("title_image").to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
         ClipboardView::Denied => crate::paste_access::denied_note().to_string(),
@@ -3137,10 +3374,10 @@ fn forget_opened_file(card_open: bool, file_open: bool, window_shows_file: bool)
     file_open && !card_open && !window_shows_file
 }
 
-/// When history is due to be forgotten: `minutes` after the last copy. `None` with no time
-/// limit (0) or nothing to forget.
-fn history_due(last_copy: Option<Instant>, minutes: u32, empty: bool) -> Option<Instant> {
-    if minutes == 0 || empty {
+/// When unpinned history is due to be forgotten: `minutes` after the last copy. `None` with
+/// no time limit (0) or when only pins remain.
+fn history_due(last_copy: Option<Instant>, minutes: u32, has_unpinned: bool) -> Option<Instant> {
+    if minutes == 0 || !has_unpinned {
         return None;
     }
     Some(last_copy? + Duration::from_secs(u64::from(minutes) * 60))
@@ -3205,7 +3442,14 @@ fn dropped_image_save_job(
 
 fn history_title(history: &ClipboardHistory, index: usize) -> String {
     match (history.mark(index), history.byte_len(index)) {
-        (Some(mark), Some(len)) => commands::history_label(mark, len),
+        (Some(mark), Some(len)) => {
+            let label = commands::history_label(mark, len);
+            if history.is_pinned(index) {
+                format!("{}{label}", clipboard::PIN_MARK)
+            } else {
+                label
+            }
+        }
         _ => String::new(),
     }
 }
@@ -3240,6 +3484,8 @@ fn version_label() -> String {
 /// "Allow screenshots" (testing): the card and the table window can be captured until it is
 /// switched off or Copycraft restarts.
 const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
+const PAUSE_ID: &str = "pause-recording";
+const IGNORE_NEXT_ID: &str = "ignore-next";
 
 const SETTINGS_ID: &str = "settings";
 const ABOUT_ID: &str = "about";
@@ -3255,7 +3501,11 @@ fn status_labels() -> [String; 3] {
 #[cfg(test)]
 fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     let [hotkey, version, quit] = status_labels();
-    let mut rows = vec![hotkey];
+    let mut rows = vec![
+        hotkey,
+        crate::locale::t("pause_recording").to_string(),
+        crate::locale::t("ignore_next").to_string(),
+    ];
     if !entries.is_empty() {
         rows.push(crate::locale::t("history").to_string());
     }
@@ -3271,6 +3521,20 @@ fn status_menu(entries: &[(usize, String)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
+    let _ = menu.append(&CheckMenuItem::with_id(
+        PAUSE_ID,
+        crate::locale::t("pause_recording"),
+        true,
+        crate::capture::paused(),
+        None,
+    ));
+    let _ = menu.append(&CheckMenuItem::with_id(
+        IGNORE_NEXT_ID,
+        crate::locale::t("ignore_next"),
+        true,
+        crate::capture::ignore_next(),
+        None,
+    ));
     if !entries.is_empty() {
         let history = Submenu::new(crate::locale::t("history"), true);
         for (index, title) in entries {
@@ -3396,6 +3660,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         decoded_picture: None,
         image_job: None,
         image_note: None,
+        pin_refused: false,
         diff_sel: crate::diff::Selection::default(),
         diff_generation: 0,
         diff_outcome: None,
@@ -3433,12 +3698,12 @@ mod tests {
     fn history_is_forgotten_minutes_after_the_last_copy() {
         let copied = std::time::Instant::now();
         assert_eq!(
-            history_due(Some(copied), 15, false),
+            history_due(Some(copied), 15, true),
             Some(copied + std::time::Duration::from_secs(15 * 60))
         );
-        assert_eq!(history_due(Some(copied), 0, false), None);
-        assert_eq!(history_due(Some(copied), 5, true), None);
-        assert_eq!(history_due(None, 5, false), None);
+        assert_eq!(history_due(Some(copied), 0, true), None);
+        assert_eq!(history_due(Some(copied), 5, false), None);
+        assert_eq!(history_due(None, 5, true), None);
     }
 
     #[test]
@@ -3545,6 +3810,8 @@ mod tests {
             status_rows(&entries),
             vec![
                 crate::settings::hotkey_label(),
+                crate::locale::t("pause_recording").to_string(),
+                crate::locale::t("ignore_next").to_string(),
                 crate::locale::t("history").to_string(),
                 crate::locale::t("allow_screenshots").to_string(),
                 crate::locale::t("settings").to_string(),

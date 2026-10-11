@@ -14,6 +14,28 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("empty_pasteboard", "Klembord legen", "Empty pasteboard"),
     ("clear_history", "Geschiedenis wissen", "Clear history"),
+    ("pause_recording", "Opname pauzeren", "Pause recording"),
+    ("ignore_next", "Volgende kopie negeren", "Ignore next copy"),
+    (
+        "ignore_front_app",
+        "Kopieën van de voorste app negeren",
+        "Ignore copies from the frontmost app",
+    ),
+    ("pin", "Vastzetten", "Pin"),
+    ("unpin", "Losmaken", "Unpin"),
+    (
+        "remove_history",
+        "Uit geschiedenis verwijderen",
+        "Remove from history",
+    ),
+    ("clear_pins", "Vastgezette items wissen", "Clear pins"),
+    (
+        "pin_list_full",
+        "De vastgezette lijst is vol",
+        "The pin list is full",
+    ),
+    ("tip_paused", "Gepauzeerd", "Paused"),
+    ("tip_copy_ignored", "Kopie genegeerd", "Copy ignored"),
     (
         "clear_sensitive",
         "Gevoelige kopieën na 60 s wissen",
@@ -121,6 +143,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "symbols_field_a11y",
         "Lijst met speciale tekens",
         "Special character list",
+    ),
+    ("ignored_apps", "Genegeerde apps", "Ignored apps"),
+    (
+        "ignored_apps_add",
+        "Voorste app toevoegen",
+        "Add frontmost app",
     ),
     // Sensitivity labels and status (meta line)
     ("label_credential", "inloggegevens", "credential"),
@@ -315,19 +343,54 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("detail_forget_copies", "Kopieën vergeten", "Forget copies"),
     (
+        "detail_pin",
+        "Blijft staan voorbij de limiet van 20 en de bewaartermijn",
+        "Stays past the limit of 20 and the retention timer",
+    ),
+    (
+        "detail_unpin",
+        "Telt weer mee voor de limiet en de bewaartermijn",
+        "Counts again toward the limit and the timer",
+    ),
+    (
+        "detail_remove_history",
+        "Alleen dit item vergeten",
+        "Forget only this item",
+    ),
+    (
+        "detail_clear_pins",
+        "Alleen de vastgezette items",
+        "Pinned items only",
+    ),
+    (
+        "detail_pause",
+        "Nieuwe kopieën niet lezen tot je hervat",
+        "Do not read new copies until you resume",
+    ),
+    (
+        "detail_ignore_next",
+        "Eén volgende kopie van een andere app overslaan",
+        "Skip one next copy from another app",
+    ),
+    (
+        "detail_ignore_app",
+        "Kopieën van die app nooit lezen",
+        "Never read copies from that app",
+    ),
+    (
         "detail_clear_sensitive",
         "Leeg het klembord een minuut nadat Copycraft inloggegevens, PII of financiële gegevens heeft gekopieerd",
         "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
     ),
     (
         "detail_history_forgotten",
-        "De geschiedenis wordt altijd vergeten als het scherm vergrendelt, de Mac slaapt of je van gebruiker wisselt",
-        "History is always forgotten when the screen locks, the Mac sleeps or you switch users",
+        "De geschiedenis, ook vastgezette items, wordt altijd vergeten als het scherm vergrendelt, de Mac slaapt of je van gebruiker wisselt",
+        "History, including pins, is always forgotten when the screen locks, the Mac sleeps or you switch users",
     ),
     (
         "detail_settings",
-        "Sneltoets, datumvolgorde, privacyfilter, vervagen, Openen bij inloggen",
-        "Hotkey, date order, privacy filter, blur, Open at Login",
+        "Sneltoets, datumvolgorde, privacyfilter, vervagen, genegeerde apps, Openen bij inloggen",
+        "Hotkey, date order, privacy filter, blur, ignored apps, Open at Login",
     ),
     (
         "detail_about",

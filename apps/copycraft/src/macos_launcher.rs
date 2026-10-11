@@ -119,6 +119,8 @@ thread_local! {
     /// The `⋯` menu's check marks for settings.
     static CLEAR_SENSITIVE: Cell<bool> = const { Cell::new(true) };
     static HISTORY_MINUTES: Cell<u32> = const { Cell::new(15) };
+    static PAUSED: Cell<bool> = const { Cell::new(false) };
+    static IGNORE_NEXT: Cell<bool> = const { Cell::new(false) };
     static SHOWS_IMAGE: Cell<bool> = const { Cell::new(false) };
     static THUMB_TOKEN: Cell<isize> = const { Cell::new(-1) };
     /// The dropped picture the card shows instead of the clipboard's (`LaunchData::picture`).
@@ -815,6 +817,8 @@ fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     THEME.set(data.theme);
     CLEAR_SENSITIVE.set(data.settings.clear_sensitive);
     HISTORY_MINUTES.set(data.settings.history_minutes);
+    PAUSED.set(data.paused);
+    IGNORE_NEXT.set(data.ignore_next);
     ACTIONS.with(|slot| set_commands(slot, commands::chips(&data)));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
     OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
@@ -2432,7 +2436,10 @@ fn pop_overflow() {
     for (index, cmd) in items.iter().enumerate() {
         let in_history = matches!(
             cmd.id,
-            CommandId::History(_) | CommandId::ClearHistory | CommandId::DiffToggle(_)
+            CommandId::History(_)
+                | CommandId::ClearHistory
+                | CommandId::ClearPins
+                | CommandId::DiffToggle(_)
         );
         if in_history {
             let submenu = history_menu.get_or_insert_with(|| {
@@ -2495,6 +2502,20 @@ fn pop_overflow() {
         }
         if cmd.id == CommandId::ClearSensitive {
             item.setState(if CLEAR_SENSITIVE.with(Cell::get) {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        }
+        if cmd.id == CommandId::Pause {
+            item.setState(if PAUSED.with(Cell::get) {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        }
+        if cmd.id == CommandId::IgnoreNext {
+            item.setState(if IGNORE_NEXT.with(Cell::get) {
                 NSControlStateValueOn
             } else {
                 NSControlStateValueOff
@@ -3588,6 +3609,11 @@ mod tests {
             image: None,
             history: Vec::new(),
             can_clear_history: false,
+            can_clear_pins: false,
+            paused: false,
+            ignore_next: false,
+            can_ignore_app: false,
+            notice: None,
             history_nav: None,
             theme: crate::appearance::Theme::System,
             settings: crate::settings::Settings::default(),
@@ -3636,6 +3662,11 @@ mod tests {
             }),
             history: Vec::new(),
             can_clear_history: false,
+            can_clear_pins: false,
+            paused: false,
+            ignore_next: false,
+            can_ignore_app: false,
+            notice: None,
             history_nav: None,
             theme: crate::appearance::Theme::System,
             settings: crate::settings::Settings::default(),

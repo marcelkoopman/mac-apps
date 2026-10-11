@@ -85,6 +85,11 @@ const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 /// The symbol list, space-separated. Missing, empty or invalid means the standard list.
 const SYMBOLS_KEY: &str = "CopycraftSymbols";
+/// Bundle ids whose copies are never read. One id per line. Not clipboard data.
+const IGNORED_APPS_KEY: &str = "CopycraftIgnoredApps";
+
+/// How many bundle ids the ignore list keeps.
+pub const IGNORED_APP_MAX: usize = 50;
 
 /// Stored settings; a missing key keeps its default.
 pub fn load() -> Settings {
@@ -255,6 +260,80 @@ pub fn symbol_catalog_text() -> String {
 pub fn set_symbol_catalog(raw: &str) {
     let list = crate::symbols::parse_catalog(raw).unwrap_or_else(crate::symbols::default_list);
     store_string(SYMBOLS_KEY, &crate::symbols::format_list(&list));
+}
+
+/// A bundle id Copycraft will keep: reverse-DNS, so it contains a dot. A letter or digit,
+/// then letters, digits, dots and hyphens, with no empty segment and no trailing dot.
+/// A word without a dot (`not an id`) is not an id.
+pub fn valid_bundle_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return false;
+    }
+    id.contains('.') && !id.ends_with('.') && !id.split('.').any(|segment| segment.is_empty())
+}
+
+/// Bundle ids from `raw` (one per line, or separated by spaces or commas). Invalid lines,
+/// duplicates and Copycraft's own id are dropped. At most [`IGNORED_APP_MAX`].
+pub fn parse_ignored(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for piece in raw.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
+        let id = piece.trim();
+        if !valid_bundle_id(id) || id == crate::capture::OWN_BUNDLE {
+            continue;
+        }
+        if out.iter().any(|existing| existing == id) {
+            continue;
+        }
+        if out.len() == IGNORED_APP_MAX {
+            break;
+        }
+        out.push(id.to_string());
+    }
+    out
+}
+
+/// Bundle ids whose copies are not read. Missing means none.
+pub fn ignored_bundles() -> Vec<String> {
+    load_string(IGNORED_APPS_KEY)
+        .map(|raw| parse_ignored(&raw))
+        .unwrap_or_default()
+}
+
+pub fn bundle_ignored(id: &str) -> bool {
+    id != crate::capture::OWN_BUNDLE && ignored_bundles().iter().any(|item| item == id)
+}
+
+/// The ignore list on one line, for the settings field.
+pub fn ignored_apps_text() -> String {
+    ignored_bundles().join(" ")
+}
+
+/// Store `raw`. Invalid ids are dropped.
+pub fn set_ignored_apps(raw: &str) {
+    store_string(IGNORED_APPS_KEY, &parse_ignored(raw).join("\n"));
+}
+
+/// Append `bundle` when it is a new, valid, foreign id and the list is not full.
+pub fn ignore_app(bundle: &str) -> bool {
+    let mut list = ignored_bundles();
+    if list.len() >= IGNORED_APP_MAX || list.iter().any(|item| item == bundle) {
+        return false;
+    }
+    list.push(bundle.to_string());
+    let parsed = parse_ignored(&list.join("\n"));
+    if parsed.len() == list.len() - 1 {
+        return false;
+    }
+    store_string(IGNORED_APPS_KEY, &parsed.join("\n"));
+    true
 }
 
 /// Put the standard list back.
@@ -435,5 +514,29 @@ mod tests {
     #[test]
     fn preferred_read_options_follow_the_date_setting() {
         assert!(!super::preferred_read_options().month_first);
+    }
+
+    #[test]
+    fn ignored_apps_keep_only_valid_foreign_bundle_ids() {
+        let raw = "com.apple.Safari\nnot an id\ncom..broken\ncom.apple.\n.hidden\n\
+                   com.github.marcelkoopman.copycraft\ncom.apple.Safari\ncom.apple.Notes, com.example.app-1";
+        let ids = super::parse_ignored(raw);
+        assert_eq!(
+            ids,
+            vec![
+                "com.apple.Safari".to_string(),
+                "com.apple.Notes".to_string(),
+                "com.example.app-1".to_string(),
+            ]
+        );
+        let mut many = String::new();
+        for i in 0..super::IGNORED_APP_MAX + 5 {
+            many.push_str(&format!("app.item{i}\n"));
+        }
+        assert_eq!(super::parse_ignored(&many).len(), super::IGNORED_APP_MAX);
+        assert!(!super::valid_bundle_id(""));
+        assert!(!super::valid_bundle_id(
+            "com.github.marcelkoopman.copycraft."
+        ));
     }
 }
