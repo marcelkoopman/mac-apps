@@ -1,4 +1,4 @@
-# Contributing
+# How to contribute
 
 Issues and pull requests are welcome.
 

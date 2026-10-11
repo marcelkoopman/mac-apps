@@ -97,9 +97,9 @@ Local app bundle (needs `cargo-bundle`; `config.toml` is bundled as a resource):
 cd apps/ticker && cargo bundle --release
 ```
 
-## Release
+## How to contribute
 
-Releases are made only by the maintainer (see the [root README](../../README.md#release)). Issues and pull requests are welcome; please do not tag or publish builds.
+Issues and pull requests are welcome; see the [root README](../../README.md#how-to-contribute). Releases are made only by the maintainer.
 
 ## App Store readiness
 

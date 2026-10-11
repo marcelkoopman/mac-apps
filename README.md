@@ -73,9 +73,14 @@ CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clipp
 
 CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
-## Release
+## How to contribute
 
-Releases are made only by the maintainer. Contributions are welcome as issues and pull requests; please do not tag, publish or distribute builds. A pull request is reviewed and merged by the maintainer, and the maintainer decides when a release is made. The release workflows run for the maintainer's release tags only.
+Issues and pull requests are welcome.
+
+- **Report a bug or suggest a change:** open an issue.
+- **Send a change:** open a pull request against `main`. Keep it small, and run `cargo fmt`, `cargo clippy` and `cargo test` first; CI runs the same checks on every pull request. I review and merge it.
+- **Offline by design:** Copycraft has no network access. Changes that add network access or new entitlements are not accepted.
+- **Releases:** only the maintainer makes releases. Please do not create tags or GitHub releases, or distribute builds of these apps.
 
 Downloads: [Releases](https://github.com/marcelkoopman/mac-apps/releases).
 
