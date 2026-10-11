@@ -5,7 +5,7 @@ edition.workspace = true
 
 [package.metadata.bundle]
 name = "Copycraft"
-identifier = "com.github.marcelkoopman.copycraft"
+identifier = "com.github.marcelkoopman.mac-apps.copycraft"
 icon = ["assets/icon.icns"]
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
 resources = ["PrivacyInfo.xcprivacy"]

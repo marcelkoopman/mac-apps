@@ -44,5 +44,8 @@ if [ -n "$APP" ]; then
     [ "$(/usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$APP/Contents/Info.plist")" = "false" ] \
       || die "ITSAppUsesNonExemptEncryption is not false in $APP/Contents/Info.plist"
   fi
+  want_id="$(sed -n 's/^identifier *= *"\(.*\)"/\1/p' "$ROOT/apps/$PKG/Cargo.toml")"
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = "$want_id" ] \
+    || die "CFBundleIdentifier in $APP/Contents/Info.plist is not $want_id (Cargo.toml)"
   echo -e "${GREEN}$PKG: bundle holds a valid, identical PrivacyInfo.xcprivacy${NC}"
 fi

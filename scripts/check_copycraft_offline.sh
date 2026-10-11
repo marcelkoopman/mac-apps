@@ -7,6 +7,8 @@
 #   3. the shared layer (crates/mac-ui/src) starts a subprocess or uses std::net /
 #      std::os::unix::net: with feature unification in workspace builds, whatever mac-ui holds
 #      can end up in copycraft. Ticker keeps its own subprocess code (its osascript fallback).
+#   4. an old bundle id (without the mac-apps. segment) is still in the repo, or the ids in
+#      Cargo.toml / capture::OWN_BUNDLE differ from the expected ones.
 # In copycraft itself, subprocesses and std::net / std::os::unix::net are caught by clippy
 # (apps/copycraft/clippy.toml).
 #
@@ -53,5 +55,21 @@ fi
 if grep -rnE 'process::Command|Command::new|std::net|os::unix::net|TcpStream|UdpSocket|UnixStream' crates/mac-ui/src; then
   die "Subprocess- of netwerkcode in crates/mac-ui: de gedeelde laag heeft die niet, die hoort in de app zelf (AGENTS.md)"
 fi
+
+# Bundle ids: copycraft and ticker moved to com.github.marcelkoopman.mac-apps.<app> before the
+# first Store submission. The old ids (no "mac-apps." segment) must not come back anywhere in the
+# tracked files, and the id in Cargo.toml, capture::OWN_BUNDLE and the expected value must agree.
+old_ids='com\.github\.marcelkoopman\.(copycraft|ticker)'
+# docs/pasteboard-privacy/FINDINGS.md is historical (test logs) and may keep an old id.
+if git grep -nIE "$old_ids" -- . ':!docs/pasteboard-privacy/FINDINGS.md'; then
+  die "Oude bundle id in de repo (nu com.github.marcelkoopman.mac-apps.<app>); zie hierboven"
+fi
+for app in copycraft ticker; do
+  want="com.github.marcelkoopman.mac-apps.$app"
+  have="$(sed -n 's/^identifier *= *"\(.*\)"/\1/p' "apps/$app/Cargo.toml")"
+  [ "$have" = "$want" ] || die "apps/$app/Cargo.toml: identifier is '$have', verwacht '$want'"
+done
+grep -q 'OWN_BUNDLE: &str = "com.github.marcelkoopman.mac-apps.copycraft";' apps/copycraft/src/capture.rs \
+  || die "capture::OWN_BUNDLE komt niet overeen met de bundle id in apps/copycraft/Cargo.toml"
 
 echo -e "${GREEN}copycraft: geen netwerk-crates (socket2 via polars → tokio toegestaan), geen osascript; mac-ui: geen subprocessen of netwerk${NC}"

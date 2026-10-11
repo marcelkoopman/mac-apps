@@ -5,7 +5,7 @@ edition.workspace = true
 
 [package.metadata.bundle]
 name = "Ticker"
-identifier = "com.github.marcelkoopman.ticker"
+identifier = "com.github.marcelkoopman.mac-apps.ticker"
 icon = ["assets/icon.icns"]
 # config.toml and the privacy manifest land in Contents/Resources/.
 resources = ["config.toml", "PrivacyInfo.xcprivacy"]

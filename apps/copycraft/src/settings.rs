@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn ignored_apps_keep_only_valid_foreign_bundle_ids() {
         let raw = "com.apple.Safari\nnot an id\ncom..broken\ncom.apple.\n.hidden\n\
-                   com.github.marcelkoopman.copycraft\ncom.apple.Safari\ncom.apple.Notes, com.example.app-1";
+                   com.github.marcelkoopman.mac-apps.copycraft\ncom.apple.Safari\ncom.apple.Notes, com.example.app-1";
         let ids = super::parse_ignored(raw);
         assert_eq!(
             ids,
@@ -536,7 +536,7 @@ mod tests {
         assert_eq!(super::parse_ignored(&many).len(), super::IGNORED_APP_MAX);
         assert!(!super::valid_bundle_id(""));
         assert!(!super::valid_bundle_id(
-            "com.github.marcelkoopman.copycraft."
+            "com.github.marcelkoopman.mac-apps.copycraft."
         ));
     }
 }
