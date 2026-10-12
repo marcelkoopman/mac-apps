@@ -18,6 +18,11 @@
 #                             its largest image
 # Without any of them the script says so and exits 0, leaving the bundle as cargo-bundle made it.
 #
+# Optional accent colour: apps/<app>/assets/AccentColor.colorset/ (an asset catalog colour set).
+# When present it is compiled into the same Assets.car (actool --accent-color) and Info.plist gets
+# NSAccentColorName = AccentColor, so NSColor.controlAccentColor follows it while the user's
+# System Settings accent is Multicolour; a specific system accent colour still wins.
+#
 # Run it BEFORE scripts/sign_app.sh: changing the bundle after signing breaks the signature.
 # macOS only: xcrun actool (Xcode or the Command Line Tools), plus iconutil and sips for icon.icns.
 # The deployment target comes from minimum_system_version in apps/<app>/Cargo.toml.
@@ -28,6 +33,7 @@ die() { echo -e "${RED}$*${NC}" >&2; exit 1; }
 note() { echo -e "${YELLOW}$*${NC}" >&2; }
 
 ICON_NAME="AppIcon"
+ACCENT_NAME="AccentColor"
 PLISTBUDDY="${PLISTBUDDY:-/usr/libexec/PlistBuddy}"
 
 PKG="${1:-}"
@@ -169,17 +175,32 @@ case "$KIND" in
     ;;
 esac
 
+# 4b. Optional accent colour, in its own catalog passed to actool next to the icon input.
+ACCENT_ARGS=()
+ACCENT_INPUT=()
+if [ -d "$ASSETS/$ACCENT_NAME.colorset" ]; then
+  [ -f "$ASSETS/$ACCENT_NAME.colorset/Contents.json" ] || die "Geen Contents.json in $ASSETS/$ACCENT_NAME.colorset"
+  ACCENT_CATALOG="$WORK/Accent.xcassets"
+  mkdir -p "$ACCENT_CATALOG"
+  printf '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n' > "$ACCENT_CATALOG/Contents.json"
+  cp -R "$ASSETS/$ACCENT_NAME.colorset" "$ACCENT_CATALOG/$ACCENT_NAME.colorset"
+  ACCENT_INPUT=("$ACCENT_CATALOG")
+  ACCENT_ARGS=(--accent-color "$ACCENT_NAME")
+  echo -e "${YELLOW}🎨 $NAME: accentkleur $ACCENT_NAME uit $ACCENT_NAME.colorset${NC}"
+fi
+
 # 5. Compile into a scratch folder first, so a failure leaves the bundle untouched.
 OUT="$WORK/out"
 mkdir -p "$OUT"
 echo -e "${YELLOW}🎨 $NAME: app-icoon uit $(basename "$SOURCE") ($KIND), macOS $MIN_OS+${NC}"
-xcrun actool "$INPUT" \
+xcrun actool "$INPUT" ${ACCENT_INPUT[@]+"${ACCENT_INPUT[@]}"} \
   --compile "$OUT" \
   --platform macosx \
   --target-device mac \
   --minimum-deployment-target "$MIN_OS" \
   --app-icon "$ICON_NAME" \
   --include-all-app-icons \
+  ${ACCENT_ARGS[@]+"${ACCENT_ARGS[@]}"} \
   --enable-on-demand-resources NO \
   --development-region en \
   --output-partial-info-plist "$WORK/partial.plist" \
@@ -197,6 +218,9 @@ plist_set() {
 }
 plist_set CFBundleIconName "$ICON_NAME"
 plist_set CFBundleIconFile "$ICON_NAME"
+if [ "${#ACCENT_ARGS[@]}" -gt 0 ]; then
+  plist_set NSAccentColorName "$ACCENT_NAME"
+fi
 plutil -lint "$PLIST" >/dev/null || die "$PLIST is ongeldig na het bijwerken"
 [ "$("$PLISTBUDDY" -c 'Print :CFBundleIconName' "$PLIST")" = "$ICON_NAME" ] \
   || die "CFBundleIconName staat niet op $ICON_NAME in $PLIST"

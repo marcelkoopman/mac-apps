@@ -134,6 +134,12 @@ jobs:
               grep -q '"AppIcon"' "$RUNNER_TEMP/$pkg-assets.json" \
                 || { echo "::error::$pkg Assets.car has no AppIcon"; exit 1; }
               test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = AppIcon
+              if [ -d "apps/$pkg/assets/AccentColor.colorset" ]; then
+                grep -q '"AccentColor"' "$RUNNER_TEMP/$pkg-assets.json" \
+                  || { echo "::error::$pkg Assets.car has no AccentColor"; exit 1; }
+                test "$(/usr/libexec/PlistBuddy -c 'Print :NSAccentColorName' "$app/Contents/Info.plist")" = AccentColor \
+                  || { echo "::error::$pkg Info.plist has no NSAccentColorName = AccentColor"; exit 1; }
+              fi
             fi
           done
 
