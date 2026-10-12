@@ -21,6 +21,16 @@ impl VersionBar {
                 current: edit.version.min(edit.labels.len() - 1),
             });
         }
+        if let Some(edit) = &data.text_edit
+            && data.subject_kind == SubjectKind::Text
+            && data.view == CardView::Original
+            && edit.labels.len() > 1
+        {
+            return Some(Self {
+                labels: edit.labels.clone(),
+                current: edit.version.min(edit.labels.len() - 1),
+            });
+        }
         let table = data.table.as_ref()?;
         let text = data.subject_text.as_deref()?;
         (presented_view(text, data.view) == CardView::Dataframe && table.labels.len() > 1).then(

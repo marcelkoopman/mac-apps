@@ -335,6 +335,12 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageMenu
             | CommandId::ImageStep(_)
             | CommandId::ImageResizeCustom
+            | CommandId::TextMenu
+            | CommandId::TextCount
+            | CommandId::TextHead
+            | CommandId::TextTail
+            | CommandId::TextReverse
+            | CommandId::TextColumn
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
     )

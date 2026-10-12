@@ -18,6 +18,19 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             {
                 chips.push(question);
             }
+            // Text… on text and code cards; tables and links have their own chips.
+            if data.text_edit.is_some()
+                && !chips
+                    .iter()
+                    .any(|cmd| matches!(cmd.id, CommandId::TableOpenWindow | CommandId::Visit))
+            {
+                chips.push(command(
+                    CommandId::TextMenu,
+                    text_menu_title(),
+                    crate::locale::t("detail_text_steps"),
+                    "text lines count head tail reverse column undo redo",
+                ));
+            }
             chips
         }
         SubjectKind::Empty
@@ -94,6 +107,15 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     if let Some(edit) = &data.image_edit {
         commands.extend(
             image_menu_items(edit)
+                .into_iter()
+                .map(|(command, _)| command),
+        );
+    }
+    if let Some(edit) = &data.text_edit
+        && commands.iter().any(|c| c.id == CommandId::TextMenu)
+    {
+        commands.extend(
+            text_menu_items(edit)
                 .into_iter()
                 .map(|(command, _)| command),
         );

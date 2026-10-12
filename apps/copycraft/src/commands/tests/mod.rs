@@ -39,6 +39,7 @@ fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         picture: None,
         table: None,
         image_edit: None,
+        text_edit: None,
         shown_id: None,
         shown_mark: None,
         diff_picks: Vec::new(),

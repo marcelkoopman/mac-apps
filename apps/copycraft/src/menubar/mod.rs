@@ -57,11 +57,13 @@ mod save;
 mod source;
 mod state;
 mod table;
+mod text;
 
 use app::*;
 use menu::*;
 pub use run::*;
 use state::*;
+use text::*;
 
 #[cfg(test)]
 mod tests;

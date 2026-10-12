@@ -86,6 +86,10 @@ pub(crate) struct App {
     /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
     /// shown on that picture's card until the next step.
     pub(crate) image_note: Option<(usize, String)>,
+    /// The versions Text… made of the text on the card ([`TextSteps`]).
+    pub(crate) text_steps: Option<TextSteps>,
+    /// The count, or why the last Text… step did nothing, and for which history entry.
+    pub(crate) text_note: Option<(u64, String)>,
     /// The last pin was refused because the pin list is full. Shown on the card meta line.
     pub(crate) pin_refused: bool,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.

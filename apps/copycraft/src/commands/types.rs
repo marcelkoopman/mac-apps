@@ -96,6 +96,9 @@ pub struct LaunchData {
     /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
     /// have them. Absent: no Image ▾.
     pub image_edit: Option<ImageShown>,
+    /// The versions Text… made of the text on the card ([`crate::text_ops`]). Absent: no
+    /// Text… (tables, links, a chosen file).
+    pub text_edit: Option<TextShown>,
     /// History entry on screen, when the card follows history. Absent for a chosen file.
     pub shown_id: Option<u64>,
     /// "A" or "B" when that entry is chosen for the diff. Not set on the diff card.
@@ -134,6 +137,28 @@ pub struct ImageShown {
 }
 
 impl ImageShown {
+    pub fn can_undo(&self) -> bool {
+        self.version > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.version + 1 < self.labels.len()
+    }
+}
+
+/// The versions Text… made of a text, for the card. Each version is a history entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextShown {
+    /// "Original", then each step's label.
+    pub labels: Vec<String>,
+    /// The version shown: 0 is the original.
+    pub version: usize,
+    /// The count, or why the last step did nothing, for the meta line.
+    pub note: Option<String>,
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+impl TextShown {
     pub fn can_undo(&self) -> bool {
         self.version > 0
     }
@@ -371,6 +396,18 @@ pub enum CommandId {
     ImageStep(crate::image_edit::ImageOp),
     /// Resize › Custom…: asks for a width or a height.
     ImageResizeCustom,
+    /// The "Text…" chip on a text or code card: the card pops [`text_menu_items`].
+    TextMenu,
+    /// Count lines, words and characters; shown on the card, the clipboard stays.
+    TextCount,
+    /// Ask for N, then keep the first N lines as a new version.
+    TextHead,
+    /// Ask for N, then keep the last N lines as a new version.
+    TextTail,
+    /// The lines in reverse order, as a new version.
+    TextReverse,
+    /// Ask for a separator and a column, then keep that column as a new version.
+    TextColumn,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.

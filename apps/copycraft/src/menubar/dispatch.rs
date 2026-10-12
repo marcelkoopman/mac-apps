@@ -71,6 +71,21 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
+            // On a text Text… worked on, undo, redo and the version capsule are the text's.
+            CommandId::TableUndo if self.text_versions_shown() => {
+                self.text_goto(|cursor| cursor.checked_sub(1));
+            }
+            CommandId::TableRedo if self.text_versions_shown() => {
+                self.text_goto(|cursor| Some(cursor + 1));
+            }
+            CommandId::TableVersion(index) if self.text_versions_shown() => {
+                self.text_goto(|_| Some(index));
+            }
+            CommandId::TextCount => self.text_count(),
+            CommandId::TextHead => self.text_lines_prompt(false),
+            CommandId::TextTail => self.text_lines_prompt(true),
+            CommandId::TextReverse => self.text_step(crate::text_ops::TextOp::Reverse),
+            CommandId::TextColumn => self.text_column_prompt(),
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
@@ -89,7 +104,10 @@ impl App {
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),
             // The card pops the menu itself.
-            CommandId::TableMenu | CommandId::ImageMenu | CommandId::TableChooseColumns => {}
+            CommandId::TableMenu
+            | CommandId::ImageMenu
+            | CommandId::TextMenu
+            | CommandId::TableChooseColumns => {}
             CommandId::TableDateOrder(month_first) => {
                 self.table_reread(TableTarget::Card, |options| {
                     options.month_first = month_first;

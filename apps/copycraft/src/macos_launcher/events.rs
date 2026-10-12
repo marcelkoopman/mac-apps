@@ -222,7 +222,7 @@ pub(crate) fn activate_overflow(index: usize) {
 }
 
 pub(crate) fn run_command(cmd: Command) {
-    if cmd.id == CommandId::ImageMenu {
+    if cmd.id == CommandId::ImageMenu || cmd.id == CommandId::TextMenu {
         pop_table_menu();
         return;
     }

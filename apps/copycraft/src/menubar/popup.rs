@@ -227,6 +227,7 @@ impl App {
         };
         self.attach_table(&mut data);
         self.attach_image(&mut data);
+        self.attach_text(&mut data);
         self.attach_decoded_picture(&mut data);
         self.fill_diff(&mut data);
         data

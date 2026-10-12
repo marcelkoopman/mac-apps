@@ -74,6 +74,69 @@ pub(crate) fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command
 pub fn image_menu_title() -> &'static str {
     crate::locale::t("image_menu")
 }
+/// The "Text…" chip.
+pub fn text_menu_title() -> &'static str {
+    crate::locale::t("text_menu")
+}
+
+/// The "Text…" menu: count, first and last lines, reverse, column, then undo and redo when
+/// there is a version to go to. No check marks.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
+    let mut commands = vec![
+        command(
+            CommandId::TextCount,
+            crate::locale::t("text_count"),
+            crate::locale::t("text_menu"),
+            "count wc lines words characters text",
+        ),
+        command(
+            CommandId::TextHead,
+            crate::locale::t("text_head"),
+            crate::locale::t("text_menu"),
+            "head first lines top text",
+        ),
+        command(
+            CommandId::TextTail,
+            crate::locale::t("text_tail"),
+            crate::locale::t("text_menu"),
+            "tail last lines bottom text",
+        ),
+        command(
+            CommandId::TextReverse,
+            crate::locale::t("text_reverse"),
+            crate::locale::t("text_menu"),
+            "tac reverse lines order text",
+        ),
+        command(
+            CommandId::TextColumn,
+            crate::locale::t("text_column"),
+            crate::locale::t("text_menu"),
+            "awk column field cut separator text",
+        ),
+    ];
+    if edit.can_undo() {
+        commands.push(command(
+            CommandId::TableUndo,
+            crate::locale::t("undo_text_step"),
+            &edit.labels[edit.version],
+            "undo text version back",
+        ));
+    }
+    if edit.can_redo() {
+        commands.push(command(
+            CommandId::TableRedo,
+            crate::locale::t("redo_text_step"),
+            &edit.labels[edit.version + 1],
+            "redo text version forward",
+        ));
+    }
+    commands
+        .into_iter()
+        .map(|command| (command, false))
+        .collect()
+}
+
 /// Resize › Custom….
 pub fn custom_resize_title() -> &'static str {
     crate::locale::t("custom_resize")

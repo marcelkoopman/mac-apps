@@ -769,9 +769,12 @@ pub(crate) fn pop_table_menu() {
             .collect()
     });
     let index = SHOWN.with(|slot| {
-        slot.borrow()
-            .iter()
-            .position(|cmd| matches!(cmd.id, CommandId::TableMenu | CommandId::ImageMenu))
+        slot.borrow().iter().position(|cmd| {
+            matches!(
+                cmd.id,
+                CommandId::TableMenu | CommandId::ImageMenu | CommandId::TextMenu
+            )
+        })
     });
     let chip = index.and_then(|index| CHIPS.with(|slot| slot.borrow().get(index).cloned()));
     match chip {

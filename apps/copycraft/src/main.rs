@@ -35,6 +35,7 @@ mod table;
 mod table_ops;
 #[cfg(test)]
 mod testdata_manifest;
+mod text_ops;
 mod toolbar_visibility;
 mod transform;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

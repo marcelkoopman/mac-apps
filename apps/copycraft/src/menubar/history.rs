@@ -53,6 +53,8 @@ impl App {
             self.image_on_pasteboard = None;
             self.cancel_image_job();
             self.image_note = None;
+            self.text_steps = None;
+            self.text_note = None;
             self.cancel_table_job();
             self.table_error = None;
             self.close_table_window();
@@ -510,6 +512,7 @@ impl App {
         self.record_current(&view);
         let mut data = self.launch_data(&view);
         self.attach_image(&mut data);
+        self.attach_text(&mut data);
         if launcher::is_open() {
             launcher::sync(data);
         } else {
