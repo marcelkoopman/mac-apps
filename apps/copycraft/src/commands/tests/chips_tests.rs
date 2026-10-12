@@ -394,3 +394,24 @@ fn text_menu_on_prose_and_every_code_card_not_on_tables_or_links() {
         assert!(!offers_text_menu(other), "{other}");
     }
 }
+
+#[test]
+fn text_menu_chip_comes_first_on_a_code_card() {
+    let rust = "fn main() {\n    let v = vec![1, 2];\n}\n";
+    let reversed = crate::text_ops::reverse(rust);
+    for text in [rust, reversed.as_str()] {
+        let mut card = data(SubjectKind::Text, Some(text));
+        card.text_edit = Some(crate::commands::TextShown {
+            labels: vec!["Original".into()],
+            version: 0,
+            note: None,
+        });
+        let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
+        let at = ids.iter().position(|id| *id == CommandId::TextMenu);
+        let after = ids
+            .iter()
+            .position(|id| *id == CommandId::Original)
+            .map_or(0, |i| i + 1);
+        assert_eq!(at, Some(after), "{ids:?}");
+    }
+}

@@ -4,6 +4,9 @@
 use super::*;
 use crate::text_ops::{self, Separator, TextOp};
 
+/// The entry id Text… uses for a shown copy that is not in history.
+const NOT_IN_HISTORY: u64 = u64::MAX;
+
 /// The versions Text… made: the history entries they are, oldest first, and which is shown.
 /// Only ids and labels: the texts stay in history (and go when it forgets them).
 pub(crate) struct TextSteps {
@@ -19,13 +22,27 @@ impl App {
         if self.opened.is_some() {
             return None;
         }
-        // The copied source, also when the card shows it formatted.
-        let text = Zeroizing::new(self.source_text()?);
+        // The copied source the card shows, also when it shows it formatted. While recording
+        // is paused or the app is ignored (Held) the card shows the history entry: so does
+        // Text….
+        let view = ClipboardView::from_os();
+        let text = if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
+            self.history.get(self.history_cursor).map(str::to_string)
+        } else {
+            view.text().map(str::to_string)
+        };
+        let text = Zeroizing::new(text?);
         if !commands::offers_text_menu(&text) {
             return None;
         }
-        let index = self.history.text_index(&text, self.history_cursor)?;
-        Some((self.history.id_at(index)?, text))
+        // A copy that is not in history (not recorded) still gets Text…; only ⌘Z back to it
+        // has nothing to put back.
+        let id = self
+            .history
+            .text_index(&text, self.history_cursor)
+            .and_then(|index| self.history.id_at(index))
+            .unwrap_or(NOT_IN_HISTORY);
+        Some((id, text))
     }
 
     /// The steps whose shown version is entry `id`.

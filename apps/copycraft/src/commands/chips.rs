@@ -23,12 +23,20 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             if data.text_edit.is_some()
                 && data.subject_text.as_deref().is_some_and(offers_text_menu)
             {
-                chips.push(command(
-                    CommandId::TextMenu,
-                    text_menu_title(),
-                    crate::locale::t("detail_text_steps"),
-                    "text lines count head tail reverse column undo redo",
-                ));
+                // Up front (after Original), before the less used chips.
+                let at = chips
+                    .iter()
+                    .position(|cmd| cmd.id == CommandId::Original)
+                    .map_or(0, |index| index + 1);
+                chips.insert(
+                    at,
+                    command(
+                        CommandId::TextMenu,
+                        text_menu_title(),
+                        crate::locale::t("detail_text_steps"),
+                        "text lines count head tail reverse column filter undo redo",
+                    ),
+                );
             }
             chips
         }
