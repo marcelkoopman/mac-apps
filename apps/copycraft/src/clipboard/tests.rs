@@ -1,0 +1,597 @@
+use super::{
+    ClipboardHistory, ClipboardImage, ClipboardView, SecretBytes, Zeroizing, formatted, one_line,
+    try_format_json,
+};
+use zeroize::Zeroize;
+
+#[test]
+fn image_rejects_invalid_dimensions() {
+    assert!(ClipboardImage::new(0, 1, vec![0, 0, 0, 255]).is_none());
+    assert!(ClipboardImage::new(1, 1, vec![0, 0, 0]).is_none());
+    assert!(ClipboardImage::new(2, 1, vec![255, 0, 0, 255]).is_none());
+}
+
+#[test]
+fn image_encodes_png() {
+    let image = ClipboardImage::new(2, 1, vec![255, 0, 0, 255, 0, 255, 0, 255]).expect("rgba");
+    let png = image.png_bytes().expect("png");
+    assert!(png.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]));
+    let decoded = image::load_from_memory(&png).expect("decode");
+    assert_eq!(decoded.width(), 2);
+    assert_eq!(decoded.height(), 1);
+}
+
+#[test]
+fn image_view_is_previewable() {
+    let view = ClipboardView::Image;
+    assert!(view.is_previewable());
+    assert!(view.is_image());
+    assert!(view.text().is_none());
+    assert_eq!(view.label(), "img");
+    assert_eq!(view.type_mark(), Some("img"));
+    assert!(!ClipboardView::Empty.is_previewable());
+    assert!(!ClipboardView::NoText.is_previewable());
+    assert!(ClipboardView::Text(Zeroizing::new("hello".into())).is_previewable());
+}
+
+#[test]
+fn one_line_uses_symbol_for_plain_text() {
+    assert_eq!(one_line("\n  Hello world  \nmore"), "¶");
+}
+
+#[test]
+fn one_line_marks_json() {
+    assert_eq!(one_line("{\"name\":\"copycraft\"}"), "{}");
+}
+
+#[test]
+fn one_line_marks_xml() {
+    assert_eq!(one_line("<root><item/></root>"), "</>");
+}
+
+#[test]
+fn menu_mark_hides_content() {
+    let mark = super::menu_mark("Naam: Jan de Vries\nE-mailadres: jan@x.nl");
+    assert_eq!(mark, "¶");
+    assert!(!mark.contains("Jan"));
+    assert!(!mark.contains("@"));
+}
+
+#[test]
+fn menu_mark_by_type() {
+    assert_eq!(super::menu_mark("{\"a\":1}"), "{}");
+    assert_eq!(
+        super::menu_mark("name: copycraft\nitems:\n  - one\n"),
+        "---"
+    );
+    assert_eq!(super::menu_mark("<root><item/></root>"), "</>");
+    assert_eq!(super::menu_mark("https://example.com/x"), "://");
+    assert_eq!(super::menu_mark("fn main() {}"), "fn");
+    assert_eq!(super::menu_mark("plain"), "Aa");
+    assert_eq!(super::menu_mark("name,age\nalice,30\nbob,40"), "csv");
+    assert_eq!(super::menu_mark("name\tage\nalice\t30\nbob\t40"), "tsv");
+}
+
+#[test]
+fn formats_json_when_valid() {
+    let pretty = try_format_json("{\"name\":\"copycraft\"}").expect("json");
+    assert!(pretty.contains('\n'));
+    assert!(pretty.contains("copycraft"));
+}
+
+#[test]
+fn ignores_non_json() {
+    assert_eq!(try_format_json("hello"), None);
+    assert_eq!(try_format_json("123"), None);
+}
+
+#[test]
+fn formatted_pretty_prints_json() {
+    let pretty = formatted("{\"a\":1}");
+    assert!(pretty.contains('\n'));
+    assert!(pretty.contains('{'));
+}
+
+#[test]
+fn formatted_pretty_prints_xml() {
+    let pretty = formatted("<a><b>x</b></a>");
+    assert!(pretty.contains('\n'));
+    assert!(pretty.contains("    <b>"));
+}
+
+#[test]
+fn one_line_is_short_symbol() {
+    let label = one_line(&"a".repeat(80));
+    assert_eq!(label, "Aa");
+}
+
+#[test]
+fn tracked_entry_moves_down_one() {
+    let mut history = ClipboardHistory::default();
+    history.record("old".into());
+    history.record("clip".into());
+    assert_eq!(history.record_tracking("dropped".into(), 0), Some(1));
+    assert_eq!(history.get(0), Some("dropped"));
+    assert_eq!(history.get(1), Some("clip"));
+}
+
+#[test]
+fn tracked_entry_that_is_the_text_moves_to_the_front() {
+    let mut history = ClipboardHistory::default();
+    history.record("clip".into());
+    history.record("newer".into());
+    assert_eq!(history.record_tracking("clip".into(), 1), Some(0));
+    assert_eq!(history.get(0), Some("clip"));
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn tracked_entry_keeps_its_place_when_the_text_came_from_above() {
+    let mut history = ClipboardHistory::default();
+    history.record("clip".into());
+    history.record("dropped".into());
+    history.record("newest".into());
+    // "dropped" (index 1) moves to the front; "clip" stays at index 2.
+    assert_eq!(history.record_tracking("dropped".into(), 2), Some(2));
+    assert_eq!(history.get(2), Some("clip"));
+}
+
+#[test]
+fn a_tracked_image_shares_its_bytes_with_history() {
+    let mut history = ClipboardHistory::default();
+    history.record("clip".into());
+    let bytes = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
+    assert_eq!(history.record_image_tracking(bytes.clone(), 0), 1);
+    assert!(history.image(0).expect("image").same_allocation(&bytes));
+    assert_eq!(history.get(1), Some("clip"));
+    // The same picture again moves to the front instead of being listed twice.
+    let again = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
+    assert_eq!(history.record_image_tracking(again, 1), 1);
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn putting_a_history_picture_back_keeps_its_bytes() {
+    let mut history = ClipboardHistory::default();
+    let bytes = history.record_image(vec![1, 2, 3]).expect("image");
+    history.record("newer".into());
+    // Chosen from the menu: the entry's own handle goes back in front.
+    let shared = history.image(1).expect("image");
+    assert_eq!(history.record_image_tracking(shared, 0), 1);
+    assert_eq!(history.len(), 2);
+    assert!(history.image(0).expect("image").same_allocation(&bytes));
+    assert_eq!(bytes.with(<[u8]>::to_vec), vec![1, 2, 3]);
+}
+
+#[test]
+fn recording_the_newest_text_again_changes_nothing() {
+    let mut history = ClipboardHistory::default();
+    history.record("older".into());
+    history.record("clip".into());
+    history.record("clip".into());
+    assert_eq!(history.len(), 2);
+    assert_eq!(history.get(0), Some("clip"));
+    history.record("older".into());
+    assert_eq!(history.get(0), Some("older"));
+    assert_eq!(history.get(1), Some("clip"));
+}
+
+#[test]
+fn tracking_blank_text_records_nothing() {
+    let mut history = ClipboardHistory::default();
+    history.record("clip".into());
+    assert_eq!(history.record_tracking("  \n".into(), 0), None);
+    assert_eq!(history.len(), 1);
+}
+
+#[test]
+fn tracking_keeps_the_history_limit() {
+    let mut history = ClipboardHistory::default();
+    for i in 0..super::MAX_HISTORY {
+        history.record(format!("copy {i}"));
+    }
+    let last = super::MAX_HISTORY - 1;
+    // The tracked entry was the oldest and falls off the end.
+    assert_eq!(history.record_tracking("dropped".into(), last), Some(last));
+    assert_eq!(history.len(), super::MAX_HISTORY);
+    assert_eq!(history.get(0), Some("dropped"));
+}
+
+#[test]
+fn history_dedupes_and_moves_to_front() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    history.record("one".into());
+    assert_eq!(history.get(0), Some("one"));
+    assert_eq!(history.get(1), Some("two"));
+    assert_eq!(history.labels().len(), 2);
+}
+
+#[test]
+fn history_keeps_an_image_after_later_text() {
+    let mut history = ClipboardHistory::default();
+    let image = history
+        .record_image(vec![137, 80, 78, 71, 13, 10, 26, 10])
+        .expect("image");
+    history.record("hello".into());
+    assert_eq!(history.get(0), Some("hello"));
+    assert!(history.image(1).is_some());
+    assert!(!history.shows_in_history(0, Some("hello"), None));
+    assert!(history.shows_in_history(1, Some("hello"), None));
+    assert!(!history.shows_in_history(1, None, Some(&image)));
+    assert_eq!(history.mark(1), Some("img"));
+    assert_eq!(history.labels()[1].1, "img");
+    assert_eq!(history.byte_len(0), Some("hello".len()));
+    assert_eq!(history.byte_len(1), Some(8));
+    assert_eq!(history.byte_len(2), None);
+}
+
+#[test]
+fn history_moves_duplicate_image_to_front() {
+    let mut history = ClipboardHistory::default();
+    history.record_image(vec![1, 2, 3, 4]).expect("image");
+    history.record("hello".into());
+    history.record_image(vec![1, 2, 3, 4]).expect("image");
+    assert!(history.image(0).is_some());
+    assert_eq!(history.get(1), Some("hello"));
+    assert_eq!(history.labels().len(), 2);
+}
+
+#[test]
+fn history_clear_empties_selectable_items() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    history.clear();
+    assert!(history.is_empty());
+    assert!(history.labels().is_empty());
+    assert_eq!(history.get(0), None);
+}
+
+#[test]
+fn clear_zeroizes_shared_image_bytes() {
+    let mut history = ClipboardHistory::default();
+    history.record("secret-token".into());
+    let image = history
+        .record_image(b"secret-bytes".to_vec())
+        .expect("image");
+    history.clear();
+    assert!(history.is_empty());
+    assert_eq!(history.get(0), None);
+    assert!(image.prefix_is_zero(b"secret-bytes".len()));
+}
+
+#[test]
+fn zeroizing_text_overwrites_its_allocation() {
+    let mut text = Zeroizing::new("secret-token".to_string());
+    let ptr = text.as_ptr();
+    let len = text.len();
+    let cap = text.capacity();
+    text.zeroize();
+    assert!(text.is_empty());
+    assert_eq!(text.capacity(), cap);
+    // SAFETY: zeroize keeps this allocation and writes zeros across its
+    // capacity. `text` still owns the buffer, and `len` is inside it.
+    let wiped = unsafe { std::slice::from_raw_parts(ptr, len) };
+    assert!(wiped.iter().all(|byte| *byte == 0));
+}
+
+fn card(excerpt: &str) -> crate::commands::WorkCard {
+    crate::commands::WorkCard {
+        title: "JSON".into(),
+        meta: "1 B".into(),
+        excerpt: excerpt.into(),
+        placeholder: String::new(),
+        shows_image: false,
+        highlight: None,
+        selectable: false,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    }
+}
+
+#[test]
+fn a_remembered_card_stays_with_its_entry_and_view() {
+    use crate::commands::CardView;
+    let mut history = ClipboardHistory::default();
+    history.record("{\"a\":1}".into());
+    history.record("two".into());
+    let json = history.text_index("{\"a\":1}", 0).expect("entry");
+    assert_eq!(json, 1);
+    assert!(history.card(json, CardView::Format).is_none());
+    history.remember_card(json, CardView::Format, card("{ a }"));
+    assert_eq!(
+        history
+            .card(json, CardView::Format)
+            .map(|c| c.excerpt.as_str()),
+        Some("{ a }")
+    );
+    assert!(history.card(json, CardView::Convert).is_none());
+    assert!(history.card(0, CardView::Format).is_none());
+    // Another copy in front moves the entry, and its card with it.
+    history.record("three".into());
+    assert!(history.card(2, CardView::Format).is_some());
+    history.remember_card(2, CardView::Format, card("{ b }"));
+    assert_eq!(
+        history
+            .card(2, CardView::Format)
+            .map(|c| c.excerpt.as_str()),
+        Some("{ b }")
+    );
+}
+
+#[test]
+fn copying_an_entry_again_drops_its_card() {
+    use crate::commands::CardView;
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.remember_card(0, CardView::Original, card("one"));
+    history.record("two".into());
+    history.record("one".into());
+    assert_eq!(history.get(0), Some("one"));
+    assert!(history.card(0, CardView::Original).is_none());
+}
+
+#[test]
+fn evicted_and_cleared_entries_take_their_cards() {
+    use crate::commands::CardView;
+    let mut history = ClipboardHistory::default();
+    history.record("oldest".into());
+    history.remember_card(0, CardView::Original, card("oldest"));
+    for i in 0..super::MAX_HISTORY - 1 {
+        history.record(format!("copy {i}"));
+    }
+    let last = super::MAX_HISTORY - 1;
+    assert!(history.card(last, CardView::Original).is_some());
+    history.record("newest".into());
+    assert_eq!(history.text_index("oldest", last), None);
+    assert!((0..history.len()).all(|index| history.card(index, CardView::Original).is_none()));
+    history.remember_card(0, CardView::Original, card("newest"));
+    history.clear();
+    assert!(history.card(0, CardView::Original).is_none());
+}
+
+#[test]
+fn only_entries_near_the_one_shown_keep_derived_data() {
+    use crate::commands::{CardView, ImageScan};
+    let mut history = ClipboardHistory::default();
+    let image = history.record_image(vec![9, 9]).expect("image");
+    for text in ["a", "b", "c", "d"] {
+        history.record(text.into());
+    }
+    // d c b a image
+    let scan = ImageScan {
+        info: "PNG".into(),
+        data_url: None,
+        ocr: Some("text".into()),
+        qr: None,
+    };
+    history.remember_image_scan(&image, &scan);
+    assert_eq!(history.image_scan(&image), Some(scan));
+    history.remember_card(3, CardView::Original, card("a"));
+    assert!(history.image_scan(&image).is_some());
+    history.remember_card(0, CardView::Original, card("d"));
+    assert!(history.image_scan(&image).is_none());
+    assert!(history.card(3, CardView::Original).is_none());
+    history.remember_card(1, CardView::Original, card("c"));
+    assert!(history.card(0, CardView::Original).is_some());
+    assert!(history.card(1, CardView::Original).is_some());
+}
+
+#[test]
+fn table_versions_stay_with_their_entry_and_far_ones_forget_frames() {
+    use crate::table::TableOp;
+    use std::sync::atomic::AtomicBool;
+    let mut history = ClipboardHistory::default();
+    let table = "name,n\na,1\na,1";
+    for text in [table, "b", "c", "d"] {
+        history.record(text.into());
+    }
+    // d c b table
+    let versions = history.table_mut(3).expect("text entry");
+    let job = versions.push(TableOp::Dedupe, table).expect("push");
+    let done = job.run(&AtomicBool::new(false)).expect("job");
+    assert!(versions.finish(done));
+    assert_eq!(history.table(3).map(|t| t.len()), Some(2));
+    assert!(history.table(3).and_then(|t| t.frame()).is_some());
+    // Showing an entry far away: the frames go, the steps stay.
+    history.remember_card(0, crate::commands::CardView::Original, card("d"));
+    let versions = history.table(3).expect("versions");
+    assert!(versions.frame().is_none());
+    assert_eq!((versions.len(), versions.cursor()), (2, 1));
+    assert!(history.table(0).is_none());
+    // Moving it to the front keeps them.
+    history.move_to_front(3);
+    assert_eq!(history.table(0).map(|t| t.len()), Some(2));
+    history.clear();
+    assert!(history.table(0).is_none());
+}
+
+#[test]
+fn a_finished_job_finds_the_table_it_was_made_for() {
+    use crate::table::TableOp;
+    let mut history = ClipboardHistory::default();
+    for text in ["x,y\n1,2", "p,q\n3,4"] {
+        history.record(text.into());
+    }
+    let first = history
+        .table_mut(0)
+        .expect("text")
+        .push(TableOp::Dedupe, "p,q\n3,4")
+        .expect("push");
+    let second = history
+        .table_mut(1)
+        .expect("text")
+        .push(TableOp::Dedupe, "x,y\n1,2")
+        .expect("push");
+    assert_ne!(first.generation, second.generation);
+    assert!(history.table_awaiting(second.generation).is_some());
+    assert!(history.table_awaiting(first.generation).is_some());
+    assert!(history.table_awaiting(u64::MAX).is_none());
+    history.clear();
+    assert!(history.table_awaiting(second.generation).is_none());
+}
+
+#[test]
+fn pictures_have_no_table_versions() {
+    let mut history = ClipboardHistory::default();
+    history.record_image(vec![1, 2, 3]).expect("image");
+    assert!(history.table_mut(0).is_none());
+}
+
+#[test]
+fn image_entries_keep_no_card() {
+    use crate::commands::CardView;
+    let mut history = ClipboardHistory::default();
+    history.record_image(vec![1, 2, 3]).expect("image");
+    history.remember_card(0, CardView::Original, card("x"));
+    assert!(history.card(0, CardView::Original).is_none());
+    assert_eq!(history.text_index("x", 0), None);
+}
+
+#[test]
+fn marks_come_from_the_format_found_on_record() {
+    let mut history = ClipboardHistory::default();
+    for text in [
+        "{\"a\":1}",
+        "fn main() {}",
+        "plain",
+        "name,age\nalice,30\nbob,40",
+    ] {
+        history.record(text.into());
+        assert_eq!(history.mark(0), Some(super::menu_mark(text)));
+        assert_eq!(history.labels()[0].1, super::one_line(text));
+    }
+    history.record_image(vec![1]).expect("image");
+    assert_eq!(
+        history.mark(0),
+        Some(crate::format::FormatKind::Image.menu_symbol())
+    );
+}
+
+#[test]
+fn re_copying_an_older_text_gets_a_new_id_and_moving_keeps_it() {
+    use crate::commands::CardView;
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    let one = history.id_at(0).expect("one");
+    history.record("two".into());
+    let two = history.id_at(0).expect("two");
+    assert_ne!(one, two);
+    assert_eq!(history.id_at(1), Some(one));
+    history.move_to_front(1);
+    assert_eq!(history.id_at(0), Some(one));
+    history.record("one".into());
+    assert_eq!(
+        history.id_at(0),
+        Some(one),
+        "the newest copy is left as it is"
+    );
+    history.record("two".into());
+    let replaced = history.id_at(0).expect("replaced");
+    assert_ne!(replaced, two);
+    assert!(!history.contains_id(two));
+    assert!(history.is_text_id(one));
+    assert_eq!(
+        history.text_of(one).as_deref().map(String::as_str),
+        Some("one")
+    );
+    history.record_image(vec![9]).expect("image");
+    let image = history.id_at(0).expect("image");
+    assert!(!history.is_text_id(image));
+    assert!(history.text_of(image).is_none());
+    history.remember_card(1, CardView::Diff, card("secret diff"));
+    assert!(history.card(1, CardView::Diff).is_none());
+}
+
+#[test]
+fn a_wiped_card_holds_no_text() {
+    let mut shown = card("secret");
+    shown.link_page = Some("https://example.com/secret".into());
+    shown.preview_note = Some("Showing 1 of 2".into());
+    shown.wipe();
+    assert!(shown.title.is_empty() && shown.meta.is_empty() && shown.excerpt.is_empty());
+    assert_eq!(shown.link_page.as_deref(), Some(""));
+    assert_eq!(shown.preview_note.as_deref(), Some(""));
+}
+
+#[test]
+fn a_pin_skips_the_cap_and_clearing_unpinned_leaves_it() {
+    let mut history = ClipboardHistory::default();
+    history.record("pinned".into());
+    let id = history.id_at(0).expect("id");
+    assert!(history.pin(id));
+    assert!(history.is_pinned(0));
+    for i in 0..super::MAX_HISTORY {
+        history.record(format!("copy {i}"));
+    }
+    assert_eq!(history.len(), super::MAX_HISTORY + 1);
+    assert!(history.contains_id(id));
+    assert!(!history.is_pinned(0));
+    history.record("one more".into());
+    assert_eq!(history.len() - history.pin_count(), super::MAX_HISTORY);
+    assert!(history.contains_id(id));
+    history.clear_unpinned();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history.get(0), Some("pinned"));
+    assert!(history.is_pinned(0));
+    history.clear();
+    assert!(history.is_empty());
+}
+
+#[test]
+fn pinning_stops_at_the_cap_and_recopying_keeps_the_pin() {
+    let mut history = ClipboardHistory::default();
+    let mut ids = Vec::new();
+    for i in 0..super::PIN_MAX {
+        history.record(format!("pin {i}"));
+        let id = history.id_at(0).expect("id");
+        assert!(history.pin(id));
+        ids.push(id);
+    }
+    history.record("extra".into());
+    let extra = history.id_at(0).expect("extra");
+    assert!(!history.pin(extra));
+    assert!(!history.is_pinned(0));
+    assert_eq!(history.pin_count(), super::PIN_MAX);
+    let oldest = *ids.first().expect("oldest");
+    history.record("pin 0".into());
+    assert_eq!(history.get(0), Some("pin 0"));
+    assert!(history.is_pinned(0));
+    assert_eq!(history.id_at(0), Some(oldest));
+    history.unpin(oldest);
+    assert!(history.contains_id(oldest));
+    assert!(!history.is_pinned(0));
+}
+
+#[test]
+fn removing_an_entry_reports_its_index_and_the_cursor_settles() {
+    let mut history = ClipboardHistory::default();
+    history.record("old".into());
+    history.record("mid".into());
+    history.record("new".into());
+    let mid = history.id_at(1).expect("mid");
+    assert_eq!(history.remove_id(mid), Some(1));
+    assert_eq!(history.get(0), Some("new"));
+    assert_eq!(history.get(1), Some("old"));
+    assert_eq!(super::cursor_after_remove(0, 2, 2), 1);
+    assert_eq!(super::cursor_after_remove(2, 2, 2), 1);
+    assert_eq!(super::cursor_after_remove(1, 0, 2), 0);
+    assert_eq!(super::cursor_after_remove(0, 0, 0), 0);
+}
+
+#[test]
+fn search_text_is_capped_and_empty_for_a_picture() {
+    let mut history = ClipboardHistory::default();
+    let mut body = "ä".repeat(super::SEARCH_CAP);
+    body.push('z');
+    history.record(body);
+    let found = history.search_text(0);
+    assert!(found.len() <= super::SEARCH_CAP);
+    assert!(!found.contains('z'));
+    assert!(found.is_char_boundary(found.len()));
+    history.record_image(vec![1, 2, 3]).expect("image");
+    assert!(history.search_text(0).is_empty());
+}
