@@ -1726,7 +1726,11 @@ fn set_well_blur(on: bool) {
         clear_blur();
         return;
     }
-    let filters = None::<(Retained<AnyObject>, Retained<AnyObject>)>;
+    let filters = if crate::settings::load().blur {
+        gaussian_blurs()
+    } else {
+        None
+    };
     let plan = commands::well_mask(true, filters.is_some());
     SHADE_ON.set(plan.shade);
     show_mask_shade(plan.shade);
