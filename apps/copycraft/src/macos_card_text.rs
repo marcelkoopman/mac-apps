@@ -40,7 +40,7 @@ pub(crate) fn paint(
             &crate::appearance::caption_color(),
         )
     };
-    if let Some(storage) = unsafe { text.textStorage() } {
+    if let Some(storage) = mac_ui::widgets::text_storage(text) {
         storage.setAttributedString(&attr);
     } else {
         text.setString(&NSString::from_str(body));
@@ -87,7 +87,7 @@ pub(crate) fn paint_diff(text: &NSTextView, body: &str) {
             );
         }
     }
-    if let Some(storage) = unsafe { text.textStorage() } {
+    if let Some(storage) = mac_ui::widgets::text_storage(text) {
         storage.setAttributedString(&attr);
     } else {
         text.setString(&NSString::from_str(&display));
@@ -242,8 +242,7 @@ pub(crate) fn copy_frozen_column(
     frozen: &NSTextView,
     lines: &[crate::dataframe::FrozenLine],
 ) {
-    // SAFETY (all three): used right away, while the text views keep them alive.
-    let Some(storage) = (unsafe { text.textStorage() }) else {
+    let Some(storage) = mac_ui::widgets::text_storage(text) else {
         return;
     };
     let length = storage.length();
@@ -264,12 +263,13 @@ pub(crate) fn copy_frozen_column(
         }
     }
     frozen.setTextContainerInset(text.textContainerInset());
-    if let (Some(from), Some(to)) = (unsafe { text.textContainer() }, unsafe {
-        frozen.textContainer()
-    }) {
+    if let (Some(from), Some(to)) = (
+        mac_ui::widgets::text_container(text),
+        mac_ui::widgets::text_container(frozen),
+    ) {
         to.setLineFragmentPadding(from.lineFragmentPadding());
     }
-    if let Some(frozen_storage) = unsafe { frozen.textStorage() } {
+    if let Some(frozen_storage) = mac_ui::widgets::text_storage(frozen) {
         frozen_storage.setAttributedString(&column);
     }
     mac_ui::widgets::fit_text_view(frozen, None);
@@ -287,9 +287,8 @@ pub(crate) fn copy_frozen_column(
 
 /// Right edge of the first column in `text` (view coords), matching the floating pin's width.
 fn pin_width_from_grid(text: &NSTextView, lines: &[crate::dataframe::FrozenLine]) -> Option<f64> {
-    // SAFETY: layout objects are used immediately while the text view keeps them.
-    let layout = unsafe { text.layoutManager() }?;
-    let container = unsafe { text.textContainer() }?;
+    let layout = mac_ui::widgets::layout_manager(text)?;
+    let container = mac_ui::widgets::text_container(text)?;
     let inset = text.textContainerInset();
     layout.ensureLayoutForTextContainer(&container);
     let mut max_x = 0.0_f64;

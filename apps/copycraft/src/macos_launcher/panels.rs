@@ -408,7 +408,7 @@ pub(crate) fn set_preview_text_hidden(hidden: bool) {
     PREVIEW_CLIP.with(|slot| {
         if let Some(clip) = slot.borrow().as_ref() {
             clip.setHidden(hidden);
-            if let Some(parent) = unsafe { clip.superview() } {
+            if let Some(parent) = mac_ui::widgets::superview(clip) {
                 if hidden {
                     parent.addSubview_positioned_relativeTo(
                         clip,
@@ -434,7 +434,7 @@ pub(crate) fn show_preview_image() {
         return;
     };
     view.setHidden(false);
-    if let Some(parent) = unsafe { view.superview() } {
+    if let Some(parent) = mac_ui::widgets::superview(&view) {
         parent.addSubview(&view);
     }
     raise_content_actions();

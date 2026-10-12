@@ -16,12 +16,14 @@ pub(crate) fn scan_png(png: &[u8]) -> (Option<String>, Option<String>) {
         &data,
         &options,
     );
+    // SAFETY: `init` on a freshly allocated Vision request.
     let text_req = unsafe { VNRecognizeTextRequest::init(VNRecognizeTextRequest::alloc()) };
     text_req.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
     text_req.setAutomaticallyDetectsLanguage(true);
     let nl = NSString::from_str("nl-NL");
     let en = NSString::from_str("en-US");
     text_req.setRecognitionLanguages(&NSArray::from_slice(&[&*nl, &*en]));
+    // SAFETY: `init` on a freshly allocated Vision request.
     let qr_req = unsafe { VNDetectBarcodesRequest::init(VNDetectBarcodesRequest::alloc()) };
     let text_as_req: Retained<VNRequest> =
         Retained::into_super(Retained::into_super(text_req.clone()));
@@ -52,9 +54,11 @@ fn ocr_text(request: &VNRecognizeTextRequest) -> Option<String> {
 }
 
 fn qr_text(request: &VNDetectBarcodesRequest) -> Option<String> {
+    // SAFETY: reads a property of an object Vision returned, after the request finished.
     let results = unsafe { request.results() }?;
     let mut lines = Vec::new();
     for observation in results.iter() {
+        // SAFETY: reads a property of an object Vision returned, after the request finished.
         let Some(payload) = (unsafe { observation.payloadStringValue() }) else {
             continue;
         };
@@ -73,6 +77,7 @@ fn qr_text(request: &VNDetectBarcodesRequest) -> Option<String> {
 }
 
 fn barcode_label(observation: &VNBarcodeObservation) -> String {
+    // SAFETY: reads a property of an object Vision returned, after the request finished.
     let raw = unsafe { observation.symbology() }.to_string();
     raw.strip_prefix("VNBarcodeSymbology")
         .unwrap_or(&raw)

@@ -8,10 +8,7 @@ use base64::Engine;
 use mac_ui::objc2::rc::{Retained, autoreleasepool};
 use mac_ui::objc2::runtime::NSObjectProtocol;
 use mac_ui::objc2::{AnyThread, sel};
-use mac_ui::objc2_app_kit::{
-    NSImage, NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeString,
-    NSPasteboardTypeTIFF, NSWorkspace,
-};
+use mac_ui::objc2_app_kit::{NSImage, NSPasteboard, NSWorkspace};
 use mac_ui::objc2_foundation::{NSArray, NSData, NSString, NSURL};
 
 use zeroize::{Zeroize, Zeroizing};
@@ -214,7 +211,7 @@ fn grab_image(
         })?;
         let tiff = match &source {
             ImageSource::File(path) if std::fs::File::open(path).is_err() => {
-                pasteboard_data(pasteboard, unsafe { NSPasteboardTypeTIFF })
+                pasteboard_data(pasteboard, mac_ui::pasteboard_types::tiff())
             }
             _ => None,
         };
@@ -336,7 +333,7 @@ pub(crate) fn card_image_input() -> Option<CardImageInput> {
     let source = autoreleasepool(|_| image_source(&pasteboard, cached_path.as_deref()))?;
     let tiff = match &source {
         ImageSource::File(path) if std::fs::File::open(path).is_err() => {
-            autoreleasepool(|_| pasteboard_data(&pasteboard, unsafe { NSPasteboardTypeTIFF }))
+            autoreleasepool(|_| pasteboard_data(&pasteboard, mac_ui::pasteboard_types::tiff()))
         }
         _ => None,
     };
@@ -554,8 +551,10 @@ pub(crate) fn write_text(text: &str, concealed: bool) -> Result<(), String> {
     let pasteboard = NSPasteboard::generalPasteboard();
     let ok = autoreleasepool(|_| {
         pasteboard.clearContents();
-        pasteboard.setString_forType(&NSString::from_str(text), unsafe { NSPasteboardTypeString })
-            && mark_own(&pasteboard, concealed)
+        pasteboard.setString_forType(
+            &NSString::from_str(text),
+            mac_ui::pasteboard_types::string(),
+        ) && mark_own(&pasteboard, concealed)
     });
     invalidate_caches();
     if ok {
@@ -578,12 +577,12 @@ pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
         if original != "public.png" && original != "public.tiff" {
             match png_fallback(&data) {
                 Some(png) => {
-                    ok &= pasteboard.setData_forType(Some(&png), unsafe { NSPasteboardTypePNG });
+                    ok &= pasteboard.setData_forType(Some(&png), mac_ui::pasteboard_types::png());
                 }
                 None => {
                     if let Some(tiff) = tiff_fallback(&data) {
                         ok &= pasteboard
-                            .setData_forType(Some(&tiff), unsafe { NSPasteboardTypeTIFF });
+                            .setData_forType(Some(&tiff), mac_ui::pasteboard_types::tiff());
                     }
                 }
             }
@@ -1017,7 +1016,7 @@ fn extension_kind(path: &std::path::Path) -> ContentKind {
 
 fn read_view(pasteboard: &NSPasteboard) -> (ClipboardView, Option<PathBuf>) {
     autoreleasepool(|_| {
-        let text = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeString });
+        let text = pasteboard_string(pasteboard, mac_ui::pasteboard_types::string());
         // ⌘C of a file in Finder puts the file's name on the pasteboard next to its URL.
         // The card shows that file the way a drop does: a picture as a picture, text (CSV,
         // JSON, …) as that text. Real copied text, and a name that is not this file, stays
@@ -1078,9 +1077,12 @@ fn names_copied_file(text: &str, path: &std::path::Path) -> bool {
 fn has_image_data(pasteboard: &NSPasteboard) -> bool {
     let jpeg = NSString::from_str("public.jpeg");
     let heic = NSString::from_str("public.heic");
-    let types = unsafe {
-        NSArray::from_slice(&[NSPasteboardTypePNG, NSPasteboardTypeTIFF, &*jpeg, &*heic])
-    };
+    let types = NSArray::from_slice(&[
+        mac_ui::pasteboard_types::png(),
+        mac_ui::pasteboard_types::tiff(),
+        &*jpeg,
+        &*heic,
+    ]);
     pasteboard.availableTypeFromArray(&types).is_some()
 }
 
@@ -1106,7 +1108,7 @@ fn image_source(
 ) -> Option<ImageSource> {
     // A declared PNG that is not image bytes used to win over the file and over
     // TIFF, and the card then had neither a thumbnail nor a size line.
-    if let Some(bytes) = take_encoded(pasteboard, unsafe { NSPasteboardTypePNG }) {
+    if let Some(bytes) = take_encoded(pasteboard, mac_ui::pasteboard_types::png()) {
         return Some(ImageSource::Bytes {
             bytes,
             is_png: true,
@@ -1125,7 +1127,7 @@ fn image_source(
     if let Some(path) = image_file(pasteboard) {
         return Some(ImageSource::File(path));
     }
-    if let Some(bytes) = take_encoded(pasteboard, unsafe { NSPasteboardTypeTIFF }) {
+    if let Some(bytes) = take_encoded(pasteboard, mac_ui::pasteboard_types::tiff()) {
         return Some(ImageSource::Bytes {
             bytes,
             is_png: false,
@@ -1201,6 +1203,7 @@ fn copied_file_view(
     if text.is_some_and(|text| !names_copied_file(text.trim(), &path)) {
         return None;
     }
+    // SAFETY: balanced by the stop call below when it returns true.
     let started = unsafe { url.startAccessingSecurityScopedResource() };
     let found = if is_image_file(&path) {
         Some((ClipboardView::Image, Some(path)))
@@ -1210,6 +1213,7 @@ fn copied_file_view(
             .map(|body| (ClipboardView::Text(body), None))
     };
     if started {
+        // SAFETY: balances the successful start call above.
         unsafe { url.stopAccessingSecurityScopedResource() };
     }
     found
@@ -1218,8 +1222,8 @@ fn copied_file_view(
 /// The one file on the pasteboard, image or not. A `file://` URL keeps the security scope
 /// Finder put on it; an older file-name list is a plain path.
 fn file_url(pasteboard: &NSPasteboard) -> Option<Retained<NSURL>> {
-    if type_available(pasteboard, unsafe { NSPasteboardTypeFileURL })
-        && let Some(raw) = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeFileURL })
+    if type_available(pasteboard, mac_ui::pasteboard_types::file_url())
+        && let Some(raw) = pasteboard_string(pasteboard, mac_ui::pasteboard_types::file_url())
         && let Some(url) = NSURL::URLWithString(&NSString::from_str(&raw))
         && url.path().is_some()
     {
@@ -1232,7 +1236,7 @@ fn file_url(pasteboard: &NSPasteboard) -> Option<Retained<NSURL>> {
 }
 
 fn image_file(pasteboard: &NSPasteboard) -> Option<PathBuf> {
-    if type_available(pasteboard, unsafe { NSPasteboardTypeFileURL })
+    if type_available(pasteboard, mac_ui::pasteboard_types::file_url())
         && let Some(path) = path_from_file_url(pasteboard).filter(|path| is_image_file(path))
     {
         return Some(path);
@@ -1250,7 +1254,7 @@ fn type_available(pasteboard: &NSPasteboard, kind: &NSString) -> bool {
 }
 
 fn path_from_file_url(pasteboard: &NSPasteboard) -> Option<PathBuf> {
-    let url = pasteboard_string(pasteboard, unsafe { NSPasteboardTypeFileURL })?;
+    let url = pasteboard_string(pasteboard, mac_ui::pasteboard_types::file_url())?;
     let url = NSString::from_str(&url);
     let path = NSURL::URLWithString(&url)?.path()?.to_string();
     Some(PathBuf::from(path))

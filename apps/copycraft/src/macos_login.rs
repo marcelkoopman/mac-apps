@@ -11,6 +11,7 @@
 // Loads ServiceManagement so `SMAppService` is registered. No direct symbol refs: those are
 // absent from older SDKs. `#[link]` here has no `+weak` modifier (rustc rejects it); a missing
 // class or `+mainAppService` is handled at runtime instead of aborting.
+// SAFETY: an empty block: it only links the framework and declares no symbols.
 #[link(name = "ServiceManagement", kind = "framework")]
 unsafe extern "C" {}
 

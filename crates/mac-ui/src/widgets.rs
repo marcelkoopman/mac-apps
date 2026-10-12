@@ -11,8 +11,8 @@ use objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
     NSColor, NSControl, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling,
-    NSImageView, NSLineBreakMode, NSScrollView, NSSearchField, NSTextField, NSTextView,
-    NSTitlePosition, NSView,
+    NSImageView, NSLayoutManager, NSLineBreakMode, NSScrollView, NSSearchField, NSTextContainer,
+    NSTextField, NSTextStorage, NSTextView, NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
@@ -105,6 +105,30 @@ pub fn raise_view(view: &NSView) {
     if let Some(parent) = unsafe { view.superview() } {
         parent.addSubview(view);
     }
+}
+
+/// The view's superview, if it has one.
+pub fn superview(view: &NSView) -> Option<Retained<NSView>> {
+    // SAFETY: AppKit returns the superview or nil; the `Retained` keeps it alive for the caller.
+    unsafe { view.superview() }
+}
+
+/// The text view's text storage, if it has one.
+pub fn text_storage(text: &NSTextView) -> Option<Retained<NSTextStorage>> {
+    // SAFETY: AppKit returns the storage or nil; the `Retained` keeps it alive for the caller.
+    unsafe { text.textStorage() }
+}
+
+/// The text view's layout manager, if it has one.
+pub fn layout_manager(text: &NSTextView) -> Option<Retained<NSLayoutManager>> {
+    // SAFETY: AppKit returns the layout manager or nil; the `Retained` keeps it alive.
+    unsafe { text.layoutManager() }
+}
+
+/// The text view's text container, if it has one.
+pub fn text_container(text: &NSTextView) -> Option<Retained<NSTextContainer>> {
+    // SAFETY: AppKit returns the container or nil; the `Retained` keeps it alive.
+    unsafe { text.textContainer() }
 }
 
 /// A button as two views: `root` to position and show, `hit` to wire target and action.

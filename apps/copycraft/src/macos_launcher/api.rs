@@ -68,8 +68,7 @@ pub fn set_busy(busy: bool) {
     let Some(well) = WELL.with(|slot| slot.borrow().clone()) else {
         return;
     };
-    // SAFETY: the superview is used right away, while the view hierarchy keeps it alive.
-    let Some(parent) = (unsafe { well.superview() }) else {
+    let Some(parent) = mac_ui::widgets::superview(&well) else {
         return;
     };
     SPINNER.with(|slot| {
@@ -137,8 +136,7 @@ pub fn raise_panel_wait() {
     let window = PANEL_WAIT.with(|slot| {
         let borrowed = slot.borrow();
         let spinner = borrowed.as_ref()?;
-        // SAFETY: the superview is used only to re-add the spinner, which keeps it alive.
-        let parent = unsafe { spinner.view().superview() };
+        let parent = mac_ui::widgets::superview(spinner.view());
         let parent = parent?;
         parent.addSubview(spinner.view());
         spinner.view().window()

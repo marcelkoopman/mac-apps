@@ -53,10 +53,14 @@ pub fn observe(hook: fn()) {
         if slot.get().is_some() {
             return;
         }
+        // SAFETY: `init` on a freshly allocated instance of a class that declares no other
+        // initializer.
         let observer: Retained<SessionObserver> =
             unsafe { msg_send![SessionObserver::alloc(mtm), init] };
         let target: &AnyObject = &observer;
         let workspace = NSWorkspace::sharedWorkspace().notificationCenter();
+        // SAFETY: the observer is kept in OBSERVER for the life of the process (notification
+        // centers do not retain observers) and implements `sessionEnded:`.
         unsafe {
             for name in [
                 NSWorkspaceWillSleepNotification,

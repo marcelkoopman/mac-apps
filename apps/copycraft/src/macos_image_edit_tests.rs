@@ -98,7 +98,9 @@ fn near(actual: [u8; 4], expected: [u8; 4]) -> bool {
 /// ("Orientation", "{GPS}", "{TIFF}.Make"…).
 fn property_keys(bytes: &[u8]) -> Vec<String> {
     let data = CFData::from_bytes(bytes);
+    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
     let properties = unsafe { source.properties_at_index(0, None) }.unwrap();
     let mut keys = Vec::new();
     flatten("", &properties, &mut keys);
@@ -121,9 +123,13 @@ fn flatten(prefix: &str, dict: &CFDictionary, keys: &mut Vec<String>) {
 /// The EXIF orientation of encoded picture bytes; 1 (upright) when there is none.
 fn orientation(bytes: &[u8]) -> i64 {
     let data = CFData::from_bytes(bytes);
+    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
     let properties = unsafe { source.properties_at_index(0, None) }.unwrap();
+    // SAFETY: image properties have CFString keys.
     let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let key = unsafe { objc2_image_io::kCGImagePropertyOrientation };
     properties
         .get(key)
@@ -137,7 +143,9 @@ fn orientation(bytes: &[u8]) -> i64 {
 
 fn uti_of(bytes: &[u8]) -> String {
     let data = CFData::from_bytes(bytes);
+    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
+    // SAFETY: a valid image source; an unknown type gives None.
     unsafe { source.r#type() }
         .map(|uti| uti.to_string())
         .unwrap_or_default()

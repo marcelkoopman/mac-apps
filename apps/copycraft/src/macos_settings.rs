@@ -9,9 +9,8 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFont, NSFontWeightSemibold,
-    NSPopUpButton, NSTextField, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
-    NSWindowStyleMask, NSWindowTabbingMode,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFont, NSPopUpButton, NSTextField,
+    NSView, NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
@@ -84,6 +83,8 @@ define_class!(
                 handle_record_key(event);
                 return;
             }
+            // SAFETY: forwards the event to the superclass implementation of the same selector,
+            // with the same argument and return types.
             let _: () = unsafe { msg_send![super(self), keyDown: event] };
         }
 
@@ -102,6 +103,8 @@ define_class!(
                 }
                 true
             } else {
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
@@ -119,8 +122,10 @@ define_class!(
     #[ivars = DelegateIvars]
     struct SettingsDelegate;
 
+    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
     unsafe impl NSObjectProtocol for SettingsDelegate {}
 
+    // SAFETY: the methods below use the NSWindowDelegate selectors and signatures.
     unsafe impl NSWindowDelegate for SettingsDelegate {
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSObject) {
@@ -242,6 +247,8 @@ define_class!(
 impl SettingsDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(DelegateIvars);
+        // SAFETY: NSObject's `init` on the freshly allocated instance; the class declares no other
+        // initializer.
         unsafe { msg_send![super(this), init] }
     }
 }
@@ -332,6 +339,8 @@ pub fn show() {
 fn build(mtm: MainThreadMarker) {
     let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
+    // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
+    // plain value arguments.
     let window: Retained<SettingsWindow> = unsafe {
         msg_send![
             SettingsWindow::alloc(mtm),
@@ -341,13 +350,15 @@ fn build(mtm: MainThreadMarker) {
             defer: false,
         ]
     };
-    unsafe { window.setReleasedWhenClosed(false) };
+    mac_ui::panel::keep_when_closed(&window);
     window.setTitle(&NSString::from_str(crate::locale::t("settings_title")));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
 
     let delegate = SettingsDelegate::new(mtm);
+    // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
+    // window's weak delegate reference stays valid.
     unsafe { panel::set_delegate(&window, &*delegate) };
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 
@@ -558,8 +569,7 @@ fn gap(top: &mut f64, height: f64) {
 
 fn place_heading(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
     let field = widgets::label(mtm, mac_ui::metrics::FONT_TITLE, &NSColor::labelColor());
-    // SAFETY: NSFontWeightSemibold is a process-wide AppKit constant.
-    let semibold = unsafe { NSFontWeightSemibold };
+    let semibold = mac_ui::fonts::semibold_weight();
     field.setFont(Some(&NSFont::systemFontOfSize_weight(
         mac_ui::metrics::FONT_TITLE,
         semibold,
@@ -607,6 +617,7 @@ fn place_explanation(mtm: MainThreadMarker, parent: &NSView, text: &str, top: &m
 }
 
 fn checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSButton> {
+    // SAFETY: no target or action is passed, so no weak reference has to stay valid.
     let button = unsafe {
         NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
     };

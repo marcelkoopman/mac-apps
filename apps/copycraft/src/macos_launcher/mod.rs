@@ -17,11 +17,10 @@ use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAnimatablePropertyContainer, NSAnimationContext, NSApplication,
     NSApplicationDidResignActiveNotification, NSAttributedStringNSStringDrawing, NSBeep, NSBox,
     NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
-    NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSFontWeightSemibold,
-    NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle,
-    NSParagraphStyleAttributeName, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
-    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowLevel, NSWindowOrderingMode,
-    NSWindowSharingType,
+    NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage, NSImageView,
+    NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSParagraphStyleAttributeName,
+    NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView,
+    NSView, NSWindow, NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
@@ -278,6 +277,8 @@ define_class!(
             // NSWindow's own keyDown: moves along the key-view loop. Without it, Tab would stop
             // on the first button under Full Keyboard Access.
             if Key::from_key_code(event.keyCode()) == Some(Key::Tab) {
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let _: () = unsafe { msg_send![super(self), keyDown: event] };
                 return;
             }
@@ -291,6 +292,8 @@ define_class!(
                 handled
             } else if picker_open() {
                 // The card's chords (history, versions, find) wait until it is closed.
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
@@ -317,6 +320,8 @@ define_class!(
                 on_arrow(key, true, commands::ArrowFocus::Card);
                 true
             } else {
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
@@ -589,6 +594,8 @@ define_class!(
 impl LauncherDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm);
+        // SAFETY: `init` on a freshly allocated instance of a class that declares no other
+        // initializer.
         unsafe { msg_send![this, init] }
     }
 }

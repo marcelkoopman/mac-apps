@@ -14,6 +14,7 @@ use crate::clipboard::ClipboardImage;
 /// Original has no picture to return to. This reads the pasteboard the way Preview does.
 pub(crate) fn nsimage_from_pasteboard(pasteboard: &NSPasteboard) -> Option<Retained<NSImage>> {
     let classes = NSArray::from_slice(&[NSImage::class()]);
+    // SAFETY: `classes` holds only NSImage, so the returned objects are images; no options.
     let read = unsafe { pasteboard.readObjectsForClasses_options(&classes, None) };
     if let Some(objects) = read
         && objects.count() > 0
@@ -72,6 +73,8 @@ mod tests {
             NSPasteboard::pasteboardWithName(&NSString::from_str("copycraft.image-preview.test"));
         pasteboard.clearContents();
         let data = NSData::with_bytes(&png());
+        // SAFETY: PNG data written under the PNG type; NSPasteboardTypePNG is an immutable AppKit
+        // constant.
         assert!(unsafe { pasteboard.setData_forType(Some(&data), NSPasteboardTypePNG) });
         let image = nsimage_from_pasteboard(&pasteboard).expect("pasteboard image");
         assert_eq!(mac_ui::image::pixel_size(&image), (2, 2));

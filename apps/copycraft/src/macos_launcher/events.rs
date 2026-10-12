@@ -102,8 +102,7 @@ pub(crate) fn rebuild_pills(
             NSSize::new(frame.width, commands::CHIP_PILL_H),
         ));
         chip.button().setTag(index as isize);
-        // SAFETY: reading the view's parent on the main thread, only to compare it with `list`.
-        let parent = unsafe { chip.view().superview() };
+        let parent = mac_ui::widgets::superview(chip.view());
         if parent.is_none_or(|parent| !std::ptr::eq(&*parent, list)) {
             list.addSubview(chip.view());
         }
@@ -204,6 +203,8 @@ pub(crate) fn overflow_item(
     title: &str,
     index: usize,
 ) -> Retained<NSMenuItem> {
+    // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
+    // implements, or none.
     let item = unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(
             NSMenuItem::alloc(mtm),
@@ -215,6 +216,8 @@ pub(crate) fn overflow_item(
     item.setTag(index as isize);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
+            // SAFETY: the delegate is kept in a thread-local for the life of the app, so the item's
+            // weak target stays valid.
             unsafe {
                 item.setTarget(Some(delegate));
             }
@@ -275,6 +278,8 @@ pub(crate) fn pop_overflow() {
         );
         if in_history {
             let submenu = history_menu.get_or_insert_with(|| {
+                // SAFETY: a freshly allocated menu item; its action is a selector the launcher
+                // delegate implements, or none.
                 let parent = unsafe {
                     NSMenuItem::initWithTitle_action_keyEquivalent(
                         NSMenuItem::alloc(mtm),
@@ -355,6 +360,8 @@ pub(crate) fn pop_overflow() {
         }
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
+                // SAFETY: the delegate is kept in a thread-local for the life of the app, so the
+                // item's weak target stays valid.
                 unsafe {
                     item.setTarget(Some(delegate));
                 }

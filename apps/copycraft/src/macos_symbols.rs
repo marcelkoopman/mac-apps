@@ -70,6 +70,8 @@ define_class!(
 impl SymbolsDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm);
+        // SAFETY: `init` on a freshly allocated instance of a class that declares no other
+        // initializer.
         unsafe { msg_send![this, init] }
     }
 }

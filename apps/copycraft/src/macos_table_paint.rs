@@ -114,8 +114,7 @@ fn place_table_header(views: &Views, shown: bool) {
     let Some(scroll) = views.grid.enclosingScrollView() else {
         return;
     };
-    // SAFETY: the superview is used immediately, while the view hierarchy keeps it alive.
-    let Some(clip) = (unsafe { scroll.superview() }) else {
+    let Some(clip) = mac_ui::widgets::superview(&scroll) else {
         return;
     };
     let size = clip.bounds().size;
@@ -263,8 +262,7 @@ fn text_width(sample: &str, font: &NSFont) -> f64 {
 }
 
 fn line_height_for(text: &NSTextView, font: &NSFont) -> f64 {
-    // SAFETY: the layout manager is used immediately, while the text view keeps it alive.
-    let height = unsafe { text.layoutManager() }
+    let height = mac_ui::widgets::layout_manager(text)
         .map(|manager| manager.defaultLineHeightForFont(font))
         .unwrap_or(0.0);
     if height > 0.0 { height } else { 16.0 }
@@ -272,8 +270,7 @@ fn line_height_for(text: &NSTextView, font: &NSFont) -> f64 {
 
 fn set_line_padding(text: &NSTextView, inset: NSSize, padding: f64) {
     text.setTextContainerInset(inset);
-    // SAFETY: the container is used immediately, while the text view keeps it alive.
-    if let Some(container) = unsafe { text.textContainer() } {
+    if let Some(container) = mac_ui::widgets::text_container(text) {
         container.setLineFragmentPadding(padding);
     }
 }
@@ -324,8 +321,7 @@ fn set_styled_text(
     unsafe {
         attr.addAttribute_value_range(NSParagraphStyleAttributeName, style, range);
     }
-    // SAFETY: the text storage is used immediately, while the text view keeps it alive.
-    if let Some(storage) = unsafe { view.textStorage() } {
+    if let Some(storage) = mac_ui::widgets::text_storage(view) {
         storage.setAttributedString(&attr);
     }
 }

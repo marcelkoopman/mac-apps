@@ -78,6 +78,7 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
     // Read in place, so no copy of the picture is left in CoreFoundation's memory.
     // SAFETY: `bytes` outlives `data` and everything made from it, which stay in this function.
     let data = unsafe { CFData::with_bytes_no_copy(None, bytes.as_ptr(), len, kCFAllocatorNull) }?;
+    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }?;
     let (width, height) = upright_size(&source)?;
     if width.checked_mul(height)? > MAX_PIXELS {
@@ -85,6 +86,7 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
     }
     let longest = CFNumber::new_i64(i64::try_from(width.max(height)).ok()?);
     let yes = CFBoolean::new(true);
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let keys: [&CFString; 3] = unsafe {
         [
             kCGImageSourceCreateThumbnailFromImageAlways,
@@ -94,6 +96,7 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
     };
     let values: [&CFType; 3] = [yes, yes, &longest];
     let options = CFDictionary::from_slices(&keys, &values);
+    // SAFETY: `options` is a valid dictionary of thumbnail keys; failure gives None.
     let image = unsafe { source.thumbnail_at_index(0, Some(options.as_opaque())) }?;
     let (width, height) = (CGImage::width(Some(&image)), CGImage::height(Some(&image)));
     if width == 0 || height == 0 || width.checked_mul(height)? > MAX_PIXELS {
@@ -115,14 +118,18 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
 
 /// The width and height of the first picture in `source`, its EXIF orientation applied.
 fn upright_size(source: &CGImageSource) -> Option<(usize, usize)> {
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
     let properties = unsafe { source.properties_at_index(0, None) }?;
     // SAFETY: image properties have CFString keys.
     let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
     let number = |key: &CFString| -> Option<i64> {
         properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64()
     };
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let width = usize::try_from(number(unsafe { kCGImagePropertyPixelWidth })?).ok()?;
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let height = usize::try_from(number(unsafe { kCGImagePropertyPixelHeight })?).ok()?;
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let orientation = number(unsafe { kCGImagePropertyOrientation }).unwrap_or(1);
     // 5 to 8 are a quarter turn (with or without a mirror image).
     Some(if (5..=8).contains(&orientation) {
@@ -152,16 +159,21 @@ pub fn encode(image: &Rgba, encoding: Encoding) -> Option<Vec<u8>> {
     };
     let out = CFMutableData::new(None, 0)?;
     let uti = CFString::from_static_str(encoding.uti());
+    // SAFETY: `out` is a valid mutable CFData and `uti` a valid type identifier; failure gives
+    // None.
     let destination = unsafe { CGImageDestination::with_data(&out, &uti, 1, None) }?;
     let properties = match encoding {
         Encoding::Png => None,
         Encoding::Jpeg(quality) | Encoding::Heic(quality) => {
             let quality = CFNumber::new_f64(quality.clamp(0.0, 1.0));
+            // SAFETY: reads immutable constants exported by the system frameworks.
             let keys: [&CFString; 1] = [unsafe { kCGImageDestinationLossyCompressionQuality }];
             let values: [&CFType; 1] = [&quality];
             Some(CFDictionary::from_slices(&keys, &values))
         }
     };
+    // SAFETY: `picture` is a valid image and `properties` a valid dictionary or None; finalize runs
+    // once, after the only image.
     let finished = unsafe {
         destination.add_image(&picture, properties.as_deref().map(|dict| dict.as_opaque()));
         destination.finalize()
@@ -193,6 +205,7 @@ fn bitmap(
     if pixels.len() != width.checked_mul(height)?.checked_mul(4)? {
         return None;
     }
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
     // SAFETY: `pixels` holds `height` rows of `width * 4` bytes and outlives the context,
     // which callers drop before they read `pixels`.

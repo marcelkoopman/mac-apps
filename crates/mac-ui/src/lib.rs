@@ -72,6 +72,8 @@ pub mod metrics;
 pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]
 pub mod panel;
+#[cfg(all(target_os = "macos", feature = "drop"))]
+pub mod pasteboard_types;
 #[cfg(all(target_os = "macos", feature = "progress"))]
 pub mod progress;
 #[cfg(all(target_os = "macos", feature = "widgets"))]

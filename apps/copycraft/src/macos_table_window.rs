@@ -117,6 +117,8 @@ define_class!(
             if window_key(event) {
                 true
             } else {
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
@@ -237,6 +239,8 @@ define_class!(
 impl TableWindowDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm);
+        // SAFETY: `init` on a freshly allocated instance of a class that declares no other
+        // initializer.
         unsafe { msg_send![this, init] }
     }
 }
@@ -595,6 +599,7 @@ fn run_column_picker() {
     let mut checks: Vec<Retained<NSButton>> = Vec::new();
     for (index, column) in picker.columns().iter().enumerate() {
         let y = list_h - (index as f64 + 1.0) * row_h;
+        // SAFETY: no target or action is passed, so no weak reference has to stay valid.
         let check = unsafe {
             NSButton::checkboxWithTitle_target_action(
                 &NSString::from_str(&column.shown),
@@ -744,6 +749,8 @@ fn ensure_views(mtm: MainThreadMarker) {
         | NSWindowStyleMask::Miniaturizable
         | NSWindowStyleMask::Resizable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), INITIAL_SIZE);
+    // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
+    // plain value arguments.
     let window: Retained<TableWindowPanel> = unsafe {
         msg_send![
             TableWindowPanel::alloc(mtm),
@@ -753,9 +760,7 @@ fn ensure_views(mtm: MainThreadMarker) {
             defer: false,
         ]
     };
-    // SAFETY: VIEWS holds a `Retained` to the window, so AppKit must not also release it on
-    // close.
-    unsafe { window.setReleasedWhenClosed(false) };
+    mac_ui::panel::keep_when_closed(&window);
     window.setTitle(&NSString::from_str(crate::locale::t("table_window_title")));
     window.setContentMinSize(MIN_SIZE);
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
@@ -1196,7 +1201,7 @@ fn paint_content(views: &Views, view: &TableWindowView) {
     for range in &kinds {
         attr.color(range, &dim);
     }
-    if let Some(storage) = unsafe { views.sidebar.textStorage() } {
+    if let Some(storage) = mac_ui::widgets::text_storage(&views.sidebar) {
         storage.setAttributedString(&attr.into_attributed());
     }
     zeroize::Zeroize::zeroize(&mut text);
@@ -1305,6 +1310,8 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
             Some(name) => match &group {
                 Some((shown, submenu)) if *shown == name => submenu.clone(),
                 _ => {
+                    // SAFETY: a freshly allocated menu item; its action is a selector the launcher
+                    // delegate implements, or none.
                     let parent = unsafe {
                         NSMenuItem::initWithTitle_action_keyEquivalent(
                             NSMenuItem::alloc(mtm),
@@ -1323,6 +1330,8 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 }
             },
         };
+        // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
+        // implements, or none.
         let item = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),

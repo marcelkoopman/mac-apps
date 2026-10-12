@@ -47,6 +47,8 @@ define_class!(
                 launcher::emit(UserEvent::Run(CommandId::Save));
                 true
             } else {
+                // SAFETY: forwards the event to the superclass implementation of the same selector,
+                // with the same argument and return types.
                 let handled: bool =
                     unsafe { msg_send![super(self), performKeyEquivalent: event] };
                 handled
@@ -64,8 +66,10 @@ define_class!(
     #[ivars = DelegateIvars]
     struct AboutDelegate;
 
+    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
     unsafe impl NSObjectProtocol for AboutDelegate {}
 
+    // SAFETY: the methods below use the NSWindowDelegate selectors and signatures.
     unsafe impl NSWindowDelegate for AboutDelegate {
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSObject) {
@@ -82,6 +86,8 @@ define_class!(
 impl AboutDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(DelegateIvars);
+        // SAFETY: NSObject's `init` on the freshly allocated instance; the class declares no other
+        // initializer.
         unsafe { msg_send![super(this), init] }
     }
 }
@@ -111,6 +117,8 @@ pub fn show() {
 fn build(mtm: MainThreadMarker) {
     let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
+    // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
+    // plain value arguments.
     let window: Retained<AboutWindow> = unsafe {
         msg_send![
             AboutWindow::alloc(mtm),
@@ -120,13 +128,15 @@ fn build(mtm: MainThreadMarker) {
             defer: false,
         ]
     };
-    unsafe { window.setReleasedWhenClosed(false) };
+    mac_ui::panel::keep_when_closed(&window);
     window.setTitle(&NSString::from_str(crate::locale::t("about_title")));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
 
     let delegate = AboutDelegate::new(mtm);
+    // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
+    // window's weak delegate reference stays valid.
     unsafe { panel::set_delegate(&window, &*delegate) };
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 

@@ -38,13 +38,19 @@ where
     }
 }
 
+/// Keep `window` alive when it closes: AppKit does not release it, so a caller's `Retained`
+/// stays valid and the window can be shown again.
+pub fn keep_when_closed(window: &NSWindow) {
+    // SAFETY: the caller holds a `Retained` to the window, so AppKit must not also release it
+    // on close.
+    unsafe { window.setReleasedWhenClosed(false) };
+}
+
 /// Make `window` a transparent, shadowed panel that floats above normal windows, shows on every
 /// Space and over full-screen apps, stays out of the window cycle and can be dragged by its
 /// background. It is not released on close, so the caller's `Retained` stays valid.
 pub fn configure_floating(window: &NSWindow) {
-    // SAFETY: the caller holds a `Retained` to the window, so AppKit must not also release it
-    // on close.
-    unsafe { window.setReleasedWhenClosed(false) };
+    keep_when_closed(window);
     window.setOpaque(false);
     window.setHasShadow(true);
     window.setBackgroundColor(Some(&NSColor::clearColor()));

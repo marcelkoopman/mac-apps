@@ -72,8 +72,7 @@ pub(crate) fn set_header(
 /// Kind in semibold, then the hotkey in the caption colour. The whole line truncates in the
 /// middle, so a long kind keeps the hotkey visible.
 pub(crate) fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
-    // SAFETY: NSFontWeightSemibold is a process-wide AppKit constant.
-    let semibold = unsafe { NSFontWeightSemibold };
+    let semibold = mac_ui::fonts::semibold_weight();
     let title_font = NSFont::systemFontOfSize_weight(mac_ui::metrics::FONT_TITLE, semibold);
     let hotkey_font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY);
     let attr = AttrText::new(text, &title_font, &NSColor::labelColor());
@@ -446,9 +445,7 @@ pub(crate) fn place_show_all(mtm: MainThreadMarker, preview_y: f64) {
             let parent = WELL.with(|well| {
                 well.borrow()
                     .as_ref()
-                    // SAFETY: the superview is used right away, while the view hierarchy keeps
-                    // it alive.
-                    .and_then(|well| unsafe { well.superview() })
+                    .and_then(|well| mac_ui::widgets::superview(well))
             });
             if let Some(parent) = parent {
                 parent.addSubview(button.view());
@@ -738,6 +735,8 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
             Some(name) => match &group {
                 Some((shown, submenu)) if *shown == name => submenu.clone(),
                 _ => {
+                    // SAFETY: a freshly allocated menu item; its action is a selector the launcher
+                    // delegate implements, or none.
                     let parent = unsafe {
                         NSMenuItem::initWithTitle_action_keyEquivalent(
                             NSMenuItem::alloc(mtm),
@@ -756,6 +755,8 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 }
             },
         };
+        // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
+        // implements, or none.
         let item = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(mtm),
@@ -770,6 +771,8 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
         }
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
+                // SAFETY: the delegate is kept in a thread-local for the life of the app, so the
+                // item's weak target stays valid.
                 unsafe { item.setTarget(Some(delegate)) };
             }
         });

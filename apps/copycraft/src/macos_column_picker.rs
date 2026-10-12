@@ -109,6 +109,7 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     );
     root.setHidden(true);
     root.setAccessibilityElement(true);
+    // SAFETY: reads immutable constants exported by the system frameworks.
     root.setAccessibilityRole(Some(unsafe {
         mac_ui::objc2_app_kit::NSAccessibilityGroupRole
     }));
@@ -256,7 +257,7 @@ fn open_picker() {
     if fresh {
         let views = picker_views(mtm);
         let well = WELL.with(|slot| slot.borrow().clone());
-        if let Some(parent) = well.and_then(|well| unsafe { well.superview() }) {
+        if let Some(parent) = well.and_then(|well| mac_ui::widgets::superview(&well)) {
             parent.addSubview(&views.root);
         }
         PICKER_VIEWS.with(|slot| slot.replace(Some(views)));
@@ -453,6 +454,7 @@ fn rebuild_picker_rows(mtm: MainThreadMarker) {
         for (position, &index) in visible.iter().enumerate() {
             let column = &picker.columns()[index];
             let y = height - (position as f64 + 1.0) * PICKER_ROW_H;
+            // SAFETY: no target or action is passed, so no weak reference has to stay valid.
             let check = unsafe {
                 NSButton::checkboxWithTitle_target_action(
                     &NSString::from_str(&column.shown),

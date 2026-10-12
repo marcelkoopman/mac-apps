@@ -16,6 +16,7 @@ pub struct WipeOnFree;
 ///
 /// `ptr` must be valid for writes of `size` bytes.
 unsafe fn wipe(ptr: *mut u8, size: usize) {
+    // SAFETY: the caller guarantees `ptr` is valid for writes of `size` bytes.
     unsafe { std::ptr::write_bytes(ptr, 0, size) };
     std::hint::black_box(ptr);
     std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
@@ -25,14 +26,18 @@ unsafe fn wipe(ptr: *mut u8, size: usize) {
 // that layout; `wipe` stays inside the block.
 unsafe impl GlobalAlloc for WipeOnFree {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        // SAFETY: forwards the caller's layout to the system allocator unchanged.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        // SAFETY: forwards the caller's layout to the system allocator unchanged.
         unsafe { System.alloc_zeroed(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        // SAFETY: `ptr` was allocated by `System` with `layout`, so it is valid for `layout.size()`
+        // bytes and goes back with the same layout.
         unsafe {
             wipe(ptr, layout.size());
             System.dealloc(ptr, layout);
@@ -42,6 +47,8 @@ unsafe impl GlobalAlloc for WipeOnFree {
     /// Always a new block: the system's `realloc` can move the data and free the old block
     /// without wiping it.
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        // SAFETY: the GlobalAlloc contract makes `new_size` with the old alignment a valid layout;
+        // the copy stays within both blocks and the old block is freed once.
         unsafe {
             let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
             let new = System.alloc(new_layout);

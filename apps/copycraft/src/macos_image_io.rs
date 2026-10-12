@@ -15,6 +15,7 @@ type CFDictionaryRef = *const c_void;
 const RGBA_PREMUL: u32 = (4 << 12) | 1;
 const CF_NUMBER_SINT64: i32 = 4;
 
+// SAFETY: these declarations match the signatures in the system framework headers.
 #[link(name = "ImageIO", kind = "framework")]
 unsafe extern "C" {
     static kCGImageSourceThumbnailMaxPixelSize: CFStringRef;
@@ -40,6 +41,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
 }
 
+// SAFETY: these declarations match the signatures in the system framework headers.
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {
     fn CGColorSpaceCreateDeviceRGB() -> *mut c_void;
@@ -57,6 +59,7 @@ unsafe extern "C" {
     fn CGImageGetHeight(image: *mut c_void) -> usize;
 }
 
+// SAFETY: these declarations match the signatures in the system framework headers.
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
     static kCFBooleanTrue: *const c_void;
@@ -135,6 +138,7 @@ impl Owned {
 impl Drop for Owned {
     fn drop(&mut self) {
         if !self.0.is_null() {
+            // SAFETY: `Owned` holds the only reference from a Create/Copy call and is never null.
             unsafe { CFRelease(self.0) }
         }
     }
@@ -144,6 +148,8 @@ pub(crate) fn preview_from_bytes(bytes: &[u8]) -> Option<ClipboardImage> {
     let data = NSData::with_bytes(bytes);
     let options = source_options();
     let options_ptr = options.as_ref().map(Owned::get).unwrap_or(std::ptr::null());
+    // SAFETY: the data/URL object is alive for the call and the options pointer is null or a valid
+    // dictionary; a null result is handled.
     let source =
         unsafe { CGImageSourceCreateWithData(Retained::as_ptr(&data).cast(), options_ptr) };
     preview_from_source(source)
@@ -154,19 +160,25 @@ pub(crate) fn preview_from_path(path: &Path) -> Option<ClipboardImage> {
     let url = NSURL::fileURLWithPath(&NSString::from_str(text));
     let options = source_options();
     let options_ptr = options.as_ref().map(Owned::get).unwrap_or(std::ptr::null());
+    // SAFETY: the data/URL object is alive for the call and the options pointer is null or a valid
+    // dictionary; a null result is handled.
     let source = unsafe { CGImageSourceCreateWithURL(Retained::as_ptr(&url).cast(), options_ptr) };
     preview_from_source(source)
 }
 
 /// Keep ImageIO from decoding a large paste into a full bitmap just to read it.
 fn source_options() -> Option<Owned> {
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let keys = unsafe {
         [
             kCGImageSourceShouldCache,
             kCGImageSourceShouldCacheImmediately,
         ]
     };
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let values = unsafe { [kCFBooleanFalse, kCFBooleanFalse] };
+    // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
+    // call.
     let dict = unsafe {
         CFDictionaryCreate(
             std::ptr::null(),
@@ -184,10 +196,13 @@ fn preview_from_source(source: *mut c_void) -> Option<ClipboardImage> {
     let source = Owned::new(source.cast())?;
     let (full_width, full_height) = oriented_size(source.get());
     let options = thumbnail_options()?;
+    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
     let thumb =
         unsafe { CGImageSourceCreateThumbnailAtIndex(source.get().cast_mut(), 0, options.get()) };
     let thumb = Owned::new(thumb.cast())?;
+    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
     let width = unsafe { CGImageGetWidth(thumb.get().cast_mut()) };
+    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
     let height = unsafe { CGImageGetHeight(thumb.get().cast_mut()) };
     let mut rgba = rgba_from_image(thumb.get().cast_mut(), width, height)?;
     unpremultiply(&mut rgba);
@@ -204,6 +219,7 @@ fn preview_from_source(source: *mut c_void) -> Option<ClipboardImage> {
 
 fn thumbnail_options() -> Option<Owned> {
     let max_edge = i64::try_from(PREVIEW_MAX_EDGE).ok()?;
+    // SAFETY: the value pointer points at a live i64, matching CF_NUMBER_SINT64.
     let max_number = Owned::new(unsafe {
         CFNumberCreate(
             std::ptr::null(),
@@ -211,6 +227,7 @@ fn thumbnail_options() -> Option<Owned> {
             (&max_edge) as *const i64 as *const c_void,
         )
     })?;
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let keys = unsafe {
         [
             kCGImageSourceThumbnailMaxPixelSize,
@@ -218,9 +235,12 @@ fn thumbnail_options() -> Option<Owned> {
             kCGImageSourceCreateThumbnailWithTransform,
         ]
     };
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let values = [max_number.get(), unsafe { kCFBooleanTrue }, unsafe {
         kCFBooleanTrue
     }];
+    // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
+    // call.
     let dict = unsafe {
         CFDictionaryCreate(
             std::ptr::null(),
@@ -235,13 +255,18 @@ fn thumbnail_options() -> Option<Owned> {
 }
 
 fn oriented_size(source: *const c_void) -> (usize, usize) {
+    // SAFETY: `source` is a live image source and no options are passed; a null result is
+    // handled by `Owned::new`.
     let Some(props) = Owned::new(unsafe {
         CGImageSourceCopyPropertiesAtIndex(source.cast_mut(), 0, std::ptr::null())
     }) else {
         return (0, 0);
     };
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let mut width = dict_usize(props.get(), unsafe { kCGImagePropertyPixelWidth });
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let mut height = dict_usize(props.get(), unsafe { kCGImagePropertyPixelHeight });
+    // SAFETY: reads immutable constants exported by the system frameworks.
     let orientation = dict_usize(props.get(), unsafe { kCGImagePropertyOrientation });
     if matches!(orientation, 5..=8) {
         std::mem::swap(&mut width, &mut height);
@@ -250,11 +275,14 @@ fn oriented_size(source: *const c_void) -> (usize, usize) {
 }
 
 fn dict_usize(dict: *const c_void, key: *const c_void) -> usize {
+    // SAFETY: `dict` is a live dictionary and `key` a valid CFString; a missing key gives null,
+    // which is checked.
     let value = unsafe { CFDictionaryGetValue(dict, key) };
     if value.is_null() {
         return 0;
     }
     let mut number = 0i64;
+    // SAFETY: writes one i64 into a local of that type, matching CF_NUMBER_SINT64.
     let ok = unsafe {
         CFNumberGetValue(
             value,
@@ -276,7 +304,9 @@ fn rgba_from_image(image: *mut c_void, width: usize, height: usize) -> Option<Ve
         return None;
     }
     let mut rgba = vec![0u8; len];
+    // SAFETY: takes no arguments; a null result is handled by `Owned::new`.
     let space = Owned::new(unsafe { CGColorSpaceCreateDeviceRGB() })?;
+    // SAFETY: `rgba` holds `height` rows of `width * 4` bytes and outlives the context.
     let context = Owned::new(unsafe {
         CGBitmapContextCreate(
             rgba.as_mut_ptr().cast(),
@@ -288,6 +318,7 @@ fn rgba_from_image(image: *mut c_void, width: usize, height: usize) -> Option<Ve
             RGBA_PREMUL,
         )
     })?;
+    // SAFETY: the context and image are live CF objects owned for the duration of the call.
     unsafe {
         CGContextDrawImage(
             context.get().cast_mut(),
