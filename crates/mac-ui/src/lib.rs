@@ -61,13 +61,13 @@ pub mod fonts;
 #[cfg(target_os = "macos")]
 pub mod glass;
 pub mod icon;
-pub mod metrics;
 #[cfg(all(target_os = "macos", feature = "image"))]
 pub mod image;
 pub mod keys;
 pub mod lang;
 #[cfg(target_os = "macos")]
 pub mod layer;
+pub mod metrics;
 #[cfg(all(target_os = "macos", feature = "notify"))]
 pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]

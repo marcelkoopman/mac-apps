@@ -14,15 +14,14 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification,
-    NSAnimatablePropertyContainer, NSAnimationContext, NSAttributedStringNSStringDrawing, NSBeep,
-    NSBox, NSButton, NSColor,
-    NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags,
-    NSFloatingWindowLevel, NSFocusRingType, NSFont, NSFontWeightSemibold, NSImage, NSImageView,
-    NSLineBreakMode, NSMenu,
-    NSMenuItem, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSScrollView, NSSearchField,
-    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
-    NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
+    NSAccessibility, NSAnimatablePropertyContainer, NSAnimationContext, NSApplication,
+    NSApplicationDidResignActiveNotification, NSAttributedStringNSStringDrawing, NSBeep, NSBox,
+    NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
+    NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSFontWeightSemibold,
+    NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle,
+    NSParagraphStyleAttributeName, NSScrollView, NSSearchField, NSTextAlignment, NSTextField,
+    NSTextFieldBezelStyle, NSTextView, NSView, NSWindow, NSWindowLevel, NSWindowOrderingMode,
+    NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
@@ -1019,18 +1018,30 @@ fn ensure_window(mtm: MainThreadMarker) {
     let header = widgets::label(mtm, mac_ui::metrics::FONT_TITLE, &NSColor::labelColor());
     // A long type name is cut in the middle so the hotkey stays visible.
     header.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
-    let meta = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
+    let meta = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
     // Keep the warning at the end when a long filename is cut short.
     meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     meta.setAllowsEditingTextAttributes(true);
     let field = search_field(mtm);
     let item_find = item_search_field(mtm);
-    let item_count = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
+    let item_count = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
     item_count.setAlignment(NSTextAlignment::Right);
     item_count.setHidden(true);
     let well = filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
     crate::appearance::apply_well(&well, false, true);
-    let empty_line = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &crate::appearance::caption_color());
+    let empty_line = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_BODY,
+        &crate::appearance::caption_color(),
+    );
     empty_line.setAlignment(NSTextAlignment::Center);
     empty_line.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     empty_line.setHidden(true);
@@ -3534,10 +3545,7 @@ fn history_capsule(
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     count.setFrame(NSRect::new(
-        NSPoint::new(
-            commands::nav_mid_x(),
-            ((height - count_h) / 2.0).floor(),
-        ),
+        NSPoint::new(commands::nav_mid_x(), ((height - count_h) / 2.0).floor()),
         NSSize::new(commands::NAV_COUNT_W, count_h),
     ));
     next.view().setFrame(NSRect::new(
@@ -3640,10 +3648,7 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     title.setFrame(NSRect::new(
-        NSPoint::new(
-            commands::nav_mid_x(),
-            ((height - title_h) / 2.0).floor(),
-        ),
+        NSPoint::new(commands::nav_mid_x(), ((height - title_h) / 2.0).floor()),
         NSSize::new(commands::NAV_COUNT_W, title_h),
     ));
     redo.view().setFrame(NSRect::new(

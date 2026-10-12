@@ -3103,7 +3103,11 @@ fn image_meta(facts: &ImageFacts) -> String {
 /// Fit `line` into `max_width` (measured by `width_of`). The part before the first `  ·  `
 /// is shortened in the middle so the rest (format, dimensions) stays. When that rest alone
 /// is wider than the line, the whole line is shortened in the middle. The result is one line.
-pub(crate) fn fit_leading_name(line: &str, max_width: f64, width_of: impl Fn(&str) -> f64) -> String {
+pub(crate) fn fit_leading_name(
+    line: &str,
+    max_width: f64,
+    width_of: impl Fn(&str) -> f64,
+) -> String {
     if width_of(line) <= max_width {
         return line.to_string();
     }
@@ -3292,9 +3296,7 @@ fn command_enabled(
 mod tests {
     use super::picker_columns;
     use super::{ArrowAction, ArrowFocus, arrow_action};
-    use super::{
-        CHIP_GAP, CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON,
-    };
+    use super::{CHIP_GAP, CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
     use super::{
         CardView, CommandId, ContentActions, DiffShown, Hist, ImageFacts, ImageScan, LaunchData,
         NAV_RESERVE, NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key,
@@ -6010,10 +6012,7 @@ Kleinste opdracht die de change dekt.
         const { assert!(NAV_COUNT_W >= 40.0) };
         // Square chevron hit areas as tall as a chip.
         const { assert!(NAV_BUTTON == CHIP_PILL_H) };
-        assert_eq!(
-            NAV_SPAN,
-            NAV_BUTTON * 2.0 + NAV_COUNT_W + CHIP_GAP * 2.0
-        );
+        assert_eq!(NAV_SPAN, NAV_BUTTON * 2.0 + NAV_COUNT_W + CHIP_GAP * 2.0);
     }
 
     #[test]

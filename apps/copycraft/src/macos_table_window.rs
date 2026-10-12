@@ -16,19 +16,18 @@
 use std::cell::{Cell, RefCell};
 
 use mac_ui::button::{ButtonSize, GlassButton};
-use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::AnyThread;
+use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAttributedStringNSStringDrawing,
     NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
-    NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn,
-    NSEvent, NSEventGestureAxis, NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode,
-    NSMenu, NSMenuItem, NSModalPanelWindowLevel, NSMutableParagraphStyle,
-    NSParagraphStyleAttributeName, NSScrollView, NSTextAlignment, NSTextField, NSTextTab,
-    NSTextView, NSView, NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask,
-    NSWindowTabbingMode,
+    NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
+    NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode, NSMenu, NSMenuItem,
+    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSScrollView,
+    NSTextAlignment, NSTextField, NSTextTab, NSTextView, NSView, NSViewBoundsDidChangeNotification,
+    NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
@@ -840,7 +839,11 @@ fn ensure_views(mtm: MainThreadMarker) {
     let (undo, title, redo) = version_capsule(mtm, &capsule);
     content.addSubview(&capsule);
 
-    let hint = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
+    let hint = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
     hint.setAlignment(NSTextAlignment::Center);
     let hint_x = actions_x;
     hint.setFrame(NSRect::new(
@@ -854,7 +857,11 @@ fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(&hint);
 
     // The meta line along the bottom.
-    let meta = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
+    let meta = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
     meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     meta.setUsesSingleLineMode(true);
     meta.setMaximumNumberOfLines(1);
@@ -959,7 +966,11 @@ fn ensure_views(mtm: MainThreadMarker) {
     header_rule.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 1.0)));
     header_clip.addSubview(&header_rule);
     grid_clip.addSubview(&header_clip);
-    let placeholder = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &crate::appearance::caption_color());
+    let placeholder = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_BODY,
+        &crate::appearance::caption_color(),
+    );
     placeholder.setAlignment(NSTextAlignment::Center);
     placeholder.setFrame(NSRect::new(
         NSPoint::new(SIDEBAR_W, META_H + body_h / 2.0 - 9.0),
@@ -1064,10 +1075,7 @@ fn version_capsule(
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     title.setFrame(NSRect::new(
-        NSPoint::new(
-            commands::nav_mid_x(),
-            ((height - title_h) / 2.0).floor(),
-        ),
+        NSPoint::new(commands::nav_mid_x(), ((height - title_h) / 2.0).floor()),
         NSSize::new(commands::NAV_COUNT_W, title_h),
     ));
     redo.view().setFrame(NSRect::new(

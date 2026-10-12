@@ -134,7 +134,9 @@ mod tests {
         let now = std::time::Instant::now();
         assert!(accept_click(now));
         assert!(!accept_click(now));
-        assert!(!accept_click(now + CLICK_GAP - std::time::Duration::from_millis(1)));
+        assert!(!accept_click(
+            now + CLICK_GAP - std::time::Duration::from_millis(1)
+        ));
         assert!(accept_click(now + CLICK_GAP));
     }
 }

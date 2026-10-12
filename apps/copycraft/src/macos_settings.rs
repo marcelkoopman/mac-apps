@@ -32,11 +32,8 @@ const NOTE_H: f64 = 16.0;
 /// One control plus its one-line explanation.
 const SETTING_H: f64 = BUTTON_H + NOTE_GAP + NOTE_H;
 /// A labelled setting with a field and a button under the explanation.
-const FIELD_BLOCK_H: f64 = SETTING_H
-    + mac_ui::metrics::SPACE_S
-    + BUTTON_H
-    + mac_ui::metrics::SPACE_S
-    + BUTTON_H;
+const FIELD_BLOCK_H: f64 =
+    SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
 const HEAD_H: f64 = 22.0;
 const SECTION_GAP: f64 = mac_ui::metrics::SECTION_GAP;
 /// Width of the name on a row that also holds a value (hotkey, language, date order).
@@ -47,8 +44,7 @@ const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S
 const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 /// Weergave: heading and the symbols block.
 const DISPLAY_H: f64 = HEAD_H + FIELD_BLOCK_H;
-const HEIGHT: f64 =
-    MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
+const HEIGHT: f64 = MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
 const _: () = assert!(SETTING_H == 46.0);
@@ -583,7 +579,10 @@ fn place_name(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
 fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64, width: f64) {
     let field = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &NSColor::labelColor());
     field.setStringValue(&NSString::from_str(title));
-    field.setFrame(NSRect::new(NSPoint::new(MARGIN, y), NSSize::new(width, BUTTON_H)));
+    field.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(width, BUTTON_H),
+    ));
     parent.addSubview(&field);
 }
 

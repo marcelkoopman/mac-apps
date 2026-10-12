@@ -153,7 +153,11 @@ impl SameSizeBlur {
     }
 
     fn with_input<T>(&self, body: impl FnOnce(&mut Input) -> T) -> T {
-        let mut input = self.ivars().input.lock().unwrap_or_else(|err| err.into_inner());
+        let mut input = self
+            .ivars()
+            .input
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
         body(&mut input)
     }
 
@@ -261,9 +265,8 @@ mod tests {
         let output: *mut AnyObject = unsafe { msg_send![&*filter, outputImage] };
         let output = unsafe { Retained::retain_autoreleased(output) }.expect("output");
         let output = extent_of(&output);
-        let via_key: *mut AnyObject = unsafe {
-            msg_send![&*filter, valueForKey: &*NSString::from_str("outputImage")]
-        };
+        let via_key: *mut AnyObject =
+            unsafe { msg_send![&*filter, valueForKey: &*NSString::from_str("outputImage")] };
         let via_key = unsafe { Retained::retain_autoreleased(via_key) }.expect("valueForKey");
         let via_key = extent_of(&via_key);
         assert_eq!(via_key.size.width, input.size.width);
@@ -294,9 +297,8 @@ mod tests {
 
     fn finite_image(width: f64, height: f64) -> Retained<AnyObject> {
         let color_cls = AnyClass::get(c"CIColor").expect("CIColor");
-        let color: *mut AnyObject = unsafe {
-            msg_send![color_cls, colorWithRed: 0.2, green: 0.3, blue: 0.4, alpha: 1.0]
-        };
+        let color: *mut AnyObject =
+            unsafe { msg_send![color_cls, colorWithRed: 0.2, green: 0.3, blue: 0.4, alpha: 1.0] };
         let color = unsafe { Retained::retain_autoreleased(color) }.expect("color");
         let image_cls = AnyClass::get(c"CIImage").expect("CIImage");
         let image: *mut AnyObject = unsafe { msg_send![image_cls, imageWithColor: &*color] };
@@ -317,8 +319,7 @@ mod tests {
         let filter = unsafe { Retained::retain_autoreleased(filter) }.expect("CIGaussianBlur");
         let _: () = unsafe { msg_send![&*filter, setDefaults] };
         let number_cls = AnyClass::get(c"NSNumber").expect("NSNumber");
-        let number: *mut AnyObject =
-            unsafe { msg_send![number_cls, numberWithDouble: radius] };
+        let number: *mut AnyObject = unsafe { msg_send![number_cls, numberWithDouble: radius] };
         let number = unsafe { Retained::retain_autoreleased(number) }.expect("radius");
         let key = NSString::from_str("inputRadius");
         let _: () = unsafe { msg_send![&*filter, setValue: &*number, forKey: &*key] };

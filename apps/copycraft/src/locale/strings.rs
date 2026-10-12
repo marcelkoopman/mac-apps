@@ -231,11 +231,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Drop a text file or image here to open it",
     ),
     ("nothing_copied", "Niets gekopieerd", "Nothing copied"),
-    (
-        "empty_history",
-        "Kopieer met {0}",
-        "Copy with {0}",
-    ),
+    ("empty_history", "Kopieer met {0}", "Copy with {0}"),
     (
         "no_text_on_clipboard",
         "Geen tekst op het klembord",
