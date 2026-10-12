@@ -105,6 +105,17 @@ impl<'a> AttrText<'a> {
     }
 }
 
+/// Apply `style` to `range` (UTF-16) of `text`.
+pub fn set_paragraph_style(
+    text: &NSMutableAttributedString,
+    style: &NSParagraphStyle,
+    range: NSRange,
+) {
+    // SAFETY: NSParagraphStyleAttributeName is an immutable AppKit constant and takes an
+    // NSParagraphStyle value.
+    unsafe { text.addAttribute_value_range(NSParagraphStyleAttributeName, style, range) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AttrText, utf16_range};
@@ -138,15 +149,4 @@ mod tests {
         let attr = text.into_attributed();
         assert_eq!(attr.string().to_string(), source);
     }
-}
-
-/// Apply `style` to `range` (UTF-16) of `text`.
-pub fn set_paragraph_style(
-    text: &NSMutableAttributedString,
-    style: &NSParagraphStyle,
-    range: NSRange,
-) {
-    // SAFETY: NSParagraphStyleAttributeName is an immutable AppKit constant and takes an
-    // NSParagraphStyle value.
-    unsafe { text.addAttribute_value_range(NSParagraphStyleAttributeName, style, range) };
 }
