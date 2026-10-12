@@ -30,6 +30,15 @@ env:
   XCODE_VERSION: "26.6"
 
 jobs:
+  # Real unsafe (blocks, unsafe fn, unsafe impl) in copycraft and mac-ui may only go down.
+  unsafe-count:
+    name: unsafe count
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Unsafe at or below scripts/unsafe_baseline.txt
+        run: scripts/count_unsafe.sh --check
+
   # fmt and clippy are the same on every macOS, so they run once, on the pinned runner.
   lint:
     name: fmt, clippy
