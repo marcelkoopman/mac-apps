@@ -119,6 +119,173 @@ pub fn choose(
         .filter(|&index| index < options.len())
 }
 
+/// What [`choose_with_number`] asks: a pop-up of `options` (starting at `selected`) and a
+/// number field (pre-filled with `number_default`), each with a label, above a live preview.
+#[cfg(feature = "widgets")]
+pub struct NumberChoice<'a> {
+    pub title: &'a str,
+    pub message: &'a str,
+    pub options: &'a [&'a str],
+    pub selected: usize,
+    pub option_label: &'a str,
+    pub number_label: &'a str,
+    pub number_default: &'a str,
+    pub preview_label: &'a str,
+}
+
+/// Pick one of `ask.options` and type a number, with a preview under them that `preview`
+/// fills from the picked index and the typed text, again on every change. Returns the picked
+/// index and the typed text (untrimmed) on OK, `None` on Cancel or without options.
+#[cfg(feature = "widgets")]
+pub fn choose_with_number(
+    mtm: MainThreadMarker,
+    ask: &NumberChoice<'_>,
+    preview: impl Fn(usize, &str) -> String + 'static,
+) -> Option<(usize, String)> {
+    use objc2_app_kit::NSView;
+
+    const ROW: f64 = 26.0;
+    const LABEL_W: f64 = 120.0;
+    const PREVIEW_H: f64 = 110.0;
+    if ask.options.is_empty() {
+        return None;
+    }
+    let alert = new_alert(mtm, ask.title, ask.message, &[ok(), cancel()]);
+    let height = ROW * 2.0 + 12.0 + PREVIEW_H;
+    let view = NSView::initWithFrame(NSView::alloc(mtm), accessory_frame(height));
+    let label = |text: &str, y: f64| {
+        let label = NSTextField::labelWithString(&NSString::from_str(text), mtm);
+        label.setFrame(NSRect::new(
+            NSPoint::new(0.0, y + 4.0),
+            NSSize::new(LABEL_W - 6.0, 18.0),
+        ));
+        view.addSubview(&label);
+    };
+
+    let popup_y = height - ROW;
+    label(ask.option_label, popup_y);
+    let popup = NSPopUpButton::initWithFrame_pullsDown(
+        NSPopUpButton::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(LABEL_W, popup_y),
+            NSSize::new(ACCESSORY_WIDTH - LABEL_W, ROW),
+        ),
+        false,
+    );
+    let menu = popup.menu()?;
+    for option in ask.options {
+        let item = NSMenuItem::new(mtm);
+        item.setTitle(&NSString::from_str(option));
+        menu.addItem(&item);
+    }
+    if ask.selected < ask.options.len() {
+        popup.selectItemAtIndex(ask.selected as isize);
+    }
+    popup.setAccessibilityLabel(Some(&NSString::from_str(ask.option_label)));
+    view.addSubview(&popup);
+
+    let field_y = popup_y - ROW - 6.0;
+    label(ask.number_label, field_y);
+    let field = NSTextField::initWithFrame(
+        NSTextField::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(LABEL_W, field_y + 1.0),
+            NSSize::new(80.0, 24.0),
+        ),
+    );
+    field.setStringValue(&NSString::from_str(ask.number_default));
+    field.setAccessibilityLabel(Some(&NSString::from_str(ask.number_label)));
+    // Every keystroke sends the action, so the preview follows the typing.
+    field.setContinuous(true);
+    view.addSubview(&field);
+
+    let shown = NSTextField::wrappingLabelWithString(&NSString::from_str(""), mtm);
+    shown.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(ACCESSORY_WIDTH, PREVIEW_H),
+    ));
+    shown.setFont(Some(&crate::fonts::monospace(11.0, &[])));
+    shown.setAccessibilityLabel(Some(&NSString::from_str(ask.preview_label)));
+    view.addSubview(&shown);
+
+    let watcher = preview::Watcher::new(
+        mtm,
+        preview::Ivars {
+            popup: popup.clone(),
+            field: field.clone(),
+            shown,
+            preview: Box::new(preview),
+        },
+    );
+    watcher.refresh();
+    crate::actions::connect(&popup, &watcher, objc2::sel!(refresh:));
+    crate::actions::connect(&field, &watcher, objc2::sel!(refresh:));
+
+    alert.setAccessoryView(Some(&view));
+    alert.layout();
+    alert.window().setInitialFirstResponder(Some(&field));
+    let answer = button_index(run(mtm, &alert));
+    // The controls hold the watcher weakly; it lives until here.
+    drop(watcher);
+    if answer != Some(0) {
+        return None;
+    }
+    let index = usize::try_from(popup.indexOfSelectedItem())
+        .ok()
+        .filter(|&index| index < ask.options.len())?;
+    Some((index, field.stringValue().to_string()))
+}
+
+/// The target of [`choose_with_number`]'s pop-up and field: fills the preview.
+#[cfg(feature = "widgets")]
+mod preview {
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, NSObject};
+    use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+    use objc2_app_kit::{NSPopUpButton, NSTextField};
+    use objc2_foundation::NSString;
+
+    pub(super) struct Ivars {
+        pub(super) popup: Retained<NSPopUpButton>,
+        pub(super) field: Retained<NSTextField>,
+        pub(super) shown: Retained<NSTextField>,
+        pub(super) preview: Box<dyn Fn(usize, &str) -> String>,
+    }
+
+    define_class!(
+        // SAFETY: NSObject has no subclassing requirements. `refresh:` takes the sender and
+        // returns void, as an action method; the ivars need no Objective-C cleanup.
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "MacUiPreviewWatcher"]
+        #[ivars = Ivars]
+        pub(super) struct Watcher;
+
+        impl Watcher {
+            #[unsafe(method(refresh:))]
+            fn refresh_sent(&self, _sender: Option<&AnyObject>) {
+                self.refresh();
+            }
+        }
+    );
+
+    impl Watcher {
+        pub(super) fn new(mtm: MainThreadMarker, ivars: Ivars) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(ivars);
+            // SAFETY: NSObject's `init` on a freshly allocated instance with its ivars set.
+            unsafe { msg_send![super(this), init] }
+        }
+
+        pub(super) fn refresh(&self) {
+            let ivars = self.ivars();
+            let index = usize::try_from(ivars.popup.indexOfSelectedItem()).unwrap_or(0);
+            let typed = ivars.field.stringValue().to_string();
+            let text = (ivars.preview)(index, &typed);
+            ivars.shown.setStringValue(&NSString::from_str(&text));
+        }
+    }
+}
+
 /// Accessibility label for a prompt's text field or pop-up: the bold title, else the message.
 fn accessory_label<'a>(title: &'a str, message: &'a str) -> &'a str {
     if title.trim().is_empty() {
