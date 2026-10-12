@@ -8,10 +8,10 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSAppearance, NSAppearanceNameDarkAqua, NSApplication, NSBackingStoreType,
-    NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSFont,
-    NSLineBreakMode, NSTextAlignment, NSTextField, NSView, NSWindow, NSWindowDelegate,
-    NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSAccessibility, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua,
+    NSApplication, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
+    NSControlStateValueOn, NSEvent, NSFont, NSLineBreakMode, NSTextAlignment, NSTextField, NSView,
+    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 use mac_ui::{panel, widgets};
