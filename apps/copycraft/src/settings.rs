@@ -81,6 +81,8 @@ const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
+/// Stored (true) once the welcome window closed; missing on first launch.
+const WELCOME_KEY: &str = "hasSeenWelcome";
 /// Newest symbol first, at most [`crate::symbols::MAX_RECENT`], separated by spaces.
 const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 /// The symbol list, space-separated. Missing, empty or invalid means the standard list.
@@ -220,6 +222,22 @@ pub fn hotkey() -> global_hotkey::hotkey::HotKey {
 /// Compact label of the stored chord (`⌃⌘C`).
 pub fn hotkey_label() -> String {
     hotkey::label(&hotkey())
+}
+
+/// Whether the welcome window should open: only while `hasSeenWelcome` was never stored.
+pub fn should_show_welcome(seen: Option<bool>) -> bool {
+    seen.is_none()
+}
+
+/// First launch: `hasSeenWelcome` is missing from the user defaults.
+pub fn welcome_due() -> bool {
+    should_show_welcome(load_bool(WELCOME_KEY))
+}
+
+/// The welcome window closed: do not open it on its own again.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn mark_welcome_seen() {
+    store_bool(WELCOME_KEY, true);
 }
 
 /// Whether the card has shown the one-time explanation of the pasteboard privacy alert.
@@ -454,6 +472,22 @@ fn store_string(key: &str, value: &str) {
 #[cfg(test)]
 mod tests {
     use super::Settings;
+
+    #[test]
+    fn welcome_shows_only_while_the_key_is_missing() {
+        assert!(super::should_show_welcome(None));
+        assert!(!super::should_show_welcome(Some(true)));
+        assert!(!super::should_show_welcome(Some(false)));
+    }
+
+    #[test]
+    fn closing_the_welcome_marks_it_seen() {
+        super::store_bool(super::WELCOME_KEY, false);
+        assert!(!super::welcome_due());
+        super::mark_welcome_seen();
+        assert_eq!(super::load_bool(super::WELCOME_KEY), Some(true));
+        assert!(!super::welcome_due());
+    }
 
     #[test]
     fn defaults_match_the_previous_behaviour() {

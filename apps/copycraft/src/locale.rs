@@ -220,6 +220,32 @@ mod tests {
     }
 
     #[test]
+    fn welcome_keys_are_in_both_languages() {
+        for key in [
+            "welcome_menu",
+            "welcome_title",
+            "welcome_hotkey",
+            "welcome_local",
+            "welcome_sensitive",
+            "welcome_start",
+            "open_at_login",
+            "settings",
+        ] {
+            let (_, nl, en) = STRINGS
+                .iter()
+                .find(|(k, _, _)| *k == key)
+                .unwrap_or_else(|| panic!("{key} is missing"));
+            assert!(!nl.is_empty() && !en.is_empty(), "{key}");
+        }
+        assert_eq!(t_in(Lang::En, "welcome_title"), "Welcome to Copycraft");
+        assert_eq!(t_in(Lang::Nl, "welcome_title"), "Welkom bij Copycraft");
+        assert_eq!(
+            tf_in(Lang::En, "welcome_hotkey", &[&"⌃⌘C"]),
+            "Open Copycraft from any app with ⌃⌘C."
+        );
+    }
+
+    #[test]
     fn placeholders_are_filled() {
         assert_eq!(tf_in(Lang::En, "item_of", &[&2, &5]), "Item 2 of 5");
         assert_eq!(tf_in(Lang::Nl, "item_of", &[&2, &5]), "Item 2 van 5");

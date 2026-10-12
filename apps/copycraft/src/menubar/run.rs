@@ -55,6 +55,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = builder.build()?;
     launcher::install_proxy(event_loop.create_proxy());
     crate::sensitivity::on_checked(|| launcher::emit(UserEvent::LabelsChecked));
+    if crate::settings::welcome_due() {
+        launcher::emit(UserEvent::ShowWelcome);
+    }
 
     let mut app = App {
         tray,

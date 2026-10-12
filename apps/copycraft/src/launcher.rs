@@ -12,6 +12,8 @@ pub enum UserEvent {
     ToggleUnderIcon,
     /// Right click on the menu-bar icon: open the status menu.
     ShowStatusMenu,
+    /// First launch: show the welcome window once the event loop runs.
+    ShowWelcome,
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,
@@ -132,6 +134,12 @@ pub fn close_settings() {
 pub fn show_about() {
     #[cfg(target_os = "macos")]
     crate::macos_about::show();
+}
+
+/// Open the first-run welcome window (also from the status menu).
+pub fn show_welcome() {
+    #[cfg(target_os = "macos")]
+    crate::macos_welcome::show();
 }
 
 pub fn close_about() {

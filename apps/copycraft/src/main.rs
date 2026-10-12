@@ -81,6 +81,8 @@ mod macos_symbols;
 mod macos_table_window;
 #[cfg(target_os = "macos")]
 mod macos_vision;
+#[cfg(target_os = "macos")]
+mod macos_welcome;
 
 fn main() {
     // Polars prints 10 rows and 8 columns of a table, in at most 100 characters, by default.

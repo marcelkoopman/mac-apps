@@ -147,7 +147,7 @@ Columns (fixed; the test parses this table between the markers):
 | `sensitivity/none_amount.txt` | No label: amount 10.06 | plain text | Content | — | — | kind=Plain |
 | `sensitivity/none_invalid_iban.txt` | No label: IBAN failing mod-97 | plain text | Content | — | — | kind=Plain |
 | `sensitivity/none_card_fails_luhn.txt` | No label: card number failing Luhn | plain text | Content | — | — | kind=Plain |
-| `edge/empty.txt` | Edge: empty input | plain text | Clipboard | — | — | placeholder~Copy with |
+| `edge/empty.txt` | Edge: empty input | plain text | Clipboard | — | — | placeholder~Copy something to get started |
 | `edge/unicode_emoji.txt` | Edge: Unicode and emoji | plain text | Content | — | — | kind=Text |
 | `edge/long_line.txt` | Edge: one very long line (5,399 characters) | plain text | Content | — | — | kind=Plain; meta~5.4 KB |
 | `diff/a.txt` | Two history copies, left side | plain text | Content | — | — | kind=Text |
@@ -225,7 +225,7 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,
       unlock, and check that history is empty.
 - [ ] `edge/empty.txt`: copying an empty Notion code block copies nothing, so the card keeps
-      the previous copy. Copying blank text from an editor shows "Copy with ⌃⌘C".
+      the previous copy. Copying blank text from an editor shows "Copy something to get started, open with ⌃⌘C".
 - [ ] `images/qr_code.png`: the QR chip shows "Copycraft QR test 2026".
 - [ ] `images/ocr_text.png`: the Text chip shows "Copycraft OCR test / Invoice 2026-0042 /
       Total 59.90 EUR".

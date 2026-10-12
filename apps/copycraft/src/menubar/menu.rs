@@ -9,6 +9,7 @@ pub(crate) const PAUSE_ID: &str = "pause-recording";
 pub(crate) const IGNORE_NEXT_ID: &str = "ignore-next";
 
 pub(crate) const SETTINGS_ID: &str = "settings";
+pub(crate) const WELCOME_ID: &str = "welcome";
 pub(crate) const ABOUT_ID: &str = "about";
 
 pub(crate) fn status_labels() -> [String; 3] {
@@ -32,6 +33,7 @@ pub(crate) fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
     }
     rows.push(crate::locale::t("allow_screenshots").to_string());
     rows.push(crate::locale::t("settings").to_string());
+    rows.push(crate::locale::t("welcome_menu").to_string());
     rows.push(crate::locale::t("about").to_string());
     rows.push(version);
     rows.push(quit);
@@ -78,6 +80,12 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
     let _ = menu.append(&MenuItem::with_id(
         SETTINGS_ID,
         crate::locale::t("settings"),
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        WELCOME_ID,
+        crate::locale::t("welcome_menu"),
         true,
         None,
     ));

@@ -5,6 +5,29 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Tray / overflow
     ("settings", "Instellingen…", "Settings…"),
     ("about", "Over Copycraft", "About Copycraft"),
+    ("welcome_menu", "Welkomstscherm…", "Welcome screen…"),
+    // Welcome window
+    (
+        "welcome_title",
+        "Welkom bij Copycraft",
+        "Welcome to Copycraft",
+    ),
+    (
+        "welcome_hotkey",
+        "Open Copycraft vanuit elke app met {0}.",
+        "Open Copycraft from any app with {0}.",
+    ),
+    (
+        "welcome_local",
+        "Alles blijft lokaal op je Mac, zonder internet.",
+        "Everything stays local on your Mac, no internet.",
+    ),
+    (
+        "welcome_sensitive",
+        "Gevoelige gegevens worden gefilterd en niet bewaard.",
+        "Sensitive data is filtered and not stored.",
+    ),
+    ("welcome_start", "Aan de slag", "Get started"),
     ("quit", "Stop", "Quit"),
     ("history", "Geschiedenis", "History"),
     (
@@ -230,7 +253,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Sleep hier een tekstbestand of afbeelding heen om het te openen",
         "Drop a text file or image here to open it",
     ),
-    ("empty_history", "Kopieer met {0}", "Copy with {0}"),
+    (
+        "empty_history",
+        "Kopieer iets om te beginnen, open met {0}",
+        "Copy something to get started, open with {0}",
+    ),
     (
         "no_text_on_clipboard",
         "Geen tekst op het klembord",

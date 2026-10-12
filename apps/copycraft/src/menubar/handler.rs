@@ -18,6 +18,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Run(id) => self.run_command(event_loop, id),
             UserEvent::ToggleUnderIcon => self.toggle_popup_under_icon(),
             UserEvent::ShowStatusMenu => self.show_status_menu(),
+            UserEvent::ShowWelcome => launcher::show_welcome(),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::PreviewReady { generation, result } => {
@@ -101,6 +102,7 @@ impl ApplicationHandler<UserEvent> for App {
                 SETTINGS_ID => {
                     self.run_command(event_loop, CommandId::Settings);
                 }
+                WELCOME_ID => launcher::show_welcome(),
                 ABOUT_ID => {
                     self.run_command(event_loop, CommandId::About);
                 }

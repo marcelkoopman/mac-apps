@@ -49,6 +49,7 @@ impl App {
             crate::macos_table_window::relabel();
             crate::macos_settings::reopen();
             crate::macos_about::reopen();
+            crate::macos_welcome::reopen();
         }
         self.refresh_popup();
     }
