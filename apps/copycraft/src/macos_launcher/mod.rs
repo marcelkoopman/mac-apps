@@ -604,6 +604,7 @@ mod api;
 mod controls;
 mod events;
 mod find;
+mod pager;
 mod panels;
 mod window;
 
@@ -611,6 +612,7 @@ pub use api::*;
 use controls::*;
 pub use events::*;
 use find::*;
+pub use pager::*;
 pub use panels::*;
 pub use window::*;
 

@@ -54,6 +54,7 @@ impl App {
             self.cancel_image_job();
             self.image_note = None;
             self.text_steps = None;
+            self.text_generation = self.text_generation.wrapping_add(1);
             self.text_note = None;
             self.cancel_table_job();
             self.table_error = None;

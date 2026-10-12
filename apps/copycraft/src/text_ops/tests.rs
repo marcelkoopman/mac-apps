@@ -141,3 +141,117 @@ fn parse_count_takes_whole_numbers_from_one() {
     assert_eq!(parse_count("0"), None);
     assert_eq!(parse_count("x"), None);
 }
+
+mod filter_tests {
+    use super::super::filter::{LineFilter, filter, preview};
+
+    #[test]
+    fn keeps_matching_lines() {
+        let f = LineFilter::new("ERROR", false, false).unwrap();
+        assert_eq!(filter("a ERROR\nb ok\nc ERROR\n", &f), "a ERROR\nc ERROR\n");
+        assert_eq!(filter("", &f), "");
+        assert_eq!(filter("x\r\nERROR y\r\n", &f), "ERROR y\r\n");
+    }
+
+    #[test]
+    fn invert_drops_matching_lines() {
+        let f = LineFilter::new("ERROR", false, true).unwrap();
+        assert_eq!(filter("a ERROR\nb ok\nc\n", &f), "b ok\nc\n");
+        assert!(f.marks("b ok").is_empty());
+    }
+
+    #[test]
+    fn ignore_case() {
+        let f = LineFilter::new("error", true, false).unwrap();
+        assert_eq!(filter("Error a\nb\nERROR c", &f), "Error a\nERROR c");
+        let strict = LineFilter::new("error", false, false).unwrap();
+        assert_eq!(filter("Error a\nb\n", &strict), "");
+    }
+
+    #[test]
+    fn invalid_or_huge_patterns_are_errors() {
+        assert!(LineFilter::new("(", false, false).is_err());
+        assert!(LineFilter::new("[z-a]", false, false).is_err());
+        let huge = LineFilter::new(r"\w{1000}{1000}", false, false);
+        assert!(huge.is_err());
+        assert!(!huge.unwrap_err().is_empty());
+    }
+
+    #[test]
+    fn unicode_matches_and_marks() {
+        let f = LineFilter::new("caf.", false, false).unwrap();
+        assert_eq!(filter("café ☕\nthee\n", &f), "café ☕\n");
+        let shown = preview("x\ncafé ☕ café\n", &f, 5);
+        assert_eq!(shown.text, "café ☕ café");
+        assert_eq!(shown.marks.len(), 2);
+        assert_eq!(&shown.text[shown.marks[1].clone()], "café");
+        assert_eq!(shown.kept, 1);
+    }
+
+    #[test]
+    fn preview_counts_every_kept_line() {
+        let f = LineFilter::new("a", false, false).unwrap();
+        let shown = preview("a1\na2\na3\nb\n", &f, 2);
+        assert_eq!(shown.text, "a1\na2");
+        assert_eq!(shown.kept, 3);
+    }
+}
+
+mod pager_tests {
+    use super::super::pager::{LineIndex, page_after_resize, page_text, per_page};
+
+    #[test]
+    fn page_count_and_last_page() {
+        let text: String = (1..=25).map(|i| format!("{i}\n")).collect();
+        let index = LineIndex::new(&text);
+        assert_eq!(index.lines(), 25);
+        assert_eq!(index.pages(10), 3);
+        assert_eq!(page_text(&text, index.page(0, 10)).lines().count(), 10);
+        let last = page_text(&text, index.page(2, 10));
+        assert_eq!(last, "21\n22\n23\n24\n25");
+        // Past the end: the last page.
+        assert_eq!(index.page(9, 10), index.page(2, 10));
+        assert_eq!(index.percent(0, 10), 40);
+        assert_eq!(index.percent(2, 10), 100);
+    }
+
+    #[test]
+    fn empty_text_is_one_page() {
+        let index = LineIndex::new("");
+        assert_eq!(index.lines(), 0);
+        assert_eq!(index.pages(10), 1);
+        assert_eq!(page_text("", index.page(0, 10)), "");
+        assert_eq!(index.percent(0, 10), 100);
+    }
+
+    #[test]
+    fn crlf_and_no_final_newline() {
+        let index = LineIndex::new("a\r\nb\r\nc");
+        assert_eq!(index.lines(), 3);
+        assert_eq!(page_text("a\r\nb\r\nc", index.page(0, 2)), "a\r\nb");
+        assert_eq!(page_text("a\r\nb\r\nc", index.page(1, 2)), "c");
+    }
+
+    #[test]
+    fn resize_keeps_the_first_line_in_view() {
+        assert_eq!(per_page(300.0, 15.0), 20);
+        assert_eq!(per_page(5.0, 15.0), 1);
+        assert_eq!(per_page(100.0, 0.0), 1);
+        // Page 3 of 20 lines starts at line 60: with 30 lines a page that is page 2.
+        assert_eq!(page_after_resize(3, 20, 30), 2);
+        assert_eq!(page_after_resize(0, 20, 7), 0);
+    }
+
+    #[test]
+    fn long_texts_index_quickly() {
+        let text: String = (0..100_000).map(|i| format!("line {i}\n")).collect();
+        let start = std::time::Instant::now();
+        let index = LineIndex::new(&text);
+        assert_eq!(index.pages(40), 2500);
+        assert_eq!(
+            page_text(&text, index.page(2499, 40)).lines().last(),
+            Some("line 99999")
+        );
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
+}

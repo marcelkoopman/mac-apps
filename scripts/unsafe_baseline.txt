@@ -1,8 +1,9 @@
 # Upper bounds for scripts/count_unsafe.sh --check (CI). Lower them when unsafe goes down.
-# mac-ui blocks 76: +1 for the NSObject `init` of dialog::choose_with_number's preview target (Text… > Column…).
+# mac-ui blocks 77: +1 for the NSObject `init` of dialog::form's preview target (Text… > Column…, Filter…),
+# +1 for actions::run_on_main (background results back to the main queue).
 copycraft blocks 100
 copycraft fn 5
 copycraft impl 7
-mac-ui blocks 76
+mac-ui blocks 77
 mac-ui fn 4
 mac-ui impl 4

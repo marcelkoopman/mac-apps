@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// A "Show all" text longer than this many lines is paged (when the setting is on).
+const PAGE_MIN_LINES: usize = 200;
+
 impl App {
     pub(crate) fn summon_popup(&mut self) {
         if !launcher::is_open() {
@@ -76,8 +79,9 @@ impl App {
         let full = self
             .full_card
             .as_ref()
-            .filter(|full| full.key == key && full.view == data.view)
-            .map(|full| full.card.clone());
+            .filter(|full| full.key == key && full.view == data.view);
+        launcher::set_pages(key, full.and_then(|full| full.pages.clone()));
+        let full = full.map(|full| full.card.clone());
         match full {
             Some(card) => {
                 data.full = true;
@@ -152,10 +156,17 @@ impl App {
             .name("copycraft-show-all".into())
             .spawn(move || {
                 let card = commands::work_card(&data);
+                // The paged view's line index is worked out here too, never on the main thread.
+                let pages =
+                    (data.settings.page_long_text && data.table.is_none() && !card.shows_image)
+                        .then(|| crate::text_ops::pager::LineIndex::new(&card.excerpt))
+                        .filter(|index| index.lines() > PAGE_MIN_LINES)
+                        .map(std::sync::Arc::new);
                 launcher::emit(UserEvent::FullCardReady(Box::new(launcher::FullCard {
                     key,
                     view,
                     card,
+                    pages,
                 })));
             });
         match spawned {

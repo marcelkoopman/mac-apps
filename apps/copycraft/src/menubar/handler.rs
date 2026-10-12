@@ -63,6 +63,11 @@ impl ApplicationHandler<UserEvent> for App {
                 generation,
                 outcome,
             } => self.finish_diff(generation, *outcome),
+            UserEvent::TextReady {
+                generation,
+                entry,
+                result,
+            } => self.finish_text(generation, entry, *result),
         }
     }
 

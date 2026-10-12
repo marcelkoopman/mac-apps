@@ -299,7 +299,7 @@ pub(crate) fn apply_preview(y: f64) {
     let placeholder = CARD_PLACEHOLDER.with(|slot| slot.borrow().clone());
     let payload = !excerpt.is_empty();
     let body = if !excerpt.is_empty() {
-        excerpt
+        page_body(&excerpt, text_frame.size.height).unwrap_or(excerpt)
     } else {
         placeholder
     };

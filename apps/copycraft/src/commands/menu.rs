@@ -114,6 +114,12 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             crate::locale::t("text_menu"),
             "awk column field cut separator text",
         ),
+        command(
+            CommandId::TextFilter,
+            crate::locale::t("text_filter"),
+            crate::locale::t("text_menu"),
+            "grep filter regex regular expression match lines text",
+        ),
     ];
     if edit.can_undo() {
         commands.push(command(

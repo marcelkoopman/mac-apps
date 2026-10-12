@@ -102,6 +102,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_note: None,
         text_steps: None,
         text_note: None,
+        text_generation: 0,
         pin_refused: false,
         diff_sel: crate::diff::Selection::default(),
         diff_generation: 0,

@@ -41,8 +41,8 @@ const LABEL_W: f64 = 136.0;
 const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
 /// Privacy: heading, two settings, the ignored-apps block, two gaps.
 const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Weergave: heading and the symbols block.
-const DISPLAY_H: f64 = HEAD_H + FIELD_BLOCK_H;
+/// Weergave: heading, the pages setting, a gap and the symbols block.
+const DISPLAY_H: f64 = HEAD_H + SETTING_H + mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 const HEIGHT: f64 = MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
@@ -50,8 +50,8 @@ const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(GENERAL_H == 230.0);
 const _: () = assert!(PRIVACY_H == 248.0);
-const _: () = assert!(DISPLAY_H == 140.0);
-const _: () = assert!(HEIGHT == 682.0);
+const _: () = assert!(DISPLAY_H == 194.0);
+const _: () = assert!(HEIGHT == 736.0);
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -196,6 +196,15 @@ define_class!(
             });
             // The open card and table window mask (on) or unmask (off) at once.
             launcher::emit(UserEvent::PrivacyFilterChanged);
+        }
+
+        #[unsafe(method(pageLongTextToggled:))]
+        fn page_long_text_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            settings::set_page_long_text(button.state() == NSControlStateValueOn);
+            launcher::emit(UserEvent::SettingsChanged);
         }
 
         #[unsafe(method(blurToggled:))]
@@ -510,6 +519,18 @@ fn build(mtm: MainThreadMarker) {
         crate::locale::t("group_display"),
         take(&mut top, HEAD_H),
     );
+    let y = take(&mut top, BUTTON_H);
+    let pages = checkbox(mtm, crate::locale::t("page_long_text"), y);
+    pages.setState(state_of(settings::load().page_long_text));
+    wire(&pages, sel!(pageLongTextToggled:));
+    body.addSubview(&pages);
+    place_explanation(
+        mtm,
+        &body,
+        crate::locale::t("page_long_text_note"),
+        &mut top,
+    );
+    gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
         &body,

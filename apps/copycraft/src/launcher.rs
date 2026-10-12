@@ -77,6 +77,13 @@ pub enum UserEvent {
         generation: u64,
         outcome: Box<crate::diff::Outcome>,
     },
+    /// A Text… job finished for history entry `entry`. A mismatched `generation` is dropped
+    /// (a newer job, Wipe).
+    TextReady {
+        generation: u64,
+        entry: u64,
+        result: Box<crate::text_ops::TextResult>,
+    },
 }
 
 /// What the table window asks for: a command on its table (a step, undo, redo, a version,
@@ -186,6 +193,9 @@ pub struct FullCard {
     pub key: u64,
     pub view: crate::commands::CardView,
     pub card: crate::commands::WorkCard,
+    /// The line index for the paged view, worked out on the show-all thread; `None` when the
+    /// text is short, not plain text, or paging is off in Settings.
+    pub pages: Option<std::sync::Arc<crate::text_ops::pager::LineIndex>>,
 }
 
 static PROXY: Mutex<Option<EventLoopProxy<UserEvent>>> = Mutex::new(None);
@@ -240,6 +250,16 @@ pub fn sync(data: LaunchData) {
 
 /// Like [`sync`], with the card already built (off the main thread, or earlier for the same
 /// history entry).
+/// Page the card for content `key` (a long text, after Show all), or stop paging.
+pub fn set_pages(key: u64, pages: Option<std::sync::Arc<crate::text_ops::pager::LineIndex>>) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::set_pages(key, pages);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (key, pages);
+    }
+}
+
 pub fn sync_with_card(data: LaunchData, card: crate::commands::WorkCard) {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::sync_with_card(data, card);

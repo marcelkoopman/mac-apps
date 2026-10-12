@@ -81,11 +81,12 @@ impl App {
             CommandId::TableVersion(index) if self.text_versions_shown() => {
                 self.text_goto(|_| Some(index));
             }
-            CommandId::TextCount => self.text_count(),
+            CommandId::TextCount => self.run_text(None),
             CommandId::TextHead => self.text_lines_prompt(false),
             CommandId::TextTail => self.text_lines_prompt(true),
-            CommandId::TextReverse => self.text_step(crate::text_ops::TextOp::Reverse),
+            CommandId::TextReverse => self.run_text(Some(crate::text_ops::TextOp::Reverse)),
             CommandId::TextColumn => self.text_column_prompt(),
+            CommandId::TextFilter => self.text_filter_prompt(),
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));

@@ -90,6 +90,8 @@ pub(crate) struct App {
     pub(crate) text_steps: Option<TextSteps>,
     /// The count, or why the last Text… step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
+    /// Bumped for every Text… job; a result with another number is stale and dropped.
+    pub(crate) text_generation: u64,
     /// The last pin was refused because the pin list is full. Shown on the card meta line.
     pub(crate) pin_refused: bool,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.

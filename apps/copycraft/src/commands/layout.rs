@@ -341,6 +341,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextTail
             | CommandId::TextReverse
             | CommandId::TextColumn
+            | CommandId::TextFilter
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
     )

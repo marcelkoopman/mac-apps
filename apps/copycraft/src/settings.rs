@@ -53,6 +53,8 @@ pub struct Settings {
     pub hotkey: Option<String>,
     /// Interface language. [`Language::System`] until a choice is stored.
     pub language: Language,
+    /// "Show all" on a long text shows it one page at a time, like `more`. On by default.
+    pub page_long_text: bool,
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -68,6 +70,7 @@ impl Default for Settings {
             date_month_first: false,
             hotkey: None,
             language: Language::System,
+            page_long_text: true,
         }
     }
 }
@@ -79,6 +82,7 @@ const BLUR_KEY: &str = "CopycraftBlurMaskedWell";
 const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
+const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Stored (true) once the welcome window closed; missing on first launch.
@@ -120,6 +124,9 @@ pub fn load() -> Settings {
     if let Some(language) = load_string(LANGUAGE_KEY).and_then(|text| Language::parse(&text)) {
         settings.language = language;
     }
+    if let Some(value) = load_bool(PAGE_LONG_TEXT_KEY) {
+        settings.page_long_text = value;
+    }
     settings
 }
 
@@ -157,6 +164,11 @@ pub fn set_privacy_filter(on: bool) {
 
 pub fn set_blur(on: bool) {
     store_bool(BLUR_KEY, on);
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_page_long_text(on: bool) {
+    store_bool(PAGE_LONG_TEXT_KEY, on);
 }
 
 pub fn set_date_month_first(on: bool) {

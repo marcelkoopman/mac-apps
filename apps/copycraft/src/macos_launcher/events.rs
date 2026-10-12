@@ -363,6 +363,9 @@ pub(crate) fn on_key(event: &NSEvent) {
         }
         return;
     }
+    if pager_key(event) {
+        return;
+    }
     match Key::from_key_code(event.keyCode()) {
         // A button or the reveal cover has the focus: no text caret to keep.
         Some(key @ (Key::Left | Key::Right | Key::Up | Key::Down)) => {

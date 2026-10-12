@@ -408,6 +408,8 @@ pub enum CommandId {
     TextReverse,
     /// Ask for a separator and a column, then keep that column as a new version.
     TextColumn,
+    /// Text… › Filter (regex)…: keep the lines a pattern matches, like grep.
+    TextFilter,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.

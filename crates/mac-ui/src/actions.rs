@@ -14,7 +14,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{NSObject, NSObjectProtocol, Sel};
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{NSButton, NSControl, NSMenuItem};
-use objc2_foundation::{NSObjectNSDelayedPerforming, NSString};
+use objc2_foundation::{NSObjectNSDelayedPerforming, NSOperationQueue, NSString};
 
 /// Send `action` to `target` when `control` is clicked. `false` (and nothing set) when `target`
 /// does not implement `action`.
@@ -98,4 +98,20 @@ pub fn cancel_perform(target: &NSObject, selector: Sel) {
     unsafe {
         NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(target, selector, None)
     };
+}
+
+/// Run `f` once on the main thread, from any thread. The main queue is also served while a
+/// modal alert runs, so a background result can reach an open [`crate::dialog::form`].
+pub fn run_on_main(f: impl FnOnce() + Send + 'static) {
+    let once = std::sync::Mutex::new(Some(f));
+    let block: block2::RcBlock<dyn Fn()> = block2::RcBlock::new(move || {
+        let f = once.lock().ok().and_then(|mut slot| slot.take());
+        if let Some(f) = f {
+            f();
+        }
+    });
+    // SAFETY: the block holds only `f`, which is `Send`, behind a Mutex, so it may run on the
+    // main queue's thread as `addOperationWithBlock:` requires; the queue retains the block
+    // until it has run.
+    unsafe { NSOperationQueue::mainQueue().addOperationWithBlock(&block) };
 }

@@ -1,4 +1,4 @@
-//! Text… actions: count, first and last lines, reverse and column ([`crate::text_ops`]). Each
+//! Text… actions: count, first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
 //! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
 
 use super::*;
@@ -70,39 +70,73 @@ impl App {
         });
     }
 
-    /// Count lines, words and characters onto the meta line. The clipboard stays.
-    pub(crate) fn text_count(&mut self) {
-        let Some((id, text)) = self.text_entry() else {
+    /// Count (`op` `None`) or take step `op` on the text on the card, on a background thread,
+    /// like the card is built: the text never blocks the main thread. [`App::finish_text`]
+    /// takes the result.
+    pub(crate) fn run_text(&mut self, op: Option<TextOp>) {
+        let Some((entry, text)) = self.text_entry() else {
             return;
         };
-        let counts = text_ops::count(&text);
-        self.text_note = Some((
-            id,
-            crate::locale::tf(
-                "text_count_result",
-                &[&counts.lines, &counts.words, &counts.chars],
-            ),
-        ));
-        self.refresh_popup();
+        self.text_generation = self.text_generation.wrapping_add(1);
+        let generation = self.text_generation;
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-text".into())
+            .spawn(move || {
+                let result = text_ops::TextResult::work(&text, op);
+                launcher::emit(UserEvent::TextReady {
+                    generation,
+                    entry,
+                    result: Box::new(result),
+                });
+            });
+        if let Err(e) = spawned {
+            eprintln!("copycraft: text step skipped: {e}");
+        }
     }
 
-    /// Run `op` on the text on the card: copy the result (a new history entry) and make it the
-    /// version after the one shown.
-    pub(crate) fn text_step(&mut self, op: TextOp) {
-        let Some((id, text)) = self.text_entry() else {
+    /// A Text… result is back on the main thread. Dropped when stale: a newer job started,
+    /// history was wiped, or the card shows another entry by now.
+    pub(crate) fn finish_text(
+        &mut self,
+        generation: u64,
+        entry: u64,
+        result: text_ops::TextResult,
+    ) {
+        if generation != self.text_generation {
+            return;
+        }
+        let Some((id, _)) = self.text_entry().filter(|(id, _)| *id == entry) else {
             return;
         };
-        let result = op.apply(&text).map(Zeroizing::new);
-        let Some(result) = result.filter(|result| result.as_str() != text.as_str()) else {
-            self.text_note = Some((id, crate::locale::t("text_nothing").to_string()));
-            self.refresh_popup();
-            return;
-        };
-        if let Err(e) = self.write_own(&result) {
+        match result {
+            text_ops::TextResult::Count(counts) => {
+                self.text_note = Some((
+                    id,
+                    crate::locale::tf(
+                        "text_count_result",
+                        &[&counts.lines, &counts.words, &counts.chars],
+                    ),
+                ));
+                self.refresh_popup();
+            }
+            text_ops::TextResult::Step { text: None, .. } => {
+                self.text_note = Some((id, crate::locale::t("text_nothing").to_string()));
+                self.refresh_popup();
+            }
+            text_ops::TextResult::Step {
+                op,
+                text: Some(result),
+            } => self.text_stepped(id, &op, &result),
+        }
+    }
+
+    /// Copy step `op`'s `result` (a new history entry) and make it the version after entry `id`.
+    fn text_stepped(&mut self, id: u64, op: &TextOp, result: &Zeroizing<String>) {
+        if let Err(e) = self.write_own(result) {
             eprintln!("text step failed: {e:#}");
             return;
         }
-        self.record_own_copy(&result);
+        self.record_own_copy(result);
         let Some(new_id) = self.history.id_at(0) else {
             return;
         };
@@ -184,11 +218,11 @@ impl App {
                 }
                 match text_ops::parse_count(&answer) {
                     Some(n) => {
-                        self.text_step(if last {
+                        self.run_text(Some(if last {
                             TextOp::Tail(n)
                         } else {
                             TextOp::Head(n)
-                        });
+                        }));
                         return;
                     }
                     None => message = crate::locale::t("text_count_invalid").to_string(),
@@ -216,30 +250,99 @@ impl App {
                 .iter()
                 .position(|sep| *sep == detected)
                 .unwrap_or(0);
-            let ask = mac_ui::dialog::NumberChoice {
+            let ask = mac_ui::dialog::Form {
                 title: crate::locale::t("text_column_title"),
                 message: crate::locale::t("text_column_message"),
                 options: &titles,
                 selected,
                 option_label: crate::locale::t("text_separator"),
-                number_label: crate::locale::t("text_column_number"),
-                number_default: "1",
+                field_label: crate::locale::t("text_column_number"),
+                field_default: "1",
+                field_width: 60.0,
+                checks: &[],
                 preview_label: crate::locale::t("text_preview"),
             };
-            let answer = mac_ui::dialog::choose_with_number(mtm, &ask, move |option, typed| {
-                column_preview(&text, option, typed)
-            });
+            let text = std::sync::Arc::new(text);
+            let answer = mac_ui::dialog::form(
+                mtm,
+                &ask,
+                std::sync::Arc::new(move |option, typed, _| mac_ui::dialog::Preview {
+                    text: column_preview(&text, option, typed),
+                    ..Default::default()
+                }),
+            );
             launcher::order_front();
-            let Some((option, typed)) = answer else {
+            let Some(answer) = answer else {
                 return;
             };
-            match (Separator::ALL.get(option), text_ops::parse_count(&typed)) {
-                (Some(separator), Some(n)) => self.text_step(TextOp::Column(*separator, n)),
+            let typed = Zeroizing::new(answer.text);
+            match (
+                Separator::ALL.get(answer.option),
+                text_ops::parse_count(&typed),
+            ) {
+                (Some(separator), Some(n)) => self.run_text(Some(TextOp::Column(*separator, n))),
                 _ => {
                     self.text_note = Some((id, crate::locale::t("text_count_invalid").to_string()));
                     self.refresh_popup();
                 }
             }
+        }
+    }
+
+    /// Filter (regex)…: a pattern, Invert and Ignore case, with the matching lines (matches
+    /// highlighted) worked out live in the background; then take the step.
+    pub(crate) fn text_filter_prompt(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let Some((id, text)) = self.text_entry() else {
+                return;
+            };
+            let checks = [
+                crate::locale::t("filter_invert"),
+                crate::locale::t("filter_ignore_case"),
+            ];
+            let ask = mac_ui::dialog::Form {
+                title: crate::locale::t("filter_title"),
+                message: crate::locale::t("filter_message"),
+                options: &[],
+                selected: 0,
+                option_label: "",
+                field_label: crate::locale::t("filter_pattern"),
+                field_default: "",
+                field_width: 300.0,
+                checks: &checks,
+                preview_label: crate::locale::t("text_preview"),
+            };
+            let text = std::sync::Arc::new(text);
+            let answer = mac_ui::dialog::form(
+                mtm,
+                &ask,
+                std::sync::Arc::new(move |_, typed, checks| {
+                    let flag = |at: usize| checks.get(at).copied().unwrap_or(false);
+                    filter_preview(&text, typed, flag(0), flag(1))
+                }),
+            );
+            launcher::order_front();
+            let Some(answer) = answer else {
+                return;
+            };
+            let flag = |at: usize| answer.checks.get(at).copied().unwrap_or(false);
+            let (invert, ignore_case) = (flag(0), flag(1));
+            if let Err(reason) =
+                text_ops::filter::LineFilter::new(&answer.text, ignore_case, invert)
+            {
+                self.text_note = Some((id, reason));
+                self.refresh_popup();
+                return;
+            }
+            self.run_text(Some(TextOp::Filter {
+                pattern: answer.text,
+                ignore_case,
+                invert,
+            }));
         }
     }
 }
@@ -256,5 +359,38 @@ fn column_preview(text: &str, option: usize, typed: &str) -> String {
         crate::locale::t("text_preview_empty").to_string()
     } else {
         preview
+    }
+}
+
+/// The preview under Filter…: how many lines match and the first of them with the matches
+/// marked, or why the pattern does not work (in red).
+#[cfg(target_os = "macos")]
+fn filter_preview(
+    text: &str,
+    pattern: &str,
+    invert: bool,
+    ignore_case: bool,
+) -> mac_ui::dialog::Preview {
+    let filter = match text_ops::filter::LineFilter::new(pattern, ignore_case, invert) {
+        Ok(filter) => filter,
+        Err(reason) => {
+            return mac_ui::dialog::Preview {
+                text: reason,
+                marks: Vec::new(),
+                error: true,
+            };
+        }
+    };
+    let shown = text_ops::filter::preview(text, &filter, 8);
+    let head = crate::locale::tf("filter_kept", &[&shown.kept]);
+    let shift = head.len() + 1;
+    mac_ui::dialog::Preview {
+        text: format!("{head}\n{}", shown.text),
+        marks: shown
+            .marks
+            .into_iter()
+            .map(|range| range.start + shift..range.end + shift)
+            .collect(),
+        error: false,
     }
 }

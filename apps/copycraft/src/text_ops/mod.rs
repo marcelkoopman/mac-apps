@@ -21,8 +21,45 @@ pub fn count(text: &str) -> Counts {
     }
 }
 
+/// What a Text… job on its thread found, for the main thread.
+#[derive(Clone)]
+pub enum TextResult {
+    Count(Counts),
+    /// The step's text; `None` when it would leave nothing or change nothing.
+    Step {
+        op: TextOp,
+        text: Option<zeroize::Zeroizing<String>>,
+    },
+}
+
+/// Copied text is never printed.
+impl std::fmt::Debug for TextResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextResult::Count(counts) => write!(f, "Count({counts:?})"),
+            TextResult::Step { text, .. } => write!(f, "Step(changed: {})", text.is_some()),
+        }
+    }
+}
+
+impl TextResult {
+    /// Work `op` (or the count, without one) out on `text`. Runs on a background thread.
+    pub fn work(text: &str, op: Option<TextOp>) -> Self {
+        match op {
+            None => TextResult::Count(count(text)),
+            Some(op) => {
+                let out = op
+                    .apply(text)
+                    .filter(|out| out.as_str() != text)
+                    .map(zeroize::Zeroizing::new);
+                TextResult::Step { op, text: out }
+            }
+        }
+    }
+}
+
 /// A step that makes a new version of the text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub enum TextOp {
     /// The first `n` lines.
@@ -33,27 +70,52 @@ pub enum TextOp {
     Reverse,
     /// Field `n` (1-based) of every line that has it.
     Column(Separator, usize),
+    /// The lines `pattern` matches (`invert`: does not match), like grep.
+    Filter {
+        pattern: String,
+        ignore_case: bool,
+        invert: bool,
+    },
 }
 
 impl TextOp {
     /// The step's text, or `None` when it would leave nothing.
     pub fn apply(&self, text: &str) -> Option<String> {
-        let out = match *self {
-            TextOp::Head(n) => head(text, n).to_string(),
-            TextOp::Tail(n) => tail(text, n).to_string(),
+        let out = match self {
+            TextOp::Head(n) => head(text, *n).to_string(),
+            TextOp::Tail(n) => tail(text, *n).to_string(),
             TextOp::Reverse => reverse(text),
-            TextOp::Column(separator, n) => column(text, separator, n),
+            TextOp::Column(separator, n) => column(text, *separator, *n),
+            TextOp::Filter {
+                pattern,
+                ignore_case,
+                invert,
+            } => {
+                let compiled = filter::LineFilter::new(pattern, *ignore_case, *invert).ok()?;
+                filter::filter(text, &compiled)
+            }
         };
         (!out.trim().is_empty()).then_some(out)
     }
 
     /// The version's name in the version capsule: "First 5 lines", "Column 2".
     pub fn label(&self) -> String {
-        match *self {
-            TextOp::Head(n) => crate::locale::tf("text_head_label", &[&n]),
-            TextOp::Tail(n) => crate::locale::tf("text_tail_label", &[&n]),
+        match self {
+            TextOp::Head(n) => crate::locale::tf("text_head_label", &[n]),
+            TextOp::Tail(n) => crate::locale::tf("text_tail_label", &[n]),
             TextOp::Reverse => crate::locale::t("text_reverse_label").to_string(),
-            TextOp::Column(_, n) => crate::locale::tf("text_column_label", &[&n]),
+            TextOp::Column(_, n) => crate::locale::tf("text_column_label", &[n]),
+            TextOp::Filter {
+                pattern, invert, ..
+            } => {
+                // The pattern is the user's own; it is short and shown only in the capsule.
+                let short: String = pattern.chars().take(24).collect();
+                if *invert {
+                    crate::locale::tf("filter_label_invert", &[&short])
+                } else {
+                    crate::locale::tf("filter_label", &[&short])
+                }
+            }
         }
     }
 }
@@ -166,7 +228,7 @@ fn ending(text: &str) -> (&'static str, bool) {
     (if crlf { "\r\n" } else { "\n" }, text.ends_with('\n'))
 }
 
-fn join<'a>(text: &str, lines: impl Iterator<Item = &'a str>) -> String {
+pub(crate) fn join<'a>(text: &str, lines: impl Iterator<Item = &'a str>) -> String {
     let (newline, trailing) = ending(text);
     let mut out = String::with_capacity(text.len());
     for (index, line) in lines.enumerate() {
@@ -220,6 +282,9 @@ pub fn column_preview(text: &str, separator: Separator, n: usize, lines: usize) 
 pub fn parse_count(typed: &str) -> Option<usize> {
     typed.trim().parse::<usize>().ok().filter(|&n| n > 0)
 }
+
+pub mod filter;
+pub mod pager;
 
 #[cfg(test)]
 mod tests;
