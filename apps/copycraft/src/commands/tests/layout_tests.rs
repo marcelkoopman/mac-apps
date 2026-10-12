@@ -1,0 +1,239 @@
+use super::*;
+
+#[test]
+fn clear_stays_on_the_open_card() {
+    assert!(keeps_card_open(&CommandId::Clear));
+}
+
+#[test]
+fn chip_width_follows_the_measured_pill() {
+    assert_eq!(chip_width(71.2), 72.0);
+    assert_eq!(chip_width(120.0), 120.0);
+    assert_eq!(chip_width(30.0), crate::commands::CHIP_MIN_W);
+    assert_eq!(chip_width(0.0), crate::commands::CHIP_MIN_W);
+    assert_eq!(chip_width(f64::NAN), crate::commands::CHIP_MIN_W);
+    assert_eq!(chip_width(-5.0), crate::commands::CHIP_MIN_W);
+    assert_eq!(chip_width(900.0), crate::commands::CHIP_MAX_W);
+    assert_eq!(chip_width(f64::INFINITY), crate::commands::CHIP_MAX_W);
+}
+
+#[test]
+fn chips_keep_their_measured_widths() {
+    let widths = [chip_width(61.5), chip_width(88.0), chip_width(40.0)];
+    let frames = layout_chips(&widths, 412.0, 0.0);
+    assert_eq!(frames.len(), 3);
+    assert!(frames.iter().all(|frame| frame.row == 0));
+    assert_eq!(frames[0].x, 0.0);
+    assert_eq!(frames[0].width, 62.0);
+    assert_eq!(frames[1].x, 62.0 + crate::commands::CHIP_GAP);
+    assert_eq!(frames[1].width, 88.0);
+    assert_eq!(frames[2].x, 62.0 + 88.0 + 2.0 * crate::commands::CHIP_GAP);
+    assert_eq!(frames[2].width, crate::commands::CHIP_MIN_W);
+}
+
+#[test]
+fn a_chip_wider_than_the_row_gets_its_own_row() {
+    let frames = layout_chips(&[80.0, 220.0, 80.0], 200.0, 0.0);
+    assert_eq!(frames[0].row, 0);
+    assert_eq!((frames[1].row, frames[1].x), (1, 0.0));
+    assert_eq!((frames[2].row, frames[2].x), (2, 0.0));
+    assert!(layout_chips(&[], 200.0, 0.0).is_empty());
+}
+
+#[test]
+fn chips_wrap_and_arrows_move_between_pills() {
+    let widths = [78.0, 72.0, 86.0, 56.0, 74.0, 80.0];
+    let frames = layout_chips(&widths, 220.0, 0.0);
+    assert!(frames.len() == widths.len());
+    assert_eq!(frames[0].row, 0);
+    assert!(frames.last().unwrap().row > 0);
+    assert_eq!(step_chip(&frames, 0, 1, 0), 1);
+    assert_eq!(step_chip(&frames, 0, -1, 0), 0);
+    let down = step_chip(&frames, 0, 0, 1);
+    assert_ne!(frames[down].row, frames[0].row);
+    assert_eq!(step_chip(&frames, down, 0, -1), 0);
+    assert_eq!(step_chip(&[], 0, 1, 0), 0);
+    // No row that way: ↑ / ↓ go to the previous / next chip, and stop at the ends.
+    let last = frames.len() - 1;
+    assert_eq!(step_chip(&frames, last, 0, 1), last);
+    assert_eq!(step_chip(&frames, 0, 0, -1), 0);
+    let one_row = layout_chips(&[60.0, 60.0, 60.0], 400.0, 0.0);
+    assert!(one_row.iter().all(|frame| frame.row == 0));
+    assert_eq!(step_chip(&one_row, 0, 0, 1), 1);
+    assert_eq!(step_chip(&one_row, 1, 0, 1), 2);
+    assert_eq!(step_chip(&one_row, 2, 0, 1), 2);
+    assert_eq!(step_chip(&one_row, 2, 0, -1), 1);
+}
+
+#[test]
+fn left_and_right_step_history_like_the_chevrons() {
+    use ArrowAction::{Chip, History, Text};
+    use ArrowFocus::{Card, TextWithContent};
+    // ← is ‹ Previous (toward 1, the newest), → is › Next (toward the oldest).
+    assert_eq!(
+        arrow_action(Key::Left, false, Card, true),
+        Some(History(PREVIOUS_CHEVRON))
+    );
+    assert_eq!(
+        arrow_action(Key::Right, false, Card, true),
+        Some(History(NEXT_CHEVRON))
+    );
+    assert_eq!(PREVIOUS_CHEVRON.command(), CommandId::HistoryNewer);
+    assert_eq!(NEXT_CHEVRON.command(), CommandId::HistoryOlder);
+    // Text in the search or find field: plain ← → move the caret.
+    assert_eq!(
+        arrow_action(Key::Left, false, TextWithContent, true),
+        Some(Text)
+    );
+    assert_eq!(
+        arrow_action(Key::Right, false, TextWithContent, false),
+        Some(Text)
+    );
+    // ⌘← / ⌘→ always step history.
+    for focus in [Card, TextWithContent] {
+        for has_history in [true, false] {
+            assert_eq!(
+                arrow_action(Key::Left, true, focus, has_history),
+                Some(History(PREVIOUS_CHEVRON))
+            );
+            assert_eq!(
+                arrow_action(Key::Right, true, focus, has_history),
+                Some(History(NEXT_CHEVRON))
+            );
+        }
+    }
+    // No history capsule: ← → move between the chips, as before.
+    assert_eq!(
+        arrow_action(Key::Left, false, Card, false),
+        Some(Chip { dx: -1, dy: 0 })
+    );
+    assert_eq!(
+        arrow_action(Key::Right, false, Card, false),
+        Some(Chip { dx: 1, dy: 0 })
+    );
+    // ↑ ↓ move between the chips; other keys are not arrows.
+    for (key, dy) in [(Key::Up, -1), (Key::Down, 1)] {
+        for focus in [Card, TextWithContent] {
+            assert_eq!(
+                arrow_action(key, false, focus, true),
+                Some(Chip { dx: 0, dy })
+            );
+        }
+    }
+    assert_eq!(arrow_action(Key::Return, false, Card, true), None);
+    assert_eq!(arrow_action(Key::Escape, true, Card, true), None);
+}
+
+#[test]
+fn chevrons_name_their_keys() {
+    assert_eq!(PREVIOUS_CHEVRON.tooltip(), "Previous (← or ⌘←)");
+    assert_eq!(NEXT_CHEVRON.tooltip(), "Next (→ or ⌘→)");
+    assert_eq!(
+        PREVIOUS_CHEVRON.spoken_shortcut(),
+        "Left Arrow, or Command-Left Arrow"
+    );
+    assert_eq!(
+        NEXT_CHEVRON.spoken_shortcut(),
+        "Right Arrow, or Command-Right Arrow"
+    );
+}
+
+#[test]
+fn history_nav_stays_on_the_card() {
+    assert_eq!(history_nav(0, 0), None, "no history: no capsule");
+    assert_eq!(history_nav(1, 0), None, "one copy: nowhere to go");
+    let newest = history_nav(3, 0).unwrap();
+    assert!(newest.can_older);
+    assert!(!newest.can_newer);
+    let middle = history_nav(3, 1).unwrap();
+    assert!(middle.can_older && middle.can_newer);
+    let oldest = history_nav(3, 2).unwrap();
+    assert!(!oldest.can_older);
+    assert!(oldest.can_newer);
+    assert_eq!(newest.total, 3);
+    assert_eq!(middle.total, 3);
+    assert_eq!(step_history(3, 0, true), Some(1));
+    assert_eq!(step_history(3, 0, false), None);
+    assert_eq!(step_history(3, 2, true), None);
+    assert_eq!(step_history(3, 2, false), Some(1));
+    assert_eq!(step_history(0, 0, true), None);
+    assert_eq!(step_history(1, 0, true), None);
+    assert_eq!(step_history(1, 0, false), None);
+}
+
+#[test]
+fn history_position_counts_from_the_newest() {
+    let newest = history_nav(2, 0).unwrap();
+    assert_eq!(newest.position, 1);
+    assert_eq!(newest.label(), "1 / 2");
+    assert_eq!(newest.spoken(), "Item 1 of 2");
+    let oldest = history_nav(2, 1).unwrap();
+    assert_eq!(oldest.label(), "2 / 2");
+    assert_eq!(oldest.spoken(), "Item 2 of 2");
+    // › (next) counts up, ‹ (previous) counts down.
+    let next = step_history(5, 0, NEXT_CHEVRON.older).unwrap();
+    assert_eq!(history_nav(5, next).unwrap().label(), "2 / 5");
+    let previous = step_history(5, next, PREVIOUS_CHEVRON.older).unwrap();
+    assert_eq!(history_nav(5, previous).unwrap().label(), "1 / 5");
+    // A cursor past the end shows the oldest copy.
+    assert_eq!(history_nav(3, 9).unwrap().label(), "3 / 3");
+    assert_eq!(history_nav(20, 19).unwrap().label(), "20 / 20");
+}
+
+#[test]
+fn chevrons_are_one_glyph_with_a_spoken_name() {
+    for chevron in [PREVIOUS_CHEVRON, NEXT_CHEVRON] {
+        assert_eq!(chevron.glyph.chars().count(), 1);
+        assert!(!chevron.name().contains(chevron.glyph));
+    }
+    assert_eq!(PREVIOUS_CHEVRON.name(), "Previous");
+    assert_eq!(NEXT_CHEVRON.name(), "Next");
+    assert_eq!(PREVIOUS_CHEVRON.symbol, "chevron.left");
+    assert_eq!(NEXT_CHEVRON.symbol, "chevron.right");
+}
+
+#[test]
+fn chevrons_follow_the_numbers() {
+    assert_eq!(PREVIOUS_CHEVRON.command(), CommandId::HistoryNewer);
+    assert_eq!(NEXT_CHEVRON.command(), CommandId::HistoryOlder);
+    // At 1 / 3 only › works, at 3 / 3 only ‹, in between both.
+    let first = history_nav(3, 0).unwrap();
+    assert!(!PREVIOUS_CHEVRON.enabled(&first) && NEXT_CHEVRON.enabled(&first));
+    let middle = history_nav(3, 1).unwrap();
+    assert!(PREVIOUS_CHEVRON.enabled(&middle) && NEXT_CHEVRON.enabled(&middle));
+    let last = history_nav(3, 2).unwrap();
+    assert!(PREVIOUS_CHEVRON.enabled(&last) && !NEXT_CHEVRON.enabled(&last));
+    // Walking with › from 1 reaches N, then stops; ‹ walks back to 1.
+    let mut cursor = 0;
+    let mut seen = vec![history_nav(3, cursor).unwrap().position];
+    while let Some(next) = step_history(3, cursor, NEXT_CHEVRON.older) {
+        cursor = next;
+        seen.push(history_nav(3, cursor).unwrap().position);
+    }
+    assert_eq!(seen, vec![1, 2, 3]);
+    while let Some(previous) = step_history(3, cursor, PREVIOUS_CHEVRON.older) {
+        cursor = previous;
+    }
+    assert_eq!(history_nav(3, cursor).unwrap().position, 1);
+}
+
+#[test]
+fn history_capsule_fits_the_longest_position() {
+    // "20 / 20" in 12 pt monospaced digits is about 40 pt wide.
+    const { assert!(NAV_COUNT_W >= 40.0) };
+    // Square chevron hit areas as tall as a chip.
+    const { assert!(NAV_BUTTON == CHIP_PILL_H) };
+    assert_eq!(NAV_SPAN, NAV_BUTTON * 2.0 + NAV_COUNT_W + CHIP_GAP * 2.0);
+}
+
+#[test]
+fn history_arrows_keep_the_first_row_clear() {
+    let widths = [62.0, 74.0, 78.0, 72.0, 86.0, 56.0];
+    let width = 412.0;
+    let frames = layout_chips(&widths, width, NAV_RESERVE);
+    let nav_left = width - NAV_SPAN;
+    assert!(frames.iter().any(|frame| frame.row > 0));
+    for frame in frames.iter().filter(|frame| frame.row == 0) {
+        assert!(frame.x + frame.width <= nav_left - crate::commands::CHIP_GAP + 0.01);
+    }
+}

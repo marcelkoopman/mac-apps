@@ -1,0 +1,541 @@
+//! Building the work card: masking, content keys and per-subject cards.
+
+use super::*;
+
+/// History row. The type mark and size stand in for the copied text.
+pub fn history_label(mark: &str, byte_len: usize) -> String {
+    format!("{mark}  {}", format_bytes(byte_len))
+}
+
+/// Whether a revealed card stays revealed when it is stored again: while it shows the same
+/// history entry (`shown_key` and `next_key` the same [`content_key`]), in all its views, chips,
+/// table versions and steps, and when a rebuilt card or its sensitivity labels arrive. Views of
+/// one entry can show different labels (a conversion, a version's CSV); a step only removes
+/// data, so none of that masks it again. Another entry does; focus loss, Wipe, lock and
+/// retention mask it on their own.
+pub fn stays_revealed(revealed: bool, shown_key: u64, next_key: u64) -> bool {
+    revealed && shown_key == next_key
+}
+
+/// The well has copied content, so it stays blurred until it is clicked.
+/// Image info is dimensions and a data URL, so the Info chip stays sharp.
+pub fn masks_content(card: &WorkCard, view: CardView) -> bool {
+    if view == CardView::Info {
+        return false;
+    }
+    // A diff is copied text even while it is still being built (the excerpt is empty then).
+    if view == CardView::Diff {
+        return true;
+    }
+    card.shows_image || card.link_page.is_some() || !card.excerpt.is_empty()
+}
+
+/// Whether content is masked now. The privacy filter setting is the master switch: with it off
+/// nothing is masked, whatever was revealed before. With it on, content that [`masks_content`]
+/// stays masked until it is revealed. The card's well and the table window both decide here.
+pub fn effective_mask(privacy_filter: bool, content_masks: bool, revealed: bool) -> bool {
+    privacy_filter && content_masks && !revealed
+}
+
+/// How a masked well hides the copy. A blur that cannot be installed covers
+/// the well and drops the excerpt. The transparent click target is not a mask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WellMask {
+    pub blur: bool,
+    pub shade: bool,
+    pub show_body: bool,
+}
+
+pub fn well_mask(masked: bool, blur_ready: bool) -> WellMask {
+    if !masked {
+        WellMask {
+            blur: false,
+            shade: false,
+            show_body: true,
+        }
+    } else if blur_ready {
+        WellMask {
+            blur: true,
+            shade: false,
+            show_body: true,
+        }
+    } else {
+        WellMask {
+            blur: false,
+            shade: true,
+            show_body: false,
+        }
+    }
+}
+
+/// Identity of the copied item. Chips on that item share one reveal.
+pub fn content_key(data: &LaunchData) -> u64 {
+    use std::hash::{Hash, Hasher};
+    // The diff is its own item: revealing the copy on screen does not reveal it, and a swap
+    // or a finished result masks it again.
+    if data.view == CardView::Diff
+        && let Some(diff) = &data.diff
+    {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        diff.token.hash(&mut hasher);
+        return hasher.finish();
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    data.subject_kind.hash(&mut hasher);
+    data.subject_text.hash(&mut hasher);
+    data.source_name.hash(&mut hasher);
+    if let Some(edit) = &data.image_edit {
+        // Each version of a picture is the same entry, which stays revealed.
+        edit.entry.hash(&mut hasher);
+    } else {
+        if let Some(image) = &data.image {
+            image.format.hash(&mut hasher);
+            image.width.hash(&mut hasher);
+            image.height.hash(&mut hasher);
+            image.byte_len.hash(&mut hasher);
+        }
+        // Two dropped pictures alike in name, format and size are still different items. (A text
+        // that decodes to a picture is the text's item, with or without its picture yet.)
+        if data.subject_kind == SubjectKind::Image
+            && let Some(picture) = &data.picture
+        {
+            picture.allocation_id().hash(&mut hasher);
+        }
+    }
+    // Not the table's version, view, reading or labels: those show the same entry, which stays
+    // revealed ([`stays_revealed`]).
+    hasher.finish()
+}
+
+/// The start of the clipboard text, kept on its own lines.
+pub fn payload_excerpt(text: &str) -> String {
+    let mut out = Vec::new();
+    let mut extra = false;
+    for (index, line) in text.lines().enumerate() {
+        if index >= EXCERPT_LINES {
+            extra = true;
+            break;
+        }
+        out.push(clip_chars(line, EXCERPT_LINE_CHARS));
+    }
+    if extra
+        && let Some(last) = out.last_mut()
+        && !last.ends_with('…')
+    {
+        last.push('…');
+    }
+    out.join("\n")
+}
+
+pub fn work_card(data: &LaunchData) -> WorkCard {
+    if data.view == CardView::Diff {
+        return diff_card(data);
+    }
+    if let Some(note) = &data.source_note {
+        return WorkCard {
+            title: data
+                .source_name
+                .clone()
+                .unwrap_or_else(|| crate::locale::t("title_file").to_string()),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: note.clone(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        };
+    }
+    let mut card = compose_card(data);
+    if let Some(name) = &data.source_name {
+        card.meta = if card.meta.is_empty() {
+            name.clone()
+        } else {
+            format!("{name}  ·  {}", card.meta)
+        };
+    }
+    if let Some(mark) = data.shown_mark {
+        card.meta = if card.meta.is_empty() {
+            mark.to_string()
+        } else {
+            format!("{mark}  ·  {}", card.meta)
+        };
+    }
+    if let Some(notice) = &data.notice {
+        card.meta = if card.meta.is_empty() {
+            notice.clone()
+        } else {
+            format!("{}  ·  {notice}", card.meta)
+        };
+    }
+    card
+}
+
+/// The diff view. The well shows A and B side by side. Copy and Save take the `+` / `-` lines.
+pub(crate) fn diff_card(data: &LaunchData) -> WorkCard {
+    let Some(diff) = &data.diff else {
+        return WorkCard {
+            title: crate::locale::t("chip_diff").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: crate::locale::t("diff_working").to_string(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        };
+    };
+    let (excerpt, placeholder, meta, selectable) = match &diff.phase {
+        crate::diff::Phase::Working => (
+            String::new(),
+            crate::locale::t("diff_working").to_string(),
+            String::new(),
+            false,
+        ),
+        crate::diff::Phase::TooLarge => {
+            let message = crate::locale::t("diff_too_large").to_string();
+            (message.clone(), String::new(), message, true)
+        }
+        crate::diff::Phase::Same(pane) => (
+            pane.as_str().to_string(),
+            String::new(),
+            crate::locale::t("diff_none").to_string(),
+            true,
+        ),
+        crate::diff::Phase::Lines(lines) => {
+            let added = lines.added();
+            let removed = lines.removed();
+            (
+                lines.view().to_string(),
+                String::new(),
+                crate::locale::tf("diff_counts", &[&added, &removed]),
+                true,
+            )
+        }
+    };
+    let mut card = WorkCard {
+        title: crate::locale::t("chip_diff").to_string(),
+        meta,
+        excerpt,
+        placeholder,
+        shows_image: false,
+        highlight: None,
+        selectable,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    };
+    with_diff_labels(&mut card, &diff.labels);
+    card
+}
+
+/// Sensitivity labels of both sides, after the summary. "Checking…" stays at the end so the
+/// card cannot be revealed until the check is done.
+pub(crate) fn with_diff_labels(card: &mut WorkCard, labels: &crate::sensitivity::Labeling) {
+    let line = match labels {
+        crate::sensitivity::Labeling::Checking => crate::sensitivity::checking().to_string(),
+        crate::sensitivity::Labeling::Known(found) if !found.labels.is_empty() => {
+            crate::sensitivity::label_line(&found.labels)
+        }
+        crate::sensitivity::Labeling::Known(_) => return,
+    };
+    if card.meta.is_empty() {
+        card.meta = format!("  ·  {line}");
+    } else {
+        card.meta.push_str("  ·  ");
+        card.meta.push_str(&line);
+    }
+}
+
+pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
+    match data.subject_kind {
+        SubjectKind::Image => image_card(data),
+        SubjectKind::Text => {
+            let text = data.subject_text.as_deref().unwrap_or("");
+            // A link's decoder view (URL) is a text view; the Link card is its Original.
+            if data.view != CardView::Decode {
+                if let Some(card) = youtube_card(text) {
+                    return card;
+                }
+                if let Some(card) = page_card(text) {
+                    return card;
+                }
+            }
+            let (excerpt, preview_note) = excerpt_for(text, data.full);
+            let mut card = WorkCard {
+                title: text_title(text),
+                meta: text_meta(text),
+                excerpt,
+                placeholder: String::new(),
+                shows_image: false,
+                highlight: None,
+                selectable: false,
+                link_page: None,
+                preview_note,
+                error_line: None,
+            };
+            let view = presented_view(text, data.view);
+            apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
+            if view == CardView::Decode && data.picture.is_some() && decode::picture_candidate(text)
+            {
+                show_decoded_picture(&mut card, text);
+            }
+            // JSON with a mistake stays as copied; the meta line says where, the well marks it.
+            if view == CardView::Format
+                && let Some(problem) = crate::validate::broken_json(text)
+            {
+                add_meta_note(&mut card, &problem.note());
+                card.error_line = Some(problem.line);
+            }
+            card
+        }
+        SubjectKind::Empty => WorkCard {
+            title: crate::locale::t("title_clipboard").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: crate::locale::tf("empty_history", &[&crate::settings::hotkey_label()]),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::Hidden => WorkCard {
+            title: crate::clipboard::hidden_content().to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: crate::locale::t("private_copy_note").to_string(),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::Denied => WorkCard {
+            title: crate::locale::t("title_clipboard").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: format!(
+                "{}\n{}\n{}",
+                crate::paste_access::denied_note(),
+                crate::locale::t("paste_denied_detail"),
+                drop_hint()
+            ),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::Pending | SubjectKind::PasteAsk => WorkCard {
+            title: crate::locale::t("title_clipboard").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: if data.subject_kind == SubjectKind::PasteAsk {
+                crate::paste_access::ask_note().to_string()
+            } else {
+                format!("{}\n{}", crate::paste_access::pending_note(), drop_hint())
+            },
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+        SubjectKind::NoText => WorkCard {
+            title: crate::locale::t("title_clipboard").to_string(),
+            meta: String::new(),
+            excerpt: String::new(),
+            placeholder: format!(
+                "{}\n{}",
+                crate::locale::t("no_text_on_clipboard"),
+                drop_hint()
+            ),
+            shows_image: false,
+            highlight: None,
+            selectable: false,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        },
+    }
+}
+
+pub(crate) fn image_card(data: &LaunchData) -> WorkCard {
+    let mut facts = data.image.as_ref().map(image_meta).unwrap_or_default();
+    if let Some(edit) = &data.image_edit {
+        let mut parts: Vec<&str> = Vec::new();
+        if !facts.is_empty() {
+            parts.push(&facts);
+        }
+        if edit.version > 0
+            && let Some(label) = edit.labels.get(edit.version)
+        {
+            parts.push(label);
+        }
+        if edit.working {
+            parts.push(crate::locale::t("working"));
+        } else if let Some(note) = &edit.note {
+            parts.push(note);
+        }
+        facts = parts.join("  ·  ");
+    }
+    let text = match data.view {
+        CardView::Info => Some(image_info_text(data)),
+        CardView::Ocr | CardView::Qr => image_view_text(data.image_scan.as_ref(), data.view),
+        _ => None,
+    };
+    if let Some(text) = text {
+        let meta = if matches!(data.view, CardView::Ocr | CardView::Qr) {
+            text_meta(&text)
+        } else {
+            facts
+        };
+        return WorkCard {
+            title: match data.view {
+                CardView::Ocr => crate::locale::t("title_text").to_string(),
+                CardView::Qr => crate::locale::t("title_qr").to_string(),
+                _ => crate::locale::t("title_image_info").to_string(),
+            },
+            meta,
+            excerpt: shown_body(&text),
+            placeholder: String::new(),
+            shows_image: false,
+            highlight: None,
+            selectable: true,
+            link_page: None,
+            preview_note: None,
+            error_line: None,
+        };
+    }
+    WorkCard {
+        title: crate::locale::t("title_image").to_string(),
+        meta: facts,
+        excerpt: String::new(),
+        placeholder: String::new(),
+        shows_image: true,
+        highlight: None,
+        selectable: false,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    }
+}
+
+/// Text a non-picture image view copies or saves.
+/// OCR and QR use that body.
+pub fn image_view_text(scan: Option<&ImageScan>, view: CardView) -> Option<String> {
+    let scan = scan?;
+    match view {
+        CardView::Info => Some(scan.info.clone()),
+        CardView::Ocr => scan.ocr.clone(),
+        CardView::Qr => scan.qr.clone(),
+        _ => None,
+    }
+}
+
+/// `full` renders the whole text; otherwise the card shows a preview (see [`excerpt_for`]).
+pub(crate) fn apply_text_view(
+    card: &mut WorkCard,
+    source: &str,
+    view: CardView,
+    full: bool,
+    table: Option<&TableShown>,
+) {
+    if view == CardView::Original {
+        show_copied_table(card, source, full);
+        return;
+    }
+    if view == CardView::Dataframe {
+        match table {
+            Some(table)
+                if table.version > 0 || table.options != dataframe::ReadOptions::default() =>
+            {
+                show_table_version(card, table, full)
+            }
+            _ => show_dataframe(card, source, full, table.and_then(|table| table.overview)),
+        }
+        if let Some(error) = table.and_then(|table| table.error.as_deref()) {
+            add_meta_note(card, error);
+        }
+        return;
+    }
+    let Some(body) = transformed_text(source, view) else {
+        return;
+    };
+    let kind = format::detect(source);
+    card.title = if view == CardView::Format && matches!(kind, FormatKind::Json | FormatKind::Xml) {
+        text_title(source)
+    } else if let Some(flagged) = (view == CardView::Format)
+        .then(|| crate::validate::code_title(source))
+        .flatten()
+    {
+        // Formatting still runs; the title says the brackets do not balance.
+        flagged
+    } else if view == CardView::Format && body == source {
+        kind.source_heading().to_string()
+    } else {
+        text_view_title(source, view, &body)
+    };
+    card.meta = if view == CardView::Decode {
+        // The decoded text keeps the copy's labels: a JWT stays a credential once decoded.
+        text_meta_joined(&body, source)
+    } else {
+        text_meta(&body)
+    };
+    if matches!(view, CardView::Schema | CardView::Sample) {
+        set_excerpt(card, &body, full);
+        card.highlight = Some(if view == CardView::Sample || kind == FormatKind::Xml {
+            FormatKind::Xml
+        } else {
+            FormatKind::Json
+        });
+        card.selectable = true;
+    } else if view == CardView::Format && opens_formatted(source) {
+        set_excerpt(card, &body, full);
+        card.highlight = Some(kind);
+    } else if view == CardView::Decode && decode::detect(source) == Some(decode::DecodeKind::Jwt) {
+        // A decoded JWT: its Header and Payload JSON in color, the notes above as text.
+        set_excerpt(card, &body, full);
+        card.highlight = Some(FormatKind::Jwt);
+    } else if matches!(view, CardView::Convert | CardView::Decode)
+        && format::detect(&body) == FormatKind::Json
+    {
+        // JSON that a step produced (To JSON / Convert, a decoded Base64 JSON) is colored like
+        // the JSON card; the theme and light/dark handling are the highlighter's.
+        set_excerpt(card, &body, full);
+        card.highlight = Some(FormatKind::Json);
+    } else {
+        set_excerpt(card, &body, full);
+    }
+}
+
+/// The Decode view of a Base64 picture whose bytes the card holds ([`LaunchData::picture`]): the
+/// well draws the picture (blurred like any picture until clicked) and the meta line keeps the
+/// description (type, pixels, bytes), then the labels of the copy.
+pub(crate) fn show_decoded_picture(card: &mut WorkCard, source: &str) {
+    let Some(body) = transformed_text(source, CardView::Decode) else {
+        return;
+    };
+    card.shows_image = true;
+    card.excerpt.zeroize();
+    card.preview_note = None;
+    card.highlight = None;
+    card.selectable = false;
+    card.error_line = None;
+    let description: Vec<&str> = body.lines().collect();
+    let mut meta = description.join("  ·  ");
+    if let Some(labels) = joined_label_line(&body, source) {
+        meta.push_str("  ·  ");
+        meta.push_str(&labels);
+    }
+    card.meta = meta;
+}
