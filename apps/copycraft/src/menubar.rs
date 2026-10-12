@@ -1792,7 +1792,7 @@ impl App {
                 .and_then(|mtm| NSApplication::sharedApplication(mtm).keyWindow());
             let _wait = crate::macos_launcher::PanelWait::show();
             let path = crate::macos_launcher::holding_reveal(|| {
-                crate::macos_table_window::holding_reveal(|| crate::macos_open::choose_path())
+                crate::macos_table_window::holding_reveal(crate::macos_open::choose_path)
             });
             if let Some(path) = path {
                 // Layout during the panel may have covered the wheel. Put it back for the read.
