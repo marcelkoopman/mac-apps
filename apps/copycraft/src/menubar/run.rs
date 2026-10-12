@@ -61,7 +61,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = App {
         tray,
-        history: ClipboardHistory::default(),
+        history: ClipboardHistory::with_gate(crate::capture::history_held),
         history_cursor: 0,
         clipboard_cursor: None,
         current_image: None,
@@ -104,6 +104,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         text_note: None,
         text_generation: 0,
         lanes: Default::default(),
+        work_error: None,
         pin_refused: false,
         diff_sel: crate::diff::Selection::default(),
         diff_generation: 0,

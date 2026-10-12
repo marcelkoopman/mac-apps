@@ -192,7 +192,7 @@ impl App {
                     cancel,
                 });
             }
-            Err(e) => eprintln!("image job failed to start: {e}"),
+            Err(e) => self.work_failed("image job", &e),
         }
     }
 

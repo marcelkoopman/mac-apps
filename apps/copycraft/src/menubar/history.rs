@@ -498,12 +498,17 @@ impl App {
     /// Text copycraft put on the clipboard (Copy, Format in place, a history entry chosen from
     /// the menu): the newest copy in history. The poller skips copycraft's own writes, so this
     /// is where they are recorded.
-    pub(crate) fn record_own_copy(&mut self, text: &str) {
+    /// Put copycraft's own copy into history. Returns `false` when history is held (recording
+    /// paused, or an ignored app in front): the clipboard has it, history does not.
+    pub(crate) fn record_own_copy(&mut self, text: &str) -> bool {
         self.last_copy = Some(Instant::now());
-        self.history.record(text.to_string());
+        if !self.history.record(text.to_string()) {
+            return false;
+        }
         self.history_cursor = 0;
         self.clipboard_cursor = None;
         self.refresh_status_menu();
+        true
     }
 
     /// The history row stays a type mark. The card shows the copy that was chosen.

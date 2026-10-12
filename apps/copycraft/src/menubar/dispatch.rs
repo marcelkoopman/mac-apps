@@ -239,9 +239,8 @@ impl App {
         match spawned {
             Ok(_) => true,
             Err(err) => {
-                eprintln!("copycraft: diff skipped: {err}");
                 self.diffing = None;
-                self.stop_spinner_when_idle();
+                self.work_failed("diff", &err);
                 false
             }
         }

@@ -85,12 +85,30 @@ impl App {
                 ))))));
             });
         if let Err(e) = spawned {
-            eprintln!("copycraft: {lane:?} work skipped: {e}");
+            self.lanes.slow[lane as usize] = None;
+            self.work_failed(&format!("{lane:?} work"), &e);
             return None;
         }
+        self.work_error = None;
         let value = handoff.take_within(wait);
         self.lanes.slow[lane as usize] = value.is_none().then(Instant::now);
         value
+    }
+
+    /// A worker thread could not start: say so on the card (NL/EN), drop the Working… state
+    /// and the spinner. The card is refreshed once, from the event loop (never from inside a
+    /// card update), so a failing refresh cannot loop.
+    pub(crate) fn work_failed(&mut self, what: &str, error: &std::io::Error) {
+        eprintln!("copycraft: {what} failed to start: {error}");
+        let first = self.work_error.is_none();
+        self.work_error = Some(crate::locale::t("work_failed").to_string());
+        self.stop_spinner_when_idle();
+        if first {
+            let refresh: Finish = Box::new(|app: &mut App| app.refresh_popup());
+            launcher::emit(UserEvent::WorkDone(WorkDone(Arc::new(Mutex::new(Some(
+                refresh,
+            ))))));
+        }
     }
 
     pub(crate) fn finish_work(&mut self, done: WorkDone) {

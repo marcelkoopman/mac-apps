@@ -240,7 +240,7 @@ impl App {
                     launcher::emit(UserEvent::PreviewReady { generation, result });
                 });
             if let Err(err) = spawned {
-                eprintln!("preview failed: {err}");
+                self.work_failed("preview", &err);
             }
         }
     }

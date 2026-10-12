@@ -144,6 +144,14 @@ pub fn building_card() -> WorkCard {
     }
 }
 
+/// The card when its worker thread could not start: the short reason, no copied text.
+pub fn failed_card(reason: &str) -> WorkCard {
+    let mut card = building_card();
+    card.title = reason.to_string();
+    card.placeholder = reason.to_string();
+    card
+}
+
 pub fn work_card(data: &LaunchData) -> WorkCard {
     if data.view == CardView::Diff {
         return diff_card(data);

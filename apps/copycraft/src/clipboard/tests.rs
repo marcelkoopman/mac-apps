@@ -595,3 +595,61 @@ fn search_text_is_capped_and_empty_for_a_picture() {
     history.record_image(vec![1, 2, 3]).expect("image");
     assert!(history.search_text(0).is_empty());
 }
+
+mod held_history {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use crate::clipboard::ClipboardHistory;
+    use crate::text_ops::TextOp;
+
+    static PAUSED: AtomicBool = AtomicBool::new(true);
+    static FRONT_IGNORED: AtomicBool = AtomicBool::new(true);
+
+    fn paused_gate() -> bool {
+        crate::capture::held(PAUSED.load(Ordering::Relaxed), None, |_| false)
+    }
+
+    fn ignored_app_gate() -> bool {
+        crate::capture::held(false, Some("com.example.secrets"), |id| {
+            FRONT_IGNORED.load(Ordering::Relaxed) && id == "com.example.secrets"
+        })
+    }
+
+    /// A Text… step as the app takes it: the result is recorded as an own copy.
+    fn text_step(history: &mut ClipboardHistory, source: &str) -> bool {
+        let result = TextOp::Reverse.apply(source).expect("a result");
+        history.record(result)
+    }
+
+    #[test]
+    fn a_text_step_adds_nothing_while_recording_is_paused() {
+        PAUSED.store(false, Ordering::Relaxed);
+        let mut history = ClipboardHistory::with_gate(paused_gate);
+        assert!(history.record("first copy".into()));
+        PAUSED.store(true, Ordering::Relaxed);
+        assert!(history.held());
+        assert!(!text_step(&mut history, "a\nb\n"));
+        assert!(!history.record("own copy".into()));
+        assert!(history.record_image(vec![1, 2, 3]).is_none());
+        assert_eq!(history.record_tracking("x".into(), 0), None);
+        assert_eq!(history.len(), 1);
+    }
+
+    #[test]
+    fn a_text_step_adds_nothing_with_an_ignored_app_in_front() {
+        let mut history = ClipboardHistory::with_gate(ignored_app_gate);
+        assert!(history.held());
+        assert!(!text_step(&mut history, "a\nb\nc\n"));
+        assert_eq!(history.len(), 0);
+    }
+
+    #[test]
+    fn an_open_gate_records_as_before() {
+        fn open() -> bool {
+            crate::capture::held(false, Some("com.example.editor"), |_| false)
+        }
+        let mut history = ClipboardHistory::with_gate(open);
+        assert!(text_step(&mut history, "a\nb\n"));
+        assert_eq!(history.len(), 1);
+    }
+}

@@ -328,7 +328,7 @@ impl App {
                     target,
                 });
             }
-            Err(e) => eprintln!("table job failed to start: {e}"),
+            Err(e) => self.work_failed("table job", &e),
         }
     }
 

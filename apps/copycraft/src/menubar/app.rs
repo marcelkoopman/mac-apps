@@ -94,6 +94,8 @@ pub(crate) struct App {
     pub(crate) text_generation: u64,
     /// Sequence numbers of the background jobs ([`work::Lane`]).
     pub(crate) lanes: work::Lanes,
+    /// A worker thread failed to start: the short message on the card until work starts again.
+    pub(crate) work_error: Option<String>,
     /// The last pin was refused because the pin list is full. Shown on the card meta line.
     pub(crate) pin_refused: bool,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.

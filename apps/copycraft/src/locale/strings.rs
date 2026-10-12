@@ -915,6 +915,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Like more: Space, b, g and G page; Esc or q stops.",
     ),
     ("card_building", "Bezig…", "Working…"),
+    (
+        "text_not_kept",
+        "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)",
+        "Copied, not in history (recording paused or app ignored)",
+    ),
+    (
+        "work_failed",
+        "Kon het werk niet starten. Probeer het opnieuw.",
+        "Could not start the work. Try again.",
+    ),
     ("sep_tab", "Tab", "Tab"),
     ("sep_comma", "Komma", "Comma"),
     ("sep_semicolon", "Puntkomma", "Semicolon"),

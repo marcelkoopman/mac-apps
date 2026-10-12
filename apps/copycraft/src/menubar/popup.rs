@@ -132,7 +132,10 @@ impl App {
                 self.keep_card(slot, view, &card);
                 card
             }
-            None => commands::building_card(),
+            None => match &self.work_error {
+                Some(error) => commands::failed_card(error),
+                None => commands::building_card(),
+            },
         }
     }
 
@@ -243,7 +246,7 @@ impl App {
             });
         match spawned {
             Ok(_) => self.loading_all = Some(Background::now()),
-            Err(e) => eprintln!("show all failed: {e}"),
+            Err(e) => self.work_failed("show all", &e),
         }
     }
 
@@ -311,6 +314,12 @@ impl App {
         self.attach_table(&mut data);
         self.attach_image(&mut data);
         self.attach_text(&mut data);
+        if let Some(error) = &self.work_error {
+            data.notice = Some(match data.notice.take() {
+                Some(notice) => format!("{notice}  ·  {error}"),
+                None => error.clone(),
+            });
+        }
         self.attach_decoded_picture(&mut data);
         self.fill_diff(&mut data);
         data

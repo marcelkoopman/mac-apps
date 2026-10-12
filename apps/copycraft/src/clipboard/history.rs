@@ -4,16 +4,33 @@ use super::*;
 pub struct ClipboardHistory {
     entries: Vec<HistoryEntry>,
     next_id: u64,
+    /// Asked before anything is added: `true` while recording is paused or the frontmost app is
+    /// ignored ([`crate::capture::history_held`]). The one guard for every way into history
+    /// (copies, own copies such as Text… steps and filter results, pictures).
+    gate: Option<fn() -> bool>,
 }
 
 impl ClipboardHistory {
+    pub fn with_gate(gate: fn() -> bool) -> Self {
+        Self {
+            gate: Some(gate),
+            ..Self::default()
+        }
+    }
+
+    /// Nothing may be added now (see `gate`).
+    pub fn held(&self) -> bool {
+        self.gate.is_some_and(|gate| gate())
+    }
+
     /// `text` as the newest copy. Already the newest: nothing changes (`text` is zeroized), so
     /// the entry keeps its cards. A pinned copy of the same text moves to the front and stays
     /// pinned. An unpinned one further down is replaced by a new entry in front.
-    pub fn record(&mut self, mut text: String) {
-        if text.trim().is_empty() {
+    /// Returns whether `text` is in history now (`false`: blank, or history is held).
+    pub fn record(&mut self, mut text: String) -> bool {
+        if text.trim().is_empty() || self.held() {
             text.zeroize();
-            return;
+            return false;
         }
         if let Some(index) = self.text_pos(&text)
             && (index == 0 || self.entries[index].pinned)
@@ -22,7 +39,7 @@ impl ClipboardHistory {
                 self.move_to_front(index);
             }
             text.zeroize();
-            return;
+            return true;
         }
         self.entries.retain(|existing| match &existing.body {
             HistoryBody::Text(existing) => existing.as_str() != text,
@@ -31,6 +48,7 @@ impl ClipboardHistory {
         let id = self.alloc_id();
         self.entries.insert(0, HistoryEntry::text(id, text));
         self.trim_unpinned();
+        true
     }
 
     fn text_pos(&self, text: &str) -> Option<usize> {
@@ -53,7 +71,7 @@ impl ClipboardHistory {
     /// one further down, or at the front when it was `text` itself. `None` when nothing was
     /// recorded (blank text), so `cursor` still holds.
     pub fn record_tracking(&mut self, text: String, cursor: usize) -> Option<usize> {
-        if text.trim().is_empty() {
+        if text.trim().is_empty() || self.held() {
             let mut text = text;
             text.zeroize();
             return None;
@@ -69,6 +87,9 @@ impl ClipboardHistory {
     /// Like [`record_tracking`](Self::record_tracking), for an image: the entry shares `bytes`'
     /// allocation, as a copied image's does.
     pub fn record_image_tracking(&mut self, bytes: SecretBytes, cursor: usize) -> usize {
+        if self.held() {
+            return cursor;
+        }
         let same = self.entries.iter().position(|entry| match &entry.body {
             HistoryBody::Image(existing) => existing == &bytes,
             HistoryBody::Text(_) => false,
@@ -91,6 +112,9 @@ impl ClipboardHistory {
     /// The picture as the newest copy, and the handle history keeps for it.
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
         let bytes = SecretBytes::new(bytes)?;
+        if self.held() {
+            return None;
+        }
         Some(self.insert_image(bytes))
     }
 

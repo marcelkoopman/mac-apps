@@ -153,6 +153,22 @@ pub fn observe_front(bundle: Option<&str>) {
     session().last_foreign = Some(bundle.to_string());
 }
 
+/// History takes nothing new: recording is paused, or the frontmost app (the last foreign
+/// one, as Copycraft's own card is in front while it is used) is on the ignore list. The gate
+/// of [`crate::clipboard::ClipboardHistory`].
+pub fn history_held() -> bool {
+    let (paused, front) = {
+        let slot = session();
+        (slot.paused, slot.last_foreign.clone())
+    };
+    held(paused, front.as_deref(), crate::settings::bundle_ignored)
+}
+
+/// [`history_held`] from its parts.
+pub fn held(paused: bool, front: Option<&str>, ignored: impl Fn(&str) -> bool) -> bool {
+    paused || front.is_some_and(ignored)
+}
+
 pub fn last_foreign() -> Option<String> {
     session().last_foreign.clone()
 }

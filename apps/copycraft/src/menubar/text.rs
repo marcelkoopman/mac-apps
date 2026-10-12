@@ -107,8 +107,9 @@ impl App {
                     result: Box::new(result),
                 });
             });
-        if let Err(e) = spawned {
-            eprintln!("copycraft: text step skipped: {e}");
+        match spawned {
+            Ok(_) => self.work_error = None,
+            Err(e) => self.work_failed("text step", &e),
         }
     }
 
@@ -154,7 +155,13 @@ impl App {
             eprintln!("text step failed: {e:#}");
             return;
         }
-        self.record_own_copy(result);
+        if !self.record_own_copy(result) {
+            // Recording is paused or the app is ignored: the result is on the clipboard but
+            // not in history, so it makes no version either.
+            self.text_note = Some((id, crate::locale::t("text_not_kept").to_string()));
+            self.refresh_popup();
+            return;
+        }
         let Some(new_id) = self.history.id_at(0) else {
             return;
         };
