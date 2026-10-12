@@ -124,6 +124,17 @@ fn right_button_down() -> bool {
     pressed & RIGHT_BUTTON != 0
 }
 
+fn same_ptr<T: ?Sized, U: ?Sized>(left: Option<&T>, right: Option<&U>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => std::ptr::eq(
+            std::ptr::from_ref(left).cast::<()>(),
+            std::ptr::from_ref(right).cast::<()>(),
+        ),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{CLICK_GAP, LAST_CLICK, accept_click};
@@ -138,16 +149,5 @@ mod tests {
             now + CLICK_GAP - std::time::Duration::from_millis(1)
         ));
         assert!(accept_click(now + CLICK_GAP));
-    }
-}
-
-fn same_ptr<T: ?Sized, U: ?Sized>(left: Option<&T>, right: Option<&U>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => std::ptr::eq(
-            std::ptr::from_ref(left).cast::<()>(),
-            std::ptr::from_ref(right).cast::<()>(),
-        ),
-        (None, None) => true,
-        _ => false,
     }
 }
