@@ -1,6 +1,6 @@
 [package]
 name = "copycraft"
-version = "0.1.68"
+version = "0.1.69"
 edition.workspace = true
 
 [package.metadata.bundle]
@@ -9,7 +9,7 @@ identifier = "com.github.marcelkoopman.mac-apps.copycraft"
 icon = ["assets/icon.icns"]
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
 resources = ["PrivacyInfo.xcprivacy"]
-version = "0.1.68"
+version = "0.1.69"
 category = "Utilities"
 short_description = "Clipboard transformer"
 long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
