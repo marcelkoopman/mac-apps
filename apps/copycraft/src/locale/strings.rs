@@ -28,6 +28,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Sensitive data is filtered and not stored.",
     ),
     ("welcome_start", "Aan de slag", "Get started"),
+    (
+        "welcome_login_failed",
+        "{0}\n\nJe kunt het ook aanzetten in Systeeminstellingen › Algemeen › Inlogonderdelen.",
+        "{0}\n\nYou can also turn it on in System Settings › General › Login Items.",
+    ),
     ("quit", "Stop", "Quit"),
     ("history", "Geschiedenis", "History"),
     (

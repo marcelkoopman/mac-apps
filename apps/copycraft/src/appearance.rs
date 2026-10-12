@@ -1,15 +1,26 @@
 pub use mac_ui::theme::Appearance as Theme;
 pub use mac_ui::theme::apply;
 
+#[cfg_attr(test, allow(dead_code))]
 const DEFAULTS_KEY: &str = "CopycraftAppearance";
 
 /// Stored appearance, or [`Theme::System`] when none is stored.
+/// Tests never read the real user defaults.
 pub fn load() -> Theme {
-    mac_ui::theme::load(DEFAULTS_KEY).unwrap_or(Theme::System)
+    #[cfg(not(test))]
+    {
+        mac_ui::theme::load(DEFAULTS_KEY).unwrap_or(Theme::System)
+    }
+    #[cfg(test)]
+    {
+        Theme::System
+    }
 }
 
 /// Store the appearance and apply it.
+/// Tests never write the real user defaults.
 pub fn save(theme: Theme) {
+    #[cfg(not(test))]
     mac_ui::theme::store(DEFAULTS_KEY, theme);
     apply(theme);
 }

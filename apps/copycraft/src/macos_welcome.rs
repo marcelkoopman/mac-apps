@@ -9,11 +9,14 @@ use mac_ui::objc2::runtime::{AnyObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua,
-    NSApplication, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSFont, NSLineBreakMode, NSTextAlignment, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor,
+    NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSFont, NSLayoutAttribute, NSStackView,
+    NSStackViewDistribution, NSTextAlignment, NSTextField, NSUserInterfaceLayoutOrientation,
+    NSView, NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
-use mac_ui::objc2_foundation::{NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use mac_ui::objc2_foundation::{
+    NSArray, NSEdgeInsets, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+};
 use mac_ui::{panel, widgets};
 
 use crate::commands::CommandId;
@@ -21,15 +24,14 @@ use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 392.0;
 const PAD: f64 = 24.0;
 const ICON: f64 = 96.0;
 /// Background of `assets/icon.icns` (sRGB, about #070E24).
 const ICON_BACKGROUND: (f64, f64, f64) = (7.0 / 255.0, 14.0 / 255.0, 36.0 / 255.0);
 /// The app icon from `assets/icon.icns`, the same file the bundle uses.
 const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
-const BUTTON_W: f64 = 140.0;
-const BUTTON_H: f64 = 28.0;
+/// Width of the labels and the button row: the window width minus the side margins.
+const INNER_W: f64 = WIDTH - PAD * 2.0;
 /// Escape (`kVK_Escape`).
 const ESCAPE_KEY_CODE: u16 = 53;
 
@@ -114,6 +116,13 @@ define_class!(
             let on = button.state() == NSControlStateValueOn;
             if let Err(message) = macos_login::set_enabled(on) {
                 eprintln!("copycraft: open at login: {message}");
+                // Back to the real state first, so the box never shows a change that failed.
+                refresh_login_box();
+                mac_ui::dialog::alert(
+                    self.mtm(),
+                    crate::locale::t("login_change_failed"),
+                    &crate::locale::tf("welcome_login_failed", &[&message]),
+                );
             }
             refresh_login_box();
         }
@@ -171,41 +180,34 @@ fn wire(control: &NSButton, action: Sel) {
     });
 }
 
-fn push_button(mtm: MainThreadMarker, title: &str, x: f64, action: Sel) -> Retained<NSButton> {
+fn push_button(mtm: MainThreadMarker, title: &str, action: Sel) -> Retained<NSButton> {
     // SAFETY: no target or action is passed here; `wire` sets them right below.
     let button = unsafe {
         NSButton::buttonWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
     };
-    button.setFrame(NSRect::new(
-        NSPoint::new(x, PAD),
-        NSSize::new(BUTTON_W, BUTTON_H),
-    ));
     button.setAccessibilityLabel(Some(&NSString::from_str(title)));
     wire(&button, action);
     button
 }
 
-fn text_line(
-    mtm: MainThreadMarker,
-    text: &str,
-    size: f64,
-    y: f64,
-    height: f64,
-) -> Retained<NSTextField> {
-    let label = widgets::label(mtm, size, &NSColor::labelColor());
-    label.setStringValue(&NSString::from_str(text));
-    label.setUsesSingleLineMode(false);
-    label.setLineBreakMode(NSLineBreakMode::ByWordWrapping);
-    label.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, height),
-    ));
+/// A wrapping label as wide as the content: it grows downwards for long (Dutch) text and
+/// large system text instead of being cut off.
+fn text_line(mtm: MainThreadMarker, text: &str, font: &NSFont) -> Retained<NSTextField> {
+    let label = NSTextField::wrappingLabelWithString(&NSString::from_str(text), mtm);
+    label.setFont(Some(font));
+    label.setTextColor(Some(&NSColor::labelColor()));
+    label.setSelectable(false);
+    label.setPreferredMaxLayoutWidth(INNER_W);
+    label
+        .widthAnchor()
+        .constraintEqualToConstant(INNER_W)
+        .setActive(true);
     label
 }
 
 fn build(mtm: MainThreadMarker) {
     let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, 320.0));
     // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
     // plain value arguments.
     let window: Retained<WelcomeWindow> = unsafe {
@@ -222,7 +224,6 @@ fn build(mtm: MainThreadMarker) {
     window.setTitle(&NSString::from_str(title));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
-    window.center();
 
     let delegate = WelcomeDelegate::new(mtm);
     // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
@@ -230,8 +231,6 @@ fn build(mtm: MainThreadMarker) {
     unsafe { panel::set_delegate(&window, &*delegate) };
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 
-    let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    window.setContentView(Some(&content));
     // The window matches the icon's dark navy, so it always uses the dark appearance (light
     // text and controls) and the title bar blends into the same colour.
     // SAFETY: NSAppearanceNameDarkAqua is an immutable AppKit string constant.
@@ -244,39 +243,35 @@ fn build(mtm: MainThreadMarker) {
         ICON_BACKGROUND.2,
         1.0,
     )));
-    let body = content.clone();
 
-    let mut y = HEIGHT - PAD - ICON;
     let icon = widgets::image_view(mtm);
     if let Some(image) = mac_ui::image::from_bytes(ICON_ICNS)
         .or_else(|| NSApplication::sharedApplication(mtm).applicationIconImage())
     {
         icon.setImage(Some(&image));
     }
-    icon.setFrame(NSRect::new(
-        NSPoint::new((WIDTH - ICON) / 2.0, y),
-        NSSize::new(ICON, ICON),
-    ));
+    icon.widthAnchor()
+        .constraintEqualToConstant(ICON)
+        .setActive(true);
+    icon.heightAnchor()
+        .constraintEqualToConstant(ICON)
+        .setActive(true);
     icon.setAccessibilityElement(false);
-    body.addSubview(&icon);
 
-    y -= 36.0;
-    let heading = text_line(mtm, title, 20.0, y, 28.0);
-    heading.setFont(Some(&NSFont::boldSystemFontOfSize(20.0)));
+    let heading = text_line(mtm, title, &NSFont::boldSystemFontOfSize(20.0));
     heading.setAlignment(NSTextAlignment::Center);
-    body.addSubview(&heading);
 
+    let body_font = NSFont::systemFontOfSize(NSFont::systemFontSize());
     let points = [
         crate::locale::tf("welcome_hotkey", &[&crate::settings::hotkey_label()]),
         crate::locale::t("welcome_local").to_string(),
         crate::locale::t("welcome_sensitive").to_string(),
     ];
-    for point in &points {
-        y -= 40.0;
-        body.addSubview(&text_line(mtm, &format!("•  {point}"), 13.0, y, 36.0));
-    }
+    let point_views: Vec<Retained<NSTextField>> = points
+        .iter()
+        .map(|point| text_line(mtm, &format!("•  {point}"), &body_font))
+        .collect();
 
-    y -= 36.0;
     // SAFETY: no target or action is passed here; `wire` sets them right below.
     let login = unsafe {
         NSButton::checkboxWithTitle_target_action(
@@ -286,32 +281,67 @@ fn build(mtm: MainThreadMarker) {
             mtm,
         )
     };
-    login.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, BUTTON_H),
-    ));
     login.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("open_at_login"))));
     wire(&login, sel!(welcomeLoginToggled:));
-    body.addSubview(&login);
     LOGIN_BOX.with(|slot| *slot.borrow_mut() = Some(login.clone()));
     refresh_login_box();
 
-    let settings = push_button(
-        mtm,
-        crate::locale::t("settings"),
-        PAD,
-        sel!(welcomeSettings:),
-    );
-    body.addSubview(&settings);
-    let start = push_button(
-        mtm,
-        crate::locale::t("welcome_start"),
-        WIDTH - PAD - BUTTON_W,
-        sel!(welcomeStart:),
-    );
+    let settings = push_button(mtm, crate::locale::t("settings"), sel!(welcomeSettings:));
+    let start = push_button(mtm, crate::locale::t("welcome_start"), sel!(welcomeStart:));
     // Return triggers it and draws it as the default button.
     start.setKeyEquivalent(&NSString::from_str("\r"));
-    body.addSubview(&start);
+    // Settings on the left, "Get started" on the right, across the full content width.
+    let settings_view: &NSView = &settings;
+    let start_view: &NSView = &start;
+    let buttons =
+        NSStackView::stackViewWithViews(&NSArray::from_slice(&[settings_view, start_view]), mtm);
+    buttons.setOrientation(NSUserInterfaceLayoutOrientation::Horizontal);
+    buttons.setDistribution(NSStackViewDistribution::EqualSpacing);
+    buttons
+        .widthAnchor()
+        .constraintEqualToConstant(INNER_W)
+        .setActive(true);
+
+    let icon_view: &NSView = &icon;
+    let heading_view: &NSView = &heading;
+    let login_view: &NSView = &login;
+    let buttons_view: &NSView = &buttons;
+    let mut views: Vec<&NSView> = vec![icon_view, heading_view];
+    for view in &point_views {
+        let view: &NSView = view;
+        views.push(view);
+    }
+    views.push(login_view);
+    views.push(buttons_view);
+    let stack = NSStackView::stackViewWithViews(&NSArray::from_slice(&views), mtm);
+    stack.setOrientation(NSUserInterfaceLayoutOrientation::Vertical);
+    stack.setAlignment(NSLayoutAttribute::CenterX);
+    stack.setSpacing(10.0);
+    stack.setEdgeInsets(NSEdgeInsets {
+        top: PAD,
+        left: PAD,
+        bottom: PAD,
+        right: PAD,
+    });
+    stack.setCustomSpacing_afterView(14.0, &icon);
+    stack.setCustomSpacing_afterView(16.0, &heading);
+    if let Some(last) = point_views.last() {
+        stack.setCustomSpacing_afterView(18.0, last);
+    }
+    stack.setCustomSpacing_afterView(20.0, &login);
+
+    // The content decides the height; the width stays WIDTH.
+    let height = stack.fittingSize().height.ceil().max(200.0);
+    window.setContentSize(NSSize::new(WIDTH, height));
+    stack.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(WIDTH, height),
+    ));
+    stack.setAutoresizingMask(
+        NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
+    );
+    window.setContentView(Some(&stack));
+    window.center();
 
     // Tab moves through the checkbox and both buttons; focus starts on "Get started".
     window.setAutorecalculatesKeyViewLoop(true);

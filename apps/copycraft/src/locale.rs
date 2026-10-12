@@ -273,7 +273,8 @@ mod tests {
                 continue;
             }
             let text = std::fs::read_to_string(&path).expect("read source");
-            for call in ["t(", "tf(", "t_in(lang,", "tf_in(lang,", "_key:"] {
+            // `t_in`/`tf_in` take the language first, under any name (`lang`, `*lang`, `Lang::En`).
+            for call in ["t(", "tf(", "t_in(", "tf_in(", "_key:"] {
                 let mut rest = text.as_str();
                 while let Some(at) = rest.find(call) {
                     let before = rest[..at].chars().next_back();
@@ -281,6 +282,16 @@ mod tests {
                     // `format(\"`, `set(\"` and the like are not catalog calls.
                     if call != "_key:" && before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
                         continue;
+                    }
+                    if call.ends_with("_in(") {
+                        // Skip the language argument: up to the first comma, if it comes
+                        // before the call closes.
+                        match (rest.find(','), rest.find(')')) {
+                            (Some(comma), Some(close)) if comma < close => {
+                                rest = &rest[comma + 1..];
+                            }
+                            _ => continue,
+                        }
                     }
                     // The key may sit on the next line.
                     let Some(quoted) = rest.trim_start().strip_prefix('"') else {

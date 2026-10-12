@@ -362,7 +362,7 @@ pub fn restore_symbol_catalog() {
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn load_bool(key: &str) -> Option<bool> {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     let defaults = NSUserDefaults::standardUserDefaults();
@@ -371,13 +371,13 @@ fn load_bool(key: &str) -> Option<bool> {
     Some(defaults.boolForKey(&key))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn store_bool(key: &str, value: bool) {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     NSUserDefaults::standardUserDefaults().setBool_forKey(value, &NSString::from_str(key));
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn load_int(key: &str) -> Option<i64> {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     let defaults = NSUserDefaults::standardUserDefaults();
@@ -386,14 +386,14 @@ fn load_int(key: &str) -> Option<i64> {
     Some(defaults.integerForKey(&key) as i64)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn store_int(key: &str, value: i64) {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     NSUserDefaults::standardUserDefaults()
         .setInteger_forKey(value as isize, &NSString::from_str(key));
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn load_string(key: &str) -> Option<String> {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     let defaults = NSUserDefaults::standardUserDefaults();
@@ -402,7 +402,7 @@ fn load_string(key: &str) -> Option<String> {
     Some(value.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn store_string(key: &str, value: &str) {
     use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
     // SAFETY: NSString is a valid NSObject for the defaults dictionary.
@@ -420,30 +420,47 @@ fn load_bool(_key: &str) -> Option<bool> {
 #[cfg(all(not(target_os = "macos"), not(test)))]
 fn store_bool(_key: &str, _value: bool) {}
 
-// Tests off macOS keep booleans in memory (per test thread), so a setting can round-trip.
-#[cfg(all(not(target_os = "macos"), test))]
+// Tests keep settings in memory (per test thread) on every platform, so a setting can
+// round-trip and no test ever reads or writes the real user defaults.
+#[cfg(test)]
 thread_local! {
     static MEMORY: std::cell::RefCell<std::collections::HashMap<String, bool>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-#[cfg(all(not(target_os = "macos"), test))]
+#[cfg(test)]
 fn load_bool(key: &str) -> Option<bool> {
     MEMORY.with(|map| map.borrow().get(key).copied())
 }
 
-#[cfg(all(not(target_os = "macos"), test))]
+#[cfg(test)]
 fn store_bool(key: &str, value: bool) {
     MEMORY.with(|map| map.borrow_mut().insert(key.to_owned(), value));
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn load_int(_key: &str) -> Option<i64> {
     None
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn store_int(_key: &str, _value: i64) {}
+
+#[cfg(test)]
+thread_local! {
+    static MEMORY_INT: std::cell::RefCell<std::collections::HashMap<String, i64>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+#[cfg(test)]
+fn load_int(key: &str) -> Option<i64> {
+    MEMORY_INT.with(|map| map.borrow().get(key).copied())
+}
+
+#[cfg(test)]
+fn store_int(key: &str, value: i64) {
+    MEMORY_INT.with(|map| map.borrow_mut().insert(key.to_owned(), value));
+}
 
 #[cfg(all(not(target_os = "macos"), not(test)))]
 fn load_string(_key: &str) -> Option<String> {
@@ -453,18 +470,18 @@ fn load_string(_key: &str) -> Option<String> {
 #[cfg(all(not(target_os = "macos"), not(test)))]
 fn store_string(_key: &str, _value: &str) {}
 
-#[cfg(all(not(target_os = "macos"), test))]
+#[cfg(test)]
 thread_local! {
     static MEMORY_STRING: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-#[cfg(all(not(target_os = "macos"), test))]
+#[cfg(test)]
 fn load_string(key: &str) -> Option<String> {
     MEMORY_STRING.with(|map| map.borrow().get(key).cloned())
 }
 
-#[cfg(all(not(target_os = "macos"), test))]
+#[cfg(test)]
 fn store_string(key: &str, value: &str) {
     MEMORY_STRING.with(|map| map.borrow_mut().insert(key.to_owned(), value.to_owned()));
 }
@@ -478,6 +495,17 @@ mod tests {
         assert!(super::should_show_welcome(None));
         assert!(!super::should_show_welcome(Some(true)));
         assert!(!super::should_show_welcome(Some(false)));
+    }
+
+    #[test]
+    fn tests_start_from_an_empty_settings_store() {
+        // Each test thread has its own in-memory store: nothing here touches the real defaults.
+        std::thread::spawn(|| {
+            assert!(super::welcome_due());
+            assert_eq!(super::load_bool(super::WELCOME_KEY), None);
+        })
+        .join()
+        .expect("test thread");
     }
 
     #[test]
