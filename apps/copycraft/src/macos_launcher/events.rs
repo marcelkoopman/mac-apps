@@ -278,16 +278,7 @@ pub(crate) fn pop_overflow() {
         );
         if in_history {
             let submenu = history_menu.get_or_insert_with(|| {
-                // SAFETY: a freshly allocated menu item; its action is a selector the launcher
-                // delegate implements, or none.
-                let parent = unsafe {
-                    NSMenuItem::initWithTitle_action_keyEquivalent(
-                        NSMenuItem::alloc(mtm),
-                        &NSString::from_str(crate::locale::t("history")),
-                        None,
-                        &NSString::from_str(""),
-                    )
-                };
+                let parent = mac_ui::widgets::menu_item(mtm, crate::locale::t("history"));
                 let submenu = NSMenu::initWithTitle(
                     NSMenu::alloc(mtm),
                     &NSString::from_str(crate::locale::t("history")),

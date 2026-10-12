@@ -29,6 +29,8 @@ widgets = [
     "objc2-app-kit/NSImageCell",
     "objc2-app-kit/NSImageView",
     "objc2-app-kit/NSLayoutManager",
+    "objc2-app-kit/NSMenu",
+    "objc2-app-kit/NSMenuItem",
     "objc2-app-kit/NSParagraphStyle",
     "objc2-app-kit/NSScrollView",
     "objc2-app-kit/NSSearchField",
@@ -113,7 +115,7 @@ progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "o
 # `mac_ui::blur`: a CIGaussianBlur content filter on a view.
 blur = ["objc2-foundation/NSArray"]
 # `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
-image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep"]
+image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep", "objc2-foundation/NSDictionary"]
 # `mac_ui::wake::observe_sleep_wake`: NSWorkspace will-sleep / did-wake notifications, delivered
 # on the main operation queue through a block observer.
 wake = [

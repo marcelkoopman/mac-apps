@@ -189,20 +189,15 @@ pub(super) fn copied_file_view(
     if text.is_some_and(|text| !names_copied_file(text.trim(), &path)) {
         return None;
     }
-    // SAFETY: balanced by the stop call below when it returns true.
-    let started = unsafe { url.startAccessingSecurityScopedResource() };
-    let found = if is_image_file(&path) {
-        Some((ClipboardView::Image, Some(path)))
-    } else {
-        crate::open_file::load(&path)
-            .text
-            .map(|body| (ClipboardView::Text(body), None))
-    };
-    if started {
-        // SAFETY: balances the successful start call above.
-        unsafe { url.stopAccessingSecurityScopedResource() };
-    }
-    found
+    mac_ui::pasteboard_types::with_security_scope(&url, move || {
+        if is_image_file(&path) {
+            Some((ClipboardView::Image, Some(path)))
+        } else {
+            crate::open_file::load(&path)
+                .text
+                .map(|body| (ClipboardView::Text(body), None))
+        }
+    })
 }
 
 /// The one file on the pasteboard, image or not. A `file://` URL keeps the security scope

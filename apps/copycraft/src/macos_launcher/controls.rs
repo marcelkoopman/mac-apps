@@ -735,16 +735,7 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
             Some(name) => match &group {
                 Some((shown, submenu)) if *shown == name => submenu.clone(),
                 _ => {
-                    // SAFETY: a freshly allocated menu item; its action is a selector the launcher
-                    // delegate implements, or none.
-                    let parent = unsafe {
-                        NSMenuItem::initWithTitle_action_keyEquivalent(
-                            NSMenuItem::alloc(mtm),
-                            &NSString::from_str(name),
-                            None,
-                            &NSString::from_str(""),
-                        )
-                    };
+                    let parent = mac_ui::widgets::menu_item(mtm, name);
                     let submenu =
                         NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
                     submenu.setAutoenablesItems(false);

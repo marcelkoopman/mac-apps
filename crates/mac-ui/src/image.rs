@@ -5,9 +5,10 @@
 use objc2::AnyThread;
 use objc2::rc::Retained;
 use objc2_app_kit::{
-    NSBitmapFormat, NSBitmapImageRep, NSCalibratedRGBColorSpace, NSImage, NSImageRep,
+    NSBitmapFormat, NSBitmapImageFileType, NSBitmapImageRep, NSCalibratedRGBColorSpace, NSImage,
+    NSImageRep,
 };
-use objc2_foundation::{NSData, NSSize};
+use objc2_foundation::{NSData, NSDictionary, NSSize};
 
 /// `NSImage` decoded from encoded bytes (PNG, JPEG, TIFF, anything `NSImage` reads).
 ///
@@ -143,5 +144,16 @@ mod tests {
         assert!(from_rgba(0, 1, &[0, 0, 0, 255]).is_none());
         assert!(from_rgba(1, 1, &[0, 0, 0]).is_none());
         assert!(from_rgba(2, 1, &[255, 0, 0, 255]).is_none());
+    }
+}
+
+/// PNG bytes re-encoded from bitmap image data (TIFF, BMP, anything `NSBitmapImageRep` reads).
+///
+/// `None` when AppKit cannot read `data` as a bitmap.
+pub fn png_from_bitmap_data(data: &NSData) -> Option<Retained<NSData>> {
+    let rep = NSBitmapImageRep::imageRepWithData(data)?;
+    // SAFETY: an empty dictionary is a valid property list for any file type.
+    unsafe {
+        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
     }
 }

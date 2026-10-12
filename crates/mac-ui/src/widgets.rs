@@ -11,8 +11,8 @@ use objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
     NSColor, NSControl, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling,
-    NSImageView, NSLayoutManager, NSLineBreakMode, NSScrollView, NSSearchField, NSTextContainer,
-    NSTextField, NSTextStorage, NSTextView, NSTitlePosition, NSView,
+    NSImageView, NSLayoutManager, NSLineBreakMode, NSMenuItem, NSScrollView, NSSearchField,
+    NSTextContainer, NSTextField, NSTextStorage, NSTextView, NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
@@ -98,6 +98,20 @@ pub fn filled_box(mtm: MainThreadMarker, radius: f64, color: &NSColor) -> Retain
 }
 
 pub use crate::layer::round_view;
+
+/// A menu item with no action and no key equivalent: a submenu parent or a plain label.
+pub fn menu_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
+    // SAFETY: a freshly allocated item with no action selector, so AppKit never sends a message
+    // on its behalf; both strings are valid NSStrings.
+    unsafe {
+        NSMenuItem::initWithTitle_action_keyEquivalent(
+            NSMenuItem::alloc(mtm),
+            &NSString::from_str(title),
+            None,
+            &NSString::from_str(""),
+        )
+    }
+}
 
 /// Move the view to the front of its siblings. Does nothing without a superview.
 pub fn raise_view(view: &NSView) {
@@ -241,6 +255,7 @@ define_class!(
 /// previews the keyboard should pass over.
 pub fn passive_text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<NSScrollView> {
     let allocated = PassiveTextScroll::alloc(mtm);
+    // SAFETY: NSScrollView's `initWithFrame:` initialiser, with a matching argument type.
     let scroll: Retained<PassiveTextScroll> =
         unsafe { msg_send![allocated, initWithFrame: NSRect::ZERO] };
     let scroll = scroll.into_super();
@@ -255,6 +270,7 @@ pub fn passive_text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained
 /// `target` must implement `action` as a method taking the sender (`-action:(id)sender`). The
 /// control holds `target` weakly, so keep it alive for as long as clicks should reach it.
 pub unsafe fn set_target_action(control: &NSControl, target: &AnyObject, action: Sel) {
+    // SAFETY: the caller guarantees `target` implements `action` and outlives the control's use.
     unsafe {
         control.setTarget(Some(target));
         control.setAction(Some(action));
@@ -268,6 +284,8 @@ pub unsafe fn set_target_action(control: &NSControl, target: &AnyObject, action:
 /// Every `NSTextFieldDelegate` / `NSControlTextEditingDelegate` method `delegate` implements must
 /// have the protocol's signature. The field holds `delegate` weakly, so keep it alive.
 pub unsafe fn set_text_delegate(field: &NSTextField, delegate: &AnyObject) {
+    // SAFETY: the caller guarantees the delegate's methods have the protocol signatures and that
+    // it outlives the field's use; `setDelegate:` takes an object and returns void.
     unsafe {
         let _: () = msg_send![field, setDelegate: delegate];
     }

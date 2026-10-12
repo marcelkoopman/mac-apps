@@ -186,13 +186,7 @@ pub(super) fn uti_for_extension(extension: &str) -> &'static str {
 }
 
 pub(super) fn png_fallback(data: &NSData) -> Option<Retained<NSData>> {
-    use mac_ui::objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
-    use mac_ui::objc2_foundation::NSDictionary;
-    let rep = NSBitmapImageRep::imageRepWithData(data)?;
-    // SAFETY: an empty dictionary is a valid property list for any file type.
-    unsafe {
-        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
-    }
+    mac_ui::image::png_from_bitmap_data(data)
 }
 
 pub(super) fn tiff_fallback(data: &NSData) -> Option<Retained<NSData>> {

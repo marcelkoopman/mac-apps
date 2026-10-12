@@ -202,8 +202,8 @@ mod appkit {
         NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
         NSAccessibilityPriorityLevel, NSBox, NSBoxType, NSColor, NSDragOperation,
         NSDraggingDestination, NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard,
-        NSPasteboardType, NSPasteboardTypeFileURL, NSPasteboardTypeString,
-        NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView, NSTitlePosition, NSView,
+        NSPasteboardType, NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView,
+        NSTitlePosition, NSView,
     };
     use objc2_foundation::{
         NSArray, NSDictionary, NSError, NSNumber, NSOperationQueue, NSPoint, NSRect, NSSize,
@@ -406,7 +406,7 @@ mod appkit {
                     files: &files,
                     promised: &promised,
                     image: ivars.accept.images && image_type(&pasteboard).is_some(),
-                    text: has_type(&pasteboard, unsafe { NSPasteboardTypeString }),
+                    text: has_type(&pasteboard, crate::pasteboard_types::string()),
                 };
                 judge(&drag, ivars.accept)
             })
@@ -426,7 +426,7 @@ mod appkit {
                 Offer::Image => image_data(&pasteboard).map(Dropped::Image),
                 Offer::Promised => None,
                 Offer::Text => pasteboard
-                    .stringForType(unsafe { NSPasteboardTypeString })
+                    .stringForType(crate::pasteboard_types::string())
                     .map(|text| Dropped::Text(text.to_string())),
             });
             match dropped {
@@ -507,14 +507,14 @@ mod appkit {
             unsafe { msg_send![super(this), initWithFrame: NSRect::ZERO] };
         let mut registered: Vec<Retained<NSString>> = Vec::new();
         if !accept.file_types.is_empty() {
-            registered.push(unsafe { NSPasteboardTypeFileURL }.retain());
+            registered.push(crate::pasteboard_types::file_url().retain());
             registered.extend(NSFilePromiseReceiver::readableDraggedTypes().iter());
         }
         if accept.images {
             registered.extend(IMAGE_TYPES.iter().map(|kind| NSString::from_str(kind)));
         }
         if accept.text {
-            registered.push(unsafe { NSPasteboardTypeString }.retain());
+            registered.push(crate::pasteboard_types::string().retain());
         }
         let registered: Vec<&NSString> = registered.iter().map(|kind| &**kind).collect();
         view.registerForDraggedTypes(&NSArray::from_slice(&registered));
@@ -545,6 +545,7 @@ mod appkit {
         let priority = NSNumber::numberWithInteger(NSAccessibilityPriorityLevel::High.0);
         let text: &AnyObject = &text;
         let priority: &AnyObject = &priority;
+        // SAFETY (both): immutable AppKit constants, read for the life of the process.
         let info = NSDictionary::from_slices(
             &[unsafe { NSAccessibilityAnnouncementKey }, unsafe {
                 NSAccessibilityPriorityKey
@@ -593,6 +594,7 @@ mod appkit {
         let classes: Retained<NSArray<AnyClass>> = NSArray::from_slice(&[NSURL::class()]);
         let yes = NSNumber::numberWithBool(true);
         let yes: &AnyObject = &yes;
+        // SAFETY: an immutable AppKit constant, read for the life of the process.
         let options =
             NSDictionary::from_slices(&[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }], &[yes]);
         // SAFETY: NSURL reads from the pasteboard, and the option takes an NSNumber boolean.
