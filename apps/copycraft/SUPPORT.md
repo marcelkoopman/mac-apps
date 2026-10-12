@@ -10,7 +10,7 @@ Heb je een vraag of een bug gevonden? Mail naar mac-apps-support@proton.me of op
 
 ### Veelgestelde vragen
 
-1. **Hoe open ik Copycraft?** Met de sneltoets (standaard ⌃⌥⌘C) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
+1. **Hoe open ik Copycraft?** Met de sneltoets (standaard ⌃⌘C) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
 2. **Waarom is mijn tekst vaag?** Dat is het privacyfilter. Klik op de tekst om hem te tonen. Wil je het uit, zet dan "Gebruik privacyfilter" uit in Instellingen.
 3. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of Copycraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Privacy en beveiliging, Plakken vanuit andere apps.
 4. **Gaat mijn data het internet op?** Nee. Copycraft werkt volledig offline en heeft geen netwerktoegang.
@@ -27,7 +27,7 @@ Question or found a bug? Email mac-apps-support@proton.me or open an issue on [G
 
 ### FAQ
 
-1. **How do I open Copycraft?** With the hotkey (default ⌃⌥⌘C) or from the menu bar icon. Change the hotkey in Settings.
+1. **How do I open Copycraft?** With the hotkey (default ⌃⌘C) or from the menu bar icon. Change the hotkey in Settings.
 2. **Why is my text blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings.
 3. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether Copycraft may read the clipboard from other apps. Choose Allow, or set it in Privacy & Security, Paste from Other Apps.
 4. **Does my data leave my Mac?** No. Copycraft works fully offline and has no network access.

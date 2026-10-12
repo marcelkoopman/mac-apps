@@ -36,8 +36,8 @@ pub(crate) fn paint(
     } else {
         plain(
             body,
-            &NSFont::systemFontOfSize(13.0),
-            &NSColor::secondaryLabelColor(),
+            &NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY),
+            &crate::appearance::caption_color(),
         )
     };
     if let Some(storage) = unsafe { text.textStorage() } {

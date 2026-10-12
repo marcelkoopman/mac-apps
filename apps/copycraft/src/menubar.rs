@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,6 +31,9 @@ use crate::table::{TableOp, TableVersions};
 
 /// How often the pasteboard is polled while the card is open.
 const REFRESH: Duration = Duration::from_millis(400);
+/// One status-item click can be delivered twice (the button action and the tray mouse-up).
+/// A second toggle inside this window would open the card and close it again.
+const ICON_CLICK_GAP: Duration = Duration::from_millis(50);
 /// How often it is polled while the card is closed. A quiet tick reads only the change count.
 const IDLE_REFRESH: Duration = Duration::from_secs(1);
 /// A copy copycraft wrote that is labelled sensitive is cleared from the pasteboard this long
@@ -276,6 +280,8 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::Run(id) => self.run_command(event_loop, id),
+            UserEvent::ToggleUnderIcon => self.toggle_popup_under_icon(),
+            UserEvent::ShowStatusMenu => self.show_status_menu(),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::PreviewReady { generation, result } => {
@@ -324,6 +330,9 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // A right-click menu clears the status button's action. Put it back before the next click.
+        #[cfg(target_os = "macos")]
+        crate::macos_status_click::install(&self.tray);
         // A closed card forgets the file, so the next hotkey shows the clipboard.
         // Open table closes the card on purpose; that window keeps the file until it closes.
         if forget_opened_file(
@@ -1489,12 +1498,27 @@ impl App {
     }
 
     fn toggle_popup_under_icon(&mut self) {
+        let now = Instant::now();
+        if !icon_click_is_new(icon_click_at(), now) {
+            return;
+        }
+        note_icon_click(now);
         if !launcher::is_open() {
             self.card_view = CardView::Original;
             self.leave_opened();
             self.full_card = None;
         }
         launcher::toggle_under_icon(self.launch_for_popup(), &self.tray);
+    }
+
+    fn show_status_menu(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            // performClick: sends the button action. That must not toggle the card as well.
+            crate::macos_status_click::set_menu_action(true);
+            self.tray.show_menu();
+            crate::macos_status_click::set_menu_action(false);
+        }
     }
 
     /// The language setting changed. Cached cards keep the old words, so they are dropped and
@@ -1759,11 +1783,30 @@ impl App {
     fn choose_file(&mut self) {
         #[cfg(target_os = "macos")]
         {
-            if let Some(path) = crate::macos_open::choose_path() {
+            use mac_ui::objc2::MainThreadMarker;
+            use mac_ui::objc2_app_kit::NSApplication;
+            use mac_ui::panel;
+            // The panel steals key. Remember who had it, and keep a revealed card or table
+            // sharp until the panel is gone. The wheel runs while the panel is still loading.
+            let previous = MainThreadMarker::new()
+                .and_then(|mtm| NSApplication::sharedApplication(mtm).keyWindow());
+            let _wait = crate::macos_launcher::PanelWait::show();
+            let path = crate::macos_launcher::holding_reveal(|| {
+                crate::macos_table_window::holding_reveal(|| crate::macos_open::choose_path())
+            });
+            if let Some(path) = path {
+                // Layout during the panel may have covered the wheel. Put it back for the read.
+                crate::macos_launcher::raise_panel_wait();
                 // Same as a drop: history, the well, and a picture scan. The clipboard stays.
                 self.show_dropped(crate::open_file::load_dropped(&path));
+            } else if let Some(window) = previous.as_ref() {
+                if let Some(mtm) = MainThreadMarker::new() {
+                    panel::activate_app(mtm);
+                }
+                panel::bring_to_front(window);
+            } else {
+                launcher::order_front();
             }
-            launcher::order_front();
         }
     }
 
@@ -2184,6 +2227,8 @@ impl App {
             if self.saving.is_some() {
                 return;
             }
+            // The wheel runs while the frame is copied and the save panel is still loading.
+            let _wait = crate::macos_launcher::PanelWait::show();
             let Some(frame) = self.window_table_frame() else {
                 return;
             };
@@ -2191,22 +2236,25 @@ impl App {
             if let Some(opened) = self.opened.as_ref() {
                 job.filename = crate::open_file::save_name(&opened.name, job.extension);
             }
-            let started = (|| -> anyhow::Result<()> {
-                let Some(path) = job.choose_path()? else {
-                    return Ok(());
-                };
-                let content = job.content;
-                std::thread::Builder::new()
-                    .name("copycraft-save".into())
-                    .spawn(move || {
-                        let result = content.write_to(&path).map_err(|e| format!("{e:#}"));
-                        launcher::emit(UserEvent::SaveFinished(result));
-                    })
-                    .context("cannot start the save thread")?;
-                self.saving = Some(Background::now());
-                Ok(())
-            })();
-            launcher::order_front();
+            // The save panel steals key, and ordering the card front afterwards would
+            // steal it again. Stay on this window: a sharp grid stays sharp.
+            let started = crate::macos_table_window::keeping_revealed(|| {
+                (|| -> anyhow::Result<()> {
+                    let Some(path) = job.choose_path()? else {
+                        return Ok(());
+                    };
+                    let content = job.content;
+                    std::thread::Builder::new()
+                        .name("copycraft-save".into())
+                        .spawn(move || {
+                            let result = content.write_to(&path).map_err(|e| format!("{e:#}"));
+                            launcher::emit(UserEvent::SaveFinished(result));
+                        })
+                        .context("cannot start the save thread")?;
+                    self.saving = Some(Background::now());
+                    Ok(())
+                })()
+            });
             if let Err(e) = started {
                 log_save_failure(&format!("{e:#}"));
             }
@@ -2331,7 +2379,10 @@ impl App {
             if self.saving.is_some() {
                 return;
             }
-            let started = self.start_save();
+            // The wheel runs while the save panel is still loading. The panel can also
+            // resign the app; a revealed card stays revealed across it.
+            let _wait = crate::macos_launcher::PanelWait::show();
+            let started = crate::macos_launcher::holding_reveal(|| self.start_save());
             launcher::order_front();
             if let Err(e) = started {
                 log_save_failure(&format!("{e:#}"));
@@ -3481,6 +3532,23 @@ fn version_label() -> String {
     tray::version_label("Copycraft", env!("CARGO_PKG_VERSION"))
 }
 
+thread_local! {
+    static ICON_CLICK_AT: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+fn icon_click_at() -> Option<Instant> {
+    ICON_CLICK_AT.with(Cell::get)
+}
+
+fn note_icon_click(now: Instant) {
+    ICON_CLICK_AT.with(|slot| slot.set(Some(now)));
+}
+
+/// `true` when `now` is a new click, not the second delivery of the click at `last`.
+fn icon_click_is_new(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|at| now.saturating_duration_since(at) >= ICON_CLICK_GAP)
+}
+
 /// "Allow screenshots" (testing): the card and the table window can be captured until it is
 /// switched off or Copycraft restarts.
 const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
@@ -3614,8 +3682,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     // Icon only: name the button for VoiceOver. `sync_tooltip` adds the kind.
     mac_ui::tray::set_accessibility_label(&tray, &tray_label("Copycraft"));
+    // Above `tray-icon`'s view, so a click reaches us while that window is not key.
+    #[cfg(target_os = "macos")]
+    crate::macos_status_click::install(&tray);
 
-    let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+    let mut builder = EventLoop::<UserEvent>::with_user_event();
+    // Do not set an activation policy here. The bundled app is an agent via LSUIElement in
+    // Info.plist, and winit leaves that alone. Forcing Accessory on `cargo run` (no bundle)
+    // orders the card but macOS keeps it occluded, so the click and the hotkey show nothing.
+    let event_loop = builder.build()?;
     launcher::install_proxy(event_loop.create_proxy());
     crate::sensitivity::on_checked(|| launcher::emit(UserEvent::LabelsChecked));
 
@@ -3678,12 +3753,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClipSig, forget_opened_file, history_due, icon_tip, status_labels, status_rows, tray_label,
-        version_label,
+        ClipSig, ICON_CLICK_GAP, forget_opened_file, history_due, icon_click_is_new, icon_tip,
+        status_labels, status_rows, tray_label, version_label,
     };
     use crate::clipboard::ClipboardView;
     use crate::format::FormatKind;
     use zeroize::Zeroizing;
+
+    #[test]
+    fn a_second_delivery_of_one_icon_click_does_not_toggle_again() {
+        let now = std::time::Instant::now();
+        assert!(icon_click_is_new(None, now));
+        assert!(!icon_click_is_new(Some(now), now));
+        assert!(!icon_click_is_new(
+            Some(now),
+            now + ICON_CLICK_GAP - std::time::Duration::from_millis(1)
+        ));
+        assert!(icon_click_is_new(Some(now), now + ICON_CLICK_GAP));
+    }
 
     #[test]
     fn a_closed_card_keeps_a_file_while_its_table_window_is_open() {

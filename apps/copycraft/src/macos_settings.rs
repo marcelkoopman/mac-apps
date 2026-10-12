@@ -9,25 +9,54 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFont, NSFontWeightSemibold,
+    NSPopUpButton, NSTextField, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
+    NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
 };
 use mac_ui::{panel, widgets};
 
+use crate::commands::CommandId;
 use crate::hotkey;
 use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 use crate::settings;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 584.0;
-const PAD: f64 = 20.0;
-const ROW: f64 = 28.0;
-const GAP: f64 = 16.0;
-const RADIUS: f64 = 16.0;
+const MARGIN: f64 = mac_ui::metrics::MARGIN;
+const BUTTON_H: f64 = mac_ui::metrics::BUTTON_H;
+const NOTE_GAP: f64 = 2.0;
+const NOTE_H: f64 = 16.0;
+/// One control plus its one-line explanation.
+const SETTING_H: f64 = BUTTON_H + NOTE_GAP + NOTE_H;
+/// A labelled setting with a field and a button under the explanation.
+const FIELD_BLOCK_H: f64 = SETTING_H
+    + mac_ui::metrics::SPACE_S
+    + BUTTON_H
+    + mac_ui::metrics::SPACE_S
+    + BUTTON_H;
+const HEAD_H: f64 = 22.0;
+const SECTION_GAP: f64 = mac_ui::metrics::SECTION_GAP;
+/// Width of the name on a row that also holds a value (hotkey, language, date order).
+const LABEL_W: f64 = 136.0;
+/// Algemeen: heading, four settings, three gaps.
+const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
+/// Privacy: heading, two settings, the ignored-apps block, two gaps.
+const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Weergave: heading and the symbols block.
+const DISPLAY_H: f64 = HEAD_H + FIELD_BLOCK_H;
+const HEIGHT: f64 =
+    MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
+const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
+
+const _: () = assert!(SETTING_H == 46.0);
+const _: () = assert!(FIELD_BLOCK_H == 118.0);
+const _: () = assert!(GENERAL_H == 230.0);
+const _: () = assert!(PRIVACY_H == 248.0);
+const _: () = assert!(DISPLAY_H == 140.0);
+const _: () = assert!(HEIGHT == 682.0);
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -60,6 +89,27 @@ define_class!(
                 return;
             }
             let _: () = unsafe { msg_send![super(self), keyDown: event] };
+        }
+
+        #[unsafe(method(performKeyEquivalent:))]
+        fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
+            let open = mac_ui::keys::is_command_chord(event, "o");
+            let save = mac_ui::keys::is_command_chord(event, "s");
+            if open || save {
+                if RECORDING.get() {
+                    // The hotkey field is listening: ⌘O and ⌘S are chords, not Open or Save.
+                    handle_record_key(event);
+                } else if open {
+                    launcher::emit(UserEvent::Run(CommandId::ChooseFile));
+                } else {
+                    launcher::emit(UserEvent::Run(CommandId::Save));
+                }
+                true
+            } else {
+                let handled: bool =
+                    unsafe { msg_send![super(self), performKeyEquivalent: event] };
+                handled
+            }
         }
     }
 );
@@ -309,55 +359,49 @@ fn build(mtm: MainThreadMarker) {
     window.setContentView(Some(&content));
     let body = panel::rounded_glass(mtm, &content, RADIUS).content;
 
-    let mut y = HEIGHT - PAD - ROW;
+    let mut top = HEIGHT - MARGIN;
+    let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
 
-    place_label(mtm, &body, crate::locale::t("hotkey"), PAD, y);
-    let value = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
+    place_heading(
+        mtm,
+        &body,
+        crate::locale::t("group_general"),
+        take(&mut top, HEAD_H),
+    );
+
+    let y = take(&mut top, BUTTON_H);
+    place_name(mtm, &body, crate::locale::t("hotkey"), y);
+    let value = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_BODY,
+        &crate::appearance::caption_color(),
+    );
     value.setStringValue(&NSString::from_str(&settings::hotkey_label()));
+    let change = GlassButton::pill(mtm, crate::locale::t("change_hotkey"), ButtonSize::Small);
+    change.set_accessibility_label(crate::locale::t("change_hotkey_a11y"));
+    let change_w = change.width_within(140.0).max(BUTTON_H);
+    let change_x = WIDTH - MARGIN - change_w;
     value.setFrame(NSRect::new(
-        NSPoint::new(PAD + 110.0, y),
-        NSSize::new(180.0, ROW),
+        NSPoint::new(value_x, y),
+        NSSize::new(
+            (change_x - mac_ui::metrics::BUTTON_GAP - value_x).max(40.0),
+            BUTTON_H,
+        ),
     ));
     body.addSubview(&value);
     HOTKEY_LABEL.with(|slot| *slot.borrow_mut() = Some(value));
-    let change = GlassButton::pill(mtm, crate::locale::t("change_hotkey"), ButtonSize::Small);
-    change.set_accessibility_label(crate::locale::t("change_hotkey_a11y"));
-    let change_w = change.width_within(100.0);
     change.view().setFrame(NSRect::new(
-        NSPoint::new(WIDTH - PAD - change_w, y),
-        NSSize::new(change_w, ROW),
+        NSPoint::new(change_x, y),
+        NSSize::new(change_w, BUTTON_H),
     ));
     wire(change.button(), sel!(changeHotkey:));
     body.addSubview(change.view());
+    place_explanation(mtm, &body, crate::locale::t("hotkey_note"), &mut top);
 
-    y -= ROW + GAP;
-    place_label(mtm, &body, crate::locale::t("date_order"), PAD, y);
-    let popup = NSPopUpButton::initWithFrame_pullsDown(
-        NSPopUpButton::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(PAD + 110.0, y - 2.0),
-            NSSize::new(200.0, ROW + 4.0),
-        ),
-        false,
-    );
-    popup.removeAllItems();
-    popup.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_dmy")));
-    popup.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_mdy")));
-    popup.selectItemAtIndex(isize::from(settings::load().date_month_first));
-    wire(popup.as_ref(), sel!(dateOrderChanged:));
-    body.addSubview(&popup);
-    DATE_POPUP.with(|slot| *slot.borrow_mut() = Some(popup));
-
-    y -= ROW + GAP;
-    place_label(mtm, &body, crate::locale::t("language"), PAD, y);
-    let language = NSPopUpButton::initWithFrame_pullsDown(
-        NSPopUpButton::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(PAD + 110.0, y - 2.0),
-            NSSize::new(200.0, ROW + 4.0),
-        ),
-        false,
-    );
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    place_name(mtm, &body, crate::locale::t("language"), y);
+    let language = popup(mtm, y);
     language.removeAllItems();
     language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_system")));
     language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_nl")));
@@ -365,83 +409,114 @@ fn build(mtm: MainThreadMarker) {
     language.selectItemAtIndex(language_index(settings::language()));
     wire(language.as_ref(), sel!(languageChanged:));
     body.addSubview(&language);
+    place_explanation(mtm, &body, crate::locale::t("language_note"), &mut top);
 
-    y -= ROW + GAP;
-    let privacy = unsafe {
-        NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str(crate::locale::t("privacy_filter")),
-            None,
-            None,
-            mtm,
-        )
-    };
-    privacy.setState(state_of(settings::privacy_filter()));
-    privacy.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
-    wire(&privacy, sel!(privacyFilterToggled:));
-    body.addSubview(&privacy);
-    PRIVACY_BOX.with(|slot| *slot.borrow_mut() = Some(privacy));
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    place_name(mtm, &body, crate::locale::t("date_order"), y);
+    let date_order = popup(mtm, y);
+    date_order.removeAllItems();
+    date_order.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_dmy")));
+    date_order.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_mdy")));
+    date_order.selectItemAtIndex(isize::from(settings::load().date_month_first));
+    wire(date_order.as_ref(), sel!(dateOrderChanged:));
+    body.addSubview(&date_order);
+    DATE_POPUP.with(|slot| *slot.borrow_mut() = Some(date_order));
+    place_explanation(mtm, &body, crate::locale::t("date_order_note"), &mut top);
 
-    y -= ROW + GAP;
-    let blur = unsafe {
-        NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str(crate::locale::t("blur_masked")),
-            None,
-            None,
-            mtm,
-        )
-    };
-    blur.setState(state_of(settings::load().blur));
-    // The blur only styles the privacy filter's mask.
-    blur.setEnabled(settings::privacy_filter());
-    blur.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
-    wire(&blur, sel!(blurToggled:));
-    body.addSubview(&blur);
-    BLUR_BOX.with(|slot| *slot.borrow_mut() = Some(blur));
-
-    y -= ROW + GAP;
-    let login = unsafe {
-        NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str(crate::locale::t("open_at_login")),
-            None,
-            None,
-            mtm,
-        )
-    };
-    login.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    let login = checkbox(mtm, crate::locale::t("open_at_login"), y);
     wire(&login, sel!(loginToggled:));
     body.addSubview(&login);
     LOGIN_BOX.with(|slot| *slot.borrow_mut() = Some(login));
-
-    y -= ROW;
-    let note = widgets::label(mtm, 11.0, &NSColor::secondaryLabelColor());
-    note.setFrame(NSRect::new(
-        NSPoint::new(PAD + 24.0, y - 2.0),
-        NSSize::new(WIDTH - PAD * 2.0 - 24.0, ROW),
-    ));
-    body.addSubview(&note);
+    gap(&mut top, NOTE_GAP);
+    let note = place_note(
+        mtm,
+        &body,
+        crate::locale::t("login_note"),
+        take(&mut top, NOTE_H),
+    );
     LOGIN_NOTE.with(|slot| *slot.borrow_mut() = Some(note));
     refresh_login_row();
 
-    y -= GAP + ROW;
-    place_label(mtm, &body, crate::locale::t("symbols"), PAD, y);
-    y -= ROW;
-    let field = widgets::plain_field(mtm, 13.0, "");
-    field.setBezeled(true);
-    field.setDrawsBackground(true);
+    gap(&mut top, SECTION_GAP);
+    place_heading(
+        mtm,
+        &body,
+        crate::locale::t("group_privacy"),
+        take(&mut top, HEAD_H),
+    );
+
+    let y = take(&mut top, BUTTON_H);
+    let privacy = checkbox(mtm, crate::locale::t("privacy_filter"), y);
+    privacy.setState(state_of(settings::privacy_filter()));
+    wire(&privacy, sel!(privacyFilterToggled:));
+    body.addSubview(&privacy);
+    PRIVACY_BOX.with(|slot| *slot.borrow_mut() = Some(privacy));
+    place_explanation(mtm, &body, crate::locale::t("privacy_note"), &mut top);
+
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    let blur = checkbox(mtm, crate::locale::t("blur_masked"), y);
+    blur.setState(state_of(settings::load().blur));
+    // The blur only styles the privacy filter's mask.
+    blur.setEnabled(settings::privacy_filter());
+    wire(&blur, sel!(blurToggled:));
+    body.addSubview(&blur);
+    BLUR_BOX.with(|slot| *slot.borrow_mut() = Some(blur));
+    place_explanation(mtm, &body, crate::locale::t("blur_note"), &mut top);
+
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    place_label(
+        mtm,
+        &body,
+        crate::locale::t("ignored_apps"),
+        take(&mut top, BUTTON_H),
+        WIDTH - MARGIN * 2.0,
+    );
+    place_explanation(mtm, &body, crate::locale::t("ignored_note"), &mut top);
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let ignored = text_field(mtm, take(&mut top, BUTTON_H));
+    ignored.setStringValue(&NSString::from_str(&settings::ignored_apps_text()));
+    ignored.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("ignored_apps"))));
+    DELEGATE.with(|slot| {
+        if let Some(delegate) = slot.borrow().as_ref() {
+            // SAFETY: SettingsDelegate implements controlTextDidEndEditing:. DELEGATE keeps it
+            // alive while the window is open; the field holds it weakly.
+            unsafe { widgets::set_text_delegate(&ignored, delegate) };
+        }
+    });
+    body.addSubview(&ignored);
+    IGNORED_FIELD.with(|slot| *slot.borrow_mut() = Some(ignored));
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let add = GlassButton::pill(mtm, crate::locale::t("ignored_apps_add"), ButtonSize::Small);
+    add.set_accessibility_label(crate::locale::t("ignored_apps_add"));
+    place_pill(&add, take(&mut top, BUTTON_H), 280.0);
+    wire(add.button(), sel!(addFrontmostApp:));
+    let add_button = add.button().retain();
+    body.addSubview(add.view());
+    IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
+    refresh_ignore_button();
+
+    gap(&mut top, SECTION_GAP);
+    place_heading(
+        mtm,
+        &body,
+        crate::locale::t("group_display"),
+        take(&mut top, HEAD_H),
+    );
+    place_label(
+        mtm,
+        &body,
+        crate::locale::t("symbols"),
+        take(&mut top, BUTTON_H),
+        WIDTH - MARGIN * 2.0,
+    );
+    place_explanation(mtm, &body, crate::locale::t("symbols_note"), &mut top);
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let field = text_field(mtm, take(&mut top, BUTTON_H));
     field.setStringValue(&NSString::from_str(&settings::symbol_catalog_text()));
-    field.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
     field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
         "symbols_field_a11y",
     ))));
@@ -455,58 +530,13 @@ fn build(mtm: MainThreadMarker) {
     });
     body.addSubview(&field);
     SYMBOLS_FIELD.with(|slot| *slot.borrow_mut() = Some(field));
-
-    y -= GAP + ROW;
+    gap(&mut top, mac_ui::metrics::SPACE_S);
     let restore = GlassButton::pill(mtm, crate::locale::t("symbols_restore"), ButtonSize::Small);
     restore.set_accessibility_label(crate::locale::t("symbols_restore"));
-    let restore_w = restore.width_within(240.0);
-    restore.view().setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(restore_w, ROW),
-    ));
+    place_pill(&restore, take(&mut top, BUTTON_H), 240.0);
     wire(restore.button(), sel!(restoreSymbols:));
     body.addSubview(restore.view());
-
-    y -= GAP + ROW;
-    let ignored_label = widgets::label(mtm, 13.0, &NSColor::labelColor());
-    ignored_label.setStringValue(&NSString::from_str(crate::locale::t("ignored_apps")));
-    ignored_label.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
-    body.addSubview(&ignored_label);
-
-    y -= ROW;
-    let ignored = widgets::plain_field(mtm, 13.0, "");
-    ignored.setBezeled(true);
-    ignored.setDrawsBackground(true);
-    ignored.setStringValue(&NSString::from_str(&settings::ignored_apps_text()));
-    ignored.setFrame(NSRect::new(
-        NSPoint::new(PAD, y),
-        NSSize::new(WIDTH - PAD * 2.0, ROW),
-    ));
-    ignored.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("ignored_apps"))));
-    DELEGATE.with(|slot| {
-        if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: SettingsDelegate implements controlTextDidEndEditing:. DELEGATE keeps it
-            // alive while the window is open; the field holds it weakly.
-            unsafe { widgets::set_text_delegate(&ignored, delegate) };
-        }
-    });
-    body.addSubview(&ignored);
-    IGNORED_FIELD.with(|slot| *slot.borrow_mut() = Some(ignored));
-
-    y -= GAP + ROW;
-    let add = GlassButton::pill(mtm, crate::locale::t("ignored_apps_add"), ButtonSize::Small);
-    add.set_accessibility_label(crate::locale::t("ignored_apps_add"));
-    let add_w = add.width_within(280.0);
-    add.view()
-        .setFrame(NSRect::new(NSPoint::new(PAD, y), NSSize::new(add_w, ROW)));
-    wire(add.button(), sel!(addFrontmostApp:));
-    let add_button = add.button().retain();
-    body.addSubview(add.view());
-    IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
-    refresh_ignore_button();
+    debug_assert!((top - MARGIN).abs() < 0.5);
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);
@@ -521,11 +551,102 @@ fn restore_level(window: &NSWindow) {
     LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
-fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, x: f64, y: f64) {
-    let field = widgets::label(mtm, 13.0, &NSColor::labelColor());
+fn take(top: &mut f64, height: f64) -> f64 {
+    *top -= height;
+    *top
+}
+
+fn gap(top: &mut f64, height: f64) {
+    *top -= height;
+}
+
+fn place_heading(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
+    let field = widgets::label(mtm, mac_ui::metrics::FONT_TITLE, &NSColor::labelColor());
+    // SAFETY: NSFontWeightSemibold is a process-wide AppKit constant.
+    let semibold = unsafe { NSFontWeightSemibold };
+    field.setFont(Some(&NSFont::systemFontOfSize_weight(
+        mac_ui::metrics::FONT_TITLE,
+        semibold,
+    )));
     field.setStringValue(&NSString::from_str(title));
-    field.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(100.0, ROW)));
+    field.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(WIDTH - MARGIN * 2.0, HEAD_H),
+    ));
     parent.addSubview(&field);
+}
+
+fn place_name(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
+    place_label(mtm, parent, title, y, LABEL_W);
+}
+
+fn place_label(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64, width: f64) {
+    let field = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &NSColor::labelColor());
+    field.setStringValue(&NSString::from_str(title));
+    field.setFrame(NSRect::new(NSPoint::new(MARGIN, y), NSSize::new(width, BUTTON_H)));
+    parent.addSubview(&field);
+}
+
+fn place_note(mtm: MainThreadMarker, parent: &NSView, text: &str, y: f64) -> Retained<NSTextField> {
+    let note = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
+    note.setStringValue(&NSString::from_str(text));
+    note.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(WIDTH - MARGIN * 2.0, NOTE_H),
+    ));
+    parent.addSubview(&note);
+    note
+}
+
+fn place_explanation(mtm: MainThreadMarker, parent: &NSView, text: &str, top: &mut f64) {
+    gap(top, NOTE_GAP);
+    place_note(mtm, parent, text, take(top, NOTE_H));
+}
+
+fn checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSButton> {
+    let button = unsafe {
+        NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
+    };
+    button.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(WIDTH - MARGIN * 2.0, BUTTON_H),
+    ));
+    button
+}
+
+fn popup(mtm: MainThreadMarker, y: f64) -> Retained<NSPopUpButton> {
+    let x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
+    NSPopUpButton::initWithFrame_pullsDown(
+        NSPopUpButton::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(x, y),
+            NSSize::new(WIDTH - MARGIN - x, BUTTON_H),
+        ),
+        false,
+    )
+}
+
+fn text_field(mtm: MainThreadMarker, y: f64) -> Retained<NSTextField> {
+    let field = widgets::plain_field(mtm, mac_ui::metrics::FONT_BODY, "");
+    field.setBezeled(true);
+    field.setDrawsBackground(true);
+    field.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(WIDTH - MARGIN * 2.0, BUTTON_H),
+    ));
+    field
+}
+
+fn place_pill(button: &GlassButton, y: f64, max_w: f64) {
+    let width = button.width_within(max_w).max(BUTTON_H);
+    button.view().setFrame(NSRect::new(
+        NSPoint::new(MARGIN, y),
+        NSSize::new(width, BUTTON_H),
+    ));
 }
 
 fn language_index(language: settings::Language) -> isize {

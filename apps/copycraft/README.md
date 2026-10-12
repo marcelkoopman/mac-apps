@@ -1,6 +1,6 @@
 # Copycraft
 
-A clipboard command for macOS. Press **⌃⌥⌘C** and a card opens at the cursor showing what you copied, plus the actions that fit it. The menu bar icon shows that Copycraft is running: a monochrome template that follows the menu bar (light, dark or tinted) and blinks briefly on each new copy. The detected kind (JSON, Rust, Image, a link's host, YouTube, …) shows in its tooltip and its VoiceOver label. The app has no Dock icon.
+A clipboard command for macOS. Press **⌃⌘C** and a card opens at the cursor showing what you copied, plus the actions that fit it. The menu bar icon shows that Copycraft is running: a monochrome template that follows the menu bar (light, dark or tinted) and blinks briefly on each new copy. The detected kind (JSON, Rust, Image, a link's host, YouTube, …) shows in its tooltip and its VoiceOver label. The app has no Dock icon.
 
 Part of the [mac-apps](../../README.md) monorepo.
 
@@ -38,7 +38,7 @@ Text that decodes gets exactly one extra chip next to *Original*, named after wh
 - **Hash**: hex digits of one case, with letters and digits, recognised by length only: 32 *Probably MD5* / *Waarschijnlijk MD5* (or a UUID without dashes), 40 SHA-1, 56 SHA-224, 64 SHA-256, 96 SHA-384, 128 SHA-512. Never reversed or looked up. Copycraft does not compute hashes or encode Base64.
 - **Base64**: Base64 and Base64URL, with or without padding, and `data:…;base64,` URIs. Only offered when the bytes are readable UTF-8 text (shown as is), JSON (shown pretty) or a picture: PNG, JPEG, GIF, WebP or HEIC is recognised by its magic bytes and described as type, size in pixels (read from the header) and byte count, and the picture itself is drawn in the card's well. It is decoded on a background thread (the card describes it until the picture arrives) and drawn the way a dropped picture is, blurred until clicked like any picture; the description stays on the meta line, with the labels of the copy. *Original* goes back to the text. A picture over 20 MB decoded, or over 50 megapixels where the header says, or one the system cannot read, is not drawn: the description stays (with *Not shown: larger than 20 MB* / *Niet getoond: groter dan 20 MB*). Copy and Save in this view still take the description text. Ordinary words (*hello*, *Test*, *password*) are not Base64: at least 8 characters, one alphabet, padding only where the length needs it, and decoded text must read as text.
 
-Manual checks on the Mac (copy the text, press ⌃⌥⌘C):
+Manual checks on the Mac (copy the text, press ⌃⌘C):
 
 1. `testdata/decode/jwt_expired.txt`: chip *JWT*, meta line *credential*, well blurred. Click *JWT*: still blurred and *credential*; after a click: *Signature not verified*, *Expires (exp): expired (…)*, header and payload. *Original* shows the token again.
 2. `testdata/decode/jwt_valid_until_2099.txt`: *valid for 72 years* (or 73); `jwt_not_before_future.txt`: *not valid yet (in …)*. With the Mac in Dutch: *nog … geldig*, *nog niet geldig (over …)*.
@@ -82,7 +82,7 @@ Manual check of the language (NL/EN): open Settings › Language and choose Nede
 
 | Input | Action |
 | --- | --- |
-| ⌃⌥⌘C | Open the card at the cursor, or close it |
+| ⌃⌘C | Open the card at the cursor, or close it |
 | Click the menu bar icon | Open the card under the icon, or close it |
 | Right-click the menu bar icon | Hotkey hint, *Pause recording*, *Ignore next copy*, *History*, version, *Quit* |
 | Type any text, or `/` | Search actions, history and appearance. With the privacy filter on, a history hit is titled with its type and size; with it off, one line of the text (about 80 characters). The menu bar *History* rows stay type and size |

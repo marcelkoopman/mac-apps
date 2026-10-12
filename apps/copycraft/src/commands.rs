@@ -10,17 +10,27 @@ use crate::toolbar_visibility;
 use mac_ui::keys::Key;
 
 pub const MAX_VISIBLE: usize = 8;
-pub const CHIP_PITCH: f64 = 34.0;
-pub const CHIP_PILL_H: f64 = 28.0;
-
-pub const CHIP_GAP: f64 = 6.0;
-/// History chevrons: square hit areas at the ends of the history capsule, as tall as a chip.
-pub const NAV_BUTTON: f64 = 28.0;
+pub const CHIP_PILL_H: f64 = mac_ui::metrics::BUTTON_H;
+pub const CHIP_GAP: f64 = mac_ui::metrics::BUTTON_GAP;
+/// Vertical step from one chip row to the next: the pill, then the same gap as between buttons.
+pub const CHIP_PITCH: f64 = CHIP_PILL_H + CHIP_GAP;
+/// History chevrons: square hit areas, as tall as a chip.
+pub const NAV_BUTTON: f64 = mac_ui::metrics::BUTTON_H;
 /// The "3 / 20" position between the chevrons. Fixed and wide enough for the longest label
-/// (history holds 20), so the capsule never changes width while stepping.
+/// (history holds 20), so the row never changes width while stepping.
 pub const NAV_COUNT_W: f64 = 44.0;
-/// The whole history capsule: chevron, position, chevron, with no gaps.
-pub const NAV_SPAN: f64 = NAV_BUTTON + NAV_COUNT_W + NAV_BUTTON;
+/// The history controls: chevron, gap, position, gap, chevron.
+pub const NAV_SPAN: f64 = NAV_BUTTON + CHIP_GAP + NAV_COUNT_W + CHIP_GAP + NAV_BUTTON;
+
+/// Left edge of the position label inside a history or version row.
+pub fn nav_mid_x() -> f64 {
+    NAV_BUTTON + CHIP_GAP
+}
+
+/// Left edge of the trailing chevron inside a history or version row.
+pub fn nav_end_x() -> f64 {
+    NAV_BUTTON + CHIP_GAP + NAV_COUNT_W + CHIP_GAP
+}
 
 /// A history chevron: its SF Symbol, the glyph drawn without SF Symbols, its name (the
 /// VoiceOver label and tooltip, never drawn) and which way it steps through history.
@@ -80,12 +90,6 @@ impl Chevron {
         } else {
             nav.can_newer
         }
-    }
-
-    /// The button title: empty when the symbol image shows (image only, so no name is drawn
-    /// beside or under it), else just the fallback glyph.
-    pub fn title(&self, has_image: bool) -> &'static str {
-        if has_image { "" } else { self.glyph }
     }
 
     /// Tooltip: the name and its keys, `Previous (← or ⌘←)` (`Vorige (← of ⌘←)`).
@@ -980,7 +984,7 @@ fn compose_card(data: &LaunchData) -> WorkCard {
             title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: format!("{}\n{}", crate::locale::t("nothing_copied"), drop_hint()),
+            placeholder: crate::locale::tf("empty_history", &[&crate::settings::hotkey_label()]),
             shows_image: false,
             highlight: None,
             selectable: false,
@@ -3098,7 +3102,7 @@ fn image_meta(facts: &ImageFacts) -> String {
 
 /// Fit `line` into `max_width` (measured by `width_of`). The part before the first `  ·  `
 /// is shortened in the middle so the rest (format, dimensions) stays. When that rest alone
-/// is wider than the line, the name goes on the first line and the rest on the second.
+/// is wider than the line, the whole line is shortened in the middle. The result is one line.
 pub(crate) fn fit_leading_name(line: &str, max_width: f64, width_of: impl Fn(&str) -> f64) -> String {
     if width_of(line) <= max_width {
         return line.to_string();
@@ -3107,8 +3111,7 @@ pub(crate) fn fit_leading_name(line: &str, max_width: f64, width_of: impl Fn(&st
         return shrink_middle(line, |candidate| width_of(candidate) <= max_width);
     };
     if width_of(tail) > max_width {
-        let name = shrink_middle(name, |candidate| width_of(candidate) <= max_width);
-        return format!("{name}\n{tail}");
+        return shrink_middle(line, |candidate| width_of(candidate) <= max_width);
     }
     let sep = "  ·  ";
     let name = shrink_middle(name, |candidate| {
@@ -3289,7 +3292,9 @@ fn command_enabled(
 mod tests {
     use super::picker_columns;
     use super::{ArrowAction, ArrowFocus, arrow_action};
-    use super::{CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
+    use super::{
+        CHIP_GAP, CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON,
+    };
     use super::{
         CardView, CommandId, ContentActions, DiffShown, Hist, ImageFacts, ImageScan, LaunchData,
         NAV_RESERVE, NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key,
@@ -5562,7 +5567,7 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         let card = work_card(&input);
         assert_eq!(
             card.placeholder,
-            "Nothing copied\nDrop a text file or image here to open it"
+            crate::locale::tf("empty_history", &[&crate::hotkey::DEFAULT_LABEL]),
         );
         assert!(card.excerpt.is_empty());
         assert_eq!(
@@ -5963,12 +5968,10 @@ Kleinste opdracht die de change dekt.
     }
 
     #[test]
-    fn chevrons_draw_only_their_image_or_glyph() {
+    fn chevrons_are_one_glyph_with_a_spoken_name() {
         for chevron in [PREVIOUS_CHEVRON, NEXT_CHEVRON] {
-            assert_eq!(chevron.title(true), "", "{chevron:?}: image only");
-            assert_eq!(chevron.title(false), chevron.glyph);
             assert_eq!(chevron.glyph.chars().count(), 1);
-            assert!(!chevron.title(false).contains(chevron.name()));
+            assert!(!chevron.name().contains(chevron.glyph));
         }
         assert_eq!(PREVIOUS_CHEVRON.name(), "Previous");
         assert_eq!(NEXT_CHEVRON.name(), "Next");
@@ -6005,9 +6008,12 @@ Kleinste opdracht die de change dekt.
     fn history_capsule_fits_the_longest_position() {
         // "20 / 20" in 12 pt monospaced digits is about 40 pt wide.
         const { assert!(NAV_COUNT_W >= 40.0) };
-        // Square chevron hit areas as tall as the capsule (a chip).
+        // Square chevron hit areas as tall as a chip.
         const { assert!(NAV_BUTTON == CHIP_PILL_H) };
-        assert_eq!(NAV_SPAN, NAV_BUTTON * 2.0 + NAV_COUNT_W);
+        assert_eq!(
+            NAV_SPAN,
+            NAV_BUTTON * 2.0 + NAV_COUNT_W + CHIP_GAP * 2.0
+        );
     }
 
     #[test]
@@ -6369,7 +6375,8 @@ Kleinste opdracht die de change dekt.
         assert!(!fitted.contains('\n'), "{fitted}");
         assert!(width(&fitted) <= 40.0, "{fitted}");
         let tight = super::fit_leading_name(&line, 10.0, width);
-        assert!(tight.contains('\n'), "{tight}");
-        assert!(tight.contains("4032×3024"), "{tight}");
+        assert!(!tight.contains('\n'), "{tight}");
+        assert!(tight.contains('…'), "{tight}");
+        assert!(width(&tight) <= 10.0, "{tight}");
     }
 }

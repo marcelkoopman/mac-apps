@@ -5,8 +5,8 @@
 //! states, and the focus ring. It replaces the hand-built [`OverlayButton`] (a filled `NSBox`
 //! under a transparent button).
 //!
-//! - [`GlassButton::symbol`]: SF Symbol, circle shape. The accessibility label doubles as the
-//!   button title, so VoiceOver never reads an empty button.
+//! - [`GlassButton::symbol`]: SF Symbol, circle shape. The spoken name is the accessibility
+//!   label only. A glass circle paints a title, so the title stays empty while the symbol shows.
 //! - [`GlassButton::pill`]: text title, capsule shape, sized with `sizeToFit`.
 //!
 //! Callers set the frame, visibility and tooltip, and wire target and action
@@ -112,10 +112,11 @@ pub struct GlassButton {
 impl GlassButton {
     /// Circle button showing SF Symbol `symbol` at `point_size` points (template image).
     ///
-    /// `label` names the action for VoiceOver ("Copy", "Save"). It is the button title, kept out
-    /// of sight by the image-only position, and the accessibility label. Without SF Symbols
-    /// (before macOS 11, or an unknown name) the button shows `fallback` text in the system
-    /// font at `point_size` instead. An empty `label` falls back to `fallback`, then `symbol`.
+    /// `label` names the action for VoiceOver ("Copy", "Save"). It is the accessibility label.
+    /// The title stays empty: a glass circle draws the title on top of the symbol (the K of
+    /// Kopieer, the B of Bewaar). Without SF Symbols (before macOS 11, or an unknown name) the
+    /// button shows `fallback` text in the system font at `point_size` instead. An empty
+    /// `label` falls back to `fallback`, then `symbol`.
     pub fn symbol(
         mtm: MainThreadMarker,
         symbol: &str,
@@ -129,11 +130,12 @@ impl GlassButton {
         if let Some(image) = system_symbol(symbol, label) {
             image.setTemplate(true);
             image.setSize(NSSize::new(point_size, point_size));
+            // Title first: setting it can put the image back beside the title.
+            this.button.setTitle(&NSString::from_str(""));
             this.button.setImage(Some(&image));
             this.button.setImagePosition(NSCellImagePosition::ImageOnly);
             this.button
                 .setImageScaling(NSImageScaling::ScaleProportionallyDown);
-            this.button.setTitle(&title);
         } else {
             this.button.setTitle(&NSString::from_str(fallback));
             this.button

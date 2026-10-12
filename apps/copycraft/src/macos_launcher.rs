@@ -11,20 +11,22 @@ use mac_ui::find::{match_label, step_match};
 use mac_ui::glass;
 use mac_ui::keys::Key;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
+use mac_ui::objc2::runtime::{AnyClass, AnyObject, NSObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSApplication, NSApplicationDidResignActiveNotification,
-    NSAttributedStringNSStringDrawing, NSBeep, NSBox, NSButton, NSCellImagePosition, NSColor,
+    NSAnimatablePropertyContainer, NSAnimationContext, NSAttributedStringNSStringDrawing, NSBeep,
+    NSBox, NSButton, NSColor,
     NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventModifierFlags,
-    NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage, NSImageView, NSLineBreakMode, NSMenu,
+    NSFloatingWindowLevel, NSFocusRingType, NSFont, NSFontWeightSemibold, NSImage, NSImageView,
+    NSLineBreakMode, NSMenu,
     NSMenuItem, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSScrollView, NSSearchField,
     NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
     NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSMouseInRect, NSNotification, NSNotificationCenter,
-    NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
+    NSNotificationCenter, NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};
@@ -43,13 +45,11 @@ const WIDTH: f64 = 440.0;
 /// The diff well is two columns, so the card grows while that view is showing.
 const DIFF_WIDTH: f64 = 820.0;
 use crate::card_layout::{
-    HEADER_H, ITEM_FIND_H, PAD, PREVIEW_H, meta_block_height, place_sections,
+    HEADER_H, ITEM_FIND_H, PAD, PREVIEW_H, SEARCH_H, meta_block_height, place_sections,
 };
-const HEADER_BUTTON: f64 = 22.0;
-const CLEAR_BUTTON_W: f64 = 64.0;
-const WELL_ACTION: f64 = 26.0;
-const WELL_INSET: f64 = 8.0;
-const WELL_GAP: f64 = 6.0;
+const WELL_ACTION: f64 = mac_ui::metrics::BUTTON_H;
+const WELL_INSET: f64 = mac_ui::metrics::SPACE_S;
+const WELL_GAP: f64 = mac_ui::metrics::BUTTON_GAP;
 const ITEM_COUNT_W: f64 = 56.0;
 /// Gaussian blur (`CIGaussianBlur` radius, in points) over masked text in the well. The privacy
 /// tradeoff: the blur should show the shape of what was copied (how many lines, their indentation
@@ -65,21 +65,19 @@ const TEXT_BLUR_RADIUS: f64 = 6.0;
 /// does not.
 const IMAGE_BLUR_RADIUS: f64 = 10.0;
 const _: () = assert!(TEXT_BLUR_RADIUS >= 5.0 && TEXT_BLUR_RADIUS < IMAGE_BLUR_RADIUS);
-/// Glass controls this close merge on macOS 26+ (`glass::group`). Below the 6 pt gaps between
-/// chips and header buttons, so they only merge while they morph closer together.
+/// Glass controls this close merge on macOS 26+ (`glass::group`). Below the button gap, so
+/// neighbours only merge while they morph closer together.
 const GLASS_MERGE: f64 = 4.0;
-/// History capsule: chevron symbol size and the position label's font size.
-const NAV_SYMBOL: f64 = 12.0;
-const NAV_FONT: f64 = 12.0;
-/// Corner radius of the launcher panel, its glass and the frosted fallback. Every nested
-/// radius derives from it. Fixed: objc2-app-kit 0.3.2 has no public API for the system window
-/// corner radius on macOS 26+ (`NSViewCornerConfiguration` is not bound), so the panel keeps
-/// this documented value instead of matching it at runtime.
-const PANEL_RADIUS: f64 = 16.0;
-/// The well (content panel) and its reveal shade sit `PAD` inside the panel edge, so their
-/// corners are concentric with the panel's: `PANEL_RADIUS - PAD`, clamped at
-/// [`corners::MIN_RADIUS`].
-const WELL_RADIUS: f64 = corners::concentric_radius(PANEL_RADIUS, PAD);
+/// History chevron symbol size and the position label's font size.
+const NAV_SYMBOL: f64 = mac_ui::metrics::FONT_CAPTION;
+const NAV_FONT: f64 = mac_ui::metrics::FONT_CAPTION;
+/// Corner radius of the launcher panel, its glass and the frosted fallback. Fixed:
+/// objc2-app-kit 0.3.2 has no public API for the system window corner radius on macOS 26+
+/// (`NSViewCornerConfiguration` is not bound), so the panel keeps the shared radius.
+const PANEL_RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
+/// The well uses the shared 8 pt radius. It shares the window margin with the search field,
+/// so the radius is not `concentric_radius(PANEL_RADIUS, PAD)` (that would clamp to 4).
+const WELL_RADIUS: f64 = mac_ui::metrics::WELL_RADIUS;
 /// What the card takes when it is dropped on it: one text file of any kind (plain, source code,
 /// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`) or picture (`public.image`:
 /// PNG, JPEG, HEIC, GIF, WebP, TIFF, …), also as a promised file (Photos); image data (a picture
@@ -195,6 +193,8 @@ thread_local! {
     static SPINNER: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
     /// "Showing 200 of 23,220 rows" when the well holds a preview. Empty otherwise.
     static PREVIEW_NOTE: RefCell<String> = const { RefCell::new(String::new()) };
+    /// One-line empty state, centred in the well.
+    static EMPTY_LINE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// "Show all" pill at the bottom of the well, rebuilt when its title changes.
     static SHOW_ALL: RefCell<Option<ShowAllButton>> = const { RefCell::new(None) };
     static REVEAL: RefCell<Option<RevealCover>> = const { RefCell::new(None) };
@@ -230,6 +230,8 @@ thread_local! {
     static DIFF_LOCK: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };
+    /// Our open panel is up. It can resign the app; a revealed card stays revealed.
+    static FILE_PANEL: Cell<bool> = const { Cell::new(false) };
     /// The table's version capsule ([`commands::VersionBar`]); `None` hides it.
     static VERSION_BAR: RefCell<Option<commands::VersionBar>> = const { RefCell::new(None) };
     /// The version capsule's views.
@@ -297,6 +299,14 @@ define_class!(
                 if item_find_on() {
                     focus_item_field();
                 }
+                true
+            } else if mac_ui::keys::is_command_chord(event, "o") {
+                // ⌘O opens a file, also while a search field has the caret.
+                launcher::emit(UserEvent::Run(CommandId::ChooseFile));
+                true
+            } else if mac_ui::keys::is_command_chord(event, "s") {
+                // ⌘S saves what the card shows, also while a search field has the caret.
+                launcher::emit(UserEvent::Run(CommandId::Save));
                 true
             } else if let Some(id) = undo_chord(event) {
                 // ⌘Z / ⇧⌘Z step through the table's versions (typed search text keeps them).
@@ -662,6 +672,95 @@ pub fn set_busy(busy: bool) {
     });
 }
 
+thread_local! {
+    /// Busy wheel shown while a modal open or save panel is starting. The panel blocks the
+    /// main thread, so the wheel is committed before that call.
+    static PANEL_WAIT: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
+}
+
+/// The busy wheel on the key window, for the wait before an open or save panel appears.
+pub struct PanelWait;
+
+impl PanelWait {
+    /// Show the wheel and commit its animation. Dropping it removes the wheel.
+    pub fn show() -> Self {
+        show_panel_wait();
+        Self
+    }
+}
+
+impl Drop for PanelWait {
+    fn drop(&mut self) {
+        hide_panel_wait();
+    }
+}
+
+fn show_panel_wait() {
+    if PANEL_WAIT.with(|slot| slot.borrow().is_some()) {
+        return;
+    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(window) = NSApplication::sharedApplication(mtm).keyWindow() else {
+        return;
+    };
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    let spinner = progress::Spinner::new(mtm, SpinnerSize::Regular);
+    let indicator = spinner.view();
+    indicator.setWantsLayer(true);
+    // SAFETY: `setUsesThreadedAnimation:` keeps an indeterminate indicator spinning while
+    // the main thread is inside a modal panel and cannot service the run loop.
+    unsafe { indicator.setUsesThreadedAnimation(true) };
+    spinner.add_centered(&content, content.bounds());
+    // The view has to be in the window before its layer exists. Draw once, then start,
+    // then commit, so the wheel is already running when the panel blocks this thread.
+    window.displayIfNeeded();
+    spinner.start();
+    window.displayIfNeeded();
+    commit_animations();
+    PANEL_WAIT.with(|slot| slot.replace(Some(spinner)));
+}
+
+/// Put the panel-wait wheel back above whatever layout just raised.
+pub fn raise_panel_wait() {
+    let window = PANEL_WAIT.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(spinner) = borrowed.as_ref() else {
+            return None;
+        };
+        // SAFETY: the superview is used only to re-add the spinner, which keeps it alive.
+        let parent = unsafe { spinner.view().superview() };
+        let Some(parent) = parent else {
+            return None;
+        };
+        parent.addSubview(spinner.view());
+        spinner.view().window()
+    });
+    if let Some(window) = window.as_ref() {
+        window.displayIfNeeded();
+        commit_animations();
+    }
+}
+
+fn commit_animations() {
+    if let Some(transaction) = AnyClass::get(c"CATransaction") {
+        // SAFETY: +[CATransaction flush] takes no arguments. It commits animations already
+        // added to a layer.
+        let _: () = unsafe { msg_send![transaction, flush] };
+    }
+}
+
+fn hide_panel_wait() {
+    PANEL_WAIT.with(|slot| {
+        if let Some(spinner) = slot.borrow_mut().take() {
+            spinner.remove();
+        }
+    });
+}
+
 /// Keep a running spinner centered over the well and above the views raised after it.
 fn place_spinner(well_frame: NSRect) {
     SPINNER.with(|slot| {
@@ -917,19 +1016,24 @@ fn ensure_window(mtm: MainThreadMarker) {
     // `content` is `window_view`.
     let content = panel::rounded_glass(mtm, &window_view, PANEL_RADIUS).content;
 
-    let header = widgets::label(mtm, 13.0, &NSColor::labelColor());
+    let header = widgets::label(mtm, mac_ui::metrics::FONT_TITLE, &NSColor::labelColor());
     // A long type name is cut in the middle so the hotkey stays visible.
     header.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
-    let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let meta = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
     // Keep the warning at the end when a long filename is cut short.
     meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     meta.setAllowsEditingTextAttributes(true);
     let field = search_field(mtm);
     let item_find = item_search_field(mtm);
-    let item_count = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let item_count = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
     item_count.setAlignment(NSTextAlignment::Right);
     item_count.setHidden(true);
-    let well = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
+    let well = filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
+    crate::appearance::apply_well(&well, false, true);
+    let empty_line = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &crate::appearance::caption_color());
+    empty_line.setAlignment(NSTextAlignment::Center);
+    empty_line.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    empty_line.setHidden(true);
     let preview_text = payload_view(mtm);
     let preview_scroll = text_scroll(mtm, &preview_text);
     let preview_clip = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
@@ -945,7 +1049,7 @@ fn ensure_window(mtm: MainThreadMarker) {
         "⋯",
         sel!(moreClicked:),
     );
-    let clear = GlassButton::pill(mtm, crate::locale::t("wipe"), ButtonSize::Small);
+    let clear = GlassButton::pill(mtm, crate::locale::t("wipe"), ButtonSize::Regular);
     wire_button(clear.button(), sel!(clearClicked:));
     clear
         .button()
@@ -957,7 +1061,7 @@ fn ensure_window(mtm: MainThreadMarker) {
         "✕",
         sel!(closeClicked:),
     );
-    let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Small);
+    let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Regular);
     symbols.set_accessibility_label(crate::locale::t("symbols_a11y"));
     symbols
         .button()
@@ -997,6 +1101,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(header_group.view());
     content.addSubview(symbols.view());
     content.addSubview(&well);
+    content.addSubview(&empty_line);
     content.addSubview(&preview_clip);
     content.addSubview(&preview_image);
     content.addSubview(&reveal.root);
@@ -1015,6 +1120,7 @@ fn ensure_window(mtm: MainThreadMarker) {
     ITEM_FIELD.with(|slot| slot.replace(Some(item_find)));
     ITEM_COUNT.with(|slot| slot.replace(Some(item_count)));
     WELL.with(|slot| slot.replace(Some(well)));
+    EMPTY_LINE.with(|slot| slot.replace(Some(empty_line)));
     PREVIEW_TEXT.with(|slot| slot.replace(Some(preview_text)));
     PREVIEW_SCROLL.with(|slot| slot.replace(Some(preview_scroll)));
     PREVIEW_CLIP.with(|slot| slot.replace(Some(preview_clip)));
@@ -1151,11 +1257,10 @@ pub fn relabel() {
     }
 }
 
-/// VoiceOver name of a symbol button. The image stays; the title is hidden by the image-only
-/// position, as at construction.
+/// VoiceOver name of a symbol button. The title stays empty so the glass circle does not
+/// draw the word on top of the symbol.
 fn label_symbol(button: &GlassButton, label: &str) {
     button.set_accessibility_label(label);
-    button.button().setTitle(&NSString::from_str(label));
 }
 
 /// History chevron: name, tooltip and hint. The drawn title stays the glyph (or empty).
@@ -1175,6 +1280,67 @@ fn label_step(button: &GlassButton, name: &str, keys: &str) {
     button
         .button()
         .setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
+}
+
+/// Move `view` to `alpha`. Already there: nothing. Reduce Motion: jump. Otherwise a short fade.
+fn fade(view: &NSView, alpha: f64) {
+    if (view.alphaValue() - alpha).abs() < 0.01 {
+        return;
+    }
+    let duration = crate::appearance::motion_secs();
+    if duration == 0.0 {
+        view.setAlphaValue(alpha);
+        return;
+    }
+    NSAnimationContext::beginGrouping();
+    NSAnimationContext::currentContext().setDuration(duration);
+    view.animator().setAlphaValue(alpha);
+    NSAnimationContext::endGrouping();
+}
+
+/// Opaque window when Reduce Transparency is on, clear glass otherwise. The well is filled
+/// again here so Increase Contrast is picked up on the next layout, not only at construction.
+fn apply_window_chrome() {
+    let reduce = crate::appearance::display().reduce_transparency;
+    WINDOW.with(|slot| {
+        let window = slot.borrow();
+        let Some(window) = window.as_ref() else {
+            return;
+        };
+        if reduce {
+            window.setOpaque(true);
+            window.setBackgroundColor(Some(&NSColor::windowBackgroundColor()));
+        } else {
+            window.setOpaque(false);
+            window.setBackgroundColor(Some(&NSColor::clearColor()));
+        }
+    });
+    WELL.with(|slot| {
+        if let Some(well) = slot.borrow().as_ref() {
+            crate::appearance::apply_well(well, false, true);
+        }
+    });
+    let color = crate::appearance::caption_color();
+    ITEM_COUNT.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            label.setTextColor(Some(&color));
+        }
+    });
+    NAV_COUNT.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            label.setTextColor(Some(&color));
+        }
+    });
+    EMPTY_LINE.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            label.setTextColor(Some(&color));
+        }
+    });
+    VERSION_ROW.with(|slot| {
+        if let Some(row) = slot.borrow().as_ref() {
+            row.title.setContentTintColor(Some(&color));
+        }
+    });
 }
 
 fn layout(fresh_place: bool) {
@@ -1220,49 +1386,53 @@ fn layout(fresh_place: bool) {
         commands::layout_chips(&widths, inner, reserve)
     };
     let show_empty = shown.is_empty() && searching && !query.trim().is_empty();
-    let item_find = !well_is_masked();
+    // The field is hidden while the well is masked. The row stays, so a click to reveal does
+    // not grow the card (and blurring it again does not shrink it).
+    let find_shown = !well_is_masked();
     let placed = place_sections(
         &meta,
         searching,
         &frames,
         show_empty,
         nav.is_some() || version_bar.is_some(),
-        item_find,
+        true,
     );
     place_window(mtm, placed.height, fresh_place);
+    apply_window_chrome();
     let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
-    let close_x = card_width() - PAD - 24.0;
-    let more_x = close_x - 6.0 - HEADER_BUTTON;
-    let clear_x = more_x - 6.0 - CLEAR_BUTTON_W;
+    let button_h = mac_ui::metrics::BUTTON_H;
+    let button_gap = mac_ui::metrics::BUTTON_GAP;
+    let close_x = card_width() - PAD - button_h;
+    let more_x = close_x - button_gap - button_h;
+    let clear_w = clear_button_width();
+    let clear_x = more_x - button_gap - clear_w;
     let symbols_w = symbols_button_width();
-    let symbols_x = clear_x - 8.0 - symbols_w;
-    let title_w = (symbols_x - PAD - 8.0).max(40.0);
+    let symbols_x = clear_x - button_gap - symbols_w;
+    let title_w = (symbols_x - PAD - button_gap).max(40.0);
+    let button_y = placed.header_y + (HEADER_H - button_h) / 2.0;
     HEADER.with(|slot| {
-        set_label(slot, PAD, placed.header_y, title_w, HEADER_H, &title);
+        set_header(slot, PAD, placed.header_y, title_w, HEADER_H, &title);
     });
     HEADER_GROUP.with(|slot| {
         if let Some(group) = slot.borrow().as_ref() {
             group.view().setFrame(NSRect::new(
-                NSPoint::new(clear_x, placed.header_y + (HEADER_H - HEADER_BUTTON) / 2.0),
-                NSSize::new(close_x + HEADER_BUTTON - clear_x, HEADER_BUTTON),
+                NSPoint::new(clear_x, button_y),
+                NSSize::new(close_x + button_h - clear_x, button_h),
             ));
         }
     });
-    CLEAR.with(|slot| place_header_button(slot, 0.0, CLEAR_BUTTON_W));
-    MORE.with(|slot| place_header_button(slot, more_x - clear_x, HEADER_BUTTON));
-    CLOSE.with(|slot| place_header_button(slot, close_x - clear_x, HEADER_BUTTON));
+    CLEAR.with(|slot| place_header_button(slot, 0.0, clear_w));
+    MORE.with(|slot| place_header_button(slot, more_x - clear_x, button_h));
+    CLOSE.with(|slot| place_header_button(slot, close_x - clear_x, button_h));
     SYMBOLS.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             button.view().setFrame(NSRect::new(
-                NSPoint::new(
-                    symbols_x,
-                    placed.header_y + (HEADER_H - HEADER_BUTTON) / 2.0,
-                ),
-                NSSize::new(symbols_w, HEADER_BUTTON),
+                NSPoint::new(symbols_x, button_y),
+                NSSize::new(symbols_w, button_h),
             ));
         }
     });
-    place_item_find(placed.find_y, item_find);
+    place_item_find(placed.find_y, find_shown);
     place_well(placed.preview_y);
     apply_preview(placed.preview_y);
     place_content_actions(placed.preview_y);
@@ -1276,8 +1446,8 @@ fn layout(fresh_place: bool) {
             return;
         };
         label.setFrame(NSRect::new(
-            NSPoint::new(PAD + 2.0, placed.meta_y),
-            NSSize::new(inner - 4.0, meta_block_height(&meta)),
+            NSPoint::new(PAD, placed.meta_y),
+            NSSize::new(inner, meta_block_height(&meta)),
         ));
         label.setHidden(meta.is_empty());
         if !meta.is_empty() {
@@ -1291,8 +1461,9 @@ fn layout(fresh_place: bool) {
             // would give up focus. Out of search it has a zero frame, so it takes no clicks, and
             // alpha 0 keeps its focus ring from drawing.
             field.setHidden(false);
+            let field_h = mac_ui::metrics::BUTTON_H;
             let (field_y, field_h, alpha) = if searching {
-                (placed.search_y + 4.0, 28.0, 1.0)
+                (placed.search_y + (SEARCH_H - field_h) / 2.0, field_h, 1.0)
             } else {
                 (0.0, 0.0, 0.0)
             };
@@ -1300,7 +1471,7 @@ fn layout(fresh_place: bool) {
                 NSPoint::new(PAD, field_y),
                 NSSize::new(inner, field_h),
             ));
-            field.setAlphaValue(alpha);
+            fade(field, alpha);
         }
     });
     PILLS.with(|slot| {
@@ -1390,7 +1561,8 @@ fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     let width = card_width() - PAD * 2.0;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H));
     let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
-    let shade = filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
+    let shade = filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
+    crate::appearance::apply_well(&shade, true, false);
     shade.setFrame(frame);
     shade.setHidden(true);
     let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
@@ -1453,8 +1625,29 @@ fn show_reveal_cover(shown: bool) {
     raise_picker();
 }
 
+/// The open panel is choosing a file. A revealed card stays revealed across it.
+pub fn holding_reveal<T>(body: impl FnOnce() -> T) -> T {
+    let keep = is_open() && REVEALED.with(Cell::get);
+    if keep {
+        FILE_PANEL.set(true);
+    }
+    let result = body();
+    if keep {
+        REVEALED.set(true);
+        if is_open() {
+            layout(false);
+        }
+    }
+    FILE_PANEL.set(false);
+    result
+}
+
 /// Blur revealed content again (the app is no longer active). The next click reveals it.
 fn mask_again() {
+    // The open panel resigns the app; that is not a real focus loss.
+    if FILE_PANEL.with(Cell::get) {
+        return;
+    }
     // Focus loss closes the column picker.
     close_picker();
     if !is_open() || !MASKS.with(Cell::get) || !REVEALED.with(Cell::get) {
@@ -1526,11 +1719,7 @@ fn set_well_blur(on: bool) {
         clear_blur();
         return;
     }
-    let filters = if crate::settings::load().blur {
-        gaussian_blurs()
-    } else {
-        None
-    };
+    let filters = None::<(Retained<AnyObject>, Retained<AnyObject>)>;
     let plan = commands::well_mask(true, filters.is_some());
     SHADE_ON.set(plan.shade);
     show_mask_shade(plan.shade);
@@ -1612,8 +1801,11 @@ fn apply_preview(y: f64) {
         show_mask_shade(false);
     }
     let image_frame = NSRect::new(
-        NSPoint::new(PAD + 8.0, y + 8.0),
-        NSSize::new(card_width() - PAD * 2.0 - 16.0, PREVIEW_H - 16.0),
+        NSPoint::new(PAD + WELL_INSET, y + WELL_INSET),
+        NSSize::new(
+            card_width() - PAD * 2.0 - WELL_INSET * 2.0,
+            PREVIEW_H - WELL_INSET * 2.0,
+        ),
     );
     let text_frame = NSRect::new(
         NSPoint::new(PAD, y),
@@ -1636,6 +1828,7 @@ fn apply_preview(y: f64) {
     });
     place_reveal_cover(y);
     if SHOWS_IMAGE.with(Cell::get) {
+        hide_empty_line();
         clear_preview_text();
         set_preview_text_hidden(true);
         show_preview_image();
@@ -1654,8 +1847,48 @@ fn apply_preview(y: f64) {
     } else {
         placeholder
     };
-    paint_preview_text(&body, payload);
+    // Empty history is one short line, centred. A placeholder with a line break (paste ask,
+    // denied, private, no text) stays in the text view. A mask hides the line; the cover
+    // sits above it.
+    if !payload && !body.contains('\n') && !well_is_masked() {
+        clear_preview_text();
+        set_item_text(body.clone());
+        set_preview_text_hidden(true);
+        show_empty_line(&body, text_frame);
+    } else {
+        hide_empty_line();
+        paint_preview_text(&body, payload);
+    }
     finish_preview();
+}
+
+fn show_empty_line(text: &str, well: NSRect) {
+    EMPTY_LINE.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(label) = borrowed.as_ref() else {
+            return;
+        };
+        let line_h = mac_ui::metrics::FONT_BODY + 6.0;
+        label.setStringValue(&NSString::from_str(text));
+        label.setTextColor(Some(&crate::appearance::caption_color()));
+        label.setFrame(NSRect::new(
+            NSPoint::new(
+                well.origin.x + WELL_INSET,
+                well.origin.y + (well.size.height - line_h) / 2.0,
+            ),
+            NSSize::new((well.size.width - WELL_INSET * 2.0).max(0.0), line_h),
+        ));
+        label.setHidden(false);
+    });
+}
+
+fn hide_empty_line() {
+    EMPTY_LINE.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            label.setHidden(true);
+            label.setStringValue(&NSString::from_str(""));
+        }
+    });
 }
 
 fn finish_preview() {
@@ -2014,7 +2247,7 @@ fn set_preview_text_hidden(hidden: bool) {
             // setHidden keeps clicks, scrolling and focus off the hidden text. The alpha only
             // backs it up: a layer-backed scroll view can keep painting after setHidden.
             view.setHidden(hidden);
-            view.setAlphaValue(if hidden { 0.0 } else { 1.0 });
+            fade(view, if hidden { 0.0 } else { 1.0 });
         }
     });
     // Reorder the clip host (not the scroller): it is the card sibling that must sit behind
@@ -2250,7 +2483,11 @@ fn rebuild_pills(
     NO_MATCHES.with(|slot| {
         let mut slot = slot.borrow_mut();
         if show_empty && slot.is_none() {
-            let empty = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
+            let empty = widgets::label(
+                mtm,
+                mac_ui::metrics::FONT_BODY,
+                &crate::appearance::caption_color(),
+            );
             empty.setStringValue(&NSString::from_str(crate::locale::t(
                 "no_matching_commands",
             )));
@@ -2737,25 +2974,21 @@ fn focus_field() {
 /// Size and filename stay quiet. PII is a yellow caution; financial and
 /// credential are a red alert.
 fn paint_warning_meta(label: &NSTextField, meta: &str) {
-    let font = NSFont::systemFontOfSize(12.0);
-    let attr = AttrText::new(meta, &font, &NSColor::secondaryLabelColor());
-    let warn_font = NSFont::boldSystemFontOfSize(12.0);
-    for mark in crate::sensitivity::warning_marks(meta) {
+    let flat = meta.replace('\n', "  ·  ");
+    let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+    let attr = AttrText::new(&flat, &font, &crate::appearance::caption_color());
+    let warn_font = NSFont::boldSystemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+    for mark in crate::sensitivity::warning_marks(&flat) {
         let range = mark.start..mark.end;
         let (ink, wash) = warning_colors(mark.label);
         attr.font(&range, &warn_font)
             .color(&range, &ink)
             .background(&range, &wash);
     }
-    let two_lines = meta.contains('\n');
-    label.setUsesSingleLineMode(!two_lines);
-    label.setMaximumNumberOfLines(if two_lines { 2 } else { 1 });
+    label.setUsesSingleLineMode(true);
+    label.setMaximumNumberOfLines(1);
     let style = NSMutableParagraphStyle::new();
-    style.setLineBreakMode(if two_lines {
-        NSLineBreakMode::ByWordWrapping
-    } else {
-        NSLineBreakMode::ByTruncatingMiddle
-    });
+    style.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     let built = attr.into_attributed();
     let range = NSRange {
         location: 0,
@@ -2770,7 +3003,7 @@ fn paint_warning_meta(label: &NSTextField, meta: &str) {
 
 /// The image footer: shorten the filename in the middle so format and pixel size stay visible.
 fn display_image_meta(meta: &str, max_width: f64) -> String {
-    let font = NSFont::systemFontOfSize(12.0);
+    let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
     let width_of = |text: &str| {
         let attr = AttrText::new(text, &font, &NSColor::secondaryLabelColor()).into_attributed();
         attr.size().width
@@ -2787,7 +3020,7 @@ fn warning_colors(label: crate::sensitivity::Label) -> (Retained<NSColor>, Retai
     }
 }
 
-fn set_label(
+fn set_header(
     slot: &RefCell<Option<Retained<NSTextField>>>,
     x: f64,
     y: f64,
@@ -2800,7 +3033,33 @@ fn set_label(
         return;
     };
     label.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)));
-    label.setStringValue(&NSString::from_str(text));
+    label.setAttributedStringValue(&header_line(text));
+}
+
+/// Kind in semibold, then the hotkey in the caption colour. The whole line truncates in the
+/// middle, so a long kind keeps the hotkey visible.
+fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
+    // SAFETY: NSFontWeightSemibold is a process-wide AppKit constant.
+    let semibold = unsafe { NSFontWeightSemibold };
+    let title_font = NSFont::systemFontOfSize_weight(mac_ui::metrics::FONT_TITLE, semibold);
+    let hotkey_font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY);
+    let attr = AttrText::new(text, &title_font, &NSColor::labelColor());
+    if let Some(at) = text.rfind(" · ") {
+        attr.font(&(at..text.len()), &hotkey_font)
+            .color(&(at..text.len()), &crate::appearance::caption_color());
+    }
+    let built = attr.into_attributed();
+    let style = NSMutableParagraphStyle::new();
+    style.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    let range = NSRange {
+        location: 0,
+        length: built.length(),
+    };
+    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
+    unsafe {
+        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
+    }
+    built
 }
 
 /// The card title (kind, plus any check such as `missing }`) and the open hotkey.
@@ -2812,12 +3071,21 @@ fn symbols_button_width() -> f64 {
     SYMBOLS.with(|slot| {
         slot.borrow()
             .as_ref()
-            .map(|button| button.width_within(120.0).max(64.0))
-            .unwrap_or(72.0)
+            .map(|button| button.width_within(140.0).max(mac_ui::metrics::BUTTON_H))
+            .unwrap_or(mac_ui::metrics::BUTTON_H)
     })
 }
 
-/// Place a header button at `x` inside the header group (which is `HEADER_BUTTON` tall).
+fn clear_button_width() -> f64 {
+    CLEAR.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|button| button.width_within(140.0).max(mac_ui::metrics::BUTTON_H))
+            .unwrap_or(mac_ui::metrics::BUTTON_H)
+    })
+}
+
+/// Place a header button at `x` inside the header group (which is one button tall).
 fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) {
     let borrowed = slot.borrow();
     let Some(button) = borrowed.as_ref() else {
@@ -2825,12 +3093,12 @@ fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) 
     };
     button.view().setFrame(NSRect::new(
         NSPoint::new(x, 0.0),
-        NSSize::new(width, HEADER_BUTTON),
+        NSSize::new(width, mac_ui::metrics::BUTTON_H),
     ));
 }
 
 fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
-    let field = widgets::plain_field(mtm, 16.0, crate::locale::t("search"));
+    let field = widgets::plain_field(mtm, mac_ui::metrics::FONT_BODY, crate::locale::t("search"));
     // Native rounded border, background and focus ring while the field is shown.
     field.setBezeled(true);
     field.setBezelStyle(NSTextFieldBezelStyle::RoundedBezel);
@@ -2852,7 +3120,7 @@ fn search_field(mtm: MainThreadMarker) -> Retained<NSTextField> {
 }
 
 fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
-    let field = widgets::search_field(mtm, 13.0, crate::locale::t("find"));
+    let field = widgets::search_field(mtm, mac_ui::metrics::FONT_BODY, crate::locale::t("find"));
     field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("find_in_item"))));
     field.setHidden(true);
     DELEGATE.with(|slot| {
@@ -2868,7 +3136,7 @@ fn item_search_field(mtm: MainThreadMarker) -> Retained<NSSearchField> {
 
 fn place_item_find(y: f64, shown: bool) {
     let inner = card_width() - PAD * 2.0;
-    let field_w = (inner - ITEM_COUNT_W - 6.0).max(40.0);
+    let field_w = (inner - ITEM_COUNT_W - mac_ui::metrics::BUTTON_GAP).max(40.0);
     ITEM_FIELD.with(|slot| {
         if let Some(field) = slot.borrow().as_ref() {
             field.setHidden(!shown);
@@ -2882,7 +3150,10 @@ fn place_item_find(y: f64, shown: bool) {
         if let Some(label) = slot.borrow().as_ref() {
             label.setHidden(!shown);
             label.setFrame(NSRect::new(
-                NSPoint::new(PAD + field_w + 6.0, y + (ITEM_FIND_H - 16.0) / 2.0),
+                NSPoint::new(
+                    PAD + field_w + mac_ui::metrics::BUTTON_GAP,
+                    y + (ITEM_FIND_H - mac_ui::metrics::FONT_CAPTION) / 2.0,
+                ),
                 NSSize::new(ITEM_COUNT_W, 16.0),
             ));
         }
@@ -2890,7 +3161,10 @@ fn place_item_find(y: f64, shown: bool) {
 }
 
 fn payload_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
-    let text = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
+    let text = widgets::read_only_text_view(
+        mtm,
+        NSSize::new(mac_ui::metrics::SPACE_M, mac_ui::metrics::SPACE_M),
+    );
     widgets::scroll_text_both_ways(&text);
     text.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
         "clipboard_content",
@@ -3193,7 +3467,7 @@ fn well_action(
     fallback: &str,
     action: Sel,
 ) -> WellAction {
-    let button = GlassButton::symbol(mtm, symbol, label, fallback, 15.0);
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, mac_ui::metrics::FONT_BODY);
     wire_button(button.button(), action);
     button.view().setHidden(true);
     button
@@ -3211,15 +3485,6 @@ fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
         NAV_SYMBOL,
     );
     let ns = button.button();
-    // The capsule is the glass; a second glass bezel inside it would stack glass on glass.
-    ns.setBordered(false);
-    // `GlassButton::symbol` keeps the name as a hidden title. A borderless button draws it next
-    // to the image, so the title must be empty (or only the fallback glyph).
-    let has_image = ns.image().is_some();
-    ns.setTitle(&NSString::from_str(chevron.title(has_image)));
-    if has_image {
-        ns.setImagePosition(NSCellImagePosition::ImageOnly);
-    }
     ns.setAlignment(NSTextAlignment::Center);
     ns.setAccessibilityLabel(Some(&NSString::from_str(chevron.name())));
     // The keys: "Previous (← or ⌘←)", and VoiceOver's hint "Left Arrow, or Command-Left Arrow".
@@ -3235,9 +3500,8 @@ fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
     button
 }
 
-/// The history capsule, hidden until there are two copies: Liquid Glass on macOS 26+ (frosted
-/// before), fully rounded, with `‹` Previous and `›` Next chevrons around the position label in
-/// tabular digits. Fixed size ([`commands::NAV_SPAN`]), so it never jumps while stepping.
+/// Previous, the position and Next, in the same glass buttons as the chips. Hidden until
+/// there are two copies. Fixed size ([`commands::NAV_SPAN`]), so it never jumps while stepping.
 fn history_capsule(
     mtm: MainThreadMarker,
 ) -> (
@@ -3255,10 +3519,9 @@ fn history_capsule(
         ),
     );
     capsule.setHidden(true);
-    let inside = glass::background(mtm, &capsule, height / 2.0).content;
     let previous = nav_button(mtm, commands::PREVIOUS_CHEVRON);
     let next = nav_button(mtm, commands::NEXT_CHEVRON);
-    let count = widgets::label(mtm, NAV_FONT, &NSColor::secondaryLabelColor());
+    let count = widgets::label(mtm, NAV_FONT, &crate::appearance::caption_color());
     // Tabular digits: "1 / 9" and "2 / 9" are the same width. 0.0 is NSFontWeightRegular.
     count.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
         NAV_FONT, 0.0,
@@ -3271,16 +3534,19 @@ fn history_capsule(
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     count.setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON, ((height - count_h) / 2.0).floor()),
+        NSPoint::new(
+            commands::nav_mid_x(),
+            ((height - count_h) / 2.0).floor(),
+        ),
         NSSize::new(commands::NAV_COUNT_W, count_h),
     ));
     next.view().setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
+        NSPoint::new(commands::nav_end_x(), 0.0),
         NSSize::new(commands::NAV_BUTTON, height),
     ));
-    inside.addSubview(previous.view());
-    inside.addSubview(&count);
-    inside.addSubview(next.view());
+    capsule.addSubview(previous.view());
+    capsule.addSubview(&count);
+    capsule.addSubview(next.view());
     (capsule, previous, count, next)
 }
 
@@ -3292,7 +3558,7 @@ fn header_symbol(
     fallback: &str,
     action: Sel,
 ) -> GlassButton {
-    let button = GlassButton::symbol(mtm, symbol, label, fallback, 13.0);
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, mac_ui::metrics::FONT_BODY);
     wire_button(button.button(), action);
     button
 }
@@ -3316,9 +3582,9 @@ fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     })
 }
 
-/// The table's version capsule in the chip row, left of the history capsule: undo `↶`, the
-/// version shown (`v2/3`, a button that pops the list of versions) and redo `↷`. Built like
-/// the history capsule ([`history_capsule`]): same height, glass, font and buttons.
+/// The table's version row in the chip row, left of the history controls: undo `↶`, the
+/// version shown (`v2/3`, a button that pops the list of versions) and redo `↷`. Same height,
+/// gap and buttons as the history controls ([`history_capsule`]).
 struct VersionRow {
     capsule: Retained<NSView>,
     undo: GlassButton,
@@ -3336,17 +3602,9 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
         ),
     );
     capsule.setHidden(true);
-    let inside = glass::background(mtm, &capsule, height / 2.0).content;
     let step_button = |symbol: &str, name: &str, glyph: &str, keys: &str, action: Sel| {
         let button = GlassButton::symbol(mtm, symbol, name, glyph, NAV_SYMBOL);
         let ns = button.button();
-        // The capsule is the glass; no second bezel inside it.
-        ns.setBordered(false);
-        let has_image = ns.image().is_some();
-        ns.setTitle(&NSString::from_str(if has_image { "" } else { glyph }));
-        if has_image {
-            ns.setImagePosition(NSCellImagePosition::ImageOnly);
-        }
         ns.setAlignment(NSTextAlignment::Center);
         ns.setAccessibilityLabel(Some(&NSString::from_str(name)));
         ns.setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
@@ -3373,7 +3631,7 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
     title.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
         NAV_FONT, 0.0,
     )));
-    title.setContentTintColor(Some(&NSColor::secondaryLabelColor()));
+    title.setContentTintColor(Some(&crate::appearance::caption_color()));
     title.setAlignment(NSTextAlignment::Center);
     wire_button(&title, sel!(versionsClicked:));
     let title_h = title.fittingSize().height.ceil();
@@ -3382,16 +3640,19 @@ fn version_row(mtm: MainThreadMarker) -> VersionRow {
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     title.setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON, ((height - title_h) / 2.0).floor()),
+        NSPoint::new(
+            commands::nav_mid_x(),
+            ((height - title_h) / 2.0).floor(),
+        ),
         NSSize::new(commands::NAV_COUNT_W, title_h),
     ));
     redo.view().setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
+        NSPoint::new(commands::nav_end_x(), 0.0),
         NSSize::new(commands::NAV_BUTTON, height),
     ));
-    inside.addSubview(undo.view());
-    inside.addSubview(&title);
-    inside.addSubview(redo.view());
+    capsule.addSubview(undo.view());
+    capsule.addSubview(&title);
+    capsule.addSubview(redo.view());
     VersionRow {
         capsule,
         undo,
@@ -3556,22 +3817,23 @@ mod tests {
 
     #[test]
     fn header_title_is_the_kind_and_the_hotkey() {
-        assert_eq!(super::header_title("Rust"), "Rust · ⌃⌥⌘C");
-        assert_eq!(super::header_title("Clipboard"), "Clipboard · ⌃⌥⌘C");
+        assert_eq!(super::header_title("Rust"), "Rust · ⌃⌘C");
+        assert_eq!(super::header_title("Clipboard"), "Clipboard · ⌃⌘C");
         // Checks stay in the kind part; no date or time follows.
         let title = super::header_title("Java · missing }");
-        assert_eq!(title, "Java · missing } · ⌃⌥⌘C");
+        assert_eq!(title, "Java · missing } · ⌃⌘C");
         assert!(!title.chars().any(|ch| ch.is_ascii_digit()), "{title}");
     }
 
     #[test]
-    fn well_radius_is_concentric_with_the_panel() {
-        let inset = super::PAD;
-        assert_eq!(
+    fn well_radius_is_the_shared_eight() {
+        assert_eq!(super::WELL_RADIUS, mac_ui::metrics::WELL_RADIUS);
+        assert_eq!(super::WELL_RADIUS, mac_ui::metrics::SPACE_S);
+        // The well shares the 16 pt margin, so this is not the clamped concentric radius.
+        assert_ne!(
             super::WELL_RADIUS,
-            mac_ui::corners::concentric_radius(super::PANEL_RADIUS, inset)
+            mac_ui::corners::concentric_radius(super::PANEL_RADIUS, super::PAD)
         );
-        assert_eq!(super::WELL_RADIUS, mac_ui::corners::MIN_RADIUS);
     }
 
     #[test]

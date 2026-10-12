@@ -52,6 +52,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Copycraft Settings",
     ),
     ("hotkey", "Sneltoets", "Hotkey"),
+    (
+        "hotkey_note",
+        "Opent de kaart bij de aanwijzer.",
+        "Opens the card at the pointer.",
+    ),
+    ("group_general", "Algemeen", "General"),
+    ("group_privacy", "Privacy", "Privacy"),
+    ("group_display", "Weergave", "Display"),
     ("change_hotkey", "Wijzigen…", "Change…"),
     ("change_hotkey_a11y", "Sneltoets wijzigen", "Change hotkey"),
     (
@@ -65,7 +73,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Need ⌃ or ⌘ (not Option alone) — try again",
     ),
     ("date_order", "Datumvolgorde", "Date order"),
+    (
+        "date_order_note",
+        "Hoe een datum in een tabel wordt gelezen.",
+        "How a date in a table is read.",
+    ),
     ("language", "Taal", "Language"),
+    (
+        "language_note",
+        "Taal van de kaart en de menu's.",
+        "Language of the card and the menus.",
+    ),
     ("language_system", "Systeem", "System"),
     ("language_nl", "Nederlands", "Nederlands"),
     ("language_en", "English", "English"),
@@ -75,9 +93,19 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Use privacy filter",
     ),
     (
+        "privacy_note",
+        "Verbergt gevoelige kopieën tot je ze toont.",
+        "Hides sensitive copies until you reveal them.",
+    ),
+    (
         "blur_masked",
         "Gemaskeerde inhoud vervagen",
         "Blur masked content",
+    ),
+    (
+        "blur_note",
+        "Maakt het masker wazig in plaats van vlak.",
+        "Makes the mask blurred instead of flat.",
     ),
     ("open_at_login", "Openen bij inloggen", "Open at Login"),
     (
@@ -132,6 +160,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Symbols popover
     ("symbols", "Tekens", "Symbols"),
+    (
+        "symbols_note",
+        "Tekens op de Tekens-knop, gescheiden door spaties.",
+        "Characters on the Symbols button, separated by spaces.",
+    ),
     ("symbols_a11y", "Speciale tekens", "Special characters"),
     ("symbols_tip", "Kopieer een teken", "Copy a character"),
     (
@@ -145,6 +178,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Special character list",
     ),
     ("ignored_apps", "Genegeerde apps", "Ignored apps"),
+    (
+        "ignored_note",
+        "Apps waarvan kopieën niet worden bewaard.",
+        "Apps whose copies are not kept.",
+    ),
     (
         "ignored_apps_add",
         "Voorste app toevoegen",
@@ -193,6 +231,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Drop a text file or image here to open it",
     ),
     ("nothing_copied", "Niets gekopieerd", "Nothing copied"),
+    (
+        "empty_history",
+        "Kopieer met {0}",
+        "Copy with {0}",
+    ),
     (
         "no_text_on_clipboard",
         "Geen tekst op het klembord",

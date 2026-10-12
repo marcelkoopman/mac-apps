@@ -8,6 +8,10 @@ use crate::commands::{CommandId, LaunchData};
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     Run(CommandId),
+    /// The menu-bar icon was clicked: open the card under it, or close it.
+    ToggleUnderIcon,
+    /// Right click on the menu-bar icon: open the status menu.
+    ShowStatusMenu,
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,

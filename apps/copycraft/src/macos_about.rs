@@ -5,13 +5,16 @@ use std::cell::{Cell, RefCell};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use mac_ui::objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
+    NSBackingStoreType, NSColor, NSEvent, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
     NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSBundle, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
 };
 use mac_ui::{panel, widgets};
+
+use crate::commands::CommandId;
+use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 380.0;
 const HEIGHT: f64 = 220.0;
@@ -22,11 +25,35 @@ const RADIUS: f64 = 16.0;
 pub const GITHUB_URL: &str = "https://github.com/marcelkoopman/mac-apps";
 
 thread_local! {
-    static WINDOW: RefCell<Option<Retained<NSWindow>>> = const { RefCell::new(None) };
+    static WINDOW: RefCell<Option<Retained<AboutWindow>>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<AboutDelegate>>> = const { RefCell::new(None) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
 }
+
+define_class!(
+    #[unsafe(super(NSWindow))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "CopycraftAboutWindow"]
+    struct AboutWindow;
+
+    impl AboutWindow {
+        #[unsafe(method(performKeyEquivalent:))]
+        fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
+            if mac_ui::keys::is_command_chord(event, "o") {
+                launcher::emit(UserEvent::Run(CommandId::ChooseFile));
+                true
+            } else if mac_ui::keys::is_command_chord(event, "s") {
+                launcher::emit(UserEvent::Run(CommandId::Save));
+                true
+            } else {
+                let handled: bool =
+                    unsafe { msg_send![super(self), performKeyEquivalent: event] };
+                handled
+            }
+        }
+    }
+);
 
 struct DelegateIvars;
 
@@ -84,16 +111,15 @@ pub fn show() {
 fn build(mtm: MainThreadMarker) {
     let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
-    let window = unsafe {
+    let window: Retained<AboutWindow> = unsafe {
         msg_send![
-            NSWindow::alloc(mtm),
+            AboutWindow::alloc(mtm),
             initWithContentRect: frame,
             styleMask: style,
             backing: NSBackingStoreType::Buffered,
             defer: false,
         ]
     };
-    let window: Retained<NSWindow> = window;
     unsafe { window.setReleasedWhenClosed(false) };
     window.setTitle(&NSString::from_str(crate::locale::t("about_title")));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);

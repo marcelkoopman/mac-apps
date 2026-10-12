@@ -74,6 +74,8 @@ mod macos_session;
 #[cfg(target_os = "macos")]
 mod macos_settings;
 #[cfg(target_os = "macos")]
+mod macos_status_click;
+#[cfg(target_os = "macos")]
 mod macos_symbols;
 #[cfg(target_os = "macos")]
 mod macos_table_window;

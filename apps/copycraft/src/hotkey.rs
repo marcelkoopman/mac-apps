@@ -1,33 +1,35 @@
-//! Global hotkey that summons the card. Stored in the user defaults; the default is ⌃⌥⌘C.
+//! Global hotkey that summons the card. Stored in the user defaults; the default is ⌃⌘C.
 
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 
 /// Menu / Settings label for the default chord.
 #[cfg_attr(not(test), allow(dead_code))]
-pub const DEFAULT_LABEL: &str = "⌃⌥⌘C";
+pub const DEFAULT_LABEL: &str = "⌃⌘C";
 
 /// Storage form of the default ([`open`]).
 #[cfg_attr(not(test), allow(dead_code))]
-pub const DEFAULT_STORAGE: &str = "control+alt+super+KeyC";
+pub const DEFAULT_STORAGE: &str = "control+super+KeyC";
+
+/// The previous default. A stored copy of it follows [`open`] so the chord moves with the app.
+const PREVIOUS_DEFAULT_STORAGE: &str = "control+alt+super+KeyC";
 
 /// The chord registered at launch when none is stored.
 pub fn open() -> HotKey {
-    HotKey::new(
-        Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER),
-        Code::KeyC,
-    )
+    HotKey::new(Some(Modifiers::CONTROL | Modifiers::SUPER), Code::KeyC)
 }
 
-/// The chord from `storage` (a [`HotKey`] string), or the default when missing or unsafe.
+/// The chord from `storage` (a [`HotKey`] string), or the default when missing, unsafe, or still
+/// the previous default.
 pub fn from_storage(storage: Option<&str>) -> HotKey {
     storage
+        .filter(|text| *text != PREVIOUS_DEFAULT_STORAGE)
         .and_then(|text| text.parse::<HotKey>().ok())
         .filter(is_safe)
         .unwrap_or_else(open)
 }
 
 /// Whether `chord` is strong enough: not a bare key, not Option alone, not Shift alone
-/// (Option-C while typing is too easy to hit). Control-Option-C and the default are fine.
+/// (Option-C while typing is too easy to hit). Control-Option-C and Control-Command-C are fine.
 pub fn is_safe(chord: &HotKey) -> bool {
     let mods =
         chord.mods & (Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER | Modifiers::SHIFT);
@@ -37,7 +39,7 @@ pub fn is_safe(chord: &HotKey) -> bool {
     true
 }
 
-/// Compact Mac label (`⌃⌥⌘C`) for menus and Settings.
+/// Compact Mac label (`⌃⌘C`) for menus and Settings.
 pub fn label(chord: &HotKey) -> String {
     let mut out = String::new();
     if chord.mods.contains(Modifiers::CONTROL) {
@@ -156,14 +158,15 @@ mod tests {
     use super::{DEFAULT_LABEL, DEFAULT_STORAGE, from_storage, is_safe, label, open, to_storage};
 
     #[test]
-    fn default_chord_is_control_option_command_c() {
+    fn default_chord_is_control_command_c() {
         assert_eq!(label(&open()), DEFAULT_LABEL);
         assert_eq!(to_storage(&open()), DEFAULT_STORAGE);
         let chord = open();
         assert_eq!(chord.key, Code::KeyC);
+        assert_eq!(chord.mods, Modifiers::CONTROL | Modifiers::SUPER);
         assert_eq!(
-            chord.mods,
-            Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER
+            from_storage(Some("control+alt+super+KeyC")).id(),
+            open().id()
         );
     }
 

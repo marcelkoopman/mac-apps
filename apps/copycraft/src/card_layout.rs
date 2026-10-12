@@ -3,14 +3,15 @@
 
 use crate::commands::{self, ChipFrame};
 
-pub const PAD: f64 = 14.0;
+pub const PAD: f64 = mac_ui::metrics::MARGIN;
 pub const HEADER_H: f64 = 32.0;
 pub const PREVIEW_H: f64 = 264.0;
 pub const META_H: f64 = 22.0;
 pub const SEARCH_H: f64 = 36.0;
-/// Fixed in-item field under the header. Hidden until the well is revealed.
-pub const ITEM_FIND_H: f64 = 28.0;
-pub const GAP: f64 = 8.0;
+/// Fixed in-item field under the header. The field stays hidden until the well is revealed.
+/// The card still keeps this row, so blurring and revealing do not resize the window.
+pub const ITEM_FIND_H: f64 = mac_ui::metrics::BUTTON_H;
+pub const GAP: f64 = mac_ui::metrics::BUTTON_GAP;
 
 /// The card's height and the bottom of each row (AppKit counts y from the bottom).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,15 +26,10 @@ pub struct Sections {
     pub chips_h: f64,
 }
 
-/// Height of the meta row. One line is [`META_H`]; each extra line (a filename that did not fit
-/// beside its dimensions) adds 16 pt. Empty meta takes no row.
+/// Height of the meta row. One line is [`META_H`]. A newline in the text does not add a row:
+/// the footer stays one line and truncates in the middle. Empty meta takes no row.
 pub fn meta_block_height(meta: &str) -> f64 {
-    if meta.is_empty() {
-        0.0
-    } else {
-        let extra = meta.chars().filter(|c| *c == '\n').count();
-        META_H + extra as f64 * 16.0
-    }
+    if meta.is_empty() { 0.0 } else { META_H }
 }
 
 /// Rows from the top: header, in-item find (`item_find`), the well, the meta line (when `meta`
@@ -50,7 +46,7 @@ pub fn place_sections(
     let meta_h = meta_block_height(meta);
     let search_h = if searching { SEARCH_H } else { 0.0 };
     let find_h = if item_find { ITEM_FIND_H } else { 0.0 };
-    let gap_after_find = if find_h > 0.0 { 6.0 } else { 0.0 };
+    let gap_after_find = if find_h > 0.0 { GAP } else { 0.0 };
     let mut chips_h = if show_empty {
         28.0
     } else {
@@ -67,7 +63,7 @@ pub fn place_sections(
         0.0
     };
     let gap_after_search = if search_h > 0.0 && chips_h > 0.0 {
-        4.0
+        GAP
     } else {
         0.0
     };
@@ -132,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn a_two_line_meta_grows_the_card_and_keeps_one_line_where_it_was() {
+    fn a_newline_in_the_meta_stays_on_one_line() {
         let one = place_sections(
             "photo.heic  ·  HEIC  4032×3024",
             false,
@@ -150,9 +146,9 @@ mod tests {
             false,
         );
         assert_eq!(one.preview_y, one.meta_y + META_H + GAP);
-        assert_eq!(two.height, one.height + 16.0);
+        assert_eq!(two.height, one.height);
         assert_eq!(two.meta_y, one.meta_y);
-        assert_eq!(two.preview_y, one.preview_y + 16.0);
+        assert_eq!(two.preview_y, one.preview_y);
     }
 
     #[test]

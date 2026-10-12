@@ -8,14 +8,14 @@
 // the app as `UserEvent::TableWindow`.
 //
 // Opens with the grid and sidebar revealed (Open table from the card). Blurs again when
-// the window stops being key (another window or app). The app closes the window and wipes it
-// on Wipe, Clear history, screen lock, sleep and when its entry is gone. Without a blur filter
-// they stay blank under an opaque cover when masked. No extra entitlements.
+// the window stops being key (another window or app). Choose columns… and our save and open
+// panels steal key; a grid that was sharp stays sharp. The app closes the window and wipes
+// it on Wipe, Clear history, screen lock, sleep and when its entry is gone. Without a blur
+// filter they stay blank under an opaque cover when masked. No extra entitlements.
 
 use std::cell::{Cell, RefCell};
 
 use mac_ui::button::{ButtonSize, GlassButton};
-use mac_ui::glass;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::AnyThread;
 use mac_ui::objc2::runtime::{AnyObject, NSObject, Sel};
@@ -23,7 +23,7 @@ use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAlert, NSAlertFirstButtonReturn, NSAttributedStringNSStringDrawing,
     NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
-    NSButton, NSCellImagePosition, NSColor, NSControlStateValueOff, NSControlStateValueOn,
+    NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn,
     NSEvent, NSEventGestureAxis, NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode,
     NSMenu, NSMenuItem, NSModalPanelWindowLevel, NSMutableParagraphStyle,
     NSParagraphStyleAttributeName, NSScrollView, NSTextAlignment, NSTextField, NSTextTab,
@@ -51,10 +51,10 @@ const TOOLBAR_H: f64 = 44.0;
 const META_H: f64 = 28.0;
 const SIDEBAR_W: f64 = 220.0;
 const SIDEBAR_TITLE_H: f64 = 22.0;
-const PAD: f64 = 12.0;
-const WELL_RADIUS: f64 = 8.0;
-const NAV_SYMBOL: f64 = 12.0;
-const NAV_FONT: f64 = 12.0;
+const PAD: f64 = mac_ui::metrics::MARGIN;
+const WELL_RADIUS: f64 = mac_ui::metrics::WELL_RADIUS;
+const NAV_SYMBOL: f64 = mac_ui::metrics::FONT_CAPTION;
+const NAV_FONT: f64 = mac_ui::metrics::FONT_CAPTION;
 /// The card's text blur (`TEXT_BLUR_RADIUS` in `macos_launcher`): lines and their shape show,
 /// the characters do not.
 const BLUR_RADIUS: f64 = 6.0;
@@ -74,6 +74,8 @@ thread_local! {
     static BLUR: RefCell<Option<Option<Retained<AnyObject>>>> = const { RefCell::new(None) };
     /// Choose columns… modal is up: do not blur on resign-key (the alert takes key).
     static COLUMN_PICKER_OPEN: Cell<bool> = const { Cell::new(false) };
+    /// Our save or open panel is up. It takes key; a revealed grid stays sharp.
+    static OWN_PANEL: Cell<bool> = const { Cell::new(false) };
     /// Checkboxes of the open Choose columns… alert (All / None toggle these).
     static PICKER_CHECKS: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
 }
@@ -87,6 +89,8 @@ struct Views {
     header_clip: Retained<NSView>,
     header_back: Retained<NSBox>,
     header_rule: Retained<NSBox>,
+    /// Rounded fill behind the grid. The grid paints its own opaque background on top.
+    well: Retained<NSBox>,
     sidebar: Retained<NSTextView>,
     sidebar_title: Retained<NSTextField>,
     meta: Retained<NSTextField>,
@@ -305,13 +309,13 @@ pub fn relabel() {
             NSPoint::new(PAD, toolbar_y),
             NSSize::new(table_w, height),
         ));
-        let mut x = PAD + table_w + 8.0;
+        let mut x = PAD + table_w + mac_ui::metrics::BUTTON_GAP;
         let copy_w = views.copy_button.width_within(100.0);
         views.copy_button.view().setFrame(NSRect::new(
             NSPoint::new(x, toolbar_y),
             NSSize::new(copy_w, height),
         ));
-        x += copy_w + 6.0;
+        x += copy_w + mac_ui::metrics::BUTTON_GAP;
         let save_w = views.save_button.width_within(100.0);
         views.save_button.view().setFrame(NSRect::new(
             NSPoint::new(x, toolbar_y),
@@ -446,8 +450,9 @@ fn reveal() {
 
 /// The window is no longer key: blurred again; the next click reveals it.
 fn mask_again() {
-    // Choose columns… is a modal alert: it steals key; keep the table revealed under it.
-    if COLUMN_PICKER_OPEN.with(Cell::get) {
+    // Choose columns… and our save and open panels are modals: they steal key. Keep the
+    // table revealed under them.
+    if COLUMN_PICKER_OPEN.with(Cell::get) || OWN_PANEL.with(Cell::get) {
         return;
     }
     if !REVEALED.with(Cell::get) {
@@ -455,6 +460,61 @@ fn mask_again() {
     }
     REVEALED.set(false);
     apply_mask();
+}
+
+fn visible_window() -> Option<Retained<TableWindowPanel>> {
+    VIEWS.with(|slot| {
+        let borrowed = slot.borrow();
+        borrowed
+            .as_ref()
+            .and_then(|views| views.window.isVisible().then(|| views.window.clone()))
+    })
+}
+
+/// While `body` runs, a revealed grid does not blur. The flag stays set until [`end_own_panel`].
+fn begin_own_panel() -> (Option<Retained<TableWindowPanel>>, bool) {
+    let window = visible_window();
+    let keep = window.is_some() && REVEALED.with(Cell::get);
+    if keep {
+        OWN_PANEL.set(true);
+    }
+    (window, keep)
+}
+
+fn end_own_panel(keep: bool) {
+    if keep {
+        // Not `reveal`: that beeps while labels are still being checked. This grid was
+        // already shown.
+        REVEALED.set(true);
+        apply_mask();
+    }
+    OWN_PANEL.set(false);
+}
+
+/// Run `body` (the open panel) without blurring a revealed grid. Does not change which
+/// window is key; the caller puts the previous one back.
+pub fn holding_reveal<T>(body: impl FnOnce() -> T) -> T {
+    let (_window, keep) = begin_own_panel();
+    let result = body();
+    end_own_panel(keep);
+    result
+}
+
+/// Run `body` (the table window's save panel) without blurring a revealed grid. Afterwards
+/// the window is in front again. A grid that was sharp stays sharp and key, so a later real
+/// focus loss still blurs it. A grid that was already blurred stays blurred.
+pub fn keeping_revealed<T>(body: impl FnOnce() -> T) -> T {
+    let (window, keep) = begin_own_panel();
+    let result = body();
+    // Still holding while this window comes back: ordering it must not count as a blur.
+    if let Some(window) = window.as_ref() {
+        if let Some(mtm) = MainThreadMarker::new() {
+            panel::activate_app(mtm);
+        }
+        panel::bring_to_front(window);
+    }
+    end_own_panel(keep);
+    result
 }
 
 /// Schedule Choose columns… after the Table menu finishes tracking (so the alert is not
@@ -618,8 +678,16 @@ fn run(id: CommandId) {
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Run(id)));
 }
 
-/// ⌘Z / ⇧⌘Z step through the versions, ⌘W closes.
+/// ⌘O opens a file, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions, ⌘W closes.
 fn window_key(event: &NSEvent) -> bool {
+    if mac_ui::keys::is_command_chord(event, "o") {
+        launcher::emit(UserEvent::Run(CommandId::ChooseFile));
+        return true;
+    }
+    if mac_ui::keys::is_command_chord(event, "s") {
+        run(CommandId::Save);
+        return true;
+    }
     if mac_ui::keys::is_command_chord(event, "w") {
         let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
         if let Some(window) = window {
@@ -731,7 +799,7 @@ fn ensure_views(mtm: MainThreadMarker) {
         ))));
     wire(copy_button.button(), sel!(tableWindowCopyClicked:));
     let copy_w = copy_button.width_within(100.0);
-    let mut actions_x = PAD + table_w + 8.0;
+    let mut actions_x = PAD + table_w + mac_ui::metrics::BUTTON_GAP;
     copy_button.view().setFrame(NSRect::new(
         NSPoint::new(actions_x, toolbar_y),
         NSSize::new(copy_w, commands::CHIP_PILL_H),
@@ -740,7 +808,7 @@ fn ensure_views(mtm: MainThreadMarker) {
         .view()
         .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
     content.addSubview(copy_button.view());
-    actions_x += copy_w + 6.0;
+    actions_x += copy_w + mac_ui::metrics::BUTTON_GAP;
 
     let save_button = GlassButton::pill(mtm, crate::locale::t("save"), ButtonSize::Regular);
     save_button.set_accessibility_label(crate::locale::t("save_table_a11y"));
@@ -772,7 +840,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     let (undo, title, redo) = version_capsule(mtm, &capsule);
     content.addSubview(&capsule);
 
-    let hint = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let hint = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
     hint.setAlignment(NSTextAlignment::Center);
     let hint_x = actions_x;
     hint.setFrame(NSRect::new(
@@ -786,7 +854,10 @@ fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(&hint);
 
     // The meta line along the bottom.
-    let meta = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
+    let meta = widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &crate::appearance::caption_color());
+    meta.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    meta.setUsesSingleLineMode(true);
+    meta.setMaximumNumberOfLines(1);
     meta.setFrame(NSRect::new(
         NSPoint::new(PAD, (META_H - 18.0) / 2.0),
         NSSize::new(width - PAD * 2.0, 18.0),
@@ -795,8 +866,11 @@ fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(&meta);
 
     // The sidebar: "Columns" and one line per column (name, type).
-    let sidebar_title = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
-    sidebar_title.setFont(Some(&NSFont::boldSystemFontOfSize(12.0)));
+    let sidebar_title = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_CAPTION,
+        &crate::appearance::caption_color(),
+    );
     sidebar_title.setFrame(NSRect::new(
         NSPoint::new(PAD, META_H + body_h - SIDEBAR_TITLE_H),
         NSSize::new(SIDEBAR_W - PAD * 2.0, 18.0),
@@ -818,7 +892,8 @@ fn ensure_views(mtm: MainThreadMarker) {
         NSPoint::new(SIDEBAR_W, META_H),
         NSSize::new(width - SIDEBAR_W - PAD, body_h),
     );
-    let well = widgets::filled_box(mtm, WELL_RADIUS, &NSColor::controlBackgroundColor());
+    let well = widgets::filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
+    crate::appearance::apply_well(&well, false, true);
     well.setFrame(grid_frame);
     well.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     content.addSubview(&well);
@@ -857,6 +932,8 @@ fn ensure_views(mtm: MainThreadMarker) {
     }
     let frozen = widgets::read_only_text_view(mtm, NSSize::new(12.0, 10.0));
     frozen.setDrawsBackground(true);
+    // Opaque plate: the same colour the grid paints, so the scrolling body does not show
+    // through the frozen column and the two stay one surface.
     frozen.setBackgroundColor(&NSColor::controlBackgroundColor());
     // A copy of what the grid says: VoiceOver reads the grid itself.
     frozen.setAccessibilityElement(false);
@@ -882,7 +959,7 @@ fn ensure_views(mtm: MainThreadMarker) {
     header_rule.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 1.0)));
     header_clip.addSubview(&header_rule);
     grid_clip.addSubview(&header_clip);
-    let placeholder = widgets::label(mtm, 13.0, &NSColor::secondaryLabelColor());
+    let placeholder = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &crate::appearance::caption_color());
     placeholder.setAlignment(NSTextAlignment::Center);
     placeholder.setFrame(NSRect::new(
         NSPoint::new(SIDEBAR_W, META_H + body_h / 2.0 - 9.0),
@@ -926,6 +1003,7 @@ fn ensure_views(mtm: MainThreadMarker) {
             header_clip,
             header_back,
             header_rule,
+            well,
             sidebar,
             sidebar_title,
             meta,
@@ -943,24 +1021,16 @@ fn ensure_views(mtm: MainThreadMarker) {
     });
 }
 
-/// The card's version capsule: ↶, the version shown (a button that pops the versions) and ↷,
-/// on glass (or frosted before macOS 26) inside `capsule`.
+/// The card's version row: ↶, the version shown (a button that pops the versions) and ↷.
+/// Separate glass buttons with the same gap as the card, not a second glass capsule.
 fn version_capsule(
     mtm: MainThreadMarker,
     capsule: &NSView,
 ) -> (GlassButton, Retained<NSButton>, GlassButton) {
     let height = commands::CHIP_PILL_H;
-    let inside = glass::background(mtm, capsule, height / 2.0).content;
     let step_button = |symbol: &str, name: &str, glyph: &str, keys: &str, action: Sel| {
         let button = GlassButton::symbol(mtm, symbol, name, glyph, NAV_SYMBOL);
         let ns = button.button();
-        // The capsule is the glass; no second bezel inside it.
-        ns.setBordered(false);
-        let has_image = ns.image().is_some();
-        ns.setTitle(&NSString::from_str(if has_image { "" } else { glyph }));
-        if has_image {
-            ns.setImagePosition(NSCellImagePosition::ImageOnly);
-        }
         ns.setAlignment(NSTextAlignment::Center);
         ns.setAccessibilityLabel(Some(&NSString::from_str(name)));
         ns.setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
@@ -985,7 +1055,7 @@ fn version_capsule(
     title.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
         NAV_FONT, 0.0,
     )));
-    title.setContentTintColor(Some(&NSColor::secondaryLabelColor()));
+    title.setContentTintColor(Some(&crate::appearance::caption_color()));
     title.setAlignment(NSTextAlignment::Center);
     wire(&title, sel!(tableWindowVersionsClicked:));
     let title_h = title.fittingSize().height.ceil();
@@ -994,17 +1064,36 @@ fn version_capsule(
         NSSize::new(commands::NAV_BUTTON, height),
     ));
     title.setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON, ((height - title_h) / 2.0).floor()),
+        NSPoint::new(
+            commands::nav_mid_x(),
+            ((height - title_h) / 2.0).floor(),
+        ),
         NSSize::new(commands::NAV_COUNT_W, title_h),
     ));
     redo.view().setFrame(NSRect::new(
-        NSPoint::new(commands::NAV_BUTTON + commands::NAV_COUNT_W, 0.0),
+        NSPoint::new(commands::nav_end_x(), 0.0),
         NSSize::new(commands::NAV_BUTTON, height),
     ));
-    inside.addSubview(undo.view());
-    inside.addSubview(&title);
-    inside.addSubview(redo.view());
+    capsule.addSubview(undo.view());
+    capsule.addSubview(&title);
+    capsule.addSubview(redo.view());
     (undo, title, redo)
+}
+
+/// Well border and caption colours follow Reduce Transparency and Increase Contrast.
+/// The frozen column and the header strip stay an opaque plate in the grid's own colour,
+/// so scrolling cells do not show through and the plate does not become a second surface.
+fn apply_table_chrome(views: &Views) {
+    crate::appearance::apply_well(&views.well, false, true);
+    let plate = NSColor::controlBackgroundColor();
+    views.header_back.setFillColor(&plate);
+    views.frozen.setBackgroundColor(&plate);
+    views.header.setBackgroundColor(&plate);
+    let caption = crate::appearance::caption_color();
+    views.hint.setTextColor(Some(&caption));
+    views.sidebar_title.setTextColor(Some(&caption));
+    views.placeholder.setTextColor(Some(&caption));
+    views.title.setContentTintColor(Some(&caption));
 }
 
 /// Everything from the view shown: the toolbar, the meta line and (unless blanked for a
@@ -1015,6 +1104,7 @@ fn paint() {
         let Some(views) = borrowed.as_ref() else {
             return;
         };
+        apply_table_chrome(views);
         let empty = SHOWN.with(|shown| {
             let shown = shown.borrow();
             let Some(view) = shown.as_ref() else {
@@ -1087,10 +1177,14 @@ fn paint_content(views: &Views, view: &TableWindowView) {
     }
     let attr = AttrText::new(
         &text,
-        &NSFont::systemFontOfSize(12.0),
+        &NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION),
         &NSColor::labelColor(),
     );
-    let dim = NSColor::tertiaryLabelColor();
+    let dim = if crate::appearance::display().increase_contrast {
+        crate::appearance::caption_color()
+    } else {
+        NSColor::tertiaryLabelColor()
+    };
     for range in &kinds {
         attr.color(range, &dim);
     }
@@ -1104,10 +1198,11 @@ fn paint_content(views: &Views, view: &TableWindowView) {
 
 /// The meta line, its sensitivity labels marked as on the card.
 fn paint_meta(label: &NSTextField, meta: &str) {
-    let font = NSFont::systemFontOfSize(12.0);
-    let attr = AttrText::new(meta, &font, &NSColor::secondaryLabelColor());
-    let warn_font = NSFont::boldSystemFontOfSize(12.0);
-    for mark in crate::sensitivity::warning_marks(meta) {
+    let flat = meta.replace('\n', "  ·  ");
+    let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+    let attr = AttrText::new(&flat, &font, &crate::appearance::caption_color());
+    let warn_font = NSFont::boldSystemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+    for mark in crate::sensitivity::warning_marks(&flat) {
         let range = mark.start..mark.end;
         let (ink, wash) = match mark.label {
             crate::sensitivity::Label::Pii => (NSColor::blackColor(), NSColor::systemYellowColor()),
@@ -1119,7 +1214,20 @@ fn paint_meta(label: &NSTextField, meta: &str) {
             .color(&range, &ink)
             .background(&range, &wash);
     }
-    label.setAttributedStringValue(&attr.into_attributed());
+    label.setUsesSingleLineMode(true);
+    label.setMaximumNumberOfLines(1);
+    let style = NSMutableParagraphStyle::new();
+    style.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    let built = attr.into_attributed();
+    let range = NSRange {
+        location: 0,
+        length: built.length(),
+    };
+    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
+    unsafe {
+        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
+    }
+    label.setAttributedStringValue(&built);
 }
 
 /// Blur (or blank) the sidebar and grid while masked, sharp once revealed.
