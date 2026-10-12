@@ -612,7 +612,7 @@ pub use api::*;
 use controls::*;
 pub use events::*;
 use find::*;
-pub use pager::*;
+pub(crate) use pager::*;
 pub use panels::*;
 pub use window::*;
 
