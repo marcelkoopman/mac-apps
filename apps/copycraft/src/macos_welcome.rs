@@ -8,9 +8,10 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyObject, Sel};
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSApplication, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSFont, NSLineBreakMode, NSTextAlignment, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSAccessibility, NSAppearance, NSAppearanceNameDarkAqua, NSApplication, NSBackingStoreType,
+    NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSFont,
+    NSLineBreakMode, NSTextAlignment, NSTextField, NSView, NSWindow, NSWindowDelegate,
+    NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 use mac_ui::{panel, widgets};
@@ -22,8 +23,9 @@ use crate::macos_login;
 const WIDTH: f64 = 420.0;
 const HEIGHT: f64 = 392.0;
 const PAD: f64 = 24.0;
-const RADIUS: f64 = 16.0;
 const ICON: f64 = 96.0;
+/// Background of `assets/icon.icns` (sRGB, about #070E24).
+const ICON_BACKGROUND: (f64, f64, f64) = (7.0 / 255.0, 14.0 / 255.0, 36.0 / 255.0);
 /// The app icon from `assets/icon.icns`, the same file the bundle uses.
 const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
 const BUTTON_W: f64 = 140.0;
@@ -230,7 +232,19 @@ fn build(mtm: MainThreadMarker) {
 
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
     window.setContentView(Some(&content));
-    let body = panel::rounded_glass(mtm, &content, RADIUS).content;
+    // The window matches the icon's dark navy, so it always uses the dark appearance (light
+    // text and controls) and the title bar blends into the same colour.
+    // SAFETY: NSAppearanceNameDarkAqua is an immutable AppKit string constant.
+    let dark = unsafe { NSAppearanceNameDarkAqua };
+    window.setAppearance(NSAppearance::appearanceNamed(dark).as_deref());
+    window.setTitlebarAppearsTransparent(true);
+    window.setBackgroundColor(Some(&NSColor::colorWithSRGBRed_green_blue_alpha(
+        ICON_BACKGROUND.0,
+        ICON_BACKGROUND.1,
+        ICON_BACKGROUND.2,
+        1.0,
+    )));
+    let body = content.clone();
 
     let mut y = HEIGHT - PAD - ICON;
     let icon = widgets::image_view(mtm);
