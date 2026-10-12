@@ -17,11 +17,34 @@ pub fn system_lang() -> Lang {
 
 /// The language for labels: the stored choice, or [`system_lang`] when that choice is System.
 pub fn lang() -> Lang {
-    match crate::settings::language() {
+    match chosen_language() {
         crate::settings::Language::Nl => Lang::Nl,
         crate::settings::Language::En => Lang::En,
         crate::settings::Language::System => system_lang(),
     }
+}
+
+#[cfg(not(test))]
+fn chosen_language() -> crate::settings::Language {
+    crate::settings::language()
+}
+
+// Tests run in parallel on Macs set to any language: each test thread gets English
+// unless it picks a language itself, and never touches the stored setting.
+#[cfg(test)]
+thread_local! {
+    static TEST_LANGUAGE: std::cell::Cell<crate::settings::Language> =
+        const { std::cell::Cell::new(crate::settings::Language::En) };
+}
+
+#[cfg(test)]
+fn chosen_language() -> crate::settings::Language {
+    TEST_LANGUAGE.with(|c| c.get())
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_language(language: crate::settings::Language) {
+    TEST_LANGUAGE.with(|c| c.set(language));
 }
 
 /// Point shared panels ([`mac_ui::lang`]) at the same language as [`lang`].
@@ -118,31 +141,21 @@ pub fn copy_symbol(lang: Lang, symbol: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lang, lang, strings::STRINGS, system_lang, t, t_in, tf_in};
+    use super::{Lang, lang, set_test_language, strings::STRINGS, system_lang, t, t_in, tf_in};
     use std::collections::HashSet;
     use std::path::Path;
 
     #[test]
     fn system_follows_the_platform_language_and_a_choice_overrides_it() {
         let _lock = crate::settings::language_test_lock();
-        let previous = crate::settings::load().language;
-        struct Restore(crate::settings::Language);
-        impl Drop for Restore {
-            fn drop(&mut self) {
-                crate::settings::set_language(self.0);
-                crate::settings::clear_language_choice();
-                super::apply();
-            }
-        }
-        let _restore = Restore(previous);
-        crate::settings::clear_language_choice();
+        set_test_language(crate::settings::Language::System);
         assert_eq!(lang(), system_lang());
         assert_eq!(t("settings"), t_in(system_lang(), "settings"));
-        crate::settings::set_language(crate::settings::Language::Nl);
+        set_test_language(crate::settings::Language::Nl);
         assert_eq!(lang(), Lang::Nl);
         assert_eq!(t("settings"), "Instellingen…");
         assert_eq!(t("about"), "Over Copycraft");
-        crate::settings::set_language(crate::settings::Language::En);
+        set_test_language(crate::settings::Language::En);
         assert_eq!(lang(), Lang::En);
         assert_eq!(t("settings"), "Settings…");
         assert_eq!(t("quit"), "Quit");
