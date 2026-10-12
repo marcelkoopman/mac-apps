@@ -97,6 +97,17 @@ fn positive_pixels(value: f64) -> usize {
     }
 }
 
+/// PNG bytes re-encoded from bitmap image data (TIFF, BMP, anything `NSBitmapImageRep` reads).
+///
+/// `None` when AppKit cannot read `data` as a bitmap.
+pub fn png_from_bitmap_data(data: &NSData) -> Option<Retained<NSData>> {
+    let rep = NSBitmapImageRep::imageRepWithData(data)?;
+    // SAFETY: an empty dictionary is a valid property list for any file type.
+    unsafe {
+        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ::image::ExtendedColorType;
@@ -144,16 +155,5 @@ mod tests {
         assert!(from_rgba(0, 1, &[0, 0, 0, 255]).is_none());
         assert!(from_rgba(1, 1, &[0, 0, 0]).is_none());
         assert!(from_rgba(2, 1, &[255, 0, 0, 255]).is_none());
-    }
-}
-
-/// PNG bytes re-encoded from bitmap image data (TIFF, BMP, anything `NSBitmapImageRep` reads).
-///
-/// `None` when AppKit cannot read `data` as a bitmap.
-pub fn png_from_bitmap_data(data: &NSData) -> Option<Retained<NSData>> {
-    let rep = NSBitmapImageRep::imageRepWithData(data)?;
-    // SAFETY: an empty dictionary is a valid property list for any file type.
-    unsafe {
-        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
     }
 }
