@@ -21,7 +21,7 @@ impl App {
                 // Layout during the panel may have covered the wheel. Put it back for the read.
                 crate::macos_launcher::raise_panel_wait();
                 // Same as a drop: history, the well, and a picture scan. The clipboard stays.
-                self.show_dropped(crate::open_file::load_dropped(&path));
+                self.open_path(path, false);
             } else if let Some(window) = previous.as_ref() {
                 if let Some(mtm) = MainThreadMarker::new() {
                     panel::activate_app(mtm);
@@ -30,6 +30,26 @@ impl App {
             } else {
                 launcher::order_front();
             }
+        }
+    }
+
+    /// Read a dropped or chosen file on a thread (a large file, a picture), then show it. A
+    /// promised file (`promised`) is removed after the read.
+    pub(crate) fn open_path(&mut self, path: std::path::PathBuf, promised: bool) {
+        let opened = self.start_work(
+            work::Lane::File,
+            work::QUICK,
+            move || {
+                let opened = crate::open_file::load_dropped(&path);
+                if promised {
+                    mac_ui::drop::discard_promised(&path);
+                }
+                opened
+            },
+            |app, opened| app.show_dropped(opened),
+        );
+        if let Some(opened) = opened {
+            self.show_dropped(opened);
         }
     }
 

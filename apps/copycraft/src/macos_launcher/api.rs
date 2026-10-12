@@ -186,43 +186,28 @@ pub fn order_front() {
     });
 }
 
-pub fn summon(data: LaunchData) {
-    if is_open() {
-        hide();
-        return;
-    }
-    reveal(data);
-}
-
-/// Close an open card, or open it under the menu bar icon of `tray` (at the pointer when the
-/// icon has no frame).
-pub fn toggle_under_icon(data: LaunchData, tray: &mac_ui::tray_icon::TrayIcon) {
-    if is_open() {
-        hide();
-        return;
-    }
+/// Open the card under the menu bar icon of `tray` with `card` built (off the main thread)
+/// from `data`.
+pub fn open_under_icon(
+    data: LaunchData,
+    card: commands::WorkCard,
+    tray: &mac_ui::tray_icon::TrayIcon,
+) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
     ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
-    reveal(data);
+    reveal_with_card(data, card);
     ICON_FRAME.set(None);
 }
 
-pub fn reveal(data: LaunchData) {
+/// Open the card with `card` already built (off the main thread) from `data`.
+pub fn reveal_with_card(data: LaunchData, card: commands::WorkCard) {
     let fresh = !is_open();
-    present(data, fresh);
+    present_with_card(data, card, fresh);
 }
 
-pub fn sync(data: LaunchData) {
-    if !is_open() {
-        return;
-    }
-    store(data);
-    layout(false);
-}
-
-/// [`sync`] with `card` already built from `data`: the "Show all" card (built off the main
+/// Update the open card with `card` already built from `data`: the "Show all" card (built off the main
 /// thread), or a history entry's card built earlier.
 pub fn sync_with_card(data: LaunchData, card: commands::WorkCard) {
     if !is_open() {
@@ -232,7 +217,7 @@ pub fn sync_with_card(data: LaunchData, card: commands::WorkCard) {
     layout(false);
 }
 
-pub(crate) fn present(data: LaunchData, fresh: bool) {
+pub(crate) fn present_with_card(data: LaunchData, card: commands::WorkCard, fresh: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -246,7 +231,7 @@ pub(crate) fn present(data: LaunchData, fresh: bool) {
     if fresh {
         REVEALED.set(false);
     }
-    store(data);
+    store_with_card(data, card);
     OPEN.set(true);
     layout(fresh);
     WINDOW.with(|slot| {
@@ -272,6 +257,7 @@ pub(crate) fn present(data: LaunchData, fresh: bool) {
     raise_content_actions();
 }
 
+#[cfg(test)]
 pub(crate) fn store(data: LaunchData) {
     let card = commands::work_card(&data);
     store_with_card(data, card);

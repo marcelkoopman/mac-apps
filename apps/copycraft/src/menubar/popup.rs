@@ -12,7 +12,12 @@ impl App {
             self.leave_opened();
             self.full_card = None;
         }
-        launcher::summon(self.launch_for_popup());
+        let data = self.launch_for_popup();
+        if launcher::is_open() {
+            launcher::hide();
+        } else {
+            self.reveal_card(data);
+        }
     }
 
     pub(crate) fn toggle_popup_under_icon(&mut self) {
@@ -26,7 +31,13 @@ impl App {
             self.leave_opened();
             self.full_card = None;
         }
-        launcher::toggle_under_icon(self.launch_for_popup(), &self.tray);
+        let data = self.launch_for_popup();
+        if launcher::is_open() {
+            launcher::hide();
+        } else {
+            let card = self.history_card(&data);
+            launcher::open_under_icon(data, card, &self.tray);
+        }
     }
 
     pub(crate) fn show_status_menu(&mut self) {
@@ -99,6 +110,62 @@ impl App {
     /// view, and kept with that entry (dropped and zeroized with it), so stepping back and
     /// forth through history does not detect, format and lay out the same copies again.
     pub(crate) fn history_card(&mut self, data: &LaunchData) -> commands::WorkCard {
+        let slot = self.card_slot(data);
+        if let Some(card) = slot.and_then(|index| self.history.card(index, data.view)) {
+            return card.clone();
+        }
+        // Detection, formatting (JSON, XML, Markdown, code, HTML) and the dataframe views run
+        // on a thread. A quick card is back within a frame and shows as before; a slow one
+        // shows "Working…" first and is put on the card when it is ready (if the card still
+        // shows that item and view).
+        let key = commands::content_key(data);
+        let view = data.view;
+        let job = data.clone();
+        let built = self.start_work(
+            work::Lane::Card,
+            work::QUICK,
+            move || commands::work_card(&job),
+            move |app, card| app.card_built(key, view, card),
+        );
+        match built {
+            Some(card) => {
+                self.keep_card(slot, view, &card);
+                card
+            }
+            None => commands::building_card(),
+        }
+    }
+
+    fn keep_card(&mut self, slot: Option<usize>, view: CardView, card: &commands::WorkCard) {
+        if let Some(index) = slot
+            && !commands::is_checking(card)
+        {
+            self.history.remember_card(index, view, card.clone());
+        }
+    }
+
+    /// A slow card is ready (main thread).
+    fn card_built(&mut self, key: u64, view: CardView, mut card: commands::WorkCard) {
+        if !launcher::is_open() {
+            card.wipe();
+            return;
+        }
+        let data = self.current_launch_data();
+        let full = self
+            .full_card
+            .as_ref()
+            .is_some_and(|full| full.key == key && full.view == view);
+        if commands::content_key(&data) != key || data.view != view || full {
+            card.wipe();
+            return;
+        }
+        let slot = self.card_slot(&data);
+        self.keep_card(slot, view, &card);
+        launcher::sync_with_card(data, card);
+    }
+
+    /// The history entry whose kept cards `data`'s card belongs with, if it may be kept.
+    fn card_slot(&self, data: &LaunchData) -> Option<usize> {
         let entry = data
             .subject_text
             .as_deref()
@@ -123,17 +190,22 @@ impl App {
                 .is_some_and(crate::decode::picture_candidate);
         // A diff is not kept with the entry: it is not one view of that copy.
         let diff_view = data.view == CardView::Diff;
-        let Some(index) = entry.filter(|_| !versioned && !picture && !diff_view) else {
-            return commands::work_card(data);
-        };
-        if let Some(card) = self.history.card(index, data.view) {
-            return card.clone();
+        entry.filter(|_| !versioned && !picture && !diff_view)
+    }
+
+    /// Open the card for `data` (the card is built as in [`App::history_card`]).
+    pub(crate) fn reveal_card(&mut self, data: LaunchData) {
+        let card = self.history_card(&data);
+        launcher::reveal(data, card);
+    }
+
+    /// Update the open card with `data`.
+    pub(crate) fn sync_card(&mut self, data: LaunchData) {
+        if !launcher::is_open() {
+            return;
         }
-        let card = commands::work_card(data);
-        if !commands::is_checking(&card) {
-            self.history.remember_card(index, data.view, card.clone());
-        }
-        card
+        let card = self.history_card(&data);
+        launcher::sync_with_card(data, card);
     }
 
     /// Build the whole-text card on a background thread; the spinner shows if it is slow.

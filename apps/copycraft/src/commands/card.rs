@@ -127,6 +127,23 @@ pub fn payload_excerpt(text: &str) -> String {
     out.join("\n")
 }
 
+/// The card shown while a slow card is built on its thread: no copied text, only "Working…".
+pub fn building_card() -> WorkCard {
+    let working = crate::locale::t("card_building").to_string();
+    WorkCard {
+        title: working.clone(),
+        meta: String::new(),
+        excerpt: String::new(),
+        placeholder: working,
+        shows_image: false,
+        highlight: None,
+        selectable: false,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    }
+}
+
 pub fn work_card(data: &LaunchData) -> WorkCard {
     if data.view == CardView::Diff {
         return diff_card(data);

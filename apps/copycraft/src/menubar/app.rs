@@ -92,6 +92,8 @@ pub(crate) struct App {
     pub(crate) text_note: Option<(u64, String)>,
     /// Bumped for every Text… job; a result with another number is stale and dropped.
     pub(crate) text_generation: u64,
+    /// Sequence numbers of the background jobs ([`work::Lane`]).
+    pub(crate) lanes: work::Lanes,
     /// The last pin was refused because the pin list is full. Shown on the card meta line.
     pub(crate) pin_refused: bool,
     /// The Base64 picture the Decode chip draws, for the copy it was decoded from.

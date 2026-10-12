@@ -249,7 +249,8 @@ impl App {
         self.refresh_status_menu();
         if launcher::is_open() {
             self.record_current(&view);
-            launcher::sync(self.launch_data(&view));
+            let data = self.launch_data(&view);
+            self.sync_card(data);
         }
     }
 
@@ -515,9 +516,9 @@ impl App {
         self.attach_image(&mut data);
         self.attach_text(&mut data);
         if launcher::is_open() {
-            launcher::sync(data);
+            self.sync_card(data);
         } else {
-            launcher::reveal(data);
+            self.reveal_card(data);
         }
     }
 

@@ -190,15 +190,32 @@ impl App {
             notes: table.notes(),
             overview: Some(false),
         };
-        let view = commands::table_window_view(&shown_table, &text);
         if let Some(window) = self.table_window.as_mut() {
             window.shown = Some(key);
-            window.checking = view.checking;
         }
-        launcher::show_table_window(view);
+        // The grid text of a large table takes a while: built on a thread, shown on main.
+        let source = text;
+        let built = self.start_work(
+            work::Lane::TableWindow,
+            work::QUICK,
+            move || commands::table_window_view(&shown_table, &source),
+            move |app, view| app.table_view_built(key, view),
+        );
+        if let Some(view) = built {
+            self.table_view_built(key, view);
+        }
         if let Some(job) = load {
             self.run_table_job(job, true, TableTarget::Window);
         }
+    }
+
+    /// The table window's view for `key` is built; dropped when the window moved on.
+    fn table_view_built(&mut self, key: u64, view: commands::TableWindowView) {
+        let Some(window) = self.table_window.as_mut().filter(|w| w.shown == Some(key)) else {
+            return;
+        };
+        window.checking = view.checking;
+        launcher::show_table_window(view);
     }
 
     /// Read the table another way (the date order): it starts over from

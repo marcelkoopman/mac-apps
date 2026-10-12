@@ -42,15 +42,44 @@ impl App {
         let version = (shown == CardView::Dataframe)
             .then(|| self.shown_table_version())
             .flatten();
-        let body = match version {
-            Some(frame) => crate::dataframe::frame_grid(&frame),
-            None => commands::transformed_text(source.as_str(), shown),
-        };
-        let Some(body) = body.map(Zeroizing::new) else {
+        // The conversion (format, decode, the table grid) runs on a thread; the clipboard
+        // write stays here, or comes when the slow conversion is done.
+        let input = source.clone();
+        let late_source = source.clone();
+        let body = self.start_work(
+            work::Lane::Copy,
+            work::QUICK,
+            move || {
+                match version {
+                    Some(frame) => crate::dataframe::frame_grid(&frame),
+                    None => commands::transformed_text(input.as_str(), shown),
+                }
+                .map(Zeroizing::new)
+            },
+            move |app, body| {
+                if let Err(e) = app.copy_converted(body, &late_source, from_file) {
+                    eprintln!("copy failed: {e:#}");
+                }
+            },
+        );
+        match body {
+            Some(body) => self.copy_converted(body, &source, from_file),
+            None => Ok(()),
+        }
+    }
+
+    /// Copy the converted `body` of `source` (main thread).
+    fn copy_converted(
+        &mut self,
+        body: Option<Zeroizing<String>>,
+        source: &str,
+        from_file: bool,
+    ) -> anyhow::Result<()> {
+        let Some(body) = body else {
             return Ok(());
         };
         // The clipboard already holds this text. A file does not, so Copy still writes it.
-        if !from_file && body.as_str() == source.as_str() {
+        if !from_file && body.as_str() == source {
             return Ok(());
         }
         self.write_own(body.as_str())?;
@@ -68,7 +97,24 @@ impl App {
         let Some(frame) = self.window_table_frame() else {
             return Ok(());
         };
-        let Some(body) = crate::dataframe::frame_grid(&frame).map(Zeroizing::new) else {
+        let body = self.start_work(
+            work::Lane::Copy,
+            work::QUICK,
+            move || crate::dataframe::frame_grid(&frame).map(Zeroizing::new),
+            |app, body| {
+                if let Err(e) = app.copy_grid(body) {
+                    eprintln!("copy failed: {e:#}");
+                }
+            },
+        );
+        match body {
+            Some(body) => self.copy_grid(body),
+            None => Ok(()),
+        }
+    }
+
+    fn copy_grid(&mut self, body: Option<Zeroizing<String>>) -> anyhow::Result<()> {
+        let Some(body) = body else {
             return Ok(());
         };
         self.write_own(body.as_str())?;
@@ -322,6 +368,7 @@ impl App {
             .into_iter()
             .flatten()
             .map(|run| run.started)
+            .chain(self.lanes.slow_since())
             .min()
         else {
             return wake;
@@ -348,6 +395,7 @@ impl App {
             && self.table_job.as_ref().is_none_or(|run| run.quiet)
             && self.image_job.is_none()
             && self.diffing.is_none()
+            && self.lanes.slow_since().is_none()
         {
             self.spinner_on = false;
             launcher::set_busy(false);

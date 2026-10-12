@@ -79,6 +79,8 @@ pub enum UserEvent {
     },
     /// A Text… job finished for history entry `entry`. A mismatched `generation` is dropped
     /// (a newer job, Wipe).
+    /// A background job ([`crate::menubar::WorkDone`]): card, table window, Copy, opened file.
+    WorkDone(crate::menubar::WorkDone),
     TextReady {
         generation: u64,
         entry: u64,
@@ -211,40 +213,34 @@ pub fn emit(event: UserEvent) {
     }
 }
 
-pub fn summon(data: LaunchData) {
+/// Open the card under the menu bar icon of `tray` (at the pointer when the icon has no frame),
+/// with `card` already built from `data`.
+pub fn open_under_icon(
+    data: LaunchData,
+    card: crate::commands::WorkCard,
+    tray: &mac_ui::tray_icon::TrayIcon,
+) {
     #[cfg(target_os = "macos")]
-    crate::macos_launcher::summon(data);
+    crate::macos_launcher::open_under_icon(data, card, tray);
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = data;
+        let _ = (data, card, tray);
     }
 }
 
-/// The menu bar icon's click: close an open card, or open it under the icon.
-pub fn toggle_under_icon(data: LaunchData, tray: &mac_ui::tray_icon::TrayIcon) {
+/// Close the card.
+pub fn hide() {
     #[cfg(target_os = "macos")]
-    crate::macos_launcher::toggle_under_icon(data, tray);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (data, tray);
-    }
+    crate::macos_launcher::hide();
 }
 
-pub fn reveal(data: LaunchData) {
+/// Open the card with `card` already built from `data`.
+pub fn reveal(data: LaunchData, card: crate::commands::WorkCard) {
     #[cfg(target_os = "macos")]
-    crate::macos_launcher::reveal(data);
+    crate::macos_launcher::reveal_with_card(data, card);
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = data;
-    }
-}
-
-pub fn sync(data: LaunchData) {
-    #[cfg(target_os = "macos")]
-    crate::macos_launcher::sync(data);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = data;
+        let _ = (data, card);
     }
 }
 

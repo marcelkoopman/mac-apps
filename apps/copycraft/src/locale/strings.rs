@@ -914,6 +914,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Zoals more: spatie, b, g en G bladeren; Esc of q stopt.",
         "Like more: Space, b, g and G page; Esc or q stops.",
     ),
+    ("card_building", "Bezig…", "Working…"),
     ("sep_tab", "Tab", "Tab"),
     ("sep_comma", "Komma", "Comma"),
     ("sep_semicolon", "Puntkomma", "Semicolon"),

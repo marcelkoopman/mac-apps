@@ -25,14 +25,8 @@ impl ApplicationHandler<UserEvent> for App {
                 self.finish_preview(generation, result);
             }
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
-            UserEvent::DroppedFile(path) => {
-                self.show_dropped(crate::open_file::load_dropped(&path));
-            }
-            UserEvent::DroppedPromisedFile(path) => {
-                let opened = crate::open_file::load_dropped(&path);
-                mac_ui::drop::discard_promised(&path);
-                self.show_dropped(opened);
-            }
+            UserEvent::DroppedFile(path) => self.open_path(path, false),
+            UserEvent::DroppedPromisedFile(path) => self.open_path(path, true),
             UserEvent::DroppedImage(bytes) => {
                 self.show_dropped(crate::open_file::from_image_data(dropped_image(), bytes));
             }
@@ -63,6 +57,7 @@ impl ApplicationHandler<UserEvent> for App {
                 generation,
                 outcome,
             } => self.finish_diff(generation, *outcome),
+            UserEvent::WorkDone(done) => self.finish_work(done),
             UserEvent::TextReady {
                 generation,
                 entry,

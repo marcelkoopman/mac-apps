@@ -58,6 +58,9 @@ mod source;
 mod state;
 mod table;
 mod text;
+mod work;
+
+pub(crate) use work::WorkDone;
 
 use app::*;
 use menu::*;
