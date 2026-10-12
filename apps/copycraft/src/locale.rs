@@ -194,6 +194,7 @@ mod tests {
             "overview_type",
             "language_nl",
             "language_en",
+            "group_privacy",
         ];
         for (key, nl, en) in STRINGS {
             if nl == en {
