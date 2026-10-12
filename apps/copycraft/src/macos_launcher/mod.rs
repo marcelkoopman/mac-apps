@@ -594,17 +594,17 @@ impl LauncherDelegate {
 }
 
 mod api;
+mod controls;
 mod events;
 mod find;
 mod panels;
-mod widgets;
 mod window;
 
 pub use api::*;
+use controls::*;
 pub use events::*;
 use find::*;
 pub use panels::*;
-use widgets::*;
 pub use window::*;
 
 #[cfg(test)]

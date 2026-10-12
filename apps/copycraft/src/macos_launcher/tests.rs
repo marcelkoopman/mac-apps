@@ -1,4 +1,3 @@
-
 use zeroize::Zeroize;
 
 struct ForceBlurOff;
