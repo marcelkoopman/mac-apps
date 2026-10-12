@@ -1,0 +1,51 @@
+name: Security audit
+
+# RustSec advisories for every crate in Cargo.lock. cargo-audit is a CI tool installed here, not a
+# dependency of the apps. Vulnerabilities fail the job; unmaintained, unsound and yanked crates are
+# printed as warnings (cargo-audit's default). Ignores live in .cargo/audit.toml, each with its
+# reason, never as a silent flag here. The yanked check is off there (with its reason: the
+# sparse-index lookups time out on GitHub runners).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/LICENSE"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/LICENSE"
+  # Weekly, for advisories published against crates that did not change.
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-audit:
+    name: cargo audit (RustSec)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      # Version, components and target come from rust-toolchain.toml.
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      - name: Install cargo-audit (prebuilt)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit
+        run: cargo audit

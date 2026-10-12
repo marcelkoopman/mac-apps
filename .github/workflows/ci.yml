@@ -151,20 +151,3 @@ jobs:
               fi
             fi
           done
-
-  audit:
-    name: Security audit
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      # Version, components and target come from rust-toolchain.toml.
-      - name: Install Rust (rust-toolchain.toml)
-        run: |
-          rustup toolchain install
-          rustc --version
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit
-      # Ignores live in .cargo/audit.toml at the repo root.
-      - run: cargo audit
