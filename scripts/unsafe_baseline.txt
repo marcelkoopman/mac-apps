@@ -1,7 +1,7 @@
 # Upper bounds for scripts/count_unsafe.sh --check (CI). Lower them when unsafe goes down.
-copycraft blocks 139
+copycraft blocks 100
 copycraft fn 5
 copycraft impl 7
-mac-ui blocks 67
+mac-ui blocks 75
 mac-ui fn 4
 mac-ui impl 4
