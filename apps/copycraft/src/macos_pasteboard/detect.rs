@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct ContentKind {
     pub(super) label: &'static str,
     pub(super) mime: &'static str,
