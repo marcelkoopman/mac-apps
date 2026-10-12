@@ -126,11 +126,16 @@ fn upright_size(source: &CGImageSource) -> Option<(usize, usize)> {
         properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64()
     };
     // SAFETY: reads immutable constants exported by the system frameworks.
-    let width = usize::try_from(number(unsafe { kCGImagePropertyPixelWidth })?).ok()?;
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let height = usize::try_from(number(unsafe { kCGImagePropertyPixelHeight })?).ok()?;
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let orientation = number(unsafe { kCGImagePropertyOrientation }).unwrap_or(1);
+    let (width_key, height_key, orientation_key) = unsafe {
+        (
+            kCGImagePropertyPixelWidth,
+            kCGImagePropertyPixelHeight,
+            kCGImagePropertyOrientation,
+        )
+    };
+    let width = usize::try_from(number(width_key)?).ok()?;
+    let height = usize::try_from(number(height_key)?).ok()?;
+    let orientation = number(orientation_key).unwrap_or(1);
     // 5 to 8 are a quarter turn (with or without a mirror image).
     Some(if (5..=8).contains(&orientation) {
         (height, width)

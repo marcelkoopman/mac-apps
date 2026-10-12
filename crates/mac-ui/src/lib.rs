@@ -13,6 +13,7 @@
 //!   (target/action, text delegates, a scroller Tab skips), the glass push button
 //!   ([`button::GlassButton`]), font lookup and attributed-string building ([`text::AttrText`],
 //!   byte to UTF-16 ranges). It also adds ⌘-chord and Shift checks on key events to `keys`.
+//! - `actions`: `widgets`, safe target/action wiring, action menu items, delayed performs.
 //! - `dialog`: `dialog`, modal `NSAlert` message, confirm, choice, prompt and list pick.
 //! - `panel`: `panel`, borderless floating panel creation, activation and placement.
 //! - `notify`: `notify`, user notifications.
@@ -42,6 +43,8 @@ pub use objc2_app_kit;
 #[cfg(target_os = "macos")]
 pub use objc2_foundation;
 
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub mod actions;
 #[cfg(all(target_os = "macos", any(feature = "panel", feature = "dialog")))]
 mod activation;
 #[cfg(all(target_os = "macos", feature = "blur"))]

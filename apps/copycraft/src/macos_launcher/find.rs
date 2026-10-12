@@ -278,20 +278,12 @@ pub(crate) fn item_query_changed(delegate: &LauncherDelegate) {
         take_item_query_from_field();
         return;
     }
-    let target: &AnyObject = delegate.as_ref();
-    // SAFETY: `findAfterPause:` is a method of the delegate that takes an optional sender.
-    unsafe {
-        NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(
-            target,
-            sel!(findAfterPause:),
-            None,
-        );
-        delegate.performSelector_withObject_afterDelay(
-            sel!(findAfterPause:),
-            None,
-            item_find::DEBOUNCE.as_secs_f64(),
-        );
-    }
+    mac_ui::actions::cancel_perform(delegate, sel!(findAfterPause:));
+    mac_ui::actions::perform_after(
+        delegate,
+        sel!(findAfterPause:),
+        item_find::DEBOUNCE.as_secs_f64(),
+    );
 }
 
 pub(crate) fn set_match_label(label: &str) {

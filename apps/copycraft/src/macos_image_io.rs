@@ -169,14 +169,15 @@ pub(crate) fn preview_from_path(path: &Path) -> Option<ClipboardImage> {
 /// Keep ImageIO from decoding a large paste into a full bitmap just to read it.
 fn source_options() -> Option<Owned> {
     // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys = unsafe {
-        [
-            kCGImageSourceShouldCache,
-            kCGImageSourceShouldCacheImmediately,
-        ]
+    let (keys, values) = unsafe {
+        (
+            [
+                kCGImageSourceShouldCache,
+                kCGImageSourceShouldCacheImmediately,
+            ],
+            [kCFBooleanFalse, kCFBooleanFalse],
+        )
     };
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let values = unsafe { [kCFBooleanFalse, kCFBooleanFalse] };
     // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
     // call.
     let dict = unsafe {
@@ -200,10 +201,13 @@ fn preview_from_source(source: *mut c_void) -> Option<ClipboardImage> {
     let thumb =
         unsafe { CGImageSourceCreateThumbnailAtIndex(source.get().cast_mut(), 0, options.get()) };
     let thumb = Owned::new(thumb.cast())?;
-    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
-    let width = unsafe { CGImageGetWidth(thumb.get().cast_mut()) };
-    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
-    let height = unsafe { CGImageGetHeight(thumb.get().cast_mut()) };
+    // SAFETY: `thumb` is a live, non-null CGImage held by `Owned`.
+    let (width, height) = unsafe {
+        (
+            CGImageGetWidth(thumb.get().cast_mut()),
+            CGImageGetHeight(thumb.get().cast_mut()),
+        )
+    };
     let mut rgba = rgba_from_image(thumb.get().cast_mut(), width, height)?;
     unpremultiply(&mut rgba);
     let mut image = ClipboardImage::new(width, height, rgba)?;
@@ -228,17 +232,16 @@ fn thumbnail_options() -> Option<Owned> {
         )
     })?;
     // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys = unsafe {
-        [
-            kCGImageSourceThumbnailMaxPixelSize,
-            kCGImageSourceCreateThumbnailFromImageAlways,
-            kCGImageSourceCreateThumbnailWithTransform,
-        ]
+    let (keys, values) = unsafe {
+        (
+            [
+                kCGImageSourceThumbnailMaxPixelSize,
+                kCGImageSourceCreateThumbnailFromImageAlways,
+                kCGImageSourceCreateThumbnailWithTransform,
+            ],
+            [max_number.get(), kCFBooleanTrue, kCFBooleanTrue],
+        )
     };
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let values = [max_number.get(), unsafe { kCFBooleanTrue }, unsafe {
-        kCFBooleanTrue
-    }];
     // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
     // call.
     let dict = unsafe {
@@ -263,11 +266,16 @@ fn oriented_size(source: *const c_void) -> (usize, usize) {
         return (0, 0);
     };
     // SAFETY: reads immutable constants exported by the system frameworks.
-    let mut width = dict_usize(props.get(), unsafe { kCGImagePropertyPixelWidth });
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let mut height = dict_usize(props.get(), unsafe { kCGImagePropertyPixelHeight });
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let orientation = dict_usize(props.get(), unsafe { kCGImagePropertyOrientation });
+    let (width_key, height_key, orientation_key) = unsafe {
+        (
+            kCGImagePropertyPixelWidth,
+            kCGImagePropertyPixelHeight,
+            kCGImagePropertyOrientation,
+        )
+    };
+    let mut width = dict_usize(props.get(), width_key);
+    let mut height = dict_usize(props.get(), height_key);
+    let orientation = dict_usize(props.get(), orientation_key);
     if matches!(orientation, 5..=8) {
         std::mem::swap(&mut width, &mut height);
     }

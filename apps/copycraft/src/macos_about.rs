@@ -135,9 +135,10 @@ fn build(mtm: MainThreadMarker) {
     window.center();
 
     let delegate = AboutDelegate::new(mtm);
-    // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
-    // window's weak delegate reference stays valid.
-    unsafe { panel::set_delegate(&window, &*delegate) };
+    // The delegate is stored in DELEGATE right below and outlives the window.
+    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
+        &*delegate,
+    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);

@@ -12,9 +12,7 @@ use mac_ui::objc2_app_kit::{
     NSButton, NSColor, NSFont, NSPopover, NSPopoverBehavior, NSTextAlignment, NSTextField, NSView,
     NSViewController,
 };
-use mac_ui::objc2_foundation::{
-    NSObject, NSObjectNSDelayedPerforming, NSPoint, NSRect, NSRectEdge, NSSize, NSString,
-};
+use mac_ui::objc2_foundation::{NSObject, NSPoint, NSRect, NSRectEdge, NSSize, NSString};
 use mac_ui::widgets;
 
 use crate::locale;
@@ -194,9 +192,7 @@ fn build_grid(
         button
             .view()
             .setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(CELL_W, CELL_H)));
-        // SAFETY: DELEGATE keeps the target alive for the process, and `symbolClicked:` takes
-        // the sender.
-        unsafe { widgets::set_target_action(button.button(), delegate, sel!(symbolClicked:)) };
+        mac_ui::actions::connect(button.button(), delegate, sel!(symbolClicked:));
         view.addSubview(button.view());
     }
     let note = widgets::label(mtm, 12.0, &NSColor::secondaryLabelColor());
@@ -235,21 +231,9 @@ fn set_note(text: &str) {
 
 fn schedule_clear(delegate: &SymbolsDelegate) {
     cancel_note(delegate);
-    // SAFETY: `clearCopiedNote:` is a method of this delegate and takes an optional sender.
-    // DELEGATE keeps it alive past the delay.
-    unsafe {
-        delegate.performSelector_withObject_afterDelay(sel!(clearCopiedNote:), None, NOTE_SECS);
-    }
+    mac_ui::actions::perform_after(delegate, sel!(clearCopiedNote:), NOTE_SECS);
 }
 
 fn cancel_note(delegate: &SymbolsDelegate) {
-    let target: &AnyObject = delegate.as_ref();
-    // SAFETY: same selector as [`schedule_clear`].
-    unsafe {
-        NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(
-            target,
-            sel!(clearCopiedNote:),
-            None,
-        );
-    }
+    mac_ui::actions::cancel_perform(delegate, sel!(clearCopiedNote:));
 }

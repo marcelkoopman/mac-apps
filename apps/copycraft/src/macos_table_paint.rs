@@ -325,10 +325,7 @@ fn set_styled_text(
         location: 0,
         length: attr.length(),
     };
-    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
-    unsafe {
-        attr.addAttribute_value_range(NSParagraphStyleAttributeName, style, range);
-    }
+    mac_ui::text::set_paragraph_style(&attr, style, range);
     if let Some(storage) = mac_ui::widgets::text_storage(view) {
         storage.setAttributedString(&attr);
     }

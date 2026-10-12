@@ -97,14 +97,24 @@ fn near(actual: [u8; 4], expected: [u8; 4]) -> bool {
 /// The keys of the encoded picture's properties, those of a nested dictionary after its name
 /// ("Orientation", "{GPS}", "{TIFF}.Make"…).
 fn property_keys(bytes: &[u8]) -> Vec<String> {
-    let data = CFData::from_bytes(bytes);
-    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
-    let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
-    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
-    let properties = unsafe { source.properties_at_index(0, None) }.unwrap();
+    let properties = properties_of(bytes);
     let mut keys = Vec::new();
     flatten("", &properties, &mut keys);
     keys
+}
+
+/// An image source over a copy of `bytes`.
+fn source_of(bytes: &[u8]) -> objc2_core_foundation::CFRetained<CGImageSource> {
+    let data = CFData::from_bytes(bytes);
+    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
+    unsafe { CGImageSource::with_data(&data, None) }.unwrap()
+}
+
+/// The properties of the first picture in `bytes`.
+fn properties_of(bytes: &[u8]) -> objc2_core_foundation::CFRetained<CFDictionary> {
+    let source = source_of(bytes);
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
+    unsafe { source.properties_at_index(0, None) }.unwrap()
 }
 
 fn flatten(prefix: &str, dict: &CFDictionary, keys: &mut Vec<String>) {
@@ -122,15 +132,15 @@ fn flatten(prefix: &str, dict: &CFDictionary, keys: &mut Vec<String>) {
 
 /// The EXIF orientation of encoded picture bytes; 1 (upright) when there is none.
 fn orientation(bytes: &[u8]) -> i64 {
-    let data = CFData::from_bytes(bytes);
-    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
-    let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
-    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
-    let properties = unsafe { source.properties_at_index(0, None) }.unwrap();
-    // SAFETY: image properties have CFString keys.
-    let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let key = unsafe { objc2_image_io::kCGImagePropertyOrientation };
+    let properties = properties_of(bytes);
+    // SAFETY: image properties have CFString keys, and the key is an immutable constant exported
+    // by the system frameworks.
+    let (properties, key): (&CFDictionary<CFString, CFType>, _) = unsafe {
+        (
+            properties.cast_unchecked(),
+            objc2_image_io::kCGImagePropertyOrientation,
+        )
+    };
     properties
         .get(key)
         .and_then(|value| {
@@ -142,9 +152,7 @@ fn orientation(bytes: &[u8]) -> i64 {
 }
 
 fn uti_of(bytes: &[u8]) -> String {
-    let data = CFData::from_bytes(bytes);
-    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
-    let source = unsafe { CGImageSource::with_data(&data, None) }.unwrap();
+    let source = source_of(bytes);
     // SAFETY: a valid image source; an unknown type gives None.
     unsafe { source.r#type() }
         .map(|uti| uti.to_string())

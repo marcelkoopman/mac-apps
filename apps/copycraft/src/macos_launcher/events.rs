@@ -203,24 +203,11 @@ pub(crate) fn overflow_item(
     title: &str,
     index: usize,
 ) -> Retained<NSMenuItem> {
-    // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
-    // implements, or none.
-    let item = unsafe {
-        NSMenuItem::initWithTitle_action_keyEquivalent(
-            NSMenuItem::alloc(mtm),
-            &NSString::from_str(title),
-            Some(sel!(overflowClicked:)),
-            &NSString::from_str(""),
-        )
-    };
+    let item = mac_ui::actions::menu_item_with_action(mtm, title, sel!(overflowClicked:));
     item.setTag(index as isize);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: the delegate is kept in a thread-local for the life of the app, so the item's
-            // weak target stays valid.
-            unsafe {
-                item.setTarget(Some(delegate));
-            }
+            mac_ui::actions::set_menu_target(&item, delegate);
         }
     });
     item
@@ -351,11 +338,7 @@ pub(crate) fn pop_overflow() {
         }
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
-                // SAFETY: the delegate is kept in a thread-local for the life of the app, so the
-                // item's weak target stays valid.
-                unsafe {
-                    item.setTarget(Some(delegate));
-                }
+                mac_ui::actions::set_menu_target(&item, delegate);
             }
         });
         menu.addItem(&item);

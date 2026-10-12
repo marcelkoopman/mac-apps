@@ -25,13 +25,13 @@ use mac_ui::objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
     NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
     NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode, NSMenu, NSMenuItem,
-    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSScrollView,
-    NSTextAlignment, NSTextField, NSTextTab, NSTextView, NSView, NSViewBoundsDidChangeNotification,
-    NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
+    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSScrollView, NSTextAlignment, NSTextField,
+    NSTextTab, NSTextView, NSView, NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask,
+    NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSObjectNSDelayedPerforming,
-    NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize,
+    NSString,
 };
 use mac_ui::panel;
 use mac_ui::text::AttrText;
@@ -527,14 +527,8 @@ pub fn open_column_picker() {
     let Some(delegate) = delegate else {
         return;
     };
-    // SAFETY: open_column_picker_clicked takes an optional sender; delay 0 runs after the menu.
-    unsafe {
-        delegate.performSelector_withObject_afterDelay(
-            sel!(tableWindowOpenColumnPicker:),
-            None,
-            0.0,
-        );
-    }
+    // Delay 0 runs after the menu.
+    mac_ui::actions::perform_after(&delegate, sel!(tableWindowOpenColumnPicker:), 0.0);
 }
 
 /// Modal Choose columns… for the table window: All / None, checkboxes, Apply / Cancel.
@@ -599,15 +593,7 @@ fn run_column_picker() {
     let mut checks: Vec<Retained<NSButton>> = Vec::new();
     for (index, column) in picker.columns().iter().enumerate() {
         let y = list_h - (index as f64 + 1.0) * row_h;
-        // SAFETY: no target or action is passed, so no weak reference has to stay valid.
-        let check = unsafe {
-            NSButton::checkboxWithTitle_target_action(
-                &NSString::from_str(&column.shown),
-                None,
-                None,
-                mtm,
-            )
-        };
+        let check = mac_ui::actions::checkbox(mtm, &column.shown);
         check.setState(NSControlStateValueOn);
         check.setToolTip(Some(&NSString::from_str(&column.name)));
         check.setFrame(NSRect::new(
@@ -726,9 +712,7 @@ fn window_key(event: &NSEvent) -> bool {
 fn wire(control: &NSButton, action: Sel) {
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: every action wired here is a TableWindowDelegate method taking the
-            // sender; DELEGATE keeps it alive for the app's lifetime.
-            unsafe { widgets::set_target_action(control, delegate, action) };
+            mac_ui::actions::connect(control, delegate, action);
         }
     });
 }
@@ -1236,10 +1220,7 @@ fn paint_meta(label: &NSTextField, meta: &str) {
         location: 0,
         length: built.length(),
     };
-    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
-    unsafe {
-        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
-    }
+    mac_ui::text::set_paragraph_style(&built, &style, range);
     label.setAttributedStringValue(&built);
 }
 
@@ -1321,23 +1302,17 @@ fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 }
             },
         };
-        // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
-        // implements, or none.
-        let item = unsafe {
-            NSMenuItem::initWithTitle_action_keyEquivalent(
-                NSMenuItem::alloc(mtm),
-                &NSString::from_str(&cmd.title),
-                Some(sel!(tableWindowPoppedClicked:)),
-                &NSString::from_str(""),
-            )
-        };
+        let item = mac_ui::actions::menu_item_with_action(
+            mtm,
+            &cmd.title,
+            sel!(tableWindowPoppedClicked:),
+        );
         item.setTag(index as isize);
         if *checked {
             item.setState(NSControlStateValueOn);
         }
         if let Some(delegate) = delegate.as_ref() {
-            // SAFETY: DELEGATE keeps the target alive for the app's lifetime.
-            unsafe { item.setTarget(Some(delegate)) };
+            mac_ui::actions::set_menu_target(&item, delegate);
         }
         target.addItem(&item);
     }

@@ -268,11 +268,7 @@ fn clear_controls() {
 fn wire(control: &NSButton, action: mac_ui::objc2::runtime::Sel) {
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: DELEGATE keeps the target alive while the window is open.
-            unsafe {
-                control.setTarget(Some(delegate));
-                control.setAction(Some(action));
-            }
+            mac_ui::actions::connect(control, delegate, action);
         }
     });
 }
@@ -357,9 +353,10 @@ fn build(mtm: MainThreadMarker) {
     window.center();
 
     let delegate = SettingsDelegate::new(mtm);
-    // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
-    // window's weak delegate reference stays valid.
-    unsafe { panel::set_delegate(&window, &*delegate) };
+    // The delegate is stored in DELEGATE right below and outlives the window.
+    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
+        &*delegate,
+    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
@@ -617,10 +614,7 @@ fn place_explanation(mtm: MainThreadMarker, parent: &NSView, text: &str, top: &m
 }
 
 fn checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSButton> {
-    // SAFETY: no target or action is passed, so no weak reference has to stay valid.
-    let button = unsafe {
-        NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
-    };
+    let button = mac_ui::actions::checkbox(mtm, title);
     button.setFrame(NSRect::new(
         NSPoint::new(MARGIN, y),
         NSSize::new(WIDTH - MARGIN * 2.0, BUTTON_H),

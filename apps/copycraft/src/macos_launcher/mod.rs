@@ -18,13 +18,13 @@ use mac_ui::objc2_app_kit::{
     NSApplicationDidResignActiveNotification, NSAttributedStringNSStringDrawing, NSBeep, NSBox,
     NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
     NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage, NSImageView,
-    NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSParagraphStyleAttributeName,
-    NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView,
-    NSView, NSWindow, NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
+    NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSScrollView, NSSearchField,
+    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
+    NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
-    NSNotificationCenter, NSObjectNSDelayedPerforming, NSPoint, NSRange, NSRect, NSSize, NSString,
+    NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::progress::{self, SpinnerSize};

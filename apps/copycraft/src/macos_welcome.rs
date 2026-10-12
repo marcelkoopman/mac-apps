@@ -173,18 +173,13 @@ pub fn close() {
 fn wire(control: &NSButton, action: Sel) {
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: the delegate implements `action` taking the sender, and DELEGATE keeps it
-            // alive for as long as the window exists.
-            unsafe { widgets::set_target_action(control, delegate, action) };
+            mac_ui::actions::connect(control, delegate, action);
         }
     });
 }
 
 fn push_button(mtm: MainThreadMarker, title: &str, action: Sel) -> Retained<NSButton> {
-    // SAFETY: no target or action is passed here; `wire` sets them right below.
-    let button = unsafe {
-        NSButton::buttonWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
-    };
+    let button = mac_ui::actions::push_button(mtm, title);
     button.setAccessibilityLabel(Some(&NSString::from_str(title)));
     wire(&button, action);
     button
@@ -226,9 +221,10 @@ fn build(mtm: MainThreadMarker) {
     window.setSharingType(crate::macos_launcher::sharing_type());
 
     let delegate = WelcomeDelegate::new(mtm);
-    // SAFETY: the delegate is stored in DELEGATE right below and outlives the window, so the
-    // window's weak delegate reference stays valid.
-    unsafe { panel::set_delegate(&window, &*delegate) };
+    // The delegate is stored in DELEGATE right below and outlives the window.
+    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
+        &*delegate,
+    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
 
     // The window matches the icon's dark navy, so it always uses the dark appearance (light
@@ -272,15 +268,7 @@ fn build(mtm: MainThreadMarker) {
         .map(|point| text_line(mtm, &format!("•  {point}"), &body_font))
         .collect();
 
-    // SAFETY: no target or action is passed here; `wire` sets them right below.
-    let login = unsafe {
-        NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str(crate::locale::t("open_at_login")),
-            None,
-            None,
-            mtm,
-        )
-    };
+    let login = mac_ui::actions::checkbox(mtm, crate::locale::t("open_at_login"));
     login.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("open_at_login"))));
     wire(&login, sel!(welcomeLoginToggled:));
     LOGIN_BOX.with(|slot| *slot.borrow_mut() = Some(login.clone()));

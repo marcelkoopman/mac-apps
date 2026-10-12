@@ -25,10 +25,7 @@ pub(crate) fn paint_warning_meta(label: &NSTextField, meta: &str) {
         location: 0,
         length: built.length(),
     };
-    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
-    unsafe {
-        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
-    }
+    mac_ui::text::set_paragraph_style(&built, &style, range);
     label.setAttributedStringValue(&built);
 }
 
@@ -87,10 +84,7 @@ pub(crate) fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
         location: 0,
         length: built.length(),
     };
-    // SAFETY: NSParagraphStyleAttributeName takes an NSParagraphStyle.
-    unsafe {
-        built.addAttribute_value_range(NSParagraphStyleAttributeName, &style, range);
-    }
+    mac_ui::text::set_paragraph_style(&built, &style, range);
     built
 }
 
@@ -746,25 +740,14 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 }
             },
         };
-        // SAFETY: a freshly allocated menu item; its action is a selector the launcher delegate
-        // implements, or none.
-        let item = unsafe {
-            NSMenuItem::initWithTitle_action_keyEquivalent(
-                NSMenuItem::alloc(mtm),
-                &NSString::from_str(&cmd.title),
-                Some(sel!(poppedClicked:)),
-                &NSString::from_str(""),
-            )
-        };
+        let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(poppedClicked:));
         item.setTag(index as isize);
         if *checked {
             item.setState(NSControlStateValueOn);
         }
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
-                // SAFETY: the delegate is kept in a thread-local for the life of the app, so the
-                // item's weak target stays valid.
-                unsafe { item.setTarget(Some(delegate)) };
+                mac_ui::actions::set_menu_target(&item, delegate);
             }
         });
         target.addItem(&item);
@@ -816,9 +799,7 @@ pub(crate) fn pop_versions_menu() {
 pub(crate) fn wire_button(button: &NSButton, action: Sel) {
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
-            // SAFETY: every action wired here is a LauncherDelegate method taking the sender;
-            // DELEGATE keeps it alive for the app's lifetime.
-            unsafe { widgets::set_target_action(button, delegate, action) };
+            mac_ui::actions::connect(button, delegate, action);
         }
     });
 }

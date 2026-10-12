@@ -11,7 +11,7 @@ use objc2::AnyThread;
 use objc2::rc::Retained;
 use objc2_app_kit::{
     NSBackgroundColorAttributeName, NSColor, NSFont, NSFontAttributeName,
-    NSForegroundColorAttributeName,
+    NSForegroundColorAttributeName, NSParagraphStyle, NSParagraphStyleAttributeName,
 };
 use objc2_foundation::{NSMutableAttributedString, NSRange, NSString};
 
@@ -138,4 +138,15 @@ mod tests {
         let attr = text.into_attributed();
         assert_eq!(attr.string().to_string(), source);
     }
+}
+
+/// Apply `style` to `range` (UTF-16) of `text`.
+pub fn set_paragraph_style(
+    text: &NSMutableAttributedString,
+    style: &NSParagraphStyle,
+    range: NSRange,
+) {
+    // SAFETY: NSParagraphStyleAttributeName is an immutable AppKit constant and takes an
+    // NSParagraphStyle value.
+    unsafe { text.addAttribute_value_range(NSParagraphStyleAttributeName, style, range) };
 }
