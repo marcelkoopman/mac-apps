@@ -11,6 +11,7 @@ icon = ["assets/icon.icns"]
 resources = ["PrivacyInfo.xcprivacy"]
 version = "0.1.70"
 category = "Utilities"
+copyright = "© 2026 Marcel Koopman"
 short_description = "Clipboard transformer"
 long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
 

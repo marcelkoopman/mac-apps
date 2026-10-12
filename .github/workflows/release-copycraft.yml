@@ -114,6 +114,10 @@ jobs:
           echo "=== Assets ==="
           ls -lah "$RES/assets"
 
+      # Development region `en`, then checks the localisation, copyright and category keys.
+      - name: Finish Info.plist
+        run: scripts/finish_info_plist.sh "$PKG" "$APP"
+
       # cargo-bundle only copies an .icns and cannot read the macOS 26 Icon Composer format.
       # This compiles the icon with actool into Assets.car + AppIcon.icns and sets
       # CFBundleIconName/CFBundleIconFile. Source: $APP_DIR/assets/AppIcon.icon, else

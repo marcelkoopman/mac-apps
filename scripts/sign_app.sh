@@ -62,6 +62,7 @@ fi
 
 plutil -lint "$ENTITLEMENTS" >/dev/null
 # The privacy manifest must be in the bundle (and the export key in Info.plist) before sealing.
+"$ROOT/scripts/finish_info_plist.sh" "$PKG" "$APP" || die "Info.plist check failed for $APP"
 "$ROOT/scripts/check_privacy_manifest.sh" "$PKG" "$APP" || die "Privacy manifest check failed for $APP"
 
 IDENTITY="${MACOS_SIGN_IDENTITY:-}"
