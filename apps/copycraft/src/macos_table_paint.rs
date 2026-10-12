@@ -196,8 +196,15 @@ fn paint_aligned_table(views: &Views, sheet: &crate::dataframe::GridSheet, previ
         set_line_padding(&views.grid, NSSize::new(BODY_INSET_X, 4.0), 0.0);
         set_line_padding(&views.header, NSSize::new(BODY_INSET_X, pad_y), 0.0);
         let style = table_paragraph(&layout.stops, line_h);
-        set_styled_text(&views.grid, &layout.body, &body_font, &style);
-        set_styled_text(&views.header, &layout.header, &header_font, &style);
+        set_styled_text(&views.grid, &layout.body, &body_font, &style, &NSColor::labelColor());
+        // Column names take the app accent (the icon blue under Multicolour), like CSV headers.
+        set_styled_text(
+            &views.header,
+            &layout.header,
+            &header_font,
+            &style,
+            &NSColor::controlAccentColor(),
+        );
         widgets::fit_text_view(&views.grid, None);
         size_header(views, layout.content_width());
         if body_changed {
@@ -311,8 +318,9 @@ fn set_styled_text(
     text: &str,
     font: &NSFont,
     style: &NSMutableParagraphStyle,
+    color: &NSColor,
 ) {
-    let attr = AttrText::new(text, font, &NSColor::labelColor()).into_attributed();
+    let attr = AttrText::new(text, font, color).into_attributed();
     let range = NSRange {
         location: 0,
         length: attr.length(),
