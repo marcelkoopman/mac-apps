@@ -18,11 +18,10 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             {
                 chips.push(question);
             }
-            // Text… on text and code cards; tables and links have their own chips.
+            // Text… on text and code cards, also in a formatted view; tables and links have
+            // their own chips.
             if data.text_edit.is_some()
-                && !chips
-                    .iter()
-                    .any(|cmd| matches!(cmd.id, CommandId::TableOpenWindow | CommandId::Visit))
+                && data.subject_text.as_deref().is_some_and(offers_text_menu)
             {
                 chips.push(command(
                     CommandId::TextMenu,
@@ -86,6 +85,30 @@ pub(crate) fn copied_text_chips(text: &str) -> Vec<Command> {
     })
 }
 
+/// Whether the Text… menu belongs on a copied text: prose and every code card (Rust, Python,
+/// JSON, XML, Markdown, HTML…), also when code happens to parse as a table (commas in a
+/// function call); not a real table (CSV, TSV, or plain text that reads as one) and not a link.
+/// Remembered per text like the chips.
+pub fn offers_text_menu(text: &str) -> bool {
+    TEXT_MENU.get_or_compute(text, |text| {
+        if crate::youtube::video_id(text).is_some() || crate::page_preview::page_url(text).is_some()
+        {
+            return false;
+        }
+        let kind = crate::format::detect(text);
+        match kind {
+            FormatKind::Csv | FormatKind::Tsv | FormatKind::Dataframe => false,
+            FormatKind::Plain | FormatKind::Text | FormatKind::Url => {
+                !crate::toolbar_visibility::shows_dataframe_button(kind, text)
+            }
+            _ => true,
+        }
+    })
+}
+
+static TEXT_MENU: crate::memo::Memo<bool> =
+    crate::memo::Memo::with_min_len(crate::clipboard::MAX_HISTORY + 4, 0);
+
 /// Work out (and remember) the chips of a copied text ahead of the card, off the main thread.
 pub fn warm_chips(text: &str) {
     copied_text_chips(text);
@@ -94,6 +117,7 @@ pub fn warm_chips(text: &str) {
 /// Drop the remembered chips (Wipe).
 pub fn forget_chips() {
     TEXT_CHIPS.clear();
+    TEXT_MENU.clear();
 }
 
 /// Chips, earlier copies, and appearance. Quit stays out.

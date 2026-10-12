@@ -370,3 +370,27 @@ fn json_keeps_its_chips_and_the_diff_view() {
     input.view = CardView::Diff;
     assert_eq!(presented_view("{\"a\":1}", input.view), CardView::Diff);
 }
+
+#[test]
+fn text_menu_on_prose_and_every_code_card_not_on_tables_or_links() {
+    use crate::commands::offers_text_menu;
+    for code in [
+        "fn main() {\n    let a = 1;\n    println!(\"{a}\");\n}\n",
+        // Commas in a call make this parse as a table too: still code.
+        "def f(a, b):\n    return a + b\n",
+        "{\"a\": 1, \"b\": [1, 2]}",
+        "<a><b>1</b></a>",
+        "# Title\n\n- one\n- two\n",
+        "SELECT a, b FROM t WHERE c = 1;",
+        "just a sentence of prose",
+    ] {
+        assert!(offers_text_menu(code), "{code}");
+    }
+    for other in [
+        "name,age\nann,31\nbob,42\n",
+        "name\tage\nann\t31\n",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    ] {
+        assert!(!offers_text_menu(other), "{other}");
+    }
+}

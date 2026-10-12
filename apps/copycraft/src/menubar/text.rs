@@ -19,8 +19,9 @@ impl App {
         if self.opened.is_some() {
             return None;
         }
+        // The copied source, also when the card shows it formatted.
         let text = Zeroizing::new(self.source_text()?);
-        if self.table_source().is_some() {
+        if !commands::offers_text_menu(&text) {
             return None;
         }
         let index = self.history.text_index(&text, self.history_cursor)?;

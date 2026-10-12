@@ -317,8 +317,8 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         (Some(edit), _) if data.subject_kind == commands::SubjectKind::Image => {
             commands::image_menu_items(edit)
         }
-        // Text… on a text or code card (never on a table: `text_edit` is absent there).
-        (_, Some(text)) if data.table.is_none() => commands::text_menu_items(text),
+        // (`text_edit` is only there when the card offers Text…, see `offers_text_menu`).
+        (_, Some(text)) => commands::text_menu_items(text),
         _ => commands::table_menu_items(data.table.as_ref()),
     };
     let (menu, checks): (Vec<Command>, Vec<bool>) = items.into_iter().unzip();
