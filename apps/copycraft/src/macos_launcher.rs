@@ -727,14 +727,10 @@ fn show_panel_wait() {
 pub fn raise_panel_wait() {
     let window = PANEL_WAIT.with(|slot| {
         let borrowed = slot.borrow();
-        let Some(spinner) = borrowed.as_ref() else {
-            return None;
-        };
+        let spinner = borrowed.as_ref()?;
         // SAFETY: the superview is used only to re-add the spinner, which keeps it alive.
         let parent = unsafe { spinner.view().superview() };
-        let Some(parent) = parent else {
-            return None;
-        };
+        let parent = parent?;
         parent.addSubview(spinner.view());
         spinner.view().window()
     });
