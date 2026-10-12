@@ -20,10 +20,12 @@ use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 
 const WIDTH: f64 = 420.0;
-const HEIGHT: f64 = 360.0;
+const HEIGHT: f64 = 392.0;
 const PAD: f64 = 24.0;
 const RADIUS: f64 = 16.0;
-const ICON: f64 = 64.0;
+const ICON: f64 = 96.0;
+/// The app icon from `assets/icon.icns`, the same file the bundle uses.
+const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
 const BUTTON_W: f64 = 140.0;
 const BUTTON_H: f64 = 28.0;
 /// Escape (`kVK_Escape`).
@@ -232,7 +234,9 @@ fn build(mtm: MainThreadMarker) {
 
     let mut y = HEIGHT - PAD - ICON;
     let icon = widgets::image_view(mtm);
-    if let Some(image) = NSApplication::sharedApplication(mtm).applicationIconImage() {
+    if let Some(image) = mac_ui::image::from_bytes(ICON_ICNS)
+        .or_else(|| NSApplication::sharedApplication(mtm).applicationIconImage())
+    {
         icon.setImage(Some(&image));
     }
     icon.setFrame(NSRect::new(
