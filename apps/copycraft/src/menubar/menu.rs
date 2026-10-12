@@ -1,0 +1,94 @@
+//! The status item menu.
+
+use super::*;
+
+/// "Allow screenshots" (testing): the card and the table window can be captured until it is
+/// switched off or Copycraft restarts.
+pub(crate) const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
+pub(crate) const PAUSE_ID: &str = "pause-recording";
+pub(crate) const IGNORE_NEXT_ID: &str = "ignore-next";
+
+pub(crate) const SETTINGS_ID: &str = "settings";
+pub(crate) const ABOUT_ID: &str = "about";
+
+pub(crate) fn status_labels() -> [String; 3] {
+    [
+        crate::settings::hotkey_label(),
+        version_label(),
+        crate::locale::t("quit").to_string(),
+    ]
+}
+
+#[cfg(test)]
+pub(crate) fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
+    let [hotkey, version, quit] = status_labels();
+    let mut rows = vec![
+        hotkey,
+        crate::locale::t("pause_recording").to_string(),
+        crate::locale::t("ignore_next").to_string(),
+    ];
+    if !entries.is_empty() {
+        rows.push(crate::locale::t("history").to_string());
+    }
+    rows.push(crate::locale::t("allow_screenshots").to_string());
+    rows.push(crate::locale::t("settings").to_string());
+    rows.push(crate::locale::t("about").to_string());
+    rows.push(version);
+    rows.push(quit);
+    rows
+}
+
+pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
+    let [hotkey, version, quit] = status_labels();
+    let menu = Menu::new();
+    let _ = menu.append(&tray::info_item(&hotkey));
+    let _ = menu.append(&CheckMenuItem::with_id(
+        PAUSE_ID,
+        crate::locale::t("pause_recording"),
+        true,
+        crate::capture::paused(),
+        None,
+    ));
+    let _ = menu.append(&CheckMenuItem::with_id(
+        IGNORE_NEXT_ID,
+        crate::locale::t("ignore_next"),
+        true,
+        crate::capture::ignore_next(),
+        None,
+    ));
+    if !entries.is_empty() {
+        let history = Submenu::new(crate::locale::t("history"), true);
+        for (index, title) in entries {
+            let _ = history.append(&MenuItem::with_id(
+                format!("hist-{index}"),
+                title,
+                true,
+                None,
+            ));
+        }
+        let _ = menu.append(&history);
+    }
+    let _ = menu.append(&CheckMenuItem::with_id(
+        ALLOW_SCREENSHOTS_ID,
+        crate::locale::t("allow_screenshots"),
+        true,
+        launcher::allows_screenshots(),
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        SETTINGS_ID,
+        crate::locale::t("settings"),
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        ABOUT_ID,
+        crate::locale::t("about"),
+        true,
+        None,
+    ));
+    let _ = menu.append(&PredefinedMenuItem::separator());
+    let _ = menu.append(&tray::info_item(&version));
+    let _ = menu.append(&tray::quit_item(&quit));
+    menu
+}
