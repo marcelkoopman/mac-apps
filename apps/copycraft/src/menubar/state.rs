@@ -267,6 +267,33 @@ pub(crate) fn prewarm(text: &str) {
 /// The one place a failed save is reported, whether it failed before or on the save thread.
 pub(crate) fn log_save_failure(message: &str) {
     eprintln!("save failed: {message}");
+    save_feedback(&save_toast(&Err(message.to_string())));
+}
+
+/// The confirmation after a save, in the style of Copy's: "Saved", or what went wrong.
+pub(crate) fn save_toast(result: &Result<(), String>) -> String {
+    match result {
+        Ok(()) => crate::locale::t("saved_toast").to_string(),
+        Err(message) => {
+            let first = message.lines().next().unwrap_or("").trim();
+            let short: String = first.chars().take(120).collect();
+            if short.is_empty() {
+                crate::locale::t("save_failed_toast").to_string()
+            } else {
+                format!("{}: {short}", crate::locale::t("save_failed_toast"))
+            }
+        }
+    }
+}
+
+/// Show `text` with the same toast as Copy's confirmation.
+pub(crate) fn save_feedback(text: &str) {
+    #[cfg(target_os = "macos")]
+    if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+        mac_ui::toast::show(mtm, text, crate::settings::announce_confirmations());
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = text;
 }
 
 /// Save job for a dropped picture: the shown scan text, else the picture as it was dropped

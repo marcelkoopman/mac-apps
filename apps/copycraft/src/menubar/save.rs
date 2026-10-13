@@ -489,8 +489,10 @@ impl App {
             );
         }
         self.stop_spinner_when_idle();
-        if let Err(message) = result {
-            log_save_failure(&message);
+        match result {
+            // Like Copy's "Copied": the file is written. A cancelled panel never gets here.
+            Ok(()) => save_feedback(&save_toast(&Ok(()))),
+            Err(message) => log_save_failure(&message),
         }
     }
 

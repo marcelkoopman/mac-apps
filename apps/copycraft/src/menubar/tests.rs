@@ -234,3 +234,14 @@ fn history_steps_through_three_entries_both_ways() {
         "clamped at the newest"
     );
 }
+
+#[test]
+fn a_save_confirms_like_copy_and_a_failure_says_why() {
+    use super::state::save_toast;
+    assert_eq!(save_toast(&Ok(())), "Saved");
+    assert_eq!(
+        save_toast(&Err("Permission denied (os error 13)\ncaused by…".into())),
+        "Save failed: Permission denied (os error 13)"
+    );
+    assert_eq!(save_toast(&Err(String::new())), "Save failed");
+}
