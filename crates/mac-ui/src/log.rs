@@ -47,6 +47,7 @@ impl Category {
     /// How many categories there are: one `os_log_t` handle each.
     pub const COUNT: usize = Category::ALL.len();
 
+    #[cfg(any(target_os = "macos", test))]
     fn index(self) -> usize {
         self as usize
     }
@@ -238,6 +239,7 @@ pub const MIN_MACOS: (i64, i64) = (14, 0);
 
 /// Whether macOS `major.minor` is at least [`MIN_MACOS`]. Unreadable versions (0 or negative)
 /// count as not supported.
+#[cfg(any(target_os = "macos", test))]
 fn supported(major: i64, minor: i64) -> bool {
     major > 0 && minor >= 0 && (major, minor) >= MIN_MACOS
 }

@@ -273,7 +273,7 @@ impl App {
         else {
             return;
         };
-        #[cfg(debug_assertions)]
+        // Needed in every build: the cursor goes back when the entry cannot be shown.
         let previous = self.history_cursor;
         self.history_cursor = next;
         self.browsing = None;

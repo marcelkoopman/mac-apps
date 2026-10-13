@@ -80,6 +80,32 @@ jobs:
           scripts/check_privacy_manifest.sh copycraft
           scripts/check_privacy_manifest.sh ticker
 
+  # Release profile: code under #[cfg(debug_assertions)] (or not) only compiles differently
+  # here, so a debug-only binding used in release is caught before a release run.
+  release-check:
+    name: release check
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      - name: Install Rust (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check (release)
+        run: cargo check --release --locked --workspace --all-targets
+
+      - name: Clippy (release)
+        run: cargo clippy --release --locked --workspace --all-targets -- -D warnings
+
   # Tests on the pinned macOS 26 runner and on macOS 15, where the pre-26 fallbacks run for real
   # (FlexiblePush instead of the Glass bezel, frosted background, plain view instead of the glass
   # group). Each runner uses its image's Xcode (keep 26.6 in step with XCODE_VERSION).
