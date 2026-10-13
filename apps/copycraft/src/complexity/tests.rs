@@ -335,3 +335,147 @@ fn lines_menu_offers_complexity_only_on_code() {
     edit.code = true;
     assert!(has(&edit));
 }
+
+#[test]
+fn texts_over_the_limit_are_refused_not_scored() {
+    use super::{MAX_BYTES, MAX_LINES, Refused, analyze_guarded};
+    let small = "fn a() { if x {} }\n";
+    assert_eq!(analyze_guarded(small, Lang::Rust).map(|s| s.len()), Ok(1));
+    let many_lines = "x\n".repeat(MAX_LINES + 1);
+    assert_eq!(
+        analyze_guarded(&many_lines, Lang::Python),
+        Err(Refused::TooLarge)
+    );
+    let wide = "a".repeat(MAX_BYTES + 1);
+    assert_eq!(analyze_guarded(&wide, Lang::Java), Err(Refused::TooLarge));
+    assert_eq!(
+        crate::commands::complexity_refused(Refused::TooLarge),
+        crate::locale::t("complexity_too_large")
+    );
+    let event = crate::diag::LogEvent::ComplexityTooLarge {
+        lang: Lang::Java,
+        bytes: 9,
+    };
+    assert_eq!(event.line(), "complexity: Java too large (9 bytes)");
+}
+
+/// xorshift64*: a small, seeded generator, so a failure repeats.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+    fn below(&mut self, n: usize) -> usize {
+        (self.next() % n as u64) as usize
+    }
+}
+
+#[test]
+fn random_and_malformed_input_never_panics_or_hangs() {
+    const PIECES: &[&str] = &[
+        "{",
+        "}",
+        "(",
+        ")",
+        "[",
+        "]",
+        "\"",
+        "'",
+        "\"\"\"",
+        "'''",
+        "/*",
+        "*/",
+        "//",
+        "#",
+        "\n",
+        "    ",
+        "\t",
+        "if ",
+        "else ",
+        "for ",
+        "while ",
+        "loop ",
+        "match ",
+        "switch ",
+        "case ",
+        "default ",
+        "catch ",
+        "try ",
+        "do ",
+        "fn ",
+        "def ",
+        "lambda ",
+        "class ",
+        "void ",
+        "public ",
+        "int ",
+        "x",
+        "f(",
+        "&&",
+        "||",
+        " and ",
+        " or ",
+        "?",
+        ":",
+        ";",
+        ",",
+        "->",
+        "=>",
+        "|",
+        "'a",
+        "r#\"",
+        "\"#",
+        "b'",
+        "\\",
+        "break ",
+        "continue ",
+        "goto ",
+        "é",
+        "😀",
+        "async ",
+        "return ",
+        "new ",
+        "::",
+        ".",
+        "=",
+        "<",
+        ">",
+    ];
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let started = std::time::Instant::now();
+    let mut inputs: Vec<String> = vec![
+        String::new(),
+        "{".repeat(5000),
+        "}".repeat(5000),
+        "(".repeat(5000),
+        "\"never closed".into(),
+        "/* never closed".into(),
+        "'''never closed".into(),
+        "\"\"\"never closed".into(),
+        "fn".into(),
+        "def".into(),
+        "fn f(".into(),
+        "if (".repeat(2000),
+        "def f():\n if x:\n".to_string()
+            + &(1..400)
+                .map(|d| format!("{}if x:\n", " ".repeat(d)))
+                .collect::<String>(),
+    ];
+    for _ in 0..3000 {
+        let len = rng.below(200);
+        let text: String = (0..len).map(|_| PIECES[rng.below(PIECES.len())]).collect();
+        inputs.push(text);
+    }
+    for text in &inputs {
+        for lang in [Lang::Rust, Lang::Java, Lang::Python] {
+            let result = std::panic::catch_unwind(|| analyze(text, lang));
+            assert!(result.is_ok(), "{lang:?} panicked on {text:?}");
+        }
+    }
+    let elapsed = started.elapsed();
+    assert!(elapsed.as_secs() < 30, "took {elapsed:?}");
+}
