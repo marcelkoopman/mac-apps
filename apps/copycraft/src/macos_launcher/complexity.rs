@@ -63,8 +63,7 @@ pub fn show_agent_lists(check: bool) {
         .name("copycraft-agent".into())
         .spawn(move || {
             let (rows, footer) = if check {
-                let folder = crate::agent::folder_of(&text);
-                let warnings = crate::agent::check(&text, folder.as_deref());
+                let warnings = crate::agent::check(&text);
                 crate::diag::log(crate::diag::LogEvent::AgentChecked {
                     warnings: warnings.len(),
                     secrets: warnings

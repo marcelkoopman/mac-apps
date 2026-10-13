@@ -156,7 +156,7 @@ fn the_outline_is_every_heading_with_its_line() {
 
 #[test]
 fn check_finds_empty_and_duplicate_sections() {
-    let warnings = check(AGENTS, None);
+    let warnings = check(AGENTS);
     assert!(
         warnings.contains(&Warning::DuplicateHeading {
             line: 29,
@@ -175,18 +175,18 @@ fn check_finds_empty_and_duplicate_sections() {
 #[test]
 fn check_finds_missing_sections_and_length() {
     let text = "# Rules\n\nBe brief.\n";
-    let warnings = check(text, None);
+    let warnings = check(text);
     assert!(warnings.contains(&Warning::MissingBuild));
     assert!(warnings.contains(&Warning::MissingTest));
     let long = "# Build\nx\n# Test\ny\n".to_string() + &"line\n".repeat(600);
     assert!(
-        check(&long, None)
+        check(&long)
             .iter()
             .any(|w| matches!(w, Warning::TooLong { lines: 604, .. }))
     );
     let wordy = "# Build\nx\n# Test\n".to_string() + &"a".repeat(40_000);
     assert!(
-        check(&wordy, None)
+        check(&wordy)
             .iter()
             .any(|w| matches!(w, Warning::TooLong { .. }))
     );
@@ -195,31 +195,51 @@ fn check_finds_missing_sections_and_length() {
 }
 
 #[test]
-fn relative_links_are_checked_only_in_a_known_folder() {
-    let dir = std::env::temp_dir().join(format!("copycraft-agent-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("present.md"), "x").unwrap();
-    let text = "# Build\n\nSee [ok](present.md) and [web](https://x.y/z).\n\n# Test\n\nSee [gone](missing.md#part) and [up](../outside.md).\n";
-    let warnings = check(text, Some(&dir));
-    let broken: Vec<&Warning> = warnings
-        .iter()
-        .filter(|w| matches!(w, Warning::BrokenLink { .. }))
+fn only_in_file_anchor_links_are_checked() {
+    let text = "# Build\n\nSee [setup](#build), [twice](#build-1), [up](#Build) and [x](<a id=\"x\">).\n\nSee [other](missing.md), [part](other.md#part), [up](../outside.md) and [web](https://x.y/z).\n\n# Test\n\n<a name=\"here\"></a> [ok](#here) [gone](#nowhere)\n\n# Build\n\nx\n";
+    let broken: Vec<Warning> = check(text)
+        .into_iter()
+        .filter(|w| matches!(w, Warning::BrokenAnchor { .. }))
         .collect();
-    assert_eq!(broken, vec![&Warning::BrokenLink { line: 7 }]);
-    // Without a folder (pasted, or no access) links are skipped.
-    assert!(
-        !check(text, None)
-            .iter()
-            .any(|w| matches!(w, Warning::BrokenLink { .. }))
-    );
-    std::fs::remove_dir_all(&dir).ok();
+    // Line 3: all four resolve; line 5: links to files are never looked up; line 9: #nowhere.
+    assert_eq!(broken, vec![Warning::BrokenAnchor { line: 9 }]);
+    assert_eq!(slug("Code style: Rust!"), "code-style-rust");
+}
+
+#[test]
+fn a_section_counts_only_by_its_exact_name() {
+    for name in [
+        "Build",
+        "build:",
+        "  TESTING.",
+        "Tests",
+        "Code style:",
+        "PR instructions",
+    ] {
+        assert!(heading_matches(name, AGENT_HEADINGS), "{name}");
+    }
+    for name in [
+        "testsuite",
+        "User agent parsing",
+        "Builds and deploys",
+        "How to test",
+        "Test data",
+        "Committee",
+    ] {
+        assert!(!heading_matches(name, AGENT_HEADINGS), "{name}");
+    }
+    let readme = "# Parser\n\n## User agent parsing\n\nx\n\n## Testsuite\n\n```bash\ncargo test\n```\n\n## Build steps\n\ny\n";
+    assert!(!looks_like_agent(readme));
+    let warnings = check("# Testsuite\n\nx\n\n# Building blocks\n\ny\n");
+    assert!(warnings.contains(&Warning::MissingBuild));
+    assert!(warnings.contains(&Warning::MissingTest));
 }
 
 #[test]
 fn secrets_are_reported_by_line_and_kind_never_by_value() {
     let secret = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB";
     let text = format!("# Build\n\nx\n\n# Test\n\nexport GITHUB_TOKEN={secret}\n");
-    let warnings = check(&text, None);
+    let warnings = check(&text);
     let found: Vec<&Warning> = warnings
         .iter()
         .filter(|w| matches!(w, Warning::Secret { .. }))

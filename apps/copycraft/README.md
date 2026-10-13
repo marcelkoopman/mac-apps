@@ -126,9 +126,10 @@ a rough token estimate (characters / 4). *Lines…* then offers:
   is left for the clipboard).
 - *Outline* (*Overzicht*): the headings; pick one to scroll the card there.
 - *Check* (*Controle*): possible secrets (line and kind only, never the value), a very long
-  file (over 500 lines or about 8k tokens), empty sections, duplicate headings, relative
-  links that look broken (only checked next to an opened file, never for pasted text) and a
-  missing Build or Test section.
+  file (over 500 lines or about 8k tokens), empty sections, duplicate headings, in-file
+  `#anchor` links that match no heading (links to other files are not checked) and a missing
+  Build or Test section. A section counts only when its heading is exactly a known name
+  (case-insensitive, trailing `:` ignored), such as *Build* or *Testing*.
 
 Only counts are logged, never the instructions.
 

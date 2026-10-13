@@ -143,7 +143,6 @@ static DETECTED: crate::memo::Memo<FormatKind> = crate::memo::Memo::new(8);
 pub fn forget_detected() {
     DETECTED.clear();
     NAMED_FILES.clear();
-    crate::agent::forget();
 }
 
 fn detect_uncached(text: &str) -> FormatKind {
@@ -238,12 +237,10 @@ pub fn hint_by_name(name: &str, text: &str) {
 }
 
 /// A file at `path` that is agent instructions by its path (`.cursor/rules/x.mdc`, which the
-/// name alone does not tell), remembered like [`hint_by_name`], with its folder for Check.
+/// name alone does not tell), remembered like [`hint_by_name`],.
 pub fn hint_by_path(path: &std::path::Path, text: &str) {
     if crate::agent::is_agent_path(path) {
         NAMED_FILES.put(text, FormatKind::Agent);
-        crate::agent::remember_folder(path, text);
-        crate::agent::remember_folder(path, &format_text(text));
     }
 }
 

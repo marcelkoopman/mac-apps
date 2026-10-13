@@ -2,7 +2,7 @@
 //! copilot-instructions.md, GEMINI.md): recognising them, and the Lines… steps Commands,
 //! Outline and Check. Only counts are logged, never the text.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// File names that are agent instructions whatever they say.
 const NAMES: &[&str] = &[
@@ -32,7 +32,10 @@ pub fn is_agent_path(path: &Path) -> bool {
 /// Headings typical of agent instructions.
 const AGENT_HEADINGS: &[&str] = &[
     "build",
+    "building",
     "test",
+    "tests",
+    "testing",
     "setup",
     "code style",
     "coding style",
@@ -41,8 +44,12 @@ const AGENT_HEADINGS: &[&str] = &[
     "commands",
     "pr instructions",
     "pull request",
+    "pull requests",
     "commit",
+    "commits",
+    "commit messages",
     "lint",
+    "linting",
     "dev environment",
     "development environment",
     "project structure",
@@ -102,17 +109,14 @@ pub fn headings(text: &str) -> Vec<Heading> {
     out
 }
 
+/// `heading` is exactly one of `words`, ignoring case, surrounding spaces and trailing
+/// punctuation (`Build:`, `Test.`). "Testsuite" or "User agent parsing" is no section name.
 fn heading_matches(heading: &str, words: &[&str]) -> bool {
     let h = heading.to_lowercase();
-    let h = h.trim_matches(|c: char| !c.is_alphanumeric());
-    words.iter().any(|w| {
-        h == *w
-            || h.starts_with(&format!("{w} "))
-            || h.starts_with(&format!("{w}s"))
-            || h.ends_with(&format!(" {w}"))
-            || h.ends_with(&format!(" {w}s"))
-            || h.contains(&format!(" {w} "))
-    })
+    let h = h
+        .trim()
+        .trim_end_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace());
+    words.contains(&h)
 }
 
 /// Fenced code blocks: (language, first line of code (1-based), code).
@@ -301,7 +305,8 @@ pub enum Warning {
         line: usize,
         first: usize,
     },
-    BrokenLink {
+    /// An in-file `(#anchor)` link that matches no heading or anchor in the file.
+    BrokenAnchor {
         line: usize,
     },
     MissingBuild,
@@ -315,7 +320,7 @@ impl Warning {
             Warning::Secret { line, .. }
             | Warning::EmptySection { line }
             | Warning::DuplicateHeading { line, .. }
-            | Warning::BrokenLink { line } => Some(*line),
+            | Warning::BrokenAnchor { line } => Some(*line),
             _ => None,
         }
     }
@@ -331,7 +336,7 @@ impl Warning {
             Warning::DuplicateHeading { line, first } => {
                 tf("agent_duplicate_heading", &[line, first])
             }
-            Warning::BrokenLink { line } => tf("agent_broken_link", &[line]),
+            Warning::BrokenAnchor { line } => tf("agent_broken_anchor", &[line]),
             Warning::MissingBuild => t("agent_missing_build").to_string(),
             Warning::MissingTest => t("agent_missing_test").to_string(),
         }
@@ -341,10 +346,11 @@ impl Warning {
 pub const MAX_LINES: usize = 500;
 pub const MAX_TOKENS: usize = 8000;
 
-/// Check `text`. `folder` is the opened file's folder, when relative links may be checked
-/// there; without it they are skipped.
-pub fn check(text: &str, folder: Option<&Path>) -> Vec<Warning> {
+/// Check `text`. Links are only checked inside the text: an `(#anchor)` link that matches no
+/// heading. Links to other files are never looked up on disk.
+pub fn check(text: &str) -> Vec<Warning> {
     let mut out = Vec::new();
+    let anchors = anchors(text);
     let mut fenced = false;
     for (i, line) in text.lines().enumerate() {
         let trimmed = line.trim_start();
@@ -354,13 +360,12 @@ pub fn check(text: &str, folder: Option<&Path>) -> Vec<Warning> {
         for label in crate::sensitivity::scan_labels(line) {
             out.push(Warning::Secret { line: i + 1, label });
         }
-        if !fenced && let Some(folder) = folder {
-            for target in relative_links(line) {
-                if link_is_broken(folder, &target) {
-                    out.push(Warning::BrokenLink { line: i + 1 });
-                    break;
-                }
-            }
+        if !fenced
+            && anchor_links(line)
+                .iter()
+                .any(|a| !anchors.contains(&a.to_lowercase()))
+        {
+            out.push(Warning::BrokenAnchor { line: i + 1 });
         }
     }
     let lines = text.lines().count();
@@ -408,9 +413,9 @@ pub fn check(text: &str, folder: Option<&Path>) -> Vec<Warning> {
     out
 }
 
-/// Targets of `[text](target)` links on `line` that are relative paths (no scheme, no
-/// anchor-only, no absolute path).
-fn relative_links(line: &str) -> Vec<String> {
+/// Anchors of `[text](#anchor)` links on `line` (without the `#`). Links to other files,
+/// with or without an anchor, are not returned.
+fn anchor_links(line: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = line;
     while let Some(at) = rest.find("](") {
@@ -419,54 +424,56 @@ fn relative_links(line: &str) -> Vec<String> {
             break;
         };
         let target = after[..end].split_whitespace().next().unwrap_or("");
-        let target = target.split('#').next().unwrap_or("");
-        let external = target.contains("://")
-            || target.starts_with("mailto:")
-            || target.starts_with('/')
-            || target.starts_with('~');
-        if !target.is_empty() && !external {
-            out.push(target.to_string());
+        if let Some(anchor) = target.strip_prefix('#')
+            && !anchor.is_empty()
+        {
+            out.push(anchor);
         }
         rest = &after[end + 1..];
     }
     out
 }
 
-/// A relative link that leaves the folder is not checked; one inside it is broken only when
-/// the file system says it is not there (no access: skipped).
-fn link_is_broken(folder: &Path, target: &str) -> bool {
-    let target = Path::new(target);
-    if target
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return false;
-    }
-    match std::fs::symlink_metadata(folder.join(target)) {
-        Ok(_) => false,
-        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
-    }
+/// GitHub's anchor for a heading: lower case, punctuation other than `-` and `_` dropped,
+/// spaces as `-`.
+fn slug(heading: &str) -> String {
+    heading
+        .to_lowercase()
+        .chars()
+        .filter_map(|c| match c {
+            ' ' => Some('-'),
+            c if c.is_alphanumeric() || c == '-' || c == '_' => Some(c),
+            _ => None,
+        })
+        .collect()
 }
 
-/// Folders of the last agent files opened by name, kept by a hash of their text, so Check
-/// can look at relative links next to the file.
-static FOLDERS: crate::memo::Memo<Option<PathBuf>> = crate::memo::Memo::with_min_len(4, 0);
-
-/// Remember `path`'s folder for `text` when it is an agent file.
-pub fn remember_folder(path: &Path, text: &str) {
-    if is_agent_path(path) {
-        FOLDERS.put(text, path.parent().map(Path::to_path_buf));
+/// Every anchor `text` defines (lower case): heading slugs (a repeated one also as `slug-1`,
+/// `slug-2`, …, like GitHub) and explicit `id="…"` / `name="…"` attributes.
+fn anchors(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for h in headings(text) {
+        let base = slug(&h.text);
+        let mut anchor = base.clone();
+        let mut n = 0;
+        while out.contains(&anchor) {
+            n += 1;
+            anchor = format!("{base}-{n}");
+        }
+        out.push(anchor);
     }
-}
-
-/// The folder `text` was opened from, if remembered.
-pub fn folder_of(text: &str) -> Option<PathBuf> {
-    FOLDERS.get(text).flatten()
-}
-
-/// Drop the remembered folders (Wipe).
-pub fn forget() {
-    FOLDERS.clear();
+    for attr in ["id=\"", "name=\""] {
+        let mut rest = text;
+        while let Some(at) = rest.find(attr) {
+            let after = &rest[at + attr.len()..];
+            let Some(end) = after.find('"') else {
+                break;
+            };
+            out.push(after[..end].to_lowercase());
+            rest = &after[end + 1..];
+        }
+    }
+    out
 }
 
 #[cfg(test)]

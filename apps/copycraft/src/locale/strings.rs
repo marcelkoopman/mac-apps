@@ -905,9 +905,9 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "l. {0}: duplicate heading (also l. {1})",
     ),
     (
-        "agent_broken_link",
-        "r. {0}: relatieve link lijkt kapot",
-        "l. {0}: relative link looks broken",
+        "agent_broken_anchor",
+        "r. {0}: link naar #anker dat niet bestaat",
+        "l. {0}: link to an #anchor that does not exist",
     ),
     (
         "agent_missing_build",
