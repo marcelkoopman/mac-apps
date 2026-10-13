@@ -209,7 +209,11 @@ fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
                 .copied()
                 .filter(u8::is_ascii_digit)
                 .collect();
-            no_digit(before) && no_digit(after) && luhn(&digits)
+            // A standalone number: not a run inside a hex hash or another token
+            // (`checksum = "c982642fa9…"` in a Cargo.lock).
+            before.is_none_or(|byte| !is_token_byte(byte))
+                && after.is_none_or(|byte| !is_token_byte(byte))
+                && luhn(&digits)
         }
         Check::Iban => {
             let compact: Vec<u8> = bytes[start..end]
