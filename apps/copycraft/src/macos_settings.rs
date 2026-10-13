@@ -408,6 +408,7 @@ fn build(mtm: MainThreadMarker) {
     );
     value.setStringValue(&NSString::from_str(&settings::hotkey_label()));
     let change = GlassButton::pill(mtm, crate::locale::t("change_hotkey"), ButtonSize::Small);
+    change.set_symbol("keyboard");
     change.set_accessibility_label(crate::locale::t("change_hotkey_a11y"));
     let change_w = change.width_within(140.0).max(BUTTON_H);
     let change_x = WIDTH - MARGIN - change_w;
@@ -521,6 +522,7 @@ fn build(mtm: MainThreadMarker) {
     IGNORED_FIELD.with(|slot| *slot.borrow_mut() = Some(ignored));
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let add = GlassButton::pill(mtm, crate::locale::t("ignored_apps_add"), ButtonSize::Small);
+    add.set_symbol("plus");
     add.set_accessibility_label(crate::locale::t("ignored_apps_add"));
     place_pill(&add, take(&mut top, BUTTON_H), 280.0);
     wire(add.button(), sel!(addFrontmostApp:));
@@ -593,6 +595,7 @@ fn build(mtm: MainThreadMarker) {
     SYMBOLS_FIELD.with(|slot| *slot.borrow_mut() = Some(field));
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let restore = GlassButton::pill(mtm, crate::locale::t("symbols_restore"), ButtonSize::Small);
+    restore.set_symbol("arrow.counterclockwise");
     restore.set_accessibility_label(crate::locale::t("symbols_restore"));
     place_pill(&restore, take(&mut top, BUTTON_H), 240.0);
     wire(restore.button(), sel!(restoreSymbols:));

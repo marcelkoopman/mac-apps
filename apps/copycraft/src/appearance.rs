@@ -135,6 +135,7 @@ pub fn restyle_open_windows() {
     crate::macos_launcher::apply_window_chrome();
     crate::macos_settings::restyle();
     crate::macos_about::restyle();
+    crate::macos_table_window::restyle();
     if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
         mac_ui::toast::restyle(mtm);
     }

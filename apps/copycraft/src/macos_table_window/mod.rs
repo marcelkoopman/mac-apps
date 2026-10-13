@@ -60,6 +60,8 @@ const BLUR_RADIUS: f64 = 6.0;
 
 thread_local! {
     static VIEWS: RefCell<Option<Views>> = const { RefCell::new(None) };
+    /// The toolbar's glass strip, restyled when Reduce Transparency changes.
+    static TOOLBAR: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<TableWindowDelegate>>> = const { RefCell::new(None) };
     /// What the window shows; wiped when it is replaced or the window closes.
     static SHOWN: RefCell<Option<TableWindowView>> = const { RefCell::new(None) };
@@ -538,6 +540,15 @@ mod build;
 mod menus;
 mod paint;
 mod picker;
+
+/// Reduce Transparency or Increase Contrast changed: restyle the toolbar, well and captions.
+pub(crate) fn restyle() {
+    VIEWS.with(|slot| {
+        if let Some(views) = slot.borrow().as_ref() {
+            apply_table_chrome(views);
+        }
+    });
+}
 
 use build::*;
 use menus::*;

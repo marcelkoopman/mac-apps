@@ -56,12 +56,27 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     let (width, height) = (INITIAL_SIZE.width, INITIAL_SIZE.height);
     let body_h = height - TOOLBAR_H - META_H;
 
+    // The toolbar strip: glass (vibrancy before macOS 26, opaque with Reduce Transparency),
+    // behind the buttons like the card's header.
+    let strip = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(0.0, height - TOOLBAR_H),
+            NSSize::new(width, TOOLBAR_H),
+        ),
+    );
+    strip.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewMinYMargin]));
+    panel::rounded_glass(mtm, &strip, 0.0);
+    content.addSubview(&strip);
+    TOOLBAR.with(|slot| slot.replace(Some(strip)));
+
     // The toolbar: Table ▾, Copy, Save; version capsule at the right; hint between.
     let toolbar_y = height - TOOLBAR_H + (TOOLBAR_H - commands::CHIP_PILL_H) / 2.0;
     let table_button = GlassButton::pill(mtm, crate::locale::t("table_menu"), ButtonSize::Regular);
+    table_button.set_symbol("tablecells");
     table_button.set_accessibility_label(crate::locale::t("table_steps_a11y"));
     wire(table_button.button(), sel!(tableWindowMenuClicked:));
-    let table_w = table_button.width_within(120.0);
+    let table_w = table_button.width_within(140.0);
     table_button.view().setFrame(NSRect::new(
         NSPoint::new(PAD, toolbar_y),
         NSSize::new(table_w, commands::CHIP_PILL_H),
@@ -72,6 +87,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(table_button.view());
 
     let copy_button = GlassButton::pill(mtm, crate::locale::t("copy"), ButtonSize::Regular);
+    copy_button.set_symbol("doc.on.doc");
     copy_button.set_accessibility_label(crate::locale::t("copy_table_a11y"));
     copy_button
         .button()
@@ -79,7 +95,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
             "copy_table_tip",
         ))));
     wire(copy_button.button(), sel!(tableWindowCopyClicked:));
-    let copy_w = copy_button.width_within(100.0);
+    let copy_w = copy_button.width_within(120.0);
     let mut actions_x = PAD + table_w + mac_ui::metrics::BUTTON_GAP;
     copy_button.view().setFrame(NSRect::new(
         NSPoint::new(actions_x, toolbar_y),
@@ -92,6 +108,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     actions_x += copy_w + mac_ui::metrics::BUTTON_GAP;
 
     let save_button = GlassButton::pill(mtm, crate::locale::t("save"), ButtonSize::Regular);
+    save_button.set_symbol("square.and.arrow.down");
     save_button.set_accessibility_label(crate::locale::t("save_table_a11y"));
     save_button
         .button()
@@ -99,7 +116,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
             "save_table_tip",
         ))));
     wire(save_button.button(), sel!(tableWindowSaveClicked:));
-    let save_w = save_button.width_within(100.0);
+    let save_w = save_button.width_within(120.0);
     save_button.view().setFrame(NSRect::new(
         NSPoint::new(actions_x, toolbar_y),
         NSSize::new(save_w, commands::CHIP_PILL_H),
@@ -374,6 +391,11 @@ pub(super) fn version_capsule(
 /// The frozen column and the header strip stay an opaque plate in the grid's own colour,
 /// so scrolling cells do not show through and the plate does not become a second surface.
 pub(super) fn apply_table_chrome(views: &Views) {
+    if let Some(mtm) = MainThreadMarker::new()
+        && let Some(strip) = TOOLBAR.with(|slot| slot.borrow().clone())
+    {
+        mac_ui::glass::set_opaque_fill(mtm, &strip, 0.0, mac_ui::motion::reduce_transparency());
+    }
     crate::appearance::apply_well(&views.well, false, true);
     let plate = NSColor::controlBackgroundColor();
     views.header_back.setFillColor(&plate);
