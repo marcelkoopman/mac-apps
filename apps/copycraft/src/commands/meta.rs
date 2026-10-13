@@ -73,10 +73,19 @@ pub(crate) fn middle_keep(chars: &[char], keep: usize) -> String {
 }
 
 /// The column count of a CSV or TSV card (from its header line; cheap).
-fn table_columns(text: &str) -> Option<usize> {
+fn table_columns(text: &str) -> Option<String> {
     matches!(format::detect(text), FormatKind::Csv | FormatKind::Tsv)
         .then(|| crate::dataframe::header_columns(text))
         .flatten()
+        .map(columns_label)
+}
+
+/// "1 sectie" / "4 secties" on a TOML card.
+fn toml_sections(text: &str) -> Option<String> {
+    (format::detect(text) == FormatKind::Toml).then(|| match crate::format::toml::sections(text) {
+        1 => crate::locale::t("one_section").to_string(),
+        n => crate::locale::tf("n_sections", &[&n]),
+    })
 }
 
 /// "2 kolommen" / "1 kolom".
@@ -124,11 +133,8 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
-        match table_columns(classified) {
-            Some(columns) => crate::locale::tf(
-                "lines_columns_size",
-                &[&lines, &columns_label(columns), &size],
-            ),
+        match table_columns(classified).or_else(|| toml_sections(classified)) {
+            Some(count) => crate::locale::tf("lines_columns_size", &[&lines, &count, &size]),
             None => crate::locale::tf("lines_size", &[&lines, &size]),
         }
     } else {

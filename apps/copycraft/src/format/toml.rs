@@ -5,6 +5,16 @@
 /// (quoted, a number, a date, `true`/`false`, `[` or `{`), or part of a multi-line array or
 /// string; with at least one key, and a header or two keys. INI files (`name=bare text`) fail.
 pub fn looks_like_toml(text: &str) -> bool {
+    scan(text).is_some_and(|(keys, headers)| keys >= 1 && (headers >= 1 || keys >= 2))
+}
+
+/// `[table]` and `[[array]]` headers of TOML `text` (not inside strings, arrays or comments).
+pub fn sections(text: &str) -> usize {
+    scan(text).map_or(0, |(_, headers)| headers)
+}
+
+/// Keys and headers of `text`, `None` when a line is not TOML.
+fn scan(text: &str) -> Option<(usize, usize)> {
     let mut keys = 0;
     let mut headers = 0;
     let mut depth: i32 = 0;
@@ -28,12 +38,10 @@ pub fn looks_like_toml(text: &str) -> bool {
             headers += 1;
             continue;
         }
-        let Some((key, value)) = line.split_once('=') else {
-            return false;
-        };
+        let (key, value) = line.split_once('=')?;
         let (key, value) = (key.trim(), value.trim());
         if !is_key(key) || !is_value(value) {
-            return false;
+            return None;
         }
         keys += 1;
         for open in ["\"\"\"", "'''"] {
@@ -47,7 +55,7 @@ pub fn looks_like_toml(text: &str) -> bool {
             depth = bracket_balance(value).max(0);
         }
     }
-    keys >= 1 && (headers >= 1 || keys >= 2)
+    Some((keys, headers))
 }
 
 fn is_header(line: &str) -> bool {
@@ -147,6 +155,20 @@ mod tests {
         assert!(!looks_like_toml("x = 1\n"), "one key alone is too little");
         assert!(!looks_like_toml("[link](https://example.com)\n"));
         assert!(!looks_like_toml("a = b + c\nd = e\n"));
+    }
+
+    #[test]
+    fn sections_count_headers_only() {
+        assert_eq!(super::sections(CARGO), 4);
+        let tricky = "[server]\nname = \"[not a header]\"\nports = [\n  8080,\n]\n# [commented]\nnote = \"\"\"\n[inside]\n\"\"\"\n";
+        assert_eq!(super::sections(tricky), 1);
+        assert_eq!(
+            crate::commands::text_meta(
+                "[package]\nname = \"a\"\nversion = \"1\"\nedition = \"2024\"\n"
+            ),
+            "4 lines · 1 section · 0.052 KB"
+        );
+        assert!(crate::commands::text_meta(CARGO).contains(" · 4 sections · "));
     }
 
     #[test]
