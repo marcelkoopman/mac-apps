@@ -522,8 +522,11 @@ impl App {
             return;
         }
         self.current_image = None;
+        // The clipboard's text is already the newest entry (every poll and card refresh reads
+        // it again): not a new copy, so the card stays on the entry being browsed.
         if let Some(text) = view.text()
             && self.should_record(text)
+            && is_new_copy(self.history.get(0), text)
         {
             self.skip_record = None;
             self.last_copy = Some(Instant::now());

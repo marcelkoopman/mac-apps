@@ -205,3 +205,32 @@ fn browsing_history_ends_only_with_a_new_copy() {
     assert!(browse_ends(Some(7), 8, false));
     assert!(!browse_ends(None, 8, false));
 }
+
+#[test]
+fn history_steps_through_three_entries_both_ways() {
+    use super::state::is_new_copy;
+    use crate::commands::{history_nav, step_history};
+    let label = |cursor: usize| {
+        let nav = history_nav(3, cursor).expect("nav");
+        format!("{} / {}", nav.position, nav.total)
+    };
+    // The clipboard's item read again by a poll is not a new copy: browsing stays put.
+    assert!(!is_new_copy(Some("newest"), "newest"));
+    assert!(is_new_copy(Some("newest"), "another"));
+    let mut cursor = 0;
+    assert_eq!(label(cursor), "1 / 3");
+    for (want, shown) in [(1, "2 / 3"), (2, "3 / 3")] {
+        cursor = step_history(3, cursor, true).expect("older");
+        assert_eq!((cursor, label(cursor).as_str()), (want, shown));
+    }
+    assert_eq!(step_history(3, cursor, true), None, "clamped at the oldest");
+    for (want, shown) in [(1, "2 / 3"), (0, "1 / 3")] {
+        cursor = step_history(3, cursor, false).expect("newer");
+        assert_eq!((cursor, label(cursor).as_str()), (want, shown));
+    }
+    assert_eq!(
+        step_history(3, cursor, false),
+        None,
+        "clamped at the newest"
+    );
+}

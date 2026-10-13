@@ -195,6 +195,11 @@ pub(crate) fn discard_preview_files() {
     crate::macos_open::discard_previews();
 }
 
+/// The clipboard's `text` is a new copy, not the newest history entry read again.
+pub(crate) fn is_new_copy(newest: Option<&str>, text: &str) -> bool {
+    newest != Some(text)
+}
+
 /// Browsing history ends when the pasteboard changed to `change` since `polled` and the change
 /// is not copycraft's own write: a new copy.
 pub(crate) fn browse_ends(polled: Option<isize>, change: isize, own: bool) -> bool {
