@@ -1,4 +1,3 @@
-
 use super::{is_xsd, try_sample, try_schema};
 
 #[test]
