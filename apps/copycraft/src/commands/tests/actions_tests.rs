@@ -243,7 +243,17 @@ fn image_scan_adds_the_actions_from_the_old_preview() {
         ocr: Some("hello".into()),
         qr: Some("https://example.com".into()),
     });
-    assert_eq!(titles(&chips(&input)), vec!["Info", "Text", "QR"]);
+    // After OCR one toggle, named after where it goes; no Original chip.
+    assert_eq!(titles(&chips(&input)), vec!["Info", "Show text", "QR"]);
+    let mut on_text = input.clone();
+    on_text.view = CardView::Ocr;
+    let toggle = chips(&on_text);
+    assert_eq!(titles(&toggle), vec!["Info", "Show image", "QR"]);
+    assert_eq!(toggle[1].id, CommandId::Original);
+    assert_eq!(chips(&input)[1].id, CommandId::Ocr);
+    let mut no_ocr = input.clone();
+    no_ocr.image_scan.as_mut().unwrap().ocr = None;
+    assert_eq!(titles(&chips(&no_ocr)), vec!["Info", "QR"]);
     assert_eq!(
         content_actions(&input),
         ContentActions {

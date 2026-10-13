@@ -5,7 +5,11 @@ use super::*;
 /// Actions for the thing on the clipboard. Housekeeping stays in [`overflow`].
 pub fn chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = match data.subject_kind {
-        SubjectKind::Image => image_chips(data.image_scan.as_ref(), data.image_edit.is_some()),
+        SubjectKind::Image => image_chips(
+            data.image_scan.as_ref(),
+            data.image_edit.is_some(),
+            data.view == CardView::Ocr,
+        ),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
             // The date question, in the Dataframe view while dates fit both orders.
@@ -329,7 +333,7 @@ pub(crate) fn text_chips(text: &str) -> Vec<Command> {
     finish_modes(commands)
 }
 
-pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command> {
+pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool, on_text: bool) -> Vec<Command> {
     let mut modes = vec![command(
         CommandId::Info,
         crate::locale::t("chip_info"),
@@ -337,13 +341,10 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command>
         "info data url size",
     )];
     if let Some(scan) = scan {
+        // After text recognition one toggle between the text and the picture, named after
+        // where it goes (no Original chip, no clash with the Image ▾ menu).
         if scan.ocr.is_some() {
-            modes.push(command(
-                CommandId::Ocr,
-                crate::locale::t("title_text"),
-                crate::locale::t("detail_ocr"),
-                "text ocr recognize",
-            ));
+            modes.push(ocr_toggle(on_text));
         }
         if scan.qr.is_some() {
             modes.push(command(
@@ -362,9 +363,27 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command>
             "image picture resize rotate flip grayscale metadata undo redo",
         ));
     }
-    // No Original chip: the picture is the card's own view, the active chip clicked again goes
-    // back to it, and ↶ goes back to v1.
     modes
+}
+
+/// The OCR toggle: on the recognized text it goes to the picture (`Original`), on the picture
+/// to the text (`Ocr`).
+pub(crate) fn ocr_toggle(on_text: bool) -> Command {
+    if on_text {
+        command(
+            CommandId::Original,
+            crate::locale::t("show_image"),
+            crate::locale::t("detail_original_image"),
+            "original source picture image",
+        )
+    } else {
+        command(
+            CommandId::Ocr,
+            crate::locale::t("show_text"),
+            crate::locale::t("detail_ocr"),
+            "text ocr recognize",
+        )
+    }
 }
 
 /// The view chips of a text card. There is no chip back to the copy as it came: the card always

@@ -319,6 +319,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ChooseFile
             | CommandId::UseClipboard
             | CommandId::ShowAll
+            | CommandId::Original
             | CommandId::Format
             | CommandId::Convert
             | CommandId::Decode
@@ -361,7 +362,7 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
     let keeps = |cmd: &Command| {
         matches!(
             cmd.id,
-            CommandId::TextMenu | CommandId::ImageMenu | CommandId::TableMenu
+            CommandId::Original | CommandId::TextMenu | CommandId::ImageMenu | CommandId::TableMenu
         )
     };
     let kept = chips.iter().filter(|cmd| keeps(cmd)).count();
@@ -385,6 +386,7 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
     Some(match id {
+        CommandId::Original => "photo",
         CommandId::Visit => "safari",
         CommandId::Format => "wand.and.stars",
         CommandId::Convert => "arrow.triangle.2.circlepath",
