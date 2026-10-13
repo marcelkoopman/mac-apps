@@ -927,6 +927,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("card_building", "Bezig…", "Working…"),
     ("copied_toast", "Gekopieerd", "Copied"),
+    ("hide_content", "Verberg", "Hide"),
+    ("show_content", "Toon", "Show"),
     ("clear_confirm_title", "Wissen?", "Clear?"),
     (
         "clear_confirm_message",

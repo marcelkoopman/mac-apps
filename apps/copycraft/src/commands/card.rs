@@ -37,6 +37,32 @@ pub fn effective_mask(privacy_filter: bool, content_masks: bool, revealed: bool)
     privacy_filter && content_masks && !revealed
 }
 
+/// Whether the well is masked, including the card's hide button: `hidden` hides the current
+/// entry whatever the privacy filter or blur settings say.
+pub fn well_masked(
+    privacy_filter: bool,
+    content_masks: bool,
+    revealed: bool,
+    hidden: bool,
+) -> bool {
+    hidden || effective_mask(privacy_filter, content_masks, revealed)
+}
+
+/// The hide/show button was clicked on a well that is `masked`: the new (hidden, revealed).
+pub fn toggle_hidden(masked: bool) -> (bool, bool) {
+    if masked { (false, true) } else { (true, false) }
+}
+
+/// SF Symbol and label key for the hide/show button: eye.slash (Hide) while the content shows,
+/// eye (Show) while it is masked.
+pub fn hide_button_look(masked: bool) -> (&'static str, &'static str) {
+    if masked {
+        ("eye", "show_content")
+    } else {
+        ("eye.slash", "hide_content")
+    }
+}
+
 /// How a masked well hides the copy. A blur that cannot be installed covers
 /// the well and drops the excerpt. The transparent click target is not a mask.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

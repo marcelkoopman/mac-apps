@@ -106,6 +106,13 @@ pub(crate) fn drop_highlight() -> mac_ui::drop::Highlight {
 }
 
 thread_local! {
+    /// The hide button masked the entry on screen. Forgotten when another entry shows.
+    static HIDDEN: Cell<bool> = const { Cell::new(false) };
+    /// Hide/show on the well.
+    static HIDE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+}
+
+thread_local! {
     /// The card on screen is the "Working…" placeholder of a card still being built.
     static PLACEHOLDER: Cell<bool> = const { Cell::new(false) };
     /// Height of the last real card, kept for the placeholder so the window does not jump.
@@ -527,8 +534,14 @@ define_class!(
                 NSBeep();
                 return;
             }
+            HIDDEN.set(false);
             REVEALED.set(true);
             layout(false);
+        }
+
+        #[unsafe(method(hideClicked:))]
+        fn hide_clicked(&self, _sender: Option<&NSButton>) {
+            toggle_hidden();
         }
 
         #[unsafe(method(findAfterPause:))]

@@ -291,6 +291,18 @@ pub(crate) fn place_content_actions(preview_y: f64) {
     COPY_BUTTON.with(|slot| {
         place_action_from_right(slot, &mut x, top, actions.copy, &copy_tip);
     });
+    // Hide/show: on every card with content to copy or save.
+    let (symbol, label) = commands::hide_button_look(well_is_masked());
+    let label = crate::locale::t(label);
+    HIDE_BUTTON.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref()
+            && let Some(image) = mac_ui::icon::system_symbol(symbol, label)
+        {
+            button.button().setImage(Some(&image));
+            button.set_accessibility_label(label);
+        }
+        place_action_from_right(slot, &mut x, top, actions.copy || actions.save, label);
+    });
     PREVIEW_BUTTON.with(|slot| {
         place_action_from_right(slot, &mut x, top, actions.preview, &preview_tip);
     });
@@ -379,7 +391,7 @@ pub(crate) fn place_well_action(
 }
 
 pub(crate) fn raise_content_actions() {
-    for slot in [&COPY_BUTTON, &SAVE_BUTTON, &PREVIEW_BUTTON] {
+    for slot in [&COPY_BUTTON, &SAVE_BUTTON, &HIDE_BUTTON, &PREVIEW_BUTTON] {
         slot.with(|slot| {
             if let Some(button) = slot.borrow().as_ref()
                 && !button.view().isHidden()

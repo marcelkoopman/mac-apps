@@ -140,6 +140,13 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         "↓",
         sel!(saveClicked:),
     );
+    let hide_button = well_action(
+        mtm,
+        "eye.slash",
+        crate::locale::t("hide_content"),
+        "◌",
+        sel!(hideClicked:),
+    );
     let preview_button = well_action(
         mtm,
         "eye",
@@ -167,6 +174,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&version_row.capsule);
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
+    content.addSubview(hide_button.view());
     content.addSubview(preview_button.view());
 
     HEADER.with(|slot| slot.replace(Some(header)));
@@ -192,6 +200,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     SYMBOLS.with(|slot| slot.replace(Some(symbols)));
     COPY_BUTTON.with(|slot| slot.replace(Some(copy_button)));
     SAVE_BUTTON.with(|slot| slot.replace(Some(save_button)));
+    HIDE_BUTTON.with(|slot| slot.replace(Some(hide_button)));
     PREVIEW_BUTTON.with(|slot| slot.replace(Some(preview_button)));
     REVEAL.with(|slot| slot.replace(Some(reveal)));
     VERSION_ROW.with(|slot| slot.replace(Some(version_row)));

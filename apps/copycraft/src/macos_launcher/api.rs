@@ -281,6 +281,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     ));
     if shown != key {
         CONTENT_KEY.set(key);
+        HIDDEN.set(false);
         set_item_find(false);
     }
     PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));

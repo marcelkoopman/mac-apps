@@ -119,10 +119,11 @@ pub(crate) fn well_is_masked() -> bool {
     if DIFF_LOCK.with(Cell::get) && !REVEALED.with(Cell::get) {
         return true;
     }
-    commands::effective_mask(
+    commands::well_masked(
         crate::settings::privacy_filter(),
         MASKS.with(Cell::get),
         REVEALED.with(Cell::get),
+        HIDDEN.with(Cell::get),
     )
 }
 
@@ -566,4 +567,25 @@ pub(crate) fn load_dropped_picture(picture: &SecretBytes, already: bool) {
         PICTURE_SHOWN.set(id);
     }
     set_preview_image(&image);
+}
+
+/// The well's hide/show button: blur (or shade) the entry on screen, or show it again.
+pub(crate) fn toggle_hidden() {
+    let masked = well_is_masked();
+    if masked
+        && crate::sensitivity::meta_status(&card_meta()) == Some(crate::sensitivity::checking())
+    {
+        // Not before the labels are known, as for a click on the cover.
+        mac_ui::objc2_app_kit::NSBeep();
+        return;
+    }
+    let (hidden, revealed) = commands::toggle_hidden(masked);
+    HIDDEN.set(hidden);
+    REVEALED.set(revealed);
+    layout(false);
+    if well_is_masked() {
+        show_reveal_cover(true);
+    }
+    raise_history_nav();
+    raise_content_actions();
 }

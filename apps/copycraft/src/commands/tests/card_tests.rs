@@ -568,3 +568,20 @@ fn link_with_a_query_shows_its_url_view() {
     let plain = data(SubjectKind::Text, Some("https://example.com/docs"));
     assert_eq!(titles(&chips(&plain)), vec!["Visit"]);
 }
+
+#[test]
+fn hide_button_masks_the_entry_whatever_the_settings() {
+    use crate::commands::{hide_button_look, toggle_hidden, well_masked};
+    // Hidden by the button: masked even with the privacy filter off and content that never masks.
+    assert!(well_masked(false, false, false, true));
+    assert!(well_masked(false, false, true, true));
+    assert!(!well_masked(false, true, false, false));
+    assert!(well_masked(true, true, false, false));
+    // A click on visible content hides it; on masked content shows it.
+    assert_eq!(toggle_hidden(false), (true, false));
+    assert_eq!(toggle_hidden(true), (false, true));
+    assert_eq!(hide_button_look(false), ("eye.slash", "hide_content"));
+    assert_eq!(hide_button_look(true), ("eye", "show_content"));
+    assert_eq!(crate::locale::t("hide_content"), "Hide");
+    assert_eq!(crate::locale::t("show_content"), "Show");
+}
