@@ -68,7 +68,13 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
         CardView::Format => Some(clipboard::formatted(source)),
         CardView::Convert => convert::try_convert(source).map(|body| clipboard::formatted(&body)),
         CardView::Decode => decode::decode(source).map(|decoded| decoded.body),
-        CardView::Dataframe => dataframe::try_format(source),
+        // A table copies as the CSV it is; the drawn grid is for the screen only.
+        // Read and written again: yyyy-mm-dd dates, the source's separator, proper quoting.
+        CardView::Dataframe => Some(
+            dataframe::parse_table(source)
+                .and_then(|df| dataframe::frame_copy(&df, source))
+                .unwrap_or_else(|| source.to_string()),
+        ),
         CardView::Schema => {
             if format::detect(source) == FormatKind::Xml {
                 crate::xsd_schema::try_schema(source)
@@ -131,7 +137,10 @@ pub fn deferred_save_name(source: &str, view: CardView) -> Option<(String, &'sta
 pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     if view == CardView::Dataframe {
         // The table as the view reads it (dates typed), as CSV; the save panel can pick Parquet.
-        let bytes = dataframe::TableFile::Csv.bytes(&dataframe::parse_table(source)?)?;
+        let bytes = dataframe::TableFile::Csv.bytes(
+            &dataframe::parse_table(source)?,
+            dataframe::source_separator(source),
+        )?;
         return Some(SaveFile {
             filename: FormatKind::Dataframe.suggested_filename(),
             extension: FormatKind::Dataframe.suggested_extension(),

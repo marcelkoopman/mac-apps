@@ -47,14 +47,16 @@ pub enum SaveContent {
 /// The table to save: the version shown, or the copied text when its frame is not there yet
 /// (read on the save thread, as the view reads it).
 pub enum TableData {
-    Frame(polars::prelude::DataFrame),
+    /// A version and the separator of the table it came from.
+    Frame(polars::prelude::DataFrame, u8),
     Text(Zeroizing<String>),
 }
 
 impl SaveJob {
     /// Save job for a table version (Dataframe view): CSV by default, built on the save thread.
-    pub fn table(frame: polars::prelude::DataFrame) -> Self {
-        Self::table_of(TableData::Frame(frame))
+    pub fn table(frame: polars::prelude::DataFrame, source: &str) -> Self {
+        let separator = crate::dataframe::source_separator(source);
+        Self::table_of(TableData::Frame(frame, separator))
     }
 
     fn table_of(table: TableData) -> Self {
@@ -151,12 +153,19 @@ impl SaveContent {
                 Zeroizing::new(std::mem::take(&mut file.bytes))
             }
             Self::Table { table, format } => {
-                let frame = match table {
-                    TableData::Frame(frame) => frame,
-                    TableData::Text(source) => crate::dataframe::parse_table(&source)
-                        .context("the card has no table to save")?,
+                let (frame, separator) = match table {
+                    TableData::Frame(frame, separator) => (frame, separator),
+                    TableData::Text(source) => (
+                        crate::dataframe::parse_table(&source)
+                            .context("the card has no table to save")?,
+                        crate::dataframe::source_separator(&source),
+                    ),
                 };
-                Zeroizing::new(format.bytes(&frame).context("the table is empty")?)
+                Zeroizing::new(
+                    format
+                        .bytes(&frame, separator)
+                        .context("the table is empty")?,
+                )
             }
             Self::Image {
                 bytes, png, file, ..

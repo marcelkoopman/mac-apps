@@ -45,7 +45,6 @@ impl App {
         // The conversion (format, decode, the table grid) runs on a thread; the clipboard
         // write stays here, or comes when the slow conversion is done.
         let input = source.clone();
-        let table_view = shown == CardView::Dataframe;
         let late_source = source.clone();
         let body = self.start_work(
             work::Lane::Copy,
@@ -54,7 +53,6 @@ impl App {
                 match version {
                     // A table copies as CSV (the original: as it is), never as its drawn grid.
                     Some(frame) => crate::dataframe::frame_copy(&frame, input.as_str()),
-                    None if table_view => Some(input.as_str().to_string()),
                     None => commands::transformed_text(input.as_str(), shown),
                 }
                 .map(Zeroizing::new)
@@ -137,10 +135,13 @@ impl App {
             }
             // The wheel runs while the frame is copied and the save panel is still loading.
             let _wait = crate::macos_launcher::PanelWait::show();
+            let Some((source, _)) = self.window_source() else {
+                return;
+            };
             let Some(frame) = self.window_table_frame() else {
                 return;
             };
-            let mut job = crate::macos_save::SaveJob::table(frame);
+            let mut job = crate::macos_save::SaveJob::table(frame, &source);
             if let Some(opened) = self.opened.as_ref() {
                 job.filename = crate::open_file::save_name(&opened.name, job.extension);
             }
@@ -321,7 +322,11 @@ impl App {
         let image_version = self.shown_image_version();
         let job = match version {
             Some(frame) => {
-                let mut job = crate::macos_save::SaveJob::table(frame);
+                let source = self
+                    .table_source()
+                    .map(|(text, _)| text)
+                    .unwrap_or_default();
+                let mut job = crate::macos_save::SaveJob::table(frame, &source);
                 if let Some(opened) = self.opened.as_ref() {
                     job.filename = crate::open_file::save_name(&opened.name, job.extension);
                 }

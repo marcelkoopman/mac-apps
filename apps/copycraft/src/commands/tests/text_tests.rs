@@ -7,8 +7,8 @@ Id,Naam,Telefoonnummer,Salaris
 1,Jan de Vries,06-12345678,3450
 2,Anja Bakker,06-87654321,2900";
     let body = transformed_text(src, CardView::Dataframe).expect("dataframe");
-    assert!(body.contains('┆'));
-    assert!(body.contains("Jan de Vries"));
+    // Copy takes CSV; the drawn grid stays on the card.
+    assert_eq!(body, format!("{src}\n"));
     let mut input = data(SubjectKind::Text, Some(src));
     input.view = CardView::Dataframe;
     let card = work_card(&input);
@@ -34,7 +34,7 @@ fn save_in_the_dataframe_view_writes_csv() {
     );
     assert_eq!(
         std::str::from_utf8(&file.bytes).expect("UTF-8"),
-        "Naam,Wanneer\nJan,2026-03-13\nPiet,2026-03-14\n"
+        "Naam\tWanneer\nJan\t2026-03-13\nPiet\t2026-03-14\n"
     );
     assert_eq!(
         deferred_save_name(tsv, CardView::Dataframe),

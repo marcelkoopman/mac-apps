@@ -12,6 +12,8 @@ pub const DISPLAY_ENV: [(&str, &str); 3] = [
     ("POLARS_TABLE_WIDTH", "-1"),
 ];
 
+/// The whole drawn grid (tests: what the screen draws). Copy and Save take CSV.
+#[cfg(test)]
 pub fn try_format(text: &str) -> Option<String> {
     parse_table(text).and_then(render)
 }
@@ -81,8 +83,12 @@ pub fn frame_preview(
 /// A table version as Copy puts it on the clipboard: plain CSV with the separator of `source`
 /// (the text it was read from), so the card knows it as a table again. Never the drawn grid.
 pub fn frame_copy(df: &DataFrame, source: &str) -> Option<String> {
-    let separator = delimited_separator(source.trim()).unwrap_or(b',');
-    write_csv_with(df.clone(), separator)
+    write_csv_with(df.clone(), source_separator(source))
+}
+
+/// The separator of the table `source` (`,` `;` or tab); a comma when it has none.
+pub fn source_separator(source: &str) -> u8 {
+    delimited_separator(source.trim()).unwrap_or(b',')
 }
 
 /// A table version as CSV, for its sensitivity labels.
@@ -120,11 +126,11 @@ impl TableFile {
         }
     }
 
-    /// `df` as this file: CSV is UTF-8 with a header of the real column names, comma separated,
-    /// dates as `yyyy-mm-dd` (also for a TSV or `;` source). `None` for an empty table.
-    pub fn bytes(self, df: &DataFrame) -> Option<Vec<u8>> {
+    /// `df` as this file: CSV is UTF-8 with a header of the real column names, `separator`
+    /// between cells (the source's), dates as `yyyy-mm-dd`. `None` for an empty table.
+    pub fn bytes(self, df: &DataFrame, separator: u8) -> Option<Vec<u8>> {
         match self {
-            Self::Csv => frame_csv(df).map(String::into_bytes),
+            Self::Csv => write_csv_with(df.clone(), separator).map(String::into_bytes),
             Self::Parquet => frame_parquet(df),
         }
     }
@@ -272,6 +278,7 @@ fn write_csv_with(mut df: DataFrame, separator: u8) -> Option<String> {
         .include_bom(false)
         .with_separator(separator)
         .with_date_format(Some("%Y-%m-%d".into()))
+        .with_datetime_format(Some("%Y-%m-%d %H:%M:%S".into()))
         .finish(&mut df)
         .ok()?;
     String::from_utf8(buf).ok()

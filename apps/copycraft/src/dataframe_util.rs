@@ -589,6 +589,95 @@ mod dataframe;";
     }
 
 
+    const SEMI: &str = "\
+Date;Home Usage (kWh);Note
+2024-01-01;12.5;\"a; b\"
+2024-01-02;9.0;
+2024-01-01;12.5;\"a; b\"
+2024-01-03;7.25;plain";
+
+    /// Copy and Save of `df` (read from `src`): CSV with `src`'s separator, no drawn grid, and it
+    /// reads back to the same rows.
+    fn assert_plain_csv(df: &polars::prelude::DataFrame, src: &str) {
+        let copied = super::frame_copy(df, src).expect("csv");
+        let saved = String::from_utf8(
+            super::TableFile::Csv
+                .bytes(df, super::source_separator(src))
+                .expect("bytes"),
+        )
+        .expect("utf-8");
+        for out in [&copied, &saved] {
+            assert!(
+                !out.chars().any(|c| ('\u{2500}'..='\u{257F}').contains(&c)),
+                "box drawing in {out}"
+            );
+            assert!(!out.starts_with("shape:"));
+            let header = out.lines().next().expect("header");
+            let names: Vec<String> = df.get_column_names().iter().map(|n| n.to_string()).collect();
+            assert_eq!(header.split(';').collect::<Vec<_>>(), names);
+            let back = super::parse(out).expect("reads back");
+            assert_eq!(back.shape(), df.shape());
+            assert!(back.equals_missing(df), "{out}");
+        }
+        assert_eq!(copied, saved);
+    }
+
+    fn after(op: crate::table::TableOp) -> polars::prelude::DataFrame {
+        let df = super::parse(SEMI).expect("df");
+        op.apply(&df).expect("op").expect("changed")
+    }
+
+    #[test]
+    fn original_table_copies_and_saves_as_csv() {
+        assert_plain_csv(&super::parse(SEMI).expect("df"), SEMI);
+        // The Dataframe view copies the original as it is.
+        assert_eq!(
+            crate::commands::transformed_text(SEMI, crate::commands::CardView::Dataframe)
+                .as_deref(),
+            super::frame_copy(&super::parse(SEMI).expect("df"), SEMI).as_deref()
+        );
+    }
+
+    #[test]
+    fn dedupe_copies_as_csv() {
+        assert_plain_csv(&after(crate::table::TableOp::Dedupe), SEMI);
+    }
+
+    #[test]
+    fn drop_empty_copies_as_csv() {
+        assert_plain_csv(&after(crate::table::TableOp::DropEmpty), SEMI);
+    }
+
+    #[test]
+    fn sort_copies_as_csv() {
+        let sorted = after(crate::table::TableOp::Sort {
+            column: "Home Usage (kWh)".into(),
+            descending: true,
+        });
+        assert_plain_csv(&sorted, SEMI);
+    }
+
+    #[test]
+    fn selected_columns_copy_as_csv() {
+        let picked = after(crate::table::TableOp::SelectColumns {
+            columns: vec!["Note".into(), "Date".into()],
+            kept_of: Some(3),
+        });
+        assert_eq!(picked.width(), 2);
+        assert_plain_csv(&picked, SEMI);
+    }
+
+    #[test]
+    fn date_order_reread_copies_as_csv_with_iso_dates() {
+        let src = "Date,Amount\n03/04/2024,1\n05/06/2024,2\n";
+        let (df, _) = super::parse_table_with(src, super::ReadOptions { month_first: true })
+            .expect("df");
+        let out = super::frame_copy(&df, src).expect("csv");
+        assert!(out.contains("2024-03-04"), "{out}");
+        assert!(!out.chars().any(|c| ('\u{2500}'..='\u{257F}').contains(&c)));
+        assert!(super::parse(&out).expect("back").equals_missing(&df));
+    }
+
     #[test]
     fn copy_after_dedupe_is_csv_that_reads_back_to_the_same_rows() {
         let src = "\
@@ -664,7 +753,7 @@ Id;Naam;Salaris
     /// Save in the Dataframe view: CSV of the table as shown, read back the same.
     fn assert_csv_round_trip(df: &polars::prelude::DataFrame) -> String {
         use polars::prelude::DataType;
-        let bytes = super::TableFile::Csv.bytes(df).expect("csv");
+        let bytes = super::TableFile::Csv.bytes(df, b',').expect("csv");
         assert!(!bytes.starts_with(&[0xEF, 0xBB, 0xBF]), "no BOM");
         let csv = String::from_utf8(bytes).expect("UTF-8");
         let header = csv.lines().next().expect("header");
@@ -720,7 +809,7 @@ Id;Naam;Salaris
     #[test]
     fn parquet_stays_a_choice() {
         let df = super::parse_table(ENERGY_FIXTURE).expect("table");
-        let bytes = super::TableFile::Parquet.bytes(&df).expect("parquet");
+        let bytes = super::TableFile::Parquet.bytes(&df, b',').expect("parquet");
         let back = ParquetReader::new(std::io::Cursor::new(bytes))
             .finish()
             .expect("read");
