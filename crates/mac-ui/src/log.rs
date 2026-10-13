@@ -6,6 +6,7 @@
 //! only caller. The line goes out as one `%{public}s` argument, so the app must never pass
 //! content (clipboard text, file names, paths) here.
 
+#[cfg(target_os = "macos")]
 use std::ffi::{CStr, CString};
 
 /// The categories a line is filed under (Console's Category column).
@@ -76,6 +77,13 @@ mod imp {
     use std::ffi::{CStr, c_char, c_void};
     use std::sync::OnceLock;
 
+    // Why `_os_log_impl`: `os_log(…)` is a C macro, not a function, so Rust cannot call it; the
+    // macro expands to `_os_log_impl` (libSystem, exported since macOS 10.12; copycraft needs
+    // macOS 14, see `minimum_system_version` in its Cargo.toml). The alternative without an
+    // internal symbol is a small C or Swift shim calling `os_log` (a build step and a C
+    // compiler, which this workspace avoids) or a logging crate (a new dependency). CI checks
+    // that a line written here reads back with `log show` (`os_log_round_trip`), so a change
+    // in the private ABI fails there instead of on a user's Mac.
     unsafe extern "C" {
         fn os_log_create(subsystem: *const c_char, category: *const c_char) -> *mut c_void;
         fn _os_log_impl(
@@ -103,6 +111,10 @@ mod imp {
     }
 
     pub(super) fn write(category: Category, level: Level, line: &CStr) {
+        // When in doubt, drop the line.
+        if line.to_bytes().len() > super::MAX_LINE || category.index() >= 7 {
+            return;
+        }
         let subsystem = SUBSYSTEM.get_or_init(|| c"copycraft".to_owned());
         let kind = match level {
             Level::Debug => 0x02,
@@ -162,8 +174,30 @@ pub fn set_subsystem(bundle_id: &str) {
 
 /// Send `line` to the unified log (on macOS; elsewhere to stderr, for development).
 /// A line with a NUL byte is cut there.
+/// Never panics: a line that cannot be written (a panic while preparing it, a handle that
+/// could not be made) is dropped silently. Logging must not take the app down.
 pub fn write(category: Category, level: Level, line: &str) {
+    let _ = std::panic::catch_unwind(|| write_line(category, level, line));
+}
+
+/// The first [`MAX_LINE`] bytes of `line` up to a NUL, cut on a character boundary.
+fn clean(line: &str) -> &str {
     let line = line.split('\0').next().unwrap_or("");
+    if line.len() <= MAX_LINE {
+        return line;
+    }
+    let mut end = MAX_LINE;
+    while !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    &line[..end]
+}
+
+/// Lines are cut to this many bytes.
+pub const MAX_LINE: usize = 1000;
+
+fn write_line(category: Category, level: Level, line: &str) {
+    let line = clean(line);
     #[cfg(target_os = "macos")]
     if let Ok(line) = CString::new(line) {
         let line: &CStr = &line;
@@ -195,5 +229,31 @@ mod tests {
         for (index, category) in Category::ALL.iter().enumerate() {
             assert_eq!(category.index(), index);
         }
+    }
+
+    #[test]
+    fn odd_lines_never_panic_and_are_cut() {
+        let long = "é".repeat(2000);
+        assert!(clean(&long).len() <= MAX_LINE);
+        assert!(clean(&long).is_char_boundary(clean(&long).len()));
+        assert_eq!(clean("a\0b"), "a");
+        for category in Category::ALL {
+            for level in [Level::Debug, Level::Info, Level::Error, Level::Fault] {
+                write(category, level, "");
+                write(category, level, &long);
+                write(category, level, "\0");
+            }
+        }
+    }
+
+    /// Writes one fixed line without content. CI reads it back with `log show` (ci.yml,
+    /// "os_log round trip"): if nothing arrives, the private `_os_log_impl` ABI changed.
+    /// Ignored locally; run with `--ignored` on a Mac.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn os_log_round_trip() {
+        set_subsystem("com.github.marcelkoopman.mac-apps.oslog-test");
+        write(Category::Worker, Level::Error, "os_log round trip 7f3a");
     }
 }

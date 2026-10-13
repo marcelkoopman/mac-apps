@@ -116,6 +116,17 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+      # mac-ui's log module calls the private _os_log_impl (os_log is a C macro). Write one
+      # fixed line without content and read it back: nothing found means that ABI changed.
+      - name: os_log round trip
+        run: |
+          cargo test -p mac-ui --lib --locked log::tests::os_log_round_trip -- --ignored --exact
+          sleep 2
+          log show --last 5m --style compact \
+            --predicate 'subsystem == "com.github.marcelkoopman.mac-apps.oslog-test"' \
+            | tee "$RUNNER_TEMP/oslog.txt"
+          grep -q "os_log round trip 7f3a" "$RUNNER_TEMP/oslog.txt"
+
   # The release workflows compile the app icon with scripts/build_app_icon.sh. Run it here on a
   # stub bundle for each app, so a broken icon source or actool change shows up before a tag.
   app-icon:
