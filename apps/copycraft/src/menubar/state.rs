@@ -197,6 +197,16 @@ pub(crate) fn forget_opened_file(
     file_open && !card_open && !window_shows_file
 }
 
+/// The table window closed: show the card again when that window was opened from a chosen
+/// file that is still the card's, and the card is not already open.
+pub(crate) fn card_returns_after_window(
+    keeps_file: bool,
+    file_open: bool,
+    card_open: bool,
+) -> bool {
+    keeps_file && file_open && !card_open
+}
+
 /// When unpinned history is due to be forgotten: `minutes` after the last copy. `None` with
 /// no time limit (0) or when only pins remain.
 pub(crate) fn history_due(

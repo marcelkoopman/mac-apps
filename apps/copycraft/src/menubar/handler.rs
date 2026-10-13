@@ -77,7 +77,7 @@ impl ApplicationHandler<UserEvent> for App {
             self.opened.is_some(),
             self.table_window
                 .as_ref()
-                .is_some_and(|window| window.opened),
+                .is_some_and(|window| window.opened || window.keeps_file),
         ) {
             self.leave_opened();
         }

@@ -1,6 +1,6 @@
 use super::{
-    ClipSig, ICON_CLICK_GAP, forget_opened_file, history_due, icon_click_is_new, icon_tip,
-    status_labels, status_rows, tray_label, version_label,
+    ClipSig, ICON_CLICK_GAP, card_returns_after_window, forget_opened_file, history_due,
+    icon_click_is_new, icon_tip, status_labels, status_rows, tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -154,4 +154,23 @@ fn status_menu_lists_history_between_the_hotkey_and_version() {
             crate::locale::t("quit").to_string(),
         ]
     );
+}
+
+#[test]
+fn chosen_file_survives_open_table_and_returns_when_the_window_closes() {
+    // Kies bestand…: the file is on the card (and in history, so its table lives there).
+    // Open table closes the card; the window keeps the file, so it is not forgotten.
+    let (file_open, window_keeps_file) = (true, true);
+    assert!(!forget_opened_file(false, file_open, window_keeps_file));
+    // The window closes: the card comes back with the file, before the file could be dropped.
+    assert!(card_returns_after_window(
+        window_keeps_file,
+        file_open,
+        false
+    ));
+    assert!(!forget_opened_file(true, file_open, false));
+    // A window opened from a history entry (no file) does not bring the card back.
+    assert!(!card_returns_after_window(false, false, false));
+    // The card already open: nothing to do.
+    assert!(!card_returns_after_window(true, true, true));
 }

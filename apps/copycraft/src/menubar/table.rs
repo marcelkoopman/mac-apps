@@ -79,6 +79,7 @@ impl App {
         self.table_window = Some(TableWindow {
             text,
             opened: home == TableHome::Opened,
+            keeps_file: self.opened.is_some(),
             error: None,
             shown: None,
             checking: false,
@@ -110,7 +111,17 @@ impl App {
                 {
                     table.pin(false);
                 }
-                self.table_window = None;
+                let keeps_file = self
+                    .table_window
+                    .take()
+                    .is_some_and(|window| window.keeps_file);
+                // A chosen file goes back on the card, with its versions, as a history entry
+                // would.
+                if card_returns_after_window(keeps_file, self.opened.is_some(), launcher::is_open())
+                {
+                    let data = self.launch_for_popup();
+                    self.reveal_card(data);
+                }
             }
             launcher::TableWindowEvent::Run(id) => {
                 let target = TableTarget::Window;

@@ -148,6 +148,10 @@ pub(crate) enum TableTarget {
 pub(crate) struct TableWindow {
     pub(crate) text: Zeroizing<String>,
     pub(crate) opened: bool,
+    /// Opened while the card showed a chosen file. The file stays on the card while the window
+    /// is open (the card closes for Open table), and the card shows it again when the window
+    /// closes. Its table may live in history (a chosen file is recorded there too).
+    pub(crate) keeps_file: bool,
     /// Why the window's last step failed, for its meta line.
     pub(crate) error: Option<String>,
     /// What the window was last given ([`TableWindow::key`]); the view is built again only
