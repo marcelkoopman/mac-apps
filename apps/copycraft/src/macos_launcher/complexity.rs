@@ -25,14 +25,19 @@ pub fn show_complexity() {
         .name("copycraft-complexity".into())
         .spawn(move || {
             let started = std::time::Instant::now();
-            let scores = crate::complexity::analyze(&text, lang);
-            crate::diag::log(crate::diag::LogEvent::ComplexityScored {
-                functions: scores.len(),
-                ms: started.elapsed().as_millis() as u64,
-            });
-            let rows = commands::complexity_rows(&scores);
-            let footer = commands::complexity_footer(&scores);
-            drop(scores);
+            let (rows, footer) = match crate::complexity::analyze_guarded(&text, lang) {
+                Ok(scores) => {
+                    crate::diag::log(crate::diag::LogEvent::ComplexityScored {
+                        functions: scores.len(),
+                        ms: started.elapsed().as_millis() as u64,
+                    });
+                    (
+                        commands::complexity_rows(&scores),
+                        commands::complexity_footer(&scores),
+                    )
+                }
+                Err(refused) => (Vec::new(), vec![commands::complexity_refused(refused)]),
+            };
             mac_ui::actions::run_on_main(move || pop_complexity(rows, footer));
         });
     if let Err(e) = spawned {

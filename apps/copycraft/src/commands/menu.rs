@@ -438,3 +438,12 @@ pub fn agent_check_rows(
         })
         .collect()
 }
+
+/// What the Complexity menu says instead of scores.
+pub fn complexity_refused(refused: crate::complexity::Refused) -> String {
+    match refused {
+        crate::complexity::Refused::TooLarge => crate::locale::t("complexity_too_large"),
+        crate::complexity::Refused::Failed => crate::locale::t("complexity_failed"),
+    }
+    .to_string()
+}

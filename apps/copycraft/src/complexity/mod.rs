@@ -16,7 +16,7 @@ mod tests;
 use crate::format::FormatKind;
 
 /// The programming languages the card detects. Data and markup formats have no functions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lang {
     Rust,
     Java,
@@ -97,4 +97,36 @@ pub fn line_offset_utf16(text: &str, line: usize) -> usize {
         }
     }
     offset
+}
+
+/// Larger texts are not scored: the card says so instead.
+pub const MAX_BYTES: usize = 512 * 1024;
+/// More lines than this are not scored either.
+pub const MAX_LINES: usize = 20_000;
+
+/// Why there is no score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    /// Over [`MAX_BYTES`] or [`MAX_LINES`].
+    TooLarge,
+    /// The scanner panicked (a bug); logged as an event with the language and size only.
+    Failed,
+}
+
+/// [`analyze`] within the limits, with any panic caught: the card never goes down with it.
+pub fn analyze_guarded(text: &str, lang: Lang) -> Result<Vec<FnScore>, Refused> {
+    if text.len() > MAX_BYTES || text.lines().nth(MAX_LINES).is_some() {
+        crate::diag::log(crate::diag::LogEvent::ComplexityTooLarge {
+            lang,
+            bytes: text.len(),
+        });
+        return Err(Refused::TooLarge);
+    }
+    std::panic::catch_unwind(|| analyze(text, lang)).map_err(|_| {
+        crate::diag::log(crate::diag::LogEvent::ComplexityFailed {
+            lang,
+            bytes: text.len(),
+        });
+        Refused::Failed
+    })
 }

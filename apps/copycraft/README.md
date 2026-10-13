@@ -108,7 +108,8 @@ out in the background and are an approximation of SonarQube's cognitive complexi
 lexical pass, no parser): `if`, `else if`/`elif`, `else`, ternaries, `switch`/`match`, loops,
 `catch`/`except`, labelled `break`/`continue`, mixed `&&`/`||` (`and`/`or`) sequences and
 direct recursion count; nested structures, lambdas and closures add one per level. Only
-counts and timings are logged, never code.
+counts and timings are logged, never code. Texts over 512 KB or 20,000 lines are not scanned and show
+*Too large for complexity analysis* instead.
 
 ## Agent instructions
 

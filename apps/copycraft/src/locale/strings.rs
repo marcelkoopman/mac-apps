@@ -931,6 +931,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("complexity_high", "hoog", "high"),
     ("complexity_very_high", "zeer hoog", "very high"),
     (
+        "complexity_too_large",
+        "Te groot voor complexiteitsanalyse",
+        "Too large for complexity analysis",
+    ),
+    (
+        "complexity_failed",
+        "Complexiteit kon niet worden berekend",
+        "Complexity could not be worked out",
+    ),
+    (
         "complexity_none",
         "Geen functies gevonden",
         "No functions found",

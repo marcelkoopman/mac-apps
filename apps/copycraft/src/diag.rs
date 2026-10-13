@@ -196,6 +196,16 @@ pub enum LogEvent {
         warnings: usize,
         secrets: usize,
     },
+    /// Lines… › Complexity refused a text this large (bytes).
+    ComplexityTooLarge {
+        lang: crate::complexity::Lang,
+        bytes: usize,
+    },
+    /// The complexity scanner panicked on a text this large (bytes); the panic was caught.
+    ComplexityFailed {
+        lang: crate::complexity::Lang,
+        bytes: usize,
+    },
     /// Lines… › Complexity scored this many functions.
     ComplexityScored {
         functions: usize,
@@ -262,6 +272,8 @@ impl LogEvent {
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
             | E::ComplexityScored { .. }
+            | E::ComplexityTooLarge { .. }
+            | E::ComplexityFailed { .. }
             | E::AgentCommands { .. }
             | E::AgentOutline { .. }
             | E::AgentChecked { .. }
@@ -293,6 +305,7 @@ impl LogEvent {
             | E::OpenPanelFailed(_)
             | E::SymbolCopyFailed(_)
             | E::VisitFailed => Level::Error,
+            E::ComplexityFailed { .. } => Level::Fault,
             // Cosmetic or expected: worth a note, not an error.
             E::HotkeyUnregisterFailed(_)
             | E::IconBlinkFailed(_)
@@ -326,6 +339,7 @@ impl LogEvent {
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
             | E::ComplexityScored { .. }
+            | E::ComplexityTooLarge { .. }
             | E::AgentCommands { .. }
             | E::AgentOutline { .. }
             | E::AgentChecked { .. }
@@ -413,6 +427,12 @@ impl LogEvent {
             E::AgentOutline { headings } => format!("agent outline: {headings} headings"),
             E::AgentChecked { warnings, secrets } => {
                 format!("agent check: {warnings} warnings, {secrets} possible secrets")
+            }
+            E::ComplexityTooLarge { lang, bytes } => {
+                format!("complexity: {lang:?} too large ({bytes} bytes)")
+            }
+            E::ComplexityFailed { lang, bytes } => {
+                format!("complexity: {lang:?} scanner failed ({bytes} bytes)")
             }
             E::ComplexityScored { functions, ms } => {
                 format!("complexity: {functions} functions in {ms} ms")
