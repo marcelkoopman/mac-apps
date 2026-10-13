@@ -14,7 +14,7 @@
 use std::hash::{Hash, Hasher};
 
 /// `NSPasteboard.accessBehavior` of the general pasteboard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AccessBehavior {
     /// Never asked yet: the first content read asks.
     Default,

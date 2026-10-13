@@ -9,9 +9,10 @@
 //! ring buffer in memory for *Export diagnostics…* (`OSLogStore` is not in the bindings this
 //! app uses, so the export reads the buffer: the same events, last 24 hours, this run only).
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant, SystemTime};
 
 pub use mac_ui::log::{Category, Level};
 
@@ -19,7 +20,7 @@ pub use mac_ui::log::{Category, Level};
 pub const SUBSYSTEM: &str = "com.github.marcelkoopman.mac-apps.copycraft";
 
 /// What went wrong, as a kind and never as the error's text (that can hold a path).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     NotFound,
     PermissionDenied,
@@ -89,7 +90,7 @@ impl ErrorKind {
 }
 
 /// Background jobs that can fail to start.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Work {
     ImageJob,
     TableJob,
@@ -101,7 +102,7 @@ pub enum Work {
 }
 
 /// Why a copy was not recorded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Skip {
     Paused,
     IgnoreNext,
@@ -109,7 +110,7 @@ pub enum Skip {
 }
 
 /// Everything copycraft logs. Only fixed names, numbers and kinds: see the module docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LogEvent {
     Started,
     StartFailed(ErrorKind),
@@ -143,10 +144,6 @@ pub enum LogEvent {
         minutes: u32,
     },
     HistoryForgottenLock,
-    HistoryStep {
-        index: u64,
-        micros: u64,
-    },
     RestoreHistoryFailed(ErrorKind),
     TableOpened {
         columns: u64,
@@ -208,7 +205,6 @@ impl LogEvent {
             | E::FormatLinkFailed(_)
             | E::HistoryForgottenIdle { .. }
             | E::HistoryForgottenLock
-            | E::HistoryStep { .. }
             | E::RestoreHistoryFailed(_)
             | E::SensitivityNotStarted(_)
             | E::SensitivityChecked { .. } => Category::Clipboard,
@@ -249,15 +245,16 @@ impl LogEvent {
         }
     }
 
+    /// Levels are chosen on purpose: routine events are debug or info, only real failures are
+    /// error, and a bug in copycraft itself is fault.
     pub fn level(self) -> Level {
         use LogEvent as E;
         match self {
-            E::StartFailed(_)
-            | E::LoginItemFailed(_)
+            // Broken invariants: the strings table or start-up itself.
+            E::MissingLocaleKey | E::StartFailed(_) => Level::Fault,
+            // Something the user asked for did not happen.
+            E::LoginItemFailed(_)
             | E::HotkeyRegisterFailed(_)
-            | E::HotkeyUnregisterFailed(_)
-            | E::IconBlinkFailed(_)
-            | E::TooltipFailed(_)
             | E::SensitivityNotStarted(_)
             | E::CopyFailed(_)
             | E::ClearClipboardFailed(_)
@@ -271,17 +268,41 @@ impl LogEvent {
             | E::SaveFailed(_)
             | E::OpenPanelFailed(_)
             | E::SymbolCopyFailed(_)
-            | E::VisitFailed
-            | E::MissingLocaleKey => Level::Error,
-            E::SensitivityChecked { .. }
-            | E::HistoryStep { .. }
+            | E::VisitFailed => Level::Error,
+            // Cosmetic or expected: worth a note, not an error.
+            E::HotkeyUnregisterFailed(_)
+            | E::IconBlinkFailed(_)
+            | E::TooltipFailed(_)
+            | E::BackgroundStartSkipped(_)
+            | E::PrewarmSkipped(_)
+            | E::DecodePictureSkipped(_)
+            | E::DroppedImageScanFailed(_)
+            | E::ClipboardUnreadable
+            | E::ImageStepRefused
+            | E::SvgExternalRefs
+            | E::VisitRefused
+            | E::TableNotShown
+            | E::PreviewNoPicture
+            | E::Started
+            | E::ScreenshotsAllowed(_)
+            | E::HotkeyRegistered
+            | E::PasteAccess { .. }
+            | E::SensitiveCleared
+            | E::HistoryForgottenIdle { .. }
+            | E::HistoryForgottenLock
+            | E::TableOpened { .. }
+            | E::PreviewStarted
+            | E::SaveFinished { .. }
+            | E::DiagnosticsExported { .. } => Level::Info,
+            // Routine, per copy or per job.
+            E::CopySkipped(_)
+            | E::SensitivityChecked { .. }
             | E::TableJobDone { .. }
             | E::ImageJobDone { .. }
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
             | E::SpinnerShown { .. }
             | E::SpinnerHidden => Level::Debug,
-            _ => Level::Info,
         }
     }
 
@@ -330,7 +351,6 @@ impl LogEvent {
                 format!("history forgotten {minutes} min after the last copy")
             }
             E::HistoryForgottenLock => "history forgotten (lock, sleep or user switch)".into(),
-            E::HistoryStep { index, micros } => format!("history step to {index} in {micros} µs"),
             E::RestoreHistoryFailed(k) => format!("restore history failed: {}", k.describe()),
             E::TableOpened { columns, rows } => {
                 format!("table opened: {columns} cols, {rows} rows")
@@ -376,9 +396,56 @@ pub(crate) static RING: Mutex<VecDeque<(SystemTime, LogEvent)>> = Mutex::new(Vec
 
 /// Log `event` (unified log and the export buffer).
 pub fn log(event: LogEvent) {
-    mac_ui::log::write(event.category(), event.level(), &event.line());
+    let mut line = event.line();
+    if matches!(event.level(), Level::Error | Level::Fault) {
+        let admitted = LIMITER
+            .lock()
+            .map_or(Some(0), |mut limiter| limiter.admit(event, Instant::now()));
+        let Some(suppressed) = admitted else {
+            return;
+        };
+        if suppressed > 0 {
+            line.push_str(&format!(" ({suppressed} identical suppressed)"));
+        }
+    }
+    mac_ui::log::write(event.category(), event.level(), &line);
     remember(SystemTime::now(), event);
 }
+
+/// The same error (event and kind) at most once per this long.
+pub const REPEAT_WINDOW: Duration = Duration::from_secs(60);
+
+/// Rate limit for repeated identical errors: the first goes through, repeats within
+/// [`REPEAT_WINDOW`] are counted, and the next one after the window carries that count.
+#[derive(Default)]
+pub struct Limiter {
+    seen: HashMap<LogEvent, (Instant, u32)>,
+}
+
+impl Limiter {
+    /// `Some(suppressed since the last one)` when `event` may be written at `now`, else `None`.
+    pub fn admit(&mut self, event: LogEvent, now: Instant) -> Option<u32> {
+        match self.seen.get_mut(&event) {
+            Some((last, suppressed)) if now.duration_since(*last) < REPEAT_WINDOW => {
+                *suppressed += 1;
+                None
+            }
+            Some((last, suppressed)) => {
+                *last = now;
+                Some(std::mem::take(suppressed))
+            }
+            None => {
+                if self.seen.len() >= 256 {
+                    self.seen.clear();
+                }
+                self.seen.insert(event, (now, 0));
+                Some(0)
+            }
+        }
+    }
+}
+
+static LIMITER: LazyLock<Mutex<Limiter>> = LazyLock::new(|| Mutex::new(Limiter::default()));
 
 pub(crate) fn remember(at: SystemTime, event: LogEvent) {
     if let Ok(mut ring) = RING.lock() {
@@ -619,5 +686,56 @@ mod tests {
             !text.contains(&format!("{old_secs}  ")),
             "older than 24 h is left out"
         );
+    }
+
+    #[test]
+    fn repeated_identical_errors_go_out_once_a_minute_with_the_suppressed_count() {
+        let mut limiter = Limiter::default();
+        let t0 = Instant::now();
+        let e = LogEvent::SaveFailed(ErrorKind::from_text("os error 13"));
+        assert_eq!(limiter.admit(e, t0), Some(0));
+        assert_eq!(limiter.admit(e, t0 + Duration::from_secs(1)), None);
+        assert_eq!(limiter.admit(e, t0 + Duration::from_secs(59)), None);
+        assert_eq!(limiter.admit(e, t0 + Duration::from_secs(60)), Some(2));
+        assert_eq!(limiter.admit(e, t0 + Duration::from_secs(61)), None);
+        assert_eq!(limiter.admit(e, t0 + Duration::from_secs(200)), Some(1));
+    }
+
+    #[test]
+    fn a_different_event_or_kind_is_not_held_back() {
+        let mut limiter = Limiter::default();
+        let t0 = Instant::now();
+        let a = LogEvent::SaveFailed(ErrorKind::from_text("os error 13"));
+        let b = LogEvent::SaveFailed(ErrorKind::from_text("os error 28"));
+        assert_eq!(limiter.admit(a, t0), Some(0));
+        assert_eq!(limiter.admit(b, t0), Some(0));
+        assert_eq!(limiter.admit(LogEvent::VisitFailed, t0), Some(0));
+        assert_eq!(limiter.admit(a, t0), None);
+    }
+
+    #[test]
+    fn the_limiter_stays_bounded() {
+        let mut limiter = Limiter::default();
+        let t0 = Instant::now();
+        for ms in 0..1000u64 {
+            limiter.admit(LogEvent::SaveFinished { ms, spinner: false }, t0);
+        }
+        assert!(limiter.seen.len() <= 256);
+    }
+
+    #[test]
+    fn only_failures_are_errors_and_routine_events_are_quiet() {
+        assert_eq!(LogEvent::Started.level(), Level::Info);
+        assert_eq!(LogEvent::CopySkipped(Skip::Paused).level(), Level::Debug);
+        assert_eq!(LogEvent::SpinnerHidden.level(), Level::Debug);
+        assert_eq!(
+            LogEvent::TooltipFailed(ErrorKind::from_text("")).level(),
+            Level::Info
+        );
+        assert_eq!(
+            LogEvent::SaveFailed(ErrorKind::from_text("")).level(),
+            Level::Error
+        );
+        assert_eq!(LogEvent::MissingLocaleKey.level(), Level::Fault);
     }
 }

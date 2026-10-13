@@ -53,7 +53,10 @@ impl Category {
 pub enum Level {
     Debug,
     Info,
+    /// A real failure.
     Error,
+    /// A bug or broken invariant in the app itself.
+    Fault,
 }
 
 impl Level {
@@ -62,6 +65,7 @@ impl Level {
             Level::Debug => "debug",
             Level::Info => "info",
             Level::Error => "error",
+            Level::Fault => "fault",
         }
     }
 }
@@ -104,6 +108,7 @@ mod imp {
             Level::Debug => 0x02,
             Level::Info => 0x01,
             Level::Error => 0x10,
+            Level::Fault => 0x11,
         };
         // The argument buffer of `os_log`: summary (bit 1: a non-scalar argument), count, then
         // per argument its descriptor (string 0x20, public 0x02), its size and the pointer.

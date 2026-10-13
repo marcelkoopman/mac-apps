@@ -273,7 +273,6 @@ impl App {
             return;
         };
         #[cfg(debug_assertions)]
-        let started = Instant::now();
         let previous = self.history_cursor;
         self.history_cursor = next;
         self.browsing = None;
@@ -282,11 +281,6 @@ impl App {
         } else {
             self.history_cursor = previous;
         }
-        #[cfg(debug_assertions)]
-        crate::diag::log(crate::diag::LogEvent::HistoryStep {
-            index: self.history_cursor as u64,
-            micros: started.elapsed().as_micros() as u64,
-        });
     }
 
     pub(crate) fn clip_signature(&self, view: &ClipboardView) -> ClipSig {
