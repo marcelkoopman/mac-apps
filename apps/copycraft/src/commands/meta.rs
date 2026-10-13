@@ -72,6 +72,22 @@ pub(crate) fn middle_keep(chars: &[char], keep: usize) -> String {
     out
 }
 
+/// The column count of a CSV or TSV card (from its header line; cheap).
+fn table_columns(text: &str) -> Option<usize> {
+    matches!(format::detect(text), FormatKind::Csv | FormatKind::Tsv)
+        .then(|| crate::dataframe::header_columns(text))
+        .flatten()
+}
+
+/// "2 kolommen" / "1 kolom".
+pub(crate) fn columns_label(columns: usize) -> String {
+    if columns == 1 {
+        crate::locale::t("one_column").to_string()
+    } else {
+        crate::locale::tf("n_columns", &[&columns])
+    }
+}
+
 pub(crate) fn text_meta(text: &str) -> String {
     text_meta_from(text, text)
 }
@@ -108,7 +124,13 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
-        crate::locale::tf("lines_size", &[&lines, &size])
+        match table_columns(classified) {
+            Some(columns) => crate::locale::tf(
+                "lines_columns_size",
+                &[&lines, &columns_label(columns), &size],
+            ),
+            None => crate::locale::tf("lines_size", &[&lines, &size]),
+        }
     } else {
         size
     };

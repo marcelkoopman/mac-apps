@@ -78,3 +78,21 @@ fn copy_and_save_use_the_whole_table_not_the_preview() {
     let copied = transformed_text(&src, CardView::Original).unwrap();
     assert_eq!(copied, src);
 }
+
+#[test]
+fn table_meta_counts_columns() {
+    let csv = "Datum,Verbruik\n2024-01-01,3\n2024-01-02,4\n";
+    assert_eq!(crate::dataframe::header_columns(csv), Some(2));
+    assert_eq!(
+        crate::commands::text_meta(csv),
+        "3 lines · 2 columns · 0.041 KB"
+    );
+    // A separator inside quotes is no column; a title above the table is skipped.
+    let semi = "Rapport over maart\n\nNaam;Plaats;Bedrag\n\"Jan; de Vries\";Delft;3\nPiet;Gouda;4\nKees;Ede;5\n";
+    assert_eq!(crate::dataframe::header_columns(semi), Some(3));
+    assert_eq!(crate::commands::columns_label(1), "1 column");
+    // Plain text keeps lines and size only.
+    let text = "one line\nanother line\n";
+    assert_eq!(crate::dataframe::header_columns(text), None);
+    assert!(!crate::commands::text_meta(text).contains("column"));
+}

@@ -579,6 +579,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Version {0} of {1}, {2}",
     ),
     ("lines_size", "{0} regels  {1}", "{0} lines  {1}"),
+    (
+        "lines_columns_size",
+        "{0} regels · {1} · {2}",
+        "{0} lines · {1} · {2}",
+    ),
     // Table steps and versions
     (
         "table_label_dedupe",

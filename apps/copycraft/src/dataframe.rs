@@ -163,6 +163,31 @@ fn delimited_separator(text: &str) -> Option<u8> {
     try_csv(trimmed).map(|(start, _)| start.separator)
 }
 
+/// Columns of the delimited table in `text`, from its header line alone (quotes respected): cheap,
+/// no parse. `None` when the text is no CSV or TSV.
+pub fn header_columns(text: &str) -> Option<usize> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || crate::format::looks_like_xml(trimmed) {
+        return None;
+    }
+    let start = table_start(trimmed)?;
+    let header = start.body(trimmed).lines().next()?;
+    Some(count_fields(header, start.separator))
+}
+
+fn count_fields(line: &str, separator: u8) -> usize {
+    let mut quoted = false;
+    let mut fields = 1;
+    for byte in line.bytes() {
+        if byte == b'"' {
+            quoted = !quoted;
+        } else if byte == separator && !quoted {
+            fields += 1;
+        }
+    }
+    fields
+}
+
 fn parse(text: &str) -> Option<DataFrame> {
     let trimmed = text.trim();
     if trimmed.is_empty() || crate::format::looks_like_xml(trimmed) {
