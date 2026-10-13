@@ -15,6 +15,47 @@ pub(crate) struct TextSteps {
     pub(crate) cursor: usize,
 }
 
+/// The id Lines… uses for an opened file: its versions live with the file, not in history.
+const OPENED_FILE: u64 = u64::MAX - 1;
+
+/// Versions of an opened file made by Lines… steps: the file's own text first. ⌘Z, ⇧⌘Z and
+/// the version capsule move between them; the clipboard is left alone.
+pub(crate) struct OpenedSteps {
+    pub(crate) texts: Vec<Zeroizing<String>>,
+    pub(crate) labels: Vec<String>,
+    pub(crate) cursor: usize,
+}
+
+impl OpenedSteps {
+    /// Start from the file's `original` text.
+    pub(crate) fn new(original: &str) -> Self {
+        Self {
+            texts: vec![Zeroizing::new(original.to_string())],
+            labels: vec![crate::locale::t("original").to_string()],
+            cursor: 0,
+        }
+    }
+
+    /// Add `text` as the version after the shown one (dropping any redo), and show it.
+    pub(crate) fn push(&mut self, label: String, text: &str) {
+        self.texts.truncate(self.cursor + 1);
+        self.labels.truncate(self.cursor + 1);
+        self.texts.push(Zeroizing::new(text.to_string()));
+        self.labels.push(label);
+        self.cursor += 1;
+    }
+
+    /// Show the version `to` picks; its text, or `None` when there is no such other version.
+    pub(crate) fn go(&mut self, to: impl FnOnce(usize) -> Option<usize>) -> Option<&str> {
+        let index = to(self.cursor).filter(|&index| index < self.texts.len())?;
+        if index == self.cursor {
+            return None;
+        }
+        self.cursor = index;
+        Some(self.texts[index].as_str())
+    }
+}
+
 /// The text a card for `data` shows, for Lines…: its text subject.
 pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
     data.subject_text
@@ -28,13 +69,13 @@ impl App {
     /// follows history and is not a table (tables have their own steps).
     pub(crate) fn text_entry(&self) -> Option<(u64, Zeroizing<String>)> {
         if let Some(opened) = &self.opened {
-            // An opened agent instructions file has Lines… (Commands, Outline, Check); its
-            // steps go to the clipboard, there is no history entry to go back to.
+            // An opened text or code file has Lines… like a copy; its steps are versions of
+            // the file card ([`OpenedSteps`]), not clipboard copies.
             return opened
                 .text
                 .as_ref()
-                .filter(|text| crate::format::detect(text) == crate::format::FormatKind::Agent)
-                .map(|text| (NOT_IN_HISTORY, Zeroizing::new(text.to_string())));
+                .filter(|text| commands::offers_text_menu(text))
+                .map(|text| (OPENED_FILE, Zeroizing::new(text.to_string())));
         }
         // The copied source the card shows, also when it shows it formatted: the text the
         // card was built from. Reading the pasteboard again could see another state (a read
@@ -74,6 +115,13 @@ impl App {
 
     /// Undo, redo and the version capsule go to the text's versions.
     pub(crate) fn text_versions_shown(&self) -> bool {
+        if self.opened.is_some() {
+            return self.text_entry().is_some()
+                && self
+                    .opened_steps
+                    .as_ref()
+                    .is_some_and(|s| s.texts.len() > 1);
+        }
         self.text_entry()
             .is_some_and(|(id, _)| self.text_steps_of(id).is_some_and(|s| s.ids.len() > 1))
     }
@@ -91,10 +139,16 @@ impl App {
         let kind = crate::format::detect(&text);
         let code = crate::complexity::Lang::of(kind).is_some();
         let agent = kind == crate::format::FormatKind::Agent;
-        let (labels, version) = match self.text_steps_of(id) {
-            Some(steps) => (steps.labels.clone(), steps.cursor),
-            None => (vec![crate::locale::t("original").to_string()], 0),
+        let steps = if id == OPENED_FILE {
+            self.opened_steps
+                .as_ref()
+                .map(|steps| (steps.labels.clone(), steps.cursor))
+        } else {
+            self.text_steps_of(id)
+                .map(|steps| (steps.labels.clone(), steps.cursor))
         };
+        let (labels, version) =
+            steps.unwrap_or_else(|| (vec![crate::locale::t("original").to_string()], 0));
         let note = self
             .text_note
             .as_ref()
@@ -178,17 +232,18 @@ impl App {
 
     /// Copy step `op`'s `result` (a new history entry) and make it the version after entry `id`.
     fn text_stepped(&mut self, id: u64, op: &TextOp, result: &Zeroizing<String>) {
+        if id == OPENED_FILE {
+            self.file_stepped(op, result);
+            return;
+        }
         if let Err(e) = self.write_own(result) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             ));
             return;
         }
-        // The new version is the clipboard's: the card follows it again (also from a file).
+        // The new version is the clipboard's: the card follows it again.
         self.browsing = None;
-        if self.opened.is_some() {
-            self.leave_opened();
-        }
         if !self.record_own_copy(result) {
             // Recording is paused or the app is ignored: the result is on the clipboard but
             // not in history, so it makes no version either.
@@ -218,9 +273,48 @@ impl App {
         self.refresh_popup();
     }
 
+    /// A step on an opened file: a new version of the file card. Commands (agent instructions)
+    /// also puts its result on the clipboard, as promised; the card stays on the file.
+    fn file_stepped(&mut self, op: &TextOp, result: &Zeroizing<String>) {
+        let Some(opened) = self.opened.as_mut() else {
+            return;
+        };
+        let Some(current) = opened.text.as_ref() else {
+            return;
+        };
+        let steps = self
+            .opened_steps
+            .get_or_insert_with(|| OpenedSteps::new(current));
+        steps.push(op.label(), result);
+        opened.text = Some(Zeroizing::new(result.to_string()));
+        if matches!(op, TextOp::AgentCommands)
+            && let Err(e) = self.write_own(result)
+        {
+            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+        }
+        self.text_note = None;
+        self.reset_view();
+        self.refresh_popup();
+    }
+
     /// Show the version `to` picks from the one shown (undo, redo, the version capsule). Only
     /// shown: the clipboard is left alone (no Copied toast); Copy puts the version there.
     pub(crate) fn text_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
+        if self.opened.is_some() {
+            let text = self
+                .opened_steps
+                .as_mut()
+                .and_then(|steps| steps.go(to))
+                .map(|text| Zeroizing::new(text.to_string()));
+            if let (Some(text), Some(opened)) = (text, self.opened.as_mut()) {
+                opened.text = Some(text);
+                self.text_note = None;
+                self.refresh_popup();
+            }
+            return;
+        }
         let Some((id, _)) = self.text_entry() else {
             return;
         };

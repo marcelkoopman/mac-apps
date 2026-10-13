@@ -261,3 +261,25 @@ fn lines_works_on_the_text_the_card_was_built_from() {
     let pending = crate::commands::tests::data(SubjectKind::Pending, None);
     assert!(super::text::card_text_of(&pending).is_none());
 }
+
+#[test]
+fn steps_on_an_opened_file_are_versions_of_the_file() {
+    use super::text::OpenedSteps;
+    let mut steps = OpenedSteps::new("fn a() {}\nfn b() {}\n");
+    steps.push("First 1 lines".into(), "fn a() {}\n");
+    steps.push("Reversed".into(), "fn a() {}");
+    assert_eq!(steps.cursor, 2);
+    // ⌘Z twice: back to the file's own text; once more does nothing.
+    assert_eq!(steps.go(|c| c.checked_sub(1)), Some("fn a() {}\n"));
+    assert_eq!(
+        steps.go(|c| c.checked_sub(1)),
+        Some("fn a() {}\nfn b() {}\n")
+    );
+    assert_eq!(steps.go(|c| c.checked_sub(1)), None);
+    // A new step from the original drops the redo.
+    steps.push("Reversed".into(), "fn b() {}\nfn a() {}\n");
+    assert_eq!(steps.texts.len(), 2);
+    assert_eq!(steps.labels[0], crate::locale::t("original"));
+    assert_eq!(steps.go(|c| Some(c + 1)), None);
+    assert_eq!(steps.go(|_| Some(0)), Some("fn a() {}\nfn b() {}\n"));
+}

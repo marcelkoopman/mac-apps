@@ -101,6 +101,8 @@ pub(crate) struct App {
     pub(crate) image_note: Option<(usize, String)>,
     /// The versions Lines… made of the text on the card ([`TextSteps`]).
     pub(crate) text_steps: Option<TextSteps>,
+    /// Lines… versions of the opened file.
+    pub(crate) opened_steps: Option<super::text::OpenedSteps>,
     /// The count, or why the last Lines… step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
     /// Bumped for every Lines… job; a result with another number is stale and dropped.

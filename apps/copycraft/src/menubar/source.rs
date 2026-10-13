@@ -165,6 +165,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
+        self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
         self.opened_image = ImageVersions::default();
         if let Some(cursor) = self.clipboard_cursor.take() {
@@ -184,6 +185,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = Some(opened);
+        self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
         self.opened_image = ImageVersions::default();
         self.reset_view();
