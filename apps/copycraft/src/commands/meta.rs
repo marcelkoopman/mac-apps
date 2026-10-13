@@ -80,6 +80,14 @@ fn table_columns(text: &str) -> Option<String> {
         .map(columns_label)
 }
 
+/// "1 functie" / "8 functies" on a Rust card.
+fn rust_functions(text: &str) -> Option<String> {
+    (format::detect(text) == FormatKind::Rust).then(|| match crate::format::rust_fns::count(text) {
+        1 => crate::locale::t("one_function").to_string(),
+        n => crate::locale::tf("n_functions", &[&n]),
+    })
+}
+
 /// "1 sectie" / "4 secties" on a TOML card.
 fn toml_sections(text: &str) -> Option<String> {
     (format::detect(text) == FormatKind::Toml).then(|| match crate::format::toml::sections(text) {
@@ -133,7 +141,10 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
     let size = format_bytes(measured.len());
     let lines = measured.lines().count();
     let mut meta = if lines > 1 {
-        match table_columns(classified).or_else(|| toml_sections(classified)) {
+        match table_columns(classified)
+            .or_else(|| toml_sections(classified))
+            .or_else(|| rust_functions(classified))
+        {
             Some(count) => crate::locale::tf("lines_columns_size", &[&lines, &count, &size]),
             None => crate::locale::tf("lines_size", &[&lines, &size]),
         }

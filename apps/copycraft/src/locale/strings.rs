@@ -580,6 +580,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("one_section", "1 sectie", "1 section"),
     ("n_sections", "{0} secties", "{0} sections"),
+    ("one_function", "1 functie", "1 function"),
+    ("n_functions", "{0} functies", "{0} functions"),
     // Table steps and versions
     (
         "table_label_dedupe",
