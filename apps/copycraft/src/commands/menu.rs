@@ -143,6 +143,18 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
         .collect()
 }
 
+/// The command a pick in a popped menu runs: the item at `tag`, but only when its title is
+/// the one the menu showed. A list replaced while the menu was open (a refresh, another menu)
+/// must not run a neighbour's step, e.g. Flip horizontal for Rotate left: then the title
+/// decides, and `None` when no item has it.
+pub fn popped_pick(popped: &[Command], tag: isize, title: &str) -> Option<Command> {
+    let at = usize::try_from(tag).ok();
+    at.and_then(|at| popped.get(at))
+        .filter(|cmd| cmd.title == title)
+        .or_else(|| popped.iter().find(|cmd| cmd.title == title))
+        .cloned()
+}
+
 /// Resize › Custom….
 pub fn custom_resize_title() -> &'static str {
     crate::locale::t("custom_resize")

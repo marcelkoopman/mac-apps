@@ -569,11 +569,9 @@ define_class!(
             let Some(item) = sender else {
                 return;
             };
-            let index = item.tag();
-            if index < 0 {
-                return;
-            }
-            let cmd = POPPED.with(|slot| slot.borrow().get(index as usize).cloned());
+            let title = item.title().to_string();
+            let cmd =
+                POPPED.with(|slot| commands::popped_pick(&slot.borrow(), item.tag(), &title));
             if let Some(cmd) = cmd {
                 run_command(cmd);
             }

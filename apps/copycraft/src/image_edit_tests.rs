@@ -389,3 +389,20 @@ fn a_scan_is_kept_with_its_version() {
     versions.forget_pictures();
     assert!(!versions.remember_scan(&picture, &scan));
 }
+
+#[test]
+fn rotate_left_from_a_later_version_rotates_and_is_labelled_so() {
+    // Marcel's case: steps taken, then Rotate left: exactly that step on the version shown.
+    let original = original(40, 20);
+    let mut versions = ImageVersions::default();
+    for op in [ImageOp::Grayscale, ImageOp::FlipHorizontal] {
+        let job = versions.push(op, &original).unwrap();
+        assert!(versions.finish(run(job).unwrap()));
+    }
+    let job = versions.push(ImageOp::RotateLeft, &original).unwrap();
+    assert!(versions.finish(run(job).unwrap()));
+    assert_eq!(versions.cursor(), 3);
+    assert_eq!(versions.labels()[3], "Rotated 90° left");
+    // Turned a quarter, not mirrored: width and height swap.
+    assert_eq!(shown_size(&versions), (20, 40));
+}

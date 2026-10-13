@@ -104,3 +104,38 @@ fn choose_columns_lists_the_version_shown_and_applies_as_one_step() {
             .any(|c| c.id == CommandId::TableChooseColumns)
     );
 }
+
+#[test]
+fn image_menu_items_run_the_step_they_are_titled() {
+    use crate::commands::{Command, ImageShown, image_menu_items, popped_pick};
+    use crate::image_edit::ImageOp;
+    let edit = ImageShown {
+        entry: 1,
+        labels: vec!["Original".into()],
+        version: 0,
+        working: false,
+        note: None,
+    };
+    let items: Vec<Command> = image_menu_items(&edit)
+        .into_iter()
+        .map(|(c, _)| c)
+        .collect();
+    for op in ImageOp::MENU {
+        let item = items
+            .iter()
+            .find(|c| c.title == op.title())
+            .expect("in the menu");
+        assert_eq!(item.id, CommandId::ImageStep(op), "{}", op.title());
+    }
+    let left = items
+        .iter()
+        .position(|c| c.id == CommandId::ImageStep(ImageOp::RotateLeft))
+        .unwrap();
+    // A pick runs the item with the title shown, even when the list moved meanwhile.
+    let picked = popped_pick(&items, left as isize, "Rotate 90° left").unwrap();
+    assert_eq!(picked.id, CommandId::ImageStep(ImageOp::RotateLeft));
+    let moved = popped_pick(&items, left as isize + 2, "Rotate 90° left").unwrap();
+    assert_eq!(moved.id, CommandId::ImageStep(ImageOp::RotateLeft));
+    assert!(popped_pick(&items, left as isize, "Nothing like it").is_none());
+    assert!(popped_pick(&items, -1, "Rotate 90° left").is_some());
+}
