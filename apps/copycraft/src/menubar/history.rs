@@ -274,14 +274,8 @@ impl App {
         let previous = self.history_cursor;
         self.history_cursor = next;
         self.browsing = None;
-        let presented = self.present_history(next).unwrap_or_else(|e| {
-            eprintln!("restore history failed: {e:#}");
-            false
-        });
-        if presented {
-            // The entry is on the clipboard now, so the card follows the clipboard there.
+        if self.show_history(next) {
             self.clipboard_cursor = None;
-            self.note_own_write();
         } else {
             self.history_cursor = previous;
         }
@@ -291,25 +285,6 @@ impl App {
             self.history_cursor,
             started.elapsed().as_micros()
         );
-    }
-
-    /// A step put a history entry on the pasteboard, and the card already shows it. Note the
-    /// pasteboard as seen, so the next pass of the event loop does not take that change for a
-    /// new copy: that rebuilt the whole card a second time, rebuilt the menu bar menu (history
-    /// did not change) and blinked the icon. Only the tooltip follows the entry.
-    pub(crate) fn note_own_write(&mut self) {
-        let view = ClipboardView::from_os();
-        self.record_current(&view);
-        self.signature = self.clip_signature(&view);
-        // As `note_clipboard` does for a change: a scan of another picture no longer applies.
-        if self
-            .image_scan_change
-            .is_some_and(|seen| seen != self.signature.image_change)
-        {
-            self.image_scan_change = None;
-            self.image_scan = None;
-        }
-        self.sync_tooltip(&view);
     }
 
     pub(crate) fn clip_signature(&self, view: &ClipboardView) -> ClipSig {
@@ -325,53 +300,20 @@ impl App {
         }
     }
 
-    // Put a history entry on the clipboard without moving it to the front.
-    // `Ok(false)`: there is no entry to show at `index`.
-    pub(crate) fn present_history(&mut self, index: usize) -> anyhow::Result<bool> {
-        if self.history.image(index).is_some() {
-            return self.present_history_image(index);
-        }
-        let Some(text) = self
-            .history
-            .get(index)
-            .map(|value| Zeroizing::new(value.to_string()))
-        else {
-            return Ok(false);
+    /// Show history entry `index` on the card. Only shown: the clipboard is left alone (no
+    /// Copied toast) and a poll does not take the card back to the clipboard's item until a
+    /// new copy arrives. Copy puts it on the clipboard. `false`: there is no entry there.
+    pub(crate) fn show_history(&mut self, index: usize) -> bool {
+        let Some(id) = self.history.id_at(index) else {
+            return false;
         };
-        // The write carries copycraft's own pasteboard type, so it is not recorded: that would
-        // move this entry to the front, and the other arrow could no longer walk back.
+        self.browsing = Some(id);
         self.card_view = CardView::Original;
-        self.write_own(text.as_str())?;
         self.opened = None;
         if launcher::is_open() {
             self.refresh_popup();
         }
-        Ok(true)
-    }
-
-    pub(crate) fn present_history_image(&mut self, index: usize) -> anyhow::Result<bool> {
-        let Some(bytes) = self.history.image(index) else {
-            return Ok(false);
-        };
-        #[cfg(target_os = "macos")]
-        {
-            bytes
-                .with(crate::macos_pasteboard::write_history_image)
-                .map_err(anyhow::Error::msg)
-                .context("image")?;
-            self.image_on_pasteboard = Some((crate::macos_pasteboard::change_count(), bytes));
-            self.card_view = CardView::Original;
-            self.opened = None;
-            if launcher::is_open() {
-                self.refresh_popup();
-            }
-            Ok(true)
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = bytes;
-            Ok(false)
-        }
+        true
     }
 
     pub(crate) fn restore_history(&mut self, index: usize) -> anyhow::Result<()> {
@@ -575,6 +517,7 @@ impl App {
                 self.image_on_pasteboard = self.current_image.clone().map(|bytes| (change, bytes));
                 self.history_cursor = 0;
                 self.clipboard_cursor = None;
+                self.browsing = None;
             }
             return;
         }

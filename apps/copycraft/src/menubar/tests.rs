@@ -193,3 +193,15 @@ fn a_browsed_version_is_shown_without_the_clipboard() {
     assert_eq!(browsed_entry(Some(2), true), None);
     assert_eq!(browsed_entry(None, false), None);
 }
+
+#[test]
+fn browsing_history_ends_only_with_a_new_copy() {
+    use super::state::browse_ends;
+    // The same pasteboard (a poll, a background refresh): the card keeps the browsed item.
+    assert!(!browse_ends(Some(7), 7, false));
+    // Copycraft's own write (Copy) is not a new copy from elsewhere.
+    assert!(!browse_ends(Some(7), 8, true));
+    // Another app copied: the card follows the clipboard again.
+    assert!(browse_ends(Some(7), 8, false));
+    assert!(!browse_ends(None, 8, false));
+}

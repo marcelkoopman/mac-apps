@@ -25,6 +25,9 @@ impl App {
     pub(crate) fn shows_image(&self) -> bool {
         match &self.opened {
             Some(opened) => opened.image.is_some(),
+            None if self.browsing.is_some() => self
+                .browsed_index()
+                .is_some_and(|at| self.history.image(at).is_some()),
             None if self.pasteboard_suppressed() => {
                 self.history.image(self.history_cursor).is_some()
             }
@@ -37,6 +40,9 @@ impl App {
     pub(crate) fn image_source(&self) -> Option<SecretBytes> {
         if let Some(opened) = &self.opened {
             return opened.image.as_ref().map(|image| image.bytes.clone());
+        }
+        if self.browsing.is_some() {
+            return self.browsed_index().and_then(|at| self.history.image(at));
         }
         #[cfg(target_os = "macos")]
         {

@@ -30,6 +30,14 @@ impl App {
             {
                 return false;
             }
+            // A new copy from another app ends browsing: the card follows it.
+            if browse_ends(
+                self.polled_change,
+                change,
+                crate::macos_pasteboard::current_marks().own,
+            ) {
+                self.browsing = None;
+            }
             self.polled_change = Some(change);
         }
         let view = ClipboardView::from_os();
@@ -185,6 +193,12 @@ pub(crate) fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> 
 pub(crate) fn discard_preview_files() {
     #[cfg(target_os = "macos")]
     crate::macos_open::discard_previews();
+}
+
+/// Browsing history ends when the pasteboard changed to `change` since `polled` and the change
+/// is not copycraft's own write: a new copy.
+pub(crate) fn browse_ends(polled: Option<isize>, change: isize, own: bool) -> bool {
+    polled.is_some_and(|seen| seen != change) && !own
 }
 
 /// A closed card drops a chosen file. Not while the table window still shows that file:

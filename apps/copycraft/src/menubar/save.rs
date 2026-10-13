@@ -32,6 +32,15 @@ impl App {
             }
             return Ok(());
         }
+        // A browsed picture: Copy puts it on the clipboard (as the newest copy).
+        if !from_file
+            && self.card_view == CardView::Original
+            && let Some(at) = self.browsed_index()
+            && self.history.image(at).is_some()
+        {
+            self.browsing = None;
+            return self.restore_history(at);
+        }
         if !from_file && self.shows_image() {
             return self.copy_image_view();
         }
@@ -89,10 +98,11 @@ impl App {
         self.record_own_copy(body.as_str());
         // The browsed version is the clipboard's now; put back as a new copy, it can have a
         // new id.
-        if browsed.is_some()
+        if let Some(old_id) = browsed
             && let Some(new_id) = self.history.id_at(0)
             && let Some(steps) = self.text_steps.as_mut()
             && let Some(slot) = steps.ids.get_mut(steps.cursor)
+            && *slot == old_id
         {
             *slot = new_id;
         }

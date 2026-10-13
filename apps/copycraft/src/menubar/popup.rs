@@ -271,6 +271,10 @@ impl App {
     pub(crate) fn launch_for_popup(&mut self) -> LaunchData {
         #[cfg(target_os = "macos")]
         self.card_opening();
+        // A card opened again starts at the clipboard's item, not at an entry browsed before.
+        if self.browsing.take().is_some() {
+            self.history_cursor = 0;
+        }
         if self.opened.is_none() {
             let view = ClipboardView::from_os();
             self.record_current(&view);
