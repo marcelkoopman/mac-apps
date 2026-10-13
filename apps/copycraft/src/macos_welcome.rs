@@ -26,8 +26,10 @@ use crate::macos_login;
 const WIDTH: f64 = 420.0;
 const PAD: f64 = 24.0;
 const ICON: f64 = 96.0;
-/// Background of `assets/icon.icns` (sRGB, about #070E24).
-const ICON_BACKGROUND: (f64, f64, f64) = (7.0 / 255.0, 14.0 / 255.0, 36.0 / 255.0);
+/// Edge colour of `assets/icon.icns`, sRGB #07112D: the mean of the outer 3 px ring of the
+/// 1024 px rep (the tile is a soft gradient, #030921 in the corners to #0E1B3F at the
+/// edges). Made with `colorWithSRGBRed`, the image's colour space, with nothing over it.
+const ICON_BACKGROUND: (f64, f64, f64) = (7.0 / 255.0, 17.0 / 255.0, 45.0 / 255.0);
 /// The app icon from `assets/icon.icns`, the same file the bundle uses.
 const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
 /// Width of the labels and the button row: the window width minus the side margins.
