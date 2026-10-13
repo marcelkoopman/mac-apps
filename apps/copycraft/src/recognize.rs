@@ -166,14 +166,15 @@ pub fn warm() {
 }
 
 /// The classes the first layer finds in `text`. `code` (Rust, Java, Python source) skips
-/// personal data: there a path or a field name is not a person.
+/// personal and financial data: there a path or a field name is not a person, and a card
+/// number or IBAN is a test fixture. A real key or token in code still counts.
 pub fn classes(text: &str, code: bool) -> Classes {
     let mut found = Classes::default();
     let compiled = compiled();
     let present = compiled.set.matches(text);
     for index in present.iter() {
         let pattern = &PATTERNS[index];
-        if found.has(pattern.label) || (code && pattern.label == Label::Pii) {
+        if found.has(pattern.label) || (code && pattern.label != Label::Credential) {
             continue;
         }
         let hit = compiled.each[index]

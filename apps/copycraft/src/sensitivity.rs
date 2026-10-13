@@ -175,7 +175,7 @@ fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
         }
         for hit in guard_for(classes).find(text) {
             let label = label_for(&hit.kind);
-            if counts(text, &hit) && !(code && label == Label::Pii) {
+            if counts(text, &hit) && !(code && label != Label::Credential) {
                 classes = with(classes, label);
             }
         }
@@ -361,9 +361,13 @@ fn is_code(kind: FormatKind) -> bool {
 /// token (`checksum = "c982642fa9…"`) is no card.
 fn counts(text: &str, hit: &Match) -> bool {
     match hit.kind {
-        Kind::IpV6 => text[hit.start..hit.end]
-            .bytes()
-            .any(|byte| byte.is_ascii_digit()),
+        // Standalone, so `u64::MAX` in code or prose is no address `64::`.
+        Kind::IpV6 => {
+            standalone(text.as_bytes(), hit.start, hit.end)
+                && text[hit.start..hit.end]
+                    .bytes()
+                    .any(|byte| byte.is_ascii_digit())
+        }
         Kind::CreditCard | Kind::Iban => standalone(text.as_bytes(), hit.start, hit.end),
         _ => true,
     }
@@ -526,6 +530,29 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             "IAIOSFODNN7EXAMPLE\";\n}\n"
         );
         assert_eq!(labels(key), vec![Label::Credential]);
+    }
+
+    #[test]
+    fn rust_source_with_fixtures_gets_no_pii_or_financial_label() {
+        // Its own source: test card numbers, IBANs, e-mail and IP addresses in strings, and
+        // `u64::` paths.
+        let source = include_str!("sensitivity.rs");
+        assert_eq!(
+            crate::format::detect(source),
+            crate::format::FormatKind::Rust
+        );
+        assert!(labels(source).is_empty(), "{:?}", labels(source));
+        // A real token in code still counts (built here, so this file holds none).
+        let token = format!("ghp_{}", "1234567890abcdefghijklmnopqrstuvwxyzAB");
+        let leaked = format!("fn main() {{\n    let token = \"{token}\";\n}}\n");
+        assert_eq!(labels(&leaked), vec![Label::Credential]);
+        // Plain text keeps every detector.
+        assert_eq!(
+            labels("Pay with card 4111 1111 1111 1111 please"),
+            vec![Label::Financial]
+        );
+        assert_eq!(labels("Server at fe80::1 is down"), vec![Label::Pii]);
+        assert!(labels("The max is u64::MAX in this note").is_empty());
     }
 
     #[test]
