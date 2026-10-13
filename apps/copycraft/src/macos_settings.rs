@@ -41,8 +41,9 @@ const LABEL_W: f64 = 136.0;
 const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
 /// Privacy: heading, two settings, the ignored-apps block, two gaps.
 const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Weergave: heading, the pages and announce settings, two gaps and the symbols block.
-const DISPLAY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Weergave: heading, the pages, announce and ask-before-clearing settings, three gaps and the
+/// symbols block.
+const DISPLAY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 const HEIGHT: f64 = MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
@@ -50,8 +51,8 @@ const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(GENERAL_H == 230.0);
 const _: () = assert!(PRIVACY_H == 248.0);
-const _: () = assert!(DISPLAY_H == 248.0);
-const _: () = assert!(HEIGHT == 790.0);
+const _: () = assert!(DISPLAY_H == 302.0);
+const _: () = assert!(HEIGHT == 844.0);
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -213,6 +214,14 @@ define_class!(
                 return;
             };
             settings::set_announce_confirmations(button.state() == NSControlStateValueOn);
+        }
+
+        #[unsafe(method(confirmClearToggled:))]
+        fn confirm_clear_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            settings::set_confirm_clear(button.state() == NSControlStateValueOn);
         }
 
         #[unsafe(method(blurToggled:))]
@@ -550,6 +559,13 @@ fn build(mtm: MainThreadMarker) {
         crate::locale::t("announce_confirmations_note"),
         &mut top,
     );
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    let ask = checkbox(mtm, crate::locale::t("confirm_clear"), y);
+    ask.setState(state_of(settings::confirm_clear()));
+    wire(&ask, sel!(confirmClearToggled:));
+    body.addSubview(&ask);
+    place_explanation(mtm, &body, crate::locale::t("confirm_clear_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,

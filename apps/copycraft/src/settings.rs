@@ -58,6 +58,9 @@ pub struct Settings {
     /// VoiceOver says confirmations such as the "Copied" toast. Off keeps the toast itself.
     /// On by default.
     pub announce_confirmations: bool,
+    /// The card's Wis/Clear button asks first. "Don't ask again" turns it off; Settings turns
+    /// it back on. On by default.
+    pub confirm_clear: bool,
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -75,6 +78,7 @@ impl Default for Settings {
             language: Language::System,
             page_long_text: true,
             announce_confirmations: true,
+            confirm_clear: true,
         }
     }
 }
@@ -88,6 +92,7 @@ const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
 const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
 const ANNOUNCE_KEY: &str = "CopycraftAnnounceConfirmations";
+const CONFIRM_CLEAR_KEY: &str = "CopycraftConfirmClear";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Stored (true) once the welcome window closed; missing on first launch.
@@ -133,6 +138,7 @@ pub fn load() -> Settings {
         settings.page_long_text = value;
     }
     settings.announce_confirmations = announce_from(load_bool(ANNOUNCE_KEY));
+    settings.confirm_clear = confirm_clear_from(load_bool(CONFIRM_CLEAR_KEY));
     settings
 }
 
@@ -191,6 +197,22 @@ pub fn announce_confirmations() -> bool {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn set_announce_confirmations(on: bool) {
     store_bool(ANNOUNCE_KEY, on);
+}
+
+/// Whether Wis/Clear asks first, from the stored value: missing means it asks.
+pub fn confirm_clear_from(stored: Option<bool>) -> bool {
+    stored.unwrap_or(Settings::default().confirm_clear)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn confirm_clear() -> bool {
+    confirm_clear_from(load_bool(CONFIRM_CLEAR_KEY))
+}
+
+/// `false` after "Don't ask again"; `true` from Settings.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_confirm_clear(on: bool) {
+    store_bool(CONFIRM_CLEAR_KEY, on);
 }
 
 pub fn set_date_month_first(on: bool) {
@@ -642,5 +664,13 @@ mod tests {
         assert!(super::announce_from(None));
         assert!(super::announce_from(Some(true)));
         assert!(!super::announce_from(Some(false)));
+    }
+
+    #[test]
+    fn clear_asks_unless_told_not_to() {
+        assert!(super::Settings::default().confirm_clear);
+        assert!(super::confirm_clear_from(None));
+        assert!(super::confirm_clear_from(Some(true)));
+        assert!(!super::confirm_clear_from(Some(false)));
     }
 }

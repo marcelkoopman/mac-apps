@@ -43,6 +43,68 @@ pub fn confirm(mtm: MainThreadMarker, title: &str, message: &str, ok: &str, canc
     buttons(mtm, title, message, &[ok, cancel]) == Some(0)
 }
 
+/// Answer of [`confirm_destructive`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DestructiveAnswer {
+    /// The destructive button was clicked.
+    pub confirmed: bool,
+    /// "Don't ask again" was ticked and the action confirmed; a cancel never stores it.
+    pub dont_ask_again: bool,
+}
+
+impl DestructiveAnswer {
+    /// From the clicked button (0 cancel, 1 the action) and the checkbox.
+    pub fn from_response(index: Option<usize>, suppressed: bool) -> Self {
+        let confirmed = index == Some(1);
+        Self {
+            confirmed,
+            dont_ask_again: confirmed && suppressed,
+        }
+    }
+}
+
+/// Ask before a destructive action. `cancel` is the default button (Return, and Escape);
+/// `action` is marked destructive (red on macOS 11+). With `dont_ask`, a checkbox with that
+/// title is shown under the message.
+pub fn confirm_destructive(
+    mtm: MainThreadMarker,
+    title: &str,
+    message: &str,
+    action: &str,
+    cancel: &str,
+    dont_ask: Option<&str>,
+) -> DestructiveAnswer {
+    use objc2::{ClassType, sel};
+    use objc2_app_kit::{NSButton, NSControlStateValueOn};
+
+    let alert = new_alert(mtm, title, message, &[cancel, action]);
+    let buttons = alert.buttons();
+    if let Some(cancel_button) = buttons.iter().next() {
+        cancel_button.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+        cancel_button.setAccessibilityLabel(Some(&NSString::from_str(cancel)));
+    }
+    if let Some(action_button) = buttons.iter().nth(1) {
+        // The default button is the first one; Return must not run the action.
+        action_button.setKeyEquivalent(&NSString::from_str(""));
+        action_button.setAccessibilityLabel(Some(&NSString::from_str(action)));
+        if NSButton::class().responds_to(sel!(setHasDestructiveAction:)) {
+            action_button.setHasDestructiveAction(true);
+        }
+    }
+    if let Some(label) = dont_ask {
+        alert.setShowsSuppressionButton(true);
+        if let Some(check) = alert.suppressionButton() {
+            check.setTitle(&NSString::from_str(label));
+            check.setAccessibilityLabel(Some(&NSString::from_str(label)));
+        }
+    }
+    let index = button_index(run(mtm, &alert));
+    let suppressed = alert
+        .suppressionButton()
+        .is_some_and(|check| check.state() == NSControlStateValueOn);
+    DestructiveAnswer::from_response(index, dont_ask.is_some() && suppressed)
+}
+
 /// Show `labels` as buttons and return the index of the clicked one. The first label is the
 /// default button (Return, rightmost). A button titled with the cancel label in either language
 /// also answers Escape ([`lang::is_cancel`]). Without labels AppKit shows a single OK button,
@@ -507,6 +569,19 @@ fn accessory_frame(height: f64) -> NSRect {
 #[cfg(test)]
 mod tests {
     use super::accessory_label;
+
+    #[test]
+    fn destructive_answer_needs_the_action_button() {
+        use super::DestructiveAnswer;
+        let cancel = DestructiveAnswer::from_response(Some(0), true);
+        assert!(!cancel.confirmed && !cancel.dont_ask_again);
+        let none = DestructiveAnswer::from_response(None, true);
+        assert!(!none.confirmed && !none.dont_ask_again);
+        let ok = DestructiveAnswer::from_response(Some(1), false);
+        assert!(ok.confirmed && !ok.dont_ask_again);
+        let ok_quiet = DestructiveAnswer::from_response(Some(1), true);
+        assert!(ok_quiet.confirmed && ok_quiet.dont_ask_again);
+    }
 
     #[test]
     fn accessory_label_prefers_the_title() {

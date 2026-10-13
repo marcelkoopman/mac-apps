@@ -452,6 +452,26 @@ define_class!(
 
         #[unsafe(method(clearClicked:))]
         fn clear_clicked(&self, _sender: Option<&NSButton>) {
+            if crate::settings::confirm_clear()
+                && let Some(mtm) = MainThreadMarker::new()
+            {
+                let t = crate::locale::t;
+                let answer = mac_ui::dialog::confirm_destructive(
+                    mtm,
+                    t("clear_confirm_title"),
+                    t("clear_confirm_message"),
+                    t("clear_confirm_action"),
+                    t("cancel"),
+                    Some(t("clear_dont_ask")),
+                );
+                if answer.dont_ask_again {
+                    crate::settings::set_confirm_clear(false);
+                }
+                if !answer.confirmed {
+                    focus_card();
+                    return;
+                }
+            }
             launcher::emit(UserEvent::Run(CommandId::Clear));
         }
 

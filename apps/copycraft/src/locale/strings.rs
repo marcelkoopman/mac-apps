@@ -916,6 +916,20 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("card_building", "Bezig…", "Working…"),
     ("copied_toast", "Gekopieerd", "Copied"),
+    ("clear_confirm_title", "Wissen?", "Clear?"),
+    (
+        "clear_confirm_message",
+        "De geschiedenis, vastgezette items en het klembord worden uit het geheugen gewist.",
+        "History, pins and the clipboard are wiped from memory.",
+    ),
+    ("clear_confirm_action", "Wis", "Clear"),
+    ("clear_dont_ask", "Niet meer vragen", "Don't ask again"),
+    ("confirm_clear", "Vragen voor wissen", "Ask before clearing"),
+    (
+        "confirm_clear_note",
+        "Wis op de kaart vraagt eerst om bevestiging.",
+        "Clear on the card asks for confirmation first.",
+    ),
     (
         "announce_confirmations",
         "Bevestigingen voorlezen",

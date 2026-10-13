@@ -69,6 +69,7 @@ widgets = [
 dialog = [
     "objc2-app-kit/NSAccessibilityProtocols",
     "objc2-app-kit/NSAlert",
+    "objc2-app-kit/NSCell",
     "objc2-app-kit/NSApplication",
     "objc2-app-kit/NSButton",
     "objc2-app-kit/NSControl",
