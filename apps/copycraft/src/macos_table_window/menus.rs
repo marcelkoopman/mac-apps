@@ -96,5 +96,3 @@ pub(super) fn pop_versions_menu() {
         pop_menu(bar.menu(), &anchor);
     }
 }
-
-include!("macos_table_paint.rs");

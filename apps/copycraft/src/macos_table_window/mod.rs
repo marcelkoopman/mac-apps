@@ -531,6 +531,9 @@ pub fn open_column_picker() {
     mac_ui::actions::perform_after(&delegate, sel!(tableWindowOpenColumnPicker:), 0.0);
 }
 
+// Shared painting helpers (also used by the card), textually included as before.
+include!("../macos_table_paint.rs");
+
 mod build;
 mod menus;
 mod paint;
