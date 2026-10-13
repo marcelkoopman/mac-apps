@@ -245,3 +245,19 @@ fn a_save_confirms_like_copy_and_a_failure_says_why() {
     );
     assert_eq!(save_toast(&Err(String::new())), "Save failed");
 }
+
+#[test]
+fn lines_works_on_the_text_the_card_was_built_from() {
+    use crate::commands::SubjectKind;
+    let text = "fn main() {\n    let v = 1;\n}\n";
+    let data = crate::commands::tests::data(SubjectKind::Text, Some(text));
+    assert_eq!(
+        super::text::card_text_of(&data)
+            .as_deref()
+            .map(String::as_str),
+        Some(text)
+    );
+    // A card still waiting for its copy has no text for Lines… yet; the next build sets it.
+    let pending = crate::commands::tests::data(SubjectKind::Pending, None);
+    assert!(super::text::card_text_of(&pending).is_none());
+}

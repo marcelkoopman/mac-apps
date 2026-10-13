@@ -16,7 +16,7 @@ use crate::appearance::Theme;
 use mac_ui::keys::Key;
 use zeroize::Zeroizing;
 
-fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
+pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
     LaunchData {
         subject_kind: kind,
         subject_text: text.map(str::to_string),

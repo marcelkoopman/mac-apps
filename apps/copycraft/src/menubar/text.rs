@@ -15,6 +15,14 @@ pub(crate) struct TextSteps {
     pub(crate) cursor: usize,
 }
 
+/// The text a card for `data` shows, for Lines…: its text subject.
+pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
+    data.subject_text
+        .as_deref()
+        .filter(|_| data.subject_kind == SubjectKind::Text)
+        .map(|text| Zeroizing::new(text.to_string()))
+}
+
 impl App {
     /// The history entry on the card and its text, when Lines… may work on it: a text card that
     /// follows history and is not a table (tables have their own steps).
@@ -28,11 +36,15 @@ impl App {
                 .filter(|text| crate::format::detect(text) == crate::format::FormatKind::Agent)
                 .map(|text| (NOT_IN_HISTORY, Zeroizing::new(text.to_string())));
         }
-        // The copied source the card shows, also when it shows it formatted. While recording
-        // is paused or the app is ignored (Held) the card shows the history entry: so does
-        // Lines….
+        // The copied source the card shows, also when it shows it formatted: the text the
+        // card was built from. Reading the pasteboard again could see another state (a read
+        // still pending, a newer change) than the card, and leave Lines… off the card until
+        // it was built again. While recording is paused or the app is ignored (Held) the card
+        // shows the history entry: so does Lines….
         let view = ClipboardView::from_os();
-        let text = if let Some(at) = self.browsed_index() {
+        let text = if let Some(text) = &self.card_text {
+            Some(text.to_string())
+        } else if let Some(at) = self.browsed_index() {
             self.history.get(at).map(str::to_string)
         } else if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
             self.history.get(self.history_cursor).map(str::to_string)
@@ -67,7 +79,9 @@ impl App {
     }
 
     /// Lines… for the card: its versions and the count or note for the meta line.
-    pub(crate) fn attach_text(&self, data: &mut LaunchData) {
+    pub(crate) fn attach_text(&mut self, data: &mut LaunchData) {
+        // Lines… works on the text this card is built from, whichever path built it.
+        self.card_text = card_text_of(data);
         if data.subject_kind != SubjectKind::Text {
             return;
         }
