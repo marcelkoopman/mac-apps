@@ -62,4 +62,4 @@ strip = "debuginfo"
 [profile.dist]
 inherits = "release"
 strip = "symbols"
-panic = "abort"
+panic = "unwind"
