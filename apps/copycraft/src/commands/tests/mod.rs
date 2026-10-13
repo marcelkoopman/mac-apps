@@ -232,6 +232,7 @@ fn history_item(index: usize, title: &str, text: bool) -> Hist {
 }
 
 mod actions_tests;
+mod card_table_tests;
 mod card_tests;
 mod chips_tests;
 mod history_tests;
