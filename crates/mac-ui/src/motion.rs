@@ -65,6 +65,11 @@ fn scaled(frame: NSRect, scale: f64) -> NSRect {
     NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
 }
 
+/// Drop a pending fade-out's completion: the caller orders the window out itself now.
+pub fn cancel_window_out() {
+    next_generation();
+}
+
 /// Whether `window` is hidden or still fading out, so showing it should animate it in.
 pub fn window_needs_in(window: &NSWindow) -> bool {
     !window.isVisible() || window.alphaValue() < 0.99

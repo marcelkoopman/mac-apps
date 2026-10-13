@@ -107,6 +107,12 @@ pub fn show_table_window(view: crate::commands::TableWindowView) {
 }
 
 /// Close the table window and wipe what it shows (Wipe, lock, its entry gone).
+/// Put the table window in front (Open table, also when it is already open).
+pub fn bring_table_window_forward() {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::bring_forward();
+}
+
 pub fn close_table_window() {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::close();

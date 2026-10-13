@@ -267,6 +267,18 @@ pub fn show(view: TableWindowView) {
     }
 }
 
+/// Activate the app and put the table window in front and key, also when it was already open.
+pub fn bring_forward() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
+    if let Some(window) = window {
+        panel::activate_app(mtm);
+        panel::bring_to_front(&window);
+    }
+}
+
 /// Point the window's fixed labels at the current language and lay the toolbar out again.
 /// Pill titles change width (`Kopieer` is wider than `Copy`); the hint moves with them.
 /// Nothing when the window has not been built. The meta line, sidebar title and hint text

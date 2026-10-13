@@ -241,7 +241,11 @@ pub(crate) fn run_command(cmd: Command) {
     let formatting_link =
         cmd.id == CommandId::Format && LINK_PAGE.with(|slot| slot.borrow().is_some());
     if !commands::keeps_card_open(&cmd.id) && !formatting_link {
-        hide();
+        if cmd.id == CommandId::TableOpenWindow {
+            hide_at_once();
+        } else {
+            hide();
+        }
     }
     launcher::emit(UserEvent::Run(cmd.id));
 }

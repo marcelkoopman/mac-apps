@@ -85,6 +85,7 @@ impl App {
             checking: false,
         });
         self.refresh_table_window();
+        launcher::bring_table_window_forward();
     }
 
     /// Close the table window (Wipe, Clear history, lock, its entry gone): its table may forget

@@ -338,6 +338,16 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
 }
 
 pub(crate) fn hide() {
+    hide_card(true);
+}
+
+/// Close the card without the fade, for a window that must come to the front right after
+/// (the table window): a card still fading would be ordered out after it and take focus.
+pub(crate) fn hide_at_once() {
+    hide_card(false);
+}
+
+fn hide_card(animated: bool) {
     dismiss_picker(false);
     crate::macos_symbols::close();
     set_item_find(false);
@@ -346,8 +356,13 @@ pub(crate) fn hide() {
     }
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
-            let closing = window.clone();
-            mac_ui::motion::window_out(window, move || closing.orderOut(None));
+            if animated {
+                let closing = window.clone();
+                mac_ui::motion::window_out(window, move || closing.orderOut(None));
+            } else {
+                mac_ui::motion::cancel_window_out();
+                window.orderOut(None);
+            }
         }
     });
     OPEN.set(false);
