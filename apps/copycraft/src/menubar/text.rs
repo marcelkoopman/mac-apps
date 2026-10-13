@@ -184,7 +184,7 @@ impl App {
         steps.cursor += 1;
         self.text_steps = Some(steps);
         self.text_note = None;
-        self.card_view = CardView::Original;
+        self.reset_view();
         self.refresh_popup();
     }
 

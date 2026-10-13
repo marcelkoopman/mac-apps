@@ -27,6 +27,9 @@ impl App {
                 if matches!(id, CommandId::Format) && self.format_link_in_place() {
                     return;
                 }
+                // Raw toggles: clicked again on a copy that opens formatted, back to formatted.
+                let raw = matches!(id, CommandId::Original);
+                self.raw_view = raw && !(self.raw_view && self.card_view == CardView::Original);
                 self.card_view = CardView::from_command(&id).unwrap_or_default();
                 self.refresh_popup();
             }
@@ -47,7 +50,7 @@ impl App {
             CommandId::ChooseFile => self.choose_file(),
             CommandId::UseClipboard => {
                 self.leave_opened();
-                self.card_view = CardView::Original;
+                self.reset_view();
                 self.image_scan = None;
                 self.image_scan_change = None;
                 self.refresh_popup();
@@ -121,7 +124,7 @@ impl App {
                 if self.diff_sel.pair().is_some() {
                     self.card_view = CardView::Diff;
                     if self.diff_outcome.is_none() && self.diffing.is_none() && !self.kick_diff() {
-                        self.card_view = CardView::Original;
+                        self.reset_view();
                     }
                     self.refresh_popup();
                 }
@@ -178,7 +181,7 @@ impl App {
             self.diff_sel.remove(id);
             self.invalidate_diff();
             if self.card_view == CardView::Diff {
-                self.card_view = CardView::Original;
+                self.reset_view();
             }
             self.refresh_popup();
             return;
@@ -193,7 +196,7 @@ impl App {
         ) {
             self.card_view = CardView::Diff;
             if !self.kick_diff() {
-                self.card_view = CardView::Original;
+                self.reset_view();
             }
         }
         self.refresh_popup();
@@ -206,7 +209,7 @@ impl App {
         }
         self.card_view = CardView::Diff;
         if !self.kick_diff() {
-            self.card_view = CardView::Original;
+            self.reset_view();
         }
         self.refresh_popup();
     }
@@ -274,7 +277,7 @@ impl App {
         self.diff_sel.clear();
         self.invalidate_diff();
         if self.card_view == CardView::Diff {
-            self.card_view = CardView::Original;
+            self.reset_view();
         }
     }
 
@@ -287,7 +290,7 @@ impl App {
         self.invalidate_diff();
         let restarted = self.diff_sel.pair().is_some() && self.kick_diff();
         if !restarted && self.card_view == CardView::Diff {
-            self.card_view = CardView::Original;
+            self.reset_view();
         }
     }
 

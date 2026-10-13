@@ -170,7 +170,9 @@ fn encoded_text_offers_decode() {
 fn code_is_formatted_without_original_or_format() {
     let src = "fn main() {\nlet message = \"this identifier is definitely longer than forty eight characters\";\n}\n";
     let input = data(SubjectKind::Text, Some(src));
-    assert!(chips(&input).is_empty());
+    // Formatting indents it, so Raw is the way to the copy as it came; no Format chip.
+    let ids: Vec<CommandId> = chips(&input).into_iter().map(|c| c.id).collect();
+    assert_eq!(ids, [CommandId::Original]);
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -192,7 +194,8 @@ fn code_is_formatted_without_original_or_format() {
     let java =
         "public class Hi {\npublic static void main(String[] a) {\nSystem.out.println(1);\n}\n}\n";
     let input = data(SubjectKind::Text, Some(java));
-    assert!(chips(&input).is_empty());
+    let ids: Vec<CommandId> = chips(&input).into_iter().map(|c| c.id).collect();
+    assert_eq!(ids, [CommandId::Original]);
     let card = work_card(&input);
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Java));
     assert_eq!(card.title, "Formatted Java");
@@ -440,4 +443,44 @@ fn raw_shows_only_when_there_is_another_view() {
         crate::locale::t("detail_original"),
         "Show the text as copied"
     );
+}
+
+#[test]
+fn raw_only_when_formatting_changes_the_copy() {
+    let pretty = "fn main() {\n    let x = 1;\n}\n";
+    let messy = "fn main() {\nlet x = 1;\n}\n";
+    assert!(!crate::commands::differs_formatted(
+        pretty,
+        &format!("{pretty}  \n\n")
+    ));
+    assert!(crate::commands::differs_formatted(messy, pretty));
+    for (src, raw) in [(pretty, false), (messy, true)] {
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = presented_view(src, CardView::Original);
+        assert_eq!(input.view, CardView::Format);
+        let has_raw = chips(&input).iter().any(|c| c.id == CommandId::Original);
+        assert_eq!(has_raw, raw, "{src:?}");
+        // The title says Formatted only when formatting changed something.
+        let title = work_card(&input).title;
+        assert_eq!(title.starts_with("Formatted"), raw, "{title}");
+        assert!(title.contains("Rust"), "{title}");
+    }
+}
+
+#[test]
+fn raw_chosen_shows_the_copy_and_keeps_its_chip() {
+    use crate::commands::shown_view;
+    let messy = "fn main() {\nlet x = 1;\n}\n";
+    // Without the hand-picked Raw, a code card opens formatted; with it, as copied.
+    assert_eq!(
+        shown_view(messy, CardView::Original, false),
+        CardView::Format
+    );
+    assert_eq!(
+        shown_view(messy, CardView::Original, true),
+        CardView::Original
+    );
+    let mut input = data(SubjectKind::Text, Some(messy));
+    input.view = CardView::Original;
+    assert!(chips(&input).iter().any(|c| c.id == CommandId::Original));
 }

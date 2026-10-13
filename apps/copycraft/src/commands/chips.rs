@@ -52,8 +52,24 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         insert_diff_chip(&mut chips);
     }
     // A card in another view (a table version from search) always has the way back.
+    // Formatting that leaves the text as copied is no other view (no Raw on pretty code).
+    let same_as_copied = data.view == CardView::Format
+        && data
+            .subject_text
+            .as_deref()
+            .is_some_and(|text| !formatting_changes(text));
+    let formats_differently = data
+        .subject_text
+        .as_deref()
+        .is_some_and(|text| opens_formatted(text) && formatting_changes(text));
+    let other_view = match data.view {
+        CardView::Diff => false,
+        // Raw on a copy that opens formatted: the chip stays, to go back.
+        CardView::Original => formats_differently,
+        _ => !same_as_copied,
+    };
     if data.subject_kind == SubjectKind::Text
-        && !matches!(data.view, CardView::Original | CardView::Diff)
+        && other_view
         && !chips.iter().any(|cmd| cmd.id == CommandId::Original)
     {
         chips.insert(0, original_command());

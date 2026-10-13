@@ -8,7 +8,7 @@ const PAGE_MIN_LINES: usize = 200;
 impl App {
     pub(crate) fn summon_popup(&mut self) {
         if !launcher::is_open() {
-            self.card_view = CardView::Original;
+            self.reset_view();
             self.leave_opened();
             self.full_card = None;
         }
@@ -27,7 +27,7 @@ impl App {
         }
         note_icon_click(now);
         if !launcher::is_open() {
-            self.card_view = CardView::Original;
+            self.reset_view();
             self.leave_opened();
             self.full_card = None;
         }
@@ -268,6 +268,12 @@ impl App {
     }
 
     /// Clipboard launch, unless the card is holding a chosen file.
+    /// The card's default view (formatted where the copy opens formatted), not Raw.
+    pub(crate) fn reset_view(&mut self) {
+        self.card_view = CardView::Original;
+        self.raw_view = false;
+    }
+
     pub(crate) fn launch_for_popup(&mut self) -> LaunchData {
         #[cfg(target_os = "macos")]
         self.card_opening();

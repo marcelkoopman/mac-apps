@@ -44,6 +44,10 @@ pub(crate) fn text_title(text: &str) -> String {
 
 pub(crate) fn text_view_title(source: &str, view: CardView, body: &str) -> String {
     match view {
+        // "Formatted Rust" only when formatting changed something; else plainly "Rust".
+        CardView::Format if !formatting_changes(source) => {
+            format::detect(source).source_heading().to_string()
+        }
         CardView::Format => format::detect(source).preview_heading().to_string(),
         CardView::Dataframe => crate::locale::t("table_view").to_string(),
         CardView::Schema => if format::detect(source) == FormatKind::Xml {

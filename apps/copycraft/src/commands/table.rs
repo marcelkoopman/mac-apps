@@ -367,6 +367,57 @@ pub fn presented_view(source: &str, view: CardView) -> CardView {
     }
 }
 
+/// The view the card shows: [`presented_view`], except that Raw chosen by hand (`raw`) shows the
+/// copy as it is, where the card would open formatted.
+pub fn shown_view(source: &str, view: CardView, raw: bool) -> CardView {
+    if raw && view == CardView::Original {
+        CardView::Original
+    } else {
+        presented_view(source, view)
+    }
+}
+
+/// Formatting `source` gives other text than the copy (trailing whitespace aside). Remembered
+/// for the last few copies: every card update asks.
+pub(crate) fn formatting_changes(source: &str) -> bool {
+    use std::hash::{Hash, Hasher};
+    thread_local! {
+        static SEEN: std::cell::RefCell<Vec<(u64, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut hasher);
+    let key = hasher.finish();
+    if let Some(known) = SEEN.with(|seen| {
+        seen.borrow()
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| *v)
+    }) {
+        return known;
+    }
+    let changes = differs_formatted(source, &clipboard::formatted(source));
+    SEEN.with(|seen| {
+        let mut seen = seen.borrow_mut();
+        if seen.len() >= 16 {
+            seen.remove(0);
+        }
+        seen.push((key, changes));
+    });
+    changes
+}
+
+/// `formatted` is another text than `source`, ignoring trailing whitespace.
+pub fn differs_formatted(source: &str, formatted: &str) -> bool {
+    let trim = |text: &str| -> String {
+        text.trim_end()
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    trim(source) != trim(formatted)
+}
+
 pub(crate) fn opens_formatted(source: &str) -> bool {
     matches!(
         format::detect(source),

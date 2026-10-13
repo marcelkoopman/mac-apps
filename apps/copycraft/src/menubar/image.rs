@@ -90,7 +90,7 @@ impl App {
         match versions.push(op, &bytes) {
             Ok(job) => {
                 self.image_note = None;
-                self.card_view = CardView::Original;
+                self.reset_view();
                 self.run_image_job(job);
             }
             Err(e) => self.image_note = Some((bytes.allocation_id(), e.to_string())),
@@ -142,7 +142,7 @@ impl App {
         };
         let job = versions.goto(index, &bytes);
         self.image_note = None;
-        self.card_view = CardView::Original;
+        self.reset_view();
         if let Some(job) = job {
             self.run_image_job(job);
         } else {

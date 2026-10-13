@@ -50,14 +50,14 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/yaml_quoted_values.yaml` | Stays YAML: a normal document with quoted values | yaml | YAML | — | Raw, To JSON | kind=Yaml; json={"title":"Copycraft demo","tags":["clipboard","offline"],"settings":{"theme":"system","history":20}} |
 | `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Raw, To JSON | kind=Yaml; convert=Json |
 | `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Raw, Schema | kind=Xml |
-| `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | — | kind=Xml |
-| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>`, opens formatted (void `<meta>`/`<br>` do not indent) | html | HTML | — | — | kind=Html; pretty=detect/html_page.pretty.html |
+| `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | Raw | kind=Xml |
+| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>`, opens formatted (void `<meta>`/`<br>` do not indent) | html | HTML | — | Raw | kind=Html; pretty=detect/html_page.pretty.html |
 | `detect/html_page.pretty.html` | Format: the expected pretty form of `html_page.html` (formats to itself) | html | HTML | — | — | kind=Html; pretty=detect/html_page.pretty.html |
-| `detect/html_one_line.html` | Format: a whole HTML page on one line (void elements, style, pre, textarea, script, inline text in `<p>`) | html | HTML | — | — | kind=Html; pretty=detect/html_one_line.pretty.html |
+| `detect/html_one_line.html` | Format: a whole HTML page on one line (void elements, style, pre, textarea, script, inline text in `<p>`) | html | HTML | — | Raw | kind=Html; pretty=detect/html_one_line.pretty.html |
 | `detect/html_one_line.pretty.html` | Format: the expected pretty form of `html_one_line.html` (formats to itself) | html | HTML | — | — | kind=Html; pretty=detect/html_one_line.pretty.html |
 | `detect/markdown.md` | Detection: Markdown | markdown | Markdown | — | — | kind=Markdown |
 | `detect/rust_balanced.rs` | Detection: Rust, balanced | rust | Rust | — | — | kind=Rust |
-| `detect/rust_unbalanced.rs` | Detection: Rust, extra `)` | rust | Rust · unbalanced ) | — | — | kind=Rust |
+| `detect/rust_unbalanced.rs` | Detection: Rust, extra `)` | rust | Rust · unbalanced ) | — | Raw | kind=Rust |
 | `detect/java_missing_brace.java` | Detection: Java, class never closed | java | Java · missing } | — | — | kind=Java |
 | `detect/python_strong.py` | Detection: Python with strong hints | python | Python | — | — | kind=Python |
 | `detect/python_expected_indent.py` | Detection: Python, block without body | python | Python · expected indent | — | — | kind=Python |

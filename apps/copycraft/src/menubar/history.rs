@@ -234,7 +234,7 @@ impl App {
         self.clipboard_cursor = None;
         self.recorded_image_change = None;
         self.skip_image_change = None;
-        self.card_view = CardView::Original;
+        self.reset_view();
         self.image_scan = None;
         self.image_scan_change = None;
         self.image_scan_for = None;
@@ -308,7 +308,7 @@ impl App {
             return false;
         };
         self.browsing = Some(id);
-        self.card_view = CardView::Original;
+        self.reset_view();
         self.opened = None;
         if launcher::is_open() {
             self.refresh_popup();
@@ -317,7 +317,7 @@ impl App {
     }
 
     pub(crate) fn restore_history(&mut self, index: usize) -> anyhow::Result<()> {
-        self.card_view = CardView::Original;
+        self.reset_view();
         self.clipboard_cursor = None;
         if let Some(bytes) = self.history.image(index) {
             #[cfg(target_os = "macos")]

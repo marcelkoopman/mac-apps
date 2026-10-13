@@ -82,7 +82,7 @@ impl App {
             // Copy of a diff is copycraft's own write. Stay on the diff; anything else
             // returns the card to the copy itself.
             if !(own && self.card_view == CardView::Diff) {
-                self.card_view = CardView::Original;
+                self.reset_view();
             }
             if self
                 .image_scan_change
