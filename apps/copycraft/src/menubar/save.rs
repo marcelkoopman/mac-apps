@@ -45,13 +45,16 @@ impl App {
         // The conversion (format, decode, the table grid) runs on a thread; the clipboard
         // write stays here, or comes when the slow conversion is done.
         let input = source.clone();
+        let table_view = shown == CardView::Dataframe;
         let late_source = source.clone();
         let body = self.start_work(
             work::Lane::Copy,
             work::QUICK,
             move || {
                 match version {
-                    Some(frame) => crate::dataframe::frame_grid(&frame),
+                    // A table copies as CSV (the original: as it is), never as its drawn grid.
+                    Some(frame) => crate::dataframe::frame_copy(&frame, input.as_str()),
+                    None if table_view => Some(input.as_str().to_string()),
                     None => commands::transformed_text(input.as_str(), shown),
                 }
                 .map(Zeroizing::new)
@@ -92,15 +95,18 @@ impl App {
         Ok(())
     }
 
-    /// Copy the table version shown in the table window (full grid, same as Dataframe Copy).
+    /// Copy the table version shown in the table window as CSV (as Dataframe Copy on the card).
     pub(crate) fn copy_table_window(&mut self) -> anyhow::Result<()> {
+        let Some((source, _)) = self.window_source() else {
+            return Ok(());
+        };
         let Some(frame) = self.window_table_frame() else {
             return Ok(());
         };
         let body = self.start_work(
             work::Lane::Copy,
             work::QUICK,
-            move || crate::dataframe::frame_grid(&frame).map(Zeroizing::new),
+            move || crate::dataframe::frame_copy(&frame, source.as_str()).map(Zeroizing::new),
             |app, body| {
                 if let Err(e) = app.copy_grid(body) {
                     eprintln!("copy failed: {e:#}");

@@ -294,7 +294,6 @@ pub(crate) mod tests {
         assert_eq!((preview.rows, preview.shown_rows), (3, 2));
         assert!(!preview.grid.contains("shape:"), "{}", preview.grid);
         assert!(preview.grid.contains("┌"), "{}", preview.grid);
-        assert!(!super::frame_grid(&df).expect("grid").contains("shape:"));
         assert_eq!(super::frame_csv(&df).as_deref(), Some("name,n\na,1\nb,2\nc,3\n"));
         let parquet = super::frame_parquet(&df).expect("parquet");
         let back = ParquetReader::new(std::io::Cursor::new(parquet))
@@ -589,6 +588,31 @@ mod dataframe;";
         assert!(try_format(src).is_none());
     }
 
+
+    #[test]
+    fn copy_after_dedupe_is_csv_that_reads_back_to_the_same_rows() {
+        let src = "\
+Date;Home Usage (kWh);Cost
+2024-01-01;12.5;3.1
+2024-01-02;9.0;2.2
+2024-01-01;12.5;3.1
+2024-01-03;7.25;1.8";
+        let df = super::parse(src).expect("df");
+        let deduped = crate::table::TableOp::Dedupe
+            .apply(&df)
+            .expect("dedupe")
+            .expect("changed");
+        assert_eq!(deduped.height(), 3);
+        let out = super::frame_copy(&deduped, src).expect("csv");
+        assert!(!out.contains('┌') && !out.contains('│') && !out.contains('┆'));
+        assert!(out.starts_with("Date;Home Usage (kWh);Cost\n"));
+        assert!(out.contains("2024-01-01;12.5;3.1"));
+        let back = super::parse(&out).expect("reads back");
+        assert!(back.equals_missing(&deduped));
+        // The original version copies the same way.
+        let original = super::frame_copy(&df, src).expect("csv");
+        assert!(super::parse(&original).expect("df").equals_missing(&df));
+    }
 
     #[test]
     fn exports_semicolon_csv() {

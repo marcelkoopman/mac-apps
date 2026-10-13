@@ -78,9 +78,11 @@ pub fn frame_preview(
     })
 }
 
-/// The whole grid of a table version (what Copy takes in the Dataframe view).
-pub fn frame_grid(df: &DataFrame) -> Option<String> {
-    render(df.clone())
+/// A table version as Copy puts it on the clipboard: plain CSV with the separator of `source`
+/// (the text it was read from), so the card knows it as a table again. Never the drawn grid.
+pub fn frame_copy(df: &DataFrame, source: &str) -> Option<String> {
+    let separator = delimited_separator(source.trim()).unwrap_or(b',');
+    write_csv_with(df.clone(), separator)
 }
 
 /// A table version as CSV, for its sensitivity labels.
@@ -256,7 +258,11 @@ fn write_parquet(df: &mut DataFrame) -> Option<Vec<u8>> {
     Some(buf.into_inner())
 }
 
-fn write_csv(mut df: DataFrame) -> Option<String> {
+fn write_csv(df: DataFrame) -> Option<String> {
+    write_csv_with(df, b',')
+}
+
+fn write_csv_with(mut df: DataFrame, separator: u8) -> Option<String> {
     if df.width() == 0 || df.height() == 0 {
         return None;
     }
@@ -264,7 +270,7 @@ fn write_csv(mut df: DataFrame) -> Option<String> {
     CsvWriter::new(&mut buf)
         .include_header(true)
         .include_bom(false)
-        .with_separator(b',')
+        .with_separator(separator)
         .with_date_format(Some("%Y-%m-%d".into()))
         .finish(&mut df)
         .ok()?;
