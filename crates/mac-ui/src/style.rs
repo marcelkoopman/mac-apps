@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(SPACING, [4.0, 8.0, 12.0, 16.0, 24.0]);
         assert!(SPACING.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(SPACING.iter().all(|step| step % 4.0 == 0.0));
-        assert!(RADIUS_WELL < RADIUS_PANEL);
+        const { assert!(RADIUS_WELL < RADIUS_PANEL) };
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
         assert_eq!(CARD_OUT_SECS, 0.10);
         assert_eq!(CROSSFADE_SECS, 0.12);
         assert_eq!(TOAST_HOLD_SECS, 1.2);
-        assert!(CARD_OUT_SECS < CARD_IN_SECS);
+        const { assert!(CARD_OUT_SECS < CARD_IN_SECS) };
         assert!(
             [CARD_IN_SECS, CARD_OUT_SECS, CROSSFADE_SECS, TOAST_FADE_SECS]
                 .iter()
