@@ -339,6 +339,7 @@ impl App {
             });
         }
         self.attach_decoded_picture(&mut data);
+        attach_svg(&mut data);
         self.fill_diff(&mut data);
         data
     }
@@ -406,4 +407,55 @@ impl App {
             bytes.zeroize();
         }
     }
+}
+
+/// An SVG copy or file gets its own bytes as the card's picture when AppKit can draw them
+/// (`NSImage initWithData:`) and the document points nowhere outside itself: nothing is
+/// fetched. Else no picture, and the card shows the code. Kept for the last SVG, so the well
+/// draws it once.
+fn attach_svg(data: &mut LaunchData) {
+    use std::cell::RefCell;
+    use std::hash::{Hash, Hasher};
+    thread_local! {
+        static LAST: RefCell<Option<(u64, Option<crate::clipboard::SecretBytes>)>> =
+            const { RefCell::new(None) };
+    }
+    if data.subject_kind != SubjectKind::Text || data.picture.is_some() {
+        return;
+    }
+    let Some(text) = data.subject_text.as_deref() else {
+        return;
+    };
+    if crate::format::detect(text) != crate::format::FormatKind::Svg {
+        return;
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    let key = hasher.finish();
+    let known = LAST.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .filter(|(seen, _)| *seen == key)
+            .map(|(_, picture)| picture.clone())
+    });
+    let picture = known.unwrap_or_else(|| {
+        let picture = drawable_svg(text);
+        LAST.with(|slot| slot.replace(Some((key, picture.clone()))));
+        picture
+    });
+    data.picture = picture;
+}
+
+fn drawable_svg(text: &str) -> Option<crate::clipboard::SecretBytes> {
+    if crate::format::svg::has_external_refs(text) {
+        eprintln!("copycraft: SVG points outside itself, shown as code");
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        mac_ui::image::from_bytes(text.as_bytes())?;
+        crate::clipboard::SecretBytes::new(text.as_bytes().to_vec())
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
 }

@@ -343,8 +343,20 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
                 preview_note,
                 error_line: None,
             };
-            let view = presented_view(text, data.view);
+            let mut view = presented_view(text, data.view);
+            let svg = format::detect(text) == FormatKind::Svg;
+            if svg && view == CardView::Original {
+                if data.picture.is_some() {
+                    return svg_picture_card(text);
+                }
+                // Not drawable (or it points outside itself): the highlighted code.
+                view = CardView::Format;
+            }
             apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
+            if svg && view == CardView::Format {
+                card.title = FormatKind::Svg.source_heading().to_string();
+                card.meta = svg_meta(text);
+            }
             if view == CardView::Decode && data.picture.is_some() && decode::picture_candidate(text)
             {
                 show_decoded_picture(&mut card, text);
@@ -603,4 +615,29 @@ pub(crate) fn show_decoded_picture(card: &mut WorkCard, source: &str) {
         meta.push_str(&labels);
     }
     card.meta = meta;
+}
+
+/// An SVG drawn in the well: title SVG, its size (width × height, else the viewBox) and the
+/// usual line, byte and label facts.
+fn svg_picture_card(text: &str) -> WorkCard {
+    WorkCard {
+        title: FormatKind::Svg.source_heading().to_string(),
+        meta: svg_meta(text),
+        excerpt: String::new(),
+        placeholder: String::new(),
+        shows_image: true,
+        highlight: None,
+        selectable: false,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+    }
+}
+
+pub(crate) fn svg_meta(text: &str) -> String {
+    let facts = text_meta(text);
+    match format::svg::dimensions(text) {
+        Some(size) => format!("{size} · {facts}"),
+        None => facts,
+    }
 }

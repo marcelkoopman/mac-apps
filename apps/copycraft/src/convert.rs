@@ -14,6 +14,7 @@ pub fn try_convert(text: &str) -> Option<String> {
         | FormatKind::Tsv
         | FormatKind::Dataframe
         | FormatKind::Xml
+        | FormatKind::Svg
         | FormatKind::Html
         | FormatKind::Rust
         | FormatKind::Java

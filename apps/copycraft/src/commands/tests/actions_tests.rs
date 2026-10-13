@@ -414,3 +414,37 @@ fn image_menu_is_off_on_the_recognized_text() {
     assert!(crate::commands::image_steps_allowed(CardView::Original));
     assert!(crate::commands::image_steps_allowed(CardView::Info));
 }
+
+#[test]
+fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
+    let svg = r#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="48" height="24"><rect width="4" height="4"/></svg>"#;
+    let mut input = data(SubjectKind::Text, Some(svg));
+    // Not drawable (no picture): the highlighted code, titled SVG, no toggle.
+    let card = crate::commands::work_card(&input);
+    assert_eq!(card.title, "SVG");
+    assert!(!card.shows_image);
+    assert_eq!(card.highlight, Some(crate::format::FormatKind::Svg));
+    assert!(card.meta.starts_with("48 × 24 · "), "{}", card.meta);
+    assert!(!chips(&input).iter().any(|c| c.title == "Show code"));
+    // Drawn: the picture, with Show code.
+    input.picture = crate::clipboard::SecretBytes::new(svg.as_bytes().to_vec());
+    let card = crate::commands::work_card(&input);
+    assert!(card.shows_image);
+    assert_eq!(card.title, "SVG");
+    assert!(card.meta.starts_with("48 × 24 · "), "{}", card.meta);
+    let toggle = &chips(&input)[0];
+    assert_eq!(
+        (toggle.title.as_str(), &toggle.id),
+        ("Show code", &CommandId::Format)
+    );
+    // On the code: Show image goes back.
+    input.view = CardView::Format;
+    let card = crate::commands::work_card(&input);
+    assert!(!card.shows_image);
+    assert_eq!(card.title, "SVG");
+    let toggle = &chips(&input)[0];
+    assert_eq!(
+        (toggle.title.as_str(), &toggle.id),
+        ("Show image", &CommandId::Original)
+    );
+}

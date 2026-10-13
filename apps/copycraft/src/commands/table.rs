@@ -360,7 +360,11 @@ pub fn presented_view(source: &str, view: CardView) -> CardView {
     if view == CardView::Diff {
         return CardView::Diff;
     }
-    if view == CardView::Original && opens_formatted(source) {
+    // An SVG opens as its picture (the card falls back to the code when it cannot draw it).
+    if view == CardView::Original
+        && opens_formatted(source)
+        && format::detect(source) != FormatKind::Svg
+    {
         CardView::Format
     } else {
         view
@@ -414,6 +418,7 @@ pub(crate) fn opens_formatted(source: &str) -> bool {
         FormatKind::Json
             | FormatKind::Yaml
             | FormatKind::Xml
+            | FormatKind::Svg
             | FormatKind::Html
             | FormatKind::Markdown
             | FormatKind::Rust

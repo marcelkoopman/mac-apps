@@ -175,6 +175,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Image view only",
     ),
     ("show_text", "Toon tekst", "Show text"),
+    ("show_code", "Toon code", "Show code"),
+    ("detail_svg_code", "Toon de SVG-code", "Show the SVG code"),
+    (
+        "detail_svg_picture",
+        "Toon de getekende SVG",
+        "Show the drawn SVG",
+    ),
     (
         "detail_original_image",
         "Toon de afbeelding zoals gekopieerd",

@@ -14,6 +14,7 @@ pub fn shows_dataframe(kind: FormatKind) -> bool {
 /// Dataframe is hidden for JSON and XML even when the text also parses as a table.
 pub fn shows_dataframe_button(kind: FormatKind, source: &str) -> bool {
     kind != FormatKind::Xml
+        && kind != FormatKind::Svg
         && kind != FormatKind::Html
         && kind != FormatKind::Json
         && kind != FormatKind::Markdown

@@ -11,6 +11,8 @@ pub enum FormatKind {
     /// An HTML page (`<!DOCTYPE html>` or a root `<html>`): highlighted and formatted like XML,
     /// but no XML validation title and no XSD schema.
     Html,
+    /// An SVG document (root `<svg>`, or a `.svg` file): shown as a picture, its code is XML.
+    Svg,
     Markdown,
     /// TOML (`Cargo.toml`, `pyproject.toml`): highlighted, not reformatted.
     Toml,
@@ -36,6 +38,7 @@ impl FormatKind {
             Self::Url => "://",
             Self::Xml => "</>",
             Self::Html => "<>",
+            Self::Svg => "svg",
             Self::Markdown => "md",
             Self::Toml => "toml",
             Self::Csv => "csv",
@@ -58,6 +61,7 @@ impl FormatKind {
             Self::Url => "URL",
             Self::Xml => "XML",
             Self::Html => "HTML",
+            Self::Svg => "SVG",
             Self::Markdown => "Markdown",
             Self::Toml => "TOML",
             Self::Csv => "CSV",
@@ -79,6 +83,7 @@ impl FormatKind {
             Self::Toml => "TOML",
             Self::Xml => crate::locale::t("formatted_xml"),
             Self::Html => "HTML",
+            Self::Svg => "SVG",
             Self::Markdown => crate::locale::t("formatted_markdown"),
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
@@ -98,6 +103,7 @@ impl FormatKind {
             Self::Url => "txt",
             Self::Xml => "xml",
             Self::Html => "html",
+            Self::Svg => "svg",
             Self::Markdown => "md",
             Self::Toml => "toml",
             Self::Csv => "csv",
@@ -145,6 +151,9 @@ fn detect_uncached(text: &str) -> FormatKind {
     if looks_like_html(text) {
         return FormatKind::Html;
     }
+    if svg::is_svg(text) {
+        return FormatKind::Svg;
+    }
     // Before Python and Markdown: `# comment` and `key = value` lines would read as those.
     if toml::looks_like_toml(text) {
         return FormatKind::Toml;
@@ -185,6 +194,7 @@ fn detect_uncached(text: &str) -> FormatKind {
 }
 
 mod html;
+pub(crate) mod svg;
 pub(crate) mod toml;
 
 /// A file named `*.toml` is TOML whatever its text looks like: remembered for its text.
@@ -193,6 +203,8 @@ pub fn hint_by_name(name: &str, text: &str) {
     let name = name.to_ascii_lowercase();
     let kind = if name.ends_with(".toml") {
         FormatKind::Toml
+    } else if name.ends_with(".svg") {
+        FormatKind::Svg
     } else if name.ends_with(".md") || name.ends_with(".markdown") {
         FormatKind::Markdown
     } else {
@@ -214,7 +226,7 @@ pub fn format_text(text: &str) -> String {
         }
         // Built in: copied code is never handed to an outside program (rustfmt, …).
         FormatKind::Rust | FormatKind::Java => indent_braces(text),
-        FormatKind::Xml => pretty_xml(text),
+        FormatKind::Xml | FormatKind::Svg => pretty_xml(text),
         FormatKind::Html => html::pretty_html(text),
         FormatKind::Markdown => format_markdown(text),
         FormatKind::Url => format_url(text),

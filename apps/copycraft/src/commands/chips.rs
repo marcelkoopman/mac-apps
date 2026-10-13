@@ -12,6 +12,15 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         ),
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
+            // A drawn SVG: one toggle between its picture and its code, like OCR's.
+            if data.picture.is_some()
+                && data
+                    .subject_text
+                    .as_deref()
+                    .is_some_and(|text| format::detect(text) == FormatKind::Svg)
+            {
+                chips.insert(0, svg_toggle(data.view == CardView::Format));
+            }
             // The date question, in the Dataframe view while dates fit both orders.
             if data.view == CardView::Dataframe
                 && let Some(question) = data
@@ -370,6 +379,26 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool, on_text: bool) 
         modes.push(menu);
     }
     modes
+}
+
+/// The SVG toggle: on the code it goes to the picture (`Original`), on the picture to the
+/// code (`Format`).
+pub(crate) fn svg_toggle(on_code: bool) -> Command {
+    if on_code {
+        command(
+            CommandId::Original,
+            crate::locale::t("show_image"),
+            crate::locale::t("detail_svg_picture"),
+            "svg picture image drawing",
+        )
+    } else {
+        command(
+            CommandId::Format,
+            crate::locale::t("show_code"),
+            crate::locale::t("detail_svg_code"),
+            "svg code xml source",
+        )
+    }
 }
 
 /// The OCR toggle: on the recognized text it goes to the picture (`Original`), on the picture
