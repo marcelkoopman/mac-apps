@@ -803,8 +803,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "tabs en spaties door elkaar",
         "mixed tabs and spaces",
     ),
-    // Text… menu (text_ops)
-    ("text_menu", "Tekst…", "Text…"),
+    // Lines… menu (text_ops)
+    ("text_menu", "Regels…", "Lines…"),
     (
         "detail_text_steps",
         "Tellen, eerste of laatste regels, omkeren, kolom",

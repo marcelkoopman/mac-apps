@@ -1,4 +1,4 @@
-//! Unix-style line tools for the Text… menu: count (wc), first and last lines (head, tail),
+//! Unix-style line tools for the Lines… menu: count (wc), first and last lines (head, tail),
 //! reverse (tac) and one column (awk '{print $N}').
 //!
 //! Platform-independent and allocation-light: head and tail slice the text, so line endings
@@ -21,7 +21,7 @@ pub fn count(text: &str) -> Counts {
     }
 }
 
-/// What a Text… job on its thread found, for the main thread.
+/// What a Lines… job on its thread found, for the main thread.
 #[derive(Clone)]
 pub enum TextResult {
     Count(Counts),

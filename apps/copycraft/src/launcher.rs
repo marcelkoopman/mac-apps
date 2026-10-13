@@ -77,7 +77,7 @@ pub enum UserEvent {
         generation: u64,
         outcome: Box<crate::diff::Outcome>,
     },
-    /// A Text… job finished for history entry `entry`. A mismatched `generation` is dropped
+    /// A Lines… job finished for history entry `entry`. A mismatched `generation` is dropped
     /// (a newer job, Wipe).
     /// A background job ([`crate::menubar::WorkDone`]): card, table window, Copy, opened file.
     WorkDone(crate::menubar::WorkDone),

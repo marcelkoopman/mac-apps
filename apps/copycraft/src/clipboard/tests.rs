@@ -615,7 +615,7 @@ mod held_history {
         })
     }
 
-    /// A Text… step as the app takes it: the result is recorded as an own copy.
+    /// A Lines… step as the app takes it: the result is recorded as an own copy.
     fn text_step(history: &mut ClipboardHistory, source: &str) -> bool {
         let result = TextOp::Reverse.apply(source).expect("a result");
         history.record(result)

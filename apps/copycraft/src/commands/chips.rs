@@ -18,7 +18,7 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             {
                 chips.push(question);
             }
-            // Text… on text and code cards, also in a formatted view; tables and links have
+            // Lines… on text and code cards, also in a formatted view; tables and links have
             // their own chips.
             if data.text_edit.is_some()
                 && data.subject_text.as_deref().is_some_and(offers_text_menu)
@@ -93,7 +93,7 @@ pub(crate) fn copied_text_chips(text: &str) -> Vec<Command> {
     })
 }
 
-/// Whether the Text… menu belongs on a copied text: prose and every code card (Rust, Python,
+/// Whether the Lines… menu belongs on a copied text: prose and every code card (Rust, Python,
 /// JSON, XML, Markdown, HTML…), also when code happens to parse as a table (commas in a
 /// function call); not a real table (CSV, TSV, or plain text that reads as one) and not a link.
 /// Remembered per text like the chips.

@@ -6,7 +6,7 @@ pub struct ClipboardHistory {
     next_id: u64,
     /// Asked before anything is added: `true` while recording is paused or the frontmost app is
     /// ignored ([`crate::capture::history_held`]). The one guard for every way into history
-    /// (copies, own copies such as Text… steps and filter results, pictures).
+    /// (copies, own copies such as Lines… steps and filter results, pictures).
     gate: Option<fn() -> bool>,
 }
 

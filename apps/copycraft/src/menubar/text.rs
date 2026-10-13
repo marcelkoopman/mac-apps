@@ -1,13 +1,13 @@
-//! Text… actions: count, first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
+//! Lines… actions: count, first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
 //! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
 
 use super::*;
 use crate::text_ops::{self, Separator, TextOp};
 
-/// The entry id Text… uses for a shown copy that is not in history.
+/// The entry id Lines… uses for a shown copy that is not in history.
 const NOT_IN_HISTORY: u64 = u64::MAX;
 
-/// The versions Text… made: the history entries they are, oldest first, and which is shown.
+/// The versions Lines… made: the history entries they are, oldest first, and which is shown.
 /// Only ids and labels: the texts stay in history (and go when it forgets them).
 pub(crate) struct TextSteps {
     pub(crate) ids: Vec<u64>,
@@ -16,7 +16,7 @@ pub(crate) struct TextSteps {
 }
 
 impl App {
-    /// The history entry on the card and its text, when Text… may work on it: a text card that
+    /// The history entry on the card and its text, when Lines… may work on it: a text card that
     /// follows history and is not a table (tables have their own steps).
     pub(crate) fn text_entry(&self) -> Option<(u64, Zeroizing<String>)> {
         if self.opened.is_some() {
@@ -24,7 +24,7 @@ impl App {
         }
         // The copied source the card shows, also when it shows it formatted. While recording
         // is paused or the app is ignored (Held) the card shows the history entry: so does
-        // Text….
+        // Lines….
         let view = ClipboardView::from_os();
         let text = if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
             self.history.get(self.history_cursor).map(str::to_string)
@@ -35,7 +35,7 @@ impl App {
         if !commands::offers_text_menu(&text) {
             return None;
         }
-        // A copy that is not in history (not recorded) still gets Text…; only ⌘Z back to it
+        // A copy that is not in history (not recorded) still gets Lines…; only ⌘Z back to it
         // has nothing to put back.
         let id = self
             .history
@@ -58,7 +58,7 @@ impl App {
             .is_some_and(|(id, _)| self.text_steps_of(id).is_some_and(|s| s.ids.len() > 1))
     }
 
-    /// Text… for the card: its versions and the count or note for the meta line.
+    /// Lines… for the card: its versions and the count or note for the meta line.
     pub(crate) fn attach_text(&self, data: &mut LaunchData) {
         if data.subject_kind != SubjectKind::Text {
             return;
@@ -113,7 +113,7 @@ impl App {
         }
     }
 
-    /// A Text… result is back on the main thread. Dropped when stale: a newer job started,
+    /// A Lines… result is back on the main thread. Dropped when stale: a newer job started,
     /// history was wiped, or the card shows another entry by now.
     pub(crate) fn finish_text(
         &mut self,

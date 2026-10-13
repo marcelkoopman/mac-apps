@@ -86,11 +86,11 @@ pub(crate) struct App {
     /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
     /// shown on that picture's card until the next step.
     pub(crate) image_note: Option<(usize, String)>,
-    /// The versions Text… made of the text on the card ([`TextSteps`]).
+    /// The versions Lines… made of the text on the card ([`TextSteps`]).
     pub(crate) text_steps: Option<TextSteps>,
-    /// The count, or why the last Text… step did nothing, and for which history entry.
+    /// The count, or why the last Lines… step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
-    /// Bumped for every Text… job; a result with another number is stale and dropped.
+    /// Bumped for every Lines… job; a result with another number is stale and dropped.
     pub(crate) text_generation: u64,
     /// Sequence numbers of the background jobs ([`work::Lane`]).
     pub(crate) lanes: work::Lanes,

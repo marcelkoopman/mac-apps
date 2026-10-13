@@ -96,8 +96,8 @@ pub struct LaunchData {
     /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
     /// have them. Absent: no Image ▾.
     pub image_edit: Option<ImageShown>,
-    /// The versions Text… made of the text on the card ([`crate::text_ops`]). Absent: no
-    /// Text… (tables, links, a chosen file).
+    /// The versions Lines… made of the text on the card ([`crate::text_ops`]). Absent: no
+    /// Lines… (tables, links, a chosen file).
     pub text_edit: Option<TextShown>,
     /// History entry on screen, when the card follows history. Absent for a chosen file.
     pub shown_id: Option<u64>,
@@ -146,7 +146,7 @@ impl ImageShown {
     }
 }
 
-/// The versions Text… made of a text, for the card. Each version is a history entry.
+/// The versions Lines… made of a text, for the card. Each version is a history entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextShown {
     /// "Original", then each step's label.
@@ -396,7 +396,7 @@ pub enum CommandId {
     ImageStep(crate::image_edit::ImageOp),
     /// Resize › Custom…: asks for a width or a height.
     ImageResizeCustom,
-    /// The "Text…" chip on a text or code card: the card pops [`text_menu_items`].
+    /// The "Lines…" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
     /// Count lines, words and characters; shown on the card, the clipboard stays.
     TextCount,
@@ -408,7 +408,7 @@ pub enum CommandId {
     TextReverse,
     /// Ask for a separator and a column, then keep that column as a new version.
     TextColumn,
-    /// Text… › Filter (regex)…: keep the lines a pattern matches, like grep.
+    /// Lines… › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),

@@ -310,7 +310,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     HISTORY_MINUTES.set(data.settings.history_minutes);
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
-    // At most four chips on the card; the others lead the `…` menu (Text… stays visible).
+    // At most four chips on the card; the others lead the `…` menu (Lines… stays visible).
     let (shown, more) = commands::split_chips(commands::chips(&data));
     ACTIONS.with(|slot| set_commands(slot, shown));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
@@ -328,7 +328,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         (Some(edit), _) if data.subject_kind == commands::SubjectKind::Image => {
             commands::image_menu_items(edit)
         }
-        // (`text_edit` is only there when the card offers Text…, see `offers_text_menu`).
+        // (`text_edit` is only there when the card offers Lines…, see `offers_text_menu`).
         (_, Some(text)) => commands::text_menu_items(text),
         _ => commands::table_menu_items(data.table.as_ref()),
     };

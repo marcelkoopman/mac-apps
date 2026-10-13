@@ -1,5 +1,5 @@
 //! Background work for the card, the table window, Copy and opened files: the work runs on a
-//! thread, only AppKit and the clipboard stay on the main thread. Same pattern as Text…: a
+//! thread, only AppKit and the clipboard stay on the main thread. Same pattern as Lines…: a
 //! sequence number per kind of job, and a stale result is dropped.
 
 use std::sync::{Arc, Mutex, PoisonError};

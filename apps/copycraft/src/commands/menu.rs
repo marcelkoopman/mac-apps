@@ -74,12 +74,12 @@ pub(crate) fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command
 pub fn image_menu_title() -> &'static str {
     crate::locale::t("image_menu")
 }
-/// The "Text…" chip.
+/// The "Lines…" chip.
 pub fn text_menu_title() -> &'static str {
     crate::locale::t("text_menu")
 }
 
-/// The "Text…" menu: count, first and last lines, reverse, column, then undo and redo when
+/// The "Lines…" menu: count, first and last lines, reverse, column, then undo and redo when
 /// there is a version to go to. No check marks.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
