@@ -7,6 +7,9 @@ mod card_layout;
 mod clipboard;
 mod column_picker;
 mod commands;
+// Wired to Lines… › Complexity in the next commit.
+#[allow(dead_code)]
+mod complexity;
 mod convert;
 mod dataframe;
 mod decode;
