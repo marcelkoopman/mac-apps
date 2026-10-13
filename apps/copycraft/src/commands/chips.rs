@@ -356,12 +356,18 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool, on_text: bool) 
         }
     }
     if edits {
-        modes.push(command(
+        let mut menu = command(
             CommandId::ImageMenu,
             image_menu_title(),
             crate::locale::t("detail_image_steps"),
             "image picture resize rotate flip grayscale metadata undo redo",
-        ));
+        );
+        // Picture steps only on the picture: on the recognized text Image ▾ is off, no switch.
+        if on_text {
+            menu.enabled = false;
+            menu.detail = crate::locale::t("image_view_only").to_string();
+        }
+        modes.push(menu);
     }
     modes
 }
@@ -390,4 +396,9 @@ pub(crate) fn ocr_toggle(on_text: bool) -> Command {
 /// shows the formatted view, and the active chip clicked again goes back to it.
 pub(crate) fn finish_modes(modes: Vec<Command>) -> Vec<Command> {
     modes
+}
+
+/// Image ▾ steps run only on a picture view, never on the recognized text.
+pub fn image_steps_allowed(view: CardView) -> bool {
+    view != CardView::Ocr
 }

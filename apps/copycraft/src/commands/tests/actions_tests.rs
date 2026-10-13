@@ -381,3 +381,36 @@ fn empty_clipboard_has_no_chips_and_keeps_quit_in_the_menu() {
     assert!(menu.iter().all(|cmd| cmd.id != CommandId::Save));
     assert!(matching(&search_pool(&input), "quit").is_empty());
 }
+
+#[test]
+fn image_menu_is_off_on_the_recognized_text() {
+    let mut input = data(SubjectKind::Image, None);
+    input.image_scan = Some(ImageScan {
+        info: "Image".into(),
+        data_url: None,
+        ocr: Some("hello".into()),
+        qr: None,
+    });
+    input.image_edit = Some(crate::commands::ImageShown {
+        entry: 1,
+        labels: vec!["Original".into()],
+        version: 0,
+        working: false,
+        note: None,
+    });
+    let menu = |input: &crate::commands::LaunchData| {
+        chips(input)
+            .into_iter()
+            .find(|c| c.id == CommandId::ImageMenu)
+            .unwrap()
+    };
+    assert!(menu(&input).enabled);
+    input.view = CardView::Ocr;
+    let off = menu(&input);
+    assert!(!off.enabled);
+    assert_eq!(off.detail, "Image view only");
+    // The step itself is refused there too (a search or a stale menu), with no switch.
+    assert!(!crate::commands::image_steps_allowed(CardView::Ocr));
+    assert!(crate::commands::image_steps_allowed(CardView::Original));
+    assert!(crate::commands::image_steps_allowed(CardView::Info));
+}

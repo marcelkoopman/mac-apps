@@ -169,6 +169,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("save", "Bewaar", "Save"),
     ("original", "Origineel", "Original"),
     ("show_image", "Toon beeld", "Show image"),
+    (
+        "image_view_only",
+        "Alleen in beeldweergave",
+        "Image view only",
+    ),
     ("show_text", "Toon tekst", "Show text"),
     (
         "detail_original_image",

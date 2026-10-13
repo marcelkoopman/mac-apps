@@ -35,6 +35,10 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
     // The title is the label. VoiceOver reads the detail as the hint.
     let help = (!cmd.detail.is_empty()).then(|| NSString::from_str(&cmd.detail));
     chip.button().setAccessibilityHelp(help.as_deref());
+    // A disabled chip (Image ▾ on the recognized text) says why in its tooltip.
+    chip.button().setEnabled(cmd.enabled);
+    let tip = (!cmd.enabled && !cmd.detail.is_empty()).then(|| NSString::from_str(&cmd.detail));
+    chip.button().setToolTip(tip.as_deref());
     chip
 }
 

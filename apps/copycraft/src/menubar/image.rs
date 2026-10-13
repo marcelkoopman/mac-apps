@@ -81,6 +81,12 @@ impl App {
 
     /// Run `op` on the version shown; the card shows the new version when it is done.
     pub(crate) fn image_step(&mut self, op: ImageOp) {
+        // Picture steps only while the picture is shown (Image ▾ is off on the recognized
+        // text); no switch to the picture.
+        if !commands::image_steps_allowed(self.card_view) {
+            eprintln!("copycraft: image step ignored outside the picture view");
+            return;
+        }
         let Some(bytes) = self.image_source() else {
             return;
         };
@@ -100,6 +106,9 @@ impl App {
 
     /// Resize › Custom…: ask for a width or a height, then resize to it.
     pub(crate) fn custom_resize(&mut self) {
+        if !commands::image_steps_allowed(self.card_view) {
+            return;
+        }
         #[cfg(target_os = "macos")]
         {
             let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
