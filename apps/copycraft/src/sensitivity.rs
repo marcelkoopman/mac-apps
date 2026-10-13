@@ -141,6 +141,11 @@ pub fn labels(text: &str) -> Vec<Label> {
     found(text).labels
 }
 
+/// The labels of `text`, computed here and now and not remembered (one line of a file).
+pub fn scan_labels(text: &str) -> Vec<Label> {
+    scan(text, &|| false).unwrap_or_default().labels
+}
+
 /// The labels of `text`, computed here and now (or remembered).
 pub fn found(text: &str) -> Found {
     LABELS.get_or_compute(text, |text| scan(text, &|| false).unwrap_or_default())

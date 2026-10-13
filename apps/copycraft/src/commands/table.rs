@@ -421,6 +421,7 @@ pub(crate) fn opens_formatted(source: &str) -> bool {
             | FormatKind::Svg
             | FormatKind::Html
             | FormatKind::Markdown
+            | FormatKind::Agent
             | FormatKind::Rust
             | FormatKind::Java
             | FormatKind::Python

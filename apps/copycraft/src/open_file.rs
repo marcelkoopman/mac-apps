@@ -163,6 +163,7 @@ pub fn load(path: &Path) -> OpenedFile {
     match classify(&bytes) {
         Classified::Text(text) => {
             crate::format::hint_by_name(&name, &text);
+            crate::format::hint_by_path(path, &text);
             OpenedFile {
                 name,
                 text: Some(text),

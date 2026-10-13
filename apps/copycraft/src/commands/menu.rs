@@ -121,6 +121,26 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "grep filter regex regular expression match lines text",
         ),
     ];
+    if edit.agent {
+        commands.push(command(
+            CommandId::AgentCommands,
+            crate::locale::t("agent_commands"),
+            crate::locale::t("detail_agent_commands"),
+            "agent commands shell bash cargo npm make build test",
+        ));
+        commands.push(command(
+            CommandId::AgentOutline,
+            crate::locale::t("agent_outline"),
+            crate::locale::t("detail_agent_outline"),
+            "agent outline headings table of contents",
+        ));
+        commands.push(command(
+            CommandId::AgentCheck,
+            crate::locale::t("agent_check"),
+            crate::locale::t("detail_agent_check"),
+            "agent check lint warnings secrets links",
+        ));
+    }
     if edit.code {
         commands.push(command(
             CommandId::TextComplexity,
@@ -327,7 +347,7 @@ pub fn complexity_rows(
             }
             (
                 command(
-                    CommandId::ComplexityGoto(f.first_line),
+                    CommandId::GotoLine(f.first_line),
                     &title,
                     crate::locale::t("detail_complexity_row"),
                     "complexity function",
@@ -363,4 +383,58 @@ pub fn complexity_footer(scores: &[crate::complexity::FnScore]) -> Vec<String> {
         &[&sum, &average, &scores.len()],
     ));
     lines
+}
+
+/// The Outline menu: each heading, indented by level, going to its line.
+pub fn agent_outline_rows(
+    headings: &[crate::agent::Heading],
+) -> Vec<(Command, crate::complexity::Band)> {
+    headings
+        .iter()
+        .take(COMPLEXITY_ROWS)
+        .map(|h| {
+            let indent = "    ".repeat(h.level.saturating_sub(1));
+            let lines = crate::locale::tf("agent_line", &[&h.line]);
+            let title = format!("{indent}{}  ·  {lines}", h.text);
+            (
+                command(
+                    CommandId::GotoLine(h.line),
+                    &title,
+                    crate::locale::t("detail_complexity_row"),
+                    "outline heading",
+                ),
+                crate::complexity::Band::Normal,
+            )
+        })
+        .collect()
+}
+
+/// The Check menu: each warning; one about a line goes there. A possible secret shows as
+/// very high, the rest as high (the kind is in the words too).
+pub fn agent_check_rows(
+    warnings: &[crate::agent::Warning],
+) -> Vec<(Command, crate::complexity::Band)> {
+    use crate::agent::Warning;
+    use crate::complexity::Band;
+    warnings
+        .iter()
+        .take(COMPLEXITY_ROWS)
+        .map(|w| {
+            let band = match w {
+                Warning::Secret { .. } => Band::VeryHigh,
+                _ => Band::High,
+            };
+            let id = w.line().map_or(CommandId::TextMenu, CommandId::GotoLine);
+            (
+                command_enabled(
+                    id,
+                    &w.title(),
+                    crate::locale::t("detail_complexity_row"),
+                    "check warning",
+                    w.line().is_some(),
+                ),
+                band,
+            )
+        })
+        .collect()
 }

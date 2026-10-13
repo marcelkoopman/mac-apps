@@ -506,7 +506,10 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
             None
         } else {
             (highlight.is_none()
-                || matches!(highlight, Some(FormatKind::Markdown | FormatKind::Jwt)))
+                || matches!(
+                    highlight,
+                    Some(FormatKind::Markdown | FormatKind::Agent | FormatKind::Jwt)
+                ))
             .then(preview_wrap_width)
         };
         widgets::fit_text_view(view, wrap);

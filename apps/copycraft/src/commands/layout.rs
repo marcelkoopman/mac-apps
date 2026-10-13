@@ -351,7 +351,10 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextColumn
             | CommandId::TextFilter
             | CommandId::TextComplexity
-            | CommandId::ComplexityGoto(_)
+            | CommandId::AgentCommands
+            | CommandId::AgentOutline
+            | CommandId::AgentCheck
+            | CommandId::GotoLine(_)
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
     )
@@ -422,6 +425,9 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::DiffSwap => "arrow.left.arrow.right.circle",
         CommandId::TextMenu => "list.number",
         CommandId::TextComplexity => "gauge.with.dots.needle.50percent",
+        CommandId::AgentCommands => "terminal",
+        CommandId::AgentOutline => "list.bullet.indent",
+        CommandId::AgentCheck => "checklist",
         CommandId::ImageMenu => "photo",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",

@@ -20,6 +20,7 @@ pub fn try_convert(text: &str) -> Option<String> {
         | FormatKind::Java
         | FormatKind::Python
         | FormatKind::Markdown
+        | FormatKind::Agent
         | FormatKind::Url
         | FormatKind::Image
         | FormatKind::Jwt => {

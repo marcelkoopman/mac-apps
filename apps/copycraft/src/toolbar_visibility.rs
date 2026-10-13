@@ -18,9 +18,13 @@ pub fn shows_dataframe_button(kind: FormatKind, source: &str) -> bool {
         && kind != FormatKind::Html
         && kind != FormatKind::Json
         && kind != FormatKind::Markdown
+        && kind != FormatKind::Agent
         && !crate::format::looks_like_xml(source)
         && crate::format::detect(source) != FormatKind::Json
-        && crate::format::detect(source) != FormatKind::Markdown
+        && !matches!(
+            crate::format::detect(source),
+            FormatKind::Markdown | FormatKind::Agent
+        )
         && (shows_dataframe(kind) || crate::dataframe::is_table(source))
 }
 

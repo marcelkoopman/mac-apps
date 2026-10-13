@@ -100,6 +100,7 @@ pub enum Work {
     TextStep,
     Lane,
     Complexity,
+    Agent,
 }
 
 /// Why a copy was not recorded.
@@ -182,6 +183,19 @@ pub enum LogEvent {
         spinner: bool,
     },
     SaveFailed(ErrorKind),
+    /// Lines… › Commands found this many commands.
+    AgentCommands {
+        count: usize,
+    },
+    /// Lines… › Outline listed this many headings.
+    AgentOutline {
+        headings: usize,
+    },
+    /// Lines… › Check found this many warnings, this many of them possible secrets.
+    AgentChecked {
+        warnings: usize,
+        secrets: usize,
+    },
     /// Lines… › Complexity scored this many functions.
     ComplexityScored {
         functions: usize,
@@ -248,6 +262,9 @@ impl LogEvent {
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
             | E::ComplexityScored { .. }
+            | E::AgentCommands { .. }
+            | E::AgentOutline { .. }
+            | E::AgentChecked { .. }
             | E::WorkNotStarted(..) => Category::Worker,
         }
     }
@@ -309,6 +326,9 @@ impl LogEvent {
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
             | E::ComplexityScored { .. }
+            | E::AgentCommands { .. }
+            | E::AgentOutline { .. }
+            | E::AgentChecked { .. }
             | E::SpinnerShown { .. }
             | E::SpinnerHidden => Level::Debug,
         }
@@ -389,6 +409,11 @@ impl LogEvent {
                 }
             ),
             E::SaveFailed(k) => format!("save failed: {}", k.describe()),
+            E::AgentCommands { count } => format!("agent commands: {count}"),
+            E::AgentOutline { headings } => format!("agent outline: {headings} headings"),
+            E::AgentChecked { warnings, secrets } => {
+                format!("agent check: {warnings} warnings, {secrets} possible secrets")
+            }
             E::ComplexityScored { functions, ms } => {
                 format!("complexity: {functions} functions in {ms} ms")
             }

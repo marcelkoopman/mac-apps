@@ -195,6 +195,7 @@ mod tests {
     fn dutch_differs_from_english_unless_listed() {
         // Words and names that are the same in both languages.
         const SAME: &[&str] = &[
+            "agent_tokens",
             "label_pii",
             "title_link",
             "title_youtube",

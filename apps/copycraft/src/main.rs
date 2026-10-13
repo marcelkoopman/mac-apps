@@ -1,3 +1,4 @@
+mod agent;
 mod appearance;
 mod avro_schema;
 mod brackets;

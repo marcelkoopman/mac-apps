@@ -266,7 +266,7 @@ fn menu_rows_say_the_band_in_words_and_go_to_the_first_line() {
         },
     ];
     let rows = complexity_rows(&scores);
-    assert_eq!(rows[0].0.id, CommandId::ComplexityGoto(10));
+    assert_eq!(rows[0].0.id, CommandId::GotoLine(10));
     assert_eq!(rows[0].1, Band::VeryHigh);
     assert!(
         rows[0].0.title.starts_with("30  big  ·  "),
@@ -324,6 +324,7 @@ fn lines_menu_offers_complexity_only_on_code() {
         version: 0,
         note: None,
         code: false,
+        agent: false,
     };
     let has = |edit: &TextShown| {
         text_menu_items(edit)

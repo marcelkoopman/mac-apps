@@ -14,6 +14,9 @@ pub enum FormatKind {
     /// An SVG document (root `<svg>`, or a `.svg` file): shown as a picture, its code is XML.
     Svg,
     Markdown,
+    /// Agent instructions (AGENTS.md, CLAUDE.md, .cursorrules, …): Markdown with Lines… ›
+    /// Commands, Outline and Check.
+    Agent,
     /// TOML (`Cargo.toml`, `pyproject.toml`): highlighted, not reformatted.
     Toml,
     Csv,
@@ -40,6 +43,7 @@ impl FormatKind {
             Self::Html => "<>",
             Self::Svg => "svg",
             Self::Markdown => "md",
+            Self::Agent => "ai",
             Self::Toml => "toml",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
@@ -63,6 +67,7 @@ impl FormatKind {
             Self::Html => "HTML",
             Self::Svg => "SVG",
             Self::Markdown => "Markdown",
+            Self::Agent => crate::locale::t("agent_instructions"),
             Self::Toml => "TOML",
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
@@ -85,6 +90,7 @@ impl FormatKind {
             Self::Html => "HTML",
             Self::Svg => "SVG",
             Self::Markdown => crate::locale::t("formatted_markdown"),
+            Self::Agent => crate::locale::t("agent_instructions"),
             Self::Csv => "CSV",
             Self::Tsv => "TSV",
             Self::Dataframe => crate::locale::t("table_view"),
@@ -104,7 +110,7 @@ impl FormatKind {
             Self::Xml => "xml",
             Self::Html => "html",
             Self::Svg => "svg",
-            Self::Markdown => "md",
+            Self::Markdown | Self::Agent => "md",
             Self::Toml => "toml",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
@@ -137,6 +143,7 @@ static DETECTED: crate::memo::Memo<FormatKind> = crate::memo::Memo::new(8);
 pub fn forget_detected() {
     DETECTED.clear();
     NAMED_FILES.clear();
+    crate::agent::forget();
 }
 
 fn detect_uncached(text: &str) -> FormatKind {
@@ -153,6 +160,10 @@ fn detect_uncached(text: &str) -> FormatKind {
     }
     if svg::is_svg(text) {
         return FormatKind::Svg;
+    }
+    // Conservative: Markdown with typical instruction headings and a shell block.
+    if crate::agent::looks_like_agent(text) && looks_like_markdown(text) {
+        return FormatKind::Agent;
     }
     // Before Python and Markdown: `# comment` and `key = value` lines would read as those.
     if toml::looks_like_toml(text) {
@@ -201,7 +212,9 @@ pub(crate) mod toml;
 /// A `*.md` / `*.markdown` file is Markdown the same way.
 pub fn hint_by_name(name: &str, text: &str) {
     let name = name.to_ascii_lowercase();
-    let kind = if name.ends_with(".toml") {
+    let kind = if crate::agent::is_agent_path(std::path::Path::new(&name)) {
+        FormatKind::Agent
+    } else if name.ends_with(".toml") {
         FormatKind::Toml
     } else if name.ends_with(".svg") {
         FormatKind::Svg
@@ -211,6 +224,16 @@ pub fn hint_by_name(name: &str, text: &str) {
         return;
     };
     NAMED_FILES.put(text, kind);
+}
+
+/// A file at `path` that is agent instructions by its path (`.cursor/rules/x.mdc`, which the
+/// name alone does not tell), remembered like [`hint_by_name`], with its folder for Check.
+pub fn hint_by_path(path: &std::path::Path, text: &str) {
+    if crate::agent::is_agent_path(path) {
+        NAMED_FILES.put(text, FormatKind::Agent);
+        crate::agent::remember_folder(path, text);
+        crate::agent::remember_folder(path, &format_text(text));
+    }
 }
 
 /// Kinds of the last few files opened by name (only a hash of each text is kept).
@@ -228,7 +251,7 @@ pub fn format_text(text: &str) -> String {
         FormatKind::Rust | FormatKind::Java => indent_braces(text),
         FormatKind::Xml | FormatKind::Svg => pretty_xml(text),
         FormatKind::Html => html::pretty_html(text),
-        FormatKind::Markdown => format_markdown(text),
+        FormatKind::Markdown | FormatKind::Agent => format_markdown(text),
         FormatKind::Url => format_url(text),
         FormatKind::Python
         | FormatKind::Toml

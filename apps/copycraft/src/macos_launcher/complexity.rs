@@ -43,6 +43,60 @@ pub fn show_complexity() {
     }
 }
 
+/// Lines… › Outline (`check` false) or Check on agent instructions: worked out off the main
+/// thread from the text the card shows, then popped like Complexity.
+pub fn show_agent_lists(check: bool) {
+    let painted = PAINTED.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|p| zeroize::Zeroizing::new(p.text.clone()))
+    });
+    let Some(text) = painted else {
+        return;
+    };
+    let spawned = std::thread::Builder::new()
+        .name("copycraft-agent".into())
+        .spawn(move || {
+            let (rows, footer) = if check {
+                let folder = crate::agent::folder_of(&text);
+                let warnings = crate::agent::check(&text, folder.as_deref());
+                crate::diag::log(crate::diag::LogEvent::AgentChecked {
+                    warnings: warnings.len(),
+                    secrets: warnings
+                        .iter()
+                        .filter(|w| matches!(w, crate::agent::Warning::Secret { .. }))
+                        .count(),
+                });
+                let empty = warnings.is_empty();
+                let rows = commands::agent_check_rows(&warnings);
+                let footer = if empty {
+                    vec![crate::locale::t("agent_no_warnings").to_string()]
+                } else {
+                    Vec::new()
+                };
+                (rows, footer)
+            } else {
+                let headings = crate::agent::headings(&text);
+                crate::diag::log(crate::diag::LogEvent::AgentOutline {
+                    headings: headings.len(),
+                });
+                let footer = if headings.is_empty() {
+                    vec![crate::locale::t("agent_no_headings").to_string()]
+                } else {
+                    Vec::new()
+                };
+                (commands::agent_outline_rows(&headings), footer)
+            };
+            mac_ui::actions::run_on_main(move || pop_complexity(rows, footer));
+        });
+    if let Err(e) = spawned {
+        crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
+            crate::diag::Work::Agent,
+            crate::diag::ErrorKind::io(&e),
+        ));
+    }
+}
+
 /// The view the Lines… chip is, else the search field.
 fn lines_anchor() -> Option<Retained<NSView>> {
     let index = SHOWN.with(|slot| {
@@ -74,6 +128,7 @@ fn pop_complexity(rows: Vec<(Command, Band)>, footer: Vec<String>) {
     for (index, (cmd, band)) in rows.iter().enumerate() {
         let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(poppedClicked:));
         item.setTag(index as isize);
+        item.setEnabled(cmd.enabled);
         let color = match band {
             Band::Normal => NSColor::labelColor(),
             Band::High => NSColor::systemOrangeColor(),
@@ -89,7 +144,7 @@ fn pop_complexity(rows: Vec<(Command, Band)>, footer: Vec<String>) {
         });
         menu.addItem(&item);
     }
-    if !rows.is_empty() {
+    if !rows.is_empty() && !footer.is_empty() {
         menu.addItem(&NSMenuItem::separatorItem(mtm));
     }
     for line in &footer {

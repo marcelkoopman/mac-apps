@@ -76,6 +76,8 @@ pub enum TextOp {
         ignore_case: bool,
         invert: bool,
     },
+    /// Agent instructions: their shell commands, one per line ([`crate::agent::commands`]).
+    AgentCommands,
 }
 
 impl TextOp {
@@ -94,6 +96,13 @@ impl TextOp {
                 let compiled = filter::LineFilter::new(pattern, *ignore_case, *invert).ok()?;
                 filter::filter(text, &compiled)
             }
+            TextOp::AgentCommands => {
+                let commands = crate::agent::commands(text);
+                crate::diag::log(crate::diag::LogEvent::AgentCommands {
+                    count: commands.len(),
+                });
+                commands.join("\n")
+            }
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -104,6 +113,7 @@ impl TextOp {
             TextOp::Head(n) => crate::locale::tf("text_head_label", &[n]),
             TextOp::Tail(n) => crate::locale::tf("text_tail_label", &[n]),
             TextOp::Reverse => crate::locale::t("text_reverse_label").to_string(),
+            TextOp::AgentCommands => crate::locale::t("agent_commands").to_string(),
             TextOp::Column(_, n) => crate::locale::tf("text_column_label", &[n]),
             TextOp::Filter {
                 pattern, invert, ..

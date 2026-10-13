@@ -404,6 +404,7 @@ fn text_menu_chip_comes_first_on_a_code_card() {
             version: 0,
             note: None,
             code: true,
+            agent: false,
         });
         let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
         let at = ids.iter().position(|id| *id == CommandId::TextMenu);

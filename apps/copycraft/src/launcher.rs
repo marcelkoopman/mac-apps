@@ -152,6 +152,18 @@ pub fn show_complexity() {
     crate::macos_launcher::show_complexity();
 }
 
+/// Lines… › Outline on agent instructions: the headings, each going to its line.
+pub fn show_agent_outline() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_agent_lists(false);
+}
+
+/// Lines… › Check on agent instructions: the warnings, worked out in the background.
+pub fn show_agent_check() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_agent_lists(true);
+}
+
 /// Scroll the card to `line` (1-based) of the text it shows.
 pub fn scroll_card_to_line(line: usize) {
     #[cfg(target_os = "macos")]

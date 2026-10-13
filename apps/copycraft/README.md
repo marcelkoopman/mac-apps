@@ -110,6 +110,27 @@ lexical pass, no parser): `if`, `else if`/`elif`, `else`, ternaries, `switch`/`m
 direct recursion count; nested structures, lambdas and closures add one per level. Only
 counts and timings are logged, never code.
 
+## Agent instructions
+
+`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.cursor/rules/*.mdc`, `copilot-instructions.md`
+and `GEMINI.md` opened with *Choose file* get the *Agent instructions* card
+(*Agent-instructies*). Pasted text gets it only when it clearly reads as instructions:
+Markdown with several typical headings (Build, Test, Setup, Code style, Conventions,
+Commands, PR instructions) and a shell code block. A README stays Markdown. The footer shows
+a rough token estimate (characters / 4). *Lines…* then offers:
+
+- *Commands* (*Commando's*): the lines of shell/bash/sh/console blocks and inline commands
+  in lists (cargo, npm, pnpm, yarn, make, pytest, go, git, gradle, mvn), in order, each
+  once, as a new version on the clipboard (⌘Z goes back for a copied text; an opened file
+  is left for the clipboard).
+- *Outline* (*Overzicht*): the headings; pick one to scroll the card there.
+- *Check* (*Controle*): possible secrets (line and kind only, never the value), a very long
+  file (over 500 lines or about 8k tokens), empty sections, duplicate headings, relative
+  links that look broken (only checked next to an opened file, never for pasted text) and a
+  missing Build or Test section.
+
+Only counts are logged, never the instructions.
+
 ## Logs and diagnostics
 
 Copycraft logs events only: what happened, counts, sizes, types and error kinds. It never

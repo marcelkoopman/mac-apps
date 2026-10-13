@@ -109,6 +109,12 @@ fn java_methods(text: &str) -> Option<String> {
         .flatten()
 }
 
+/// "≈ 1234 tokens" on an agent instructions card (characters / 4).
+fn agent_tokens(text: &str) -> Option<String> {
+    (format::detect(text) == FormatKind::Agent)
+        .then(|| crate::locale::tf("agent_tokens", &[&crate::agent::token_estimate(text)]))
+}
+
 /// "1 sectie" / "4 secties" on a TOML card.
 fn toml_sections(text: &str) -> Option<String> {
     (format::detect(text) == FormatKind::Toml).then(|| match crate::format::toml::sections(text) {
@@ -166,6 +172,7 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
             .or_else(|| toml_sections(classified))
             .or_else(|| rust_functions(classified))
             .or_else(|| java_methods(classified))
+            .or_else(|| agent_tokens(classified))
             .or_else(|| markdown_headings(classified))
         {
             Some(count) => crate::locale::tf("lines_columns_size", &[&lines, &count, &size]),

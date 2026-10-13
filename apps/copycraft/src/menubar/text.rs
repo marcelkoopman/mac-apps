@@ -19,8 +19,14 @@ impl App {
     /// The history entry on the card and its text, when Lines… may work on it: a text card that
     /// follows history and is not a table (tables have their own steps).
     pub(crate) fn text_entry(&self) -> Option<(u64, Zeroizing<String>)> {
-        if self.opened.is_some() {
-            return None;
+        if let Some(opened) = &self.opened {
+            // An opened agent instructions file has Lines… (Commands, Outline, Check); its
+            // steps go to the clipboard, there is no history entry to go back to.
+            return opened
+                .text
+                .as_ref()
+                .filter(|text| crate::format::detect(text) == crate::format::FormatKind::Agent)
+                .map(|text| (NOT_IN_HISTORY, Zeroizing::new(text.to_string())));
         }
         // The copied source the card shows, also when it shows it formatted. While recording
         // is paused or the app is ignored (Held) the card shows the history entry: so does
@@ -68,7 +74,9 @@ impl App {
         let Some((id, text)) = self.text_entry() else {
             return;
         };
-        let code = crate::complexity::Lang::of(crate::format::detect(&text)).is_some();
+        let kind = crate::format::detect(&text);
+        let code = crate::complexity::Lang::of(kind).is_some();
+        let agent = kind == crate::format::FormatKind::Agent;
         let (labels, version) = match self.text_steps_of(id) {
             Some(steps) => (steps.labels.clone(), steps.cursor),
             None => (vec![crate::locale::t("original").to_string()], 0),
@@ -89,6 +97,7 @@ impl App {
             version,
             note,
             code,
+            agent,
         });
     }
 
@@ -161,8 +170,11 @@ impl App {
             ));
             return;
         }
-        // The new version is the clipboard's: the card follows it again.
+        // The new version is the clipboard's: the card follows it again (also from a file).
         self.browsing = None;
+        if self.opened.is_some() {
+            self.leave_opened();
+        }
         if !self.record_own_copy(result) {
             // Recording is paused or the app is ignored: the result is on the clipboard but
             // not in history, so it makes no version either.
