@@ -165,6 +165,11 @@ fn detect_uncached(text: &str) -> FormatKind {
     if crate::agent::looks_like_agent(text) && looks_like_markdown(text) {
         return FormatKind::Agent;
     }
+    // Clear Rust before TOML, Python and Markdown: a `# heading` in a test fixture string or a
+    // `- item` in a doc comment would read as Markdown.
+    if code::clearly_rust(text) {
+        return FormatKind::Rust;
+    }
     // Before Python and Markdown: `# comment` and `key = value` lines would read as those.
     if toml::looks_like_toml(text) {
         return FormatKind::Toml;
@@ -214,6 +219,12 @@ pub fn hint_by_name(name: &str, text: &str) {
     let name = name.to_ascii_lowercase();
     let kind = if crate::agent::is_agent_path(std::path::Path::new(&name)) {
         FormatKind::Agent
+    } else if name.ends_with(".rs") {
+        FormatKind::Rust
+    } else if name.ends_with(".java") {
+        FormatKind::Java
+    } else if name.ends_with(".py") {
+        FormatKind::Python
     } else if name.ends_with(".toml") {
         FormatKind::Toml
     } else if name.ends_with(".svg") {

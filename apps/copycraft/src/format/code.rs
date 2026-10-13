@@ -12,6 +12,51 @@ pub(super) fn looks_like_rust(text: &str) -> bool {
         || (text.contains("fn ") && (text.contains('{') || text.contains("->")))
 }
 
+/// Several kinds of unmistakable Rust lines: `use …;`, `fn`/`pub fn`, `impl`, `#[…]`
+/// attributes, `///` doc comments, `pub enum`/`pub struct`, `mod …;`. Three kinds is Rust.
+pub(super) fn clearly_rust(text: &str) -> bool {
+    let mut kinds = [false; 7];
+    for line in text.lines().take(4000) {
+        let t = line.trim_start();
+        let at = if t.starts_with("use ") && t.trim_end().ends_with(';') {
+            0
+        } else if t.starts_with("fn ")
+            || t.starts_with("pub fn ")
+            || t.starts_with("pub(crate) fn ")
+        {
+            1
+        } else if t.starts_with("impl ") || t.starts_with("impl<") {
+            2
+        } else if t.starts_with("#[") || t.starts_with("#![") {
+            3
+        } else if t.starts_with("/// ") || t == "///" || t.starts_with("//! ") {
+            4
+        } else if [
+            "pub enum ",
+            "pub struct ",
+            "pub(crate) struct ",
+            "pub(crate) enum ",
+            "enum ",
+            "struct ",
+        ]
+        .iter()
+        .any(|p| t.starts_with(p))
+            && (t.ends_with('{') || t.ends_with(';'))
+        {
+            5
+        } else if t.starts_with("mod ") || t.starts_with("pub mod ") {
+            6
+        } else {
+            continue;
+        };
+        kinds[at] = true;
+        if kinds.iter().filter(|k| **k).count() >= 3 {
+            return true;
+        }
+    }
+    false
+}
+
 pub(super) fn looks_like_java(text: &str) -> bool {
     let java_hits = [
         "public class",

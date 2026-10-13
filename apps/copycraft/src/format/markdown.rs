@@ -316,6 +316,11 @@ pub(super) fn format_markdown(src: &str) -> String {
             }
             continue;
         }
+        // An indented code block (four spaces, not under a list item) is code: kept as it is.
+        if indent_of(line) >= 4 && matches!(prev, MdKind::Blank | MdKind::Start | MdKind::Fence) {
+            push_md(&mut out, &mut prev, MdKind::Fence, line.trim_end());
+            continue;
+        }
         let kind = classify_md(line, prev);
         let text = if kind == MdKind::Heading {
             normalize_heading(line)

@@ -1,4 +1,7 @@
-use super::{FormatKind, authority_host, detect, indent_braces, looks_like_url, pretty_xml};
+use super::{
+    FormatKind, authority_host, detect, format_markdown, hint_by_name, indent_braces,
+    looks_like_url, markdown, pretty_xml,
+};
 
 #[test]
 fn python_is_detected_without_stealing_other_kinds() {
@@ -437,4 +440,33 @@ Salaris: € 3.450";
     assert!(formatted.contains("Adres:"));
     assert!(formatted.contains("Telefoonnummer:"));
     assert!(formatted.contains("jan.devries@email.nl"));
+}
+
+#[test]
+fn rust_source_with_a_markdown_fixture_is_rust_pasted_and_opened() {
+    let source = include_str!("../sensitivity.rs");
+    assert_eq!(detect(source), FormatKind::Rust);
+    let renamed = format!("{source}\n");
+    hint_by_name("Sensitivity.RS", &renamed);
+    assert_eq!(detect(&renamed), FormatKind::Rust);
+    // The extension wins for files, whatever the text looks like.
+    let notes = "# Notes\n\n- one\n- two\n";
+    hint_by_name("weird.rs", notes);
+    assert_eq!(detect(notes), FormatKind::Rust);
+    let small = "use std::fmt;\n\n/// A thing.\n#[derive(Debug)]\npub enum Kind {\n    A,\n}\n";
+    assert_eq!(detect(small), FormatKind::Rust);
+    // `#[derive` is no heading; Markdown stays Markdown.
+    assert!(!markdown::is_atx_heading("#[derive(Debug)]"));
+    let md = "# Title\n\nSome text with `use x;` in it.\n\n- item\n";
+    assert_eq!(detect(md), FormatKind::Markdown);
+}
+
+#[test]
+fn the_markdown_formatter_keeps_indented_code() {
+    let src = "# Doc\n\nText.\n\n    /// A long doc comment line that must stay one line.\n    - not a list here\n    fn a() {}\n";
+    let out = format_markdown(src);
+    assert!(
+        out.contains("    /// A long doc comment line that must stay one line.\n    - not a list here\n    fn a() {}"),
+        "{out}"
+    );
 }
