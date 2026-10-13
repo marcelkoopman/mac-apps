@@ -106,6 +106,13 @@ pub(crate) fn drop_highlight() -> mac_ui::drop::Highlight {
 }
 
 thread_local! {
+    /// The card on screen is the "Working…" placeholder of a card still being built.
+    static PLACEHOLDER: Cell<bool> = const { Cell::new(false) };
+    /// Height of the last real card, kept for the placeholder so the window does not jump.
+    static LAST_HEIGHT: Cell<Option<f64>> = const { Cell::new(None) };
+}
+
+thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.
     static ICON_FRAME: Cell<Option<NSRect>> = const { Cell::new(None) };

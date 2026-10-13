@@ -329,3 +329,12 @@ fn overflow_menu_sections_follow_the_requested_order() {
     assert_eq!(keep_history_short(60), "60 min");
     assert!(crate::locale::t("menu_choose_file").ends_with('…'));
 }
+
+#[test]
+fn placeholder_keeps_the_last_card_height() {
+    use crate::commands::{building_card, is_building_card, stable_height};
+    assert!(is_building_card(&building_card()));
+    assert_eq!(stable_height(true, 120.0, Some(340.0)), 340.0);
+    assert_eq!(stable_height(true, 120.0, None), 120.0);
+    assert_eq!(stable_height(false, 280.0, Some(340.0)), 280.0);
+}

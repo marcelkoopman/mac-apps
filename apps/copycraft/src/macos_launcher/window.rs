@@ -581,7 +581,18 @@ pub(crate) fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
         let Some(window) = borrowed.as_ref() else {
             return;
         };
+        let placeholder = PLACEHOLDER.with(Cell::get);
+        let height = commands::stable_height(placeholder, height, LAST_HEIGHT.with(Cell::get));
+        if !placeholder {
+            LAST_HEIGHT.set(Some(height));
+        }
         let size = NSSize::new(card_width(), height);
+        // A card already on screen (not fading out) stays where it is.
+        let fresh = fresh && !(window.isVisible() && window.alphaValue() >= 0.99);
+        let current = window.frame();
+        if !fresh && current.size.width == size.width && current.size.height == size.height {
+            return;
+        }
         let frame = if fresh {
             match ICON_FRAME.get() {
                 Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),

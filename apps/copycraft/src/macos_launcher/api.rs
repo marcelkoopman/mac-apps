@@ -268,6 +268,7 @@ pub(crate) fn store(data: LaunchData) {
 }
 
 pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
+    PLACEHOLDER.set(commands::is_building_card(&card));
     // Another entry is masked again. The same one stays revealed in every view, chip, version
     // and step, and when a rebuilt card or its labels arrive ([`commands::stays_revealed`]).
     let key = commands::content_key(&data);

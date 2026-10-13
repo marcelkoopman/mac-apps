@@ -1,5 +1,5 @@
-//! Short animations with the timings from [`crate::style`]: the card window fades and grows in,
-//! fades out, and content crossfades. Reduce Motion keeps the fades and drops the movement.
+//! Short animations with the timings from [`crate::style`]: the card window fades in and out
+//! (alpha only, the frame never moves), and content crossfades.
 
 use std::cell::Cell;
 use std::ptr::NonNull;
@@ -9,9 +9,8 @@ use objc2::Message;
 use objc2_app_kit::{
     NSAnimatablePropertyContainer, NSAnimationContext, NSView, NSWindow, NSWorkspace,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize};
 
-use crate::style::{Motion, scaled_about_centre};
+use crate::style::Motion;
 
 thread_local! {
     /// Bumped by every window animation, so a fade-out that finishes after the window was shown
@@ -52,19 +51,6 @@ pub(crate) fn animate(secs: f64, changes: impl Fn() + 'static, done: Option<Box<
     NSAnimationContext::runAnimationGroup_completionHandler(&changes, done.as_deref());
 }
 
-fn scaled(frame: NSRect, scale: f64) -> NSRect {
-    let (x, y, width, height) = scaled_about_centre(
-        (
-            frame.origin.x,
-            frame.origin.y,
-            frame.size.width,
-            frame.size.height,
-        ),
-        scale,
-    );
-    NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
-}
-
 /// Drop a pending fade-out's completion: the caller orders the window out itself now.
 pub fn cancel_window_out() {
     next_generation();
@@ -75,26 +61,16 @@ pub fn window_needs_in(window: &NSWindow) -> bool {
     !window.isVisible() || window.alphaValue() < 0.99
 }
 
-/// Fade `window` in (150 ms) while it grows from 0.96 to its frame; Reduce Motion: fade only.
-/// Call after the window has its final frame and is on screen.
+/// Fade `window` in (150 ms). Only its alpha changes: its frame (size and position) is
+/// never animated, so the card cannot jump. Call after the window has its final frame.
 pub fn window_in(window: &NSWindow) {
     next_generation();
     let motion = Motion::card_in(reduce_motion());
-    let full = window.frame();
     window.setAlphaValue(0.0);
-    if motion.moves() {
-        window.setFrame_display(scaled(full, motion.scale_from), false);
-    }
     let target = window.retain();
     animate(
         motion.fade_secs,
-        move || {
-            let animator = target.animator();
-            animator.setAlphaValue(1.0);
-            if motion.moves() {
-                animator.setFrame_display(full, true);
-            }
-        },
+        move || target.animator().setAlphaValue(1.0),
         None,
     );
 }

@@ -144,6 +144,20 @@ pub fn building_card() -> WorkCard {
     }
 }
 
+/// Whether `card` is the [`building_card`] placeholder.
+pub fn is_building_card(card: &WorkCard) -> bool {
+    card.excerpt.is_empty() && card.title == crate::locale::t("card_building")
+}
+
+/// Window height for a card: the placeholder keeps the last real card's height (when there
+/// is one), so the window does not jump twice while a slow card is built.
+pub fn stable_height(placeholder: bool, wanted: f64, last: Option<f64>) -> f64 {
+    match (placeholder, last) {
+        (true, Some(last)) => last,
+        _ => wanted,
+    }
+}
+
 /// The card when its worker thread could not start: the short reason, no copied text.
 pub fn failed_card(reason: &str) -> WorkCard {
     let mut card = building_card();

@@ -29,8 +29,6 @@ pub const CROSSFADE_SECS: f64 = 0.12;
 pub const TOAST_FADE_SECS: f64 = 0.15;
 /// How long the toast stays before it fades out.
 pub const TOAST_HOLD_SECS: f64 = 1.2;
-/// The card grows from this scale to 1 as it fades in.
-pub const CARD_START_SCALE: f64 = 0.96;
 
 /// The one accent colour: the navy of the app icon (sRGB, 0 to 1). Everything else uses
 /// system colours.
@@ -46,11 +44,12 @@ pub struct Motion {
 }
 
 impl Motion {
-    /// The card appearing: fade and grow, or with Reduce Motion only a fade (no movement).
-    pub fn card_in(reduce_motion: bool) -> Self {
+    /// The card appearing: a fade only. Growing the window frame made the card jump, so
+    /// nothing moves, with or without Reduce Motion.
+    pub fn card_in(_reduce_motion: bool) -> Self {
         Self {
             fade_secs: CARD_IN_SECS,
-            scale_from: if reduce_motion { 1.0 } else { CARD_START_SCALE },
+            scale_from: 1.0,
         }
     }
 
@@ -181,8 +180,8 @@ mod tests {
     #[test]
     fn reduce_motion_keeps_the_fade_and_drops_the_movement() {
         let normal = Motion::card_in(false);
-        assert_eq!(normal.scale_from, 0.96);
-        assert!(normal.moves());
+        assert!(!normal.moves(), "the card never moves or grows");
+        assert!(normal.fade_secs > 0.0);
         let reduced = Motion::card_in(true);
         assert!(!reduced.moves());
         assert!(reduced.fade_secs > 0.0);
