@@ -100,7 +100,7 @@ fn yaml_opens_formatted_and_coloured_with_to_json() {
     let input = data(SubjectKind::Text, Some(src));
     assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
     let shown = chips(&input);
-    assert_eq!(titles(&shown), vec!["Original", "To JSON"]);
+    assert_eq!(titles(&shown), vec!["Raw", "To JSON"]);
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Schema));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Dataframe));
@@ -255,7 +255,7 @@ fn page_card_adds_format_when_the_url_needs_it() {
     let messy = "https://example.com/search?q=a/b";
     assert_eq!(
         titles(&chips(&data(SubjectKind::Text, Some(messy)))),
-        vec!["Visit", "Format", "Original", "URL"]
+        vec!["Visit", "Format", "Raw", "URL"]
     );
 }
 
@@ -360,7 +360,7 @@ fn json_keeps_its_chips_and_the_diff_view() {
     let titles: Vec<_> = chips(&input).iter().map(|cmd| cmd.title.clone()).collect();
     assert_eq!(
         titles[..2],
-        [crate::locale::t("original"), crate::locale::t("chip_diff")]
+        [crate::locale::t("chip_raw"), crate::locale::t("chip_diff")]
     );
     assert!(
         titles
@@ -414,4 +414,30 @@ fn text_menu_chip_comes_first_on_a_code_card() {
             .map_or(0, |i| i + 1);
         assert_eq!(at, Some(after), "{ids:?}");
     }
+}
+
+#[test]
+fn raw_shows_only_when_there_is_another_view() {
+    let csv = "Naam,Bedrag\nJan,3\nPiet,4\n";
+    let mut input = data(SubjectKind::Text, Some(csv));
+    let titles: Vec<String> = chips(&input).iter().map(|c| c.title.to_string()).collect();
+    assert!(
+        !chips(&input).iter().any(|c| c.id == CommandId::Original),
+        "{titles:?}"
+    );
+    // A table version shown on the card from search keeps the way back.
+    input.view = CardView::Dataframe;
+    assert_eq!(chips(&input)[0].id, CommandId::Original);
+    let json = data(SubjectKind::Text, Some("{\"a\": 1}"));
+    let raw = chips(&json)
+        .into_iter()
+        .find(|c| c.id == CommandId::Original)
+        .expect("raw");
+    assert_eq!(raw.title, crate::locale::t("chip_raw"));
+    assert_eq!(raw.detail, crate::locale::t("detail_original"));
+    assert_eq!(crate::locale::t("chip_raw"), "Raw");
+    assert_eq!(
+        crate::locale::t("detail_original"),
+        "Show the text as copied"
+    );
 }

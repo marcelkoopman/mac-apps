@@ -51,6 +51,13 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     if data.diff.is_some() {
         insert_diff_chip(&mut chips);
     }
+    // A card in another view (a table version from search) always has the way back.
+    if data.subject_kind == SubjectKind::Text
+        && !matches!(data.view, CardView::Original | CardView::Diff)
+        && !chips.iter().any(|cmd| cmd.id == CommandId::Original)
+    {
+        chips.insert(0, original_command());
+    }
     chips
 }
 
@@ -372,24 +379,38 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command>
             "image picture resize rotate flip grayscale metadata undo redo",
         ));
     }
-    let mut commands = vec![original_command()];
+    let mut commands = vec![command(
+        CommandId::Original,
+        crate::locale::t("original"),
+        crate::locale::t("detail_original_image"),
+        "original source picture",
+    )];
     commands.extend(modes);
     commands
 }
 
 pub(crate) fn finish_modes(modes: Vec<Command>) -> Vec<Command> {
     let mut commands = Vec::new();
-    if !modes.is_empty() {
+    // Raw only when there is another view on the card to come back from: Open table opens a
+    // window, so a CSV card has none.
+    if has_other_view(&modes) {
         commands.push(original_command());
     }
     commands.extend(modes);
     commands
 }
 
+/// Some chip switches the card to another view of the same text (not Raw itself).
+pub(crate) fn has_other_view(chips: &[Command]) -> bool {
+    chips
+        .iter()
+        .any(|cmd| cmd.id != CommandId::Original && CardView::from_command(&cmd.id).is_some())
+}
+
 pub(crate) fn original_command() -> Command {
     command(
         CommandId::Original,
-        crate::locale::t("original"),
+        crate::locale::t("chip_raw"),
         crate::locale::t("detail_original"),
         "original source",
     )
