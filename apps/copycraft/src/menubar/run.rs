@@ -76,6 +76,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         signature: ClipSig::default(),
         saving: None,
         loading_all: None,
+        previewing: None,
         full_card: None,
         spinner_on: false,
         blink: tray::Blink::default(),

@@ -260,6 +260,12 @@ impl App {
                 return;
             };
             let generation = crate::macos_open::begin_preview();
+            self.previewing = Some(Background::now());
+            if !self.spinner_on {
+                self.spinner_on = true;
+                launcher::set_busy(true);
+                eprintln!("copycraft: spinner shown for preview");
+            }
             let spawned = std::thread::Builder::new()
                 .name("copycraft-preview".into())
                 .spawn(move || {
@@ -268,6 +274,8 @@ impl App {
                     launcher::emit(UserEvent::PreviewReady { generation, result });
                 });
             if let Err(err) = spawned {
+                self.previewing = None;
+                self.stop_spinner_when_idle();
                 self.work_failed("preview", &err);
             }
         }
@@ -424,6 +432,7 @@ impl App {
         if self.spinner_on
             && self.saving.is_none()
             && self.loading_all.is_none()
+            && self.previewing.is_none()
             && self.table_job.as_ref().is_none_or(|run| run.quiet)
             && self.image_job.is_none()
             && self.diffing.is_none()
@@ -448,6 +457,8 @@ impl App {
                 }
                 return;
             }
+            // The newest preview is done either way: the spinner goes once the window is up.
+            self.previewing = None;
             match result {
                 Ok(path) => {
                     if crate::macos_open::open_in_preview(&path) {
@@ -459,6 +470,7 @@ impl App {
                 }
                 Err(message) => eprintln!("preview failed: {message}"),
             }
+            self.stop_spinner_when_idle();
         }
         #[cfg(not(target_os = "macos"))]
         let _ = (generation, result);

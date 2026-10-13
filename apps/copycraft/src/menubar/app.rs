@@ -37,6 +37,9 @@ pub(crate) struct App {
     pub(crate) saving: Option<Background>,
     /// "Show all" rendering on its thread. One at a time.
     pub(crate) loading_all: Option<Background>,
+    /// The Preview button's picture is being written off the main thread: the spinner shows at
+    /// once (the click must answer) until the window opens or the write fails.
+    pub(crate) previewing: Option<Background>,
     /// The whole-text card "Show all" built, for the item and view it belongs to.
     pub(crate) full_card: Option<Box<launcher::FullCard>>,
     /// The card spinner is showing (some background work ran past [`SPINNER_DELAY`]).
