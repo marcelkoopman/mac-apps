@@ -311,13 +311,6 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             "clear pins history",
         ));
     }
-    commands.extend(capture_commands(data));
-    commands.push(command(
-        CommandId::ClearSensitive,
-        crate::locale::t("clear_sensitive"),
-        crate::locale::t("detail_clear_sensitive"),
-        "clear sensitive pasteboard timer",
-    ));
     for minutes in crate::settings::HISTORY_MINUTES {
         commands.push(command(
             CommandId::KeepHistory(minutes),
@@ -326,6 +319,13 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             "keep history forget minutes",
         ));
     }
+    commands.extend(capture_commands(data));
+    commands.push(command(
+        CommandId::ClearSensitive,
+        crate::locale::t("clear_sensitive"),
+        crate::locale::t("detail_clear_sensitive"),
+        "clear sensitive pasteboard timer",
+    ));
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         commands.push(command(
             CommandId::Appearance(theme),
@@ -347,10 +347,94 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "about version offline",
     ));
     commands.push(command(
+        CommandId::Welcome,
+        crate::locale::t("welcome_menu"),
+        crate::locale::t("detail_welcome"),
+        "welcome start introduction",
+    ));
+    commands.push(command(
         CommandId::Quit,
         crate::locale::t("quit"),
         crate::locale::t("detail_quit"),
         "quit exit",
     ));
     commands
+}
+
+/// The sections of the `⋯` menu, in order. A header (or a separator before macOS 14) goes
+/// between two sections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MenuSection {
+    /// Chips that did not fit on the card.
+    More,
+    File,
+    Clipboard,
+    History,
+    Recording,
+    Appearance,
+    App,
+}
+
+impl MenuSection {
+    /// The header title, NL/EN; `None` for the chips that did not fit.
+    pub fn title(self) -> Option<&'static str> {
+        match self {
+            MenuSection::More => None,
+            MenuSection::File => Some(crate::locale::t("section_file")),
+            MenuSection::Clipboard => Some(crate::locale::t("section_clipboard")),
+            MenuSection::History => Some(crate::locale::t("history")),
+            MenuSection::Recording => Some(crate::locale::t("section_recording")),
+            MenuSection::Appearance => Some(crate::locale::t("appearance")),
+            MenuSection::App => Some("Copycraft"),
+        }
+    }
+}
+
+/// Which section of the `⋯` menu `id` belongs to.
+pub fn menu_section(id: &CommandId) -> MenuSection {
+    match id {
+        CommandId::ChooseFile | CommandId::UseClipboard => MenuSection::File,
+        CommandId::ClearClipboard
+        | CommandId::DiffShown
+        | CommandId::DiffSwap
+        | CommandId::Pin
+        | CommandId::Unpin
+        | CommandId::DeleteHistory => MenuSection::Clipboard,
+        CommandId::History(_)
+        | CommandId::DiffToggle(_)
+        | CommandId::ClearHistory
+        | CommandId::ClearPins
+        | CommandId::KeepHistory(_) => MenuSection::History,
+        CommandId::Pause
+        | CommandId::IgnoreNext
+        | CommandId::IgnoreFrontApp
+        | CommandId::ClearSensitive => MenuSection::Recording,
+        CommandId::Appearance(_) => MenuSection::Appearance,
+        CommandId::Settings | CommandId::About | CommandId::Welcome | CommandId::Quit => {
+            MenuSection::App
+        }
+        _ => MenuSection::More,
+    }
+}
+
+/// The submenu `id` goes into in the `⋯` menu: History, Keep history or Appearance.
+pub fn menu_submenu(id: &CommandId) -> Option<&'static str> {
+    match id {
+        CommandId::History(_)
+        | CommandId::DiffToggle(_)
+        | CommandId::ClearHistory
+        | CommandId::ClearPins => Some(crate::locale::t("history")),
+        CommandId::KeepHistory(_) => Some(crate::locale::t("keep_history_menu")),
+        CommandId::Appearance(_) => Some(crate::locale::t("appearance")),
+        _ => None,
+    }
+}
+
+/// Short title of a retention choice inside the Keep history submenu: "15 min", "Tot wissen".
+pub fn keep_history_short(minutes: u32) -> String {
+    if minutes == 0 {
+        crate::locale::t("keep_until_cleared").to_string()
+    } else {
+        format!("{minutes} min")
+    }
 }

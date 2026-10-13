@@ -469,6 +469,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("detail_quit", "Copycraft stoppen", "Quit Copycraft"),
     ("chip_choose_file", "Kies bestand", "Choose file"),
+    ("menu_choose_file", "Kies bestand…", "Choose file…"),
+    ("section_file", "Bestand", "File"),
+    ("section_clipboard", "Klembord", "Clipboard"),
+    ("section_recording", "Opname", "Recording"),
+    ("keep_history_menu", "Bewaartermijn", "Keep history"),
+    ("keep_until_cleared", "Tot wissen", "Until cleared"),
+    (
+        "detail_welcome",
+        "Toon het welkomstscherm opnieuw",
+        "Show the welcome screen again",
+    ),
     (
         "detail_choose_file",
         "Open een bestand op de kaart",

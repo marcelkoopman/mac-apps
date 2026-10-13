@@ -139,7 +139,7 @@ fn choose_file_leads_the_menu_and_a_file_can_return_to_the_clipboard() {
     let clipboard = data(SubjectKind::Text, Some("hello"));
     let menu = overflow(&clipboard);
     assert_eq!(menu[0].id, CommandId::ChooseFile);
-    assert_eq!(menu[0].title, "Choose file");
+    assert_eq!(menu[0].title, "Choose file…");
     assert!(menu.iter().all(|cmd| cmd.id != CommandId::UseClipboard));
     assert!(keeps_card_open(&CommandId::ChooseFile));
     assert!(keeps_card_open(&CommandId::UseClipboard));

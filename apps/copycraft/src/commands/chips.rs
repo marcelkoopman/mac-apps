@@ -216,7 +216,7 @@ pub fn line_range(text: &str, line: usize) -> Option<std::ops::Range<usize>> {
 pub(crate) fn source_commands(data: &LaunchData) -> Vec<Command> {
     let mut commands = vec![command(
         CommandId::ChooseFile,
-        crate::locale::t("chip_choose_file"),
+        crate::locale::t("menu_choose_file"),
         crate::locale::t("detail_choose_file"),
         "choose file open",
     )];

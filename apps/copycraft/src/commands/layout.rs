@@ -307,6 +307,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ClearPins
             | CommandId::Settings
             | CommandId::About
+            | CommandId::Welcome
             | CommandId::Clear
             | CommandId::ChooseFile
             | CommandId::UseClipboard
@@ -397,6 +398,18 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::UseClipboard => "doc.on.clipboard",
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",
+        CommandId::About => "info.circle",
+        CommandId::Welcome => "hand.wave",
+        CommandId::Quit => "power",
+        CommandId::Pause => "pause.circle",
+        CommandId::IgnoreNext => "forward.end",
+        CommandId::IgnoreFrontApp => "app.badge.checkmark",
+        CommandId::ClearSensitive => "timer",
+        CommandId::Pin => "pin",
+        CommandId::Unpin => "pin.slash",
+        CommandId::DeleteHistory => "minus.circle",
+        CommandId::DiffShown => "arrow.left.arrow.right",
+        CommandId::DiffSwap => "arrow.left.arrow.right.circle",
         CommandId::TextMenu => "list.number",
         CommandId::ImageMenu => "photo",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",

@@ -254,55 +254,50 @@ pub(crate) fn pop_overflow() {
     let theme = THEME.with(Cell::get);
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
     menu.setAutoenablesItems(false);
-    let mut saw_appearance = false;
-    let mut saw_keep_history = false;
-    let mut saw_quit = false;
-    let mut history_menu: Option<Retained<NSMenu>> = None;
+    let mut section: Option<commands::MenuSection> = None;
+    let mut submenus: Vec<(&'static str, Retained<NSMenu>)> = Vec::new();
     for (index, cmd) in items.iter().enumerate() {
-        let in_history = matches!(
-            cmd.id,
-            CommandId::History(_)
-                | CommandId::ClearHistory
-                | CommandId::ClearPins
-                | CommandId::DiffToggle(_)
-        );
-        if in_history {
-            let submenu = history_menu.get_or_insert_with(|| {
-                let parent = mac_ui::widgets::menu_item(mtm, crate::locale::t("history"));
-                let submenu = NSMenu::initWithTitle(
-                    NSMenu::alloc(mtm),
-                    &NSString::from_str(crate::locale::t("history")),
-                );
-                submenu.setAutoenablesItems(false);
-                parent.setSubmenu(Some(&submenu));
-                menu.addItem(&parent);
-                submenu
-            });
-            let item = overflow_item(mtm, &cmd.title, index);
-            item.setEnabled(cmd.enabled);
-            submenu.addItem(&item);
-            continue;
+        let this_section = commands::menu_section(&cmd.id);
+        if section != Some(this_section) {
+            if section.is_some() || this_section != commands::MenuSection::More {
+                add_section_start(mtm, &menu, this_section, section.is_some());
+            }
+            section = Some(this_section);
         }
-        if matches!(cmd.id, CommandId::ClearSensitive) {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-        }
-        if !saw_keep_history && matches!(cmd.id, CommandId::KeepHistory(_)) {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-            saw_keep_history = true;
-        }
-        if !saw_appearance && matches!(cmd.id, CommandId::Appearance(_)) {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-            saw_appearance = true;
-        }
-        if matches!(cmd.id, CommandId::Settings) {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-        }
-        if !saw_quit && matches!(cmd.id, CommandId::Quit) {
-            menu.addItem(&NSMenuItem::separatorItem(mtm));
-            saw_quit = true;
-        }
-        let item = overflow_item(mtm, &cmd.title, index);
+        let target = match commands::menu_submenu(&cmd.id) {
+            None => menu.clone(),
+            Some(name) => match submenus.iter().find(|(shown, _)| *shown == name) {
+                Some((_, submenu)) => submenu.clone(),
+                None => {
+                    let parent = mac_ui::widgets::menu_item(mtm, name);
+                    if let Some(symbol) = submenu_symbol(&cmd.id)
+                        && let Some(image) = mac_ui::icon::system_symbol(symbol, name)
+                    {
+                        parent.setImage(Some(&image));
+                    }
+                    let submenu =
+                        NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
+                    submenu.setAutoenablesItems(false);
+                    parent.setSubmenu(Some(&submenu));
+                    menu.addItem(&parent);
+                    submenus.push((name, submenu.clone()));
+                    submenu
+                }
+            },
+        };
+        let title = match cmd.id {
+            CommandId::KeepHistory(minutes) => commands::keep_history_short(minutes),
+            _ => cmd.title.clone(),
+        };
+        let item = overflow_item(mtm, &title, index);
         item.setEnabled(cmd.enabled);
+        item.setAccessibilityLabel(Some(&NSString::from_str(&cmd.title)));
+        if commands::menu_submenu(&cmd.id).is_none()
+            && let Some(image) = commands::symbol_for(&cmd.id)
+                .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
+        {
+            item.setImage(Some(&image));
+        }
         if let CommandId::Appearance(item_theme) = cmd.id {
             let state = if item_theme == theme {
                 NSControlStateValueOn
@@ -344,7 +339,7 @@ pub(crate) fn pop_overflow() {
                 mac_ui::actions::set_menu_target(&item, delegate);
             }
         });
-        menu.addItem(&item);
+        target.addItem(&item);
     }
     let button = MORE.with(|slot| slot.borrow().as_ref().map(|more| more.view().retain()));
     let Some(button) = button else {
@@ -352,6 +347,42 @@ pub(crate) fn pop_overflow() {
     };
     menu.popUpMenuPositioningItem_atLocation_inView(None, NSPoint::new(0.0, 0.0), Some(&*button));
     focus_card();
+}
+
+/// A section header (macOS 14+) or, before that, a separator before `section`. `after_other`:
+/// another section came before, so older macOS needs the separator.
+fn add_section_start(
+    mtm: MainThreadMarker,
+    menu: &NSMenu,
+    section: commands::MenuSection,
+    after_other: bool,
+) {
+    use mac_ui::objc2::ClassType;
+    let headers = NSMenuItem::class()
+        .metaclass()
+        .responds_to(sel!(sectionHeaderWithTitle:));
+    match section.title() {
+        Some(title) if headers => {
+            if after_other {
+                menu.addItem(&NSMenuItem::separatorItem(mtm));
+            }
+            menu.addItem(&NSMenuItem::sectionHeaderWithTitle(
+                &NSString::from_str(title),
+                mtm,
+            ));
+        }
+        _ if after_other => menu.addItem(&NSMenuItem::separatorItem(mtm)),
+        _ => {}
+    }
+}
+
+/// SF Symbol on a submenu's parent row.
+fn submenu_symbol(id: &CommandId) -> Option<&'static str> {
+    match id {
+        CommandId::KeepHistory(_) => Some("timer"),
+        CommandId::Appearance(_) => Some("circle.lefthalf.filled"),
+        _ => Some("clock.arrow.circlepath"),
+    }
 }
 
 pub(crate) fn on_key(event: &NSEvent) {

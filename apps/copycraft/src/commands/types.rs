@@ -420,6 +420,8 @@ pub enum CommandId {
     Settings,
     /// Open the About window (name, version, offline promise).
     About,
+    /// Open the welcome window again.
+    Welcome,
     /// Stop recording foreign copies until it is switched off. Not stored.
     Pause,
     /// Skip the next foreign copy, then record again.
