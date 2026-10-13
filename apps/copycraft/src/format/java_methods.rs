@@ -1,6 +1,6 @@
 //! Method counts per access level for a Java card's meta line: one lexical pass, no parser.
 
-/// Declared methods (and constructors) by access level.
+/// Declared methods by access level (constructors left out).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Counts {
     pub public: usize,
@@ -150,9 +150,21 @@ const MODIFIERS: &[&str] = &[
     "transient",
 ];
 
-/// Count method and constructor declarations by access level.
+/// Count method declarations by access level. Constructors do not count.
 pub fn count(text: &str) -> Counts {
     let toks = tokens(text);
+    // Names of the classes, records, enums and interfaces: a declaration with such a name and
+    // no return type is a constructor, which does not count.
+    let types: Vec<&str> = toks
+        .windows(2)
+        .filter_map(|pair| match pair {
+            [
+                Tok::Ident("class" | "record" | "enum" | "interface"),
+                Tok::Ident(name),
+            ] => Some(*name),
+            _ => None,
+        })
+        .collect();
     let mut counts = Counts::default();
     for (at, tok) in toks.iter().enumerate() {
         let (Tok::Punct(b'('), Some(&Tok::Ident(name))) =
@@ -169,13 +181,12 @@ pub fn count(text: &str) -> Counts {
             Some(Tok::Punct(b'>' | b']')) => true,
             _ => false,
         };
-        let constructor = !method
-            && match before {
-                None | Some(Tok::Punct(b'{' | b'}' | b';')) => true,
-                Some(Tok::Ident(word)) => MODIFIERS.contains(&word),
-                _ => false,
-            };
-        if !method && !constructor {
+        let constructor = match before {
+            None | Some(Tok::Punct(b'{' | b'}' | b';')) => true,
+            Some(Tok::Ident(word)) => MODIFIERS.contains(&word),
+            _ => false,
+        };
+        if !method || (constructor && types.contains(&name)) {
             continue;
         }
         // Past the matching `)`.
@@ -274,7 +285,7 @@ public class Hi extends Base implements Runnable {
     @SuppressWarnings("unchecked") private char c() { return '('; }
 }
 "#;
-        assert_eq!(count(src), c(2, 1, 2, 2));
+        assert_eq!(count(src), c(1, 1, 2, 1));
     }
 
     #[test]
@@ -296,9 +307,9 @@ public class Hi extends Base implements Runnable {
     }
 
     #[test]
-    fn records_and_enums_constructors() {
+    fn constructors_do_not_count() {
         let src = "public record P(int x, int y) {\n  public P { }\n  int sum() { return x + y; }\n}\nenum E { A(1), B(2); private E(int v) {} }\n";
-        assert_eq!(count(src), c(0, 0, 1, 1));
+        assert_eq!(count(src), c(0, 0, 0, 1));
     }
 
     #[test]
