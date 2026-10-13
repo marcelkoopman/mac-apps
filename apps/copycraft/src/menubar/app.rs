@@ -77,8 +77,6 @@ pub(crate) struct App {
     /// The history entry (id) a Lines… version step shows instead of the clipboard: going
     /// between versions only shows them; Copy puts one on the clipboard.
     pub(crate) browsing: Option<u64>,
-    /// Raw was clicked: the card shows the copy as it is, also where it opens formatted.
-    pub(crate) raw_view: bool,
     /// Table versions for card text that is in history nor a chosen file, and that text.
     pub(crate) loose_table: TableVersions,
     pub(crate) loose_text: Option<Zeroizing<String>>,

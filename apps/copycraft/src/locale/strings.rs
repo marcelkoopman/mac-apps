@@ -168,7 +168,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("copy", "Kopieer", "Copy"),
     ("save", "Bewaar", "Save"),
     ("original", "Origineel", "Original"),
-    ("chip_raw", "Ruw", "Raw"),
     (
         "detail_original_image",
         "Toon de afbeelding zoals gekopieerd",
@@ -527,11 +526,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "detail_image_steps",
         "Stappen op de afbeelding",
         "Steps on the picture",
-    ),
-    (
-        "detail_original",
-        "Toon de tekst zoals gekopieerd",
-        "Show the text as copied",
     ),
     ("diff_add", "Toevoegen aan diff", "Add to diff"),
     ("diff_compare", "Vergelijk met A", "Compare with A"),

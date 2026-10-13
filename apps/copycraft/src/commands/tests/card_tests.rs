@@ -552,7 +552,7 @@ fn link_with_a_query_shows_its_url_view() {
     let link = "https://example.com/docs?page=2&sort=name";
     let input = data(SubjectKind::Text, Some(link));
     assert_eq!(work_card(&input).title, "Link");
-    assert_eq!(titles(&chips(&input)), vec!["Visit", "Raw", "URL"]);
+    assert_eq!(titles(&chips(&input)), vec!["Visit", "URL"]);
     let mut decoded = input.clone();
     decoded.view = CardView::Decode;
     let card = work_card(&decoded);

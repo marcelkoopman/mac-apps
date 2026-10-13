@@ -4,8 +4,7 @@ use super::*;
 fn messy_json_hides_format_convert_and_dataframe() {
     let input = data(SubjectKind::Text, Some(r#"{"name":"copycraft"}"#));
     let shown = chips(&input);
-    assert_eq!(shown[0].id, CommandId::Original);
-    assert_eq!(shown[1].id, CommandId::Schema);
+    assert_eq!(shown[0].id, CommandId::Schema);
     assert_eq!(shown.last().unwrap().id, CommandId::Schema);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Copy));
@@ -69,7 +68,7 @@ fn xsd_opens_formatted_and_coloured_with_sample() {
         vec![CommandId::Sample]
     );
     let shown = chips(&input);
-    assert_eq!(ids(&shown), vec![CommandId::Original, CommandId::Sample]);
+    assert_eq!(ids(&shown), vec![CommandId::Sample]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Schema));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));

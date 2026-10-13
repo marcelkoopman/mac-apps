@@ -27,10 +27,13 @@ impl App {
                 if matches!(id, CommandId::Format) && self.format_link_in_place() {
                     return;
                 }
-                // Raw toggles: clicked again on a copy that opens formatted, back to formatted.
-                let raw = matches!(id, CommandId::Original);
-                self.raw_view = raw && !(self.raw_view && self.card_view == CardView::Original);
-                self.card_view = CardView::from_command(&id).unwrap_or_default();
+                // The active view's chip clicked again goes back to the card's own view.
+                let view = CardView::from_command(&id).unwrap_or_default();
+                if view == self.card_view && view != CardView::Original {
+                    self.reset_view();
+                } else {
+                    self.card_view = view;
+                }
                 self.refresh_popup();
             }
             CommandId::History(index) => {

@@ -39,7 +39,7 @@ fn pretty_json_skips_format() {
     let card = work_card(&data(SubjectKind::Text, Some(pretty)));
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Json));
     assert_eq!(card.excerpt, pretty);
-    assert_eq!(ids(&shown), vec![CommandId::Original, CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
 }
 
@@ -52,7 +52,7 @@ fn xml_opens_formatted_and_coloured_with_xsd() {
         vec![CommandId::Schema]
     );
     let shown = chips(&input);
-    assert_eq!(ids(&shown), vec![CommandId::Original, CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
     assert_eq!(presented_view(src, CardView::Original), CardView::Format);
@@ -89,7 +89,7 @@ fn xml_opens_formatted_and_coloured_with_xsd() {
 fn tabular_xml_shows_schema_without_convert() {
     let src = "<root><person><name>Jan</name><age>30</age></person><person><name>Anja</name><age>40</age></person></root>";
     let shown = chips(&data(SubjectKind::Text, Some(src)));
-    assert_eq!(ids(&shown), vec![CommandId::Original, CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Dataframe));
 }
@@ -100,7 +100,7 @@ fn yaml_opens_formatted_and_coloured_with_to_json() {
     let input = data(SubjectKind::Text, Some(src));
     assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
     let shown = chips(&input);
-    assert_eq!(titles(&shown), vec!["Raw", "To JSON"]);
+    assert_eq!(titles(&shown), vec!["To JSON"]);
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Schema));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Dataframe));
@@ -170,9 +170,8 @@ fn encoded_text_offers_decode() {
 fn code_is_formatted_without_original_or_format() {
     let src = "fn main() {\nlet message = \"this identifier is definitely longer than forty eight characters\";\n}\n";
     let input = data(SubjectKind::Text, Some(src));
-    // Formatting indents it, so Raw is the way to the copy as it came; no Format chip.
-    let ids: Vec<CommandId> = chips(&input).into_iter().map(|c| c.id).collect();
-    assert_eq!(ids, [CommandId::Original]);
+    // Always the formatted view: no Raw and no Format chip.
+    assert!(chips(&input).is_empty());
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -194,8 +193,7 @@ fn code_is_formatted_without_original_or_format() {
     let java =
         "public class Hi {\npublic static void main(String[] a) {\nSystem.out.println(1);\n}\n}\n";
     let input = data(SubjectKind::Text, Some(java));
-    let ids: Vec<CommandId> = chips(&input).into_iter().map(|c| c.id).collect();
-    assert_eq!(ids, [CommandId::Original]);
+    assert!(chips(&input).is_empty());
     let card = work_card(&input);
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Java));
     assert_eq!(card.title, "Formatted Java");
@@ -258,7 +256,7 @@ fn page_card_adds_format_when_the_url_needs_it() {
     let messy = "https://example.com/search?q=a/b";
     assert_eq!(
         titles(&chips(&data(SubjectKind::Text, Some(messy)))),
-        vec!["Visit", "Format", "Raw", "URL"]
+        vec!["Visit", "Format", "URL"]
     );
 }
 
@@ -361,10 +359,7 @@ fn json_keeps_its_chips_and_the_diff_view() {
     let mut input = data(SubjectKind::Text, Some("{\"a\":1}"));
     input.diff = Some(diff_shown(crate::diff::Phase::Working));
     let titles: Vec<_> = chips(&input).iter().map(|cmd| cmd.title.clone()).collect();
-    assert_eq!(
-        titles[..2],
-        [crate::locale::t("chip_raw"), crate::locale::t("chip_diff")]
-    );
+    assert_eq!(titles[..1], [crate::locale::t("chip_diff")]);
     assert!(
         titles
             .iter()
@@ -420,72 +415,6 @@ fn text_menu_chip_comes_first_on_a_code_card() {
 }
 
 #[test]
-fn raw_shows_only_when_there_is_another_view() {
-    let csv = "Naam,Bedrag\nJan,3\nPiet,4\n";
-    let mut input = data(SubjectKind::Text, Some(csv));
-    let titles: Vec<String> = chips(&input).iter().map(|c| c.title.to_string()).collect();
-    assert!(
-        !chips(&input).iter().any(|c| c.id == CommandId::Original),
-        "{titles:?}"
-    );
-    // A table version shown on the card from search keeps the way back.
-    input.view = CardView::Dataframe;
-    assert_eq!(chips(&input)[0].id, CommandId::Original);
-    let json = data(SubjectKind::Text, Some("{\"a\": 1}"));
-    let raw = chips(&json)
-        .into_iter()
-        .find(|c| c.id == CommandId::Original)
-        .expect("raw");
-    assert_eq!(raw.title, crate::locale::t("chip_raw"));
-    assert_eq!(raw.detail, crate::locale::t("detail_original"));
-    assert_eq!(crate::locale::t("chip_raw"), "Raw");
-    assert_eq!(
-        crate::locale::t("detail_original"),
-        "Show the text as copied"
-    );
-}
-
-#[test]
-fn raw_only_when_formatting_changes_the_copy() {
-    let pretty = "fn main() {\n    let x = 1;\n}\n";
-    let messy = "fn main() {\nlet x = 1;\n}\n";
-    assert!(!crate::commands::differs_formatted(
-        pretty,
-        &format!("{pretty}  \n\n")
-    ));
-    assert!(crate::commands::differs_formatted(messy, pretty));
-    for (src, raw) in [(pretty, false), (messy, true)] {
-        let mut input = data(SubjectKind::Text, Some(src));
-        input.view = presented_view(src, CardView::Original);
-        assert_eq!(input.view, CardView::Format);
-        let has_raw = chips(&input).iter().any(|c| c.id == CommandId::Original);
-        assert_eq!(has_raw, raw, "{src:?}");
-        // The title says Formatted only when formatting changed something.
-        let title = work_card(&input).title;
-        assert_eq!(title.starts_with("Formatted"), raw, "{title}");
-        assert!(title.contains("Rust"), "{title}");
-    }
-}
-
-#[test]
-fn raw_chosen_shows_the_copy_and_keeps_its_chip() {
-    use crate::commands::shown_view;
-    let messy = "fn main() {\nlet x = 1;\n}\n";
-    // Without the hand-picked Raw, a code card opens formatted; with it, as copied.
-    assert_eq!(
-        shown_view(messy, CardView::Original, false),
-        CardView::Format
-    );
-    assert_eq!(
-        shown_view(messy, CardView::Original, true),
-        CardView::Original
-    );
-    let mut input = data(SubjectKind::Text, Some(messy));
-    input.view = CardView::Original;
-    assert!(chips(&input).iter().any(|c| c.id == CommandId::Original));
-}
-
-#[test]
 fn a_toml_card_is_titled_and_colored() {
     let src = "[package]\nname = \"copycraft\"\nversion = \"0.4.1\"\n";
     let mut input = data(SubjectKind::Text, Some(src));
@@ -493,4 +422,34 @@ fn a_toml_card_is_titled_and_colored() {
     let card = work_card(&input);
     assert_eq!(card.title, "TOML");
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Toml));
+}
+
+#[test]
+fn text_cards_have_no_raw_chip_and_title_formatted_only_when_changed() {
+    let pretty = "fn main() {\n    let x = 1;\n}\n";
+    let messy = "fn main() {\nlet x = 1;\n}\n";
+    assert!(!crate::commands::differs_formatted(
+        pretty,
+        &format!("{pretty}  \n\n")
+    ));
+    assert!(crate::commands::differs_formatted(messy, pretty));
+    for (src, formatted) in [(pretty, false), (messy, true)] {
+        let mut input = data(SubjectKind::Text, Some(src));
+        input.view = presented_view(src, CardView::Original);
+        assert_eq!(input.view, CardView::Format);
+        assert!(!chips(&input).iter().any(|c| c.id == CommandId::Original));
+        let title = work_card(&input).title;
+        assert_eq!(title.starts_with("Formatted"), formatted, "{title}");
+    }
+    for src in [
+        "{\"a\": 1}",
+        "Naam,Bedrag\nJan,3\nPiet,4\n",
+        "<a><b>1</b></a>",
+    ] {
+        let input = data(SubjectKind::Text, Some(src));
+        assert!(
+            !chips(&input).iter().any(|c| c.id == CommandId::Original),
+            "{src}"
+        );
+    }
 }

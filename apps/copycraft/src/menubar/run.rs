@@ -95,7 +95,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         opened_table: crate::settings::preferred_table(),
         card_text: None,
         browsing: None,
-        raw_view: false,
         loose_table: crate::settings::preferred_table(),
         loose_text: None,
         table_job: None,

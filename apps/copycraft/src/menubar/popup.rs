@@ -272,7 +272,6 @@ impl App {
     /// The card's default view (formatted where the copy opens formatted), not Raw.
     pub(crate) fn reset_view(&mut self) {
         self.card_view = CardView::Original;
-        self.raw_view = false;
     }
 
     pub(crate) fn launch_for_popup(&mut self) -> LaunchData {

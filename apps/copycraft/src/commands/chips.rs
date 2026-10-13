@@ -23,13 +23,9 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             if data.text_edit.is_some()
                 && data.subject_text.as_deref().is_some_and(offers_text_menu)
             {
-                // Up front (after Original), before the less used chips.
-                let at = chips
-                    .iter()
-                    .position(|cmd| cmd.id == CommandId::Original)
-                    .map_or(0, |index| index + 1);
+                // Up front, before the less used chips.
                 chips.insert(
-                    at,
+                    0,
                     command(
                         CommandId::TextMenu,
                         text_menu_title(),
@@ -51,33 +47,10 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     if data.diff.is_some() {
         insert_diff_chip(&mut chips);
     }
-    // A card in another view (a table version from search) always has the way back.
-    // Formatting that leaves the text as copied is no other view (no Raw on pretty code).
-    let same_as_copied = data.view == CardView::Format
-        && data
-            .subject_text
-            .as_deref()
-            .is_some_and(|text| !formatting_changes(text));
-    let formats_differently = data
-        .subject_text
-        .as_deref()
-        .is_some_and(|text| opens_formatted(text) && formatting_changes(text));
-    let other_view = match data.view {
-        CardView::Diff => false,
-        // Raw on a copy that opens formatted: the chip stays, to go back.
-        CardView::Original => formats_differently,
-        _ => !same_as_copied,
-    };
-    if data.subject_kind == SubjectKind::Text
-        && other_view
-        && !chips.iter().any(|cmd| cmd.id == CommandId::Original)
-    {
-        chips.insert(0, original_command());
-    }
     chips
 }
 
-/// "Diff" next to Original. A card without Original (plain text, or a link) gets both.
+/// "Diff" up front (after Visit on a link).
 pub(crate) fn insert_diff_chip(chips: &mut Vec<Command>) {
     let diff = command(
         CommandId::Diff,
@@ -85,16 +58,11 @@ pub(crate) fn insert_diff_chip(chips: &mut Vec<Command>) {
         crate::locale::t("detail_diff"),
         "diff compare",
     );
-    if let Some(at) = chips.iter().position(|cmd| cmd.id == CommandId::Original) {
-        chips.insert(at + 1, diff);
-        return;
-    }
     let at = chips
         .iter()
         .position(|cmd| cmd.id == CommandId::Visit)
         .map_or(0, |index| index + 1);
-    chips.insert(at, original_command());
-    chips.insert(at + 1, diff);
+    chips.insert(at, diff);
 }
 
 /// The chips of a copied text, which follow from the text alone. Working them out tries the
@@ -269,12 +237,11 @@ pub(crate) fn link_chips(text: &str) -> Vec<Command> {
             "format url uri",
         ));
     }
-    // A page link with a query or escapes: Original and the URL decoder after Visit (which
+    // A page link with a query or escapes: the URL decoder after Visit (which
     // stays first, the default action). Not on a YouTube video, whose query is its id.
     if crate::youtube::video_id(text).is_none()
         && let Some(found) = decode::detect(text)
     {
-        commands.push(original_command());
         commands.push(decoder_command(found));
     }
     commands
@@ -405,29 +372,8 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command>
     commands
 }
 
+/// The view chips of a text card. There is no chip back to the copy as it came: the card always
+/// shows the formatted view, and the active chip clicked again goes back to it.
 pub(crate) fn finish_modes(modes: Vec<Command>) -> Vec<Command> {
-    let mut commands = Vec::new();
-    // Raw only when there is another view on the card to come back from: Open table opens a
-    // window, so a CSV card has none.
-    if has_other_view(&modes) {
-        commands.push(original_command());
-    }
-    commands.extend(modes);
-    commands
-}
-
-/// Some chip switches the card to another view of the same text (not Raw itself).
-pub(crate) fn has_other_view(chips: &[Command]) -> bool {
-    chips
-        .iter()
-        .any(|cmd| cmd.id != CommandId::Original && CardView::from_command(&cmd.id).is_some())
-}
-
-pub(crate) fn original_command() -> Command {
-    command(
-        CommandId::Original,
-        crate::locale::t("chip_raw"),
-        crate::locale::t("detail_original"),
-        "original source",
-    )
+    modes
 }

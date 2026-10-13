@@ -202,7 +202,7 @@ impl App {
             ClipboardView::Image => (SubjectKind::Image, None),
             ClipboardView::Held => (SubjectKind::Empty, None),
             ClipboardView::Text(text) => {
-                self.card_view = commands::shown_view(text.as_str(), self.card_view, self.raw_view);
+                self.card_view = commands::presented_view(text.as_str(), self.card_view);
                 (SubjectKind::Text, Some(text.as_str().to_string()))
             }
         };
@@ -223,7 +223,7 @@ impl App {
         let note = self.opened.as_ref().and_then(|file| file.note.clone());
         let image = self.opened.as_ref().and_then(|file| file.image.clone());
         if let Some(text) = text.as_deref() {
-            self.card_view = commands::shown_view(text, self.card_view, self.raw_view);
+            self.card_view = commands::presented_view(text, self.card_view);
         }
         let mut data = self.launch_shell();
         data.source_name = Some(name);
@@ -298,7 +298,7 @@ impl App {
         let mut data = self.launch_shell();
         if let Some(text) = self.history.get(self.history_cursor) {
             let text = text.to_string();
-            self.card_view = commands::shown_view(&text, self.card_view, self.raw_view);
+            self.card_view = commands::presented_view(&text, self.card_view);
             data.view = self.card_view;
             data.subject_kind = SubjectKind::Text;
             data.subject_text = Some(text);

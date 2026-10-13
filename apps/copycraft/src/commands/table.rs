@@ -367,16 +367,6 @@ pub fn presented_view(source: &str, view: CardView) -> CardView {
     }
 }
 
-/// The view the card shows: [`presented_view`], except that Raw chosen by hand (`raw`) shows the
-/// copy as it is, where the card would open formatted.
-pub fn shown_view(source: &str, view: CardView, raw: bool) -> CardView {
-    if raw && view == CardView::Original {
-        CardView::Original
-    } else {
-        presented_view(source, view)
-    }
-}
-
 /// Formatting `source` gives other text than the copy (trailing whitespace aside). Remembered
 /// for the last few copies: every card update asks.
 pub(crate) fn formatting_changes(source: &str) -> bool {

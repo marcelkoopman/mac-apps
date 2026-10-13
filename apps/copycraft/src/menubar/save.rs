@@ -47,7 +47,7 @@ impl App {
         let Some(source) = self.source_text().map(Zeroizing::new) else {
             return Ok(());
         };
-        let shown = commands::shown_view(source.as_str(), self.card_view, self.raw_view);
+        let shown = commands::presented_view(source.as_str(), self.card_view);
         let version = (shown == CardView::Dataframe)
             .then(|| self.shown_table_version())
             .flatten();
@@ -521,7 +521,7 @@ impl App {
             return Some(dropped_image_save_job(&opened.name, image, self.card_view));
         }
         let source = opened.text.as_deref()?;
-        let view = commands::shown_view(source, self.card_view, self.raw_view);
+        let view = commands::presented_view(source, self.card_view);
         let mut job = crate::macos_save::SaveJob::text(source, view)?;
         job.filename = crate::open_file::save_name(&opened.name, job.extension);
         Some(job)
@@ -533,7 +533,7 @@ impl App {
             if let Some(text) = self.history.get(self.history_cursor) {
                 return crate::macos_save::SaveJob::text(
                     text,
-                    commands::shown_view(text, self.card_view, self.raw_view),
+                    commands::presented_view(text, self.card_view),
                 );
             }
             if self.history.image(self.history_cursor).is_some() {
@@ -546,10 +546,7 @@ impl App {
             return Some(self.image_save_job());
         }
         let source = view.text()?;
-        crate::macos_save::SaveJob::text(
-            source,
-            commands::shown_view(source, self.card_view, self.raw_view),
-        )
+        crate::macos_save::SaveJob::text(source, commands::presented_view(source, self.card_view))
     }
 
     /// Save job for the image card: the shown scan text, else the history entry's picture (as
