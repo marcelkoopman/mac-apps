@@ -138,7 +138,7 @@ fn image_card_is_a_picture_with_encoding_chips() {
     assert_eq!(card.meta, "PNG  1280×720  0.18 MB");
     assert!(card.shows_image);
     assert!(card.excerpt.is_empty());
-    assert_eq!(titles(&chips(&input)), vec!["Original", "Info"]);
+    assert_eq!(titles(&chips(&input)), vec!["Info"]);
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -243,10 +243,7 @@ fn image_scan_adds_the_actions_from_the_old_preview() {
         ocr: Some("hello".into()),
         qr: Some("https://example.com".into()),
     });
-    assert_eq!(
-        titles(&chips(&input)),
-        vec!["Original", "Info", "Text", "QR"]
-    );
+    assert_eq!(titles(&chips(&input)), vec!["Info", "Text", "QR"]);
     assert_eq!(
         content_actions(&input),
         ContentActions {

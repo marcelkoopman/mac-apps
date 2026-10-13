@@ -250,7 +250,7 @@ fn at_most_four_chips_show_and_text_stays_visible() {
         enabled: true,
     };
     let ids = [
-        CommandId::Original,
+        CommandId::Convert,
         CommandId::Format,
         CommandId::Schema,
         CommandId::Sample,
@@ -264,7 +264,7 @@ fn at_most_four_chips_show_and_text_stays_visible() {
     assert_eq!(
         shown,
         [
-            CommandId::Original,
+            CommandId::Convert,
             CommandId::Format,
             CommandId::Schema,
             CommandId::TextMenu
@@ -272,7 +272,7 @@ fn at_most_four_chips_show_and_text_stays_visible() {
     );
     assert_eq!(more, [CommandId::Sample, CommandId::Diff]);
     // Few chips: nothing moves.
-    let (shown, more) = split_chips(vec![chip(CommandId::Original), chip(CommandId::TextMenu)]);
+    let (shown, more) = split_chips(vec![chip(CommandId::Convert), chip(CommandId::TextMenu)]);
     assert_eq!(shown.len(), 2);
     assert!(more.is_empty());
 }
@@ -280,7 +280,6 @@ fn at_most_four_chips_show_and_text_stays_visible() {
 #[test]
 fn chips_and_menu_steps_have_sf_symbols() {
     for id in [
-        CommandId::Original,
         CommandId::TextMenu,
         CommandId::Copy,
         CommandId::Save,

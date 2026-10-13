@@ -406,11 +406,7 @@ fn text_menu_chip_comes_first_on_a_code_card() {
         });
         let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
         let at = ids.iter().position(|id| *id == CommandId::TextMenu);
-        let after = ids
-            .iter()
-            .position(|id| *id == CommandId::Original)
-            .map_or(0, |i| i + 1);
-        assert_eq!(at, Some(after), "{ids:?}");
+        assert_eq!(at, Some(0), "{ids:?}");
     }
 }
 
@@ -437,7 +433,11 @@ fn text_cards_have_no_raw_chip_and_title_formatted_only_when_changed() {
         let mut input = data(SubjectKind::Text, Some(src));
         input.view = presented_view(src, CardView::Original);
         assert_eq!(input.view, CardView::Format);
-        assert!(!chips(&input).iter().any(|c| c.id == CommandId::Original));
+        assert!(
+            !chips(&input)
+                .iter()
+                .any(|c| c.title == crate::locale::t("original"))
+        );
         let title = work_card(&input).title;
         assert_eq!(title.starts_with("Formatted"), formatted, "{title}");
     }
@@ -448,7 +448,9 @@ fn text_cards_have_no_raw_chip_and_title_formatted_only_when_changed() {
     ] {
         let input = data(SubjectKind::Text, Some(src));
         assert!(
-            !chips(&input).iter().any(|c| c.id == CommandId::Original),
+            !chips(&input)
+                .iter()
+                .any(|c| c.title == crate::locale::t("original")),
             "{src}"
         );
     }

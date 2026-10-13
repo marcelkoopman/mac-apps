@@ -14,8 +14,7 @@ impl App {
             CommandId::Save => self.save_current(),
             CommandId::OpenPreview => self.open_preview(),
             CommandId::ShowAll => self.show_all(),
-            CommandId::Original
-            | CommandId::Format
+            CommandId::Format
             | CommandId::Convert
             | CommandId::Decode
             | CommandId::Dataframe

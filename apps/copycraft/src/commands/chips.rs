@@ -362,14 +362,9 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool) -> Vec<Command>
             "image picture resize rotate flip grayscale metadata undo redo",
         ));
     }
-    let mut commands = vec![command(
-        CommandId::Original,
-        crate::locale::t("original"),
-        crate::locale::t("detail_original_image"),
-        "original source picture",
-    )];
-    commands.extend(modes);
-    commands
+    // No Original chip: the picture is the card's own view, the active chip clicked again goes
+    // back to it, and ↶ goes back to v1.
+    modes
 }
 
 /// The view chips of a text card. There is no chip back to the copy as it came: the card always

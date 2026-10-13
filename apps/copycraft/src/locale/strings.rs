@@ -168,11 +168,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("copy", "Kopieer", "Copy"),
     ("save", "Bewaar", "Save"),
     ("original", "Origineel", "Original"),
-    (
-        "detail_original_image",
-        "Toon de afbeelding zoals gekopieerd",
-        "Show the picture as copied",
-    ),
     ("chip_diff", "Diff", "Diff"),
     ("table_menu", "Tabel ▾", "Table ▾"),
     ("open_table", "Open tabel", "Open table"),

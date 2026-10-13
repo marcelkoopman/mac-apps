@@ -253,7 +253,6 @@ pub enum CardView {
 impl CardView {
     pub fn from_command(id: &CommandId) -> Option<Self> {
         Some(match id {
-            CommandId::Original => Self::Original,
             CommandId::Format => Self::Format,
             CommandId::Convert => Self::Convert,
             CommandId::Decode => Self::Decode,
@@ -331,7 +330,6 @@ impl HistoryNav {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandId {
-    Original,
     Visit,
     Format,
     Convert,

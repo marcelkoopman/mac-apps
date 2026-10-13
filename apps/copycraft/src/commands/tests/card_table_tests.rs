@@ -288,7 +288,7 @@ fn dropped_picture_is_an_image_card_with_its_name() {
     assert_eq!(card.meta, "photo.heic  ·  HEIC  4032×3024  2.00 MB");
     assert!(card.shows_image);
     assert!(masks_content(&card, CardView::Original));
-    assert_eq!(titles(&chips(&input)), vec!["Original", "Info"]);
+    assert_eq!(titles(&chips(&input)), vec!["Info"]);
     assert!(
         overflow(&input)
             .iter()

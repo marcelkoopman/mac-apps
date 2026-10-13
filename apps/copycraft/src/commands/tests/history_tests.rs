@@ -4,7 +4,7 @@ use super::*;
 fn a_picture_with_versions_has_image_menu_and_version_bar() {
     use crate::image_edit::{ImageOp, Resize};
     let plain = edited_picture(0, &["Original"]);
-    assert_eq!(titles(&chips(&plain)), vec!["Original", "Info", "Image ▾"]);
+    assert_eq!(titles(&chips(&plain)), vec!["Info", "Image ▾"]);
     assert_eq!(VersionBar::of(&plain), None, "one version: no capsule");
     assert!(keeps_card_open(&CommandId::ImageMenu));
     assert!(keeps_card_open(&CommandId::ImageResizeCustom));
@@ -69,7 +69,7 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
     // A picture without versions (the clipboard's, not in history) has no Image ▾.
     let mut bare = edited_picture(0, &["Original"]);
     bare.image_edit = None;
-    assert_eq!(titles(&chips(&bare)), vec!["Original", "Info"]);
+    assert_eq!(titles(&chips(&bare)), vec!["Info"]);
 }
 
 #[test]
