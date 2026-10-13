@@ -406,3 +406,24 @@ fn rotate_left_from_a_later_version_rotates_and_is_labelled_so() {
     // Turned a quarter, not mirrored: width and height swap.
     assert_eq!(shown_size(&versions), (20, 40));
 }
+
+#[test]
+fn feather_radial_keeps_the_middle_and_clears_corners_and_edges() {
+    let image = Rgba {
+        width: 100,
+        height: 100,
+        pixels: zeroize::Zeroizing::new(vec![200; 100 * 100 * 4]),
+    };
+    let out = crate::image_edit::feather_radial(image, 0.25);
+    let alpha = |x: usize, y: usize| out.pixels[(y * 100 + x) * 4 + 3];
+    assert_eq!(alpha(50, 50), 200, "middle untouched");
+    assert_eq!(alpha(50, 20), 200, "inside 75% of the radius");
+    assert_eq!(alpha(0, 0), 0, "corner clear");
+    assert!(alpha(50, 0) <= 2, "edge midpoint nearly clear");
+    assert!(
+        alpha(50, 8) > 0 && alpha(50, 8) < 200,
+        "a soft fade between"
+    );
+    // Colour stays; only alpha fades.
+    assert_eq!(out.pixels[0], 200);
+}

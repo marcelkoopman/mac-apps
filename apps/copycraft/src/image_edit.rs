@@ -244,6 +244,28 @@ fn rotate(image: Rgba, clockwise: bool) -> Rgba {
     out
 }
 
+/// Feather the picture to transparent towards its edge: alpha stays as it is inside a circle
+/// of radius `1 - fade` (half the shorter side is 1) and eases (smoothstep) to 0 at radius 1,
+/// so the corners are fully clear. For a tile shown on a background of about its own colour.
+pub fn feather_radial(mut image: Rgba, fade: f64) -> Rgba {
+    let (width, height) = (image.width, image.height);
+    let (cx, cy) = (width as f64 / 2.0, height as f64 / 2.0);
+    let radius = cx.min(cy).max(1.0);
+    let inner = (1.0 - fade.clamp(0.01, 1.0)).max(0.0);
+    for y in 0..height {
+        for x in 0..width {
+            let dx = (x as f64 + 0.5 - cx) / radius;
+            let dy = (y as f64 + 0.5 - cy) / radius;
+            let d = (dx * dx + dy * dy).sqrt();
+            let t = ((1.0 - d) / (1.0 - inner)).clamp(0.0, 1.0);
+            let keep = t * t * (3.0 - 2.0 * t);
+            let at = (y * width + x) * 4 + 3;
+            image.pixels[at] = (f64::from(image.pixels[at]) * keep).round() as u8;
+        }
+    }
+    image
+}
+
 /// A mirror image: left to right (`horizontal`) or top to bottom.
 fn flip(mut image: Rgba, horizontal: bool) -> Rgba {
     let (width, height) = (image.width, image.height);

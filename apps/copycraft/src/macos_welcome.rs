@@ -26,6 +26,8 @@ use crate::macos_login;
 const WIDTH: f64 = 420.0;
 const PAD: f64 = 24.0;
 const ICON: f64 = 96.0;
+/// Outer part of the icon's radius that fades to the window colour.
+const ICON_FADE: f64 = 0.25;
 /// Edge colour of `assets/icon.icns`, sRGB #07112D: the mean of the outer 3 px ring of the
 /// 1024 px rep (the tile is a soft gradient, #030921 in the corners to #0E1B3F at the
 /// edges). Made with `colorWithSRGBRed`, the image's colour space, with nothing over it.
@@ -243,7 +245,8 @@ fn build(mtm: MainThreadMarker) {
     )));
 
     let icon = widgets::image_view(mtm);
-    if let Some(image) = mac_ui::image::from_bytes(ICON_ICNS)
+    if let Some(image) = feathered_icon()
+        .or_else(|| mac_ui::image::from_bytes(ICON_ICNS))
         .or_else(|| NSApplication::sharedApplication(mtm).applicationIconImage())
     {
         icon.setImage(Some(&image));
@@ -364,4 +367,21 @@ fn raise_above_card(window: &NSWindow) {
 
 fn restore_level(window: &NSWindow) {
     LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
+}
+
+/// The icon with its edge faded to transparent over the outer quarter (see
+/// [`crate::image_edit::feather_radial`]): the tile's own vignette is lighter in the middle,
+/// so no flat window colour matches its edge and a square would show. Rendered once, at 3×.
+/// `icon.icns` itself is untouched.
+fn feathered_icon() -> Option<Retained<mac_ui::objc2_app_kit::NSImage>> {
+    use crate::image_edit::{Codec, ImageOp, Resize, feather_radial};
+    let codec = crate::macos_image_edit::ImageIoCodec;
+    let full = codec.decode(ICON_ICNS)?;
+    let small = match ImageOp::Resize(Resize::Longest((ICON * 3.0) as u32)).apply(full) {
+        Ok(image) | Err(image) => image,
+    };
+    let png = codec.encode_png(&feather_radial(small, ICON_FADE))?;
+    let image = mac_ui::image::from_bytes(&png)?;
+    image.setSize(NSSize::new(ICON, ICON));
+    Some(image)
 }
