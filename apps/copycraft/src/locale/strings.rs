@@ -858,6 +858,31 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Lines… menu (text_ops)
     ("text_menu", "Regels…", "Lines…"),
+    ("text_complexity", "Complexiteit", "Complexity"),
+    (
+        "detail_complexity",
+        "Cognitieve complexiteit per functie, een benadering van SonarQube",
+        "Cognitive complexity per function, an approximation of SonarQube",
+    ),
+    (
+        "detail_complexity_row",
+        "Naar deze functie in de kaart",
+        "Go to this function on the card",
+    ),
+    ("complexity_lines", "r. {0}–{1}", "l. {0}–{1}"),
+    ("complexity_high", "hoog", "high"),
+    ("complexity_very_high", "zeer hoog", "very high"),
+    (
+        "complexity_none",
+        "Geen functies gevonden",
+        "No functions found",
+    ),
+    ("complexity_more", "… en nog {0}", "… and {0} more"),
+    (
+        "complexity_total",
+        "Totaal {0} · gemiddeld {1} · {2} functies",
+        "Total {0} · average {1} · {2} functions",
+    ),
     (
         "detail_text_steps",
         "Tellen, eerste of laatste regels, omkeren, kolom",

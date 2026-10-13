@@ -99,6 +99,7 @@ pub enum Work {
     Preview,
     TextStep,
     Lane,
+    Complexity,
 }
 
 /// Why a copy was not recorded.
@@ -181,6 +182,11 @@ pub enum LogEvent {
         spinner: bool,
     },
     SaveFailed(ErrorKind),
+    /// Lines… › Complexity scored this many functions.
+    ComplexityScored {
+        functions: usize,
+        ms: u64,
+    },
     /// Export diagnostics… wrote this many log lines.
     DiagnosticsExported {
         lines: usize,
@@ -241,6 +247,7 @@ impl LogEvent {
             | E::TextStepFailed(_)
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
+            | E::ComplexityScored { .. }
             | E::WorkNotStarted(..) => Category::Worker,
         }
     }
@@ -301,6 +308,7 @@ impl LogEvent {
             | E::ImageJobDone { .. }
             | E::DiffBuilt { .. }
             | E::ShowAllBuilt { .. }
+            | E::ComplexityScored { .. }
             | E::SpinnerShown { .. }
             | E::SpinnerHidden => Level::Debug,
         }
@@ -381,6 +389,9 @@ impl LogEvent {
                 }
             ),
             E::SaveFailed(k) => format!("save failed: {}", k.describe()),
+            E::ComplexityScored { functions, ms } => {
+                format!("complexity: {functions} functions in {ms} ms")
+            }
             E::DiagnosticsExported { lines } => format!("diagnostics exported: {lines} lines"),
             E::OpenPanelFailed(k) => format!("open panel failed: {}", k.describe()),
             E::SymbolCopyFailed(k) => format!("symbol copy failed: {}", k.describe()),

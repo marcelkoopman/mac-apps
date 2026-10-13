@@ -121,6 +121,14 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "grep filter regex regular expression match lines text",
         ),
     ];
+    if edit.code {
+        commands.push(command(
+            CommandId::TextComplexity,
+            crate::locale::t("text_complexity"),
+            crate::locale::t("detail_complexity"),
+            "complexity cognitive sonar functions methods score code",
+        ));
+    }
     if edit.can_undo() {
         commands.push(command(
             CommandId::TableUndo,
@@ -287,4 +295,72 @@ pub fn choose_columns_title() -> &'static str {
 #[allow(dead_code)] // Was the Table ▾ item; Open table is the card chip now.
 pub fn open_window_title() -> &'static str {
     crate::locale::t("open_in_window")
+}
+
+/// Rows of the Complexity menu shown at most; the rest are summed up in one line.
+pub const COMPLEXITY_ROWS: usize = 300;
+
+/// The Complexity menu's rows, highest first: "18  parse  ·  r. 12–40  ·  hoog", each going to
+/// its first line, with its band for the colour. The band is in the text too, so colour is
+/// not the only signal.
+pub fn complexity_rows(
+    scores: &[crate::complexity::FnScore],
+) -> Vec<(Command, crate::complexity::Band)> {
+    use crate::complexity::Band;
+    scores
+        .iter()
+        .take(COMPLEXITY_ROWS)
+        .map(|f| {
+            let band = Band::of(f.score);
+            let lines = crate::locale::tf("complexity_lines", &[&f.first_line, &f.last_line]);
+            let mut title = format!("{}  {}  ·  {lines}", f.score, f.name);
+            match band {
+                Band::Normal => {}
+                Band::High => {
+                    title.push_str("  ·  ");
+                    title.push_str(crate::locale::t("complexity_high"));
+                }
+                Band::VeryHigh => {
+                    title.push_str("  ·  ");
+                    title.push_str(crate::locale::t("complexity_very_high"));
+                }
+            }
+            (
+                command(
+                    CommandId::ComplexityGoto(f.first_line),
+                    &title,
+                    crate::locale::t("detail_complexity_row"),
+                    "complexity function",
+                ),
+                band,
+            )
+        })
+        .collect()
+}
+
+/// The lines under the rows: how many more there are, then total and average; or that there
+/// are no functions.
+pub fn complexity_footer(scores: &[crate::complexity::FnScore]) -> Vec<String> {
+    if scores.is_empty() {
+        return vec![crate::locale::t("complexity_none").to_string()];
+    }
+    let mut lines = Vec::new();
+    if scores.len() > COMPLEXITY_ROWS {
+        lines.push(crate::locale::tf(
+            "complexity_more",
+            &[&(scores.len() - COMPLEXITY_ROWS)],
+        ));
+    }
+    let (sum, average) = crate::complexity::total(scores);
+    let average = format!("{average:.1}");
+    let average = if crate::locale::lang() == crate::locale::Lang::Nl {
+        average.replace('.', ",")
+    } else {
+        average
+    };
+    lines.push(crate::locale::tf(
+        "complexity_total",
+        &[&sum, &average, &scores.len()],
+    ));
+    lines
 }

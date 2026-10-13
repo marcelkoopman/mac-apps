@@ -641,6 +641,7 @@ impl LauncherDelegate {
 }
 
 mod api;
+mod complexity;
 mod controls;
 mod events;
 mod find;
@@ -649,6 +650,7 @@ mod panels;
 mod window;
 
 pub use api::*;
+pub use complexity::*;
 use controls::*;
 pub use events::*;
 use find::*;

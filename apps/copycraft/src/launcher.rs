@@ -146,6 +146,20 @@ pub fn close_settings() {
     crate::macos_settings::close();
 }
 
+/// Lines… › Complexity: score the code on the card in the background, then pop the list.
+pub fn show_complexity() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_complexity();
+}
+
+/// Scroll the card to `line` (1-based) of the text it shows.
+pub fn scroll_card_to_line(line: usize) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::scroll_card_to_line(line);
+    #[cfg(not(target_os = "macos"))]
+    let _ = line;
+}
+
 pub fn show_about() {
     #[cfg(target_os = "macos")]
     crate::macos_about::show();

@@ -98,6 +98,18 @@ Manual check of the language (NL/EN): open Settings › Language and choose Nede
 | Esc | Clear the find or search field, then close the card |
 | `⋯` | Choose file, Clipboard, Empty pasteboard, Add to diff / Compare with A / Remove from diff for the copy on screen, Swap when two are chosen, pin or unpin and remove the entry on screen, history (each text row has the same diff action), Clear history, Clear pins, Pause recording, Ignore next copy, Ignore copies from the frontmost app, Clear sensitive copies after 60 s (on/off), Keep history 5 / 15 / 60 min or until cleared, Appearance (System / Light / Dark), Quit |
 
+## Code complexity
+
+On a Rust, Java or Python card, *Lines… › Complexity* (*Regels… › Complexiteit*) lists every
+function or method with its line range and cognitive complexity, highest first, with the
+total and average below. 16–25 is shown in orange and marked *high*, above 25 in red and
+marked *very high*. Click a row to scroll the card to that function. The scores are worked
+out in the background and are an approximation of SonarQube's cognitive complexity (one
+lexical pass, no parser): `if`, `else if`/`elif`, `else`, ternaries, `switch`/`match`, loops,
+`catch`/`except`, labelled `break`/`continue`, mixed `&&`/`||` (`and`/`or`) sequences and
+direct recursion count; nested structures, lambdas and closures add one per level. Only
+counts and timings are logged, never code.
+
 ## Logs and diagnostics
 
 Copycraft logs events only: what happened, counts, sizes, types and error kinds. It never

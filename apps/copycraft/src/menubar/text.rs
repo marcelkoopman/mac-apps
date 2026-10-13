@@ -65,9 +65,10 @@ impl App {
         if data.subject_kind != SubjectKind::Text {
             return;
         }
-        let Some((id, _)) = self.text_entry() else {
+        let Some((id, text)) = self.text_entry() else {
             return;
         };
+        let code = crate::complexity::Lang::of(crate::format::detect(&text)).is_some();
         let (labels, version) = match self.text_steps_of(id) {
             Some(steps) => (steps.labels.clone(), steps.cursor),
             None => (vec![crate::locale::t("original").to_string()], 0),
@@ -87,6 +88,7 @@ impl App {
             labels,
             version,
             note,
+            code,
         });
     }
 

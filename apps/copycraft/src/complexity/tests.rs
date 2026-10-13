@@ -231,3 +231,106 @@ fn a_hundred_thousand_lines_stays_quick() {
     assert_eq!(all.len(), 100_000 / 6);
     assert!(started.elapsed().as_secs() < 5, "{:?}", started.elapsed());
 }
+
+#[test]
+fn line_offsets_count_utf16_units() {
+    use super::line_offset_utf16;
+    let text = "a\né😀\nc";
+    assert_eq!(line_offset_utf16(text, 1), 0);
+    assert_eq!(line_offset_utf16(text, 2), 2);
+    assert_eq!(line_offset_utf16(text, 3), 6);
+    assert_eq!(line_offset_utf16(text, 99), 7);
+}
+
+#[test]
+fn menu_rows_say_the_band_in_words_and_go_to_the_first_line() {
+    use crate::commands::{CommandId, complexity_footer, complexity_rows};
+    let scores = vec![
+        FnScore {
+            name: "big".into(),
+            first_line: 10,
+            last_line: 90,
+            score: 30,
+        },
+        FnScore {
+            name: "mid".into(),
+            first_line: 3,
+            last_line: 8,
+            score: 20,
+        },
+        FnScore {
+            name: "ok".into(),
+            first_line: 1,
+            last_line: 2,
+            score: 1,
+        },
+    ];
+    let rows = complexity_rows(&scores);
+    assert_eq!(rows[0].0.id, CommandId::ComplexityGoto(10));
+    assert_eq!(rows[0].1, Band::VeryHigh);
+    assert!(
+        rows[0].0.title.starts_with("30  big  ·  "),
+        "{}",
+        rows[0].0.title
+    );
+    assert!(
+        rows[0]
+            .0
+            .title
+            .ends_with(crate::locale::t("complexity_very_high"))
+    );
+    assert!(
+        rows[1]
+            .0
+            .title
+            .ends_with(crate::locale::t("complexity_high"))
+    );
+    assert!(
+        !rows[2]
+            .0
+            .title
+            .contains(crate::locale::t("complexity_high"))
+    );
+    let footer = complexity_footer(&scores);
+    assert_eq!(footer.len(), 1);
+    assert!(
+        footer[0].contains("51") && footer[0].contains("17"),
+        "{footer:?}"
+    );
+    assert_eq!(
+        complexity_footer(&[]),
+        vec![crate::locale::t("complexity_none").to_string()]
+    );
+    let many: Vec<FnScore> = (0..310)
+        .map(|i| FnScore {
+            name: format!("f{i}"),
+            first_line: i,
+            last_line: i,
+            score: 1,
+        })
+        .collect();
+    assert_eq!(
+        complexity_rows(&many).len(),
+        crate::commands::COMPLEXITY_ROWS
+    );
+    assert_eq!(complexity_footer(&many).len(), 2);
+}
+
+#[test]
+fn lines_menu_offers_complexity_only_on_code() {
+    use crate::commands::{CommandId, TextShown, text_menu_items};
+    let mut edit = TextShown {
+        labels: vec!["Original".into()],
+        version: 0,
+        note: None,
+        code: false,
+    };
+    let has = |edit: &TextShown| {
+        text_menu_items(edit)
+            .iter()
+            .any(|(c, _)| c.id == CommandId::TextComplexity)
+    };
+    assert!(!has(&edit));
+    edit.code = true;
+    assert!(has(&edit));
+}

@@ -155,6 +155,8 @@ pub struct TextShown {
     pub version: usize,
     /// The count, or why the last step did nothing, for the meta line.
     pub note: Option<String>,
+    /// Code in a language with functions: Lines… offers Complexity.
+    pub code: bool,
 }
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -400,6 +402,10 @@ pub enum CommandId {
     ImageResizeCustom,
     /// The "Lines…" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
+    /// Lines… › Complexity: cognitive complexity per function, in a menu.
+    TextComplexity,
+    /// A row of the Complexity menu: scroll the card to this (1-based) line.
+    ComplexityGoto(usize),
     /// Count lines, words and characters; shown on the card, the clipboard stays.
     TextCount,
     /// Ask for N, then keep the first N lines as a new version.

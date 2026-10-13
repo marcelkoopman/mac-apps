@@ -128,6 +128,8 @@ impl App {
             }
             CommandId::Settings => launcher::show_settings(),
             CommandId::About => launcher::show_about(),
+            CommandId::TextComplexity => launcher::show_complexity(),
+            CommandId::ComplexityGoto(line) => launcher::scroll_card_to_line(line),
             CommandId::ExportDiagnostics => self.export_diagnostics(),
             CommandId::Welcome => launcher::show_welcome(),
             CommandId::Diff => {

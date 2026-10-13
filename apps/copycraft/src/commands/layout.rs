@@ -350,6 +350,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextReverse
             | CommandId::TextColumn
             | CommandId::TextFilter
+            | CommandId::TextComplexity
+            | CommandId::ComplexityGoto(_)
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
     )
@@ -419,6 +421,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::DiffShown => "arrow.left.arrow.right",
         CommandId::DiffSwap => "arrow.left.arrow.right.circle",
         CommandId::TextMenu => "list.number",
+        CommandId::TextComplexity => "gauge.with.dots.needle.50percent",
         CommandId::ImageMenu => "photo",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",

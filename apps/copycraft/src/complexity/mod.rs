@@ -82,3 +82,19 @@ pub fn total(scores: &[FnScore]) -> (u32, f64) {
     };
     (sum, avg)
 }
+
+/// UTF-16 offset of the start of `line` (1-based) in `text`, clamped to its end.
+pub fn line_offset_utf16(text: &str, line: usize) -> usize {
+    let mut seen = 1;
+    let mut offset = 0;
+    for ch in text.chars() {
+        if seen >= line {
+            break;
+        }
+        offset += ch.len_utf16();
+        if ch == '\n' {
+            seen += 1;
+        }
+    }
+    offset
+}
