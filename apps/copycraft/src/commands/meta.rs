@@ -102,6 +102,13 @@ fn rust_functions(text: &str) -> Option<String> {
     })
 }
 
+/// "5 public · 2 private" on a Java card; a level without methods is left out.
+fn java_methods(text: &str) -> Option<String> {
+    (format::detect(text) == FormatKind::Java)
+        .then(|| crate::format::java_methods::count(text).label())
+        .flatten()
+}
+
 /// "1 sectie" / "4 secties" on a TOML card.
 fn toml_sections(text: &str) -> Option<String> {
     (format::detect(text) == FormatKind::Toml).then(|| match crate::format::toml::sections(text) {
@@ -158,6 +165,7 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
         match table_columns(classified)
             .or_else(|| toml_sections(classified))
             .or_else(|| rust_functions(classified))
+            .or_else(|| java_methods(classified))
             .or_else(|| markdown_headings(classified))
         {
             Some(count) => crate::locale::tf("lines_columns_size", &[&lines, &count, &size]),

@@ -272,6 +272,7 @@ mod markdown;
 #[allow(unused_imports)]
 pub use markdown::*;
 mod code;
+pub(crate) mod java_methods;
 pub(crate) mod md_headings;
 pub(crate) mod rust_fns;
 #[allow(unused_imports)]
