@@ -59,7 +59,8 @@ pub struct OpenedImage {
 /// the card ([`unreadable_image`]). Kies bestand uses this too; the app then records it in
 /// history the same way as a drop.
 pub fn load_dropped(path: &Path) -> OpenedFile {
-    if is_image_file(path) {
+    // An SVG is text (the SVG card draws it and has its code a toggle away), never a picture.
+    if !is_svg_name(path) && is_image_file(path) {
         return load_image(path);
     }
     let opened = load(path);
@@ -95,7 +96,12 @@ pub fn from_image_data(name: &str, mut bytes: Zeroizing<Vec<u8>>) -> OpenedFile 
     from_image_bytes(name.to_string(), std::mem::take(&mut *bytes))
 }
 
-fn from_image_bytes(name: String, bytes: Vec<u8>) -> OpenedFile {
+fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
+    // SVG markup handed over as image data (a drag from Finder or a browser): the SVG card.
+    if let Some(text) = svg_text(&bytes) {
+        zeroize::Zeroize::zeroize(&mut bytes);
+        return from_text(&name, text);
+    }
     match SecretBytes::new(bytes) {
         Some(bytes) => OpenedFile {
             name,
@@ -109,6 +115,18 @@ fn from_image_bytes(name: String, bytes: Vec<u8>) -> OpenedFile {
         },
         None => noted(name, unreadable_image()),
     }
+}
+
+fn is_svg_name(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
+}
+
+/// The bytes as text when they are an SVG document (UTF-8 or UTF-16, root `<svg>`).
+fn svg_text(bytes: &[u8]) -> Option<Zeroizing<String>> {
+    let text = decode(bytes)?;
+    crate::format::svg::is_svg(&text).then_some(text)
 }
 
 /// The file starts like a picture (PNG, JPEG, HEIC, GIF, WebP, TIFF, BMP, …).
@@ -325,6 +343,23 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         assert!(opened.image.is_some());
         assert!(opened.note.is_none());
+    }
+
+    #[test]
+    fn a_dropped_svg_is_text_for_the_svg_card() {
+        let svg = "<?xml version=\"1.0\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\"/></svg>\n";
+        // As image data (Finder or a browser hands the markup over as a picture).
+        let opened = from_image_data("logo.svg", Zeroizing::new(svg.as_bytes().to_vec()));
+        assert!(opened.image.is_none());
+        assert_eq!(opened.text.as_deref().map(String::as_str), Some(svg));
+        assert_eq!(crate::format::detect(svg), crate::format::FormatKind::Svg);
+        // As a file, also when its name is the only hint.
+        let path = std::env::temp_dir().join(format!("copycraft-drop-{}.svg", std::process::id()));
+        std::fs::write(&path, svg).unwrap();
+        let opened = load_dropped(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(opened.image.is_none());
+        assert!(opened.text.is_some());
     }
 
     #[test]
