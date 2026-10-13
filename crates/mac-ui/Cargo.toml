@@ -163,8 +163,9 @@ winit = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true }
-# `NSArray`: `lang` reads `NSLocale::preferredLanguages()` (an array). Not a new crate.
-objc2-foundation = { workspace = true, features = ["NSArray"] }
+# `NSArray`: `lang` reads `NSLocale::preferredLanguages()` (an array). `NSProcessInfo`: `log`
+# checks the running macOS version before using the system log. Not a new crate.
+objc2-foundation = { workspace = true, features = ["NSArray", "NSProcessInfo"] }
 # The always-on `tray` module labels the status item button for VoiceOver.
 objc2-app-kit = { workspace = true, features = [
     "NSAccessibilityProtocols",

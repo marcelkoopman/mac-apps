@@ -44,6 +44,9 @@ impl Category {
         }
     }
 
+    /// How many categories there are: one `os_log_t` handle each.
+    pub const COUNT: usize = Category::ALL.len();
+
     fn index(self) -> usize {
         self as usize
     }
@@ -78,8 +81,10 @@ mod imp {
     use std::sync::OnceLock;
 
     // Why `_os_log_impl`: `os_log(…)` is a C macro, not a function, so Rust cannot call it; the
-    // macro expands to `_os_log_impl` (libSystem, exported since macOS 10.12; copycraft needs
-    // macOS 14, see `minimum_system_version` in its Cargo.toml). The alternative without an
+    // macro expands to `_os_log_impl` (libSystem, exported since macOS 10.12). It is only called
+    // on macOS 14 or later: `set_subsystem` checks the running version at startup against
+    // `MIN_MACOS` (copycraft's `minimum_system_version`) and on an older Mac no line goes to the
+    // system log at all, the rest of the app works on. The alternative without an
     // internal symbol is a small C or Swift shim calling `os_log` (a build step and a C
     // compiler, which this workspace avoids) or a logging crate (a new dependency). CI checks
     // that a line written here reads back with `log show` (`os_log_round_trip`), so a change
@@ -98,21 +103,54 @@ mod imp {
     }
 
     /// `os_log_t` handles, made once per category. They live as long as the process.
-    struct Handles([usize; 7]);
+    struct Handles([usize; Category::COUNT]);
 
     static HANDLES: OnceLock<Handles> = OnceLock::new();
     static SUBSYSTEM: OnceLock<std::ffi::CString> = OnceLock::new();
+    /// Whether this macOS is new enough for `_os_log_impl` (see `MIN_MACOS`). Read once.
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+
+    /// The running macOS as (major, minor, patch), from `NSProcessInfo`.
+    fn running_version() -> (i64, i64, i64) {
+        let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+        (
+            version.majorVersion as i64,
+            version.minorVersion as i64,
+            version.patchVersion as i64,
+        )
+    }
+
+    /// Checks the macOS version once. On a Mac older than `MIN_MACOS` the system log stays off
+    /// and one line with only the version number goes to stderr.
+    pub(super) fn enabled() -> bool {
+        *ENABLED.get_or_init(|| {
+            let (major, minor, patch) = running_version();
+            let ok = super::supported(major, minor);
+            if !ok {
+                eprintln!(
+                    "system log off: macOS {major}.{minor}.{patch} is older than {}.{}",
+                    super::MIN_MACOS.0,
+                    super::MIN_MACOS.1
+                );
+            }
+            ok
+        })
+    }
 
     /// `%{public}s`: the one argument is the line, already free of content.
     const FORMAT: &CStr = c"%{public}s";
 
     pub(super) fn set_subsystem(subsystem: std::ffi::CString) {
         let _ = SUBSYSTEM.set(subsystem);
+        enabled();
     }
 
     pub(super) fn write(category: Category, level: Level, line: &CStr) {
         // When in doubt, drop the line.
-        if line.to_bytes().len() > super::MAX_LINE || category.index() >= 7 {
+        if line.to_bytes().len() > super::MAX_LINE
+            || category.index() >= Category::COUNT
+            || !enabled()
+        {
             return;
         }
         let subsystem = SUBSYSTEM.get_or_init(|| c"copycraft".to_owned());
@@ -137,7 +175,7 @@ mod imp {
         // the call. Neither keeps a pointer to `buffer` or `line` after returning.
         unsafe {
             let handles = HANDLES.get_or_init(|| {
-                let mut all = [0usize; 7];
+                let mut all = [0usize; Category::COUNT];
                 for category in Category::ALL {
                     let name = std::ffi::CString::new(category.name()).unwrap_or_default();
                     all[category.index()] =
@@ -193,6 +231,17 @@ fn clean(line: &str) -> &str {
     &line[..end]
 }
 
+/// The oldest macOS (major, minor) that gets lines in the system log; copycraft's
+/// `minimum_system_version`. `_os_log_impl` itself exists since 10.12; older Macs than this are
+/// not tested, so the log stays off there.
+pub const MIN_MACOS: (i64, i64) = (14, 0);
+
+/// Whether macOS `major.minor` is at least [`MIN_MACOS`]. Unreadable versions (0 or negative)
+/// count as not supported.
+fn supported(major: i64, minor: i64) -> bool {
+    major > 0 && minor >= 0 && (major, minor) >= MIN_MACOS
+}
+
 /// Lines are cut to this many bytes.
 pub const MAX_LINE: usize = 1000;
 
@@ -229,6 +278,51 @@ mod tests {
         for (index, category) in Category::ALL.iter().enumerate() {
             assert_eq!(category.index(), index);
         }
+    }
+
+    #[test]
+    fn version_check_compares_major_then_minor() {
+        assert!(supported(14, 0));
+        assert!(supported(14, 6));
+        assert!(supported(15, 0));
+        assert!(supported(26, 1));
+        assert!(!supported(13, 7));
+        assert!(!supported(13, 99));
+        assert!(!supported(12, 0));
+        assert!(!supported(10, 15));
+        assert!(!supported(0, 0));
+        assert!(!supported(-1, 20));
+        assert!(!supported(14, -1));
+    }
+
+    /// Adding a category means updating this match (it does not compile otherwise), `ALL` (the
+    /// count below fails otherwise) and with it the handle table, which is sized by `COUNT`.
+    #[test]
+    fn every_category_has_a_handle_slot() {
+        fn listed(category: Category) -> bool {
+            match category {
+                Category::Clipboard
+                | Category::Table
+                | Category::Decode
+                | Category::Settings
+                | Category::Window
+                | Category::Login
+                | Category::Worker => Category::ALL.contains(&category),
+            }
+        }
+        let variants = [
+            Category::Clipboard,
+            Category::Table,
+            Category::Decode,
+            Category::Settings,
+            Category::Window,
+            Category::Login,
+            Category::Worker,
+        ];
+        assert!(variants.iter().all(|c| listed(*c)));
+        assert_eq!(Category::COUNT, variants.len());
+        let highest = variants.iter().map(|c| c.index()).max().unwrap_or(0);
+        assert_eq!(highest + 1, Category::COUNT);
     }
 
     #[test]
