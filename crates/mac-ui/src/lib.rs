@@ -79,6 +79,7 @@ pub mod panel;
 pub mod pasteboard_types;
 #[cfg(all(target_os = "macos", feature = "progress"))]
 pub mod progress;
+pub mod style;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod text;
 #[cfg(feature = "theme")]

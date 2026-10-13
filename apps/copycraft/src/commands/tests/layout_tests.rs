@@ -237,3 +237,41 @@ fn history_arrows_keep_the_first_row_clear() {
         assert!(frame.x + frame.width <= nav_left - crate::commands::CHIP_GAP + 0.01);
     }
 }
+
+#[test]
+fn at_most_four_chips_show_and_text_stays_visible() {
+    use crate::commands::{Command, MAX_VISIBLE_CHIPS, split_chips};
+    let chip = |id: CommandId| Command {
+        id,
+        title: String::new(),
+        detail: String::new(),
+        keywords: String::new(),
+        enabled: true,
+    };
+    let ids = [
+        CommandId::Original,
+        CommandId::Format,
+        CommandId::Schema,
+        CommandId::Sample,
+        CommandId::Diff,
+        CommandId::TextMenu,
+    ];
+    let (shown, more) = split_chips(ids.iter().map(|id| chip(id.clone())).collect());
+    let shown: Vec<CommandId> = shown.into_iter().map(|c| c.id).collect();
+    let more: Vec<CommandId> = more.into_iter().map(|c| c.id).collect();
+    assert_eq!(shown.len(), MAX_VISIBLE_CHIPS);
+    assert_eq!(
+        shown,
+        [
+            CommandId::Original,
+            CommandId::Format,
+            CommandId::Schema,
+            CommandId::TextMenu
+        ]
+    );
+    assert_eq!(more, [CommandId::Sample, CommandId::Diff]);
+    // Few chips: nothing moves.
+    let (shown, more) = split_chips(vec![chip(CommandId::Original), chip(CommandId::TextMenu)]);
+    assert_eq!(shown.len(), 2);
+    assert!(more.is_empty());
+}

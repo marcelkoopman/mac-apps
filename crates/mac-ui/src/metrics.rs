@@ -1,4 +1,4 @@
-//! Shared spacing, corners and type sizes.
+//! Shared spacing, corners and type sizes, taken from [`crate::style`].
 //!
 //! Space is 8, 12 and 16 points. Type is a title, body text and a caption, all in the
 //! system font. Callers colour captions with the secondary label, and with the primary
@@ -7,11 +7,11 @@
 use crate::corners;
 
 /// Tight space: gaps between buttons, and the inset that yields [`WELL_RADIUS`].
-pub const SPACE_S: f64 = 8.0;
+pub const SPACE_S: f64 = crate::style::SPACE_S;
 /// Medium space: padding inside a well, and the gap above a caption.
-pub const SPACE_M: f64 = 12.0;
+pub const SPACE_M: f64 = crate::style::SPACE_M;
 /// Loose space: the window margin and the panel corner.
-pub const SPACE_L: f64 = 16.0;
+pub const SPACE_L: f64 = crate::style::SPACE_L;
 
 /// Inset of content from a window or panel edge.
 pub const MARGIN: f64 = SPACE_L;
@@ -30,15 +30,15 @@ pub const PANEL_RADIUS: f64 = SPACE_L;
 pub const WELL_RADIUS: f64 = corners::concentric_radius(PANEL_RADIUS, SPACE_S);
 
 /// Title and body use one size. The caption is smaller.
-pub const FONT_TITLE: f64 = 13.0;
-pub const FONT_BODY: f64 = 13.0;
-pub const FONT_CAPTION: f64 = 12.0;
+pub const FONT_TITLE: f64 = crate::style::FONT_TITLE;
+pub const FONT_BODY: f64 = crate::style::FONT_BODY;
+pub const FONT_CAPTION: f64 = crate::style::FONT_CAPTION;
 
 /// Shared height of a pill or a symbol button.
 pub const BUTTON_H: f64 = 28.0;
 
 /// Short move, in seconds. Skip it when Reduce Motion is on.
-pub const MOTION_SECS: f64 = 0.15;
+pub const MOTION_SECS: f64 = crate::style::CARD_IN_SECS;
 
 const _: () = assert!(WELL_RADIUS == SPACE_S);
 const _: () = assert!(MARGIN > WELL_RADIUS);

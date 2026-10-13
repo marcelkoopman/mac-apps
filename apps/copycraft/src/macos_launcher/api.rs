@@ -306,9 +306,16 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     HISTORY_MINUTES.set(data.settings.history_minutes);
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
-    ACTIONS.with(|slot| set_commands(slot, commands::chips(&data)));
+    // At most four chips on the card; the others lead the `…` menu (Text… stays visible).
+    let (shown, more) = commands::split_chips(commands::chips(&data));
+    ACTIONS.with(|slot| set_commands(slot, shown));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
-    OVERFLOW.with(|slot| set_commands(slot, commands::overflow(&data)));
+    OVERFLOW.with(|slot| {
+        set_commands(
+            slot,
+            more.into_iter().chain(commands::overflow(&data)).collect(),
+        )
+    });
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
