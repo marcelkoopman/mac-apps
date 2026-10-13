@@ -303,7 +303,9 @@ mod checker {
                 .name("copycraft-checker".into())
                 .spawn(run)
             {
-                eprintln!("sensitivity checker not started: {e}");
+                crate::diag::log(crate::diag::LogEvent::SensitivityNotStarted(
+                    crate::diag::ErrorKind::io(&e),
+                ));
             }
         });
     }
@@ -329,14 +331,10 @@ mod checker {
             let Some(found) = found else {
                 continue;
             };
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "copycraft: checked {} KB in {} ms",
-                job.text.len() / 1024,
-                started.elapsed().as_millis()
-            );
-            #[cfg(not(debug_assertions))]
-            let _ = started;
+            crate::diag::log(crate::diag::LogEvent::SensitivityChecked {
+                kb: (job.text.len() / 1024) as u64,
+                ms: started.elapsed().as_millis() as u64,
+            });
             super::LABELS.put(&job.text, found);
             if let Some(hook) = READY.get() {
                 hook();

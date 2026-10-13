@@ -68,7 +68,9 @@ impl App {
             },
             move |app, body| {
                 if let Err(e) = app.copy_converted(body, &late_source, from_file) {
-                    eprintln!("copy failed: {e:#}");
+                    crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    ));
                 }
             },
         );
@@ -128,7 +130,9 @@ impl App {
             move || crate::dataframe::frame_copy(&frame, source.as_str()).map(Zeroizing::new),
             |app, body| {
                 if let Err(e) = app.copy_grid(body) {
-                    eprintln!("copy failed: {e:#}");
+                    crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    ));
                 }
             },
         );
@@ -256,7 +260,7 @@ impl App {
         #[cfg(target_os = "macos")]
         {
             let Some(bytes) = self.preview_bytes() else {
-                eprintln!("preview: no picture to open");
+                crate::diag::log(crate::diag::LogEvent::PreviewNoPicture);
                 return;
             };
             let generation = crate::macos_open::begin_preview();
@@ -264,7 +268,7 @@ impl App {
             if !self.spinner_on {
                 self.spinner_on = true;
                 launcher::set_busy(true);
-                eprintln!("copycraft: spinner shown for preview");
+                crate::diag::log(crate::diag::LogEvent::PreviewStarted);
             }
             let spawned = std::thread::Builder::new()
                 .name("copycraft-preview".into())
@@ -276,7 +280,7 @@ impl App {
             if let Err(err) = spawned {
                 self.previewing = None;
                 self.stop_spinner_when_idle();
-                self.work_failed("preview", &err);
+                self.work_failed(crate::diag::Work::Preview, &err);
             }
         }
     }
@@ -417,10 +421,9 @@ impl App {
         if now >= due {
             self.spinner_on = true;
             launcher::set_busy(true);
-            eprintln!(
-                "copycraft: spinner shown after {} ms",
-                now.duration_since(started).as_millis()
-            );
+            crate::diag::log(crate::diag::LogEvent::SpinnerShown {
+                ms: now.duration_since(started).as_millis() as u64,
+            });
             wake
         } else {
             wake.min(due)
@@ -440,7 +443,7 @@ impl App {
         {
             self.spinner_on = false;
             launcher::set_busy(false);
-            eprintln!("copycraft: spinner hidden");
+            crate::diag::log(crate::diag::LogEvent::SpinnerHidden);
         }
     }
 
@@ -465,10 +468,12 @@ impl App {
                         crate::macos_open::keep_preview(path);
                     } else {
                         crate::macos_open::shred_preview(&path);
-                        eprintln!("preview: could not open Voorvertoning");
+                        crate::diag::log(crate::diag::LogEvent::PreviewOpenFailed);
                     }
                 }
-                Err(message) => eprintln!("preview failed: {message}"),
+                Err(message) => crate::diag::log(crate::diag::LogEvent::PreviewFailed(
+                    crate::diag::ErrorKind::from_text(&message),
+                )),
             }
             self.stop_spinner_when_idle();
         }
@@ -478,15 +483,10 @@ impl App {
 
     pub(crate) fn finish_save(&mut self, result: Result<(), String>) {
         if let Some(run) = self.saving.take() {
-            let shown = if self.spinner_on {
-                "spinner shown"
-            } else {
-                "under the spinner delay, no spinner"
-            };
-            eprintln!(
-                "copycraft: save finished in {} ms ({shown})",
-                run.elapsed_ms()
-            );
+            crate::diag::log(crate::diag::LogEvent::SaveFinished {
+                ms: run.elapsed_ms() as u64,
+                spinner: self.spinner_on,
+            });
         }
         self.stop_spinner_when_idle();
         match result {
@@ -615,12 +615,12 @@ impl App {
             url
         };
         if !crate::url_policy::may_visit(&url) {
-            eprintln!("visit refused: only http and https links are opened");
+            crate::diag::log(crate::diag::LogEvent::VisitRefused);
             return;
         }
         #[cfg(target_os = "macos")]
         if !crate::macos_open::open_web_url(&url) {
-            eprintln!("visit failed: the system could not open the link");
+            crate::diag::log(crate::diag::LogEvent::VisitFailed);
         }
     }
 }

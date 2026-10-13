@@ -10,6 +10,7 @@ mod commands;
 mod convert;
 mod dataframe;
 mod decode;
+mod diag;
 mod diff;
 mod format;
 mod highlight;
@@ -96,7 +97,9 @@ fn main() {
         }
     }
     if let Err(e) = menubar::run() {
-        eprintln!("copycraft failed: {e}");
+        crate::diag::log(crate::diag::LogEvent::StartFailed(
+            crate::diag::ErrorKind::from_text(&e.to_string()),
+        ));
         std::process::exit(1);
     }
 }

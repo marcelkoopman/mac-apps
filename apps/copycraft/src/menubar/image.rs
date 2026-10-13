@@ -84,7 +84,7 @@ impl App {
         // Picture steps only while the picture is shown (Image ▾ is off on the recognized
         // text); no switch to the picture.
         if !commands::image_steps_allowed(self.card_view) {
-            eprintln!("copycraft: image step ignored outside the picture view");
+            crate::diag::log(crate::diag::LogEvent::ImageStepRefused);
             return;
         }
         let Some(bytes) = self.image_source() else {
@@ -207,7 +207,7 @@ impl App {
                     cancel,
                 });
             }
-            Err(e) => self.work_failed("image job", &e),
+            Err(e) => self.work_failed(crate::diag::Work::ImageJob, &e),
         }
     }
 
@@ -225,10 +225,9 @@ impl App {
             .image_job
             .take_if(|run| run.generation == done.generation)
         {
-            eprintln!(
-                "copycraft: image job done in {} ms",
-                run.started.elapsed_ms()
-            );
+            crate::diag::log(crate::diag::LogEvent::ImageJobDone {
+                ms: run.started.elapsed_ms() as u64,
+            });
         }
         self.stop_spinner_when_idle();
         match done.result {

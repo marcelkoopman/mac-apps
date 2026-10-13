@@ -86,7 +86,7 @@ impl App {
             });
         if let Err(e) = spawned {
             self.lanes.slow[lane as usize] = None;
-            self.work_failed(&format!("{lane:?} work"), &e);
+            self.work_failed(crate::diag::Work::Lane, &e);
             return None;
         }
         self.work_error = None;
@@ -98,8 +98,11 @@ impl App {
     /// A worker thread could not start: say so on the card (NL/EN), drop the Working… state
     /// and the spinner. The card is refreshed once, from the event loop (never from inside a
     /// card update), so a failing refresh cannot loop.
-    pub(crate) fn work_failed(&mut self, what: &str, error: &std::io::Error) {
-        eprintln!("copycraft: {what} failed to start: {error}");
+    pub(crate) fn work_failed(&mut self, what: crate::diag::Work, error: &std::io::Error) {
+        crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
+            what,
+            crate::diag::ErrorKind::io(error),
+        ));
         let first = self.work_error.is_none();
         self.work_error = Some(crate::locale::t("work_failed").to_string());
         self.stop_spinner_when_idle();

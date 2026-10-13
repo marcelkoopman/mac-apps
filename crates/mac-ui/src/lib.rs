@@ -28,7 +28,7 @@
 //! - `wake`: `wake::observe_sleep_wake`, a callback when the Mac goes to sleep and wakes up.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
-//! Always on: `corners` (concentric corner radii), `find` (find in text: matches, counter,
+//! Always on: `corners` (concentric corner radii), `log` (unified logging, `os_log`), `find` (find in text: matches, counter,
 //! steps), `icon`, `keys` (named key codes), `lang` (Dutch or English labels for shared panels),
 //! `tray` (menu rows, icon set, blink timing) and `wake` (next event-loop deadline). The AppKit
 //! modules exist on macOS only.
@@ -72,6 +72,7 @@ pub mod keys;
 pub mod lang;
 #[cfg(target_os = "macos")]
 pub mod layer;
+pub mod log;
 pub mod metrics;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod motion;

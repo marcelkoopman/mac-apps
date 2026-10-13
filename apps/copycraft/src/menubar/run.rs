@@ -12,6 +12,8 @@ pub(crate) fn register_format_hotkey()
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    mac_ui::log::set_subsystem(crate::diag::SUBSYSTEM);
+    crate::diag::log(crate::diag::LogEvent::Started);
     crate::locale::apply();
     // Before the event loop, so a click cannot race this wipe of a previous run's pictures.
     #[cfg(target_os = "macos")]
@@ -27,7 +29,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             crate::sensitivity::warm();
         })
     {
-        eprintln!("background start-up skipped: {e}");
+        crate::diag::log(crate::diag::LogEvent::BackgroundStartSkipped(
+            crate::diag::ErrorKind::from_text(&e.to_string()),
+        ));
     }
     let (hotkeys, hotkey, format_hotkey_id) = register_format_hotkey()?;
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.

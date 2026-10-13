@@ -74,7 +74,7 @@ pub fn t_in(lang: Lang, key: &str) -> &'static str {
             Lang::En => en,
         },
         None => {
-            eprintln!("copycraft: missing locale key {key}");
+            crate::diag::log(crate::diag::LogEvent::MissingLocaleKey);
             "?"
         }
     }

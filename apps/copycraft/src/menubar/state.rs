@@ -118,7 +118,9 @@ impl App {
         if let Some(glyph) = step.swap
             && let Err(e) = self.icons.show(&self.tray, glyph)
         {
-            eprintln!("menu bar icon blink failed: {e}");
+            crate::diag::log(crate::diag::LogEvent::IconBlinkFailed(
+                crate::diag::ErrorKind::from_text(&e.to_string()),
+            ));
         }
         step.wake
     }
@@ -132,7 +134,9 @@ impl App {
             icon_tip(view)
         };
         if let Err(e) = self.tray.set_tooltip(Some(&tip)) {
-            eprintln!("menu bar tooltip failed: {e}");
+            crate::diag::log(crate::diag::LogEvent::TooltipFailed(
+                crate::diag::ErrorKind::from_text(&e.to_string()),
+            ));
         }
         mac_ui::tray::set_accessibility_label(&self.tray, &tray_label(&tip));
     }
@@ -260,13 +264,17 @@ pub(crate) fn prewarm(text: &str) {
             crate::commands::warm_chips(&text);
         });
     if let Err(e) = spawned {
-        eprintln!("prewarm skipped: {e}");
+        crate::diag::log(crate::diag::LogEvent::PrewarmSkipped(
+            crate::diag::ErrorKind::from_text(&e.to_string()),
+        ));
     }
 }
 
 /// The one place a failed save is reported, whether it failed before or on the save thread.
 pub(crate) fn log_save_failure(message: &str) {
-    eprintln!("save failed: {message}");
+    crate::diag::log(crate::diag::LogEvent::SaveFailed(
+        crate::diag::ErrorKind::from_text(message),
+    ));
     save_feedback(&save_toast(&Err(message.to_string())));
 }
 

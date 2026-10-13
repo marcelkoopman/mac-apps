@@ -1,9 +1,10 @@
 # Upper bounds for scripts/count_unsafe.sh --check (CI). Lower them when unsafe goes down.
-# mac-ui blocks 77: +1 for the NSObject `init` of dialog::form's preview target (Lines… > Column…, Filter…),
-# +1 for actions::run_on_main (background results back to the main queue).
+# mac-ui blocks 78: +1 for the NSObject `init` of dialog::form's preview target (Lines… > Column…, Filter…),
+# +1 for actions::run_on_main (background results back to the main queue),
+# +1 for log: os_log has no safe binding in the crates we use; one block calls os_log_create and _os_log_impl.
 copycraft blocks 100
 copycraft fn 5
 copycraft impl 7
-mac-ui blocks 77
+mac-ui blocks 78
 mac-ui fn 4
 mac-ui impl 4

@@ -31,7 +31,9 @@ pub(crate) enum PreviewBytes {
 pub fn choose_path() -> Option<PathBuf> {
     let mtm = MainThreadMarker::new()?;
     file_panel::choose_file(mtm, crate::locale::t("chip_choose_file"), &[]).unwrap_or_else(|e| {
-        eprintln!("open panel failed: {e}");
+        crate::diag::log(crate::diag::LogEvent::OpenPanelFailed(
+            crate::diag::ErrorKind::from_text(&e.to_string()),
+        ));
         None
     })
 }

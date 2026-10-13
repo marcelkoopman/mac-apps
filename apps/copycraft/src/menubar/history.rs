@@ -20,7 +20,9 @@ impl App {
                 }
                 self.refresh_popup();
             } else if let Err(e) = self.write_own(&formatted) {
-                eprintln!("format link failed: {e}");
+                crate::diag::log(crate::diag::LogEvent::FormatLinkFailed(
+                    crate::diag::ErrorKind::of(&e),
+                ));
             } else {
                 self.record_own_copy(&formatted);
                 self.refresh_popup();
@@ -171,10 +173,9 @@ impl App {
         }
         self.last_copy = None;
         self.clear_history();
-        eprintln!(
-            "copycraft: history forgotten {} min after the last copy",
-            self.history_minutes
-        );
+        crate::diag::log(crate::diag::LogEvent::HistoryForgottenIdle {
+            minutes: self.history_minutes,
+        });
         None
     }
 
@@ -192,7 +193,7 @@ impl App {
         self.clear_diff();
         if !self.history.is_empty() {
             self.forget_entries(true);
-            eprintln!("copycraft: history forgotten (lock, sleep or user switch)");
+            crate::diag::log(crate::diag::LogEvent::HistoryForgottenLock);
         } else if launcher::is_open() {
             self.refresh_popup();
         }
@@ -244,7 +245,9 @@ impl App {
         crate::memo::forget_all();
         launcher::wipe_shown();
         if let Err(e) = clipboard::clear_clipboard() {
-            eprintln!("clear clipboard failed: {e}");
+            crate::diag::log(crate::diag::LogEvent::ClearClipboardFailed(
+                crate::diag::ErrorKind::from_text(&e),
+            ));
         }
         self.signature = ClipSig::default();
         self.polled_change = None;
@@ -280,11 +283,10 @@ impl App {
             self.history_cursor = previous;
         }
         #[cfg(debug_assertions)]
-        eprintln!(
-            "copycraft: history step to {} in {} µs",
-            self.history_cursor,
-            started.elapsed().as_micros()
-        );
+        crate::diag::log(crate::diag::LogEvent::HistoryStep {
+            index: self.history_cursor as u64,
+            micros: started.elapsed().as_micros() as u64,
+        });
     }
 
     pub(crate) fn clip_signature(&self, view: &ClipboardView) -> ClipSig {
@@ -441,9 +443,11 @@ impl App {
         #[cfg(target_os = "macos")]
         if crate::macos_pasteboard::change_count() == pending.change {
             if let Err(e) = self.clear_clipboard() {
-                eprintln!("clear sensitive copy failed: {e:#}");
+                crate::diag::log(crate::diag::LogEvent::ClearSensitiveFailed(
+                    crate::diag::ErrorKind::of(&e),
+                ));
             } else {
-                eprintln!("copycraft: sensitive copy cleared after a minute");
+                crate::diag::log(crate::diag::LogEvent::SensitiveCleared);
             }
         }
         None

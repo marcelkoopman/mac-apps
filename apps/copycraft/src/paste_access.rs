@@ -96,21 +96,6 @@ pub fn explain_first(strategy: ReadStrategy, explained: bool) -> bool {
     strategy == ReadStrategy::WhenShown && !explained
 }
 
-/// The line logged when the setting changes while Copycraft runs.
-pub fn change_log_line(behavior: Option<AccessBehavior>) -> String {
-    startup_log_line(behavior).replace("accessBehavior", "accessBehavior now")
-}
-
-/// The line logged once at startup.
-pub fn startup_log_line(behavior: Option<AccessBehavior>) -> String {
-    match behavior {
-        Some(behavior) => format!("copycraft: pasteboard accessBehavior {}", behavior.name()),
-        None => {
-            "copycraft: pasteboard accessBehavior not available (before macOS 15.4)".to_string()
-        }
-    }
-}
-
 /// What a reading of the pasteboard was made for: the change count, its types (as a hash, no
 /// content) and the read strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,15 +217,6 @@ mod tests {
         assert!(!explain_first(ReadStrategy::Never, false));
     }
 
-    #[test]
-    fn the_startup_line_names_the_setting() {
-        assert_eq!(
-            startup_log_line(Some(AccessBehavior::AlwaysDeny)),
-            "copycraft: pasteboard accessBehavior alwaysDeny"
-        );
-        assert!(startup_log_line(None).contains("before macOS 15.4"));
-    }
-
     const TEXT: [&str; 1] = ["public.utf8-plain-text"];
 
     fn kept(key: ReadKey, plan: ReadPlan) -> Kept {
@@ -335,10 +311,6 @@ mod tests {
                 true
             ),
             ReadPlan::Deny
-        );
-        assert_eq!(
-            change_log_line(Some(AccessBehavior::AlwaysAllow)),
-            "copycraft: pasteboard accessBehavior now alwaysAllow"
         );
     }
 

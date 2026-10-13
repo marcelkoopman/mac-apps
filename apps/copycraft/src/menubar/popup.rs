@@ -247,13 +247,15 @@ impl App {
             });
         match spawned {
             Ok(_) => self.loading_all = Some(Background::now()),
-            Err(e) => self.work_failed("show all", &e),
+            Err(e) => self.work_failed(crate::diag::Work::ShowAll, &e),
         }
     }
 
     pub(crate) fn finish_show_all(&mut self, full: Box<launcher::FullCard>) {
         if let Some(run) = self.loading_all.take() {
-            eprintln!("copycraft: show all built in {} ms", run.elapsed_ms());
+            crate::diag::log(crate::diag::LogEvent::ShowAllBuilt {
+                ms: run.elapsed_ms() as u64,
+            });
         }
         self.stop_spinner_when_idle();
         if !launcher::is_open() {
@@ -378,7 +380,9 @@ impl App {
                 launcher::emit(UserEvent::DecodedPicture { key, picture });
             });
         if let Err(e) = spawned {
-            eprintln!("decode picture skipped: {e}");
+            crate::diag::log(crate::diag::LogEvent::DecodePictureSkipped(
+                crate::diag::ErrorKind::io(&e),
+            ));
         }
     }
 
@@ -448,7 +452,7 @@ fn attach_svg(data: &mut LaunchData) {
 
 fn drawable_svg(text: &str) -> Option<crate::clipboard::SecretBytes> {
     if crate::format::svg::has_external_refs(text) {
-        eprintln!("copycraft: SVG points outside itself, shown as code");
+        crate::diag::log(crate::diag::LogEvent::SvgExternalRefs);
         return None;
     }
     #[cfg(target_os = "macos")]

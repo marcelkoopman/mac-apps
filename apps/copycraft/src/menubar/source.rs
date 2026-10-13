@@ -125,7 +125,9 @@ impl App {
                     launcher::emit(UserEvent::DroppedImageScanned { image, scan });
                 });
             if let Err(e) = spawned {
-                eprintln!("dropped image scan failed: {e}");
+                crate::diag::log(crate::diag::LogEvent::DroppedImageScanFailed(
+                    crate::diag::ErrorKind::io(&e),
+                ));
             }
         }
         #[cfg(not(target_os = "macos"))]

@@ -119,7 +119,7 @@ define_class!(
             };
             let on = button.state() == NSControlStateValueOn;
             if let Err(message) = macos_login::set_enabled(on) {
-                eprintln!("copycraft: open at login: {message}");
+                crate::diag::log(crate::diag::LogEvent::LoginItemFailed(crate::diag::ErrorKind::from_text(&message)));
                 // Back to the real state first, so the box never shows a change that failed.
                 refresh_login_box();
                 mac_ui::dialog::alert(

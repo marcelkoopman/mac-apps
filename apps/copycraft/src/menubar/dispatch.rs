@@ -8,7 +8,9 @@ impl App {
             CommandId::Visit => self.visit_current(),
             CommandId::Copy => {
                 if let Err(e) = self.copy_current() {
-                    eprintln!("copy failed: {e:#}");
+                    crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    ));
                 }
             }
             CommandId::Save => self.save_current(),
@@ -38,14 +40,18 @@ impl App {
             }
             CommandId::History(index) => {
                 if let Err(e) = self.restore_history(index) {
-                    eprintln!("restore history failed: {e:#}");
+                    crate::diag::log(crate::diag::LogEvent::RestoreHistoryFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    ));
                 }
             }
             CommandId::HistoryOlder => self.step_history(true),
             CommandId::HistoryNewer => self.step_history(false),
             CommandId::ClearClipboard => {
                 if let Err(e) = self.clear_clipboard() {
-                    eprintln!("clear clipboard failed: {e:#}");
+                    crate::diag::log(crate::diag::LogEvent::ClearClipboardFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    ));
                 }
             }
             CommandId::ClearHistory => self.clear_history(),
@@ -247,7 +253,7 @@ impl App {
             Ok(_) => true,
             Err(err) => {
                 self.diffing = None;
-                self.work_failed("diff", &err);
+                self.work_failed(crate::diag::Work::Diff, &err);
                 false
             }
         }
@@ -258,7 +264,9 @@ impl App {
             return;
         }
         if let Some(run) = self.diffing.take() {
-            eprintln!("copycraft: diff built in {} ms", run.elapsed_ms());
+            crate::diag::log(crate::diag::LogEvent::DiffBuilt {
+                ms: run.elapsed_ms() as u64,
+            });
         }
         self.diff_outcome = Some(outcome);
         self.stop_spinner_when_idle();
@@ -347,17 +355,21 @@ impl App {
             return;
         }
         if let Err(e) = self.hotkeys.unregister(self.format_hotkey) {
-            eprintln!("copycraft: unregister hotkey: {e}");
+            crate::diag::log(crate::diag::LogEvent::HotkeyUnregisterFailed(
+                crate::diag::ErrorKind::from_text(&e.to_string()),
+            ));
         }
         match self.hotkeys.register(next) {
             Ok(()) => {
                 self.format_hotkey = next;
                 self.format_hotkey_id = next.id();
                 self.refresh_status_menu();
-                eprintln!("copycraft: hotkey {}", crate::settings::hotkey_label());
+                crate::diag::log(crate::diag::LogEvent::HotkeyRegistered);
             }
             Err(e) => {
-                eprintln!("copycraft: register hotkey: {e}");
+                crate::diag::log(crate::diag::LogEvent::HotkeyRegisterFailed(
+                    crate::diag::ErrorKind::from_text(&e.to_string()),
+                ));
                 // Best effort: put the previous chord back.
                 let _ = self.hotkeys.register(self.format_hotkey);
             }

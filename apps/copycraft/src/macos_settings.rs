@@ -263,7 +263,7 @@ define_class!(
             };
             let on = button.state() == NSControlStateValueOn;
             if let Err(message) = macos_login::set_enabled(on) {
-                eprintln!("copycraft: open at login: {message}");
+                crate::diag::log(crate::diag::LogEvent::LoginItemFailed(crate::diag::ErrorKind::from_text(&message)));
             }
             refresh_login_row();
         }

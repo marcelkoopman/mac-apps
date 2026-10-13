@@ -126,7 +126,9 @@ fn copy_symbol(delegate: &SymbolsDelegate, symbol: &str) {
     let change = match crate::macos_pasteboard::write_plain_text(symbol) {
         Ok(change) => change,
         Err(message) => {
-            eprintln!("copycraft: symbol copy failed: {message}");
+            crate::diag::log(crate::diag::LogEvent::SymbolCopyFailed(
+                crate::diag::ErrorKind::from_text(&message),
+            ));
             return;
         }
     };

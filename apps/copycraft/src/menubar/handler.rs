@@ -91,10 +91,7 @@ impl ApplicationHandler<UserEvent> for App {
                 ALLOW_SCREENSHOTS_ID => {
                     let on = !launcher::allows_screenshots();
                     launcher::set_allow_screenshots(on);
-                    eprintln!(
-                        "copycraft: allow screenshots {}",
-                        if on { "on" } else { "off" }
-                    );
+                    crate::diag::log(crate::diag::LogEvent::ScreenshotsAllowed(on));
                     self.refresh_status_menu();
                 }
                 PAUSE_ID => self.run_command(event_loop, CommandId::Pause),

@@ -85,12 +85,17 @@ impl App {
     /// may close. The window then stays with that entry.
     pub(crate) fn open_table_window(&mut self) {
         let Some((text, home)) = self.table_source() else {
-            eprintln!("copycraft: Open table: the card shows no table");
+            crate::diag::log(crate::diag::LogEvent::TableNotShown);
             return;
         };
         if home == TableHome::Loose {
             self.adopt_loose(&text);
         }
+        // Counts only: never the table's text.
+        crate::diag::log(crate::diag::LogEvent::TableOpened {
+            columns: crate::dataframe::header_columns(&text).unwrap_or(0) as u64,
+            rows: text.lines().count().saturating_sub(1) as u64,
+        });
         self.close_table_window();
         launcher::close_settings();
         launcher::close_about();
@@ -168,7 +173,9 @@ impl App {
                     }
                     CommandId::Copy => {
                         if let Err(e) = self.copy_table_window() {
-                            eprintln!("copy failed: {e:#}");
+                            crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                                crate::diag::ErrorKind::of(&e),
+                            ));
                         }
                         return;
                     }
@@ -364,7 +371,7 @@ impl App {
                     target,
                 });
             }
-            Err(e) => self.work_failed("table job", &e),
+            Err(e) => self.work_failed(crate::diag::Work::TableJob, &e),
         }
     }
 
@@ -384,10 +391,9 @@ impl App {
             .take_if(|run| run.generation == done.generation)
         {
             target = run.target;
-            eprintln!(
-                "copycraft: table job done in {} ms",
-                run.started.elapsed_ms()
-            );
+            crate::diag::log(crate::diag::LogEvent::TableJobDone {
+                ms: run.started.elapsed_ms() as u64,
+            });
         }
         self.stop_spinner_when_idle();
         match done.result {

@@ -140,10 +140,7 @@ pub(crate) fn current_view() -> ClipboardView {
                 if paste_access::text_read_failed(text_declared, view.text().is_some())
                     && matches!(view, ClipboardView::NoText)
                 {
-                    eprintln!(
-                        "copycraft: clipboard text could not be read (denied?); \
-                         not read again until the next copy"
-                    );
+                    crate::diag::log(crate::diag::LogEvent::ClipboardUnreadable);
                 }
                 if strategy == ReadStrategy::WhenShown && view.is_image() {
                     image = grab_image(&pasteboard, image_path.as_deref());
@@ -186,7 +183,10 @@ fn current_behavior(pasteboard: &NSPasteboard) -> Option<AccessBehavior> {
         if let Some(seen) = *last
             && seen != behavior
         {
-            eprintln!("{}", paste_access::change_log_line(behavior));
+            crate::diag::log(crate::diag::LogEvent::PasteAccess {
+                behavior,
+                changed: true,
+            });
         }
         *last = Some(behavior);
     }
@@ -251,7 +251,10 @@ pub(crate) fn log_access_behavior() {
     if let Ok(mut last) = LAST_BEHAVIOR.lock() {
         *last = Some(behavior);
     }
-    eprintln!("{}", paste_access::startup_log_line(behavior));
+    crate::diag::log(crate::diag::LogEvent::PasteAccess {
+        behavior,
+        changed: false,
+    });
 }
 
 /// The pasteboard's type names (no content).
@@ -290,7 +293,7 @@ fn foreign_skipped(change: isize) -> bool {
     let ignored = bundle
         .as_deref()
         .is_some_and(crate::settings::bundle_ignored);
-    crate::capture::consider(change, bundle.as_deref(), ignored).is_some()
+    crate::capture::consider(change, ignored).is_some()
 }
 
 /// Refuse a pasteboard picture read for a suppressed foreign change, or for a concealed copy.

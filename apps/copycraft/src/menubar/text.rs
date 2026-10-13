@@ -111,7 +111,7 @@ impl App {
             });
         match spawned {
             Ok(_) => self.work_error = None,
-            Err(e) => self.work_failed("text step", &e),
+            Err(e) => self.work_failed(crate::diag::Work::TextStep, &e),
         }
     }
 
@@ -154,7 +154,9 @@ impl App {
     /// Copy step `op`'s `result` (a new history entry) and make it the version after entry `id`.
     fn text_stepped(&mut self, id: u64, op: &TextOp, result: &Zeroizing<String>) {
         if let Err(e) = self.write_own(result) {
-            eprintln!("text step failed: {e:#}");
+            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
             return;
         }
         // The new version is the clipboard's: the card follows it again.

@@ -182,7 +182,7 @@ pub fn blocks(change: isize) -> bool {
 
 /// Decide a foreign change once. `None` means read it. The same change asked again
 /// returns the same answer and does not consume ignore-next a second time.
-pub fn consider(change: isize, bundle: Option<&str>, bundle_ignored: bool) -> Option<Reason> {
+pub fn consider(change: isize, bundle_ignored: bool) -> Option<Reason> {
     let mut slot = session();
     if let Some(decided) = slot.decided
         && decided.change == change
@@ -209,7 +209,7 @@ pub fn consider(change: isize, bundle: Option<&str>, bundle_ignored: bool) -> Op
             slot.ignore_next = false;
         }
         if first {
-            log_skip(reason, bundle);
+            log_skip(reason);
         }
     }
     slot.decided = Some(Decided { change, reason });
@@ -231,16 +231,18 @@ fn paused_over(paused: bool, reason: Option<Reason>) -> Option<Reason> {
     }
 }
 
-fn log_skip(reason: Option<Reason>, bundle: Option<&str>) {
+fn log_skip(reason: Option<Reason>) {
     match reason {
-        Some(Reason::Paused) => eprintln!("copycraft: copy skipped (paused)"),
-        Some(Reason::IgnoreNext) => eprintln!("copycraft: copy skipped (ignore next)"),
-        Some(Reason::IgnoredApp) => {
-            eprintln!(
-                "copycraft: copy skipped (ignored app {})",
-                bundle.unwrap_or("unknown")
-            );
-        }
+        // Never the app's bundle id: which apps are ignored stays private too.
+        Some(Reason::Paused) => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+            crate::diag::Skip::Paused,
+        )),
+        Some(Reason::IgnoreNext) => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+            crate::diag::Skip::IgnoreNext,
+        )),
+        Some(Reason::IgnoredApp) => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+            crate::diag::Skip::IgnoredApp,
+        )),
         None => {}
     }
 }
@@ -324,30 +326,18 @@ mod tests {
         let _guard = super::exclusive();
         super::set_ignore_next(true);
         super::set_paused(true);
-        assert_eq!(
-            super::consider(5, Some("com.apple.Safari"), false),
-            Some(Reason::Paused)
-        );
+        assert_eq!(super::consider(5, false), Some(Reason::Paused));
         assert!(super::ignore_next());
         assert!(super::blocks(5));
         super::set_paused(false);
-        assert_eq!(
-            super::consider(5, Some("com.apple.Safari"), false),
-            Some(Reason::Paused)
-        );
+        assert_eq!(super::consider(5, false), Some(Reason::Paused));
         // The stored decision was pause. The change stays unread; ignore-next is still armed
         // because pause did not consume it. A newer change uses the flag.
         assert!(super::ignore_next());
-        assert_eq!(
-            super::consider(6, Some("com.apple.Safari"), false),
-            Some(Reason::IgnoreNext)
-        );
+        assert_eq!(super::consider(6, false), Some(Reason::IgnoreNext));
         assert!(!super::ignore_next());
-        assert_eq!(
-            super::consider(6, Some("com.apple.Safari"), false),
-            Some(Reason::IgnoreNext)
-        );
-        assert_eq!(super::consider(7, Some("com.apple.Notes"), false), None);
+        assert_eq!(super::consider(6, false), Some(Reason::IgnoreNext));
+        assert_eq!(super::consider(7, false), None);
         assert!(super::blocks(6));
         assert!(!super::blocks(7));
     }
@@ -363,7 +353,7 @@ mod tests {
         super::on_session_end();
         assert!(super::last_foreign().is_none());
         super::set_paused(true);
-        assert_eq!(super::consider(1, None, false), Some(Reason::Paused));
+        assert_eq!(super::consider(1, false), Some(Reason::Paused));
         super::on_session_end();
         assert!(super::paused());
         assert!(super::blocks(1));
@@ -372,13 +362,7 @@ mod tests {
     #[test]
     fn an_ignored_app_is_logged_by_bundle_id_only() {
         let _guard = super::exclusive();
-        assert_eq!(
-            super::consider(4, Some("com.apple.Safari"), true),
-            Some(Reason::IgnoredApp)
-        );
-        assert_eq!(
-            super::consider(4, Some("com.apple.Safari"), true),
-            Some(Reason::IgnoredApp)
-        );
+        assert_eq!(super::consider(4, true), Some(Reason::IgnoredApp));
+        assert_eq!(super::consider(4, true), Some(Reason::IgnoredApp));
     }
 }
