@@ -33,6 +33,16 @@ thread_local! {
     static NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Symbols currently in the popover, in button-tag order.
     static SHOWN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// The last grid built, reused while its symbols and language stay the same, so opening
+    /// the popover does not build its glass buttons again.
+    static GRID: RefCell<Option<Grid>> = const { RefCell::new(None) };
+}
+
+struct Grid {
+    key: symbols::GridKey,
+    controller: Retained<NSViewController>,
+    note: Retained<NSTextField>,
+    size: NSSize,
 }
 
 define_class!(
@@ -157,10 +167,41 @@ fn fill(delegate: &SymbolsDelegate, popover: &NSPopover) {
         return;
     };
     let symbols = offered();
-    let (view, note, size) = build_grid(mtm, delegate, &symbols);
+    let key = symbols::GridKey::new(&symbols, locale::lang());
+    let cached = GRID.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .filter(|grid| grid.key == key)
+            .map(|grid| (grid.controller.clone(), grid.note.clone(), grid.size))
+    });
+    let (controller, note, size) = match cached {
+        Some(grid) => {
+            SHOWN.with(|slot| *slot.borrow_mut() = symbols);
+            grid
+        }
+        None => {
+            let (view, note, size) = build_grid(mtm, delegate, &symbols);
+            let controller = NSViewController::new(mtm);
+            controller.setView(&view);
+            GRID.with(|slot| {
+                *slot.borrow_mut() = Some(Grid {
+                    key,
+                    controller: controller.clone(),
+                    note: note.clone(),
+                    size,
+                });
+            });
+            (controller, note, size)
+        }
+    };
+    note.setStringValue(&NSString::from_str(""));
     NOTE.with(|slot| *slot.borrow_mut() = Some(note));
-    let controller = NSViewController::new(mtm);
-    controller.setView(&view);
+    if popover
+        .contentViewController()
+        .is_some_and(|shown| shown == controller)
+    {
+        return;
+    }
     popover.setContentSize(size);
     popover.setContentViewController(Some(&controller));
 }

@@ -25,6 +25,24 @@ pub(crate) fn default_list() -> Vec<String> {
     DEFAULT.iter().copied().map(str::to_string).collect()
 }
 
+/// What the symbols popover's grid was built from: its characters and the language of their
+/// labels. A grid with an equal key is reused instead of built again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GridKey {
+    symbols: Vec<String>,
+    language: String,
+}
+
+impl GridKey {
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn new(symbols: &[String], language: impl std::fmt::Debug) -> Self {
+        Self {
+            symbols: symbols.to_vec(),
+            language: format!("{language:?}"),
+        }
+    }
+}
+
 /// Characters in the popover: `recent` first (newest first, each once, at most [`MAX_RECENT`]),
 /// then the catalog. A recent character that is not in the catalog stays stored but is not shown,
 /// so removing it from the list stays removed.
@@ -270,5 +288,15 @@ mod tests {
         }
         assert_eq!(history.len(), 1);
         assert_eq!(history.get(0), Some("hello"));
+    }
+
+    #[test]
+    fn grid_key_changes_only_with_the_symbols_or_the_language() {
+        let list = super::default_list();
+        let same = super::GridKey::new(&list, "nl");
+        assert_eq!(same, super::GridKey::new(&list, "nl"));
+        assert_ne!(same, super::GridKey::new(&list, "en"));
+        let reordered = display_order(&list, &["€".to_string()]);
+        assert_ne!(same, super::GridKey::new(&reordered, "nl"));
     }
 }
