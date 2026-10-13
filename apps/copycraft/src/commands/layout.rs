@@ -287,6 +287,13 @@ pub fn step_chip(frames: &[ChipFrame], index: usize, dx: isize, dy: isize) -> us
     in_row.unwrap_or_else(|| (index as isize + dy).clamp(0, frames.len() as isize - 1) as usize)
 }
 
+/// Commands that close the card themselves once they have what they need from it. Open table
+/// reads the card's entry (history cursor, chosen file) first: a card closed before that would
+/// forget the file and the entry, and the window would never open.
+pub fn closes_card_itself(id: &CommandId) -> bool {
+    matches!(id, CommandId::TableOpenWindow)
+}
+
 pub fn keeps_card_open(id: &CommandId) -> bool {
     matches!(
         id,

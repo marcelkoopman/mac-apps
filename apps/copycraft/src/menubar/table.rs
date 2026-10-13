@@ -85,6 +85,9 @@ impl App {
             checking: false,
         });
         self.refresh_table_window();
+        // Only now the card may close: the window holds the entry (and keeps a chosen file).
+        // No fade, so the card is not ordered out after the window comes forward.
+        launcher::hide_at_once();
         launcher::bring_table_window_forward();
     }
 

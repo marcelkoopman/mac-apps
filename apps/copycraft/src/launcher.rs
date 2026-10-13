@@ -235,6 +235,12 @@ pub fn open_under_icon(
 }
 
 /// Close the card.
+/// Close the card without its fade (Open table: the window comes to the front right after).
+pub fn hide_at_once() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::hide_at_once();
+}
+
 pub fn hide() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::hide();

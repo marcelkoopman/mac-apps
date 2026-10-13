@@ -240,12 +240,11 @@ pub(crate) fn run_command(cmd: Command) {
     }
     let formatting_link =
         cmd.id == CommandId::Format && LINK_PAGE.with(|slot| slot.borrow().is_some());
-    if !commands::keeps_card_open(&cmd.id) && !formatting_link {
-        if cmd.id == CommandId::TableOpenWindow {
-            hide_at_once();
-        } else {
-            hide();
-        }
+    if !commands::keeps_card_open(&cmd.id)
+        && !commands::closes_card_itself(&cmd.id)
+        && !formatting_link
+    {
+        hide();
     }
     launcher::emit(UserEvent::Run(cmd.id));
 }

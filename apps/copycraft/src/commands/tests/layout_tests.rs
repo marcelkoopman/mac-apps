@@ -338,3 +338,13 @@ fn placeholder_keeps_the_last_card_height() {
     assert_eq!(stable_height(true, 120.0, None), 120.0);
     assert_eq!(stable_height(false, 280.0, Some(340.0)), 280.0);
 }
+
+#[test]
+fn open_table_closes_the_card_only_after_reading_its_entry() {
+    use crate::commands::{CommandId, closes_card_itself, keeps_card_open};
+    // The launcher must not close the card first: the app reads the entry, then closes it.
+    assert!(closes_card_itself(&CommandId::TableOpenWindow));
+    assert!(!keeps_card_open(&CommandId::TableOpenWindow));
+    assert!(!closes_card_itself(&CommandId::Save));
+    assert!(!closes_card_itself(&CommandId::TableMenu));
+}
