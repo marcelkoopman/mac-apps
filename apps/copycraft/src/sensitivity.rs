@@ -624,6 +624,20 @@ checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
     }
 
     #[test]
+    fn a_full_cargo_lock_has_no_labels() {
+        // The Cargo project's own lock file: hex checksums, versions and registry URLs only.
+        let lock = include_str!("../testdata/locks/cargo_project.lock");
+        assert_eq!(labels(lock), Vec::<Label>::new());
+        assert!(!crate::recognize::classes(lock, false).pii);
+    }
+
+    #[test]
+    fn standalone_phone_numbers_still_count() {
+        assert_eq!(labels("bel 0612345678"), vec![Label::Pii]);
+        assert!(!labels("hash d0a5c0629063962b03").contains(&Label::Pii));
+    }
+
+    #[test]
     fn standalone_cards_and_ibans_still_count() {
         assert_eq!(labels("card 4111111111111111"), vec![Label::Financial]);
         assert_eq!(labels("card: 4111 1111 1111 1111."), vec![Label::Financial]);

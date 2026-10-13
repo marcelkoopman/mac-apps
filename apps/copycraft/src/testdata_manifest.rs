@@ -479,8 +479,9 @@ fn every_file_is_in_the_manifest_once() {
 
 #[test]
 fn notion_languages_are_known() {
-    const KNOWN: [&str; 10] = [
+    const KNOWN: [&str; 11] = [
         "json",
+        "toml",
         "yaml",
         "xml",
         "html",

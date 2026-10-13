@@ -145,6 +145,7 @@ Columns (fixed; the test parses this table between the markers):
 | `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/leak_ssn.txt` | Leakguard: US SSN 078-05-1120 | plain text | Content | PII | — | kind=Plain |
 | `sensitivity/none_amount.txt` | No label: amount 10.06 | plain text | Content | — | — | kind=Plain |
+| `locks/cargo_project.lock` | No label: the Cargo project's Cargo.lock (hex checksums, versions, registry URLs) | toml | TOML | — | — | kind=Toml |
 | `sensitivity/none_invalid_iban.txt` | No label: IBAN failing mod-97 | plain text | Content | — | — | kind=Plain |
 | `sensitivity/none_card_fails_luhn.txt` | No label: card number failing Luhn | plain text | Content | — | — | kind=Plain |
 | `edge/empty.txt` | Edge: empty input | plain text | Clipboard | — | — | placeholder~Copy something to get started |

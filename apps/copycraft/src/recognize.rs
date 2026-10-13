@@ -238,7 +238,10 @@ fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
                 && start
                     .checked_sub(2)
                     .is_some_and(|at| bytes[at].is_ascii_digit());
-            no_digit(before) && no_digit(after) && !decimal
+            // Standalone: not a digit run inside a hex hash or another token
+            // (`checksum = "…0629063962b0…"` in a Cargo.lock).
+            let free = |byte: Option<u8>| byte.is_none_or(|byte| !is_ident_byte(byte));
+            no_digit(before) && no_digit(after) && free(before) && free(after) && !decimal
         }
     }
 }
