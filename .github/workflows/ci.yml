@@ -31,6 +31,30 @@ env:
 
 jobs:
   # Real unsafe (blocks, unsafe fn, unsafe impl) in copycraft and mac-ui may only go down.
+  commits:
+    name: commit messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Conventional Commits
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            scripts/check_commits.sh "$PR_BASE" HEAD
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            echo "new branch: nothing to compare"
+          else
+            scripts/check_commits.sh "$BEFORE" "$SHA"
+          fi
+
   unsafe-count:
     name: unsafe count
     runs-on: ubuntu-latest
