@@ -35,3 +35,19 @@ Question or found a bug? Email mac-apps-support@proton.me or open an issue on [G
 6. **How do I take a screenshot of the card?** Copycraft blocks that by default. Choose "Allow screenshots" in the menu to allow it for this session.
 7. **An app should be ignored.** Add it under Ignored apps in Settings.
 8. **How do I start Copycraft at login?** Turn on "Open at Login" in Settings.
+
+## Logs and diagnostics
+
+Copycraft logs events only: what happened, counts, sizes, types and error kinds. It never
+logs clipboard or history text, file contents, file names or paths, decoder input or output,
+regex patterns or table data.
+
+**View the log in Console.** Open Console.app, select your Mac, click Start streaming and
+search for `subsystem:com.github.marcelkoopman.mac-apps.copycraft`. The categories are
+`clipboard`, `table`, `decode`, `settings`, `window`, `login` and `worker`. Include Info and
+Debug messages (Action > Include Info Messages / Include Debug Messages) to see everything.
+
+**Export diagnostics.** In the `⋯` menu choose *Export diagnostics…* (*Diagnose
+exporteren…*) and save the `.txt` file. It holds the app version, the macOS version, the
+settings (values only) and the log lines of the last 24 hours of the current run, kept in
+memory. Attach it to your support request.

@@ -98,6 +98,22 @@ Manual check of the language (NL/EN): open Settings › Language and choose Nede
 | Esc | Clear the find or search field, then close the card |
 | `⋯` | Choose file, Clipboard, Empty pasteboard, Add to diff / Compare with A / Remove from diff for the copy on screen, Swap when two are chosen, pin or unpin and remove the entry on screen, history (each text row has the same diff action), Clear history, Clear pins, Pause recording, Ignore next copy, Ignore copies from the frontmost app, Clear sensitive copies after 60 s (on/off), Keep history 5 / 15 / 60 min or until cleared, Appearance (System / Light / Dark), Quit |
 
+## Logs and diagnostics
+
+Copycraft logs events only: what happened, counts, sizes, types and error kinds. It never
+logs clipboard or history text, file contents, file names or paths, decoder input or output,
+regex patterns or table data.
+
+**View the log in Console.** Open Console.app, select your Mac, click Start streaming and
+search for `subsystem:com.github.marcelkoopman.mac-apps.copycraft`. The categories are
+`clipboard`, `table`, `decode`, `settings`, `window`, `login` and `worker`. Include Info and
+Debug messages (Action > Include Info Messages / Include Debug Messages) to see everything.
+
+**Export diagnostics.** In the `⋯` menu choose *Export diagnostics…* (*Diagnose
+exporteren…*) and save the `.txt` file. It holds the app version, the macOS version, the
+settings (values only) and the log lines of the last 24 hours of the current run, kept in
+memory. Attach it to your support request.
+
 ## Build and run
 
 From the repo root:
