@@ -9,6 +9,7 @@ pub fn try_convert(text: &str) -> Option<String> {
         // as YAML (Dutch labeled records). Convert still maps them to JSON.
         FormatKind::Text | FormatKind::Plain => crate::transform::yaml_to_json(text)?,
         FormatKind::Json
+        | FormatKind::Toml
         | FormatKind::Csv
         | FormatKind::Tsv
         | FormatKind::Dataframe

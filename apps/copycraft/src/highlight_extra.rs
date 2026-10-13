@@ -455,3 +455,130 @@ fn skip_ws_extra(chars: &[char], mut i: usize) -> usize {
     }
     i
 }
+
+/// TOML: `[table]` headers as types, keys, strings (also `'…'` and multi-line), numbers and
+/// dates, `true`/`false`, `# comments`.
+fn tokenize_toml(source: &str) -> Vec<(TokenKind, String)> {
+    let mut out = Vec::new();
+    let chars: Vec<char> = source.chars().collect();
+    let mut i = 0;
+    let mut line_start = true;
+    let mut depth = 0usize;
+    while i < chars.len() {
+        let ch = chars[i];
+        if ch == '\n' {
+            out.push((TokenKind::Text, "\n".into()));
+            i += 1;
+            line_start = true;
+            continue;
+        }
+        if ch == ' ' || ch == '\t' {
+            let (token, next) = take_while(&chars, i, |c| c == ' ' || c == '\t');
+            out.push((TokenKind::Text, token));
+            i = next;
+            continue;
+        }
+        if ch == '#' {
+            let (token, next) = take_while(&chars, i, |c| c != '\n');
+            out.push((TokenKind::Comment, token));
+            i = next;
+            continue;
+        }
+        if line_start && depth == 0 && ch == '[' {
+            let (token, next) = take_while(&chars, i, |c| c != '\n' && c != '#');
+            let header = token.trim_end().to_string();
+            let gap = token[header.len()..].to_string();
+            out.push((TokenKind::Type, header));
+            if !gap.is_empty() {
+                out.push((TokenKind::Text, gap));
+            }
+            i = next;
+            line_start = false;
+            continue;
+        }
+        if line_start && depth == 0 && (ch.is_ascii_alphanumeric() || ch == '_' || ch == '"') {
+            let (token, next) = take_while(&chars, i, |c| c != '=' && c != '\n');
+            let key = token.trim_end().to_string();
+            let gap = token[key.len()..].to_string();
+            out.push((TokenKind::Key, key));
+            if !gap.is_empty() {
+                out.push((TokenKind::Text, gap));
+            }
+            i = next;
+            line_start = false;
+            continue;
+        }
+        line_start = false;
+        if starts_at(&chars, i, "\"\"\"") || starts_at(&chars, i, "'''") {
+            let fence: String = chars[i..i + 3].iter().collect();
+            let mut end = i + 3;
+            while end < chars.len() && !starts_at(&chars, end, &fence) {
+                end += 1;
+            }
+            let end = (end + 3).min(chars.len());
+            push_lines(&mut out, TokenKind::String, chars[i..end].iter().collect());
+            i = end;
+            continue;
+        }
+        if ch == '"' {
+            let (token, next) = take_string(&chars, i);
+            out.push((TokenKind::String, token));
+            i = next;
+            continue;
+        }
+        if ch == '\'' {
+            let mut end = i + 1;
+            while end < chars.len() && chars[end] != '\'' && chars[end] != '\n' {
+                end += 1;
+            }
+            let end = (end + 1).min(chars.len());
+            out.push((TokenKind::String, chars[i..end].iter().collect()));
+            i = end;
+            continue;
+        }
+        if ch.is_ascii_digit()
+            || ((ch == '-' || ch == '+') && chars.get(i + 1).is_some_and(char::is_ascii_digit))
+        {
+            let (token, next) = take_while(&chars, i, |c| {
+                c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_' | ':')
+            });
+            out.push((TokenKind::Number, token));
+            i = next;
+            continue;
+        }
+        if ch.is_ascii_alphabetic() {
+            let (token, next) =
+                take_while(&chars, i, |c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+            let kind = if matches!(token.as_str(), "true" | "false" | "inf" | "nan") {
+                TokenKind::Keyword
+            } else if chars.get(skip_ws_extra(&chars, next)) == Some(&'=') {
+                TokenKind::Key
+            } else {
+                TokenKind::Text
+            };
+            out.push((kind, token));
+            i = next;
+            continue;
+        }
+        match ch {
+            '[' | '{' => depth += 1,
+            ']' | '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        out.push((TokenKind::Punct, ch.to_string()));
+        i += 1;
+    }
+    out
+}
+
+/// `text` as `kind` tokens, its newlines as text (a highlighted run never spans lines).
+fn push_lines(out: &mut Vec<(TokenKind, String)>, kind: TokenKind, text: String) {
+    for (n, part) in text.split('\n').enumerate() {
+        if n > 0 {
+            out.push((TokenKind::Text, "\n".into()));
+        }
+        if !part.is_empty() {
+            out.push((kind, part.to_string()));
+        }
+    }
+}

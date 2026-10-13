@@ -143,12 +143,15 @@ pub fn load(path: &Path) -> OpenedFile {
         Err(_) => return noted(name, unreadable()),
     };
     match classify(&bytes) {
-        Classified::Text(text) => OpenedFile {
-            name,
-            text: Some(text),
-            note: None,
-            image: None,
-        },
+        Classified::Text(text) => {
+            crate::format::hint_by_name(&name, &text);
+            OpenedFile {
+                name,
+                text: Some(text),
+                note: None,
+                image: None,
+            }
+        }
         Classified::NotText => noted(name, not_text()),
         Classified::TooLarge => noted(name, too_large()),
     }
@@ -163,6 +166,7 @@ pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
     if text.trim().is_empty() {
         return noted(name, empty_text());
     }
+    crate::format::hint_by_name(&name, &text);
     OpenedFile {
         name,
         text: Some(text),

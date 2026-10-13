@@ -24,6 +24,7 @@ pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
         FormatKind::Python => tokenize_python(source),
         FormatKind::Xml | FormatKind::Html => tokenize_xml(source),
         FormatKind::Markdown => tokenize_markdown(source),
+        FormatKind::Toml => tokenize_toml(source),
         FormatKind::Csv => tokenize_csv(source),
         FormatKind::Tsv => tokenize_tsv(source),
         FormatKind::Dataframe => tokenize_dataframe(source),

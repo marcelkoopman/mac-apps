@@ -484,3 +484,13 @@ fn raw_chosen_shows_the_copy_and_keeps_its_chip() {
     input.view = CardView::Original;
     assert!(chips(&input).iter().any(|c| c.id == CommandId::Original));
 }
+
+#[test]
+fn a_toml_card_is_titled_and_colored() {
+    let src = "[package]\nname = \"copycraft\"\nversion = \"0.4.1\"\n";
+    let mut input = data(SubjectKind::Text, Some(src));
+    input.view = presented_view(src, CardView::Original);
+    let card = work_card(&input);
+    assert_eq!(card.title, "TOML");
+    assert_eq!(card.highlight, Some(crate::format::FormatKind::Toml));
+}

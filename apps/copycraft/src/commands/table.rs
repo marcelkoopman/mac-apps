@@ -429,6 +429,7 @@ pub(crate) fn opens_formatted(source: &str) -> bool {
             | FormatKind::Rust
             | FormatKind::Java
             | FormatKind::Python
+            | FormatKind::Toml
     )
 }
 
