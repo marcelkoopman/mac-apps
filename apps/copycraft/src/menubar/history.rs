@@ -431,7 +431,11 @@ impl App {
                 self.conceal_when_checked = Some(change);
             }
             if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
-                mac_ui::toast::show(mtm, crate::locale::t("copied_toast"));
+                mac_ui::toast::show(
+                    mtm,
+                    crate::locale::t("copied_toast"),
+                    crate::settings::announce_confirmations(),
+                );
             }
         }
         Ok(())

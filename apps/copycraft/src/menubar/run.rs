@@ -112,7 +112,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         diffing: None,
     };
     #[cfg(target_os = "macos")]
-    crate::macos_session::observe(|| launcher::emit(UserEvent::SessionEnded));
+    crate::macos_session::observe(
+        || launcher::emit(UserEvent::SessionEnded),
+        crate::appearance::restyle_open_windows,
+    );
     // Pasteboard privacy (macOS 15.4+): the access setting, in the local log only.
     #[cfg(target_os = "macos")]
     crate::macos_pasteboard::log_access_behavior();

@@ -7,8 +7,9 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::AnyObject;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSWorkspace, NSWorkspaceScreensDidSleepNotification,
-    NSWorkspaceSessionDidResignActiveNotification, NSWorkspaceWillSleepNotification,
+    NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
+    NSWorkspaceScreensDidSleepNotification, NSWorkspaceSessionDidResignActiveNotification,
+    NSWorkspaceWillSleepNotification,
 };
 use mac_ui::objc2_foundation::{
     NSDistributedNotificationCenter, NSNotification, NSObject, NSString,
@@ -19,6 +20,7 @@ const SCREEN_LOCKED: &str = "com.apple.screenIsLocked";
 
 thread_local! {
     static HOOK: OnceCell<fn()> = const { OnceCell::new() };
+    static DISPLAY_HOOK: OnceCell<fn()> = const { OnceCell::new() };
     /// The notification centers do not retain their observers: kept for the app's lifetime.
     static OBSERVER: OnceCell<Retained<SessionObserver>> = const { OnceCell::new() };
 }
@@ -30,6 +32,15 @@ define_class!(
     struct SessionObserver;
 
     impl SessionObserver {
+        #[unsafe(method(displayOptionsChanged:))]
+        fn display_options_changed(&self, _note: &NSNotification) {
+            DISPLAY_HOOK.with(|hook| {
+                if let Some(hook) = hook.get() {
+                    hook();
+                }
+            });
+        }
+
         #[unsafe(method(sessionEnded:))]
         fn session_ended(&self, _note: &NSNotification) {
             HOOK.with(|hook| {
@@ -41,13 +52,17 @@ define_class!(
     }
 );
 
-/// Run `hook` (on the main thread) when the screen locks, the Mac sleeps or the user switches.
-pub fn observe(hook: fn()) {
+/// Run `hook` (on the main thread) when the screen locks, the Mac sleeps or the user switches,
+/// and `display` when Reduce Transparency, Increase Contrast or Reduce Motion change.
+pub fn observe(hook: fn(), display: fn()) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
     HOOK.with(|slot| {
         let _ = slot.set(hook);
+    });
+    DISPLAY_HOOK.with(|slot| {
+        let _ = slot.set(display);
     });
     OBSERVER.with(|slot| {
         if slot.get().is_some() {
@@ -74,6 +89,12 @@ pub fn observe(hook: fn()) {
                     None,
                 );
             }
+            workspace.addObserver_selector_name_object(
+                target,
+                sel!(displayOptionsChanged:),
+                Some(NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification),
+                None,
+            );
             NSDistributedNotificationCenter::defaultCenter().addObserver_selector_name_object(
                 target,
                 sel!(sessionEnded:),

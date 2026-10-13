@@ -57,6 +57,7 @@ widgets = [
     "objc2-app-kit/NSTextStorage",
     "objc2-app-kit/NSTextView",
     "objc2-app-kit/NSTintProminence",
+    "objc2-app-kit/NSUserInterfaceItemIdentification",
     "objc2-foundation/NSDate",
     "objc2-foundation/NSRunLoop",
     "dep:block2",

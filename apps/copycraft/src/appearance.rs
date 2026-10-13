@@ -67,6 +67,17 @@ pub fn display() -> Display {
     }
 }
 
+/// How windows are drawn for the current display settings ([`mac_ui::style::Chrome`]).
+#[cfg(target_os = "macos")]
+pub fn chrome() -> mac_ui::style::Chrome {
+    let display = display();
+    mac_ui::style::Chrome::for_display(
+        display.reduce_transparency,
+        display.increase_contrast,
+        mac_ui::glass::is_available(),
+    )
+}
+
 /// Fill and border for a content well.
 ///
 /// The fill is the system text background, slightly see-through so the glass behind it
@@ -75,9 +86,9 @@ pub fn display() -> Display {
 #[cfg(target_os = "macos")]
 pub fn apply_well(well: &mac_ui::objc2_app_kit::NSBox, force_opaque: bool, border: bool) {
     use mac_ui::objc2_app_kit::NSColor;
-    let display = display();
+    let chrome = chrome();
     let fill = NSColor::textBackgroundColor();
-    let fill = if force_opaque || display.reduce_transparency || display.increase_contrast {
+    let fill = if force_opaque || chrome.opaque_wells {
         fill
     } else {
         fill.colorWithAlphaComponent(0.72)
@@ -87,7 +98,7 @@ pub fn apply_well(well: &mac_ui::objc2_app_kit::NSBox, force_opaque: bool, borde
         well.setBorderWidth(0.0);
         return;
     }
-    if display.increase_contrast {
+    if chrome.strong_borders {
         well.setBorderColor(&NSColor::labelColor());
         well.setBorderWidth(2.0);
     } else {
@@ -100,7 +111,7 @@ pub fn apply_well(well: &mac_ui::objc2_app_kit::NSBox, force_opaque: bool, borde
 #[cfg(target_os = "macos")]
 pub fn caption_color() -> mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor> {
     use mac_ui::objc2_app_kit::NSColor;
-    if display().increase_contrast {
+    if chrome().primary_captions {
         NSColor::labelColor()
     } else {
         NSColor::secondaryLabelColor()
@@ -114,6 +125,18 @@ pub fn motion_secs() -> f64 {
         0.0
     } else {
         mac_ui::metrics::MOTION_SECS
+    }
+}
+
+/// Reduce Transparency or Increase Contrast changed: restyle the backdrops, wells and captions
+/// of every open window. The welcome window is always opaque navy and needs nothing.
+#[cfg(target_os = "macos")]
+pub fn restyle_open_windows() {
+    crate::macos_launcher::apply_window_chrome();
+    crate::macos_settings::restyle();
+    crate::macos_about::restyle();
+    if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+        mac_ui::toast::restyle(mtm);
     }
 }
 

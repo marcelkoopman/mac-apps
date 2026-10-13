@@ -347,10 +347,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
     )
 }
 
-/// Chips shown on the card at most; the rest go under the `…` menu.
-pub const MAX_VISIBLE_CHIPS: usize = 4;
-
-/// Split the card's chips into the ones shown (at most [`MAX_VISIBLE_CHIPS`]) and the ones
+/// Split the card's chips into the ones shown (at most [`mac_ui::style::MAX_CARD_CHIPS`]) and the ones
 /// that move under `…`. Original and the menus (Text…, Image ▾, Table ▾) always stay visible,
 /// in their order; the rest fill the room left, in order.
 pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
@@ -361,7 +358,7 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
         )
     };
     let kept = chips.iter().filter(|cmd| keeps(cmd)).count();
-    let mut room = MAX_VISIBLE_CHIPS.saturating_sub(kept);
+    let mut room = mac_ui::style::MAX_CARD_CHIPS.saturating_sub(kept);
     let (mut shown, mut rest) = (Vec::new(), Vec::new());
     for cmd in chips {
         if keeps(&cmd) {

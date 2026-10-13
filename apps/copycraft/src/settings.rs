@@ -55,6 +55,9 @@ pub struct Settings {
     pub language: Language,
     /// "Show all" on a long text shows it one page at a time, like `more`. On by default.
     pub page_long_text: bool,
+    /// VoiceOver says confirmations such as the "Copied" toast. Off keeps the toast itself.
+    /// On by default.
+    pub announce_confirmations: bool,
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -71,6 +74,7 @@ impl Default for Settings {
             hotkey: None,
             language: Language::System,
             page_long_text: true,
+            announce_confirmations: true,
         }
     }
 }
@@ -83,6 +87,7 @@ const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
 const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
+const ANNOUNCE_KEY: &str = "CopycraftAnnounceConfirmations";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Stored (true) once the welcome window closed; missing on first launch.
@@ -127,6 +132,7 @@ pub fn load() -> Settings {
     if let Some(value) = load_bool(PAGE_LONG_TEXT_KEY) {
         settings.page_long_text = value;
     }
+    settings.announce_confirmations = announce_from(load_bool(ANNOUNCE_KEY));
     settings
 }
 
@@ -169,6 +175,22 @@ pub fn set_blur(on: bool) {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn set_page_long_text(on: bool) {
     store_bool(PAGE_LONG_TEXT_KEY, on);
+}
+
+/// Whether VoiceOver announces a confirmation, from the stored value: missing means on.
+pub fn announce_from(stored: Option<bool>) -> bool {
+    stored.unwrap_or(Settings::default().announce_confirmations)
+}
+
+/// Whether the "Copied" toast is also announced to VoiceOver.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn announce_confirmations() -> bool {
+    announce_from(load_bool(ANNOUNCE_KEY))
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_announce_confirmations(on: bool) {
+    store_bool(ANNOUNCE_KEY, on);
 }
 
 pub fn set_date_month_first(on: bool) {
@@ -612,5 +634,13 @@ mod tests {
         assert!(!super::valid_bundle_id(
             "com.github.marcelkoopman.mac-apps.copycraft."
         ));
+    }
+
+    #[test]
+    fn confirmations_are_announced_unless_turned_off() {
+        assert!(super::Settings::default().announce_confirmations);
+        assert!(super::announce_from(None));
+        assert!(super::announce_from(Some(true)));
+        assert!(!super::announce_from(Some(false)));
     }
 }

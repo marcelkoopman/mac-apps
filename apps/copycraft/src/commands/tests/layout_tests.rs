@@ -240,7 +240,8 @@ fn history_arrows_keep_the_first_row_clear() {
 
 #[test]
 fn at_most_four_chips_show_and_text_stays_visible() {
-    use crate::commands::{Command, MAX_VISIBLE_CHIPS, split_chips};
+    use crate::commands::{Command, split_chips};
+    use mac_ui::style::MAX_CARD_CHIPS;
     let chip = |id: CommandId| Command {
         id,
         title: String::new(),
@@ -259,7 +260,7 @@ fn at_most_four_chips_show_and_text_stays_visible() {
     let (shown, more) = split_chips(ids.iter().map(|id| chip(id.clone())).collect());
     let shown: Vec<CommandId> = shown.into_iter().map(|c| c.id).collect();
     let more: Vec<CommandId> = more.into_iter().map(|c| c.id).collect();
-    assert_eq!(shown.len(), MAX_VISIBLE_CHIPS);
+    assert_eq!(shown.len(), MAX_CARD_CHIPS);
     assert_eq!(
         shown,
         [

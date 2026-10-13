@@ -96,6 +96,33 @@ impl Backdrop {
     }
 }
 
+/// At most this many chips show on a card; the rest go under the `…` menu.
+pub const MAX_CARD_CHIPS: usize = 4;
+
+/// How a window is drawn for the display settings: its backdrop, whether content wells are
+/// opaque and strongly bordered, and whether captions use the primary label colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Chrome {
+    pub backdrop: Backdrop,
+    /// Wells drop their see-through fill (Reduce Transparency or Increase Contrast).
+    pub opaque_wells: bool,
+    /// Wells get a 2 pt label-coloured border (Increase Contrast).
+    pub strong_borders: bool,
+    /// Captions use the primary label colour instead of the secondary one (Increase Contrast).
+    pub primary_captions: bool,
+}
+
+impl Chrome {
+    pub fn for_display(reduce_transparency: bool, increase_contrast: bool, glass: bool) -> Self {
+        Self {
+            backdrop: Backdrop::choose(reduce_transparency, glass),
+            opaque_wells: reduce_transparency || increase_contrast,
+            strong_borders: increase_contrast,
+            primary_captions: increase_contrast,
+        }
+    }
+}
+
 /// A frame scaled by `scale` about its centre: (x, y, width, height).
 pub fn scaled_about_centre(frame: (f64, f64, f64, f64), scale: f64) -> (f64, f64, f64, f64) {
     let (x, y, w, h) = frame;
@@ -171,6 +198,27 @@ mod tests {
         assert_eq!(Backdrop::choose(true, false), Backdrop::Solid);
         assert_eq!(Backdrop::choose(false, true), Backdrop::Glass);
         assert_eq!(Backdrop::choose(false, false), Backdrop::Vibrancy);
+    }
+
+    #[test]
+    fn chrome_for_every_display_combination() {
+        for reduce in [false, true] {
+            for contrast in [false, true] {
+                for glass in [false, true] {
+                    let chrome = Chrome::for_display(reduce, contrast, glass);
+                    let backdrop = match (reduce, glass) {
+                        (true, _) => Backdrop::Solid,
+                        (false, true) => Backdrop::Glass,
+                        (false, false) => Backdrop::Vibrancy,
+                    };
+                    assert_eq!(chrome.backdrop, backdrop, "{reduce} {contrast} {glass}");
+                    assert_eq!(chrome.opaque_wells, reduce || contrast);
+                    assert_eq!(chrome.strong_borders, contrast);
+                    assert_eq!(chrome.primary_captions, contrast);
+                }
+            }
+        }
+        assert_eq!(MAX_CARD_CHIPS, 4);
     }
 
     #[test]

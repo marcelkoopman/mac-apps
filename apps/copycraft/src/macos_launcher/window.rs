@@ -362,6 +362,9 @@ pub(crate) fn apply_window_chrome() {
         let Some(window) = window.as_ref() else {
             return;
         };
+        if let Some(mtm) = MainThreadMarker::new() {
+            mac_ui::glass::restyle_window(mtm, window, PANEL_RADIUS);
+        }
         if reduce {
             window.setOpaque(true);
             window.setBackgroundColor(Some(&NSColor::windowBackgroundColor()));

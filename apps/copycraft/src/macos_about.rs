@@ -202,6 +202,16 @@ fn restore_level(window: &NSWindow) {
 }
 
 /// Close and open About again so its text follows the new language.
+/// Reduce Transparency changed: cover or uncover the glass of the open window.
+pub fn restyle() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    if let Some(window) = WINDOW.with(|slot| slot.borrow().clone()) {
+        mac_ui::glass::restyle_window(mtm, &window, RADIUS);
+    }
+}
+
 pub fn reopen() {
     if WINDOW.with(|slot| slot.borrow().is_none()) {
         return;

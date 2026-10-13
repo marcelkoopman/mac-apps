@@ -59,9 +59,10 @@ fn build(mtm: MainThreadMarker) -> Option<Toast> {
     })
 }
 
-/// Show `text` with the green check near the pointer, announce it, and fade it out after
-/// about 1.2 s. A new toast replaces one still showing.
-pub fn show(mtm: MainThreadMarker, text: &str) {
+/// Show `text` with the green check near the pointer, and fade it out after about 1.2 s. With
+/// `announce`, VoiceOver also says it, at normal priority. A new toast replaces one still
+/// showing.
+pub fn show(mtm: MainThreadMarker, text: &str, announce: bool) {
     let generation = GENERATION.with(|g| {
         g.set(g.get().wrapping_add(1));
         g.get()
@@ -92,8 +93,8 @@ pub fn show(mtm: MainThreadMarker, text: &str) {
         ));
         toast.window.setAlphaValue(0.0);
         toast.window.orderFrontRegardless();
-        if let Some(view) = toast.window.contentView() {
-            crate::a11y::announce(&view, text);
+        if announce && let Some(view) = toast.window.contentView() {
+            crate::a11y::announce_at(&view, text, crate::a11y::Priority::Medium);
         }
         fade_window(&toast.window, 1.0, None);
     });
@@ -106,6 +107,15 @@ pub fn show(mtm: MainThreadMarker, text: &str) {
     if spawned.is_err() {
         hide(generation);
     }
+}
+
+/// Apply the current Reduce Transparency setting to the toast, if it was built.
+pub fn restyle(mtm: MainThreadMarker) {
+    TOAST.with(|slot| {
+        if let Some(toast) = slot.borrow().as_ref() {
+            crate::glass::restyle_window(mtm, &toast.window, RADIUS_TOAST);
+        }
+    });
 }
 
 fn fade_window(window: &NSWindow, alpha: f64, done: Option<Box<dyn Fn()>>) {

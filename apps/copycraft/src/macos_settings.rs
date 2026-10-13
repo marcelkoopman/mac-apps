@@ -41,8 +41,8 @@ const LABEL_W: f64 = 136.0;
 const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
 /// Privacy: heading, two settings, the ignored-apps block, two gaps.
 const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Weergave: heading, the pages setting, a gap and the symbols block.
-const DISPLAY_H: f64 = HEAD_H + SETTING_H + mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Weergave: heading, the pages and announce settings, two gaps and the symbols block.
+const DISPLAY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 const HEIGHT: f64 = MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
@@ -50,8 +50,8 @@ const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(GENERAL_H == 230.0);
 const _: () = assert!(PRIVACY_H == 248.0);
-const _: () = assert!(DISPLAY_H == 194.0);
-const _: () = assert!(HEIGHT == 736.0);
+const _: () = assert!(DISPLAY_H == 248.0);
+const _: () = assert!(HEIGHT == 790.0);
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -205,6 +205,14 @@ define_class!(
             };
             settings::set_page_long_text(button.state() == NSControlStateValueOn);
             launcher::emit(UserEvent::SettingsChanged);
+        }
+
+        #[unsafe(method(announceToggled:))]
+        fn announce_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            settings::set_announce_confirmations(button.state() == NSControlStateValueOn);
         }
 
         #[unsafe(method(blurToggled:))]
@@ -531,6 +539,18 @@ fn build(mtm: MainThreadMarker) {
         &mut top,
     );
     gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    let announce = checkbox(mtm, crate::locale::t("announce_confirmations"), y);
+    announce.setState(state_of(settings::announce_confirmations()));
+    wire(&announce, sel!(announceToggled:));
+    body.addSubview(&announce);
+    place_explanation(
+        mtm,
+        &body,
+        crate::locale::t("announce_confirmations_note"),
+        &mut top,
+    );
+    gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
         &body,
@@ -566,6 +586,16 @@ fn build(mtm: MainThreadMarker) {
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);
     panel::bring_to_front(&window);
+}
+
+/// Reduce Transparency changed: cover or uncover the glass of the open window.
+pub fn restyle() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    if let Some(window) = WINDOW.with(|slot| slot.borrow().clone()) {
+        mac_ui::glass::restyle_window(mtm, &window, RADIUS);
+    }
 }
 
 fn raise_above_card(window: &NSWindow) {

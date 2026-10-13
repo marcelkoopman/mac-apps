@@ -917,6 +917,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("card_building", "Bezig…", "Working…"),
     ("copied_toast", "Gekopieerd", "Copied"),
     (
+        "announce_confirmations",
+        "Bevestigingen voorlezen",
+        "Announce confirmations",
+    ),
+    (
+        "announce_confirmations_note",
+        "VoiceOver zegt bijvoorbeeld “Gekopieerd”; de melding zelf blijft.",
+        "VoiceOver says, for example, “Copied”; the toast itself stays.",
+    ),
+    (
         "text_not_kept",
         "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)",
         "Copied, not in history (recording paused or app ignored)",

@@ -24,8 +24,6 @@ pub enum Kind {
     Glass,
     /// `NSVisualEffectView`, material Popover, behind-window blending.
     Frosted,
-    /// An opaque rounded box in the window background colour: Reduce Transparency is on.
-    Solid,
 }
 
 /// Result of [`background`].
@@ -37,8 +35,7 @@ pub struct Background {
     ///
     /// - [`Kind::Glass`]: a plain view set as the glass view's `contentView`, so content gets the
     ///   glass treatment.
-    /// - [`Kind::Frosted`] and [`Kind::Solid`]: the parent itself. Content stays a sibling above
-    ///   the backdrop.
+    /// - [`Kind::Frosted`]: the parent itself. Content stays a sibling above the frosted view.
     pub content: Retained<NSView>,
     pub kind: Kind,
 }
@@ -59,35 +56,83 @@ pub fn background(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) ->
     }
 }
 
-/// Like [`background`], but opaque while Reduce Transparency is on
-/// ([`crate::style::Backdrop::choose`]).
+/// Like [`background`], with the opaque fill of [`set_opaque_fill`] while Reduce Transparency
+/// is on ([`crate::style::Backdrop::choose`]).
 #[cfg(feature = "widgets")]
 pub fn background_for_display(
     mtm: MainThreadMarker,
     parent: &NSView,
     corner_radius: f64,
 ) -> Background {
-    use crate::style::Backdrop;
-    match Backdrop::choose(crate::motion::reduce_transparency(), is_available()) {
-        Backdrop::Solid => solid(mtm, parent, corner_radius),
-        Backdrop::Glass | Backdrop::Vibrancy => background(mtm, parent, corner_radius),
+    let background = background(mtm, parent, corner_radius);
+    let solid =
+        crate::style::Backdrop::choose(crate::motion::reduce_transparency(), is_available())
+            == crate::style::Backdrop::Solid;
+    set_opaque_fill(mtm, parent, corner_radius, solid);
+    background
+}
+
+/// Apply the current Reduce Transparency setting to a window built with
+/// [`crate::panel::rounded_glass`]: run when the display options change.
+#[cfg(feature = "widgets")]
+pub fn restyle_window(mtm: MainThreadMarker, window: &objc2_app_kit::NSWindow, corner_radius: f64) {
+    if let Some(root) = window.contentView() {
+        let solid = crate::motion::reduce_transparency();
+        set_opaque_fill(mtm, &root, corner_radius, solid);
     }
 }
 
+/// Identifier of the fill [`set_opaque_fill`] adds.
 #[cfg(feature = "widgets")]
-fn solid(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) -> Background {
+const OPAQUE_FILL: &str = "MacUiOpaqueFill";
+
+/// Cover the glass or frosted backdrop that [`background`] put in `root` with an opaque
+/// window-background fill (`solid`), or uncover it. Run again when Reduce Transparency changes.
+#[cfg(feature = "widgets")]
+pub fn set_opaque_fill(mtm: MainThreadMarker, root: &NSView, corner_radius: f64, solid: bool) {
+    use objc2_app_kit::NSUserInterfaceItemIdentification;
+    let backmost = root.subviews().firstObject();
+    // Glass: the fill goes behind the content inside the glass. Frosted: just above it.
+    let glass_content = backmost
+        .as_ref()
+        .filter(|_| is_available())
+        .and_then(|view| {
+            view.downcast_ref::<NSGlassEffectView>()
+                .map(|g| g.contentView())
+        })
+        .flatten();
+    let in_glass = glass_content.is_some();
+    let target = glass_content.unwrap_or_else(|| root.retain());
+    let id = objc2_foundation::NSString::from_str(OPAQUE_FILL);
+    let existing = target.subviews().iter().find(|view| {
+        view.identifier()
+            .is_some_and(|identifier| identifier.isEqualToString(&id))
+    });
+    if let Some(fill) = existing {
+        fill.setHidden(!solid);
+        return;
+    }
+    if !solid {
+        return;
+    }
     let fill = crate::widgets::filled_box(
         mtm,
         corner_radius,
         &objc2_app_kit::NSColor::windowBackgroundColor(),
     );
-    fill.setFrame(parent.bounds());
+    fill.setFrame(target.bounds());
+    fill.setIdentifier(Some(&id));
     track_size(&fill);
-    install_backmost(parent, &fill);
-    Background {
-        effect: fill.into_super(),
-        content: parent.retain(),
-        kind: Kind::Solid,
+    let above = backmost
+        .as_ref()
+        .filter(|view| view.downcast_ref::<NSVisualEffectView>().is_some());
+    match above {
+        Some(effect) if !in_glass => target.addSubview_positioned_relativeTo(
+            &fill,
+            NSWindowOrderingMode::Above,
+            Some(effect),
+        ),
+        _ => install_backmost(&target, &fill),
     }
 }
 
