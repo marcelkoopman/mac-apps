@@ -311,6 +311,11 @@ impl App {
                 self.launch_data(&view)
             }
         };
+        self.card_text = data
+            .subject_text
+            .as_deref()
+            .filter(|_| data.subject_kind == SubjectKind::Text)
+            .map(|text| Zeroizing::new(text.to_string()));
         self.attach_table(&mut data);
         self.attach_image(&mut data);
         self.attach_text(&mut data);

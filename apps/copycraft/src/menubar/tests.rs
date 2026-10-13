@@ -174,3 +174,13 @@ fn chosen_file_survives_open_table_and_returns_when_the_window_closes() {
     // The card already open: nothing to do.
     assert!(!card_returns_after_window(true, true, true));
 }
+
+#[test]
+fn every_table_on_the_card_has_a_home_for_open_table() {
+    use super::app::{TableHome, pick_table_home};
+    assert_eq!(pick_table_home(Some(3), false), TableHome::History(3));
+    assert_eq!(pick_table_home(Some(0), true), TableHome::History(0));
+    assert_eq!(pick_table_home(None, true), TableHome::Opened);
+    // Not in history (paused, ignored app, sensitive copy): still a table to open.
+    assert_eq!(pick_table_home(None, false), TableHome::Loose);
+}

@@ -72,6 +72,11 @@ pub(crate) struct App {
     /// Table versions for a file on the card whose text is not in history. A drop, Kies bestand
     /// and a copied file are recorded, and then use that history entry's table.
     pub(crate) opened_table: TableVersions,
+    /// The text the card shows (the text Open table and the card's table steps work on).
+    pub(crate) card_text: Option<Zeroizing<String>>,
+    /// Table versions for card text that is in history nor a chosen file, and that text.
+    pub(crate) loose_table: TableVersions,
+    pub(crate) loose_text: Option<Zeroizing<String>>,
     /// The table job on its thread. One at a time: a new one cancels it.
     pub(crate) table_job: Option<TableRun>,
     /// Why the last table step failed, shown on the card until the next one.
@@ -180,6 +185,18 @@ impl TableWindow {
 pub(crate) enum TableHome {
     History(usize),
     Opened,
+    /// Clipboard text not in history (recording paused, an ignored app, a sensitive copy).
+    Loose,
+}
+
+/// Where the table of the card's `text` lives: its history entry, the chosen file, or else the
+/// loose slot, so Open table works for any table the card shows.
+pub(crate) fn pick_table_home(history_index: Option<usize>, file_open: bool) -> TableHome {
+    match history_index {
+        Some(index) => TableHome::History(index),
+        None if file_open => TableHome::Opened,
+        None => TableHome::Loose,
+    }
 }
 
 /// A pasteboard write to clear at `due`, if the pasteboard still holds it (`change`).

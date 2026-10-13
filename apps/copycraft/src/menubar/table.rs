@@ -5,22 +5,35 @@ use super::*;
 impl App {
     /// The text on the card and where its table versions live, when it is a table.
     pub(crate) fn table_source(&self) -> Option<(Zeroizing<String>, TableHome)> {
-        let text = Zeroizing::new(self.source_text()?);
+        // What the card shows (a browsed history entry, an unrecorded copy), not a fresh read of
+        // the pasteboard, which may differ or be withheld once the card closes.
+        let text = match &self.card_text {
+            Some(text) => text.clone(),
+            None => Zeroizing::new(self.source_text()?),
+        };
         if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text) {
             return None;
         }
-        let home = match self.history.text_index(&text, self.history_cursor) {
-            Some(index) => TableHome::History(index),
-            None if self.opened.is_some() => TableHome::Opened,
-            None => return None,
-        };
+        let home = pick_table_home(
+            self.history.text_index(&text, self.history_cursor),
+            self.opened.is_some(),
+        );
         Some((text, home))
+    }
+
+    /// The loose slot holds `text`'s table: a new text starts it over.
+    pub(crate) fn adopt_loose(&mut self, text: &str) {
+        if self.loose_text.as_deref().map(|t| t.as_str()) != Some(text) {
+            self.loose_table = crate::settings::preferred_table();
+            self.loose_text = Some(Zeroizing::new(text.to_string()));
+        }
     }
 
     pub(crate) fn table_at(&mut self, home: TableHome) -> Option<&mut TableVersions> {
         match home {
             TableHome::History(index) => self.history.table_mut(index),
             TableHome::Opened => Some(&mut self.opened_table),
+            TableHome::Loose => Some(&mut self.loose_table),
         }
     }
 
@@ -59,7 +72,11 @@ impl App {
             let opened = Zeroizing::new(self.opened_text()?);
             (opened.as_str() == text.as_str()).then_some(TableHome::Opened)?
         } else {
-            TableHome::History(self.history.text_index(&text, self.history_cursor)?)
+            match self.history.text_index(&text, self.history_cursor) {
+                Some(index) => TableHome::History(index),
+                None => (self.loose_text.as_deref().map(|t| t.as_str()) == Some(text.as_str()))
+                    .then_some(TableHome::Loose)?,
+            }
         };
         Some((text, home))
     }
@@ -68,8 +85,12 @@ impl App {
     /// may close. The window then stays with that entry.
     pub(crate) fn open_table_window(&mut self) {
         let Some((text, home)) = self.table_source() else {
+            eprintln!("copycraft: Open table: the card shows no table");
             return;
         };
+        if home == TableHome::Loose {
+            self.adopt_loose(&text);
+        }
         self.close_table_window();
         launcher::close_settings();
         launcher::close_about();
@@ -374,6 +395,8 @@ impl App {
                 let generation = finished.generation();
                 let table = if self.opened_table.awaits(generation) {
                     Some(&mut self.opened_table)
+                } else if self.loose_table.awaits(generation) {
+                    Some(&mut self.loose_table)
                 } else {
                     self.history.table_awaiting(generation)
                 };
@@ -422,11 +445,10 @@ impl App {
         else {
             return;
         };
-        let home = match self.history.text_index(text, self.history_cursor) {
-            Some(index) => TableHome::History(index),
-            None if self.opened.is_some() => TableHome::Opened,
-            None => return,
-        };
+        let home = pick_table_home(
+            self.history.text_index(text, self.history_cursor),
+            self.opened.is_some(),
+        );
         let dataframe_view = data.view == CardView::Dataframe;
         // The chips are remembered per text, so this is cheap: a table has "Open table".
         if !commands::chips(data)
@@ -434,6 +456,9 @@ impl App {
             .any(|chip| chip.id == CommandId::TableOpenWindow)
         {
             return;
+        }
+        if home == TableHome::Loose {
+            self.adopt_loose(text);
         }
         let text = Zeroizing::new(text.to_string());
         let running = self.table_job.as_ref().map(|run| run.generation);
@@ -480,6 +505,7 @@ impl App {
         let table = match home {
             TableHome::History(index) => self.history.table(index)?,
             TableHome::Opened => &self.opened_table,
+            TableHome::Loose => &self.loose_table,
         };
         let reread = table.options() != crate::dataframe::ReadOptions::default();
         (table.cursor() > 0 || reread)
