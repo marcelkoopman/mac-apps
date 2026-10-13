@@ -119,8 +119,8 @@ impl FormatKind {
 /// Format of `text`. Remembered for large texts (see [`crate::memo`]): the card asks many times
 /// per redraw, and each look can parse the whole copy.
 pub fn detect(text: &str) -> FormatKind {
-    if TOML_FILES.get(text).is_some() {
-        return FormatKind::Toml;
+    if let Some(kind) = NAMED_FILES.get(text) {
+        return kind;
     }
     DETECTED.get_or_compute(text, detect_uncached)
 }
@@ -130,7 +130,7 @@ static DETECTED: crate::memo::Memo<FormatKind> = crate::memo::Memo::new(8);
 /// Drop the remembered formats (Wipe).
 pub fn forget_detected() {
     DETECTED.clear();
-    TOML_FILES.clear();
+    NAMED_FILES.clear();
 }
 
 fn detect_uncached(text: &str) -> FormatKind {
@@ -188,14 +188,21 @@ mod html;
 pub(crate) mod toml;
 
 /// A file named `*.toml` is TOML whatever its text looks like: remembered for its text.
+/// A `*.md` / `*.markdown` file is Markdown the same way.
 pub fn hint_by_name(name: &str, text: &str) {
-    if name.to_ascii_lowercase().ends_with(".toml") {
-        TOML_FILES.put(text, ());
-    }
+    let name = name.to_ascii_lowercase();
+    let kind = if name.ends_with(".toml") {
+        FormatKind::Toml
+    } else if name.ends_with(".md") || name.ends_with(".markdown") {
+        FormatKind::Markdown
+    } else {
+        return;
+    };
+    NAMED_FILES.put(text, kind);
 }
 
-/// Texts of the last few `*.toml` files opened (only a hash of each is kept).
-static TOML_FILES: crate::memo::Memo<()> = crate::memo::Memo::with_min_len(4, 0);
+/// Kinds of the last few files opened by name (only a hash of each text is kept).
+static NAMED_FILES: crate::memo::Memo<FormatKind> = crate::memo::Memo::with_min_len(4, 0);
 
 pub fn format_text(text: &str) -> String {
     match detect(text) {
@@ -253,6 +260,7 @@ mod markdown;
 #[allow(unused_imports)]
 pub use markdown::*;
 mod code;
+pub(crate) mod md_headings;
 pub(crate) mod rust_fns;
 #[allow(unused_imports)]
 pub use code::*;

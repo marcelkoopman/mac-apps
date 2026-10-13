@@ -80,6 +80,20 @@ fn table_columns(text: &str) -> Option<String> {
         .map(columns_label)
 }
 
+/// "3 # · 7 ##" on a Markdown card; a level without headings is left out.
+fn markdown_headings(text: &str) -> Option<String> {
+    if format::detect(text) != FormatKind::Markdown {
+        return None;
+    }
+    let (h1, h2) = crate::format::md_headings::count(text);
+    let parts: Vec<String> = [(h1, "#"), (h2, "##")]
+        .into_iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, mark)| format!("{n} {mark}"))
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
 /// "1 functie" / "8 functies" on a Rust card.
 fn rust_functions(text: &str) -> Option<String> {
     (format::detect(text) == FormatKind::Rust).then(|| match crate::format::rust_fns::count(text) {
@@ -144,6 +158,7 @@ pub(crate) fn text_meta_from(measured: &str, classified: &str) -> String {
         match table_columns(classified)
             .or_else(|| toml_sections(classified))
             .or_else(|| rust_functions(classified))
+            .or_else(|| markdown_headings(classified))
         {
             Some(count) => crate::locale::tf("lines_columns_size", &[&lines, &count, &size]),
             None => crate::locale::tf("lines_size", &[&lines, &size]),
