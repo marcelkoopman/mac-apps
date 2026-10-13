@@ -385,6 +385,22 @@ impl TableLayout {
         let gaps = COL_GAP * self.widths.len().saturating_sub(1) as f64;
         self.widths.iter().copied().sum::<f64>() + gaps
     }
+
+    /// Where the thin column separators go, in the same points as [`Self::stops`]: in the
+    /// middle of each gap, so every cell has the same padding on both sides. None after the
+    /// last column.
+    pub(crate) fn separators(&self) -> Vec<f64> {
+        let mut x = 0.0;
+        let mut lines = Vec::with_capacity(self.widths.len().saturating_sub(1));
+        for (index, width) in self.widths.iter().enumerate() {
+            x += width;
+            if index + 1 < self.widths.len() {
+                lines.push((x + COL_GAP / 2.0).round());
+                x += COL_GAP;
+            }
+        }
+        lines
+    }
 }
 
 const COL_GAP: f64 = 16.0;

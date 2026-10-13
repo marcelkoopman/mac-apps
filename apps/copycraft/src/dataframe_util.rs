@@ -905,6 +905,25 @@ Id;Naam;Salaris
     }
 
     #[test]
+    fn column_separators_sit_mid_gap_between_the_columns() {
+        let src = "name,when,amount\nalice,2026-03-09,12.5\nbob,2026-04-01,3";
+        let preview = super::try_format_preview(src, 20, None).expect("preview");
+        let sheet = super::grid_sheet(&preview.grid).expect("sheet");
+        let layout = super::layout_table(&sheet, 8.0, 7.0);
+        let lines = layout.separators();
+        // One between each pair of columns, none after the last.
+        assert_eq!(lines.len(), 2);
+        let first_end = layout.widths[0];
+        let second_start = first_end + 16.0;
+        // Same padding on both sides of the line (half the gap).
+        assert!((lines[0] - (first_end + 8.0)).abs() <= 0.5, "{lines:?}");
+        assert!(lines[0] > first_end && lines[0] < second_start);
+        assert!(lines[1] > lines[0] && lines[1] < layout.content_width());
+        // The right-aligned number stop stays where it was: separators change no layout.
+        assert!(layout.stops.iter().any(|(_, right)| *right));
+    }
+
+    #[test]
     fn a_real_table_keeps_dates_on_the_left_and_numbers_on_the_right() {
         let src = "name,when,amount\nalice,2026-03-09,12.5\nbob,2026-04-01,3";
         let preview = super::try_format_preview(src, 20, None).expect("preview");

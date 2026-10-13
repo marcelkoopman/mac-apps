@@ -7,6 +7,10 @@ thread_local! {
     static TABLE_STRIPES: Cell<bool> = const { Cell::new(false) };
     /// Line height the stripes use, the same height the paragraph style locks in.
     static ROW_LINE_H: Cell<f64> = const { Cell::new(0.0) };
+    /// Column separators of the sheet, x in the grid view (inset included).
+    static COLUMN_LINES: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    /// The separators in the header strip, thin boxes on the header text.
+    static HEADER_LINES: RefCell<Vec<Retained<NSBox>>> = const { RefCell::new(Vec::new()) };
 }
 
 const HEADER_STRIP: f64 = 28.0;
@@ -31,6 +35,56 @@ fn table_grid_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
 }
 
 fn draw_table_background(view: &NSTextView, dirty: NSRect) {
+    draw_stripes(view, dirty);
+    if TABLE_STRIPES.with(Cell::get) {
+        draw_column_lines(dirty);
+    }
+}
+
+/// Thin 1 pt lines between the columns, in the adaptive separator colour, over the stripes.
+fn draw_column_lines(dirty: NSRect) {
+    COLUMN_LINES.with(|lines| {
+        let lines = lines.borrow();
+        if lines.is_empty() {
+            return;
+        }
+        NSColor::separatorColor().setFill();
+        for &x in lines.iter() {
+            if x + 1.0 < dirty.origin.x || x > dirty.origin.x + dirty.size.width {
+                continue;
+            }
+            NSBezierPath::fillRect(NSRect::new(
+                NSPoint::new(x, dirty.origin.y),
+                NSSize::new(1.0, dirty.size.height),
+            ));
+        }
+    });
+}
+
+/// The same separators in the header strip, as thin boxes on the header text view (they
+/// scroll sideways with it).
+fn place_header_lines(views: &Views, xs: &[f64]) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    HEADER_LINES.with(|slot| {
+        let mut boxes = slot.borrow_mut();
+        for line in boxes.drain(..) {
+            line.removeFromSuperview();
+        }
+        for &x in xs {
+            let line = widgets::filled_box(mtm, 0.0, &NSColor::separatorColor());
+            line.setFrame(NSRect::new(
+                NSPoint::new(x, 0.0),
+                NSSize::new(1.0, HEADER_STRIP),
+            ));
+            views.header.addSubview(&line);
+            boxes.push(line);
+        }
+    });
+}
+
+fn draw_stripes(view: &NSTextView, dirty: NSRect) {
     if !TABLE_STRIPES.with(Cell::get) {
         NSColor::controlBackgroundColor().setFill();
         NSBezierPath::fillRect(dirty);
@@ -183,6 +237,14 @@ fn paint_aligned_table(views: &Views, sheet: &crate::dataframe::GridSheet, previ
     header_now.zeroize();
     let line_h = line_height_for(&views.grid, &body_font);
     ROW_LINE_H.set(line_h);
+    // Separators sit mid-gap; the text starts after the container inset in both views.
+    let xs: Vec<f64> = layout
+        .separators()
+        .into_iter()
+        .map(|x| x + BODY_INSET_X)
+        .collect();
+    place_header_lines(views, &xs);
+    COLUMN_LINES.with(|slot| slot.replace(xs));
     TABLE_STRIPES.set(true);
     views.grid.setDrawsBackground(true);
     views.frozen.setHidden(true);
@@ -228,6 +290,8 @@ fn paint_boxed_grid(views: &Views, view: &TableWindowView, previous: &str) {
         return;
     }
     TABLE_STRIPES.set(false);
+    COLUMN_LINES.with(|slot| slot.borrow_mut().clear());
+    place_header_lines(views, &[]);
     views.grid.setDrawsBackground(false);
     set_line_padding(&views.grid, NSSize::new(12.0, 10.0), 5.0);
     place_table_header(views, false);
@@ -351,5 +415,7 @@ fn clear_sheet_chrome(views: &Views) {
     widgets::wipe_text_view(&views.header);
     place_table_header(views, false);
     TABLE_STRIPES.set(false);
+    COLUMN_LINES.with(|slot| slot.borrow_mut().clear());
+    place_header_lines(views, &[]);
     views.grid.setDrawsBackground(false);
 }
