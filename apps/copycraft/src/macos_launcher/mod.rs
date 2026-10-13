@@ -110,6 +110,8 @@ thread_local! {
     static HIDDEN: Cell<bool> = const { Cell::new(false) };
     /// Hide/show on the well.
     static HIDE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+    /// The eye button's choice per item, kept in memory ([`commands::BlurChoices`]).
+    static BLUR_CHOICES: RefCell<commands::BlurChoices> = RefCell::new(commands::BlurChoices::default());
 }
 
 thread_local! {

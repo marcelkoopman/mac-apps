@@ -105,6 +105,11 @@ pub(crate) fn mask_again() {
     if !is_open() || !MASKS.with(Cell::get) || !REVEALED.with(Cell::get) {
         return;
     }
+    // Shown with the eye button: that choice holds (Preview taking focus, another app).
+    let key = CONTENT_KEY.with(Cell::get);
+    if BLUR_CHOICES.with(|choices| choices.borrow().choice(key)) == Some(false) {
+        return;
+    }
     REVEALED.set(false);
     layout(false);
     // As in `present`: the blur, then `<` `>` and the well icons, on top.
@@ -582,6 +587,8 @@ pub(crate) fn toggle_hidden() {
     let (hidden, revealed) = commands::toggle_hidden(masked);
     HIDDEN.set(hidden);
     REVEALED.set(revealed);
+    let key = CONTENT_KEY.with(Cell::get);
+    BLUR_CHOICES.with(|choices| choices.borrow_mut().remember(key, hidden));
     layout(false);
     if well_is_masked() {
         show_reveal_cover(true);

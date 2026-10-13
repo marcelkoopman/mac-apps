@@ -285,6 +285,14 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         HIDDEN.set(false);
         set_item_find(false);
     }
+    // An item the eye button was used on keeps that choice (reopened, browsed back to).
+    let (hidden, revealed) = BLUR_CHOICES.with(|choices| {
+        choices
+            .borrow()
+            .apply(key, HIDDEN.with(Cell::get), REVEALED.with(Cell::get))
+    });
+    HIDDEN.set(hidden);
+    REVEALED.set(revealed);
     PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
     let diff_lock = data.view == commands::CardView::Diff
         && data.diff.as_ref().is_some_and(|diff| diff.sensitive);

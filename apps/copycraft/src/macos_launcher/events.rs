@@ -476,6 +476,8 @@ pub(crate) fn close_search() {
 }
 
 pub fn wipe_shown() {
+    // Wipe forgets which items were shown or hidden with the eye button too.
+    BLUR_CHOICES.with(|choices| choices.borrow_mut().clear());
     dismiss_picker(false);
     set_item_find(false);
     PREVIEW_NOTE.with(|slot| slot.borrow_mut().clear());

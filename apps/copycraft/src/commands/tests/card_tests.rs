@@ -585,3 +585,28 @@ fn hide_button_masks_the_entry_whatever_the_settings() {
     assert_eq!(crate::locale::t("hide_content"), "Hide");
     assert_eq!(crate::locale::t("show_content"), "Show");
 }
+
+#[test]
+fn the_eye_choice_sticks_per_item() {
+    use crate::commands::BlurChoices;
+    let mut choices = BlurChoices::default();
+    // No choice: what the card had (first display masked by the filter).
+    assert_eq!(choices.apply(1, false, false), (false, false));
+    // Shown with the eye: item 1 stays shown when it comes back; item 2 is untouched.
+    choices.remember(1, false);
+    assert_eq!(choices.apply(1, false, false), (false, true));
+    assert_eq!(choices.apply(2, false, false), (false, false));
+    // Hidden with the eye: stays hidden, even after a reveal elsewhere.
+    choices.remember(2, true);
+    assert_eq!(choices.apply(2, false, true), (true, false));
+    // A new choice replaces the old one.
+    choices.remember(1, true);
+    assert_eq!(choices.choice(1), Some(true));
+    // Only the last KEEP items are kept; Wipe forgets all.
+    for key in 100..100 + BlurChoices::KEEP as u64 {
+        choices.remember(key, false);
+    }
+    assert_eq!(choices.choice(1), None);
+    choices.clear();
+    assert_eq!(choices.choice(150), None);
+}

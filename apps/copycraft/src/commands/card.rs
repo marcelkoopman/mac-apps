@@ -7,6 +7,47 @@ pub fn history_label(mark: &str, byte_len: usize) -> String {
     format!("{mark}  {}", format_bytes(byte_len))
 }
 
+/// The eye button's choice per history item (its [`content_key`]): `true` hidden, `false`
+/// shown. An item is masked by the privacy filter only until a choice is made; then the choice
+/// holds when the card opens again, when browsing away and back, and when the app loses focus
+/// (the Preview window). In memory only, for the last [`BlurChoices::KEEP`] items.
+#[derive(Debug, Default, Clone)]
+pub struct BlurChoices {
+    items: Vec<(u64, bool)>,
+}
+
+impl BlurChoices {
+    pub const KEEP: usize = 64;
+
+    pub fn remember(&mut self, key: u64, hidden: bool) {
+        self.items.retain(|(seen, _)| *seen != key);
+        self.items.push((key, hidden));
+        if self.items.len() > Self::KEEP {
+            self.items.remove(0);
+        }
+    }
+
+    pub fn choice(&self, key: u64) -> Option<bool> {
+        self.items
+            .iter()
+            .find(|(seen, _)| *seen == key)
+            .map(|(_, hidden)| *hidden)
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
+    /// `(hidden, revealed)` for item `key`: its choice, else what the card had (`hidden`,
+    /// `revealed`).
+    pub fn apply(&self, key: u64, hidden: bool, revealed: bool) -> (bool, bool) {
+        match self.choice(key) {
+            Some(hidden) => (hidden, !hidden),
+            None => (hidden, revealed),
+        }
+    }
+}
+
 /// Whether a revealed card stays revealed when it is stored again: while it shows the same
 /// history entry (`shown_key` and `next_key` the same [`content_key`]), in all its views, chips,
 /// table versions and steps, and when a rebuilt card or its sensitivity labels arrive. Views of
