@@ -217,6 +217,7 @@ impl App {
         self.opened = None;
         self.opened_table = crate::settings::preferred_table();
         self.card_text = None;
+        self.browsing = None;
         self.loose_table = crate::settings::preferred_table();
         self.loose_text = None;
         self.opened_image = ImageVersions::default();
@@ -272,6 +273,7 @@ impl App {
         let started = Instant::now();
         let previous = self.history_cursor;
         self.history_cursor = next;
+        self.browsing = None;
         let presented = self.present_history(next).unwrap_or_else(|e| {
             eprintln!("restore history failed: {e:#}");
             false
@@ -585,6 +587,8 @@ impl App {
             self.history.record(text.to_string());
             self.history_cursor = 0;
             self.clipboard_cursor = None;
+            // A new copy: the card follows the clipboard again.
+            self.browsing = None;
         }
     }
 }

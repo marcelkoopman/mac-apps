@@ -26,7 +26,9 @@ impl App {
         // is paused or the app is ignored (Held) the card shows the history entry: so does
         // Lines….
         let view = ClipboardView::from_os();
-        let text = if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
+        let text = if let Some(at) = self.browsed_index() {
+            self.history.get(at).map(str::to_string)
+        } else if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
             self.history.get(self.history_cursor).map(str::to_string)
         } else {
             view.text().map(str::to_string)
@@ -155,6 +157,8 @@ impl App {
             eprintln!("text step failed: {e:#}");
             return;
         }
+        // The new version is the clipboard's: the card follows it again.
+        self.browsing = None;
         if !self.record_own_copy(result) {
             // Recording is paused or the app is ignored: the result is on the clipboard but
             // not in history, so it makes no version either.
@@ -184,8 +188,8 @@ impl App {
         self.refresh_popup();
     }
 
-    /// Show the version `to` picks from the one shown (undo, redo, the version capsule): put
-    /// its history entry back on the clipboard.
+    /// Show the version `to` picks from the one shown (undo, redo, the version capsule). Only
+    /// shown: the clipboard is left alone (no Copied toast); Copy puts the version there.
     pub(crate) fn text_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
         let Some((id, _)) = self.text_entry() else {
             return;
@@ -203,17 +207,10 @@ impl App {
         let Some(at) = self.history.index_of(steps.ids[index]) else {
             return;
         };
-        if let Err(e) = self.restore_history(at) {
-            eprintln!("text version failed: {e:#}");
-            return;
-        }
-        // Put back as a new copy, the entry can have a new id.
-        let new_id = self.history.id_at(0);
+        self.browsing = Some(steps.ids[index]);
+        self.history_cursor = at;
         if let Some(steps) = self.text_steps.as_mut() {
             steps.cursor = index;
-            if let Some(new_id) = new_id {
-                steps.ids[index] = new_id;
-            }
         }
         self.text_note = None;
         self.refresh_popup();

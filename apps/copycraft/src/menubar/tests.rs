@@ -184,3 +184,12 @@ fn every_table_on_the_card_has_a_home_for_open_table() {
     // Not in history (paused, ignored app, sensitive copy): still a table to open.
     assert_eq!(pick_table_home(None, false), TableHome::Loose);
 }
+
+#[test]
+fn a_browsed_version_is_shown_without_the_clipboard() {
+    use super::app::browsed_entry;
+    assert_eq!(browsed_entry(Some(2), false), Some(2));
+    // A chosen file on the card wins; a version history let go shows the clipboard.
+    assert_eq!(browsed_entry(Some(2), true), None);
+    assert_eq!(browsed_entry(None, false), None);
+}

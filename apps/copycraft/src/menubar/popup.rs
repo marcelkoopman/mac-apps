@@ -303,6 +303,9 @@ impl App {
         self.sync_diff_picks();
         let mut data = if self.opened.is_some() {
             self.launch_from_opened()
+        } else if let Some(at) = self.browsed_index() {
+            self.history_cursor = at;
+            self.launch_from_history()
         } else {
             let view = ClipboardView::from_os();
             if matches!(view, ClipboardView::Held) {

@@ -74,6 +74,9 @@ pub(crate) struct App {
     pub(crate) opened_table: TableVersions,
     /// The text the card shows (the text Open table and the card's table steps work on).
     pub(crate) card_text: Option<Zeroizing<String>>,
+    /// The history entry (id) a Lines… version step shows instead of the clipboard: going
+    /// between versions only shows them; Copy puts one on the clipboard.
+    pub(crate) browsing: Option<u64>,
     /// Table versions for card text that is in history nor a chosen file, and that text.
     pub(crate) loose_table: TableVersions,
     pub(crate) loose_text: Option<Zeroizing<String>>,
@@ -187,6 +190,12 @@ pub(crate) enum TableHome {
     Opened,
     /// Clipboard text not in history (recording paused, an ignored app, a sensitive copy).
     Loose,
+}
+
+/// The history entry the card shows instead of the clipboard: the browsed version, unless a
+/// chosen file is on the card or the version left history.
+pub(crate) fn browsed_entry(browsed_index: Option<usize>, file_open: bool) -> Option<usize> {
+    browsed_index.filter(|_| !file_open)
 }
 
 /// Where the table of the card's `text` lives: its history entry, the chosen file, or else the

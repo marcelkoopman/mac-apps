@@ -94,6 +94,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         history_minutes: crate::settings::load().history_minutes,
         opened_table: crate::settings::preferred_table(),
         card_text: None,
+        browsing: None,
         loose_table: crate::settings::preferred_table(),
         loose_text: None,
         table_job: None,

@@ -79,12 +79,23 @@ impl App {
         let Some(body) = body else {
             return Ok(());
         };
-        // The clipboard already holds this text. A file does not, so Copy still writes it.
-        if !from_file && body.as_str() == source {
+        // The clipboard already holds this text. A file does not, nor a browsed version, so
+        // Copy still writes those.
+        let browsed = self.browsing.take();
+        if !from_file && browsed.is_none() && body.as_str() == source {
             return Ok(());
         }
         self.write_own(body.as_str())?;
         self.record_own_copy(body.as_str());
+        // The browsed version is the clipboard's now; put back as a new copy, it can have a
+        // new id.
+        if browsed.is_some()
+            && let Some(new_id) = self.history.id_at(0)
+            && let Some(steps) = self.text_steps.as_mut()
+            && let Some(slot) = steps.ids.get_mut(steps.cursor)
+        {
+            *slot = new_id;
+        }
         if from_file {
             return Ok(());
         }

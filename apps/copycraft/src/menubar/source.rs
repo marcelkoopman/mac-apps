@@ -323,9 +323,19 @@ impl App {
             .and_then(|file| file.text.as_ref().map(|value| value.as_str().to_string()))
     }
 
+    /// Index of the version the card browses (see [`App::browsing`]).
+    pub(crate) fn browsed_index(&self) -> Option<usize> {
+        browsed_entry(
+            self.browsing.and_then(|id| self.history.index_of(id)),
+            self.opened.is_some(),
+        )
+    }
+
     pub(crate) fn source_text(&self) -> Option<String> {
         if self.opened.is_some() {
             self.opened_text()
+        } else if let Some(at) = self.browsed_index() {
+            self.history.get(at).map(str::to_string)
         } else if self.pasteboard_suppressed() {
             self.history.get(self.history_cursor).map(str::to_string)
         } else {
