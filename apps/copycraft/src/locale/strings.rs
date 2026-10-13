@@ -482,6 +482,21 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Hotkey, date order, privacy filter, blur, ignored apps, Open at Login",
     ),
     (
+        "detail_export_diagnostics",
+        "Logboek van de laatste 24 uur als .txt, zonder klembordinhoud",
+        "Last 24 hours of the log as .txt, without clipboard content",
+    ),
+    (
+        "export_diagnostics",
+        "Diagnose exporteren…",
+        "Export diagnostics…",
+    ),
+    (
+        "diagnostics_saved_toast",
+        "Bewaard · zonder klembordinhoud",
+        "Saved · no clipboard content included",
+    ),
+    (
         "detail_about",
         "Versie en belofte om offline te werken",
         "Version and offline promise",

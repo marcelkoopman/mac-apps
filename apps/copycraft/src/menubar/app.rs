@@ -35,6 +35,8 @@ pub(crate) struct App {
     pub(crate) signature: ClipSig,
     /// The save running on its thread. One at a time; Save is ignored meanwhile.
     pub(crate) saving: Option<Background>,
+    /// The running save is Export diagnostics…: its toast says no content is included.
+    pub(crate) saving_diagnostics: bool,
     /// "Show all" rendering on its thread. One at a time.
     pub(crate) loading_all: Option<Background>,
     /// The Preview button's picture is being written off the main thread: the spinner shows at

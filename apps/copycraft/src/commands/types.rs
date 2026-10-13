@@ -365,6 +365,8 @@ pub enum CommandId {
     /// Empty the OS pasteboard. Copies still held in memory stay until [`Clear`](CommandId::Clear).
     ClearClipboard,
     ClearHistory,
+    /// Save copycraft's own recent log, versions and settings (never content) as a .txt file.
+    ExportDiagnostics,
     /// Wipe clipboard copies held in memory, then empty the pasteboard.
     Clear,
     /// Open a file on the card.

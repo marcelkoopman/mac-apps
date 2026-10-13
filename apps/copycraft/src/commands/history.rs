@@ -347,6 +347,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "about version offline",
     ));
     commands.push(command(
+        CommandId::ExportDiagnostics,
+        crate::locale::t("export_diagnostics"),
+        crate::locale::t("detail_export_diagnostics"),
+        "export diagnostics log support diagnose",
+    ));
+    commands.push(command(
         CommandId::Welcome,
         crate::locale::t("welcome_menu"),
         crate::locale::t("detail_welcome"),
@@ -410,9 +416,11 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         | CommandId::IgnoreFrontApp
         | CommandId::ClearSensitive => MenuSection::Recording,
         CommandId::Appearance(_) => MenuSection::Appearance,
-        CommandId::Settings | CommandId::About | CommandId::Welcome | CommandId::Quit => {
-            MenuSection::App
-        }
+        CommandId::Settings
+        | CommandId::About
+        | CommandId::ExportDiagnostics
+        | CommandId::Welcome
+        | CommandId::Quit => MenuSection::App,
         _ => MenuSection::More,
     }
 }

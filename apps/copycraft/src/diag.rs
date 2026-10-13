@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 pub use mac_ui::log::{Category, Level};
 
@@ -184,6 +184,10 @@ pub enum LogEvent {
         spinner: bool,
     },
     SaveFailed(ErrorKind),
+    /// Export diagnostics… wrote this many log lines.
+    DiagnosticsExported {
+        lines: usize,
+    },
     OpenPanelFailed(ErrorKind),
     SymbolCopyFailed(ErrorKind),
     VisitRefused,
@@ -227,6 +231,7 @@ impl LogEvent {
             | E::PreviewOpenFailed
             | E::PreviewFailed(_)
             | E::SaveFinished { .. }
+            | E::DiagnosticsExported { .. }
             | E::SaveFailed(_)
             | E::OpenPanelFailed(_)
             | E::SymbolCopyFailed(_)
@@ -356,6 +361,7 @@ impl LogEvent {
                 }
             ),
             E::SaveFailed(k) => format!("save failed: {}", k.describe()),
+            E::DiagnosticsExported { lines } => format!("diagnostics exported: {lines} lines"),
             E::OpenPanelFailed(k) => format!("open panel failed: {}", k.describe()),
             E::SymbolCopyFailed(k) => format!("symbol copy failed: {}", k.describe()),
             E::VisitRefused => "visit refused: only http and https links are opened".into(),
@@ -381,6 +387,69 @@ pub(crate) fn remember(at: SystemTime, event: LogEvent) {
             ring.pop_front();
         }
     }
+}
+
+/// How far back the export goes.
+pub const EXPORT_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// The export's log part: one line per event of the last [`EXPORT_WINDOW`] before `now`,
+/// oldest first: seconds since the epoch, level, category, line.
+pub fn recent_lines(now: SystemTime) -> Vec<String> {
+    let since = now
+        .checked_sub(EXPORT_WINDOW)
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let Ok(ring) = RING.lock() else {
+        return Vec::new();
+    };
+    ring.iter()
+        .filter(|(at, _)| *at >= since)
+        .map(|(at, event)| {
+            let secs = at
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            format!(
+                "{secs}  {:<5}  {:<9}  {}",
+                event.level().name(),
+                event.category().name(),
+                event.line()
+            )
+        })
+        .collect()
+}
+
+/// The whole diagnostics file: app and macOS version, the settings (no content), then the log.
+pub fn export_text(macos: &str, now: SystemTime) -> String {
+    let settings = crate::settings::load();
+    let mut out = String::new();
+    out.push_str("Copycraft diagnostics\n");
+    out.push_str("No clipboard content, history, file names or table data are included.\n\n");
+    out.push_str(&format!("app version: {}\n", env!("CARGO_PKG_VERSION")));
+    out.push_str(&format!("macOS: {macos}\n"));
+    out.push_str(&format!("subsystem: {SUBSYSTEM}\n\n"));
+    out.push_str("settings:\n");
+    for (name, value) in [
+        ("privacy_filter", settings.privacy_filter.to_string()),
+        ("blur", settings.blur.to_string()),
+        ("clear_sensitive", settings.clear_sensitive.to_string()),
+        ("history_minutes", settings.history_minutes.to_string()),
+        ("date_month_first", settings.date_month_first.to_string()),
+        ("custom_hotkey", settings.hotkey.is_some().to_string()),
+        ("language", format!("{:?}", settings.language)),
+        ("page_long_text", settings.page_long_text.to_string()),
+        (
+            "announce_confirmations",
+            settings.announce_confirmations.to_string(),
+        ),
+        ("confirm_clear", settings.confirm_clear.to_string()),
+    ] {
+        out.push_str(&format!("  {name}: {value}\n"));
+    }
+    out.push_str("\nlog (last 24 h of this run; time in seconds since 1970, UTC):\n");
+    for line in recent_lines(now) {
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
 }
 
 #[cfg(test)]
@@ -519,5 +588,36 @@ mod tests {
             Category::Table
         );
         assert_eq!(LogEvent::CopyFailed(ErrorKind::Other).level(), Level::Error);
+    }
+
+    #[test]
+    fn the_export_has_versions_settings_and_recent_events_only() {
+        let now = SystemTime::now();
+        remember(
+            now - Duration::from_secs(25 * 60 * 60),
+            LogEvent::HotkeyRegistered,
+        );
+        remember(
+            now,
+            LogEvent::TableOpened {
+                columns: 2,
+                rows: 5,
+            },
+        );
+        let text = export_text("Version 26.0", now);
+        assert!(text.contains("No clipboard content"));
+        assert!(text.contains(env!("CARGO_PKG_VERSION")));
+        assert!(text.contains("macOS: Version 26.0"));
+        assert!(text.contains("privacy_filter:"));
+        assert!(text.contains("table opened: 2 cols, 5 rows"));
+        let old = now - Duration::from_secs(25 * 60 * 60);
+        let old_secs = old
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(
+            !text.contains(&format!("{old_secs}  ")),
+            "older than 24 h is left out"
+        );
     }
 }

@@ -406,6 +406,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",
         CommandId::About => "info.circle",
+        CommandId::ExportDiagnostics => "stethoscope",
         CommandId::Welcome => "hand.wave",
         CommandId::Quit => "power",
         CommandId::Pause => "pause.circle",

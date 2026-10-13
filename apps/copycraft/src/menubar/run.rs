@@ -79,6 +79,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_scan_for: None,
         signature: ClipSig::default(),
         saving: None,
+        saving_diagnostics: false,
         loading_all: None,
         previewing: None,
         full_card: None,

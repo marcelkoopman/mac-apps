@@ -128,6 +128,7 @@ impl App {
             }
             CommandId::Settings => launcher::show_settings(),
             CommandId::About => launcher::show_about(),
+            CommandId::ExportDiagnostics => self.export_diagnostics(),
             CommandId::Welcome => launcher::show_welcome(),
             CommandId::Diff => {
                 if self.diff_sel.pair().is_some() {

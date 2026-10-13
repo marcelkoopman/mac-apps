@@ -377,6 +377,37 @@ impl App {
         self.spawn_save(job)
     }
 
+    /// Export diagnostics…: versions, settings and the last 24 h of copycraft's own log lines
+    /// (the in-memory ring; never content) through the save panel.
+    pub(crate) fn export_diagnostics(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            if self.saving.is_some() {
+                return;
+            }
+            let macos = mac_ui::objc2_foundation::NSProcessInfo::processInfo()
+                .operatingSystemVersionString()
+                .to_string();
+            let now = std::time::SystemTime::now();
+            let lines = crate::diag::recent_lines(now).len();
+            let text = crate::diag::export_text(&macos, now);
+            let job = crate::macos_save::SaveJob {
+                filename: "copycraft-diagnostics.txt".into(),
+                extension: "txt",
+                content: crate::macos_save::SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
+            };
+            match self.spawn_save(job) {
+                Ok(()) => {
+                    if self.saving.is_some() {
+                        self.saving_diagnostics = true;
+                        crate::diag::log(crate::diag::LogEvent::DiagnosticsExported { lines });
+                    }
+                }
+                Err(e) => log_save_failure(&format!("{e:#}")),
+            }
+        }
+    }
+
     /// Ask for a path, then write `job` on the save thread.
     #[cfg(target_os = "macos")]
     pub(crate) fn spawn_save(&mut self, mut job: crate::macos_save::SaveJob) -> anyhow::Result<()> {
@@ -489,8 +520,14 @@ impl App {
             });
         }
         self.stop_spinner_when_idle();
+        if result.is_err() {
+            self.saving_diagnostics = false;
+        }
         match result {
             // Like Copy's "Copied": the file is written. A cancelled panel never gets here.
+            Ok(()) if std::mem::take(&mut self.saving_diagnostics) => {
+                save_feedback(crate::locale::t("diagnostics_saved_toast"));
+            }
             Ok(()) => save_feedback(&save_toast(&Ok(()))),
             Err(message) => log_save_failure(&message),
         }
