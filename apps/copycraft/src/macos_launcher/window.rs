@@ -149,7 +149,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     );
     let preview_button = well_action(
         mtm,
-        "eye",
+        "arrow.up.left.and.arrow.down.right",
         crate::locale::t("open_preview"),
         "◉",
         sel!(previewClicked:),
