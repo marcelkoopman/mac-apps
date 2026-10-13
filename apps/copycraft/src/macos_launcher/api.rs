@@ -196,9 +196,10 @@ pub fn open_under_icon(
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
+    // Measured again on every show: the card is placed from the icon, never from an old frame.
+    // Kept afterwards, so a card that grows or shrinks stays anchored under the icon too.
     ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
     reveal_with_card(data, card);
-    ICON_FRAME.set(None);
 }
 
 /// Open the card with `card` already built (off the main thread) from `data`.

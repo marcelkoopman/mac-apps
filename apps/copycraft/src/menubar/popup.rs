@@ -199,7 +199,8 @@ impl App {
     /// Open the card for `data` (the card is built as in [`App::history_card`]).
     pub(crate) fn reveal_card(&mut self, data: LaunchData) {
         let card = self.history_card(&data);
-        launcher::reveal(data, card);
+        // Under the menu bar icon, measured now (not where the card was last).
+        launcher::open_under_icon(data, card, &self.tray);
     }
 
     /// Update the open card with `data`.

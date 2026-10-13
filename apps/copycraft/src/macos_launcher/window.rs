@@ -602,14 +602,16 @@ pub(crate) fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
         if !fresh && current.size.width == size.width && current.size.height == size.height {
             return;
         }
-        let frame = if fresh {
-            match ICON_FRAME.get() {
-                Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),
-                None => panel::near_cursor(mtm, size, &NEAR_CURSOR),
-            }
-        } else {
-            panel::keep_top_left(window.frame(), size)
+        // Always under the menu bar icon (also when it grows, after the table window or a
+        // copy), its height clamped to the screen; near the cursor only before the icon is known.
+        let frame = match ICON_FRAME.get() {
+            Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),
+            None if fresh => panel::near_cursor(mtm, size, &NEAR_CURSOR),
+            None => panel::keep_top_left(window.frame(), size),
         };
+        if !fresh && frame == current {
+            return;
+        }
         window.setFrame_display(frame, true);
     });
 }

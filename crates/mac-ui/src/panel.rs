@@ -180,14 +180,16 @@ pub fn under_icon(mtm: MainThreadMarker, icon: NSRect, size: NSSize, place: &Und
 
 /// Frame of `size` with its left edge at `icon`'s and its top `place.gap_y` under the menu bar
 /// (the lower of the icon's bottom and the top of `visible`), kept inside `visible` with
-/// `place.margin` to spare where it fits.
+/// `place.margin` to spare where it fits. Its height is clamped to the room under the menu bar,
+/// so the top always stays at the icon.
 pub fn frame_under(icon: NSRect, visible: NSRect, size: NSSize, place: &UnderIcon) -> NSRect {
     let min_x = visible.origin.x + place.margin;
     let max_x = visible.origin.x + visible.size.width - size.width - place.margin;
     let x = clamp_axis(icon.origin.x, min_x, max_x);
     let top = icon.origin.y.min(visible.origin.y + visible.size.height) - place.gap_y;
-    let y = (top - size.height).max(visible.origin.y + place.margin);
-    NSRect::new(NSPoint::new(x, y), size)
+    let room = (top - visible.origin.y - place.margin).max(0.0);
+    let size = NSSize::new(size.width, size.height.min(room));
+    NSRect::new(NSPoint::new(x, top - size.height), size)
 }
 
 /// `current` resized to `size` with its left and top edges kept in place.
@@ -252,6 +254,18 @@ mod tests {
 
     fn icon_at(x: f64) -> NSRect {
         NSRect::new(NSPoint::new(x, 876.0), NSSize::new(30.0, 24.0))
+    }
+
+    #[test]
+    fn a_card_taller_than_the_screen_keeps_its_top_under_the_icon() {
+        let tall = NSSize::new(SIZE.width, 5000.0);
+        let visible = below_menu_bar();
+        let frame = frame_under(icon_at(600.0), visible, tall, &UNDER);
+        let top = frame.origin.y + frame.size.height;
+        let short = frame_under(icon_at(600.0), visible, SIZE, &UNDER);
+        assert_eq!(top, short.origin.y + short.size.height);
+        assert_eq!(frame.origin.y, visible.origin.y + UNDER.margin);
+        assert!(frame.size.height < tall.height);
     }
 
     #[test]

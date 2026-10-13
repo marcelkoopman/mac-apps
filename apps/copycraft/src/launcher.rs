@@ -246,16 +246,6 @@ pub fn hide() {
     crate::macos_launcher::hide();
 }
 
-/// Open the card with `card` already built from `data`.
-pub fn reveal(data: LaunchData, card: crate::commands::WorkCard) {
-    #[cfg(target_os = "macos")]
-    crate::macos_launcher::reveal_with_card(data, card);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (data, card);
-    }
-}
-
 /// Like [`sync`], with the card already built (off the main thread, or earlier for the same
 /// history entry).
 /// Page the card for content `key` (a long text, after Show all), or stop paging.
