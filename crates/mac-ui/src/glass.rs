@@ -24,6 +24,8 @@ pub enum Kind {
     Glass,
     /// `NSVisualEffectView`, material Popover, behind-window blending.
     Frosted,
+    /// An opaque rounded box in the window background colour: Reduce Transparency is on.
+    Solid,
 }
 
 /// Result of [`background`].
@@ -35,7 +37,8 @@ pub struct Background {
     ///
     /// - [`Kind::Glass`]: a plain view set as the glass view's `contentView`, so content gets the
     ///   glass treatment.
-    /// - [`Kind::Frosted`]: the parent itself. Content stays a sibling above the frosted view.
+    /// - [`Kind::Frosted`] and [`Kind::Solid`]: the parent itself. Content stays a sibling above
+    ///   the backdrop.
     pub content: Retained<NSView>,
     pub kind: Kind,
 }
@@ -53,6 +56,38 @@ pub fn background(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) ->
         glass(mtm, parent, corner_radius)
     } else {
         frosted(mtm, parent, corner_radius)
+    }
+}
+
+/// Like [`background`], but opaque while Reduce Transparency is on
+/// ([`crate::style::Backdrop::choose`]).
+#[cfg(feature = "widgets")]
+pub fn background_for_display(
+    mtm: MainThreadMarker,
+    parent: &NSView,
+    corner_radius: f64,
+) -> Background {
+    use crate::style::Backdrop;
+    match Backdrop::choose(crate::motion::reduce_transparency(), is_available()) {
+        Backdrop::Solid => solid(mtm, parent, corner_radius),
+        Backdrop::Glass | Backdrop::Vibrancy => background(mtm, parent, corner_radius),
+    }
+}
+
+#[cfg(feature = "widgets")]
+fn solid(mtm: MainThreadMarker, parent: &NSView, corner_radius: f64) -> Background {
+    let fill = crate::widgets::filled_box(
+        mtm,
+        corner_radius,
+        &objc2_app_kit::NSColor::windowBackgroundColor(),
+    );
+    fill.setFrame(parent.bounds());
+    track_size(&fill);
+    install_backmost(parent, &fill);
+    Background {
+        effect: fill.into_super(),
+        content: parent.retain(),
+        kind: Kind::Solid,
     }
 }
 

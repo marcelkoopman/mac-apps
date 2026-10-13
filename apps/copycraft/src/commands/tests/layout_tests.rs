@@ -275,3 +275,22 @@ fn at_most_four_chips_show_and_text_stays_visible() {
     assert_eq!(shown.len(), 2);
     assert!(more.is_empty());
 }
+
+#[test]
+fn chips_and_menu_steps_have_sf_symbols() {
+    for id in [
+        CommandId::Original,
+        CommandId::TextMenu,
+        CommandId::Copy,
+        CommandId::Save,
+        CommandId::TextFilter,
+        CommandId::TextReverse,
+    ] {
+        let name = crate::commands::symbol_for(&id).expect("a symbol");
+        assert!(
+            !name.is_empty() && name.is_ascii() && !name.contains(' '),
+            "{name}"
+        );
+    }
+    assert_eq!(crate::commands::symbol_for(&CommandId::History(0)), None);
+}

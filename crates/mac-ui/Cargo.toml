@@ -15,9 +15,24 @@ theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-fou
 # constructors, the glass push button (NSBezelStyle in NSButtonCell, NSControlBorderShape in
 # NSControl, NSTintProminence, accessibility labels in NSAccessibilityProtocols), font lookup and
 # attributed strings (NSAttributedString, already on in the workspace entry). NSEvent and
-# NSApplication are for the modifier checks in `mac_ui::keys`.
+# NSApplication are for the modifier checks in `mac_ui::keys`. `mac_ui::motion`, `mac_ui::toast`
+# and `mac_ui::a11y`: NSAnimationContext groups, the Reduce Motion/Transparency settings
+# (NSWorkspace), the toast window with its SF Symbol, and VoiceOver announcements.
 widgets = [
+    "objc2-app-kit/block2",
+    "objc2-app-kit/NSAccessibility",
+    "objc2-app-kit/NSAccessibilityConstants",
     "objc2-app-kit/NSAccessibilityProtocols",
+    "objc2-app-kit/NSAnimation",
+    "objc2-app-kit/NSAnimationContext",
+    "objc2-app-kit/NSColor",
+    "objc2-app-kit/NSImage",
+    "objc2-app-kit/NSPanel",
+    "objc2-app-kit/NSScreen",
+    "objc2-app-kit/NSWindow",
+    "objc2-app-kit/NSWorkspace",
+    "objc2-foundation/NSDictionary",
+    "objc2-foundation/NSValue",
     "objc2-app-kit/NSApplication",
     "objc2-app-kit/NSBox",
     "objc2-app-kit/NSButton",

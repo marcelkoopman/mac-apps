@@ -197,13 +197,9 @@ mod appkit {
         ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send,
     };
     use objc2_app_kit::{
-        NSAccessibility, NSAccessibilityAnnouncementKey,
-        NSAccessibilityAnnouncementRequestedNotification,
-        NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
-        NSAccessibilityPriorityLevel, NSBox, NSBoxType, NSColor, NSDragOperation,
-        NSDraggingDestination, NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard,
-        NSPasteboardType, NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView,
-        NSTitlePosition, NSView,
+        NSAccessibility, NSBox, NSBoxType, NSColor, NSDragOperation, NSDraggingDestination,
+        NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard, NSPasteboardType,
+        NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView, NSTitlePosition, NSView,
     };
     use objc2_foundation::{
         NSArray, NSDictionary, NSError, NSNumber, NSOperationQueue, NSPoint, NSRect, NSSize,
@@ -368,7 +364,7 @@ mod appkit {
             self.addSubview(outline);
             outline.setHidden(false);
             if speak {
-                announce(self, highlight.announcement);
+                crate::a11y::announce(self, highlight.announcement);
             }
         }
 
@@ -537,30 +533,6 @@ mod appkit {
         outline.setAccessibilityElement(false);
         outline.setHidden(true);
         outline
-    }
-
-    /// Have VoiceOver say `text` right away.
-    fn announce(element: &NSView, text: &str) {
-        let text = NSString::from_str(text);
-        let priority = NSNumber::numberWithInteger(NSAccessibilityPriorityLevel::High.0);
-        let text: &AnyObject = &text;
-        let priority: &AnyObject = &priority;
-        // SAFETY (both): immutable AppKit constants, read for the life of the process.
-        let info = NSDictionary::from_slices(
-            &[unsafe { NSAccessibilityAnnouncementKey }, unsafe {
-                NSAccessibilityPriorityKey
-            }],
-            &[text, priority],
-        );
-        // SAFETY: an announcement request takes a view and a dictionary of NSString keys with
-        // an NSString announcement and an NSNumber priority.
-        unsafe {
-            NSAccessibilityPostNotificationWithUserInfo(
-                element,
-                NSAccessibilityAnnouncementRequestedNotification,
-                Some(&info),
-            );
-        }
     }
 
     /// The operation to show for `offer`: copy, or generic while ⌘ narrows the source's mask

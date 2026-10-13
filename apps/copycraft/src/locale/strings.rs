@@ -915,6 +915,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Like more: Space, b, g and G page; Esc or q stops.",
     ),
     ("card_building", "Bezig…", "Working…"),
+    ("copied_toast", "Gekopieerd", "Copied"),
     (
         "text_not_kept",
         "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)",

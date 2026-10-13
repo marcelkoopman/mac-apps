@@ -78,9 +78,13 @@ pub unsafe fn set_delegate<D: Message>(window: &NSWindow, delegate: &D) {
 }
 
 /// Round the corners of `view` (usually the window's content view) and put the glass background
-/// behind it; see [`glass::background`].
+/// behind it; see [`glass::background`]. With `widgets` on, Reduce Transparency makes it
+/// opaque instead ([`glass::background_for_display`]).
 pub fn rounded_glass(mtm: MainThreadMarker, view: &NSView, radius: f64) -> glass::Background {
     round_view(view, radius);
+    #[cfg(feature = "widgets")]
+    return glass::background_for_display(mtm, view, radius);
+    #[cfg(not(feature = "widgets"))]
     glass::background(mtm, view, radius)
 }
 

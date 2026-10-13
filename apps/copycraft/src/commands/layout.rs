@@ -375,3 +375,45 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
     }
     (shown, rest)
 }
+
+/// SF Symbol for `id` on its chip or menu item, if it has one. The title stays the label, so
+/// VoiceOver reads the same name as before.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
+    Some(match id {
+        CommandId::Original => "doc.text",
+        CommandId::Visit => "safari",
+        CommandId::Format => "wand.and.stars",
+        CommandId::Convert => "arrow.triangle.2.circlepath",
+        CommandId::Decode => "lock.open",
+        CommandId::Schema => "list.bullet.indent",
+        CommandId::Sample => "doc.badge.plus",
+        CommandId::Info => "info.circle",
+        CommandId::Ocr => "text.viewfinder",
+        CommandId::Qr => "qrcode",
+        CommandId::Diff => "arrow.left.arrow.right",
+        CommandId::Copy => "doc.on.doc",
+        CommandId::Save => "square.and.arrow.down",
+        CommandId::OpenPreview => "eye",
+        CommandId::ClearClipboard | CommandId::ClearHistory | CommandId::Clear => "trash",
+        CommandId::ChooseFile => "folder",
+        CommandId::UseClipboard => "doc.on.clipboard",
+        CommandId::ShowAll => "text.justify",
+        CommandId::Settings => "gearshape",
+        CommandId::TextMenu => "text.cursor",
+        CommandId::ImageMenu => "photo",
+        CommandId::TableMenu | CommandId::TextColumn => "tablecells",
+        CommandId::TableOpenWindow => "macwindow",
+        CommandId::TableChooseColumns => "checklist",
+        CommandId::TableUndo => "arrow.uturn.backward",
+        CommandId::TableRedo => "arrow.uturn.forward",
+        CommandId::TextCount => "number",
+        CommandId::TextHead => "arrow.up.to.line",
+        CommandId::TextTail => "arrow.down.to.line",
+        CommandId::TextReverse => "arrow.up.arrow.down",
+        CommandId::TextFilter => "line.3.horizontal.decrease",
+        CommandId::HistoryOlder => "chevron.left",
+        CommandId::HistoryNewer => "chevron.right",
+        _ => return None,
+    })
+}

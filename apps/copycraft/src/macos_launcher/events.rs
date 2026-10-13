@@ -19,6 +19,9 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
     });
     let chip = pooled.unwrap_or_else(|| {
         let chip = Rc::new(GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular));
+        if let Some(symbol) = commands::symbol_for(&cmd.id) {
+            chip.set_symbol(symbol);
+        }
         wire_button(chip.button(), sel!(chipClicked:));
         CHIP_POOL.with(|pool| {
             pool.borrow_mut().push(PooledChip {

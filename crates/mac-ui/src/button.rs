@@ -211,6 +211,17 @@ impl GlassButton {
         self.fit();
     }
 
+    /// Put SF Symbol `name` before the title and resize to fit. Without the symbol (before
+    /// macOS 11, or an unknown name) the pill keeps its plain title. The label stays the title.
+    pub fn set_symbol(&self, name: &str) {
+        if let Some(image) = crate::icon::system_symbol(name, "") {
+            self.button.setImage(Some(&image));
+            self.button
+                .setImagePosition(objc2_app_kit::NSCellImagePosition::ImageLeading);
+            self.fit();
+        }
+    }
+
     /// Accessibility label read by VoiceOver, for titles that do not say what the button does
     /// (e.g. "<" for "Older").
     pub fn set_accessibility_label(&self, label: &str) {

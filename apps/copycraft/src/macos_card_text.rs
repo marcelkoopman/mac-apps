@@ -120,15 +120,9 @@ fn push_side(
     }
 }
 
+/// Code on the card: SF Mono (the system monospaced font) at the shared code size.
 fn editor_font() -> Retained<NSFont> {
-    const NAMES: [&str; 5] = [
-        "Zed Mono",
-        "Zed Mono Regular",
-        "JetBrains Mono",
-        "SF Mono",
-        "Menlo",
-    ];
-    mac_ui::fonts::monospace(12.0, &NAMES)
+    mac_ui::fonts::monospace(mac_ui::style::FONT_CODE, &[])
 }
 
 fn plain(body: &str, font: &NSFont, color: &NSColor) -> Retained<NSMutableAttributedString> {

@@ -742,6 +742,11 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
         };
         let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(poppedClicked:));
         item.setTag(index as isize);
+        if let Some(image) = commands::symbol_for(&cmd.id)
+            .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
+        {
+            item.setImage(Some(&image));
+        }
         if *checked {
             item.setState(NSControlStateValueOn);
         }

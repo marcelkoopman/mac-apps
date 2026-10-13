@@ -247,7 +247,10 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
         NSPoint::new(0.0, 0.0),
         NSSize::new(ACCESSORY_WIDTH, PREVIEW_H),
     ));
-    shown.setFont(Some(&crate::fonts::monospace(11.0, &[])));
+    shown.setFont(Some(&crate::fonts::monospace(
+        crate::style::FONT_CAPTION,
+        &[],
+    )));
     shown.setAccessibilityLabel(Some(&NSString::from_str(ask.preview_label)));
     view.addSubview(&shown);
     preview::show_in(shown);
@@ -363,7 +366,7 @@ mod preview {
             } else {
                 NSColor::labelColor()
             };
-            let font = crate::fonts::monospace(11.0, &[]);
+            let font = crate::fonts::monospace(crate::style::FONT_CAPTION, &[]);
             let attr = crate::text::AttrText::new(&shown.text, &font, &color);
             let mark = NSColor::findHighlightColor();
             for range in &shown.marks {
@@ -372,6 +375,8 @@ mod preview {
                 }
             }
             label.setAttributedStringValue(&attr.into_attributed());
+            #[cfg(feature = "widgets")]
+            crate::motion::crossfade(label);
         });
     }
 

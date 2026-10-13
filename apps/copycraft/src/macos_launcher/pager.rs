@@ -108,6 +108,9 @@ pub(crate) fn pager_key(event: &NSEvent) -> bool {
     });
     if handled {
         layout(false);
+        if let Some(view) = PREVIEW_TEXT.with(|slot| slot.borrow().clone()) {
+            mac_ui::motion::crossfade(&view);
+        }
     }
     handled
 }

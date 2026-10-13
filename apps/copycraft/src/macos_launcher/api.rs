@@ -236,7 +236,11 @@ pub(crate) fn present_with_card(data: LaunchData, card: commands::WorkCard, fres
     layout(fresh);
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
+            let animate_in = mac_ui::motion::window_needs_in(window);
             panel::bring_to_front(window);
+            if animate_in {
+                mac_ui::motion::window_in(window);
+            }
         }
     });
     focus_card();
@@ -342,7 +346,8 @@ pub(crate) fn hide() {
     }
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
-            window.orderOut(None);
+            let closing = window.clone();
+            mac_ui::motion::window_out(window, move || closing.orderOut(None));
         }
     });
     OPEN.set(false);

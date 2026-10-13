@@ -258,8 +258,8 @@ fn paint_boxed_grid(views: &Views, view: &TableWindowView, previous: &str) {
 
 fn table_fonts() -> (Retained<NSFont>, Retained<NSFont>) {
     (
-        NSFont::monospacedDigitSystemFontOfSize_weight(TABLE_FONT, 0.0),
-        NSFont::monospacedDigitSystemFontOfSize_weight(TABLE_FONT, HEADER_WEIGHT),
+        NSFont::monospacedSystemFontOfSize_weight(TABLE_FONT, 0.0),
+        NSFont::monospacedSystemFontOfSize_weight(TABLE_FONT, HEADER_WEIGHT),
     )
 }
 

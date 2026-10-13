@@ -43,6 +43,8 @@ pub use objc2_app_kit;
 #[cfg(target_os = "macos")]
 pub use objc2_foundation;
 
+#[cfg(all(target_os = "macos", any(feature = "drop", feature = "widgets")))]
+pub mod a11y;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod actions;
 #[cfg(all(target_os = "macos", any(feature = "panel", feature = "dialog")))]
@@ -71,6 +73,8 @@ pub mod lang;
 #[cfg(target_os = "macos")]
 pub mod layer;
 pub mod metrics;
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub mod motion;
 #[cfg(all(target_os = "macos", feature = "notify"))]
 pub mod notify;
 #[cfg(all(target_os = "macos", feature = "panel"))]
@@ -84,6 +88,8 @@ pub mod style;
 pub mod text;
 #[cfg(feature = "theme")]
 pub mod theme;
+#[cfg(all(target_os = "macos", feature = "widgets", feature = "panel"))]
+pub mod toast;
 pub mod tray;
 pub mod wake;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
