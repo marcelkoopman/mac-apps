@@ -197,7 +197,7 @@ impl App {
                 .is_some_and(crate::decode::picture_candidate);
         // A diff is not kept with the entry: it is not one view of that copy.
         let diff_view = data.view == CardView::Diff;
-        entry.filter(|_| !versioned && !picture && !diff_view)
+        entry.filter(|_| !versioned && !picture && !diff_view && commands::card_may_be_kept(data))
     }
 
     /// Open the card for `data` (the card is built as in [`App::history_card`]).

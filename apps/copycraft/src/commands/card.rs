@@ -279,6 +279,15 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
     card
 }
 
+/// Whether the card built for `data` may be kept with its history entry and shown again
+/// later. A card with a notice in its meta line (a Lines… count, a step note, an error) may
+/// not: the kept card would hide a newer notice, or show an old one again. Without this,
+/// *Count lines, words and characters* on a plain text card got the kept card back, built
+/// before the count, so nothing changed.
+pub fn card_may_be_kept(data: &LaunchData) -> bool {
+    data.notice.is_none()
+}
+
 /// The diff view. The well shows A and B side by side. Copy and Save take the `+` / `-` lines.
 pub(crate) fn diff_card(data: &LaunchData) -> WorkCard {
     let Some(diff) = &data.diff else {
