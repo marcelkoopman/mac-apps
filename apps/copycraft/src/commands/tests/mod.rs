@@ -298,8 +298,4 @@ fn a_single_sentence_gets_the_numbers_button_and_room_for_every_well_button() {
     );
     let card = data(SubjectKind::Text, Some(sentence));
     assert!(super::offers_line_numbers(&card));
-    // Save, Copy, eye and numbers: the text keeps clear of all four.
-    let actions = content_actions(&card);
-    assert_eq!(super::well_button_count(actions, true), 4);
-    assert_eq!(super::well_button_count(actions, false), 3);
 }

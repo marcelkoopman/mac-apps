@@ -732,16 +732,6 @@ fn is_plain_kind(kind: FormatKind) -> bool {
     matches!(kind, FormatKind::Text | FormatKind::Plain)
 }
 
-/// How many well buttons stand in the top-right row: Save, Copy, the eye (with Copy or
-/// Save), line numbers, Preview. The text keeps clear of all of them.
-pub fn well_button_count(actions: ContentActions, numbers: bool) -> usize {
-    usize::from(actions.save)
-        + usize::from(actions.copy)
-        + usize::from(actions.copy || actions.save)
-        + usize::from(numbers)
-        + usize::from(actions.preview)
-}
-
 /// SF Symbol and tooltip (NL/EN) for the numbers button.
 pub fn line_numbers_button_look(on: bool) -> (&'static str, &'static str) {
     if on {

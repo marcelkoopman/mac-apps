@@ -114,6 +114,12 @@ thread_local! {
     static NUMBERS_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
     /// The card on screen can show line numbers ([`commands::offers_line_numbers`]).
     static OFFERS_NUMBERS: Cell<bool> = const { Cell::new(false) };
+    /// The mouse is over the well's right edge: the action dock is shown.
+    static DOCK_HOVERED: Cell<bool> = const { Cell::new(false) };
+    /// Top of the well in window coordinates ([`place_content_actions`]).
+    static WELL_TOP: Cell<f64> = const { Cell::new(0.0) };
+    /// Bottom of the well in window coordinates.
+    static WELL_BOTTOM: Cell<f64> = const { Cell::new(0.0) };
     /// The eye button's choice per item, kept in memory ([`commands::BlurChoices`]).
     static BLUR_CHOICES: RefCell<commands::BlurChoices> = RefCell::new(commands::BlurChoices::default());
 }
@@ -289,6 +295,11 @@ define_class!(
         #[unsafe(method(canBecomeMainWindow))]
         fn can_become_main_window(&self) -> bool {
             true
+        }
+
+        #[unsafe(method(mouseMoved:))]
+        fn mouse_moved(&self, _event: &NSEvent) {
+            update_well_dock_hover();
         }
 
         #[unsafe(method(keyDown:))]

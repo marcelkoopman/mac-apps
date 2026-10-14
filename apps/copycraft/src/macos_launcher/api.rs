@@ -360,6 +360,7 @@ pub(crate) fn hide_at_once() {
 }
 
 fn hide_card(animated: bool) {
+    reset_well_dock();
     dismiss_picker(false);
     crate::macos_symbols::close();
     set_item_find(false);

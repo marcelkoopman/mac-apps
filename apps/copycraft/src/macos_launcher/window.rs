@@ -7,6 +7,8 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         return;
     }
     let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(WIDTH, 420.0));
+    // Hover over the well's right edge shows the action dock (`mouseMoved:`).
+    window.setAcceptsMouseMovedEvents(true);
     panel::configure_floating(&window);
     // The card stays open, floating over other apps' windows, until ✕, Esc, the hotkey or the
     // menu bar icon closes it. (NSWindow's default; said here because the card relies on it.)

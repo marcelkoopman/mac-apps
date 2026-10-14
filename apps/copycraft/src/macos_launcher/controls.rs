@@ -276,50 +276,113 @@ pub(crate) fn raise_history_nav() {
     });
 }
 
+/// How wide a strip along the well's right edge counts as "over the dock".
+const DOCK_STRIP: f64 = WELL_ACTION + WELL_INSET * 2.0 + 8.0;
+
 pub(crate) fn place_content_actions(preview_y: f64) {
     let actions = CONTENT_ACTIONS.get();
     let title = CARD_TITLE.with(|slot| slot.borrow().clone());
-    let top = preview_y + PREVIEW_H - WELL_INSET - WELL_ACTION;
-    // Right to left: Save, Copy, Preview. A hidden one does not leave a gap.
-    let mut x = card_width() - PAD - WELL_INSET - WELL_ACTION;
+    // Vertical dock along the right edge (top to bottom): numbers, eye, copy, save, preview.
+    // Hidden until the mouse is over that edge ([`update_well_dock_hover`]); may cover the text.
+    let x = card_width() - PAD - WELL_INSET - WELL_ACTION;
+    let mut y = preview_y + PREVIEW_H - WELL_INSET - WELL_ACTION;
+    WELL_TOP.set(preview_y + PREVIEW_H);
+    WELL_BOTTOM.set(preview_y);
+    let open = DOCK_HOVERED.get();
     let save_tip = commands::save_tip(&title);
     let copy_tip = commands::copy_tip(&title);
     let preview_tip = commands::preview_tip(&title);
-    SAVE_BUTTON.with(|slot| {
-        place_action_from_right(slot, &mut x, top, actions.save, &save_tip);
-    });
-    COPY_BUTTON.with(|slot| {
-        place_action_from_right(slot, &mut x, top, actions.copy, &copy_tip);
-    });
-    // Hide/show: on every card with content to copy or save.
-    let (symbol, label) = commands::hide_button_look(well_is_masked());
-    let label = crate::locale::t(label);
-    HIDE_BUTTON.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref()
-            && let Some(image) = mac_ui::icon::system_symbol(symbol, label)
-        {
-            button.button().setImage(Some(&image));
-            button.set_accessibility_label(label);
-        }
-        place_action_from_right(slot, &mut x, top, actions.copy || actions.save, label);
-    });
-    // Line numbers on/off: plain text cards only, left of the eye.
-    let (symbol, label) = commands::line_numbers_button_look(commands::line_numbers_on());
+    let (eye_symbol, eye_label) = commands::hide_button_look(well_is_masked());
+    let eye_label = crate::locale::t(eye_label);
+    let (num_symbol, num_label) = commands::line_numbers_button_look(commands::line_numbers_on());
     NUMBERS_BUTTON.with(|slot| {
         if let Some(button) = slot.borrow().as_ref()
-            && let Some(image) = mac_ui::icon::system_symbol(symbol, label)
+            && let Some(image) = mac_ui::icon::system_symbol(num_symbol, num_label)
         {
             button.button().setImage(Some(&image));
-            button.set_accessibility_label(label);
+            button.set_accessibility_label(num_label);
         }
-        place_action_from_right(slot, &mut x, top, OFFERS_NUMBERS.get(), label);
+        place_dock_action(slot, x, &mut y, OFFERS_NUMBERS.get(), open, num_label);
+    });
+    HIDE_BUTTON.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref()
+            && let Some(image) = mac_ui::icon::system_symbol(eye_symbol, eye_label)
+        {
+            button.button().setImage(Some(&image));
+            button.set_accessibility_label(eye_label);
+        }
+        place_dock_action(
+            slot,
+            x,
+            &mut y,
+            actions.copy || actions.save,
+            open,
+            eye_label,
+        );
+    });
+    COPY_BUTTON.with(|slot| {
+        place_dock_action(slot, x, &mut y, actions.copy, open, &copy_tip);
+    });
+    SAVE_BUTTON.with(|slot| {
+        place_dock_action(slot, x, &mut y, actions.save, open, &save_tip);
     });
     PREVIEW_BUTTON.with(|slot| {
-        place_action_from_right(slot, &mut x, top, actions.preview, &preview_tip);
+        place_dock_action(slot, x, &mut y, actions.preview, open, &preview_tip);
     });
 }
 
-/// Keep the well's text clear of the copy and save buttons, and of the Show all footer.
+/// One dock button. Not `offered`: hidden, and it takes no place in the column. Offered: at
+/// `(x, *y)`, faded in when the dock is `open` and out when not, then `*y` steps down.
+fn place_dock_action(
+    slot: &RefCell<Option<WellAction>>,
+    x: f64,
+    y: &mut f64,
+    offered: bool,
+    open: bool,
+    tip: &str,
+) {
+    place_well_action(slot, x, *y, offered, tip);
+    if !offered {
+        return;
+    }
+    if let Some(button) = slot.borrow().as_ref() {
+        let alpha = if open { 1.0 } else { 0.0 };
+        if (button.view().alphaValue() - alpha).abs() > 0.01 {
+            button.view().animator().setAlphaValue(alpha);
+        }
+    }
+    *y -= WELL_GAP + WELL_ACTION;
+}
+
+/// The mouse moved on the card: show the dock while it is over the well's right edge, hide
+/// it when it leaves.
+pub(crate) fn update_well_dock_hover() {
+    let point = WINDOW.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|window| window.mouseLocationOutsideOfEventStream())
+    });
+    let Some(point) = point else {
+        return;
+    };
+    let hovered = dock_hit(point.x, point.y);
+    if hovered != DOCK_HOVERED.get() {
+        DOCK_HOVERED.set(hovered);
+        place_content_actions(WELL_BOTTOM.get());
+    }
+}
+
+/// Close the dock (the card hides).
+pub(crate) fn reset_well_dock() {
+    DOCK_HOVERED.set(false);
+}
+
+fn dock_hit(x: f64, y: f64) -> bool {
+    let right = card_width() - PAD;
+    x >= right - DOCK_STRIP && x <= right && y >= WELL_BOTTOM.get() && y <= WELL_TOP.get()
+}
+
+/// Keep the well's text clear of the Show all footer (the dock may cover the text).
 /// The text view itself is narrowed and raised; content insets stay at zero so the padding
 /// is not applied twice.
 pub(crate) fn fit_text_well(preview_y: f64) {
@@ -327,17 +390,8 @@ pub(crate) fn fit_text_well(preview_y: f64) {
         set_text_gutter(0.0, 0.0);
         return;
     }
-    let actions = CONTENT_ACTIONS.get();
-    let count = if picker_open() {
-        0
-    } else {
-        commands::well_button_count(actions, OFFERS_NUMBERS.get())
-    };
-    let reserve = if count == 0 {
-        0.0
-    } else {
-        WELL_INSET + count as f64 * WELL_ACTION + (count as f64 - 1.0) * WELL_GAP + 6.0
-    };
+    // The dock buttons fade in over the text on hover: no room is kept for them.
+    let reserve = 0.0;
     let note = PREVIEW_NOTE.with(|slot| !slot.borrow().is_empty());
     let footer = if note && !well_is_masked() && !picker_open() {
         SHOW_ALL_H + WELL_INSET + 6.0
@@ -362,19 +416,6 @@ pub(crate) fn fit_text_well(preview_y: f64) {
         }
     });
     set_text_gutter(0.0, 0.0);
-}
-
-pub(crate) fn place_action_from_right(
-    slot: &RefCell<Option<WellAction>>,
-    x: &mut f64,
-    y: f64,
-    shown: bool,
-    tip: &str,
-) {
-    place_well_action(slot, *x, y, shown, tip);
-    if shown {
-        *x -= WELL_GAP + WELL_ACTION;
-    }
 }
 
 pub(crate) fn place_well_action(
