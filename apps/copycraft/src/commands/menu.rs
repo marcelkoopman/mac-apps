@@ -79,17 +79,12 @@ pub fn text_menu_title() -> &'static str {
     crate::locale::t("text_menu")
 }
 
-/// The "Lines…" menu: count, first and last lines, reverse, column, then undo and redo when
-/// there is a version to go to. No check marks.
+/// The "Lines…" menu: first and last lines, reverse, column and filter, then undo and redo
+/// when there is a version to go to. No check marks. Line count and size stay on the meta
+/// line under the preview, so the menu does not count again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
     let mut commands = vec![
-        command(
-            CommandId::TextCount,
-            crate::locale::t("text_count"),
-            crate::locale::t("text_menu"),
-            "count wc lines words characters text",
-        ),
         command(
             CommandId::TextHead,
             crate::locale::t("text_head"),

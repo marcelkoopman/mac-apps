@@ -1,30 +1,13 @@
-//! Unix-style line tools for the Lines… menu: count (wc), first and last lines (head, tail),
+//! Unix-style line tools for the Lines… menu: first and last lines (head, tail),
 //! reverse (tac) and one column (awk '{print $N}').
 //!
 //! Platform-independent and allocation-light: head and tail slice the text, so line endings
 //! (LF or CRLF) come back exactly as copied. The other steps keep the text's own line ending
 //! and its final newline, if it had one.
 
-/// Lines, words and characters, like `wc -l -w -m` (a last line without a newline counts).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Counts {
-    pub lines: usize,
-    pub words: usize,
-    pub chars: usize,
-}
-
-pub fn count(text: &str) -> Counts {
-    Counts {
-        lines: text.lines().count(),
-        words: text.split_whitespace().count(),
-        chars: text.chars().count(),
-    }
-}
-
 /// What a Lines… job on its thread found, for the main thread.
 #[derive(Clone)]
 pub enum TextResult {
-    Count(Counts),
     /// The step's text; `None` when it would leave nothing or change nothing.
     Step {
         op: TextOp,
@@ -36,24 +19,21 @@ pub enum TextResult {
 impl std::fmt::Debug for TextResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TextResult::Count(counts) => write!(f, "Count({counts:?})"),
             TextResult::Step { text, .. } => write!(f, "Step(changed: {})", text.is_some()),
         }
     }
 }
 
 impl TextResult {
-    /// Work `op` (or the count, without one) out on `text`. Runs on a background thread.
-    pub fn work(text: &str, op: Option<TextOp>) -> Self {
-        match op {
-            None => TextResult::Count(count(text)),
-            Some(op) => {
-                let out = op
-                    .apply(text)
-                    .filter(|out| out.as_str() != text)
-                    .map(zeroize::Zeroizing::new);
-                TextResult::Step { op, text: out }
-            }
+    /// Work `op` out on `text`. Runs on a background thread.
+    pub fn work(text: &str, op: &TextOp) -> Self {
+        let out = op
+            .apply(text)
+            .filter(|out| out.as_str() != text)
+            .map(zeroize::Zeroizing::new);
+        TextResult::Step {
+            op: op.clone(),
+            text: out,
         }
     }
 }

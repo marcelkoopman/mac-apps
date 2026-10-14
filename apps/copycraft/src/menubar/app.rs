@@ -105,7 +105,7 @@ pub(crate) struct App {
     pub(crate) text_steps: Option<TextSteps>,
     /// Lines… versions of the opened file.
     pub(crate) opened_steps: Option<super::text::OpenedSteps>,
-    /// The count, or why the last Lines… step did nothing, and for which history entry.
+    /// Why the last Lines… step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
     /// Bumped for every Lines… job; a result with another number is stale and dropped.
     pub(crate) text_generation: u64,

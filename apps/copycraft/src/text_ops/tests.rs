@@ -1,50 +1,6 @@
 use super::*;
 
 #[test]
-fn count_empty_trailing_crlf_and_unicode() {
-    assert_eq!(
-        count(""),
-        Counts {
-            lines: 0,
-            words: 0,
-            chars: 0
-        }
-    );
-    assert_eq!(
-        count("a b\nc\n"),
-        Counts {
-            lines: 2,
-            words: 3,
-            chars: 6
-        }
-    );
-    assert_eq!(
-        count("a b\nc"),
-        Counts {
-            lines: 2,
-            words: 3,
-            chars: 5
-        }
-    );
-    assert_eq!(
-        count("a\r\nb\r\n"),
-        Counts {
-            lines: 2,
-            words: 2,
-            chars: 6
-        }
-    );
-    assert_eq!(
-        count("héllo wörld 🎉\n"),
-        Counts {
-            lines: 1,
-            words: 3,
-            chars: 14
-        }
-    );
-}
-
-#[test]
 fn head_keeps_line_endings() {
     assert_eq!(head("", 3), "");
     assert_eq!(head("a\nb\nc\n", 2), "a\nb\n");
@@ -124,7 +80,7 @@ fn apply_leaves_nothing_as_none() {
 fn long_texts_stay_quick() {
     let text: String = (0..100_000).map(|i| format!("{i} field{i} x\n")).collect();
     let start = std::time::Instant::now();
-    assert_eq!(count(&text).lines, 100_000);
+    assert_eq!(text.lines().count(), 100_000);
     assert_eq!(head(&text, 5).lines().count(), 5);
     assert_eq!(tail(&text, 5).lines().count(), 5);
     assert_eq!(reverse(&text).lines().next(), Some("99999 field99999 x"));

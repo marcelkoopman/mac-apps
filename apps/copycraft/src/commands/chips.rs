@@ -31,11 +31,10 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             {
                 chips.push(question);
             }
-            // Lines… on text and code cards, also in a formatted view; tables and links have
-            // their own chips.
-            if data.text_edit.is_some()
-                && data.subject_text.as_deref().is_some_and(offers_text_menu)
-            {
+            // Lines… on every text and code card, also formatted, and on an opened or dropped
+            // file. It does not wait for versions to be attached: a Rust card has no other chip,
+            // so gating it on `text_edit` left the row empty. Tables and links have their own chips.
+            if data.subject_text.as_deref().is_some_and(offers_text_menu) {
                 // Up front, before the less used chips.
                 chips.insert(
                     0,
@@ -43,7 +42,7 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
                         CommandId::TextMenu,
                         text_menu_title(),
                         crate::locale::t("detail_text_steps"),
-                        "text lines count head tail reverse column filter undo redo",
+                        "text lines head tail reverse column filter undo redo",
                     ),
                 );
             }
@@ -121,6 +120,29 @@ pub fn offers_text_menu(text: &str) -> bool {
 static TEXT_MENU: crate::memo::Memo<bool> =
     crate::memo::Memo::with_min_len(crate::clipboard::MAX_HISTORY + 4, 0);
 
+/// The Lines… menu for `data`: the versions already attached, or a fresh one when the text
+/// offers the menu and nothing has attached versions yet. `None` for a table, a link or a
+/// picture, so the chip and the menu stay the same thing.
+pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
+    if data.subject_kind != SubjectKind::Text {
+        return None;
+    }
+    let text = data.subject_text.as_deref()?;
+    if !offers_text_menu(text) {
+        return None;
+    }
+    Some(data.text_edit.clone().unwrap_or_else(|| {
+        let kind = crate::format::detect(text);
+        TextShown {
+            labels: vec![crate::locale::t("original").to_string()],
+            version: 0,
+            note: None,
+            code: crate::complexity::Lang::of(kind).is_some(),
+            agent: kind == crate::format::FormatKind::Agent,
+        }
+    }))
+}
+
 /// Work out (and remember) the chips of a copied text ahead of the card, off the main thread.
 pub fn warm_chips(text: &str) {
     copied_text_chips(text);
@@ -147,11 +169,11 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
                 .map(|(command, _)| command),
         );
     }
-    if let Some(edit) = &data.text_edit
+    if let Some(edit) = text_shown(data)
         && commands.iter().any(|c| c.id == CommandId::TextMenu)
     {
         commands.extend(
-            text_menu_items(edit)
+            text_menu_items(&edit)
                 .into_iter()
                 .map(|(command, _)| command),
         );

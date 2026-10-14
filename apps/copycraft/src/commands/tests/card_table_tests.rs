@@ -516,7 +516,13 @@ fn a_diff_chip_sits_beside_original_and_waits_to_be_copied() {
     let mut input = data(SubjectKind::Text, Some("hello"));
     input.diff = Some(diff_shown(crate::diff::Phase::Working));
     let titles: Vec<_> = chips(&input).iter().map(|cmd| cmd.title.clone()).collect();
-    assert_eq!(titles, [crate::locale::t("chip_diff")]);
+    assert_eq!(
+        titles,
+        [
+            crate::locale::t("chip_diff").to_string(),
+            crate::locale::t("text_menu").to_string(),
+        ]
+    );
     // The spinner text is the diff view. The chip is already there on the source view.
     input.view = CardView::Diff;
     let card = work_card(&input);

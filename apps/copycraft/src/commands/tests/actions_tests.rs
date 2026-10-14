@@ -4,7 +4,7 @@ use super::*;
 fn messy_json_hides_format_convert_and_dataframe() {
     let input = data(SubjectKind::Text, Some(r#"{"name":"copycraft"}"#));
     let shown = chips(&input);
-    assert_eq!(shown[0].id, CommandId::Schema);
+    assert_eq!(shown[0].id, CommandId::TextMenu);
     assert_eq!(shown.last().unwrap().id, CommandId::Schema);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Copy));
@@ -68,7 +68,7 @@ fn xsd_opens_formatted_and_coloured_with_sample() {
         vec![CommandId::Sample]
     );
     let shown = chips(&input);
-    assert_eq!(ids(&shown), vec![CommandId::Sample]);
+    assert_eq!(ids(&shown), vec![CommandId::TextMenu, CommandId::Sample]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Schema));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
@@ -113,7 +113,7 @@ fn xsd_opens_formatted_and_coloured_with_sample() {
 fn long_prose_keeps_copy_and_save_on_the_content() {
     let text = "please summarize these notes for the team. ".repeat(40);
     let input = data(SubjectKind::Text, Some(&text));
-    assert!(chips(&input).is_empty());
+    assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -193,7 +193,7 @@ fn a_picture_opens_in_preview() {
 #[test]
 fn plain_text_offers_copy_and_save_on_the_content() {
     let input = data(SubjectKind::Text, Some("Emmi Silvennoinen"));
-    assert!(chips(&input).is_empty());
+    assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
     let card = work_card(&input);
     assert_eq!(copy_tip(&card.title), "Copy Content");
     assert_eq!(save_tip(&card.title), "Save Content");
@@ -329,11 +329,11 @@ fn file_urls_stay_text() {
     assert_eq!(card.title, "URL");
     assert!(card.link_page.is_none());
     assert_eq!(
-        titles(&chips(&data(
+        ids(&chips(&data(
             SubjectKind::Text,
             Some("https://example.com/report.pdf")
         ))),
-        Vec::<String>::new()
+        vec![CommandId::TextMenu]
     );
     assert_eq!(
         content_actions(&data(
@@ -432,19 +432,22 @@ fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
     assert!(card.shows_image);
     assert_eq!(card.title, "SVG");
     assert!(card.meta.starts_with("48 × 24 · "), "{}", card.meta);
-    let toggle = &chips(&input)[0];
-    assert_eq!(
-        (toggle.title.as_str(), &toggle.id),
-        ("Show code", &CommandId::Format)
-    );
+    let shown = chips(&input);
+    assert!(shown.iter().any(|cmd| cmd.id == CommandId::TextMenu));
+    let toggle = shown
+        .iter()
+        .find(|cmd| cmd.id == CommandId::Format)
+        .expect("Show code");
+    assert_eq!(toggle.title.as_str(), "Show code");
     // On the code: Show image goes back.
     input.view = CardView::Format;
     let card = crate::commands::work_card(&input);
     assert!(!card.shows_image);
     assert_eq!(card.title, "SVG");
-    let toggle = &chips(&input)[0];
-    assert_eq!(
-        (toggle.title.as_str(), &toggle.id),
-        ("Show image", &CommandId::Original)
-    );
+    let shown = chips(&input);
+    let toggle = shown
+        .iter()
+        .find(|cmd| cmd.id == CommandId::Original)
+        .expect("Show image");
+    assert_eq!(toggle.title.as_str(), "Show image");
 }

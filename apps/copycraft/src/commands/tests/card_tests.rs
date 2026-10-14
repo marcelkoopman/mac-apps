@@ -24,7 +24,11 @@ fn broken_json_stays_json_says_where_and_marks_the_line() {
         "4 lines  0.037 KB  ·  Line 4, column 1: trailing comma"
     );
     assert_eq!(card.error_line, Some(4));
-    assert!(chips(&input).is_empty(), "no Schema, no To JSON");
+    assert_eq!(
+        ids(&chips(&input)),
+        vec![CommandId::TextMenu],
+        "Lines… only: no Schema, no To JSON"
+    );
     // Labels stay at the end of the meta line.
     let mail = "{\"mail\": \"jan.devries@example.nl\",}";
     let card = work_card(&data(SubjectKind::Text, Some(mail)));

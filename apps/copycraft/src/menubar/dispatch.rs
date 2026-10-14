@@ -93,7 +93,6 @@ impl App {
             CommandId::TableVersion(index) if self.text_versions_shown() => {
                 self.text_goto(|_| Some(index));
             }
-            CommandId::TextCount => self.run_text(None),
             CommandId::ToggleLineNumbers => {
                 commands::toggle_line_numbers();
                 // Kept cards were built with the old choice.
@@ -103,7 +102,7 @@ impl App {
             }
             CommandId::TextHead => self.text_lines_prompt(false),
             CommandId::TextTail => self.text_lines_prompt(true),
-            CommandId::TextReverse => self.run_text(Some(crate::text_ops::TextOp::Reverse)),
+            CommandId::TextReverse => self.run_text(crate::text_ops::TextOp::Reverse),
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
             // On a picture card, undo, redo and the version capsule are the picture's.
@@ -136,7 +135,7 @@ impl App {
             CommandId::Settings => launcher::show_settings(),
             CommandId::About => launcher::show_about(),
             CommandId::TextComplexity => launcher::show_complexity(),
-            CommandId::AgentCommands => self.run_text(Some(crate::text_ops::TextOp::AgentCommands)),
+            CommandId::AgentCommands => self.run_text(crate::text_ops::TextOp::AgentCommands),
             CommandId::AgentOutline => launcher::show_agent_outline(),
             CommandId::AgentCheck => launcher::show_agent_check(),
             CommandId::GotoLine(line) => launcher::scroll_card_to_line(line),

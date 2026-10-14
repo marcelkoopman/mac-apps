@@ -39,7 +39,7 @@ fn pretty_json_skips_format() {
     let card = work_card(&data(SubjectKind::Text, Some(pretty)));
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Json));
     assert_eq!(card.excerpt, pretty);
-    assert_eq!(ids(&shown), vec![CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::TextMenu, CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
 }
 
@@ -52,7 +52,7 @@ fn xml_opens_formatted_and_coloured_with_xsd() {
         vec![CommandId::Schema]
     );
     let shown = chips(&input);
-    assert_eq!(ids(&shown), vec![CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::TextMenu, CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Convert));
     assert_eq!(presented_view(src, CardView::Original), CardView::Format);
@@ -89,7 +89,7 @@ fn xml_opens_formatted_and_coloured_with_xsd() {
 fn tabular_xml_shows_schema_without_convert() {
     let src = "<root><person><name>Jan</name><age>30</age></person><person><name>Anja</name><age>40</age></person></root>";
     let shown = chips(&data(SubjectKind::Text, Some(src)));
-    assert_eq!(ids(&shown), vec![CommandId::Schema]);
+    assert_eq!(ids(&shown), vec![CommandId::TextMenu, CommandId::Schema]);
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Format));
     assert!(!shown.iter().any(|cmd| cmd.id == CommandId::Dataframe));
 }
@@ -100,7 +100,10 @@ fn yaml_opens_formatted_and_coloured_with_to_json() {
     let input = data(SubjectKind::Text, Some(src));
     assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
     let shown = chips(&input);
-    assert_eq!(titles(&shown), vec!["To JSON"]);
+    assert_eq!(
+        titles(&shown),
+        vec![crate::locale::t("text_menu"), "To JSON"]
+    );
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Schema));
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Dataframe));
@@ -170,8 +173,9 @@ fn encoded_text_offers_decode() {
 fn code_is_formatted_without_original_or_format() {
     let src = "fn main() {\nlet message = \"this identifier is definitely longer than forty eight characters\";\n}\n";
     let input = data(SubjectKind::Text, Some(src));
-    // Always the formatted view: no Raw and no Format chip.
-    assert!(chips(&input).is_empty());
+    // Always the formatted view: no Raw and no Format chip. Lines… is the action.
+    assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
+    assert_eq!(chips(&input)[0].title, crate::locale::t("text_menu"));
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -193,7 +197,7 @@ fn code_is_formatted_without_original_or_format() {
     let java =
         "public class Hi {\npublic static void main(String[] a) {\nSystem.out.println(1);\n}\n}\n";
     let input = data(SubjectKind::Text, Some(java));
-    assert!(chips(&input).is_empty());
+    assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
     let card = work_card(&input);
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Java));
     assert_eq!(card.title, "Formatted Java");
@@ -204,7 +208,7 @@ fn code_is_formatted_without_original_or_format() {
 fn pretty_code_stays_on_the_card_without_original() {
     let src = "fn main() {\n    let x = 1;\n}\n";
     let input = data(SubjectKind::Text, Some(src));
-    assert!(chips(&input).is_empty());
+    assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
     let card = work_card(&input);
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Rust));
     assert!(card.excerpt.contains("let x"));
@@ -391,6 +395,28 @@ fn text_menu_on_prose_and_every_code_card_not_on_tables_or_links() {
     ] {
         assert!(!offers_text_menu(other), "{other}");
     }
+}
+
+#[test]
+fn a_rust_snippet_and_an_opened_file_offer_lines() {
+    let rust = "fn main() {\n    let x = 1;\n}\n";
+    let mut card = data(SubjectKind::Text, Some(rust));
+    assert_eq!(ids(&chips(&card)), vec![CommandId::TextMenu]);
+    assert_eq!(chips(&card)[0].title, crate::locale::t("text_menu"));
+    // The menu is there before any version is attached, so the chip is not an empty button.
+    assert!(
+        search_pool(&card)
+            .iter()
+            .any(|cmd| cmd.id == CommandId::TextHead)
+    );
+    card.source_name = Some("main.rs".into());
+    card.view = presented_view(rust, CardView::Original);
+    assert!(chips(&card).iter().any(|cmd| cmd.id == CommandId::TextMenu));
+    assert!(
+        !chips(&card)
+            .iter()
+            .any(|cmd| matches!(cmd.id, CommandId::Format | CommandId::Original))
+    );
 }
 
 #[test]

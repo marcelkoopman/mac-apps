@@ -344,7 +344,6 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageStep(_)
             | CommandId::ImageResizeCustom
             | CommandId::TextMenu
-            | CommandId::TextCount
             | CommandId::ToggleLineNumbers
             | CommandId::TextHead
             | CommandId::TextTail
@@ -435,7 +434,6 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TableChooseColumns => "checklist",
         CommandId::TableUndo => "arrow.uturn.backward",
         CommandId::TableRedo => "arrow.uturn.forward",
-        CommandId::TextCount => "number",
         CommandId::TextHead => "arrow.up.to.line",
         CommandId::TextTail => "arrow.down.to.line",
         CommandId::TextReverse => "arrow.up.arrow.down",

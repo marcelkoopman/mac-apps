@@ -1,4 +1,4 @@
-//! Lines… actions: count, first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
+//! Lines… actions: first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
 //! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
 
 use super::*;
@@ -126,7 +126,7 @@ impl App {
             .is_some_and(|(id, _)| self.text_steps_of(id).is_some_and(|s| s.ids.len() > 1))
     }
 
-    /// Lines… for the card: its versions and the count or note for the meta line.
+    /// Lines… for the card: its versions and a note for the meta line.
     pub(crate) fn attach_text(&mut self, data: &mut LaunchData) {
         // Lines… works on the text this card is built from, whichever path built it.
         self.card_text = card_text_of(data);
@@ -169,10 +169,9 @@ impl App {
         });
     }
 
-    /// Count (`op` `None`) or take step `op` on the text on the card, on a background thread,
-    /// like the card is built: the text never blocks the main thread. [`App::finish_text`]
-    /// takes the result.
-    pub(crate) fn run_text(&mut self, op: Option<TextOp>) {
+    /// Take step `op` on the text on the card, on a background thread, like the card is built:
+    /// the text never blocks the main thread. [`App::finish_text`] takes the result.
+    pub(crate) fn run_text(&mut self, op: TextOp) {
         let Some((entry, text)) = self.text_entry() else {
             return;
         };
@@ -181,7 +180,7 @@ impl App {
         let spawned = std::thread::Builder::new()
             .name("copycraft-text".into())
             .spawn(move || {
-                let result = text_ops::TextResult::work(&text, op);
+                let result = text_ops::TextResult::work(&text, &op);
                 launcher::emit(UserEvent::TextReady {
                     generation,
                     entry,
@@ -209,16 +208,6 @@ impl App {
             return;
         };
         match result {
-            text_ops::TextResult::Count(counts) => {
-                self.text_note = Some((
-                    id,
-                    crate::locale::tf(
-                        "text_count_result",
-                        &[&counts.lines, &counts.words, &counts.chars],
-                    ),
-                ));
-                self.refresh_popup();
-            }
             text_ops::TextResult::Step { text: None, .. } => {
                 self.text_note = Some((id, crate::locale::t("text_nothing").to_string()));
                 self.refresh_popup();
@@ -364,11 +353,11 @@ impl App {
                 }
                 match text_ops::parse_count(&answer) {
                     Some(n) => {
-                        self.run_text(Some(if last {
+                        self.run_text(if last {
                             TextOp::Tail(n)
                         } else {
                             TextOp::Head(n)
-                        }));
+                        });
                         return;
                     }
                     None => message = crate::locale::t("text_count_invalid").to_string(),
@@ -426,7 +415,7 @@ impl App {
                 Separator::ALL.get(answer.option),
                 text_ops::parse_count(&typed),
             ) {
-                (Some(separator), Some(n)) => self.run_text(Some(TextOp::Column(*separator, n))),
+                (Some(separator), Some(n)) => self.run_text(TextOp::Column(*separator, n)),
                 _ => {
                     self.text_note = Some((id, crate::locale::t("text_count_invalid").to_string()));
                     self.refresh_popup();
@@ -484,11 +473,11 @@ impl App {
                 self.refresh_popup();
                 return;
             }
-            self.run_text(Some(TextOp::Filter {
+            self.run_text(TextOp::Filter {
                 pattern: answer.text,
                 ignore_case,
                 invert,
-            }));
+            });
         }
     }
 }

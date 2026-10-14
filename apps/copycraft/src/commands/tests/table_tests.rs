@@ -26,7 +26,10 @@ xmas-fifth-day:
     assert_eq!(crate::format::detect(src), crate::format::FormatKind::Yaml);
     let input = data(SubjectKind::Text, Some(src));
     let shown = chips(&input);
-    assert_eq!(titles(&shown), vec!["To JSON"]);
+    assert_eq!(
+        titles(&shown),
+        vec![crate::locale::t("text_menu"), "To JSON"]
+    );
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));
     assert_eq!(presented_view(src, CardView::Original), CardView::Format);
     let card = work_card(&input);

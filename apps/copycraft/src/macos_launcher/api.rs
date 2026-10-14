@@ -336,11 +336,13 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     OFFERS_NUMBERS.set(commands::offers_line_numbers(&data));
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
     // A picture's card has Image ▾ in the table menu's place.
-    let items = match (data.image_edit.as_ref(), data.text_edit.as_ref()) {
+    let text_menu = commands::text_shown(&data);
+    let items = match (data.image_edit.as_ref(), text_menu.as_ref()) {
         (Some(edit), _) if data.subject_kind == commands::SubjectKind::Image => {
             commands::image_menu_items(edit)
         }
-        // (`text_edit` is only there when the card offers Lines…, see `offers_text_menu`).
+        // The same cards that show the Lines… chip (`offers_text_menu`), with a fresh menu
+        // when no version has been attached yet.
         (_, Some(text)) => commands::text_menu_items(text),
         _ => commands::table_menu_items(data.table.as_ref()),
     };

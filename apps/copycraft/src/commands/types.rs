@@ -96,8 +96,8 @@ pub struct LaunchData {
     /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
     /// have them. Absent: no Image ▾.
     pub image_edit: Option<ImageShown>,
-    /// The versions Lines… made of the text on the card ([`crate::text_ops`]). Absent: no
-    /// Lines… (tables, links, a chosen file).
+    /// The versions Lines… made of the text on the card ([`crate::text_ops`]). Absent until
+    /// a step attaches them; the chip still shows on text and code, including a chosen file.
     pub text_edit: Option<TextShown>,
     /// History entry on screen, when the card follows history. Absent for a chosen file.
     pub shown_id: Option<u64>,
@@ -153,7 +153,7 @@ pub struct TextShown {
     pub labels: Vec<String>,
     /// The version shown: 0 is the original.
     pub version: usize,
-    /// The count, or why the last step did nothing, for the meta line.
+    /// Why the last step did nothing, for the meta line.
     pub note: Option<String>,
     /// Code in a language with functions: Lines… offers Complexity.
     pub code: bool,
@@ -414,8 +414,6 @@ pub enum CommandId {
     AgentCheck,
     /// A row of the Complexity, Outline or Check menu: scroll the card to this (1-based) line.
     GotoLine(usize),
-    /// Count lines, words and characters; shown on the card, the clipboard stays.
-    TextCount,
     /// Show or hide the line numbers of plain text cards (the well's numbers button).
     ToggleLineNumbers,
     /// Ask for N, then keep the first N lines as a new version.

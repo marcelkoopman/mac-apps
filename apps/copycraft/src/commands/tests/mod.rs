@@ -244,15 +244,15 @@ mod table_tests;
 mod text_tests;
 
 #[test]
-fn a_count_note_shows_on_a_plain_text_card_and_is_not_kept() {
-    let sentence = "Dit is een gewone Nederlandse zin om te tellen.";
+fn a_notice_shows_once_on_the_card_and_is_not_kept() {
+    let sentence = "Dit is een gewone Nederlandse zin.";
     let mut data = data(SubjectKind::Text, Some(sentence));
     assert!(super::card_may_be_kept(&data));
-    let note = crate::locale::tf("text_count_result", &[&1, &9, &47]);
+    let note = crate::locale::t("text_nothing").to_string();
     data.notice = Some(note.clone());
-    // The card built with the count shows it, and is not kept: a kept card from before the
-    // count would come back instead and the count would never show.
-    assert!(work_card(&data).meta.contains(&note));
+    // The card built with the note shows it once, and is not kept: a kept card from before
+    // the note would come back instead and the note would never show.
+    assert_eq!(work_card(&data).meta.matches(note.as_str()).count(), 1);
     assert!(!super::card_may_be_kept(&data));
 }
 

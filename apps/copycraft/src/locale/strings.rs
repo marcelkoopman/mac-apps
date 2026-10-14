@@ -953,18 +953,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "detail_text_steps",
-        "Tellen, eerste of laatste regels, omkeren, kolom",
-        "Count, first or last lines, reverse, column",
-    ),
-    (
-        "text_count",
-        "Tel regels, woorden en tekens",
-        "Count lines, words and characters",
-    ),
-    (
-        "text_count_result",
-        "{0} regels · {1} woorden · {2} tekens",
-        "{0} lines · {1} words · {2} characters",
+        "Eerste of laatste regels, omkeren, kolom, filter",
+        "First or last lines, reverse, column, filter",
     ),
     ("text_head", "Eerste regels…", "First lines…"),
     ("text_tail", "Laatste regels…", "Last lines…"),
