@@ -653,3 +653,62 @@ mod held_history {
         assert_eq!(history.len(), 1);
     }
 }
+
+#[test]
+fn an_item_over_its_limit_is_not_kept() {
+    use super::{MAX_IMAGE_BYTES, MAX_TEXT_BYTES};
+    let mut history = ClipboardHistory::default();
+    assert!(!history.record("x".repeat(MAX_TEXT_BYTES + 1)));
+    assert!(history.record_image(vec![7; MAX_IMAGE_BYTES + 1]).is_none());
+    assert_eq!(history.len(), 0);
+    let big = SecretBytes::new(vec![7; MAX_IMAGE_BYTES + 1]).unwrap();
+    assert_eq!(history.record_image_tracking(big, 3), 3);
+    assert!(
+        history
+            .record_tracking("y".repeat(MAX_TEXT_BYTES + 1), 0)
+            .is_none()
+    );
+    assert_eq!(history.len(), 0);
+    // At the limit is fine.
+    assert!(history.record("x".repeat(MAX_TEXT_BYTES)));
+    assert!(history.record_image(vec![7; MAX_IMAGE_BYTES]).is_some());
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn over_the_total_the_oldest_unpinned_goes_first_and_is_zeroized() {
+    use super::{MAX_IMAGE_BYTES, MAX_TOTAL_BYTES};
+    let mut history = ClipboardHistory::default();
+    // Oldest first: a pinned picture, then unpinned ones.
+    let pinned = history.record_image(vec![1; MAX_IMAGE_BYTES]).unwrap();
+    let pinned_id = history.id_at(0).unwrap();
+    assert!(history.pin(pinned_id));
+    let oldest_unpinned = history.record_image(vec![2; MAX_IMAGE_BYTES]).unwrap();
+    let per_entry = MAX_IMAGE_BYTES;
+    let fits = MAX_TOTAL_BYTES / per_entry;
+    for n in 3..=(fits as u8 + 1) {
+        history.record_image(vec![n; MAX_IMAGE_BYTES]);
+    }
+    assert!(history.total_bytes() <= MAX_TOTAL_BYTES);
+    assert_eq!(history.len(), fits);
+    assert!(history.contains_id(pinned_id));
+    // The oldest unpinned picture was dropped and its bytes wiped; the pinned one stayed.
+    assert!(oldest_unpinned.with(<[u8]>::is_empty));
+    assert!(pinned.with(|bytes| bytes.len() == MAX_IMAGE_BYTES));
+}
+
+#[test]
+fn equal_bytes_compare_by_length_and_hash_then_bytes() {
+    let a = SecretBytes::new(vec![1, 2, 3]).unwrap();
+    let b = SecretBytes::new(vec![1, 2, 3]).unwrap();
+    let c = SecretBytes::new(vec![1, 2, 4]).unwrap();
+    let d = SecretBytes::new(vec![1, 2]).unwrap();
+    assert!(a == b && b == a);
+    assert!(a != c && a != d);
+    // Both directions at once from two threads: locks are taken in address order.
+    let (x, y) = (a.clone(), b.clone());
+    let one = std::thread::spawn(move || (0..10_000).all(|_| x == y));
+    let (x, y) = (a.clone(), b.clone());
+    let two = std::thread::spawn(move || (0..10_000).all(|_| y == x));
+    assert!(one.join().unwrap() && two.join().unwrap());
+}

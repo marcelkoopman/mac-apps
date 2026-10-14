@@ -196,6 +196,11 @@ pub enum LogEvent {
         warnings: usize,
         secrets: usize,
     },
+    /// A copy this large (bytes) was not kept in history: over the per-item limit.
+    HistoryItemTooLarge {
+        image: bool,
+        bytes: usize,
+    },
     /// Lines… › Complexity refused a text this large (bytes).
     ComplexityTooLarge {
         lang: crate::complexity::Lang,
@@ -237,7 +242,8 @@ impl LogEvent {
             | E::HistoryForgottenLock
             | E::RestoreHistoryFailed(_)
             | E::SensitivityNotStarted(_)
-            | E::SensitivityChecked { .. } => Category::Clipboard,
+            | E::SensitivityChecked { .. }
+            | E::HistoryItemTooLarge { .. } => Category::Clipboard,
             E::TableOpened { .. } | E::TableNotShown | E::TableJobDone { .. } => Category::Table,
             E::DecodePictureSkipped(_) | E::SvgExternalRefs => Category::Decode,
             E::MissingLocaleKey
@@ -330,7 +336,8 @@ impl LogEvent {
             | E::TableOpened { .. }
             | E::PreviewStarted
             | E::SaveFinished { .. }
-            | E::DiagnosticsExported { .. } => Level::Info,
+            | E::DiagnosticsExported { .. }
+            | E::HistoryItemTooLarge { .. } => Level::Info,
             // Routine, per copy or per job.
             E::CopySkipped(_)
             | E::SensitivityChecked { .. }
@@ -427,6 +434,10 @@ impl LogEvent {
             E::AgentOutline { headings } => format!("agent outline: {headings} headings"),
             E::AgentChecked { warnings, secrets } => {
                 format!("agent check: {warnings} warnings, {secrets} possible secrets")
+            }
+            E::HistoryItemTooLarge { image, bytes } => {
+                let kind = if image { "image" } else { "text" };
+                format!("history: {kind} too large to keep ({bytes} bytes)")
             }
             E::ComplexityTooLarge { lang, bytes } => {
                 format!("complexity: {lang:?} too large ({bytes} bytes)")

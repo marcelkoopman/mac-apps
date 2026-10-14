@@ -28,7 +28,7 @@ impl ClipboardHistory {
     /// pinned. An unpinned one further down is replaced by a new entry in front.
     /// Returns whether `text` is in history now (`false`: blank, or history is held).
     pub fn record(&mut self, mut text: String) -> bool {
-        if text.trim().is_empty() || self.held() {
+        if text.trim().is_empty() || self.held() || too_large(text.len(), MAX_TEXT_BYTES, false) {
             text.zeroize();
             return false;
         }
@@ -80,14 +80,16 @@ impl ClipboardHistory {
             HistoryBody::Text(existing) => existing.as_str() == text,
             HistoryBody::Image(_) => false,
         });
-        self.record(text);
+        if !self.record(text) {
+            return None;
+        }
         Some(self.tracked(same, cursor))
     }
 
     /// Like [`record_tracking`](Self::record_tracking), for an image: the entry shares `bytes`'
     /// allocation, as a copied image's does.
     pub fn record_image_tracking(&mut self, bytes: SecretBytes, cursor: usize) -> usize {
-        if self.held() {
+        if self.held() || too_large(bytes.byte_len(), MAX_IMAGE_BYTES, true) {
             return cursor;
         }
         let same = self.entries.iter().position(|entry| match &entry.body {
@@ -111,11 +113,22 @@ impl ClipboardHistory {
 
     /// The picture as the newest copy, and the handle history keeps for it.
     pub fn record_image(&mut self, bytes: Vec<u8>) -> Option<SecretBytes> {
-        let bytes = SecretBytes::new(bytes)?;
-        if self.held() {
+        self.record_secret_image(SecretBytes::new(bytes)?)
+    }
+
+    /// [`record_image`](Self::record_image) for bytes already made into [`SecretBytes`] (and
+    /// hashed) on a background thread. Too large or held: not stored, and zeroized.
+    pub fn record_secret_image(&mut self, bytes: SecretBytes) -> Option<SecretBytes> {
+        if self.held() || too_large(bytes.byte_len(), MAX_IMAGE_BYTES, true) {
+            bytes.zeroize();
             return None;
         }
         Some(self.insert_image(bytes))
+    }
+
+    /// Bytes held by all entries together.
+    pub fn total_bytes(&self) -> usize {
+        self.entries.iter().map(|entry| entry.body.len()).sum()
     }
 
     /// Like [`record`](Self::record) for a picture. The entry that holds these very bytes (a
@@ -153,9 +166,22 @@ impl ClipboardHistory {
     }
 
     /// Drop the oldest unpinned entry until at most [`MAX_HISTORY`] unpinned entries remain.
+    /// Then, while history holds more than [`MAX_TOTAL_BYTES`], drop the oldest unpinned
+    /// entry, never the newest one. A dropped entry is zeroized (`Drop`).
     fn trim_unpinned(&mut self) {
         while self.unpinned_count() > MAX_HISTORY {
             let Some(index) = self.entries.iter().rposition(|entry| !entry.pinned) else {
+                break;
+            };
+            self.entries.remove(index);
+        }
+        while self.total_bytes() > MAX_TOTAL_BYTES {
+            let Some(index) = self
+                .entries
+                .iter()
+                .rposition(|entry| !entry.pinned)
+                .filter(|index| *index > 0)
+            else {
                 break;
             };
             self.entries.remove(index);
@@ -491,4 +517,13 @@ impl ClipboardHistory {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+}
+
+/// `len` is over `limit`: log it (the size only) and say so.
+fn too_large(len: usize, limit: usize, image: bool) -> bool {
+    let over = len > limit;
+    if over {
+        crate::diag::log(crate::diag::LogEvent::HistoryItemTooLarge { image, bytes: len });
+    }
+    over
 }

@@ -11,6 +11,12 @@ use crate::image_edit::ImageVersions;
 use crate::table::TableVersions;
 
 pub const MAX_HISTORY: usize = 20;
+/// The largest picture history keeps (bytes); a larger one is not stored.
+pub const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
+/// The largest text history keeps (bytes); a larger one is not stored.
+pub const MAX_TEXT_BYTES: usize = 5 * 1024 * 1024;
+/// All of history together (bytes): over it, the oldest unpinned entries go first.
+pub const MAX_TOTAL_BYTES: usize = 200 * 1024 * 1024;
 /// Pins on top of the unpinned cap. A further pin does nothing.
 pub const PIN_MAX: usize = 20;
 /// Prefix on a history row. It is not copied text.
@@ -158,6 +164,9 @@ impl ClipboardView {
 #[derive(Clone)]
 pub struct SecretBytes {
     inner: Arc<Mutex<Zeroizing<Vec<u8>>>>,
+    /// Length and hash of the bytes as made: equality looks at these before the bytes.
+    len: usize,
+    hash: u64,
 }
 
 impl SecretBytes {
@@ -165,9 +174,23 @@ impl SecretBytes {
         if bytes.is_empty() {
             return None;
         }
+        let len = bytes.len();
+        let hash = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::hash::DefaultHasher::new();
+            bytes.hash(&mut hasher);
+            hasher.finish()
+        };
         Some(Self {
             inner: Arc::new(Mutex::new(Zeroizing::new(bytes))),
+            len,
+            hash,
         })
+    }
+
+    /// Length of the bytes as made (a zeroized allocation keeps it).
+    pub fn byte_len(&self) -> usize {
+        self.len
     }
 
     pub fn zeroize(&self) {
@@ -217,9 +240,20 @@ impl PartialEq for SecretBytes {
         if self.same_allocation(other) {
             return true;
         }
-        let left = self.lock();
-        let right = other.lock();
-        left.as_slice() == right.as_slice()
+        // Length and hash first: two different pictures are told apart without a lock.
+        if self.len != other.len || self.hash != other.hash {
+            return false;
+        }
+        // Both locks in address order, so two threads comparing a == b and b == a cannot
+        // deadlock.
+        let (first, second) = if self.allocation_id() < other.allocation_id() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        let first = first.lock();
+        let second = second.lock();
+        first.as_slice() == second.as_slice()
     }
 }
 
@@ -229,6 +263,15 @@ impl Eq for SecretBytes {}
 enum HistoryBody {
     Text(Zeroizing<String>),
     Image(SecretBytes),
+}
+
+impl HistoryBody {
+    fn len(&self) -> usize {
+        match self {
+            HistoryBody::Text(text) => text.len(),
+            HistoryBody::Image(bytes) => bytes.byte_len(),
+        }
+    }
 }
 
 /// One copied item, and what was worked out from it once: its format, and the cards built for
