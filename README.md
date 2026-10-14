@@ -1,5 +1,7 @@
 # mac-apps
 
+[![Security audit](https://github.com/marcelkoopman/mac-apps/actions/workflows/security.yml/badge.svg)](https://github.com/marcelkoopman/mac-apps/actions/workflows/security.yml)
+
 Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo workspace.
 
 | Path | Kind | Description |
@@ -81,6 +83,7 @@ Issues and pull requests are welcome.
 - **Send a change:** open a pull request against `main`. Keep it small, and run `cargo fmt`, `cargo clippy` and `cargo test` first; CI runs the same checks on every pull request. I review and merge it.
 - **Offline by design:** Copycraft has no network access. Changes that add network access or new entitlements are not accepted.
 - **Releases:** only the maintainer makes releases. Please do not create tags or GitHub releases, or distribute builds of these apps.
+- **Security:** see [`SECURITY.md`](SECURITY.md) for supported versions, scanning and how to report a vulnerability.
 
 Downloads: [Releases](https://github.com/marcelkoopman/mac-apps/releases).
 
