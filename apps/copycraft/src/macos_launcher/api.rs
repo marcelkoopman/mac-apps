@@ -333,6 +333,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     });
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
+    OFFERS_NUMBERS.set(commands::offers_line_numbers(&data));
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
     // A picture's card has Image ▾ in the table menu's place.
     let items = match (data.image_edit.as_ref(), data.text_edit.as_ref()) {

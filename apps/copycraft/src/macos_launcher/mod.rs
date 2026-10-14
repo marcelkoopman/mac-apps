@@ -110,6 +110,10 @@ thread_local! {
     static HIDDEN: Cell<bool> = const { Cell::new(false) };
     /// Hide/show on the well.
     static HIDE_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+    /// Line numbers on/off on a plain text card, left of the eye.
+    static NUMBERS_BUTTON: RefCell<Option<WellAction>> = const { RefCell::new(None) };
+    /// The card on screen can show line numbers ([`commands::offers_line_numbers`]).
+    static OFFERS_NUMBERS: Cell<bool> = const { Cell::new(false) };
     /// The eye button's choice per item, kept in memory ([`commands::BlurChoices`]).
     static BLUR_CHOICES: RefCell<commands::BlurChoices> = RefCell::new(commands::BlurChoices::default());
 }
@@ -539,6 +543,11 @@ define_class!(
             HIDDEN.set(false);
             REVEALED.set(true);
             layout(false);
+        }
+
+        #[unsafe(method(numbersClicked:))]
+        fn numbers_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::ToggleLineNumbers));
         }
 
         #[unsafe(method(hideClicked:))]

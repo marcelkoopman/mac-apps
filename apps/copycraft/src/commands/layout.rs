@@ -345,6 +345,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ImageResizeCustom
             | CommandId::TextMenu
             | CommandId::TextCount
+            | CommandId::ToggleLineNumbers
             | CommandId::TextHead
             | CommandId::TextTail
             | CommandId::TextReverse

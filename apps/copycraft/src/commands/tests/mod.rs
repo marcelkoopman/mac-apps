@@ -265,16 +265,25 @@ fn plain_text_cards_number_their_lines() {
     assert!(numbered.ends_with("10  r10"));
     // A cut preview keeps its unnumbered "…".
     assert_eq!(super::numbered_lines("a\nb\n…"), "1  a\n2  b\n…");
-    let sentence = "Dit is een gewone Nederlandse zin.\nEn nog een regel.";
-    let card = work_card(&data(SubjectKind::Text, Some(sentence)));
+}
+
+/// The choice is global, so no test flips it: it would race with the other card tests.
+#[test]
+fn line_numbers_are_off_by_default_and_the_button_offers_them() {
+    let sentence = "Eerste regel.\nTweede regel.";
+    let plain = data(SubjectKind::Text, Some(sentence));
+    assert!(super::offers_line_numbers(&plain));
+    let code = data(SubjectKind::Text, Some("fn main() {\n    let x = 1;\n}\n"));
+    assert!(!super::offers_line_numbers(&code));
+    // Off: the well holds the text as copied, so search finds no numbers.
+    assert!(!super::line_numbers_on());
+    assert_eq!(work_card(&plain).excerpt, sentence);
     assert_eq!(
-        card.excerpt,
-        "1  Dit is een gewone Nederlandse zin.\n2  En nog een regel."
+        super::line_numbers_button_look(false),
+        ("list.number", crate::locale::t("show_line_numbers"))
     );
-    // Code keeps its highlighted text as it is.
-    let code = work_card(&data(
-        SubjectKind::Text,
-        Some("fn main() {\n    let x = 1;\n}\n"),
-    ));
-    assert!(!code.excerpt.starts_with("1  "));
+    assert_eq!(
+        super::line_numbers_button_look(true),
+        ("list.number", crate::locale::t("hide_line_numbers"))
+    );
 }

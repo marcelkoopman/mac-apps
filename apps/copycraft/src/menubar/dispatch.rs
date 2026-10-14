@@ -94,6 +94,13 @@ impl App {
                 self.text_goto(|_| Some(index));
             }
             CommandId::TextCount => self.run_text(None),
+            CommandId::ToggleLineNumbers => {
+                commands::toggle_line_numbers();
+                // Kept cards were built with the old choice.
+                self.history.forget_cards();
+                self.full_card = None;
+                self.refresh_popup();
+            }
             CommandId::TextHead => self.text_lines_prompt(false),
             CommandId::TextTail => self.text_lines_prompt(true),
             CommandId::TextReverse => self.run_text(Some(crate::text_ops::TextOp::Reverse)),

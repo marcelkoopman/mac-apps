@@ -147,6 +147,13 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         "◌",
         sel!(hideClicked:),
     );
+    let numbers_button = well_action(
+        mtm,
+        "list.number",
+        crate::locale::t("show_line_numbers"),
+        "#",
+        sel!(numbersClicked:),
+    );
     let preview_button = well_action(
         mtm,
         "arrow.up.left.and.arrow.down.right",
@@ -175,6 +182,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
     content.addSubview(hide_button.view());
+    content.addSubview(numbers_button.view());
     content.addSubview(preview_button.view());
 
     HEADER.with(|slot| slot.replace(Some(header)));
@@ -201,6 +209,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     COPY_BUTTON.with(|slot| slot.replace(Some(copy_button)));
     SAVE_BUTTON.with(|slot| slot.replace(Some(save_button)));
     HIDE_BUTTON.with(|slot| slot.replace(Some(hide_button)));
+    NUMBERS_BUTTON.with(|slot| slot.replace(Some(numbers_button)));
     PREVIEW_BUTTON.with(|slot| slot.replace(Some(preview_button)));
     REVEAL.with(|slot| slot.replace(Some(reveal)));
     VERSION_ROW.with(|slot| slot.replace(Some(version_row)));

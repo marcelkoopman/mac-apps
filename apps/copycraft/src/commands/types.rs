@@ -416,6 +416,8 @@ pub enum CommandId {
     GotoLine(usize),
     /// Count lines, words and characters; shown on the card, the clipboard stays.
     TextCount,
+    /// Show or hide the line numbers of plain text cards (the well's numbers button).
+    ToggleLineNumbers,
     /// Ask for N, then keep the first N lines as a new version.
     TextHead,
     /// Ask for N, then keep the last N lines as a new version.

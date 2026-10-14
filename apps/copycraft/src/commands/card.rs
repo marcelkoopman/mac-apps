@@ -403,8 +403,10 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
                 view = CardView::Format;
             }
             apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
-            // Plain text gets line numbers, so a Lines… count can be checked by eye.
-            if view == CardView::Original
+            // Plain text gets line numbers, so a Lines… count can be checked by eye (unless the
+            // numbers button turned them off).
+            if line_numbers_on()
+                && view == CardView::Original
                 && card.highlight.is_none()
                 && format::detect(text) == FormatKind::Text
             {
@@ -696,6 +698,40 @@ pub(crate) fn svg_meta(text: &str) -> String {
     match format::svg::dimensions(text) {
         Some(size) => format!("{size} · {facts}"),
         None => facts,
+    }
+}
+
+/// Line numbers on plain text cards: one choice for all cards, in memory (like the eye
+/// button's choices), off at launch.
+static LINE_NUMBERS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn line_numbers_on() -> bool {
+    LINE_NUMBERS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Flip the line numbers; returns the new state.
+pub fn toggle_line_numbers() -> bool {
+    !LINE_NUMBERS.fetch_xor(true, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The card for `data` is plain text in its Original view: it can show line numbers, so the
+/// numbers button shows.
+pub fn offers_line_numbers(data: &LaunchData) -> bool {
+    data.subject_kind == SubjectKind::Text
+        && data.subject_text.as_deref().is_some_and(|text| {
+            presented_view(text, data.view) == CardView::Original
+                && format::detect(text) == FormatKind::Text
+                && crate::youtube::video_id(text).is_none()
+                && crate::page_preview::page_url(text).is_none()
+        })
+}
+
+/// SF Symbol and tooltip (NL/EN) for the numbers button.
+pub fn line_numbers_button_look(on: bool) -> (&'static str, &'static str) {
+    if on {
+        ("list.number", crate::locale::t("hide_line_numbers"))
+    } else {
+        ("list.number", crate::locale::t("show_line_numbers"))
     }
 }
 
