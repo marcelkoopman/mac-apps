@@ -16,7 +16,11 @@ impl App {
             }
             crate::macos_pasteboard::set_card_shown(open);
             let change = crate::macos_pasteboard::change_count();
-            crate::capture::observe_front(crate::macos_pasteboard::front_bundle().as_deref());
+            // The frontmost app only matters for a new copy (and for "Add frontmost app",
+            // which the status menu refreshes itself): not asked on a quiet tick.
+            if self.polled_change != Some(change) {
+                crate::capture::observe_front(crate::macos_pasteboard::front_bundle().as_deref());
+            }
             // Symbol copy: do not read the pasteboard. A read would classify and label it, and
             // recording it would put the character in history. The card keeps what it showed.
             if crate::symbols::gate(crate::symbols::ignored_change(), change).ignore() {
@@ -109,6 +113,8 @@ impl App {
             .map(|(index, _)| (index, history_title(&self.history, index)))
             .collect();
         self.tray.set_menu(Some(Box::new(status_menu(&entries))));
+        // A new menu may reset the status button: aim its click again (next idle).
+        self.reinstall_click.set(true);
     }
 
     /// Swap the menu bar glyph when the blink asks for it. Returns when the blink needs the

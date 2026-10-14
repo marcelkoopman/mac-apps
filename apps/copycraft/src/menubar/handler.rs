@@ -67,9 +67,12 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // A right-click menu clears the status button's action. Put it back before the next click.
+        // A right-click menu clears the status button's action. Put it back before the next
+        // click, only after a menu was shown (not on every tick).
         #[cfg(target_os = "macos")]
-        crate::macos_status_click::install(&self.tray);
+        if self.reinstall_click.take() {
+            crate::macos_status_click::install(&self.tray);
+        }
         // A closed card forgets the file, so the next hotkey shows the clipboard.
         // Open table closes the card on purpose; that window keeps the file until it closes.
         if forget_opened_file(

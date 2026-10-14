@@ -35,7 +35,10 @@ const REFRESH: Duration = Duration::from_millis(400);
 /// A second toggle inside this window would open the card and close it again.
 const ICON_CLICK_GAP: Duration = Duration::from_millis(50);
 /// How often it is polled while the card is closed. A quiet tick reads only the change count.
-const IDLE_REFRESH: Duration = Duration::from_secs(1);
+/// A closed card can wait longer: the change count is cheap to read, and a new copy is
+/// still noticed within a few seconds. winit's `WaitUntil` has no timer tolerance like an
+/// `NSTimer` would (`setTolerance`); the wake is exact.
+const IDLE_REFRESH: Duration = Duration::from_secs(3);
 /// A copy copycraft wrote that is labelled sensitive is cleared from the pasteboard this long
 /// after the write, when that setting is on and nothing else was copied since.
 const SENSITIVE_CLEAR_AFTER: Duration = Duration::from_secs(60);

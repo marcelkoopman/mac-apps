@@ -21,6 +21,8 @@ pub(crate) struct App {
     pub(crate) clipboard_cursor: Option<usize>,
     pub(crate) current_image: Option<SecretBytes>,
     pub(crate) recorded_image_change: Option<isize>,
+    /// A status menu was shown: the status button's click action must be set again.
+    pub(crate) reinstall_click: Cell<bool>,
     pub(crate) skip_image_change: Option<isize>,
     pub(crate) skip_record: Option<Zeroizing<String>>,
     /// Result the card is showing. A new clipboard copy returns this to original.

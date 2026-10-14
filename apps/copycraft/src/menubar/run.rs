@@ -70,6 +70,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         clipboard_cursor: None,
         current_image: None,
         recorded_image_change: None,
+        reinstall_click: Cell::new(false),
         skip_image_change: None,
         skip_record: None,
         card_view: CardView::Original,
