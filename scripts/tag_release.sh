@@ -30,7 +30,7 @@ grep -q "^version = \"$NEW\"" "$TOML" || { echo -e "${RED}Versie niet bijgewerkt
 cargo update -p "$APP" --offline 2>/dev/null || cargo metadata --format-version 1 >/dev/null
 
 git add "$TOML" Cargo.lock
-git commit -m "$APP: bump version to $NEW"
+git commit -m "chore(release): $APP v$NEW"
 git tag "$TAG"
 git push origin "$BRANCH"
 git push origin "$TAG"
