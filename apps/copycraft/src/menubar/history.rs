@@ -480,6 +480,25 @@ impl App {
         }
     }
 
+    /// A copied picture's bytes, made on a worker for pasteboard `change`: into history,
+    /// unless a newer copy came meanwhile (then they are zeroized).
+    #[cfg(target_os = "macos")]
+    pub(crate) fn finish_image_record(&mut self, change: isize, bytes: Option<SecretBytes>) {
+        let Some(bytes) = bytes else {
+            return;
+        };
+        if crate::macos_pasteboard::change_count() != change {
+            bytes.zeroize();
+            return;
+        }
+        self.last_copy = Some(Instant::now());
+        self.current_image = self.history.record_secret_image(bytes);
+        self.image_on_pasteboard = self.current_image.clone().map(|bytes| (change, bytes));
+        self.history_cursor = 0;
+        self.clipboard_cursor = None;
+        self.browsing = None;
+    }
+
     pub(crate) fn record_current(&mut self, view: &ClipboardView) {
         if matches!(view, ClipboardView::Held) {
             return;
@@ -510,13 +529,26 @@ impl App {
                 return;
             }
             self.recorded_image_change = Some(change);
-            if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
-                self.last_copy = Some(Instant::now());
-                self.current_image = self.history.record_image(bytes);
-                self.image_on_pasteboard = self.current_image.clone().map(|bytes| (change, bytes));
-                self.history_cursor = 0;
-                self.clipboard_cursor = None;
-                self.browsing = None;
+            // The pasteboard is read here, on the main thread (a privacy alert must not come
+            // from another thread). Reading a copied file, hashing and wrapping the bytes run on
+            // a worker; a quick picture is back within `QUICK` and recorded right here.
+            if let Some(input) = crate::macos_pasteboard::history_image_input() {
+                let ready = self.start_work(
+                    work::Lane::Image,
+                    work::QUICK,
+                    move || {
+                        crate::macos_pasteboard::image_input_bytes(input).and_then(SecretBytes::new)
+                    },
+                    move |app: &mut App, bytes| {
+                        app.finish_image_record(change, bytes);
+                        if launcher::is_open() {
+                            app.refresh_popup();
+                        }
+                    },
+                );
+                if let Some(bytes) = ready {
+                    self.finish_image_record(change, bytes);
+                }
             }
             return;
         }

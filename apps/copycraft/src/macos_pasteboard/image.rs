@@ -126,6 +126,44 @@ pub(crate) fn current_image_bytes() -> Option<Vec<u8>> {
     (!bytes.is_empty()).then_some(bytes)
 }
 
+/// The current picture for history, fetched on the main thread like [`card_image_input`]
+/// (with the same TIFF fallback as [`current_image_bytes`] for a picture only AppKit can
+/// draw). [`image_input_bytes`] turns it into bytes on a background thread. Main thread only.
+pub(crate) fn history_image_input() -> Option<CardImageInput> {
+    if foreign_blocked() {
+        return None;
+    }
+    if let Some(shared) = shared_image() {
+        return shared.map(|grab| CardImageInput {
+            source: grab.source,
+            tiff: grab.tiff,
+        });
+    }
+    if let Some(input) = card_image_input() {
+        return Some(input);
+    }
+    let pasteboard = NSPasteboard::generalPasteboard();
+    let image = crate::macos_preview_image::nsimage_from_pasteboard(&pasteboard)?;
+    let bytes = image.TIFFRepresentation()?.to_vec();
+    (!bytes.is_empty()).then_some(CardImageInput {
+        source: ImageSource::Bytes {
+            bytes,
+            is_png: false,
+        },
+        tiff: None,
+    })
+}
+
+/// The bytes of a fetched picture: a copied file is read here, so call it off the main
+/// thread. Reads no pasteboard.
+pub(crate) fn image_input_bytes(input: CardImageInput) -> Option<Vec<u8>> {
+    let bytes = match input.source {
+        ImageSource::Bytes { bytes, .. } => bytes,
+        ImageSource::File(path) => std::fs::read(path).ok().or(input.tiff)?,
+    };
+    (!bytes.is_empty()).then_some(bytes)
+}
+
 /// The picture fetched by [`card_image_input`], decoded. Reads no pasteboard (the save
 /// thread decodes Save's clipboard PNG with it).
 pub(crate) fn decode_card_input(input: CardImageInput) -> Option<DecodedPreview> {

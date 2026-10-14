@@ -19,14 +19,16 @@ pub(crate) enum Lane {
     TableWindow,
     Copy,
     File,
+    /// Building [`SecretBytes`] for a newly copied picture (hash and any file read).
+    Image,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Lanes {
-    sequence: [Sequence; 4],
+    sequence: [Sequence; 5],
     /// When the newest job of a lane became slow (the main thread stopped waiting): the
     /// spinner shows after [`SPINNER_DELAY`], like other background work.
-    slow: [Option<Instant>; 4],
+    slow: [Option<Instant>; 5],
 }
 
 impl Lanes {
