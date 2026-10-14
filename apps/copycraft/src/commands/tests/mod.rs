@@ -255,3 +255,26 @@ fn a_count_note_shows_on_a_plain_text_card_and_is_not_kept() {
     assert!(work_card(&data).meta.contains(&note));
     assert!(!super::card_may_be_kept(&data));
 }
+
+#[test]
+fn plain_text_cards_number_their_lines() {
+    assert_eq!(super::numbered_lines("een\ntwee"), "1  een\n2  twee");
+    let ten: String = (1..=10).map(|n| format!("r{n}\n")).collect();
+    let numbered = super::numbered_lines(ten.trim_end());
+    assert!(numbered.starts_with(" 1  r1\n 2  r2"));
+    assert!(numbered.ends_with("10  r10"));
+    // A cut preview keeps its unnumbered "…".
+    assert_eq!(super::numbered_lines("a\nb\n…"), "1  a\n2  b\n…");
+    let sentence = "Dit is een gewone Nederlandse zin.\nEn nog een regel.";
+    let card = work_card(&data(SubjectKind::Text, Some(sentence)));
+    assert_eq!(
+        card.excerpt,
+        "1  Dit is een gewone Nederlandse zin.\n2  En nog een regel."
+    );
+    // Code keeps its highlighted text as it is.
+    let code = work_card(&data(
+        SubjectKind::Text,
+        Some("fn main() {\n    let x = 1;\n}\n"),
+    ));
+    assert!(!code.excerpt.starts_with("1  "));
+}

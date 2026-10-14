@@ -403,6 +403,13 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
                 view = CardView::Format;
             }
             apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
+            // Plain text gets line numbers, so a Lines… count can be checked by eye.
+            if view == CardView::Original
+                && card.highlight.is_none()
+                && format::detect(text) == FormatKind::Text
+            {
+                card.excerpt = numbered_lines(&card.excerpt);
+            }
             if svg && view == CardView::Format {
                 card.title = FormatKind::Svg.source_heading().to_string();
                 card.meta = svg_meta(text);
@@ -690,4 +697,29 @@ pub(crate) fn svg_meta(text: &str) -> String {
         Some(size) => format!("{size} · {facts}"),
         None => facts,
     }
+}
+
+/// `excerpt` with a right-aligned line number in front of every line (`  1  text`). A
+/// preview's closing `…` line is no line of the text and stays unnumbered.
+pub fn numbered_lines(excerpt: &str) -> String {
+    let (body, cut) = match excerpt.strip_suffix("\n…") {
+        Some(body) => (body, true),
+        None => (excerpt, false),
+    };
+    let count = body.lines().count().max(1);
+    let width = count.to_string().len();
+    let mut out = String::with_capacity(body.len() + count * (width + 2));
+    for (index, line) in body.lines().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!("{:>width$}  {line}", index + 1));
+    }
+    if body.is_empty() {
+        out.push_str(&format!("{:>width$}  ", 1));
+    }
+    if cut {
+        out.push_str("\n…");
+    }
+    out
 }
