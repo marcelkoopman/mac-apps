@@ -331,7 +331,7 @@ pub(crate) fn fit_text_well(preview_y: f64) {
     let count = if picker_open() {
         0
     } else {
-        usize::from(actions.copy) + usize::from(actions.save) + usize::from(actions.preview)
+        commands::well_button_count(actions, OFFERS_NUMBERS.get())
     };
     let reserve = if count == 0 {
         0.0

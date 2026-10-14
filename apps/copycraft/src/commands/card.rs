@@ -408,7 +408,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             if line_numbers_on()
                 && view == CardView::Original
                 && card.highlight.is_none()
-                && format::detect(text) == FormatKind::Text
+                && is_plain_kind(format::detect(text))
             {
                 card.excerpt = numbered_lines(&card.excerpt);
             }
@@ -720,10 +720,26 @@ pub fn offers_line_numbers(data: &LaunchData) -> bool {
     data.subject_kind == SubjectKind::Text
         && data.subject_text.as_deref().is_some_and(|text| {
             presented_view(text, data.view) == CardView::Original
-                && format::detect(text) == FormatKind::Text
+                && is_plain_kind(format::detect(text))
                 && crate::youtube::video_id(text).is_none()
                 && crate::page_preview::page_url(text).is_none()
         })
+}
+
+/// Plain text: multi-line text (`Text`) and a single sentence or other prose (`Plain`). Both
+/// show as "Inhoud" / "Content"; line numbers apply to both.
+fn is_plain_kind(kind: FormatKind) -> bool {
+    matches!(kind, FormatKind::Text | FormatKind::Plain)
+}
+
+/// How many well buttons stand in the top-right row: Save, Copy, the eye (with Copy or
+/// Save), line numbers, Preview. The text keeps clear of all of them.
+pub fn well_button_count(actions: ContentActions, numbers: bool) -> usize {
+    usize::from(actions.save)
+        + usize::from(actions.copy)
+        + usize::from(actions.copy || actions.save)
+        + usize::from(numbers)
+        + usize::from(actions.preview)
 }
 
 /// SF Symbol and tooltip (NL/EN) for the numbers button.

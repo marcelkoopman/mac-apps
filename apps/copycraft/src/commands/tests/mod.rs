@@ -287,3 +287,19 @@ fn line_numbers_are_off_by_default_and_the_button_offers_them() {
         ("list.number", crate::locale::t("hide_line_numbers"))
     );
 }
+
+#[test]
+fn a_single_sentence_gets_the_numbers_button_and_room_for_every_well_button() {
+    // A one-line Dutch sentence is `Plain` ("Inhoud"), not `Text`: it gets the button too.
+    let sentence = "Dit is een gewone Nederlandse zin die Marcel kopieerde om te tellen.";
+    assert_eq!(
+        crate::format::detect(sentence),
+        crate::format::FormatKind::Plain
+    );
+    let card = data(SubjectKind::Text, Some(sentence));
+    assert!(super::offers_line_numbers(&card));
+    // Save, Copy, eye and numbers: the text keeps clear of all four.
+    let actions = content_actions(&card);
+    assert_eq!(super::well_button_count(actions, true), 4);
+    assert_eq!(super::well_button_count(actions, false), 3);
+}
