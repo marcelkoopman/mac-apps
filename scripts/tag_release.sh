@@ -23,8 +23,11 @@ echo -e "${YELLOW}🚀 $APP release: ${GREEN}$CURRENT → $NEW${NC}"
 read -p "Doorgaan? (y/n) " -n 1 -r; echo
 [[ $REPLY =~ ^[Yy]$ ]] || { echo -e "${RED}Geannuleerd${NC}"; exit 1; }
 
-sed -i '' "s/^version = \"$CURRENT\"/version = \"$NEW\"/" "$TOML"
-sed -i '' "s/version = \"$CURRENT\" # bundle/version = \"$NEW\" # bundle/" "$TOML"
+# Temp file + mv instead of `sed -i`: BSD (macOS) and GNU sed disagree on its syntax.
+TMP=$(mktemp)
+sed -e "s/^version = \"$CURRENT\"/version = \"$NEW\"/" \
+    -e "s/version = \"$CURRENT\" # bundle/version = \"$NEW\" # bundle/" "$TOML" > "$TMP"
+mv "$TMP" "$TOML"
 grep -q "^version = \"$NEW\"" "$TOML" || { echo -e "${RED}Versie niet bijgewerkt${NC}"; exit 1; }
 
 cargo update -p "$APP" --offline 2>/dev/null || cargo metadata --format-version 1 >/dev/null
