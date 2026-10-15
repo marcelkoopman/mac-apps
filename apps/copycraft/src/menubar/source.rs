@@ -81,7 +81,11 @@ impl App {
             self.refresh_status_menu();
         }
         if let Some(image) = opened.image.as_ref() {
-            self.scan_dropped_image(image.bytes.clone(), image.pdf_source.clone());
+            self.scan_dropped_image(
+                image.bytes.clone(),
+                image.pdf_source.clone(),
+                image.pdf_text.clone(),
+            );
         }
         self.show_source(opened);
         launcher::order_front();
@@ -112,7 +116,12 @@ impl App {
 
     /// Info text, data URL, text and barcodes of a dropped picture, on a background thread
     /// like a copied one's ([`UserEvent::DroppedImageScanned`]).
-    pub(crate) fn scan_dropped_image(&self, image: SecretBytes, pdf: Option<SecretBytes>) {
+    pub(crate) fn scan_dropped_image(
+        &self,
+        image: SecretBytes,
+        pdf: Option<SecretBytes>,
+        pdf_text: Option<Zeroizing<String>>,
+    ) {
         #[cfg(target_os = "macos")]
         {
             let spawned = std::thread::Builder::new()
@@ -120,7 +129,7 @@ impl App {
                 .spawn(move || {
                     // A scanned PDF: its pages are drawn and recognized (the image is page 1).
                     if let Some(pdf) = pdf {
-                        let scan = crate::macos_pdf::scan(&pdf);
+                        let scan = crate::macos_pdf::scan(&pdf, pdf_text);
                         launcher::emit(UserEvent::DroppedImageScanned { image, scan });
                         return;
                     }
@@ -137,7 +146,7 @@ impl App {
             }
         }
         #[cfg(not(target_os = "macos"))]
-        let _ = (image, pdf);
+        let _ = (image, pdf, pdf_text);
     }
 
     pub(crate) fn finish_dropped_scan(
@@ -154,7 +163,10 @@ impl App {
         else {
             return;
         };
-        shown.scan = scan;
+        // A PDF keeps the text of its text layer when the scan fails.
+        if scan.is_some() || shown.pdf_text.is_none() {
+            shown.scan = scan;
+        }
         if launcher::is_open() {
             self.refresh_popup();
         }

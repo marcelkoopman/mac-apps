@@ -17,8 +17,9 @@ short_description = "Price Ticker"
 long_description = "A menubar price ticker for Bitcoin, Gold, and TTF Gas"
 
 [package.metadata.bundle.macos]
-# Apple silicon only (aarch64-apple-darwin, whose Rust default deployment target is 11.0).
-minimum_system_version = "11.0"
+# Same floor as copycraft (one macOS minimum everywhere): macOS 26, set for builds by
+# MACOSX_DEPLOYMENT_TARGET in .cargo/config.toml. Apple silicon only (aarch64-apple-darwin).
+minimum_system_version = "26.0"
 info_plist_exts = ["assets/Info.plist.ext"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

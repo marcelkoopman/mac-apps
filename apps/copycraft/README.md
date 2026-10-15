@@ -161,8 +161,8 @@ From the repo root:
 
 Needs macOS 26 and Xcode 26 (the Swift bridge of the Apple Intelligence actions is compiled by
 `crates/mac-ai/build.rs` with `swiftc`; without `swiftc`, or on another OS, the app builds and
-reports the actions as unavailable). For a binary that also says macOS 26 as its minimum, set
-`MACOSX_DEPLOYMENT_TARGET=26.0` (the release workflow does).
+reports the actions as unavailable). The binary also says macOS 26 as its minimum: `.cargo/config.toml` sets
+`MACOSX_DEPLOYMENT_TARGET=26.0` for every cargo build.
 
 ```bash
 cargo run -p copycraft

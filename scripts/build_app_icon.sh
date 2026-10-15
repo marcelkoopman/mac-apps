@@ -88,7 +88,7 @@ MIN_OS="$(awk '
   /^\[/ { s = 0 }
   s && /^minimum_system_version[[:space:]]*=/ { sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit }
 ' "$TOML")"
-MIN_OS="${MIN_OS:-11.0}"
+MIN_OS="${MIN_OS:-26.0}"
 
 # 3. Tools.
 command -v xcrun >/dev/null || die "xcrun niet gevonden: dit script draait alleen op macOS met Xcode of de Command Line Tools"

@@ -1,0 +1,5 @@
+# One macOS floor for every build (local, CI, release): Mach-O minos 26.0, never rustc's
+# aarch64-apple-darwin default of 11.0. `force` overrides a value already in the environment.
+# Keep in step with minimum_system_version in apps/*/Cargo.toml (CI checks `otool -l`).
+[env]
+MACOSX_DEPLOYMENT_TARGET = { value = "26.0", force = true }

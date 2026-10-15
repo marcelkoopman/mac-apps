@@ -53,8 +53,11 @@ pub struct OpenedImage {
     pub bytes: SecretBytes,
     pub facts: Option<ImageFacts>,
     pub scan: Option<ImageScan>,
-    /// The PDF this is the first page of: the text recognition reads all its pages.
+    /// The PDF this is the first page of. The scan reads all its pages: text recognition for a
+    /// scan, the text layer's own text for a PDF that has one.
     pub pdf_source: Option<SecretBytes>,
+    /// The text layer of that PDF, when it has one (the *Tekst* view and the AI input).
+    pub pdf_text: Option<Zeroizing<String>>,
 }
 
 /// A dropped or chosen file: a picture when its contents are one (see [`is_image_file`]), else
@@ -119,6 +122,7 @@ fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
                 facts: None,
                 scan: None,
                 pdf_source: None,
+                pdf_text: None,
             }),
             pdf: None,
         },
@@ -189,6 +193,36 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
             read,
             text: Some(text),
         } => {
+            // A drop or Kies bestand shows the page (the PDF itself) with its text behind the
+            // *Tekst* button; a copy has no such card and shows the text.
+            if ocr
+                && let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0)
+                && let Some(picture) = SecretBytes::new(std::mem::take(&mut *png))
+            {
+                let scan = ImageScan {
+                    info: String::new(),
+                    data_url: None,
+                    ocr: Some(text.to_string()),
+                    qr: None,
+                };
+                return OpenedFile {
+                    name,
+                    text: None,
+                    note: None,
+                    image: Some(OpenedImage {
+                        bytes: picture,
+                        facts: None,
+                        scan: Some(scan),
+                        pdf_source: Some(source),
+                        pdf_text: Some(text),
+                    }),
+                    pdf: Some(crate::pdf::PdfFacts {
+                        pages,
+                        read,
+                        scanned: false,
+                    }),
+                };
+            }
             crate::format::hint_by_name(&name, &text);
             OpenedFile {
                 name,
@@ -223,6 +257,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                     facts: None,
                     scan: None,
                     pdf_source: Some(source),
+                    pdf_text: None,
                 }),
                 pdf: Some(crate::pdf::PdfFacts {
                     pages,

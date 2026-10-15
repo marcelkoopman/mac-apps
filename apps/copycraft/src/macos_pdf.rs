@@ -165,10 +165,16 @@ fn draw_png(page: &CGPDFPage) -> Option<Zeroizing<Vec<u8>>> {
 /// [`OCR_MAX_PAGES`] pages: the picture info, data URL and barcodes are page 1's, the text is
 /// every page's, a blank line between pages. Runs on a background thread (Vision is slow);
 /// only the page drawing goes to the main thread.
-pub(crate) fn scan(source: &SecretBytes) -> Option<ImageScan> {
+pub(crate) fn scan(source: &SecretBytes, text: Option<Zeroizing<String>>) -> Option<ImageScan> {
     let (first, pages) = render_page(source, 0)?;
     let mut scan = crate::macos_pasteboard::scan_image_bytes(&first)?;
     drop(first);
+    // A PDF with a text layer: that text is the *Tekst* view, not a recognition of the pages.
+    if let Some(text) = text {
+        drop(scan.ocr.take().map(Zeroizing::new));
+        scan.ocr = Some(text.to_string());
+        return Some(scan);
+    }
     let mut texts: Vec<Zeroizing<String>> =
         scan.ocr.take().map(Zeroizing::new).into_iter().collect();
     for index in 1..pages.min(OCR_MAX_PAGES) {

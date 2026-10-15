@@ -20,7 +20,7 @@ long_description = "A macOS clipboard command. A hotkey opens a card at the curs
 [package.metadata.bundle.macos]
 # Apple silicon only. macOS 26 (Tahoe) or later (local AI actions use Foundation Models):
 # LSMinimumSystemVersion in the bundle and the actool deployment target
-# (scripts/build_app_icon.sh). The release workflow builds with MACOSX_DEPLOYMENT_TARGET=26.0.
+# (scripts/build_app_icon.sh). .cargo/config.toml sets MACOSX_DEPLOYMENT_TARGET=26.0 for every build.
 # The pre-26 fallbacks in the code are not reachable any more; they are left as they are.
 minimum_system_version = "26.0"
 info_plist_exts = ["assets/Info.plist.ext"]
