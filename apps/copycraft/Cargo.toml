@@ -1,6 +1,6 @@
 [package]
 name = "copycraft"
-version = "0.1.79"
+version = "0.1.80"
 edition.workspace = true
 
 [package.metadata.bundle]
@@ -9,7 +9,7 @@ identifier = "com.github.marcelkoopman.mac-apps.copycraft"
 icon = ["assets/icon.icns"]
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
 resources = ["PrivacyInfo.xcprivacy"]
-version = "0.1.79"
+version = "0.1.80"
 category = "Utilities"
 copyright = "© 2026 Marcel Koopman"
 short_description = "Clipboard transformer"
