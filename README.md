@@ -6,7 +6,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 
 | Path | Kind | Description |
 | --- | --- | --- |
-| [`apps/copycraft`](apps/copycraft/README.md) | app | Clipboard transformer. A global hotkey opens a card at the cursor for whatever you copied: format, convert, decode, table view, schema, OCR/QR, PDFs (text layer through PDFKit, or OCR on scans), line tools (count, head, tail, reverse, column, regex filter) and a paged view for long text, on-device AI actions (Apple Foundation Models, macOS 26 on Apple silicon), with sensitivity labels and in-memory history (search, pause, an ignore list, and pins that still die on lock, sleep and quit). Offline by design: no network code and no network entitlement. |
+| [`apps/copycraft`](apps/copycraft/README.md) | app | Clipboard transformer. A global hotkey opens a card at the cursor for whatever you copied: format, convert, decode, table view, schema, OCR/QR, PDFs (the page itself with page turning, its text layer through PDFKit, or OCR on scans), line numbers for text and code, line tools (head, tail, reverse, column, regex filter) and a paged view for long text, on-device AI actions per card type (Apple Foundation Models, macOS 26 on Apple silicon; none on tables), with sensitivity labels and in-memory history shown as a strip of small cards (search, pause, an ignore list, and pins that still die on lock, sleep and quit), and a window size you can choose. Offline by design: no network code and no network entitlement. |
 | `crates/mac-ai` | library | Swift bridge to Apple Foundation Models for Copycraft's local AI actions (compiled by `build.rs` with `swiftc`, all `unsafe` of the feature lives here). Needs macOS 26 and Apple silicon; elsewhere the actions report as unavailable. Copycraft only; ticker does not use it. |
 | [`apps/ticker`](apps/ticker/README.md) | app | Menu bar price ticker (Bitcoin, ETH, gold, TTF gas, NL fuel and power prices) with day change and price-watch notifications. |
 | `crates/mac-ui` | library | Shared look & feel for the apps. Owns and re-exports the UI frameworks (tray-icon, winit, objc2*) and holds generic helpers. Always on: `tray` (info/version/quit rows, grey titles for enabled rows, template icons, VoiceOver label of the menu bar button, the normal/flash/alert icon set and the timing of a short icon blink), `icon` (RGBA canvas, image-file icons with a plain-square fallback, template masks for monochrome menu bar icons, SF Symbols), `keys` (named key codes), `corners` (concentric corner radii), `find` (case-insensitive matches, "3/12" counter, wrapping steps), `wake` (earliest event-loop deadline as a winit control flow), and on macOS `glass` (Liquid Glass background with a frosted fallback before macOS 26, glass groups with a plain-view fallback). Opt-in features: `theme` (System/Light/Dark appearance), `widgets` (AppKit label/field/box, SF Symbol and pill buttons, read-only text view/scroller and one that Tab skips, target/action and text-delegate wiring, ⌘-chord and Shift checks on key events in `keys`, text view sizing, find marks and wiping of text views, fields and field editors, `button`: Liquid Glass push buttons with a FlexiblePush fallback before macOS 26, `fonts`: monospace font with a fallback list, `text`: attributed strings with font/colour/background runs over byte ranges and byte → UTF-16 ranges), `panel` (borderless floating panel setup, activation and near-cursor placement), `dialog` (modal NSAlert message, confirm, button choice, text prompt and list pick), `file_panel` (open and save panels, a save panel with a format popup), `progress` (busy spinner), `notify` (user notifications via UserNotifications from an app bundle; without one `send` returns `false` and ticker's debug builds fall back on osascript themselves: mac-ui starts no subprocesses), `wake` (a callback when the Mac goes to sleep and wakes up, from NSWorkspace's notifications) and `appkit-full`. Both apps depend on it (both need macOS 26). |
@@ -31,6 +31,11 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── import_signing_cert.sh # CI: Developer ID .p12 into a temporary keychain
 │   ├── notarize.sh         # notarytool submit --wait + staple + Gatekeeper check (.app/.dmg)
 │   ├── check_copycraft_offline.sh # CI: no network crates in copycraft's tree, no osascript
+│   ├── check_minos.sh      # CI/release: every binary's Mach-O minos must be 26.0
+│   ├── count_unsafe.sh     # CI: `unsafe` blocks per crate must not exceed unsafe_baseline.txt
+│   ├── unsafe_baseline.txt # upper bounds (copycraft 106, mac-ui 78, mac-ai 6 blocks)
+│   ├── check_commits.sh    # CI: Conventional Commit subjects
+│   ├── check_privacy_manifest.sh # plutil -lint of the privacy manifests
 │   └── tag_release.sh      # maintainer only: bump + tag + push a release for one app
 └── .github/workflows/
     ├── ci.yml              # fmt+clippy (macos-26), tests on macos-26, app icon check; cargo audit weekly/manual
@@ -70,6 +75,8 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow past `scripts/unsafe_baseline.txt`; lower it when it shrinks) and `scripts/check_minos.sh` on the release binaries. Copycraft's PDF support uses the `objc2-pdf-kit` bindings (PDFKit); its AI actions use the `mac-ai` crate.
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 
