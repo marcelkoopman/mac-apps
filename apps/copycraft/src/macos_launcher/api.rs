@@ -218,21 +218,40 @@ pub fn sync_with_card(data: LaunchData, card: commands::WorkCard) {
     layout(false);
 }
 
-pub(crate) fn present_with_card(data: LaunchData, card: commands::WorkCard, fresh: bool) {
+/// Bring the card back for an Apple Intelligence run or preview that is going on behind it:
+/// the same card (nothing is stored again, so a newer copy does not take its place), under the
+/// icon.
+pub fn restore_under_icon(tray: &mac_ui::tray_icon::TrayIcon) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
+    ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
+    prepare(mtm, true);
+    show_stored(true);
+}
+
+fn prepare(mtm: MainThreadMarker, fresh: bool) {
     panel::activate_app(mtm);
     ensure_window(mtm);
     if fresh {
         set_query("");
         SEARCHING.set(false);
         SELECTION.set(0);
-    }
-    if fresh {
         REVEALED.set(false);
     }
+}
+
+pub(crate) fn present_with_card(data: LaunchData, card: commands::WorkCard, fresh: bool) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    prepare(mtm, fresh);
     store_with_card(data, card);
+    show_stored(fresh);
+}
+
+/// Put the card on screen from what it already holds (nothing is stored again).
+fn show_stored(fresh: bool) {
     OPEN.set(true);
     layout(fresh);
     WINDOW.with(|slot| {
@@ -369,7 +388,9 @@ pub(crate) fn minimize() {
 }
 
 fn hide_card(animated: bool) {
-    hide_card_with(animated, false);
+    // A run or preview of Apple Intelligence goes on behind a hidden card: Cancel, Esc and Apply
+    // end it, hiding does not.
+    hide_card_with(animated, ai_open());
 }
 
 fn hide_card_with(animated: bool, keep_ai: bool) {

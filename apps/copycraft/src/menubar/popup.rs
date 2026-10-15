@@ -5,28 +5,62 @@ use super::*;
 /// A "Show all" text longer than this many lines is paged (when the setting is on).
 const PAGE_MIN_LINES: usize = 200;
 
-/// The icon (or hotkey) toggle must not close an open card while an AI run is going or its
-/// preview is open: they would be lost with it.
-fn card_stays_for_ai(ai_active: bool, card_open: bool) -> bool {
-    ai_active && card_open
+/// What the icon (or hotkey) does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IconAction {
+    /// Close the card.
+    Hide,
+    /// Send the card to the background; its AI run or preview goes on.
+    Minimize,
+    /// Open the card for the current clipboard.
+    Show,
+    /// Bring the same card back, with its AI run or preview.
+    Restore,
+}
+
+/// The toggle closes or opens the card as usual, but with an AI run or preview the card is the
+/// run's: it goes to the background and comes back as it was, never replaced by a new card.
+fn icon_action(ai_active: bool, card_open: bool) -> IconAction {
+    match (card_open, ai_active) {
+        (true, false) => IconAction::Hide,
+        (true, true) => IconAction::Minimize,
+        (false, false) => IconAction::Show,
+        (false, true) => IconAction::Restore,
+    }
 }
 
 impl App {
     pub(crate) fn summon_popup(&mut self) {
-        if !launcher::is_open() && self.ai.is_none() {
+        if !launcher::is_open() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
         }
-        if card_stays_for_ai(self.ai.is_some(), launcher::is_open()) {
-            // An Apple Intelligence run or preview belongs to the card: a click on the icon (or
-            // the hotkey) brings it forward instead of closing it. Cancel, Esc and Apply end it.
-            launcher::order_front();
-            return;
+        match icon_action(self.ai.is_some(), launcher::is_open()) {
+            IconAction::Minimize => {
+                launcher::minimize_card();
+                self.sync_ai_tray();
+                return;
+            }
+            IconAction::Restore => {
+                launcher::restore_card(&self.tray);
+                self.sync_ai_tray();
+                return;
+            }
+            IconAction::Hide | IconAction::Show => {}
         }
-        if card_stays_for_ai(self.ai.is_some(), launcher::is_open()) {
-            launcher::order_front();
-            return;
+        match icon_action(self.ai.is_some(), launcher::is_open()) {
+            IconAction::Minimize => {
+                launcher::minimize_card();
+                self.sync_ai_tray();
+                return;
+            }
+            IconAction::Restore => {
+                launcher::restore_card(&self.tray);
+                self.sync_ai_tray();
+                return;
+            }
+            IconAction::Hide | IconAction::Show => {}
         }
         let data = self.launch_for_popup();
         if launcher::is_open() {
@@ -42,7 +76,7 @@ impl App {
             return;
         }
         note_icon_click(now);
-        if !launcher::is_open() && self.ai.is_none() {
+        if !launcher::is_open() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
@@ -487,14 +521,15 @@ fn drawable_svg(text: &str) -> Option<crate::clipboard::SecretBytes> {
 
 #[cfg(test)]
 mod tests {
-    use super::card_stays_for_ai;
+    use super::{IconAction, icon_action};
 
     #[test]
-    fn the_icon_does_not_close_a_card_with_an_ai_run() {
-        assert!(card_stays_for_ai(true, true));
-        // Without a run the click still toggles; a closed card opens as usual.
-        assert!(!card_stays_for_ai(false, true));
-        assert!(!card_stays_for_ai(false, false));
-        assert!(!card_stays_for_ai(true, false));
+    fn the_icon_hides_but_an_ai_run_stays_and_comes_back_as_it_was() {
+        assert_eq!(icon_action(false, true), IconAction::Hide);
+        assert_eq!(icon_action(false, false), IconAction::Show);
+        // With a run or preview the card goes to the background instead of closing...
+        assert_eq!(icon_action(true, true), IconAction::Minimize);
+        // ...and the next click brings back the same card, not a new clipboard card.
+        assert_eq!(icon_action(true, false), IconAction::Restore);
     }
 }

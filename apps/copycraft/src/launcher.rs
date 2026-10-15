@@ -179,6 +179,14 @@ pub fn ai_preview_error(message: &str) {
     let _ = message;
 }
 
+/// Bring the card back as it was, with its AI run and preview (not a new clipboard card).
+pub fn restore_card(tray: &mac_ui::tray_icon::TrayIcon) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::restore_under_icon(tray);
+    #[cfg(not(target_os = "macos"))]
+    let _ = tray;
+}
+
 /// Hide the card but keep the AI run and its preview, for the icon to bring back.
 pub fn minimize_card() {
     #[cfg(target_os = "macos")]
