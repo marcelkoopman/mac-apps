@@ -2105,9 +2105,9 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leakguard"
-version = "0.9.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6167bebdc18e253cba9f4e672dfbb5948b6ae6a2e4a2d5c3dd4fac70e32aaed7"
+checksum = "d90d577ff89e32f565150610ac78130f0b4a90fa23250c7b09b48483667d8c8a"
 
 [[package]]
 name = "libappindicator"
