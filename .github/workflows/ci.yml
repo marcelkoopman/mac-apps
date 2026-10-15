@@ -130,9 +130,8 @@ jobs:
       - name: Clippy (release)
         run: cargo clippy --release --locked --workspace --all-targets -- -D warnings
 
-  # Tests on the pinned macOS 26 runner and on macOS 15, where the pre-26 fallbacks run for real
-  # (FlexiblePush instead of the Glass bezel, frosted background, plain view instead of the glass
-  # group). Each runner uses its image's Xcode (keep 26.6 in step with XCODE_VERSION).
+  # Tests on the pinned macOS 26 runner (Xcode 26.6, keep in step with XCODE_VERSION). No macOS 15
+  # runner any more: Copycraft needs macOS 26, and its binary links FoundationModels (mac-ai).
   test:
     name: test (${{ matrix.os }}, Xcode ${{ matrix.xcode }})
     runs-on: ${{ matrix.os }}
@@ -142,8 +141,6 @@ jobs:
         include:
           - os: macos-26
             xcode: "26.6"
-          - os: macos-15
-            xcode: "16.4"
     steps:
       - uses: actions/checkout@v7
 

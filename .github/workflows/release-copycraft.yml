@@ -54,6 +54,9 @@ jobs:
     name: Build Copycraft DMG
     needs: check
     runs-on: macos-26
+    env:
+      # Copycraft needs macOS 26 (minimum_system_version in apps/copycraft/Cargo.toml).
+      MACOSX_DEPLOYMENT_TARGET: "26.0"
 
     steps:
       - uses: actions/checkout@v7
