@@ -426,6 +426,15 @@ pub enum CommandId {
     TextColumn,
     /// Lines… › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
+    /// Lines… › Apple Intelligence › an action: runs on this click only, never on its own. The
+    /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
+    Ai(mac_ai::Action),
+    /// The preview's "Apply to clipboard": the result becomes a new text version (⌘Z undoes it).
+    AiApply,
+    /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.
+    AiCancel,
+    /// A disabled line in the Apple Intelligence menu saying why the actions are off.
+    AiUnavailable,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.

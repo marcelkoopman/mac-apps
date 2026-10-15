@@ -858,6 +858,85 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Lines… menu (text_ops)
     ("text_menu", "Regels…", "Lines…"),
+    // Lines… › Apple Intelligence (local AI, crate mac-ai)
+    ("ai_group", "Apple Intelligence", "Apple Intelligence"),
+    ("ai_summarize", "Samenvatten", "Summarize"),
+    ("ai_shorter", "Korter herschrijven", "Rewrite shorter"),
+    ("ai_formal", "Formeler herschrijven", "Rewrite more formal"),
+    ("ai_explain", "Uitleggen", "Explain"),
+    ("ai_translate", "Vertalen NL↔EN", "Translate NL↔EN"),
+    (
+        "ai_off_system",
+        "Vereist macOS 26 of nieuwer",
+        "Requires macOS 26 or later",
+    ),
+    (
+        "ai_off_silicon",
+        "Vereist een Mac met Apple Silicon",
+        "Requires a Mac with Apple silicon",
+    ),
+    (
+        "ai_off_device",
+        "Deze Mac ondersteunt Apple Intelligence niet",
+        "This Mac doesn't support Apple Intelligence",
+    ),
+    (
+        "ai_off_disabled",
+        "Zet Apple Intelligence aan in Systeeminstellingen",
+        "Turn on Apple Intelligence in System Settings",
+    ),
+    (
+        "ai_off_not_ready",
+        "Apple Intelligence wordt nog voorbereid, probeer het later opnieuw",
+        "Apple Intelligence is still getting ready, try again later",
+    ),
+    (
+        "ai_off_other",
+        "Apple Intelligence is niet beschikbaar",
+        "Apple Intelligence isn't available",
+    ),
+    (
+        "ai_err_guardrail",
+        "Apple Intelligence wil deze tekst niet verwerken",
+        "Apple Intelligence won't process this text",
+    ),
+    (
+        "ai_err_too_long",
+        "De tekst past niet in het model, probeer een kortere tekst",
+        "The text doesn't fit the model, try a shorter text",
+    ),
+    (
+        "ai_err_language",
+        "Deze taal wordt niet ondersteund",
+        "This language isn't supported",
+    ),
+    (
+        "ai_err_failed",
+        "Dat is niet gelukt, probeer het opnieuw",
+        "That didn't work, try again",
+    ),
+    ("ai_working", "Bezig…", "Working…"),
+    ("ai_apply", "Toepassen op klembord", "Apply to clipboard"),
+    (
+        "ai_apply_a11y",
+        "Resultaat toepassen op het klembord",
+        "Apply the result to the clipboard",
+    ),
+    (
+        "ai_truncated",
+        "Alleen de eerste 20.000 tekens zijn gebruikt",
+        "Only the first 20,000 characters were used",
+    ),
+    (
+        "ai_preview_a11y",
+        "Voorbeeld van het resultaat",
+        "Preview of the result",
+    ),
+    ("ai_label_summarize", "Samengevat", "Summarized"),
+    ("ai_label_shorter", "Korter", "Shorter"),
+    ("ai_label_formal", "Formeler", "More formal"),
+    ("ai_label_explain", "Uitleg", "Explanation"),
+    ("ai_label_translate", "Vertaald", "Translated"),
     ("text_complexity", "Complexiteit", "Complexity"),
     (
         "agent_instructions",

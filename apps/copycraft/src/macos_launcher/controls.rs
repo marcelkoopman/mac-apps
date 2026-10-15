@@ -800,6 +800,11 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 Some((shown, submenu)) if *shown == name => submenu.clone(),
                 _ => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
+                    if name == commands::ai_group()
+                        && let Some(image) = mac_ui::icon::system_symbol(commands::AI_SYMBOL, name)
+                    {
+                        parent.setImage(Some(&image));
+                    }
                     let submenu =
                         NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
                     submenu.setAutoenablesItems(false);
@@ -816,6 +821,11 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
             .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
         {
             item.setImage(Some(&image));
+        }
+        // A dimmed item says why in its tooltip (Apple Intelligence off).
+        if !cmd.enabled {
+            item.setEnabled(false);
+            item.setToolTip(Some(&NSString::from_str(&cmd.detail)));
         }
         if *checked {
             item.setState(NSControlStateValueOn);

@@ -12,7 +12,8 @@
   - app-sandbox: required for the Mac App Store.
   - files.user-selected.read-write: "Choose file" NSOpenPanel (macos_open::choose_path)
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).
-  Not needed: NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),
+  Not needed: the on-device Foundation Models of the Apple Intelligence actions (crates/mac-ai:
+  no network, no entitlement), NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),
   Vision text and barcode reading and the CoreImage blur (all on the device),
   NSUserDefaults, drag and drop, and Visit:
   NSWorkspace hands the link to the default browser, which loads it, not Copycraft. A file

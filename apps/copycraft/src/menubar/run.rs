@@ -115,6 +115,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         opened_steps: None,
         text_note: None,
         text_generation: 0,
+        ai: None,
+        ai_runs: 0,
         lanes: Default::default(),
         work_error: None,
         pin_refused: false,

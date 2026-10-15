@@ -699,6 +699,7 @@ dependencies = [
  "image",
  "infer",
  "leakguard",
+ "mac-ai",
  "mac-ui",
  "memchr",
  "objc2-core-foundation",

@@ -175,7 +175,8 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         commands.extend(
             text_menu_items(&edit)
                 .into_iter()
-                .map(|(command, _)| command),
+                .map(|(command, _)| command)
+                .filter(|command| command.id != CommandId::AiUnavailable),
         );
     }
     if content_actions(data).preview {

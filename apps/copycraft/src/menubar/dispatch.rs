@@ -105,6 +105,10 @@ impl App {
             CommandId::TextReverse => self.run_text(crate::text_ops::TextOp::Reverse),
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
+            CommandId::Ai(action) => self.ai_start(action),
+            CommandId::AiApply => self.ai_apply(),
+            CommandId::AiCancel => self.ai_stop(),
+            CommandId::AiUnavailable => {}
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));

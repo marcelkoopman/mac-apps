@@ -21,14 +21,16 @@ pub(crate) enum Lane {
     File,
     /// Building [`SecretBytes`] for a newly copied picture (hash and any file read).
     Image,
+    /// The Apple Intelligence model ([`AiRun`]).
+    Ai,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Lanes {
-    sequence: [Sequence; 5],
+    sequence: [Sequence; 6],
     /// When the newest job of a lane became slow (the main thread stopped waiting): the
     /// spinner shows after [`SPINNER_DELAY`], like other background work.
-    slow: [Option<Instant>; 5],
+    slow: [Option<Instant>; 6],
 }
 
 impl Lanes {

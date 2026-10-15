@@ -48,6 +48,7 @@ const SPINNER_DELAY: Duration = Duration::from_millis(180);
 /// card opens without scanning them first.
 const PREWARM_LEN: usize = 64 * 1024;
 
+mod ai;
 mod app;
 mod dispatch;
 mod handler;
@@ -65,6 +66,7 @@ mod work;
 
 pub(crate) use work::WorkDone;
 
+use ai::*;
 use app::*;
 use menu::*;
 pub use run::*;

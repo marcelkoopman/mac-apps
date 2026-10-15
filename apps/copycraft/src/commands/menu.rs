@@ -47,6 +47,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::TableStep(op) => op.group(),
         CommandId::ImageStep(op) => op.group(),
         CommandId::ImageResizeCustom => Some(crate::image_edit::resize_group()),
+        CommandId::Ai(_) | CommandId::AiUnavailable => Some(ai_group()),
         _ => None,
     }
 }
@@ -144,6 +145,7 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "complexity cognitive sonar functions methods score code",
         ));
     }
+    commands.extend(ai_menu_items(mac_ai::availability()));
     if edit.can_undo() {
         commands.push(command(
             CommandId::TableUndo,

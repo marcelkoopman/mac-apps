@@ -152,6 +152,37 @@ pub fn show_complexity() {
     crate::macos_launcher::show_complexity();
 }
 
+/// Lines… › Apple Intelligence: open the preview over the card, working. `notice` says that the
+/// text was cut.
+pub fn ai_preview_working(title: &str, notice: Option<&str>) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_ai_working(title, notice);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (title, notice);
+}
+
+/// The model's result, into the open preview.
+pub fn ai_preview_result(text: &str) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_ai_result(text);
+    #[cfg(not(target_os = "macos"))]
+    let _ = text;
+}
+
+/// The run failed: `message` on the open preview.
+pub fn ai_preview_error(message: &str) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::show_ai_error(message);
+    #[cfg(not(target_os = "macos"))]
+    let _ = message;
+}
+
+/// Close the preview (when open) and wipe its text.
+pub fn ai_preview_close() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::close_ai_preview();
+}
+
 /// Lines… › Outline on agent instructions: the headings, each going to its line.
 pub fn show_agent_outline() {
     #[cfg(target_os = "macos")]

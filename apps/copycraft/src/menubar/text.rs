@@ -215,14 +215,23 @@ impl App {
             text_ops::TextResult::Step {
                 op,
                 text: Some(result),
-            } => self.text_stepped(id, &op, &result),
+            } => self.text_stepped(id, op.label(), matches!(op, TextOp::AgentCommands), &result),
         }
     }
 
-    /// Copy step `op`'s `result` (a new history entry) and make it the version after entry `id`.
-    fn text_stepped(&mut self, id: u64, op: &TextOp, result: &Zeroizing<String>) {
+    /// Copy a step's `result` (a new history entry) and make it the version after entry `id`,
+    /// labelled `label`. `also_copy`: on an opened file, whose versions are not clipboard copies,
+    /// put the result on the clipboard too (Commands on agent instructions, an applied Apple
+    /// Intelligence preview: [`App::ai_apply`]).
+    pub(crate) fn text_stepped(
+        &mut self,
+        id: u64,
+        label: String,
+        also_copy: bool,
+        result: &Zeroizing<String>,
+    ) {
         if id == OPENED_FILE {
-            self.file_stepped(op, result);
+            self.file_stepped(label, also_copy, result);
             return;
         }
         if let Err(e) = self.write_own(result) {
@@ -254,7 +263,7 @@ impl App {
         steps.ids.truncate(steps.cursor + 1);
         steps.labels.truncate(steps.cursor + 1);
         steps.ids.push(new_id);
-        steps.labels.push(op.label());
+        steps.labels.push(label);
         steps.cursor += 1;
         self.text_steps = Some(steps);
         self.text_note = None;
@@ -264,7 +273,7 @@ impl App {
 
     /// A step on an opened file: a new version of the file card. Commands (agent instructions)
     /// also puts its result on the clipboard, as promised; the card stays on the file.
-    fn file_stepped(&mut self, op: &TextOp, result: &Zeroizing<String>) {
+    fn file_stepped(&mut self, label: String, also_copy: bool, result: &Zeroizing<String>) {
         let Some(opened) = self.opened.as_mut() else {
             return;
         };
@@ -274,11 +283,9 @@ impl App {
         let steps = self
             .opened_steps
             .get_or_insert_with(|| OpenedSteps::new(current));
-        steps.push(op.label(), result);
+        steps.push(label, result);
         opened.text = Some(Zeroizing::new(result.to_string()));
-        if matches!(op, TextOp::AgentCommands)
-            && let Err(e) = self.write_own(result)
-        {
+        if also_copy && let Err(e) = self.write_own(result) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             ));

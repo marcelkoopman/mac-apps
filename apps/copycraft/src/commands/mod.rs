@@ -10,6 +10,7 @@ use crate::toolbar_visibility;
 use mac_ui::keys::Key;
 
 mod actions;
+mod ai;
 mod card;
 mod chips;
 mod history;
@@ -21,6 +22,7 @@ mod text;
 mod types;
 
 pub use actions::*;
+pub use ai::*;
 pub use card::*;
 pub use chips::*;
 pub use history::*;

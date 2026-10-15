@@ -163,6 +163,8 @@ pub enum LogEvent {
     DroppedImageScanFailed(ErrorKind),
     SvgExternalRefs,
     TextStepFailed(ErrorKind),
+    /// An Apple Intelligence action failed (not a cancel): only the kind of error, never text.
+    AiFailed(mac_ai::Error),
     DiffBuilt {
         ms: u64,
     },
@@ -283,6 +285,7 @@ impl LogEvent {
             | E::AgentCommands { .. }
             | E::AgentOutline { .. }
             | E::AgentChecked { .. }
+            | E::AiFailed(_)
             | E::WorkNotStarted(..) => Category::Worker,
         }
     }
@@ -304,6 +307,7 @@ impl LogEvent {
             | E::FormatLinkFailed(_)
             | E::RestoreHistoryFailed(_)
             | E::TextStepFailed(_)
+            | E::AiFailed(_)
             | E::WorkNotStarted(..)
             | E::PreviewOpenFailed
             | E::PreviewFailed(_)
@@ -412,6 +416,7 @@ impl LogEvent {
             E::DroppedImageScanFailed(k) => format!("dropped image scan failed: {}", k.describe()),
             E::SvgExternalRefs => "svg has outside references, shown as code".into(),
             E::TextStepFailed(k) => format!("text step failed: {}", k.describe()),
+            E::AiFailed(e) => format!("apple intelligence failed: {}", e.kind()),
             E::DiffBuilt { ms } => format!("diff built in {ms} ms"),
             E::ShowAllBuilt { ms } => format!("show all built in {ms} ms"),
             E::WorkNotStarted(work, k) => format!("{work:?} failed to start: {}", k.describe()),

@@ -109,6 +109,10 @@ pub(crate) struct App {
     pub(crate) text_note: Option<(u64, String)>,
     /// Bumped for every Lines… job; a result with another number is stale and dropped.
     pub(crate) text_generation: u64,
+    /// The Apple Intelligence run whose preview is open ([`AiRun`]); nothing is kept after it.
+    pub(crate) ai: Option<AiRun>,
+    /// Counts the AI runs, to tell a cancelled run's late result from the current one's.
+    pub(crate) ai_runs: u64,
     /// Sequence numbers of the background jobs ([`work::Lane`]).
     pub(crate) lanes: work::Lanes,
     /// A worker thread failed to start: the short message on the card until work starts again.

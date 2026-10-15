@@ -632,6 +632,16 @@ define_class!(
             close_picker();
         }
 
+        #[unsafe(method(aiCancelClicked:))]
+        fn ai_cancel_clicked(&self, _sender: Option<&NSButton>) {
+            close_picker();
+        }
+
+        #[unsafe(method(aiApplyClicked:))]
+        fn ai_apply_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::AiApply));
+        }
+
         #[unsafe(method(pickerApplyClicked:))]
         fn picker_apply_clicked(&self, _sender: Option<&NSButton>) {
             apply_picker();
@@ -682,4 +692,5 @@ pub use window::*;
 mod tests;
 
 include!("../macos_column_picker.rs");
+include!("../macos_ai_preview.rs");
 include!("../macos_frozen_column.rs");

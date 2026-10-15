@@ -350,6 +350,10 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextReverse
             | CommandId::TextColumn
             | CommandId::TextFilter
+            | CommandId::Ai(_)
+            | CommandId::AiApply
+            | CommandId::AiCancel
+            | CommandId::AiUnavailable
             | CommandId::TextComplexity
             | CommandId::AgentCommands
             | CommandId::AgentOutline
@@ -385,6 +389,9 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
     }
     (shown, rest)
 }
+
+/// The SF Symbol of every AI action, in the menu, the search and the preview.
+pub const AI_SYMBOL: &str = "sparkles";
 
 /// SF Symbol for `id` on its chip or menu item, if it has one. The title stays the label, so
 /// VoiceOver reads the same name as before.
@@ -438,6 +445,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextTail => "arrow.down.to.line",
         CommandId::TextReverse => "arrow.up.arrow.down",
         CommandId::TextFilter => "line.3.horizontal.decrease",
+        CommandId::Ai(_) => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",
         _ => return None,

@@ -42,8 +42,10 @@ struct PickerViews {
     rows: Vec<(usize, Retained<NSButton>)>,
 }
 
+/// The column picker or the Apple Intelligence preview ([`ai_open`]) is open over the well:
+/// the card's keys, footer and buttons wait for it.
 fn picker_open() -> bool {
-    PICKER.with(|slot| slot.borrow().is_some())
+    PICKER.with(|slot| slot.borrow().is_some()) || ai_open()
 }
 
 fn show_picker_backdrop(mtm: MainThreadMarker) {
@@ -277,6 +279,7 @@ fn open_picker() {
 
 /// Put the picker over the well at `well_y` (with the well, in [`place_well`]).
 fn place_picker(well_y: f64) {
+    place_ai(well_y);
     PICKER_VIEWS.with(|slot| {
         if let Some(views) = slot.borrow().as_ref() {
             views.root.setFrameOrigin(NSPoint::new(PAD, well_y));
@@ -289,6 +292,7 @@ fn raise_picker() {
     if !picker_open() {
         return;
     }
+    raise_ai();
     PICKER_VIEWS.with(|slot| {
         if let Some(views) = slot.borrow().as_ref() {
             raise_view(&views.root);
@@ -297,6 +301,10 @@ fn raise_picker() {
 }
 
 fn focus_picker_field() {
+    if ai_open() {
+        focus_ai();
+        return;
+    }
     let field = PICKER_VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.field.clone()));
     let window = WINDOW.with(|slot| slot.borrow().clone());
     if let (Some(field), Some(window)) = (field, window) {
@@ -348,7 +356,9 @@ fn close_picker() {
 /// well buttons and focus come back — even when the caller passed `relayout: false` (a version
 /// or entry change used to leave Copy/Save hidden and the card stuck).
 fn dismiss_picker(_relayout: bool) {
-    let was_open = PICKER.with(|slot| slot.borrow_mut().take()).is_some();
+    // The Apple Intelligence preview closes with it (and stops its run).
+    let ai_was_open = dismiss_ai(true);
+    let was_open = PICKER.with(|slot| slot.borrow_mut().take()).is_some() || ai_was_open;
     hide_picker_backdrop();
     if MainThreadMarker::new().is_some() {
         PICKER_VIEWS.with(|slot| {
@@ -603,6 +613,9 @@ fn picker_arrow(up: bool) {
 fn picker_key(event: &NSEvent) -> Option<bool> {
     if !picker_open() {
         return None;
+    }
+    if ai_open() {
+        return ai_key(event);
     }
     if mac_ui::keys::is_command_chord(event, "a") {
         picker_update(ColumnPicker::keep_all);

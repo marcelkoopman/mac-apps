@@ -109,7 +109,7 @@ pub fn truncate(text: &str) -> (&str, bool) {
 }
 
 /// Why a run gave no result. Holds no text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Error {
     Unavailable,
     Cancelled,
