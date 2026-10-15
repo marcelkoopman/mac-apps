@@ -139,7 +139,11 @@ pub fn prompt_text(
     if button_index(run(mtm, &alert)) != Some(0) {
         return None;
     }
-    Some(field.stringValue().to_string())
+    let typed = field.stringValue().to_string();
+    // The text may be private (a prompt about copied text): do not leave it in the field.
+    crate::widgets::wipe_field_editor(&field);
+    crate::widgets::wipe_text_field(&field);
+    Some(typed)
 }
 
 /// Let the user pick one of `options` from a pop-up button, starting at `selected`. Returns the

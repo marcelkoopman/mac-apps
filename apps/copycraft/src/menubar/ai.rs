@@ -16,10 +16,18 @@ pub(crate) struct AiRun {
     number: u64,
     /// The history entry (or file) the action was run on.
     entry: u64,
-    action: Action,
+    kind: AiKind,
     job: Arc<mac_ai::Job>,
     /// The model's answer, once it is there.
     result: Option<Zeroizing<String>>,
+}
+
+/// What a run does: a fixed action, or the user's own instruction (kept nowhere but in the
+/// running job).
+#[derive(Clone, Copy)]
+enum AiKind {
+    Fixed(Action),
+    Custom,
 }
 
 type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
@@ -27,6 +35,36 @@ type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
 impl App {
     /// An AI action was clicked: open the preview and start the model.
     pub(crate) fn ai_start(&mut self, action: Action) {
+        self.ai_begin(AiKind::Fixed(action), Zeroizing::new(String::new()));
+    }
+
+    /// Custom prompt… was clicked: ask for the instruction, then run it like an action.
+    pub(crate) fn ai_custom_prompt(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            if mac_ai::availability().is_err() || self.text_entry().is_none() {
+                return;
+            }
+            let answer = mac_ui::dialog::prompt_text(
+                mtm,
+                crate::locale::t("ai_custom_title"),
+                crate::locale::t("ai_custom_message"),
+                "",
+            );
+            launcher::order_front();
+            let Some(mut typed) = answer else {
+                return;
+            };
+            if let Some(instruction) = commands::take_instruction(&mut typed) {
+                self.ai_begin(AiKind::Custom, instruction);
+            }
+        }
+    }
+
+    fn ai_begin(&mut self, kind: AiKind, instruction: Zeroizing<String>) {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
         if mac_ai::availability().is_err() {
@@ -47,18 +85,27 @@ impl App {
         self.ai = Some(AiRun {
             number,
             entry,
-            action,
+            kind,
             job: Arc::clone(&job),
             result: None,
         });
         launcher::ai_preview_working(
-            commands::ai_title(action),
+            match kind {
+                AiKind::Fixed(action) => commands::ai_title(action),
+                AiKind::Custom => commands::ai_custom_label(),
+            },
             truncated.then(|| crate::locale::t("ai_truncated")),
         );
         let done = self.start_work(
             work::Lane::Ai,
             Duration::ZERO,
-            move || -> AiResult { job.run(action, &input).map(Zeroizing::new) },
+            move || -> AiResult {
+                match kind {
+                    AiKind::Fixed(action) => job.run(action, &input),
+                    AiKind::Custom => job.run_custom(&instruction, &input),
+                }
+                .map(Zeroizing::new)
+            },
             move |app, result| app.ai_finished(number, result),
         );
         if let Some(result) = done {
@@ -100,7 +147,11 @@ impl App {
         };
         self.text_stepped(
             run.entry,
-            commands::ai_label(run.action).to_string(),
+            match run.kind {
+                AiKind::Fixed(action) => commands::ai_label(action),
+                AiKind::Custom => commands::ai_custom_label(),
+            }
+            .to_string(),
             true,
             &result,
         );

@@ -915,6 +915,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Dat is niet gelukt, probeer het opnieuw",
         "That didn't work, try again",
     ),
+    ("ai_custom", "Eigen opdracht…", "Custom prompt…"),
+    ("ai_custom_title", "Eigen opdracht", "Custom prompt"),
+    (
+        "ai_custom_message",
+        "Wat moet er met de tekst op de kaart gebeuren? De tekst is alleen gegevens, geen opdracht.",
+        "What should happen to the text on the card? The text is only data, not instructions.",
+    ),
+    ("ai_label_custom", "Eigen opdracht", "Custom prompt"),
     ("ai_working", "Bezig…", "Working…"),
     ("ai_apply", "Toepassen op klembord", "Apply to clipboard"),
     (

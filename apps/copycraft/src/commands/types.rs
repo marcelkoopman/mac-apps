@@ -429,6 +429,9 @@ pub enum CommandId {
     /// Lines… › Apple Intelligence › an action: runs on this click only, never on its own. The
     /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
     Ai(mac_ai::Action),
+    /// Lines… › Apple Intelligence › Custom prompt…: asks for an instruction, then runs it on
+    /// the card's text like the fixed actions (preview, Apply, Cancel).
+    AiCustom,
     /// The preview's "Apply to clipboard": the result becomes a new text version (⌘Z undoes it).
     AiApply,
     /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.

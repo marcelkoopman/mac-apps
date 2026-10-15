@@ -64,6 +64,13 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
             )
         })
         .collect();
+    items.push(command_enabled(
+        CommandId::AiCustom,
+        crate::locale::t("ai_custom"),
+        detail,
+        "ai apple intelligence custom prompt free instruction opdracht eigen",
+        enabled,
+    ));
     if let Err(reason) = availability {
         items.push(command_enabled(
             CommandId::AiUnavailable,
@@ -74,6 +81,22 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
         ));
     }
     items
+}
+
+/// Title of the preview and label of the version a free prompt makes.
+pub fn ai_custom_label() -> &'static str {
+    crate::locale::t("ai_label_custom")
+}
+
+/// The typed instruction for a free prompt, trimmed and cut to [`mac_ai::MAX_INSTRUCTION_CHARS`];
+/// `None` when it is empty. The `field` is cleared either way: no copy of the prompt is kept
+/// beyond the run (the result is zeroized when dropped).
+pub fn take_instruction(field: &mut String) -> Option<zeroize::Zeroizing<String>> {
+    use zeroize::Zeroize;
+    let (cut, _) = mac_ai::truncate_instruction(field.trim());
+    let taken = (!cut.is_empty()).then(|| zeroize::Zeroizing::new(cut.to_string()));
+    field.zeroize();
+    taken
 }
 
 /// The label of the version an applied `action` makes (the version capsule and its menu).
@@ -106,7 +129,8 @@ mod tests {
     fn available_gives_five_enabled_actions_with_sparkles() {
         let items = ai_menu_items(Ok(()));
         let ids: Vec<_> = items.iter().map(|c| c.id.clone()).collect();
-        let want: Vec<_> = Action::ALL.iter().map(|&a| CommandId::Ai(a)).collect();
+        let mut want: Vec<_> = Action::ALL.iter().map(|&a| CommandId::Ai(a)).collect();
+        want.push(CommandId::AiCustom);
         assert_eq!(ids, want);
         for item in &items {
             assert!(item.enabled);
@@ -119,7 +143,7 @@ mod tests {
     fn unavailable_dims_the_actions_and_says_why() {
         for reason in REASONS {
             let items = ai_menu_items(Err(reason));
-            let (actions, note) = items.split_at(Action::ALL.len());
+            let (actions, note) = items.split_at(Action::ALL.len() + 1);
             assert!(
                 actions
                     .iter()
@@ -152,11 +176,54 @@ mod tests {
                 assert_ne!(ai_title(action), "?");
                 assert_ne!(ai_label(action), "?");
             }
-            for key in ["ai_working", "ai_apply", "ai_apply_a11y", "ai_truncated"] {
+            for key in [
+                "ai_working",
+                "ai_apply",
+                "ai_apply_a11y",
+                "ai_truncated",
+                "ai_custom",
+                "ai_custom_title",
+                "ai_custom_message",
+                "ai_label_custom",
+            ] {
                 assert_ne!(crate::locale::t(key), "?");
             }
         }
         crate::locale::set_test_language(Language::En);
+    }
+
+    #[test]
+    fn the_prompt_field_is_cleared_when_taken() {
+        let mut field = String::from("  zet dit om naar een tabel  ");
+        let taken = take_instruction(&mut field);
+        assert_eq!(
+            taken.as_deref().map(String::as_str),
+            Some("zet dit om naar een tabel")
+        );
+        assert!(field.is_empty());
+        let mut blank = String::from("   ");
+        assert!(take_instruction(&mut blank).is_none());
+        assert!(blank.is_empty());
+        let mut long = "a".repeat(mac_ai::MAX_INSTRUCTION_CHARS + 50);
+        let taken = take_instruction(&mut long).expect("some");
+        assert_eq!(taken.chars().count(), mac_ai::MAX_INSTRUCTION_CHARS);
+        assert!(long.is_empty());
+    }
+
+    #[test]
+    fn refusal_and_too_long_say_so_in_both_languages() {
+        for lang in [Language::Nl, Language::En] {
+            crate::locale::set_test_language(lang);
+            let refused = ai_error_text(mac_ai::Error::Guardrail);
+            let long = ai_error_text(mac_ai::Error::TooLong);
+            assert_ne!(refused, long);
+            assert_ne!(refused, ai_error_text(mac_ai::Error::Failed));
+            assert_ne!(long, ai_error_text(mac_ai::Error::Failed));
+        }
+        crate::locale::set_test_language(Language::En);
+        // Only the kind of the error reaches the log.
+        let line = crate::diag::LogEvent::AiFailed(mac_ai::Error::Guardrail).line();
+        assert!(line.ends_with("guardrail"), "{line}");
     }
 
     #[test]

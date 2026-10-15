@@ -106,6 +106,7 @@ impl App {
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
             CommandId::Ai(action) => self.ai_start(action),
+            CommandId::AiCustom => self.ai_custom_prompt(),
             CommandId::AiApply => self.ai_apply(),
             CommandId::AiCancel => self.ai_stop(),
             CommandId::AiUnavailable => {}
