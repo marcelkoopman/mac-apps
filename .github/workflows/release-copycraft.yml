@@ -55,7 +55,8 @@ jobs:
     needs: check
     runs-on: macos-26
     env:
-      # Copycraft needs macOS 26 (minimum_system_version in apps/copycraft/Cargo.toml).
+      # Copycraft needs macOS 26 (minimum_system_version in apps/copycraft/Cargo.toml); also set
+      # by .cargo/config.toml, repeated here so the release never depends on that file.
       MACOSX_DEPLOYMENT_TARGET: "26.0"
 
     steps:
@@ -97,6 +98,10 @@ jobs:
       # fails here instead of being re-resolved; cargo bundle then reuses this build.
       - name: Build release binary (locked)
         run: cargo build --release --locked --target aarch64-apple-darwin -p "$PKG"
+
+      # The binary must say macOS 26.0 as its minimum (otool -l, LC_BUILD_VERSION minos).
+      - name: Check Mach-O minos is 26.0
+        run: scripts/check_minos.sh "target/aarch64-apple-darwin/release/$PKG"
 
       - name: Build app bundle
         # Run from the package dir: cargo-bundle resolves icon/resources/

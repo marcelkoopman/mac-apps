@@ -130,6 +130,17 @@ jobs:
       - name: Clippy (release)
         run: cargo clippy --release --locked --workspace --all-targets -- -D warnings
 
+      # One macOS floor: .cargo/config.toml sets MACOSX_DEPLOYMENT_TARGET=26.0, so the Mach-O
+      # minos of both release binaries must be 26.0 (rustc's own default would give 11.0).
+      - name: Build release binaries
+        run: cargo build --release --locked --target aarch64-apple-darwin -p copycraft -p ticker
+
+      - name: Mach-O minos is 26.0 (otool -l)
+        run: |
+          scripts/check_minos.sh \
+            target/aarch64-apple-darwin/release/copycraft \
+            target/aarch64-apple-darwin/release/ticker
+
   # Tests on the pinned macOS 26 runner (Xcode 26.6, keep in step with XCODE_VERSION). No macOS 15
   # runner any more: Copycraft needs macOS 26, and its binary links FoundationModels (mac-ai).
   test:
