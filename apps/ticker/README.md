@@ -97,9 +97,9 @@ Local app bundle (needs `cargo-bundle`; `config.toml` is bundled as a resource):
 cd apps/ticker && cargo bundle --release
 ```
 
-## How to contribute
+## Support
 
-Issues and pull requests are welcome; see the [root README](../../README.md#how-to-contribute). Releases are made only by the maintainer.
+This is a private repository. For support, email **mac-apps-support@proton.me**. See the [root README](../../README.md#support). Releases are made only by the maintainer.
 
 ## App Store readiness
 
@@ -118,4 +118,4 @@ Still missing for the Store: distribution signing (an Apple Distribution and a M
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Proprietary. Copyright (c) 2026 Marcel Koopman. All rights reserved. See [LICENSE](LICENSE).

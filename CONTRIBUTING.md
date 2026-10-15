@@ -1,5 +1,10 @@
 # Contributing
 
+This is a private repository. Open contributions and public GitHub issues are
+not accepted. For support, email **mac-apps-support@proton.me**.
+
+## Commit messages
+
 Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/):
 
     type(optional-scope)!: description

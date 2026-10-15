@@ -27,7 +27,7 @@ Neither app collects personal data, tracks users, or sends telemetry.
 
 Please report security issues by email to **mac-apps-support@proton.me**.
 
-You should receive an acknowledgement within 7 days. Please do not open a public GitHub issue for an unfixed vulnerability.
+You should receive an acknowledgement within 7 days. Do not report vulnerabilities anywhere other than that email address.
 
 ## Scope
 

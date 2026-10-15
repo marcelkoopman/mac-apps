@@ -19,8 +19,8 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 ├── rust-toolchain.toml     # pinned Rust version (local and CI)
 ├── AGENTS.md               # rules for coding agents
 ├── apps/
-│   ├── copycraft/          # bin: Cargo.toml, src/, assets/, LICENSE (Apache-2.0)
-│   └── ticker/             # bin: Cargo.toml, src/, assets/, config.toml, LICENSE (MIT)
+│   ├── copycraft/          # bin: Cargo.toml, src/, assets/, LICENSE (proprietary)
+│   └── ticker/             # bin: Cargo.toml, src/, assets/, config.toml, LICENSE (proprietary)
 ├── crates/
 │   └── mac-ui/             # lib: shared UI frameworks + menu bar helpers
 ├── scripts/
@@ -75,25 +75,19 @@ CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clipp
 
 CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
-## How to contribute
+## Support
 
-Issues and pull requests are welcome.
+This is a private repository. Open contributions and public GitHub issues are not accepted.
 
-- **Report a bug or suggest a change:** open an issue.
-- **Send a change:** open a pull request against `main`. Keep it small, and run `cargo fmt`, `cargo clippy` and `cargo test` first; CI runs the same checks on every pull request. I review and merge it.
-- **Offline by design:** Copycraft has no network access. Changes that add network access or new entitlements are not accepted.
-- **Releases:** only the maintainer makes releases. Please do not create tags or GitHub releases, or distribute builds of these apps.
+- **Support:** email **mac-apps-support@proton.me** (see also [`apps/copycraft/SUPPORT.md`](apps/copycraft/SUPPORT.md)).
 - **Security:** see [`SECURITY.md`](SECURITY.md) for supported versions, scanning and how to report a vulnerability.
-
-Downloads: [Releases](https://github.com/marcelkoopman/mac-apps/releases).
+- **Offline by design:** Copycraft has no network access.
+- **Releases:** only the maintainer makes releases.
 
 Today the apps are ad-hoc signed, not notarized, so Gatekeeper may block the first launch.
 
 ## License
 
-Each app carries its own license:
+Proprietary. Copyright (c) 2026 Marcel Koopman. All rights reserved.
 
-- copycraft: Apache-2.0 ([`apps/copycraft/LICENSE`](apps/copycraft/LICENSE))
-- ticker: MIT ([`apps/ticker/LICENSE`](apps/ticker/LICENSE))
-
-The repo root and `crates/mac-ui` have no license file.
+See [`LICENSE`](LICENSE). The same notice is in each app and in `crates/mac-ui`.

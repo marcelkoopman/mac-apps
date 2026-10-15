@@ -170,9 +170,9 @@ Local app bundle (needs `cargo-bundle`):
 cd apps/copycraft && cargo bundle --release
 ```
 
-## How to contribute
+## Support
 
-Issues and pull requests are welcome; see the [root README](../../README.md#how-to-contribute). Releases are made only by the maintainer.
+This is a private repository. For support, email **mac-apps-support@proton.me**. See the [root README](../../README.md#support). Releases are made only by the maintainer.
 
 ## App Store readiness
 
@@ -192,4 +192,4 @@ Still missing for the Store: distribution signing (an Apple Distribution and a M
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE).
+Proprietary. Copyright (c) 2026 Marcel Koopman. All rights reserved. See [LICENSE](LICENSE).

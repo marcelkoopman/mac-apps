@@ -2,6 +2,8 @@
 name = "ticker"
 version = "0.1.46"
 edition.workspace = true
+license = "LicenseRef-Proprietary"
+publish = false
 
 [package.metadata.bundle]
 name = "Ticker"
