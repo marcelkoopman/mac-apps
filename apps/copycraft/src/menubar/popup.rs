@@ -5,12 +5,28 @@ use super::*;
 /// A "Show all" text longer than this many lines is paged (when the setting is on).
 const PAGE_MIN_LINES: usize = 200;
 
+/// The icon (or hotkey) toggle must not close an open card while an AI run is going or its
+/// preview is open: they would be lost with it.
+fn card_stays_for_ai(ai_active: bool, card_open: bool) -> bool {
+    ai_active && card_open
+}
+
 impl App {
     pub(crate) fn summon_popup(&mut self) {
         if !launcher::is_open() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
+        }
+        if card_stays_for_ai(self.ai.is_some(), launcher::is_open()) {
+            // An Apple Intelligence run or preview belongs to the card: a click on the icon (or
+            // the hotkey) brings it forward instead of closing it. Cancel, Esc and Apply end it.
+            launcher::order_front();
+            return;
+        }
+        if card_stays_for_ai(self.ai.is_some(), launcher::is_open()) {
+            launcher::order_front();
+            return;
         }
         let data = self.launch_for_popup();
         if launcher::is_open() {
@@ -466,4 +482,18 @@ fn drawable_svg(text: &str) -> Option<crate::clipboard::SecretBytes> {
     }
     #[cfg(not(target_os = "macos"))]
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::card_stays_for_ai;
+
+    #[test]
+    fn the_icon_does_not_close_a_card_with_an_ai_run() {
+        assert!(card_stays_for_ai(true, true));
+        // Without a run the click still toggles; a closed card opens as usual.
+        assert!(!card_stays_for_ai(false, true));
+        assert!(!card_stays_for_ai(false, false));
+        assert!(!card_stays_for_ai(true, false));
+    }
 }
