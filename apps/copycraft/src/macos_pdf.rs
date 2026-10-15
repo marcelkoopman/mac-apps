@@ -27,7 +27,7 @@ use crate::commands::ImageScan;
 use crate::pdf::{MAX_PAGES, OCR_MAX_PAGES};
 
 /// Longest edge of a rendered page in pixels, and the most pixels one page may have.
-const RENDER_EDGE: f64 = 2000.0;
+const RENDER_EDGE: f64 = 3000.0;
 const RENDER_MAX_PIXELS: usize = 12_000_000;
 /// A main-thread step that takes longer than this is given up on.
 const MAIN_WAIT: Duration = Duration::from_secs(120);
@@ -94,16 +94,22 @@ fn read_on_main(source: &SecretBytes) -> Read {
     }
 }
 
-/// Page `index` as PNG, and the pages in the document. `None` when it cannot be drawn.
+/// Page `index` as PNG, and the pages in the document. `None` when it cannot be drawn. `crop`:
+/// without the empty white margin (for showing the page; see [`crate::pdf::content_crop`]).
 pub(crate) fn render_page(
     source: &SecretBytes,
     index: usize,
+    crop: bool,
 ) -> Option<(Zeroizing<Vec<u8>>, usize)> {
     let source = source.clone();
-    on_main(move || render_on_main(&source, index)).flatten()
+    on_main(move || render_on_main(&source, index, crop)).flatten()
 }
 
-fn render_on_main(source: &SecretBytes, index: usize) -> Option<(Zeroizing<Vec<u8>>, usize)> {
+fn render_on_main(
+    source: &SecretBytes,
+    index: usize,
+    crop: bool,
+) -> Option<(Zeroizing<Vec<u8>>, usize)> {
     let document = document(source)?;
     // SAFETY: plain property reads of a PDFDocument on the main thread.
     let (locked, pages) = unsafe { (document.isLocked(), document.pageCount()) };
@@ -112,10 +118,10 @@ fn render_on_main(source: &SecretBytes, index: usize) -> Option<(Zeroizing<Vec<u
     }
     // SAFETY: `index` is below the page count; reads on the main thread.
     let page_ref = unsafe { document.pageAtIndex(index)?.pageRef() }?;
-    Some((draw_png(&page_ref)?, pages))
+    Some((draw_png(&page_ref, crop)?, pages))
 }
 
-fn draw_png(page: &CGPDFPage) -> Option<Zeroizing<Vec<u8>>> {
+fn draw_png(page: &CGPDFPage, crop: bool) -> Option<Zeroizing<Vec<u8>>> {
     let area = CGPDFBox::CropBox;
     let bounds = CGPDFPage::box_rect(Some(page), area);
     let (mut width, mut height) = (bounds.size.width, bounds.size.height);
@@ -125,8 +131,8 @@ fn draw_png(page: &CGPDFPage) -> Option<Zeroizing<Vec<u8>>> {
     if !(width >= 1.0 && height >= 1.0) {
         return None;
     }
-    // Twice the page size (144 dpi), within the edge and pixel limits.
-    let scale = (RENDER_EDGE / width.max(height)).min(2.0);
+    // Three times the page size (216 dpi, readable text), within the edge and pixel limits.
+    let scale = (RENDER_EDGE / width.max(height)).min(3.0);
     let (px_w, px_h) = (
         (width * scale).round() as usize,
         (height * scale).round() as usize,
@@ -154,9 +160,15 @@ fn draw_png(page: &CGPDFPage) -> Option<Zeroizing<Vec<u8>>> {
         CGContext::draw_pdf_page(Some(context), Some(page));
         CGContext::restore_g_state(Some(context));
     })?;
+    let (mut cropped, mut out_w, mut out_h) = (None, px_w, px_h);
+    if crop && let Some(rect) = crate::pdf::content_crop(&rgba, px_w, px_h) {
+        cropped = Some(crate::pdf::crop_rgba(&rgba, px_w, rect));
+        (out_w, out_h) = (rect.2, rect.3);
+    }
+    let pixels = cropped.as_deref().map_or(rgba.as_slice(), Vec::as_slice);
     let mut png = Zeroizing::new(Vec::new());
     PngEncoder::new(&mut *png)
-        .write_image(&rgba, px_w as u32, px_h as u32, ExtendedColorType::Rgba8)
+        .write_image(pixels, out_w as u32, out_h as u32, ExtendedColorType::Rgba8)
         .ok()?;
     Some(png)
 }
@@ -166,7 +178,7 @@ fn draw_png(page: &CGPDFPage) -> Option<Zeroizing<Vec<u8>>> {
 /// every page's, a blank line between pages. Runs on a background thread (Vision is slow);
 /// only the page drawing goes to the main thread.
 pub(crate) fn scan(source: &SecretBytes, text: Option<Zeroizing<String>>) -> Option<ImageScan> {
-    let (first, pages) = render_page(source, 0)?;
+    let (first, pages) = render_page(source, 0, true)?;
     let mut scan = crate::macos_pasteboard::scan_image_bytes(&first)?;
     drop(first);
     // A PDF with a text layer: that text is the *Tekst* view, not a recognition of the pages.
@@ -178,7 +190,7 @@ pub(crate) fn scan(source: &SecretBytes, text: Option<Zeroizing<String>>) -> Opt
     let mut texts: Vec<Zeroizing<String>> =
         scan.ocr.take().map(Zeroizing::new).into_iter().collect();
     for index in 1..pages.min(OCR_MAX_PAGES) {
-        let Some((png, _)) = render_page(source, index) else {
+        let Some((png, _)) = render_page(source, index, false) else {
             continue;
         };
         if let Some(text) = crate::macos_vision::scan_png(&png).0 {

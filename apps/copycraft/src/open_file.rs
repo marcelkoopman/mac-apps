@@ -196,7 +196,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
             // A drop or Kies bestand shows the page (the PDF itself) with its text behind the
             // *Tekst* button; a copy has no such card and shows the text.
             if ocr
-                && let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0)
+                && let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0, true)
                 && let Some(picture) = SecretBytes::new(std::mem::take(&mut *png))
             {
                 let scan = ImageScan {
@@ -242,7 +242,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
             if !ocr {
                 return noted(name, crate::locale::t("pdf_no_text"));
             }
-            let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0) else {
+            let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0, true) else {
                 return noted(name, unreadable());
             };
             let Some(picture) = SecretBytes::new(std::mem::take(&mut *png)) else {

@@ -56,6 +56,9 @@ pub fn join_pages(pages: impl IntoIterator<Item = Zeroizing<String>>) -> Option<
         if page.is_empty() {
             continue;
         }
+        if chars >= MAX_TEXT_CHARS {
+            break;
+        }
         if !out.is_empty() {
             out.push_str("\n\n");
             chars += 2;
@@ -75,9 +78,97 @@ pub fn join_pages(pages: impl IntoIterator<Item = Zeroizing<String>>) -> Option<
     (!out.is_empty()).then_some(out)
 }
 
+/// A pixel counts as paper up to this value in every channel.
+const PAPER_MIN: u8 = 245;
+
+/// The part of a rendered RGBA page that has content, as `(x, y, width, height)`: the box around
+/// the non-white pixels plus a margin (2 % of the width, at least 12 px). `None` when the page is
+/// blank or the crop would not remove anything noticeable. Only for showing the page: the text
+/// and the recognition never see the crop.
+pub fn content_crop(
+    rgba: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<(usize, usize, usize, usize)> {
+    if width == 0 || height == 0 || rgba.len() != width.checked_mul(height)?.checked_mul(4)? {
+        return None;
+    }
+    let (mut left, mut top, mut right, mut bottom) = (width, height, 0usize, 0usize);
+    for (y, row) in rgba.chunks_exact(width * 4).enumerate() {
+        let ink = |px: &[u8; 4]| px[0] < PAPER_MIN || px[1] < PAPER_MIN || px[2] < PAPER_MIN;
+        let Some(first) = row.as_chunks::<4>().0.iter().position(ink) else {
+            continue;
+        };
+        let last = row
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .rposition(ink)
+            .unwrap_or(first);
+        left = left.min(first);
+        right = right.max(last);
+        top = top.min(y);
+        bottom = y;
+    }
+    if right < left || bottom < top {
+        return None;
+    }
+    let margin = (width / 50).max(12);
+    let x0 = left.saturating_sub(margin);
+    let y0 = top.saturating_sub(margin);
+    let x1 = (right + 1 + margin).min(width);
+    let y1 = (bottom + 1 + margin).min(height);
+    let (w, h) = (x1 - x0, y1 - y0);
+    // Not worth it when less than a tenth of the area goes.
+    (w * h * 10 < width * height * 9).then_some((x0, y0, w, h))
+}
+
+/// The `crop` rectangle of an RGBA image, in one zeroizing allocation.
+pub fn crop_rgba(
+    rgba: &[u8],
+    width: usize,
+    crop: (usize, usize, usize, usize),
+) -> Zeroizing<Vec<u8>> {
+    let (x, y, w, h) = crop;
+    let mut out = Zeroizing::new(Vec::with_capacity(w * h * 4));
+    for row in y..y + h {
+        let start = (row * width + x) * 4;
+        out.extend_from_slice(&rgba[start..start + w * 4]);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn page(width: usize, height: usize, ink: &[(usize, usize)]) -> Vec<u8> {
+        let mut rgba = vec![255u8; width * height * 4];
+        for &(x, y) in ink {
+            let at = (y * width + x) * 4;
+            rgba[at..at + 3].copy_from_slice(&[0, 0, 0]);
+        }
+        rgba
+    }
+
+    #[test]
+    fn the_crop_is_the_ink_plus_a_margin() {
+        let rgba = page(400, 600, &[(150, 200), (250, 400)]);
+        let (x, y, w, h) = content_crop(&rgba, 400, 600).expect("crop");
+        assert_eq!((x, y), (150 - 12, 200 - 12));
+        assert_eq!((w, h), (101 + 24, 201 + 24));
+        let cropped = crop_rgba(&rgba, 400, (x, y, w, h));
+        assert_eq!(cropped.len(), w * h * 4);
+        // The first ink pixel sits at the margin.
+        assert_eq!(cropped[(12 * w + 12) * 4], 0);
+    }
+
+    #[test]
+    fn a_blank_or_full_page_is_not_cropped() {
+        assert!(content_crop(&page(100, 100, &[]), 100, 100).is_none());
+        assert!(content_crop(&page(100, 100, &[(0, 0), (99, 99)]), 100, 100).is_none());
+        assert!(content_crop(&[0; 3], 100, 100).is_none());
+    }
 
     fn pages(texts: &[&str]) -> Vec<Zeroizing<String>> {
         texts
