@@ -269,6 +269,21 @@ impl App {
             .is_none_or(|skipped| skipped.as_str() != text)
     }
 
+    /// A card of the strip was clicked: show that copy. Only shown, like stepping.
+    pub(crate) fn view_history(&mut self, index: usize) {
+        if index == self.history_cursor || index >= self.history.len() {
+            return;
+        }
+        let previous = self.history_cursor;
+        self.history_cursor = index;
+        self.browsing = None;
+        if self.show_history(index) {
+            self.clipboard_cursor = None;
+        } else {
+            self.history_cursor = previous;
+        }
+    }
+
     pub(crate) fn step_history(&mut self, older: bool) {
         let Some(next) = commands::step_history(self.history.len(), self.history_cursor, older)
         else {

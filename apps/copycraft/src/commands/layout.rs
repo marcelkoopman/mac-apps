@@ -7,12 +7,11 @@ pub const CHIP_PILL_H: f64 = mac_ui::metrics::BUTTON_H;
 pub const CHIP_GAP: f64 = mac_ui::metrics::BUTTON_GAP;
 /// Vertical step from one chip row to the next: the pill, then the same gap as between buttons.
 pub const CHIP_PITCH: f64 = CHIP_PILL_H + CHIP_GAP;
-/// History chevrons: square hit areas, as tall as a chip.
+/// The version capsule's buttons: square hit areas, as tall as a chip.
 pub const NAV_BUTTON: f64 = mac_ui::metrics::BUTTON_H;
-/// The "3 / 20" position between the chevrons. Fixed and wide enough for the longest label
-/// (history holds 20), so the row never changes width while stepping.
+/// The "v2/3" label between the undo and redo buttons. Fixed, so the row never changes width.
 pub const NAV_COUNT_W: f64 = 44.0;
-/// The history controls: chevron, gap, position, gap, chevron.
+/// The version capsule: button, gap, label, gap, button.
 pub const NAV_SPAN: f64 = NAV_BUTTON + CHIP_GAP + NAV_COUNT_W + CHIP_GAP + NAV_BUTTON;
 
 /// Left edge of the position label inside a history or version row.
@@ -25,49 +24,21 @@ pub fn nav_end_x() -> f64 {
     NAV_BUTTON + CHIP_GAP + NAV_COUNT_W + CHIP_GAP
 }
 
-/// A history chevron: its SF Symbol, the glyph drawn without SF Symbols, its name (the
-/// VoiceOver label and tooltip, never drawn) and which way it steps through history.
+/// Which way an arrow key steps through history ([`arrow_action`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Chevron {
-    pub symbol: &'static str,
-    pub glyph: &'static str,
-    /// Locale key of the name (`Previous`, `Next`).
-    pub name_key: &'static str,
     /// Steps to an older copy (the position number goes up).
     pub older: bool,
-    /// Its arrow key ([`arrow_action`]), drawn (`←`) and spoken (`Left Arrow`).
-    pub arrow: &'static str,
-    /// Locale key of the spoken arrow (`Left Arrow`).
-    pub spoken_arrow_key: &'static str,
 }
 
-/// `‹` on the left: the previous number, toward 1 (the newest copy).
-pub const PREVIOUS_CHEVRON: Chevron = Chevron {
-    symbol: "chevron.left",
-    glyph: "‹",
-    name_key: "previous",
-    older: false,
-    arrow: "←",
-    spoken_arrow_key: "left_arrow",
-};
+/// ← : the previous number, toward 1 (the newest copy).
+pub const PREVIOUS_CHEVRON: Chevron = Chevron { older: false };
 
-/// `›` on the right: the next number, toward N (the oldest copy).
-pub const NEXT_CHEVRON: Chevron = Chevron {
-    symbol: "chevron.right",
-    glyph: "›",
-    name_key: "next",
-    older: true,
-    arrow: "→",
-    spoken_arrow_key: "right_arrow",
-};
+/// → : the next number, toward N (the oldest copy).
+pub const NEXT_CHEVRON: Chevron = Chevron { older: true };
 
 impl Chevron {
-    /// The spoken name of the button: `Previous`.
-    pub fn name(&self) -> &'static str {
-        crate::locale::t(self.name_key)
-    }
-
-    /// The command a click runs.
+    /// The command that steps this way.
     pub fn command(&self) -> CommandId {
         if self.older {
             CommandId::HistoryOlder
@@ -76,24 +47,13 @@ impl Chevron {
         }
     }
 
-    /// Whether there is somewhere to go: `‹` is off at 1, `›` at N.
+    /// Whether there is somewhere to go: ← is off at 1, → at N.
     pub fn enabled(&self, nav: &HistoryNav) -> bool {
         if self.older {
             nav.can_older
         } else {
             nav.can_newer
         }
-    }
-
-    /// Tooltip: the name and its keys, `Previous (← or ⌘←)` (`Vorige (← of ⌘←)`).
-    pub fn tooltip(&self) -> String {
-        crate::locale::tf("chevron_tooltip", &[&self.name(), &self.arrow, &self.arrow])
-    }
-
-    /// VoiceOver hint: `Left Arrow, or Command-Left Arrow`.
-    pub fn spoken_shortcut(&self) -> String {
-        let arrow = crate::locale::t(self.spoken_arrow_key);
-        crate::locale::tf("chevron_spoken", &[&arrow])
     }
 }
 
@@ -152,29 +112,21 @@ pub fn arrow_action(
     })
 }
 
-/// Empty space kept on the right of the first chip row so the capsule fits.
-pub const NAV_RESERVE: f64 = CHIP_GAP + NAV_SPAN;
 /// The table's version capsule (`↶ v2/3 ↷`), the history capsule's size.
 pub const VERSION_SPAN: f64 = NAV_SPAN;
 
-/// Room the first chip row keeps on its right for the capsules: the history capsule (`nav`)
-/// and, left of it, the version capsule (`versions`).
-pub fn trailing_reserve(nav: bool, versions: bool) -> f64 {
-    let mut reserve = 0.0;
-    if nav {
-        reserve += NAV_RESERVE;
-    }
+/// Room the first chip row keeps on its right for the table's version capsule (`versions`).
+pub fn trailing_reserve(versions: bool) -> f64 {
     if versions {
-        reserve += CHIP_GAP + VERSION_SPAN;
+        CHIP_GAP + VERSION_SPAN
+    } else {
+        0.0
     }
-    reserve
 }
 
-/// Left edge of the version capsule in a chip row ending at `right`: just left of the history
-/// capsule when there is one, else at the right end.
-pub fn version_capsule_x(right: f64, nav: bool) -> f64 {
-    let nav_room = if nav { NAV_SPAN + CHIP_GAP } else { 0.0 };
-    right - nav_room - VERSION_SPAN
+/// Left edge of the version capsule in a chip row ending at `right`.
+pub fn version_capsule_x(right: f64) -> f64 {
+    right - VERSION_SPAN
 }
 
 /// Narrowest chip, so short titles ("Copy", "File") keep a comfortable click target.
@@ -302,6 +254,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
             | CommandId::PdfPage(_)
+            | CommandId::HistoryView(_)
+            | CommandId::ToggleStrip
             | CommandId::WindowSize(_)
             | CommandId::ClearSensitive
             | CommandId::KeepHistory(_)

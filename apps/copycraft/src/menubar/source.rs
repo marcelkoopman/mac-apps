@@ -272,6 +272,39 @@ impl App {
         data
     }
 
+    /// The history strip's small cards: a few short lines of text, or a light picture. Empty with
+    /// fewer than two copies or when ⌘Y turned the strip off.
+    fn strip_thumbs(&self) -> Vec<commands::Thumb> {
+        if !commands::strip_shown(self.history.len(), commands::strip_turned_off()) {
+            return Vec::new();
+        }
+        commands::strip_range(self.history.len(), self.history_cursor)
+            .map(|index| {
+                let pin = if self.history.is_pinned(index) {
+                    crate::clipboard::PIN_MARK
+                } else {
+                    ""
+                };
+                let picture = self.history.image(index).filter(|bytes| {
+                    let _ = bytes;
+                    self.history
+                        .byte_len(index)
+                        .is_some_and(|len| len <= commands::THUMB_PICTURE_MAX_BYTES)
+                });
+                commands::Thumb {
+                    index,
+                    mark: format!("{pin}{}", self.history.mark(index).unwrap_or("")),
+                    lines: self
+                        .history
+                        .get(index)
+                        .map(commands::thumb_lines)
+                        .unwrap_or_default(),
+                    picture,
+                }
+            })
+            .collect()
+    }
+
     pub(crate) fn launch_shell(&self) -> LaunchData {
         let history = self
             .history
@@ -301,6 +334,8 @@ impl App {
                 .pin_refused
                 .then(|| crate::locale::t("pin_list_full").to_string()),
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
+            strip: self.strip_thumbs(),
+            strip_cursor: self.history_cursor,
             theme: appearance::load(),
             settings: crate::settings::load(),
             view: self.card_view,

@@ -85,6 +85,8 @@ fn data(text: &str, view: CardView) -> LaunchData {
         can_ignore_app: false,
         notice: None,
         history_nav: None,
+        strip: Vec::new(),
+        strip_cursor: 0,
         theme: crate::appearance::Theme::System,
         settings: crate::settings::Settings::default(),
         view,

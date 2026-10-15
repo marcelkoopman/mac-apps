@@ -585,6 +585,7 @@ pub fn wipe_shown() {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
     clear_painted();
+    clear_strip();
     DIFF_LOCK.set(false);
     CARD_DIFF.set(false);
     DIFF_WIDE.set(false);

@@ -98,7 +98,6 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     preview_clip.addSubview(&preview_scroll);
     let preview_image = image_view(mtm);
     let pills = glass::group(mtm, GLASS_MERGE);
-    let (nav_capsule, previous, nav_count, next) = history_capsule(mtm);
     let more = header_symbol(
         mtm,
         "ellipsis",
@@ -179,7 +178,6 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&meta);
     content.addSubview(&field);
     content.addSubview(pills.view());
-    content.addSubview(&nav_capsule);
     content.addSubview(&version_row.capsule);
     content.addSubview(copy_button.view());
     content.addSubview(save_button.view());
@@ -199,10 +197,6 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     PREVIEW_CLIP.with(|slot| slot.replace(Some(preview_clip)));
     PREVIEW_IMAGE.with(|slot| slot.replace(Some(preview_image)));
     PILLS.with(|slot| slot.replace(Some(pills)));
-    NAV_CAPSULE.with(|slot| slot.replace(Some(nav_capsule)));
-    PREVIOUS.with(|slot| slot.replace(Some(previous)));
-    NEXT.with(|slot| slot.replace(Some(next)));
-    NAV_COUNT.with(|slot| slot.replace(Some(nav_count)));
     HEADER_GROUP.with(|slot| slot.replace(Some(header_group)));
     MORE.with(|slot| slot.replace(Some(more)));
     CLEAR.with(|slot| slot.replace(Some(clear)));
@@ -263,16 +257,6 @@ pub fn relabel() {
     PREVIEW_BUTTON.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             label_symbol(button, t("open_preview"));
-        }
-    });
-    PREVIOUS.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            label_nav(button, commands::PREVIOUS_CHEVRON);
-        }
-    });
-    NEXT.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            label_nav(button, commands::NEXT_CHEVRON);
         }
     });
     VERSION_ROW.with(|slot| {
@@ -338,17 +322,6 @@ pub(crate) fn label_symbol(button: &GlassButton, label: &str) {
     button.set_accessibility_label(label);
 }
 
-/// History chevron: name, tooltip and hint. The drawn title stays the glyph (or empty).
-pub(crate) fn label_nav(button: &GlassButton, chevron: commands::Chevron) {
-    button.set_accessibility_label(chevron.name());
-    button
-        .button()
-        .setToolTip(Some(&NSString::from_str(&chevron.tooltip())));
-    button
-        .button()
-        .setAccessibilityHelp(Some(&NSString::from_str(&chevron.spoken_shortcut())));
-}
-
 /// Undo or redo in the version capsule. The drawn title stays the arrow.
 pub(crate) fn label_step(button: &GlassButton, name: &str, keys: &str) {
     button.set_accessibility_label(name);
@@ -404,11 +377,6 @@ pub(crate) fn apply_window_chrome() {
             label.setTextColor(Some(&color));
         }
     });
-    NAV_COUNT.with(|slot| {
-        if let Some(label) = slot.borrow().as_ref() {
-            label.setTextColor(Some(&color));
-        }
-    });
     EMPTY_LINE.with(|slot| {
         if let Some(label) = slot.borrow().as_ref() {
             label.setTextColor(Some(&color));
@@ -455,9 +423,8 @@ pub(crate) fn layout(fresh_place: bool) {
     if SHOWS_IMAGE.with(Cell::get) && !meta.is_empty() {
         meta = display_image_meta(&meta, (inner - 10.0).max(40.0));
     }
-    let nav = HISTORY_NAV.with(|slot| *slot.borrow());
     let version_bar = VERSION_BAR.with(|slot| slot.borrow().clone());
-    let reserve = commands::trailing_reserve(nav.is_some(), version_bar.is_some());
+    let reserve = commands::trailing_reserve(version_bar.is_some());
     let frames = if shown.is_empty() {
         Vec::new()
     } else {
@@ -467,13 +434,15 @@ pub(crate) fn layout(fresh_place: bool) {
     // The field is hidden while the well is masked. The row stays, so a click to reveal does
     // not grow the card (and blurring it again does not shrink it).
     let find_shown = !well_is_masked();
+    let strip_items = STRIP_ITEMS.with(|slot| slot.borrow().clone());
     let placed = place_sections(
         &meta,
         searching,
         &frames,
         show_empty,
-        nav.is_some() || version_bar.is_some(),
+        version_bar.is_some(),
         true,
+        !strip_items.is_empty(),
     );
     place_window(mtm, placed.height, fresh_place);
     apply_window_chrome();
@@ -570,8 +539,8 @@ pub(crate) fn layout(fresh_place: bool) {
     });
     let nav_y = placed.chips_y + placed.chips_h - commands::CHIP_PITCH
         + (commands::CHIP_PITCH - commands::CHIP_PILL_H) / 2.0;
-    place_history_nav(nav_y, nav);
-    place_version_row(nav_y, nav.is_some(), version_bar.as_ref());
+    place_version_row(nav_y, version_bar.as_ref());
+    place_strip(mtm, &placed, &strip_items);
     let selected = SELECTION.with(Cell::get);
     if shown.is_empty() {
         SELECTION.set(0);

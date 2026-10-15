@@ -326,6 +326,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         crate::locale::t("detail_clear_sensitive"),
         "clear sensitive pasteboard timer",
     ));
+    commands.push(command(
+        CommandId::ToggleStrip,
+        strip_toggle_title(strip_turned_off()),
+        crate::locale::t("strip_group"),
+        "history strip thumbnails cards historie strook",
+    ));
     for theme in [Theme::System, Theme::Light, Theme::Dark] {
         commands.push(command(
             CommandId::Appearance(theme),
@@ -429,7 +435,9 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         | CommandId::IgnoreNext
         | CommandId::IgnoreFrontApp
         | CommandId::ClearSensitive => MenuSection::Recording,
-        CommandId::Appearance(_) | CommandId::WindowSize(_) => MenuSection::Appearance,
+        CommandId::Appearance(_) | CommandId::WindowSize(_) | CommandId::ToggleStrip => {
+            MenuSection::Appearance
+        }
         CommandId::Settings
         | CommandId::About
         | CommandId::ExportDiagnostics

@@ -125,20 +125,6 @@ fn left_and_right_step_history_like_the_chevrons() {
 }
 
 #[test]
-fn chevrons_name_their_keys() {
-    assert_eq!(PREVIOUS_CHEVRON.tooltip(), "Previous (← or ⌘←)");
-    assert_eq!(NEXT_CHEVRON.tooltip(), "Next (→ or ⌘→)");
-    assert_eq!(
-        PREVIOUS_CHEVRON.spoken_shortcut(),
-        "Left Arrow, or Command-Left Arrow"
-    );
-    assert_eq!(
-        NEXT_CHEVRON.spoken_shortcut(),
-        "Right Arrow, or Command-Right Arrow"
-    );
-}
-
-#[test]
 fn history_nav_stays_on_the_card() {
     assert_eq!(history_nav(0, 0), None, "no history: no capsule");
     assert_eq!(history_nav(1, 0), None, "one copy: nowhere to go");
@@ -163,33 +149,17 @@ fn history_nav_stays_on_the_card() {
 
 #[test]
 fn history_position_counts_from_the_newest() {
-    let newest = history_nav(2, 0).unwrap();
-    assert_eq!(newest.position, 1);
-    assert_eq!(newest.label(), "1 / 2");
-    assert_eq!(newest.spoken(), "Item 1 of 2");
-    let oldest = history_nav(2, 1).unwrap();
-    assert_eq!(oldest.label(), "2 / 2");
-    assert_eq!(oldest.spoken(), "Item 2 of 2");
-    // › (next) counts up, ‹ (previous) counts down.
+    assert_eq!(history_nav(2, 0).unwrap().position, 1);
+    assert_eq!(history_nav(2, 1).unwrap().position, 2);
+    // → (next) counts up, ← (previous) counts down.
     let next = step_history(5, 0, NEXT_CHEVRON.older).unwrap();
-    assert_eq!(history_nav(5, next).unwrap().label(), "2 / 5");
+    assert_eq!(history_nav(5, next).unwrap().position, 2);
     let previous = step_history(5, next, PREVIOUS_CHEVRON.older).unwrap();
-    assert_eq!(history_nav(5, previous).unwrap().label(), "1 / 5");
+    assert_eq!(history_nav(5, previous).unwrap().position, 1);
     // A cursor past the end shows the oldest copy.
-    assert_eq!(history_nav(3, 9).unwrap().label(), "3 / 3");
-    assert_eq!(history_nav(20, 19).unwrap().label(), "20 / 20");
-}
-
-#[test]
-fn chevrons_are_one_glyph_with_a_spoken_name() {
-    for chevron in [PREVIOUS_CHEVRON, NEXT_CHEVRON] {
-        assert_eq!(chevron.glyph.chars().count(), 1);
-        assert!(!chevron.name().contains(chevron.glyph));
-    }
-    assert_eq!(PREVIOUS_CHEVRON.name(), "Previous");
-    assert_eq!(NEXT_CHEVRON.name(), "Next");
-    assert_eq!(PREVIOUS_CHEVRON.symbol, "chevron.left");
-    assert_eq!(NEXT_CHEVRON.symbol, "chevron.right");
+    assert_eq!(history_nav(3, 9).unwrap().position, 3);
+    assert_eq!(history_nav(20, 19).unwrap().position, 20);
+    assert_eq!(history_nav(20, 19).unwrap().total, 20);
 }
 
 #[test]
@@ -227,14 +197,14 @@ fn history_capsule_fits_the_longest_position() {
 }
 
 #[test]
-fn history_arrows_keep_the_first_row_clear() {
+fn the_version_capsule_keeps_the_first_row_clear() {
     let widths = [62.0, 74.0, 78.0, 72.0, 86.0, 56.0];
     let width = 412.0;
-    let frames = layout_chips(&widths, width, NAV_RESERVE);
-    let nav_left = width - NAV_SPAN;
+    let frames = layout_chips(&widths, width, crate::commands::trailing_reserve(true));
+    let capsule_left = crate::commands::version_capsule_x(width);
     assert!(frames.iter().any(|frame| frame.row > 0));
     for frame in frames.iter().filter(|frame| frame.row == 0) {
-        assert!(frame.x + frame.width <= nav_left - crate::commands::CHIP_GAP + 0.01);
+        assert!(frame.x + frame.width <= capsule_left - crate::commands::CHIP_GAP + 0.01);
     }
 }
 

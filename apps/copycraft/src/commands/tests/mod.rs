@@ -3,7 +3,7 @@ use super::{ArrowAction, ArrowFocus, arrow_action};
 use super::{CHIP_GAP, CHIP_PILL_H, NAV_BUTTON, NAV_COUNT_W, NEXT_CHEVRON, PREVIOUS_CHEVRON};
 use super::{
     CardView, CommandId, ContentActions, DiffShown, Hist, ImageFacts, ImageScan, LaunchData,
-    NAV_RESERVE, NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
+    NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
     deferred_save_name, effective_mask, history_label, history_nav, keeps_card_open, layout_chips,
     masks_content, matching, overflow, payload_excerpt, presented_view, save_tip, search_pool,
     stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
@@ -29,6 +29,8 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         can_ignore_app: false,
         notice: None,
         history_nav: None,
+        strip: Vec::new(),
+        strip_cursor: 0,
         theme: Theme::System,
         settings: crate::settings::Settings::default(),
         view: CardView::Original,

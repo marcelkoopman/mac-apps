@@ -213,60 +213,8 @@ pub(crate) fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     view
 }
 
-pub(crate) type NavButton = GlassButton;
-
-/// Show the history capsule at the right of the first chip row, or hide it (`None`: fewer than
-/// two copies). The chevrons dim at the ends; the label shows the position.
-pub(crate) fn place_history_nav(y: f64, nav: Option<commands::HistoryNav>) {
-    NAV_CAPSULE.with(|slot| {
-        let borrowed = slot.borrow();
-        let Some(capsule) = borrowed.as_ref() else {
-            return;
-        };
-        capsule.setHidden(nav.is_none());
-        capsule.setFrame(NSRect::new(
-            NSPoint::new(card_width() - PAD - commands::NAV_SPAN, y),
-            NSSize::new(commands::NAV_SPAN, commands::CHIP_PILL_H),
-        ));
-        if nav.is_some() {
-            raise_view(capsule);
-        }
-    });
-    let Some(nav) = nav else {
-        return;
-    };
-    PREVIOUS.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            // A real NSButton draws its own disabled state and leaves the key-view loop.
-            button
-                .button()
-                .setEnabled(commands::PREVIOUS_CHEVRON.enabled(&nav));
-        }
-    });
-    NEXT.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            button
-                .button()
-                .setEnabled(commands::NEXT_CHEVRON.enabled(&nav));
-        }
-    });
-    NAV_COUNT.with(|slot| {
-        if let Some(label) = slot.borrow().as_ref() {
-            label.setStringValue(&NSString::from_str(&nav.label()));
-            label.setAccessibilityLabel(Some(&NSString::from_str(&nav.spoken())));
-        }
-    });
-}
-
-/// The history and version capsules on top of the chips.
-pub(crate) fn raise_history_nav() {
-    NAV_CAPSULE.with(|slot| {
-        if let Some(capsule) = slot.borrow().as_ref()
-            && !capsule.isHidden()
-        {
-            raise_view(capsule);
-        }
-    });
+/// The version capsule on top of the chips.
+pub(crate) fn raise_version_row() {
     VERSION_ROW.with(|slot| {
         if let Some(row) = slot.borrow().as_ref()
             && !row.capsule.isHidden()
@@ -573,80 +521,6 @@ pub(crate) fn well_action(
     button
 }
 
-/// Borderless chevron inside the history capsule: the SF Symbol only (or just the fallback
-/// glyph), centred in its slot. The name ("Previous", "Next") is the VoiceOver label; the tooltip
-/// and the VoiceOver hint name its arrow keys.
-pub(crate) fn nav_button(mtm: MainThreadMarker, chevron: commands::Chevron) -> NavButton {
-    let button = GlassButton::symbol(
-        mtm,
-        chevron.symbol,
-        chevron.name(),
-        chevron.glyph,
-        NAV_SYMBOL,
-    );
-    let ns = button.button();
-    ns.setAlignment(NSTextAlignment::Center);
-    ns.setAccessibilityLabel(Some(&NSString::from_str(chevron.name())));
-    // The keys: "Previous (← or ⌘←)", and VoiceOver's hint "Left Arrow, or Command-Left Arrow".
-    ns.setToolTip(Some(&NSString::from_str(&chevron.tooltip())));
-    ns.setAccessibilityHelp(Some(&NSString::from_str(&chevron.spoken_shortcut())));
-    // Older counts up (`›`, next); newer counts down (`‹`, previous).
-    let action = if chevron.command() == CommandId::HistoryOlder {
-        sel!(olderClicked:)
-    } else {
-        sel!(newerClicked:)
-    };
-    wire_button(ns, action);
-    button
-}
-
-/// Previous, the position and Next, in the same glass buttons as the chips. Hidden until
-/// there are two copies. Fixed size ([`commands::NAV_SPAN`]), so it never jumps while stepping.
-pub(crate) fn history_capsule(
-    mtm: MainThreadMarker,
-) -> (
-    Retained<NSView>,
-    NavButton,
-    Retained<NSTextField>,
-    NavButton,
-) {
-    let height = commands::CHIP_PILL_H;
-    let capsule = NSView::initWithFrame(
-        NSView::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(0.0, 0.0),
-            NSSize::new(commands::NAV_SPAN, height),
-        ),
-    );
-    capsule.setHidden(true);
-    let previous = nav_button(mtm, commands::PREVIOUS_CHEVRON);
-    let next = nav_button(mtm, commands::NEXT_CHEVRON);
-    let count = widgets::label(mtm, NAV_FONT, &crate::appearance::caption_color());
-    // Tabular digits: "1 / 9" and "2 / 9" are the same width. 0.0 is NSFontWeightRegular.
-    count.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
-        NAV_FONT, 0.0,
-    )));
-    count.setAlignment(NSTextAlignment::Center);
-    count.setStringValue(&NSString::from_str("20 / 20"));
-    let count_h = count.fittingSize().height.ceil();
-    previous.view().setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(commands::NAV_BUTTON, height),
-    ));
-    count.setFrame(NSRect::new(
-        NSPoint::new(commands::nav_mid_x(), ((height - count_h) / 2.0).floor()),
-        NSSize::new(commands::NAV_COUNT_W, count_h),
-    ));
-    next.view().setFrame(NSRect::new(
-        NSPoint::new(commands::nav_end_x(), 0.0),
-        NSSize::new(commands::NAV_BUTTON, height),
-    ));
-    capsule.addSubview(previous.view());
-    capsule.addSubview(&count);
-    capsule.addSubview(next.view());
-    (capsule, previous, count, next)
-}
-
 /// Header symbol button (More, Close); `label` is what VoiceOver reads.
 pub(crate) fn header_symbol(
     mtm: MainThreadMarker,
@@ -679,9 +553,8 @@ pub(crate) fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     })
 }
 
-/// The table's version row in the chip row, left of the history controls: undo `↶`, the
-/// version shown (`v2/3`, a button that pops the list of versions) and redo `↷`. Same height,
-/// gap and buttons as the history controls ([`history_capsule`]).
+/// The table's version row at the right end of the chip row: undo `↶`, the
+/// version shown (`v2/3`, a button that pops the list of versions) and redo `↷`.
 pub(crate) struct VersionRow {
     pub(crate) capsule: Retained<NSView>,
     pub(crate) undo: GlassButton,
@@ -755,9 +628,9 @@ pub(crate) fn version_row(mtm: MainThreadMarker) -> VersionRow {
     }
 }
 
-/// Show the version capsule in the chip row at `y`, left of the history capsule when there
-/// is one (`nav`), with `bar`; or hide it (`None`).
-pub(crate) fn place_version_row(y: f64, nav: bool, bar: Option<&commands::VersionBar>) {
+/// Show the version capsule at the right end of the chip row at `y`, with `bar`; or hide it
+/// (`None`).
+pub(crate) fn place_version_row(y: f64, bar: Option<&commands::VersionBar>) {
     VERSION_ROW.with(|slot| {
         let borrowed = slot.borrow();
         let Some(row) = borrowed.as_ref() else {
@@ -768,7 +641,7 @@ pub(crate) fn place_version_row(y: f64, nav: bool, bar: Option<&commands::Versio
             return;
         };
         row.capsule.setFrame(NSRect::new(
-            NSPoint::new(commands::version_capsule_x(card_width() - PAD, nav), y),
+            NSPoint::new(commands::version_capsule_x(card_width() - PAD), y),
             NSSize::new(commands::VERSION_SPAN, commands::CHIP_PILL_H),
         ));
         row.undo.button().setEnabled(bar.can_undo());

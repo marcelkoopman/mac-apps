@@ -380,17 +380,15 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Can't read this image",
     ),
     // History navigation
-    ("previous", "Vorige", "Previous"),
-    ("next", "Volgende", "Next"),
-    ("left_arrow", "Pijl-links", "Left Arrow"),
-    ("right_arrow", "Pijl-rechts", "Right Arrow"),
-    ("chevron_tooltip", "{0} ({1} of ⌘{2})", "{0} ({1} or ⌘{2})"),
-    (
-        "chevron_spoken",
-        "{0}, of Command-{0}",
-        "{0}, or Command-{0}",
-    ),
     ("item_of", "Item {0} van {1}", "Item {0} of {1}"),
+    ("strip_group", "Historie", "History"),
+    ("strip_current", "getoond", "shown"),
+    (
+        "strip_hide",
+        "Historiestrook verbergen",
+        "Hide history strip",
+    ),
+    ("strip_show", "Historiestrook tonen", "Show history strip"),
     // Card status, counts
     ("working", "Bezig…", "Working…"),
     (

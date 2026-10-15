@@ -74,6 +74,10 @@ pub struct LaunchData {
     pub notice: Option<String>,
     /// `<` older and `>` newer, when an earlier copy exists. Absent hides both.
     pub history_nav: Option<HistoryNav>,
+    /// The small cards of the history strip; empty when the strip is not shown.
+    pub strip: Vec<Thumb>,
+    /// The history position on screen (0 is the newest): the card the strip marks.
+    pub strip_cursor: usize,
     pub theme: Theme,
     /// Settings with a check mark in the `⋯` menu.
     pub settings: crate::settings::Settings,
@@ -325,18 +329,6 @@ pub struct HistoryNav {
     pub total: usize,
 }
 
-impl HistoryNav {
-    /// Position between the chevrons: `1 / 3`.
-    pub fn label(&self) -> String {
-        format!("{} / {}", self.position, self.total)
-    }
-
-    /// What VoiceOver reads for the position: `Item 1 of 3`.
-    pub fn spoken(&self) -> String {
-        crate::locale::tf("item_of", &[&self.position, &self.total])
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandId {
     Original,
@@ -386,6 +378,10 @@ pub enum CommandId {
     /// Render the whole text on the card instead of its preview.
     ShowAll,
     Appearance(Theme),
+    /// Show history copy `n` on the card (the strip's cards). Only shows it; nothing is copied.
+    HistoryView(usize),
+    /// ⌘Y: show or hide the history strip.
+    ToggleStrip,
     /// Turn the PDF's pages in the Beeld view by this many (−1: back).
     PdfPage(isize),
     /// How wide the card is.
@@ -552,6 +548,9 @@ impl Drop for LaunchData {
     fn drop(&mut self) {
         if let Some(text) = self.subject_text.as_mut() {
             text.zeroize();
+        }
+        for thumb in &mut self.strip {
+            thumb.wipe();
         }
         for item in &mut self.history {
             item.title.zeroize();

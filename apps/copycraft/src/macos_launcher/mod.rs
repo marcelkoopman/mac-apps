@@ -65,7 +65,7 @@ const _: () = assert!(TEXT_BLUR_RADIUS >= 5.0 && TEXT_BLUR_RADIUS < IMAGE_BLUR_R
 /// Glass controls this close merge on macOS 26+ (`glass::group`). Below the button gap, so
 /// neighbours only merge while they morph closer together.
 pub(crate) const GLASS_MERGE: f64 = 4.0;
-/// History chevron symbol size and the position label's font size.
+/// Version capsule symbol size and its label's font size.
 pub(crate) const NAV_SYMBOL: f64 = mac_ui::metrics::FONT_CAPTION;
 pub(crate) const NAV_FONT: f64 = mac_ui::metrics::FONT_CAPTION;
 /// Corner radius of the launcher panel, its glass and the frosted fallback. Fixed:
@@ -193,13 +193,6 @@ thread_local! {
     /// "No matching commands" under a search that matches nothing.
     static NO_MATCHES: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static HISTORY_NAV: RefCell<Option<commands::HistoryNav>> = const { RefCell::new(None) };
-    /// The history capsule: a glass (or frosted) capsule holding the chevrons and the position.
-    static NAV_CAPSULE: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
-    /// `‹` previous (toward 1, the newest) and `›` next (toward the oldest).
-    static PREVIOUS: RefCell<Option<NavButton>> = const { RefCell::new(None) };
-    static NEXT: RefCell<Option<NavButton>> = const { RefCell::new(None) };
-    /// The position ("1 / 3") between the chevrons.
-    static NAV_COUNT: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Wipe, More and Close in one glass group at the right of the header.
     static HEADER_GROUP: RefCell<Option<glass::Group>> = const { RefCell::new(None) };
     static MORE: RefCell<Option<GlassButton>> = const { RefCell::new(None) };
@@ -380,6 +373,10 @@ define_class!(
                 // ⌘O opens a file, also while a search field has the caret.
                 launcher::emit(UserEvent::Run(CommandId::ChooseFile));
                 true
+            } else if mac_ui::keys::is_command_chord(event, "y") {
+                // ⌘Y shows or hides the history strip.
+                launcher::emit(UserEvent::Run(CommandId::ToggleStrip));
+                true
             } else if mac_ui::keys::is_command_chord(event, "s") {
                 // ⌘S saves what the card shows, also while a search field has the caret.
                 launcher::emit(UserEvent::Run(CommandId::Save));
@@ -549,14 +546,12 @@ define_class!(
             launcher::emit(UserEvent::Run(CommandId::Clear));
         }
 
-        #[unsafe(method(olderClicked:))]
-        fn older_clicked(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::HistoryOlder));
-        }
-
-        #[unsafe(method(newerClicked:))]
-        fn newer_clicked(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::HistoryNewer));
+        /// A card of the history strip: show that copy (nothing is copied).
+        #[unsafe(method(thumbClicked:))]
+        fn thumb_clicked(&self, sender: Option<&NSButton>) {
+            if let Some(sender) = sender {
+                launcher::emit(UserEvent::Run(CommandId::HistoryView(sender.tag() as usize)));
+            }
         }
 
         #[unsafe(method(copyClicked:))]
@@ -725,6 +720,7 @@ mod events;
 mod find;
 mod pager;
 mod panels;
+mod strip;
 mod window;
 
 pub use api::*;
@@ -734,6 +730,7 @@ pub use events::*;
 use find::*;
 pub(crate) use pager::*;
 pub use panels::*;
+use strip::*;
 pub use window::*;
 
 #[cfg(test)]

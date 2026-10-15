@@ -117,7 +117,7 @@ pub(crate) fn mask_again() {
     layout(false);
     // As in `present`: the blur, then `<` `>` and the well icons, on top.
     show_reveal_cover(true);
-    raise_history_nav();
+    raise_version_row();
     raise_content_actions();
 }
 
@@ -148,7 +148,7 @@ pub fn privacy_filter_changed() {
         // As in `present`: the blur, then `<` `>` and the well icons, on top.
         show_reveal_cover(true);
     }
-    raise_history_nav();
+    raise_version_row();
     raise_content_actions();
 }
 
@@ -602,6 +602,6 @@ pub(crate) fn toggle_hidden() {
     if well_is_masked() {
         show_reveal_cover(true);
     }
-    raise_history_nav();
+    raise_version_row();
     raise_content_actions();
 }

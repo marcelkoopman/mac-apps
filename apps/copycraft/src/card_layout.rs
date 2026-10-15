@@ -24,6 +24,9 @@ pub struct Sections {
     pub search_y: f64,
     pub chips_y: f64,
     pub chips_h: f64,
+    /// Bottom of the history strip row (the card's last row); its height is 0 without a strip.
+    pub strip_y: f64,
+    pub strip_h: f64,
 }
 
 /// Height of the meta row. One line is [`META_H`]. A newline in the text does not add a row:
@@ -42,6 +45,7 @@ pub fn place_sections(
     show_empty: bool,
     show_capsule: bool,
     item_find: bool,
+    strip: bool,
 ) -> Sections {
     let meta_h = meta_block_height(meta);
     let search_h = if searching { SEARCH_H } else { 0.0 };
@@ -55,14 +59,20 @@ pub fn place_sections(
     if show_capsule {
         chips_h = chips_h.max(commands::CHIP_PITCH);
     }
-    let below_preview = meta_h > 0.0 || search_h > 0.0 || chips_h > 0.0;
+    let strip_h = if strip { commands::STRIP_H } else { 0.0 };
+    let below_preview = meta_h > 0.0 || search_h > 0.0 || chips_h > 0.0 || strip_h > 0.0;
     let gap_after_preview = if below_preview { GAP } else { 0.0 };
-    let gap_after_meta = if meta_h > 0.0 && (search_h > 0.0 || chips_h > 0.0) {
+    let gap_after_meta = if meta_h > 0.0 && (search_h > 0.0 || chips_h > 0.0 || strip_h > 0.0) {
         GAP
     } else {
         0.0
     };
-    let gap_after_search = if search_h > 0.0 && chips_h > 0.0 {
+    let gap_after_search = if search_h > 0.0 && (chips_h > 0.0 || strip_h > 0.0) {
+        GAP
+    } else {
+        0.0
+    };
+    let gap_after_chips = if chips_h > 0.0 && strip_h > 0.0 {
         GAP
     } else {
         0.0
@@ -79,6 +89,8 @@ pub fn place_sections(
         + search_h
         + gap_after_search
         + chips_h
+        + gap_after_chips
+        + strip_h
         + PAD;
     let mut cursor = height - PAD;
     cursor -= HEADER_H;
@@ -93,6 +105,8 @@ pub fn place_sections(
     let search_y = cursor;
     cursor -= gap_after_search + chips_h;
     let chips_y = cursor;
+    cursor -= gap_after_chips + strip_h;
+    let strip_y = cursor;
     Sections {
         height,
         header_y,
@@ -102,6 +116,8 @@ pub fn place_sections(
         search_y,
         chips_y,
         chips_h,
+        strip_y,
+        strip_h,
     }
 }
 
@@ -109,7 +125,7 @@ pub fn place_sections(
 mod tests {
     use super::{GAP, META_H, PAD, place_sections};
     use crate::commands::{
-        CHIP_GAP, CHIP_PITCH, ChipFrame, NAV_SPAN, VERSION_SPAN, layout_chips, trailing_reserve,
+        CHIP_GAP, CHIP_PITCH, ChipFrame, VERSION_SPAN, layout_chips, trailing_reserve,
         version_capsule_x,
     };
 
@@ -119,8 +135,8 @@ mod tests {
 
     #[test]
     fn the_version_capsule_shares_the_chip_row_so_the_card_does_not_grow() {
-        let plain = place_sections("2 lines", false, &one_row(), false, false, false);
-        let capsule = place_sections("2 lines", false, &one_row(), false, true, false);
+        let plain = place_sections("2 lines", false, &one_row(), false, false, false, false);
+        let capsule = place_sections("2 lines", false, &one_row(), false, true, false, false);
         assert_eq!(capsule, plain);
         assert_eq!(plain.chips_y, PAD);
         assert_eq!(plain.meta_y, plain.chips_y + plain.chips_h + GAP);
@@ -136,11 +152,13 @@ mod tests {
             false,
             false,
             false,
+            false,
         );
         let two = place_sections(
             "photo…ic\nHEIC  4032×3024",
             false,
             &one_row(),
+            false,
             false,
             false,
             false,
@@ -153,32 +171,48 @@ mod tests {
 
     #[test]
     fn an_empty_card_has_no_gaps_below_the_well() {
-        let placed = place_sections("", false, &[], false, false, false);
+        let placed = place_sections("", false, &[], false, false, false, false);
         assert_eq!(placed.preview_y, PAD);
-        let capsule = place_sections("", false, &[], false, true, false);
+        let capsule = place_sections("", false, &[], false, true, false, false);
         assert_eq!(capsule.chips_h, CHIP_PITCH);
     }
 
     #[test]
-    fn the_version_capsule_sits_left_of_the_history_capsule_and_chips_keep_clear() {
+    fn the_version_capsule_ends_the_chip_row_and_chips_keep_clear() {
         let inner = 412.0;
+        assert_eq!(version_capsule_x(inner) + VERSION_SPAN, inner);
+        assert_eq!(trailing_reserve(false), 0.0);
+        assert_eq!(trailing_reserve(true), CHIP_GAP + VERSION_SPAN);
+        // First-row chips end before the capsule; the rest wrap.
+        let frames = layout_chips(&[90.0; 5], inner, trailing_reserve(true));
+        let end = frames
+            .iter()
+            .filter(|frame| frame.row == 0)
+            .map(|frame| frame.x + frame.width)
+            .fold(0.0, f64::max);
+        assert!(end + CHIP_GAP <= version_capsule_x(inner));
+        assert!(frames.iter().any(|frame| frame.row == 1));
+    }
+
+    #[test]
+    fn the_history_strip_is_the_last_row_under_the_chips() {
+        let without = place_sections("2 lines", false, &one_row(), false, false, false, false);
+        let with = place_sections("2 lines", false, &one_row(), false, false, false, true);
+        assert_eq!(with.strip_h, crate::commands::STRIP_H);
+        assert_eq!(without.strip_h, 0.0);
+        assert_eq!(with.strip_y, PAD);
+        // The card grows by the strip and one gap; everything above keeps its distance to the top.
+        assert_eq!(with.height - without.height, crate::commands::STRIP_H + GAP);
+        assert_eq!(with.chips_y, PAD + crate::commands::STRIP_H + GAP);
         assert_eq!(
-            version_capsule_x(inner, true) + VERSION_SPAN + CHIP_GAP + NAV_SPAN,
-            inner
+            with.header_y - with.preview_y,
+            without.header_y - without.preview_y
         );
-        assert_eq!(version_capsule_x(inner, false) + VERSION_SPAN, inner);
-        assert_eq!(trailing_reserve(false, false), 0.0);
-        assert_eq!(trailing_reserve(false, true), CHIP_GAP + VERSION_SPAN);
-        // First-row chips end before the capsules; the rest wrap.
-        for nav in [false, true] {
-            let frames = layout_chips(&[90.0; 4], inner, trailing_reserve(nav, true));
-            let end = frames
-                .iter()
-                .filter(|frame| frame.row == 0)
-                .map(|frame| frame.x + frame.width)
-                .fold(0.0, f64::max);
-            assert!(end + CHIP_GAP <= version_capsule_x(inner, nav), "{nav}");
-            assert!(frames.iter().any(|frame| frame.row == 1));
-        }
+        // Chips and strip do not overlap.
+        assert!(with.strip_y + with.strip_h + GAP <= with.chips_y);
+        // No chips: no extra gap.
+        let bare = place_sections("", false, &[], false, false, false, true);
+        assert_eq!(bare.strip_y, PAD);
+        assert_eq!(bare.chips_h, 0.0);
     }
 }

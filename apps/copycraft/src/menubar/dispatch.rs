@@ -45,6 +45,11 @@ impl App {
                     ));
                 }
             }
+            CommandId::HistoryView(index) => self.view_history(index),
+            CommandId::ToggleStrip => {
+                commands::toggle_strip();
+                self.refresh_popup();
+            }
             CommandId::HistoryOlder => self.step_history(true),
             CommandId::HistoryNewer => self.step_history(false),
             CommandId::ClearClipboard => {

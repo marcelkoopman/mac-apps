@@ -277,7 +277,7 @@ fn show_stored(fresh: bool) {
     if well_is_masked() {
         show_reveal_cover(true);
     }
-    raise_history_nav();
+    raise_version_row();
     raise_content_actions();
 }
 
@@ -364,6 +364,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         )
     });
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
+    store_strip(&data.strip, data.strip_cursor);
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
