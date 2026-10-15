@@ -868,7 +868,7 @@ pub(crate) fn pop_table_menu() {
     }
 }
 
-/// The AI chip's menu: Custom prompt…, then the five actions, under the chip. Dimmed with the
+/// The AI chip's menu: the five actions (a table's own three), under the chip. Dimmed with the
 /// reason as tooltip when the model is not available.
 pub(crate) fn pop_ai_menu() {
     // A table card has its own actions: its chips hold the table window chip.

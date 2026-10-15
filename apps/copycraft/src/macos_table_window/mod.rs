@@ -212,10 +212,10 @@ define_class!(
                 // The AI preview is drawn over the card: bring the card forward first.
                 let ai = matches!(
                     id,
-                    CommandId::AiCustom
-                        | CommandId::Ai(_)
+                    CommandId::Ai(_)
                         | CommandId::AiTableColumns
                         | CommandId::AiTableMarkdown
+                        | CommandId::AiTablePatterns
                 );
                 if ai {
                     crate::launcher::order_front();

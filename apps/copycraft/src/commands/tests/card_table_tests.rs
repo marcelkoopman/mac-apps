@@ -634,15 +634,15 @@ fn a_table_card_has_the_ai_chip_left_of_the_table_window_chip() {
 
 #[test]
 fn the_table_ai_menu_has_the_table_actions_only() {
+    // No Summarize: it makes no sense on rows and columns.
     let ok = crate::commands::ai_table_menu_items(Ok(()));
     let all = ids(&ok);
     assert_eq!(
         all,
         vec![
-            CommandId::AiCustom,
-            CommandId::Ai(mac_ai::Action::Summarize),
             CommandId::AiTableColumns,
             CommandId::AiTableMarkdown,
+            CommandId::AiTablePatterns,
         ]
     );
     assert!(ok.iter().all(|c| c.enabled));

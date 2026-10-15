@@ -71,7 +71,7 @@ pub fn ai_error_text(error: mac_ai::Error) -> &'static str {
     })
 }
 
-/// The AI chip's menu: Custom prompt… first, then the five actions; all dimmed (with the reason
+/// The AI chip's menu on text and code: the five actions; all dimmed (with the reason
 /// as their tooltip, and as a last dimmed line) when `availability` says no.
 pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
     let enabled = availability.is_ok();
@@ -79,13 +79,7 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
         Ok(()) => ai_group(),
         Err(reason) => ai_reason(reason),
     };
-    let mut items = vec![command_enabled(
-        CommandId::AiCustom,
-        crate::locale::t("ai_custom"),
-        detail,
-        "ai apple intelligence custom prompt free instruction opdracht eigen",
-        enabled,
-    )];
+    let mut items = Vec::new();
     items.extend(Action::ALL.iter().map(|&action| {
         command_enabled(
             CommandId::Ai(action),
@@ -107,46 +101,40 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
     items
 }
 
-/// The AI chip's menu on a table card: Custom prompt…, Summarize, Explain columns and To Markdown
-/// table (Shorter, More formal and Translate make no sense on a table). Dimmed like
+/// The AI menu of a table: the table card's chip and the table window's button both pop exactly
+/// this (one definition). Explain columns, To Markdown table and Notable patterns; Summarize,
+/// Shorter, More formal and Translate make no sense on rows and columns. Dimmed like
 /// [`ai_menu_items`].
 pub fn ai_table_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
-    let all = ai_menu_items(availability);
     let enabled = availability.is_ok();
     let detail = match availability {
         Ok(()) => ai_group(),
         Err(reason) => ai_reason(reason),
     };
-    let mut items: Vec<Command> = all
-        .into_iter()
-        .filter(|c| {
-            matches!(
-                c.id,
-                CommandId::AiCustom | CommandId::Ai(Action::Summarize) | CommandId::AiUnavailable
-            )
-        })
-        .collect();
-    let at = items
-        .iter()
-        .position(|c| c.id == CommandId::AiUnavailable)
-        .unwrap_or(items.len());
-    for (offset, (id, key)) in [
+    let mut items: Vec<Command> = [
         (CommandId::AiTableColumns, "ai_table_columns"),
         (CommandId::AiTableMarkdown, "ai_table_markdown"),
+        (CommandId::AiTablePatterns, "ai_table_patterns"),
     ]
     .into_iter()
-    .enumerate()
-    {
-        items.insert(
-            at + offset,
-            command_enabled(
-                id,
-                crate::locale::t(key),
-                detail,
-                "ai apple intelligence table tabel kolommen columns markdown explain uitleggen",
-                enabled,
-            ),
-        );
+    .map(|(id, key)| {
+        command_enabled(
+            id,
+            crate::locale::t(key),
+            detail,
+            "ai apple intelligence table tabel kolommen columns markdown patterns patronen opvallend notable explain uitleggen",
+            enabled,
+        )
+    })
+    .collect();
+    if let Err(reason) = availability {
+        items.push(command_enabled(
+            CommandId::AiUnavailable,
+            ai_reason(reason),
+            ai_group(),
+            "ai apple intelligence unavailable",
+            false,
+        ));
     }
     items
 }
@@ -206,22 +194,6 @@ pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     chips
 }
 
-/// Title of the preview and label of the version a free prompt makes.
-pub fn ai_custom_label() -> &'static str {
-    crate::locale::t("ai_label_custom")
-}
-
-/// The typed instruction for a free prompt, trimmed and cut to [`mac_ai::MAX_INSTRUCTION_CHARS`];
-/// `None` when it is empty. The `field` is cleared either way: no copy of the prompt is kept
-/// beyond the run (the result is zeroized when dropped).
-pub fn take_instruction(field: &mut String) -> Option<zeroize::Zeroizing<String>> {
-    use zeroize::Zeroize;
-    let (cut, _) = mac_ai::truncate_instruction(field.trim());
-    let taken = (!cut.is_empty()).then(|| zeroize::Zeroizing::new(cut.to_string()));
-    field.zeroize();
-    taken
-}
-
 /// The label of the version an applied `action` makes (the version capsule and its menu).
 pub fn ai_label(action: Action) -> &'static str {
     crate::locale::t(match action {
@@ -252,8 +224,7 @@ mod tests {
     fn available_gives_five_enabled_actions_with_sparkles() {
         let items = ai_menu_items(Ok(()));
         let ids: Vec<_> = items.iter().map(|c| c.id.clone()).collect();
-        let mut want = vec![CommandId::AiCustom];
-        want.extend(Action::ALL.iter().map(|&a| CommandId::Ai(a)));
+        let want: Vec<_> = (Action::ALL.iter().map(|&a| CommandId::Ai(a))).collect();
         assert_eq!(ids, want);
         for item in &items {
             assert!(item.enabled);
@@ -267,8 +238,7 @@ mod tests {
     fn unavailable_dims_the_actions_and_says_why() {
         for reason in REASONS {
             let items = ai_menu_items(Err(reason));
-            let (actions, note) = items.split_at(Action::ALL.len() + 1);
-            assert_eq!(actions[0].id, CommandId::AiCustom);
+            let (actions, note) = items.split_at(Action::ALL.len());
             assert!(
                 actions
                     .iter()
@@ -306,33 +276,14 @@ mod tests {
                 "ai_apply",
                 "ai_apply_a11y",
                 "ai_truncated",
-                "ai_custom",
-                "ai_custom_title",
-                "ai_custom_message",
-                "ai_label_custom",
+                "ai_table_columns",
+                "ai_table_markdown",
+                "ai_table_patterns",
             ] {
                 assert_ne!(crate::locale::t(key), "?");
             }
         }
         crate::locale::set_test_language(Language::En);
-    }
-
-    #[test]
-    fn the_prompt_field_is_cleared_when_taken() {
-        let mut field = String::from("  zet dit om naar een tabel  ");
-        let taken = take_instruction(&mut field);
-        assert_eq!(
-            taken.as_deref().map(String::as_str),
-            Some("zet dit om naar een tabel")
-        );
-        assert!(field.is_empty());
-        let mut blank = String::from("   ");
-        assert!(take_instruction(&mut blank).is_none());
-        assert!(blank.is_empty());
-        let mut long = "a".repeat(mac_ai::MAX_INSTRUCTION_CHARS + 50);
-        let taken = take_instruction(&mut long).expect("some");
-        assert_eq!(taken.chars().count(), mac_ai::MAX_INSTRUCTION_CHARS);
-        assert!(long.is_empty());
     }
 
     #[test]
@@ -425,7 +376,7 @@ mod tests {
             assert!(
                 text_menu_items(&edit)
                     .iter()
-                    .all(|(c, _)| !matches!(c.id, CommandId::Ai(_) | CommandId::AiCustom))
+                    .all(|(c, _)| !matches!(c.id, CommandId::Ai(_)))
             );
             assert!(
                 search_pool(&card)

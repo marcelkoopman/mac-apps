@@ -352,9 +352,9 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextFilter
             | CommandId::AiMenu
             | CommandId::Ai(_)
-            | CommandId::AiCustom
             | CommandId::AiTableColumns
             | CommandId::AiTableMarkdown
+            | CommandId::AiTablePatterns
             | CommandId::AiApply
             | CommandId::AiCancel
             | CommandId::AiUnavailable
@@ -456,9 +456,9 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextFilter => "line.3.horizontal.decrease",
         CommandId::AiMenu
         | CommandId::Ai(_)
-        | CommandId::AiCustom
         | CommandId::AiTableColumns
-        | CommandId::AiTableMarkdown => AI_SYMBOL,
+        | CommandId::AiTableMarkdown
+        | CommandId::AiTablePatterns => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",
         _ => return None,

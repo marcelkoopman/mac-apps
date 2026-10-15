@@ -435,12 +435,11 @@ pub enum CommandId {
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The
     /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
     Ai(mac_ai::Action),
-    /// Lines… › Apple Intelligence › Custom prompt…: asks for an instruction, then runs it on
-    /// the card's text like the fixed actions (preview, Apply, Cancel).
-    AiCustom,
-    /// Table cards: explain each column, or turn the table into a Markdown table.
+    /// Table cards: explain each column, turn the table into a Markdown table, or point out
+    /// notable patterns.
     AiTableColumns,
     AiTableMarkdown,
+    AiTablePatterns,
     /// The preview's "Apply to clipboard": the result becomes a new text version (⌘Z undoes it).
     AiApply,
     /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.

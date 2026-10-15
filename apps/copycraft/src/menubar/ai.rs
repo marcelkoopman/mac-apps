@@ -25,13 +25,10 @@ pub(crate) struct AiRun {
     input_hash: u64,
 }
 
-/// What a run does: a fixed action, or the user's own instruction (kept nowhere but in the
-/// running job).
+/// What a run does: one of the fixed actions, or one of a table's own.
 #[derive(Clone, Copy)]
 enum AiKind {
     Fixed(Action),
-    Custom,
-    /// A table card's own instruction (fixed, not typed).
     Table(TablePreset),
 }
 
@@ -40,21 +37,30 @@ enum AiKind {
 pub(crate) enum TablePreset {
     Columns,
     Markdown,
+    Patterns,
 }
 
 impl TablePreset {
-    /// The fixed instruction for the model (the table itself is sent as data).
-    pub(crate) fn instruction(self) -> &'static str {
+    /// The one task for the model (the table itself is sent as data, as CSV with a header row).
+    pub(crate) fn task(self) -> &'static str {
         match self {
             TablePreset::Columns => {
-                "The text is a table in CSV form with a header row. Explain in a short list what \
-                 each column most likely contains and means, mention its data type and anything \
-                 notable (empty values, ranges). Answer in the language of the column names."
+                "The text is a table as CSV; the first row holds the column names. For each \
+                 column write one line: its name, what it contains, and its data type. Mention \
+                 empty values or odd values if you see them. Use the language of the column \
+                 names."
             }
             TablePreset::Markdown => {
-                "The text is a table in CSV form with a header row. Rewrite it as a Markdown \
-                 table with the same columns and rows, and nothing else. Keep every value as it \
-                 is."
+                "The text is a table as CSV; the first row holds the column names. Write the \
+                 same table as a Markdown table: same columns, same rows, same values, nothing \
+                 else."
+            }
+            TablePreset::Patterns => {
+                "The text is a table as CSV; the first row holds the column names. List at most \
+                 5 notable patterns that are visible in the rows: trends, outliers, repeated or \
+                 missing values, strong links between columns. One bullet each, with the \
+                 numbers or values that show it. If you see none, say so in one sentence. Use \
+                 the language of the column names."
             }
         }
     }
@@ -63,6 +69,7 @@ impl TablePreset {
         crate::locale::t(match self {
             TablePreset::Columns => "ai_table_columns",
             TablePreset::Markdown => "ai_table_markdown",
+            TablePreset::Patterns => "ai_table_patterns",
         })
     }
 }
@@ -103,41 +110,15 @@ impl App {
 
     /// An AI action was clicked: open the preview and start the model.
     pub(crate) fn ai_start(&mut self, action: Action) {
-        self.ai_begin(AiKind::Fixed(action), Zeroizing::new(String::new()));
-    }
-
-    /// Custom prompt… was clicked: ask for the instruction, then run it like an action.
-    pub(crate) fn ai_custom_prompt(&mut self) {
-        #[cfg(target_os = "macos")]
-        {
-            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
-                return;
-            };
-            if mac_ai::availability().is_err() || self.ai_entry().is_none() {
-                return;
-            }
-            let answer = mac_ui::dialog::prompt_text(
-                mtm,
-                crate::locale::t("ai_custom_title"),
-                crate::locale::t("ai_custom_message"),
-                "",
-            );
-            launcher::order_front();
-            let Some(mut typed) = answer else {
-                return;
-            };
-            if let Some(instruction) = commands::take_instruction(&mut typed) {
-                self.ai_begin(AiKind::Custom, instruction);
-            }
-        }
+        self.ai_begin(AiKind::Fixed(action));
     }
 
     /// One of a table card's own actions was clicked.
     pub(crate) fn ai_table(&mut self, preset: TablePreset) {
-        self.ai_begin(AiKind::Table(preset), Zeroizing::new(String::new()));
+        self.ai_begin(AiKind::Table(preset));
     }
 
-    fn ai_begin(&mut self, kind: AiKind, instruction: Zeroizing<String>) {
+    fn ai_begin(&mut self, kind: AiKind) {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
         if mac_ai::availability().is_err() {
@@ -166,7 +147,6 @@ impl App {
         launcher::ai_preview_working(
             match kind {
                 AiKind::Fixed(action) => commands::ai_title(action),
-                AiKind::Custom => commands::ai_custom_label(),
                 AiKind::Table(preset) => preset.title(),
             },
             truncated.then(|| crate::locale::t("ai_truncated")),
@@ -177,8 +157,7 @@ impl App {
             move || -> AiResult {
                 match kind {
                     AiKind::Fixed(action) => job.run(action, &input),
-                    AiKind::Custom => job.run_custom(&instruction, &input),
-                    AiKind::Table(preset) => job.run_custom(preset.instruction(), &input),
+                    AiKind::Table(preset) => job.run_task(preset.task(), &input),
                 }
                 .map(Zeroizing::new)
             },
@@ -231,7 +210,6 @@ impl App {
             run.entry,
             match run.kind {
                 AiKind::Fixed(action) => commands::ai_label(action),
-                AiKind::Custom => commands::ai_custom_label(),
                 AiKind::Table(preset) => preset.title(),
             }
             .to_string(),
