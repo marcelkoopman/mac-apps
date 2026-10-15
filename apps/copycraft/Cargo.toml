@@ -30,7 +30,7 @@ global-hotkey = "0.8"
 # Not inherited from the workspace: copycraft needs default-features = false, ticker does not.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
-leakguard = "0.9.1"
+leakguard = "1.0.0"
 memchr = "2.8"
 # `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
 # `blur`, `dialog`, `drop`, `file_panel`, `image`, `panel`, `progress`, `theme`, `widgets`: the
