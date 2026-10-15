@@ -33,6 +33,7 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         settings: crate::settings::Settings::default(),
         view: CardView::Original,
         image_scan: None,
+        pdf: None,
         source_name: None,
         source_note: None,
         full: false,

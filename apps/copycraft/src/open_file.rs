@@ -42,6 +42,8 @@ pub struct OpenedFile {
     pub note: Option<String>,
     /// A picture from a drop or the open panel, shown like a copied one.
     pub image: Option<OpenedImage>,
+    /// A PDF: its text (or, without a text layer, the picture of its first page) is above.
+    pub pdf: Option<crate::pdf::PdfFacts>,
 }
 
 /// A picture from a drop or the open panel: its encoded bytes (shared with its history entry
@@ -51,6 +53,8 @@ pub struct OpenedImage {
     pub bytes: SecretBytes,
     pub facts: Option<ImageFacts>,
     pub scan: Option<ImageScan>,
+    /// The PDF this is the first page of: the text recognition reads all its pages.
+    pub pdf_source: Option<SecretBytes>,
 }
 
 /// A dropped or chosen file: a picture when its contents are one (see [`is_image_file`]), else
@@ -59,6 +63,9 @@ pub struct OpenedImage {
 /// the card ([`unreadable_image`]). Kies bestand uses this too; the app then records it in
 /// history the same way as a drop.
 pub fn load_dropped(path: &Path) -> OpenedFile {
+    if is_pdf_file(path) {
+        return load_pdf(path, true);
+    }
     // An SVG is text (the SVG card draws it and has its code a toggle away), never a picture.
     if !is_svg_name(path) && is_image_file(path) {
         return load_image(path);
@@ -111,7 +118,9 @@ fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
                 bytes,
                 facts: None,
                 scan: None,
+                pdf_source: None,
             }),
+            pdf: None,
         },
         None => noted(name, unreadable_image()),
     }
@@ -137,6 +146,99 @@ fn is_image_file(path: &Path) -> bool {
     )
 }
 
+/// The file starts like a PDF.
+fn is_pdf_file(path: &Path) -> bool {
+    matches!(
+        infer::get_from_path(path),
+        Ok(Some(kind)) if kind.mime_type() == "application/pdf"
+    )
+}
+
+/// A PDF: its text layer as the card's text. Without one, `ocr` (a drop or Kies bestand) makes
+/// it a picture of the first page whose text comes from text recognition after the card is
+/// up; a copied file has no such card and says there is no text. The file is read into
+/// zeroizing memory and nothing is written anywhere.
+#[cfg(target_os = "macos")]
+fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
+    use crate::macos_pdf::Read;
+    let name = file_name(path);
+    let Ok(meta) = std::fs::metadata(path) else {
+        return noted(name, unreadable());
+    };
+    if !meta.is_file() {
+        return noted(name, unreadable());
+    }
+    if meta.len() > crate::pdf::MAX_PDF_BYTES {
+        return noted(name, crate::locale::t("pdf_too_large"));
+    }
+    let Ok(mut bytes) = std::fs::read(path).map(Zeroizing::new) else {
+        return noted(name, unreadable());
+    };
+    if !crate::pdf::is_pdf(&bytes) {
+        return noted(name, unreadable());
+    }
+    let Some(source) = SecretBytes::new(std::mem::take(&mut *bytes)) else {
+        return noted(name, unreadable());
+    };
+    drop(bytes);
+    match crate::macos_pdf::read(&source) {
+        Read::Unreadable => noted(name, unreadable()),
+        Read::Locked => noted(name, crate::locale::t("pdf_locked")),
+        Read::Pages {
+            pages,
+            read,
+            text: Some(text),
+        } => {
+            crate::format::hint_by_name(&name, &text);
+            OpenedFile {
+                name,
+                text: Some(text),
+                note: None,
+                image: None,
+                pdf: Some(crate::pdf::PdfFacts {
+                    pages,
+                    read,
+                    scanned: false,
+                }),
+            }
+        }
+        Read::Pages {
+            pages, text: None, ..
+        } => {
+            if !ocr {
+                return noted(name, crate::locale::t("pdf_no_text"));
+            }
+            let Some((mut png, _)) = crate::macos_pdf::render_page(&source, 0) else {
+                return noted(name, unreadable());
+            };
+            let Some(picture) = SecretBytes::new(std::mem::take(&mut *png)) else {
+                return noted(name, unreadable());
+            };
+            OpenedFile {
+                name,
+                text: None,
+                note: None,
+                image: Some(OpenedImage {
+                    bytes: picture,
+                    facts: None,
+                    scan: None,
+                    pdf_source: Some(source),
+                }),
+                pdf: Some(crate::pdf::PdfFacts {
+                    pages,
+                    read: pages.min(crate::pdf::OCR_MAX_PAGES),
+                    scanned: true,
+                }),
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn load_pdf(path: &Path, _ocr: bool) -> OpenedFile {
+    noted(file_name(path), not_text())
+}
+
 fn file_name(path: &Path) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
@@ -145,6 +247,9 @@ fn file_name(path: &Path) -> String {
 }
 
 pub fn load(path: &Path) -> OpenedFile {
+    if is_pdf_file(path) {
+        return load_pdf(path, false);
+    }
     let name = file_name(path);
     let Ok(meta) = std::fs::metadata(path) else {
         return noted(name, unreadable());
@@ -169,6 +274,7 @@ pub fn load(path: &Path) -> OpenedFile {
                 text: Some(text),
                 note: None,
                 image: None,
+                pdf: None,
             }
         }
         Classified::NotText => noted(name, not_text()),
@@ -191,6 +297,7 @@ pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
         text: Some(text),
         note: None,
         image: None,
+        pdf: None,
     }
 }
 
@@ -216,6 +323,7 @@ pub fn noted(name: String, note: &str) -> OpenedFile {
         text: None,
         note: Some(note.to_string()),
         image: None,
+        pdf: None,
     }
 }
 

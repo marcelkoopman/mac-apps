@@ -29,6 +29,7 @@ mod open_file;
 mod page_preview;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod paste_access;
+mod pdf;
 mod python;
 mod recognize;
 mod sensitivity;
@@ -70,6 +71,8 @@ mod macos_login;
 mod macos_open;
 #[cfg(target_os = "macos")]
 mod macos_pasteboard;
+#[cfg(target_os = "macos")]
+mod macos_pdf;
 #[cfg(target_os = "macos")]
 mod macos_preview_image;
 #[cfg(target_os = "macos")]

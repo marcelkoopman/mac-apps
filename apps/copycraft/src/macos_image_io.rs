@@ -305,6 +305,41 @@ fn dict_usize(dict: *const c_void, key: *const c_void) -> usize {
     }
 }
 
+/// Run `draw` on a premultiplied RGBA bitmap context over `rgba` (`width` × `height` pixels,
+/// 4 bytes each). The context is released before this returns. `None` when the buffer has the
+/// wrong length or the system makes no context.
+pub(crate) fn with_bitmap<R>(
+    rgba: &mut [u8],
+    width: usize,
+    height: usize,
+    draw: impl FnOnce(&objc2_core_graphics::CGContext) -> R,
+) -> Option<R> {
+    use objc2_core_foundation::CFRetained;
+    let row = width.checked_mul(4)?;
+    if width == 0 || height == 0 || rgba.len() != row.checked_mul(height)? {
+        return None;
+    }
+    let space = objc2_core_graphics::CGColorSpace::new_device_rgb()?;
+    // SAFETY: `rgba` holds `height` rows of `row` bytes (checked above) and outlives the
+    // context, which is released before this function returns; `space` is a live colour space.
+    // The result is a +1 CGContext, owned by the `CFRetained` from here on.
+    let context: CFRetained<objc2_core_graphics::CGContext> = unsafe {
+        let raw = CGBitmapContextCreate(
+            rgba.as_mut_ptr().cast(),
+            width,
+            height,
+            8,
+            row,
+            std::ptr::from_ref(&*space).cast_mut().cast(),
+            RGBA_PREMUL,
+        );
+        CFRetained::from_raw(std::ptr::NonNull::new(raw.cast())?)
+    };
+    let result = draw(&context);
+    drop(context);
+    Some(result)
+}
+
 fn rgba_from_image(image: *mut c_void, width: usize, height: usize) -> Option<Vec<u8>> {
     let row = width.checked_mul(4)?;
     let len = row.checked_mul(height)?;

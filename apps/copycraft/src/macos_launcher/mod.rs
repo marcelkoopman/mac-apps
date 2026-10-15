@@ -77,11 +77,12 @@ pub(crate) const PANEL_RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 /// so the radius is not `concentric_radius(PANEL_RADIUS, PAD)` (that would clamp to 4).
 pub(crate) const WELL_RADIUS: f64 = mac_ui::metrics::WELL_RADIUS;
 /// What the card takes when it is dropped on it: one text file of any kind (plain, source code,
-/// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`) or picture (`public.image`:
-/// PNG, JPEG, HEIC, GIF, WebP, TIFF, …), also as a promised file (Photos); image data (a picture
-/// dragged from Safari or Preview); or dropped text. Not PDFs, folders or several files.
+/// JSON, XML, CSV, YAML, Markdown, … all conform to `public.text`), picture (`public.image`:
+/// PNG, JPEG, HEIC, GIF, WebP, TIFF, …) or PDF (`com.adobe.pdf`: its text layer, or text
+/// recognition on a scan), also as a promised file (Photos); image data (a picture dragged from
+/// Safari or Preview); or dropped text. Not folders or several files.
 pub(crate) const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
-    file_types: &["public.text", "public.image"],
+    file_types: &["public.text", "public.image", "com.adobe.pdf"],
     images: true,
     text: true,
 };

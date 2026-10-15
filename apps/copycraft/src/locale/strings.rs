@@ -322,6 +322,38 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Tekst is groter dan 8 MB",
         "Text is larger than 8 MB",
     ),
+    ("pdf_one_page", "1 pagina", "1 page"),
+    ("pdf_n_pages", "{0} pagina's", "{0} pages"),
+    (
+        "pdf_first_pages",
+        "Eerste {0} van {1} pagina's",
+        "First {0} of {1} pages",
+    ),
+    (
+        "pdf_locked",
+        "Deze PDF is met een wachtwoord beveiligd",
+        "This PDF is protected with a password",
+    ),
+    (
+        "pdf_no_text",
+        "Deze PDF bevat geen tekst",
+        "This PDF has no text",
+    ),
+    (
+        "pdf_too_large",
+        "PDF is groter dan 32 MB",
+        "PDF is larger than 32 MB",
+    ),
+    (
+        "ai_pdf_ocr_pending",
+        "Wacht tot de tekst in de PDF is herkend",
+        "Wait until the text in the PDF is recognized",
+    ),
+    (
+        "ai_pdf_no_text",
+        "In deze PDF is geen tekst herkend",
+        "No text was recognized in this PDF",
+    ),
     (
         "dropped_text_empty",
         "De neergezette tekst is leeg",

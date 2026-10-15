@@ -81,6 +81,8 @@ pub struct LaunchData {
     pub view: CardView,
     /// Info, a smaller JPEG, recognized text, and QR payloads for an image.
     pub image_scan: Option<ImageScan>,
+    /// The card shows a PDF (its text, or the first page of a scan): the footer counts pages.
+    pub pdf: Option<crate::pdf::PdfFacts>,
     /// Set when the card is showing a chosen file instead of the clipboard.
     pub source_name: Option<String>,
     /// Well text when that file cannot be shown.

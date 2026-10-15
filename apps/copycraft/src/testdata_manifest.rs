@@ -89,6 +89,7 @@ fn data(text: &str, view: CardView) -> LaunchData {
         settings: crate::settings::Settings::default(),
         view,
         image_scan: None,
+        pdf: None,
         source_name: None,
         source_note: None,
         full: false,

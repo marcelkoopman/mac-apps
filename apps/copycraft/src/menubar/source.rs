@@ -81,7 +81,7 @@ impl App {
             self.refresh_status_menu();
         }
         if let Some(image) = opened.image.as_ref() {
-            self.scan_dropped_image(image.bytes.clone());
+            self.scan_dropped_image(image.bytes.clone(), image.pdf_source.clone());
         }
         self.show_source(opened);
         launcher::order_front();
@@ -112,12 +112,18 @@ impl App {
 
     /// Info text, data URL, text and barcodes of a dropped picture, on a background thread
     /// like a copied one's ([`UserEvent::DroppedImageScanned`]).
-    pub(crate) fn scan_dropped_image(&self, image: SecretBytes) {
+    pub(crate) fn scan_dropped_image(&self, image: SecretBytes, pdf: Option<SecretBytes>) {
         #[cfg(target_os = "macos")]
         {
             let spawned = std::thread::Builder::new()
                 .name("copycraft-drop-scan".into())
                 .spawn(move || {
+                    // A scanned PDF: its pages are drawn and recognized (the image is page 1).
+                    if let Some(pdf) = pdf {
+                        let scan = crate::macos_pdf::scan(&pdf);
+                        launcher::emit(UserEvent::DroppedImageScanned { image, scan });
+                        return;
+                    }
                     // Copied out first: the scan (text recognition) takes a while, and the card
                     // reads the same bytes to draw the picture.
                     let bytes = Zeroizing::new(image.with(<[u8]>::to_vec));
@@ -131,7 +137,7 @@ impl App {
             }
         }
         #[cfg(not(target_os = "macos"))]
-        let _ = image;
+        let _ = (image, pdf);
     }
 
     pub(crate) fn finish_dropped_scan(
@@ -231,6 +237,7 @@ impl App {
         }
         let mut data = self.launch_shell();
         data.source_name = Some(name);
+        data.pdf = self.opened.as_ref().and_then(|file| file.pdf);
         data.image = None;
         data.image_scan = None;
         if let Some(image) = image {
@@ -283,6 +290,7 @@ impl App {
             settings: crate::settings::load(),
             view: self.card_view,
             image_scan: self.image_scan.clone(),
+            pdf: None,
             source_name: None,
             source_note: None,
             full: false,
