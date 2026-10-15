@@ -25,6 +25,14 @@ pub(crate) enum Lane {
     Ai,
 }
 
+impl Lane {
+    /// Whether a slow job of this lane makes the card show its busy wheel. The AI run has its
+    /// own spinner in its preview over the card: a second one would be drawn under it.
+    pub(crate) fn shows_card_spinner(self) -> bool {
+        self != Lane::Ai
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Lanes {
     sequence: [Sequence; 6],
@@ -95,7 +103,8 @@ impl App {
         }
         self.work_error = None;
         let value = handoff.take_within(wait);
-        self.lanes.slow[lane as usize] = value.is_none().then(Instant::now);
+        self.lanes.slow[lane as usize] =
+            (value.is_none() && lane.shows_card_spinner()).then(Instant::now);
         value
     }
 
@@ -123,5 +132,28 @@ impl App {
         if let Some(finish) = finish {
             finish(self);
         }
+    }
+}
+
+#[cfg(test)]
+mod ai_spinner_tests {
+    use super::*;
+
+    #[test]
+    fn a_slow_ai_run_does_not_start_the_cards_spinner() {
+        assert!(!Lane::Ai.shows_card_spinner());
+        for lane in [
+            Lane::Card,
+            Lane::TableWindow,
+            Lane::Copy,
+            Lane::File,
+            Lane::Image,
+        ] {
+            assert!(lane.shows_card_spinner());
+        }
+        let mut lanes = Lanes::default();
+        // What start_work records for a slow AI run: nothing, so the card shows no wheel.
+        lanes.slow[Lane::Ai as usize] = Lane::Ai.shows_card_spinner().then(Instant::now);
+        assert!(lanes.slow_since().is_none());
     }
 }

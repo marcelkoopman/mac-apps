@@ -168,6 +168,8 @@ pub(crate) fn show_ai_working(title: &str, notice: Option<&str>) {
             set_ai_note(views, notice.unwrap_or(""), false);
             views.apply.button().setEnabled(false);
             views.cancel.button().setEnabled(true);
+            // One indicator only: out of its superview first, so a second run cannot stack it.
+            views.spinner.remove();
             views
                 .spinner
                 .add_centered(&views.root, views.scroll.frame());
