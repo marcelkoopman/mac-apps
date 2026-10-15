@@ -106,6 +106,17 @@ impl App {
         Some((id, text))
     }
 
+    /// The text the AI chip works on: the card's text, or the recognized text of a scanned PDF
+    /// (the card is its first page; the chip waits for the recognition).
+    pub(crate) fn ai_entry(&self) -> Option<(u64, Zeroizing<String>)> {
+        self.text_entry().or_else(|| {
+            let image = self.opened.as_ref()?.image.as_ref()?;
+            image.pdf_source.as_ref()?;
+            let text = image.scan.as_ref()?.ocr.as_ref()?;
+            Some((OPENED_FILE, Zeroizing::new(text.clone())))
+        })
+    }
+
     /// The steps whose shown version is entry `id`.
     fn text_steps_of(&self, id: u64) -> Option<&TextSteps> {
         self.text_steps
@@ -278,6 +289,19 @@ impl App {
             return;
         };
         let Some(current) = opened.text.as_ref() else {
+            // A scanned PDF has no text version: an applied result only goes to the clipboard.
+            let scanned_pdf = opened
+                .image
+                .as_ref()
+                .is_some_and(|image| image.pdf_source.is_some());
+            if scanned_pdf {
+                match self.write_own(result) {
+                    Ok(()) => save_feedback(crate::locale::t("copied_toast")),
+                    Err(e) => crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                        crate::diag::ErrorKind::of(&e),
+                    )),
+                }
+            }
             return;
         };
         let steps = self

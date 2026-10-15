@@ -96,11 +96,34 @@ pub fn ai_button(availability: mac_ai::Availability) -> Command {
     )
 }
 
+/// The AI chip on a scanned PDF: dimmed with a short explanation until text recognition has
+/// found text (or when it found none), else like [`ai_button`].
+pub fn pdf_scan_ai_button(scan: Option<&ImageScan>) -> Command {
+    let mut button = ai_button(mac_ai::availability());
+    let waiting = match scan {
+        None => Some(crate::locale::t("ai_pdf_ocr_pending")),
+        Some(scan) if scan.ocr.is_none() => Some(crate::locale::t("ai_pdf_no_text")),
+        Some(_) => None,
+    };
+    if let Some(reason) = waiting {
+        button.enabled = false;
+        button.detail = reason.to_string();
+    }
+    button
+}
+
 /// The chips the card shows: [`chips`], with the AI chip directly left of Lines….
 pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = chips(data);
     if let Some(at) = chips.iter().position(|c| c.id == CommandId::TextMenu) {
         chips.insert(at, ai_button(mac_ai::availability()));
+    } else if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
+        // A scanned PDF: the AI chip works on the recognized text, so it waits for it.
+        let at = chips
+            .iter()
+            .position(|c| c.id == CommandId::ImageMenu)
+            .unwrap_or(chips.len());
+        chips.insert(at, pdf_scan_ai_button(data.image_scan.as_ref()));
     }
     chips
 }
@@ -290,6 +313,59 @@ mod tests {
         // Not on a link or an empty card.
         let none = super::super::tests::data(SubjectKind::Empty, None);
         assert!(card_chips(&none).iter().all(|c| c.id != CommandId::AiMenu));
+    }
+
+    #[test]
+    fn a_scanned_pdf_has_the_ai_chip_dimmed_until_text_is_recognized() {
+        crate::locale::set_test_language(Language::Nl);
+        let mut card = super::super::tests::data(SubjectKind::Image, None);
+        card.pdf = Some(crate::pdf::PdfFacts {
+            pages: 3,
+            read: 3,
+            scanned: true,
+        });
+        let chip = |card: &LaunchData| {
+            card_chips(card)
+                .into_iter()
+                .find(|c| c.id == CommandId::AiMenu)
+                .expect("AI chip")
+        };
+        // Recognition not done yet.
+        let waiting = chip(&card);
+        assert!(!waiting.enabled);
+        assert_eq!(waiting.detail, crate::locale::t("ai_pdf_ocr_pending"));
+        // Done, nothing found.
+        let scan = ImageScan {
+            info: String::new(),
+            data_url: None,
+            ocr: None,
+            qr: None,
+        };
+        card.image_scan = Some(scan.clone());
+        let empty = chip(&card);
+        assert!(!empty.enabled);
+        assert_eq!(empty.detail, crate::locale::t("ai_pdf_no_text"));
+        // A picture that is not a PDF has no AI chip.
+        card.pdf = None;
+        assert!(card_chips(&card).iter().all(|c| c.id != CommandId::AiMenu));
+        crate::locale::set_test_language(Language::En);
+    }
+
+    #[test]
+    fn the_pdf_footer_starts_with_the_pages() {
+        crate::locale::set_test_language(Language::Nl);
+        let mut card = super::super::tests::data(SubjectKind::Text, Some("alpha\nbeta"));
+        card.pdf = Some(crate::pdf::PdfFacts {
+            pages: 340,
+            read: 100,
+            scanned: false,
+        });
+        let meta = work_card(&card).meta;
+        assert!(
+            meta.starts_with("Eerste 100 van 340 pagina's  ·  "),
+            "{meta}"
+        );
+        crate::locale::set_test_language(Language::En);
     }
 
     #[test]

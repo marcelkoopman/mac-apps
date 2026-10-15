@@ -45,7 +45,7 @@ impl App {
             let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
                 return;
             };
-            if mac_ai::availability().is_err() || self.text_entry().is_none() {
+            if mac_ai::availability().is_err() || self.ai_entry().is_none() {
                 return;
             }
             let answer = mac_ui::dialog::prompt_text(
@@ -70,7 +70,7 @@ impl App {
         if mac_ai::availability().is_err() {
             return;
         }
-        let Some((entry, text)) = self.text_entry() else {
+        let Some((entry, text)) = self.ai_entry() else {
             return;
         };
         if text.trim().is_empty() {
