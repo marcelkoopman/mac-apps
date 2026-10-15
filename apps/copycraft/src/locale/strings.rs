@@ -1027,6 +1027,22 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "That didn't work, try again",
     ),
     ("ai_working", "Bezig…", "Working…"),
+    ("ai_minimize", "Verberg", "Hide"),
+    (
+        "ai_minimize_a11y",
+        "Verberg de kaart, de AI-opdracht loopt door",
+        "Hide the card, the AI action keeps running",
+    ),
+    (
+        "ai_tray_working",
+        "AI-opdracht bezig, klik om de kaart te tonen",
+        "AI action running, click to show the card",
+    ),
+    (
+        "ai_tray_ready",
+        "AI-resultaat klaar, klik om de kaart te tonen",
+        "AI result ready, click to show the card",
+    ),
     ("ai_apply", "Toepassen op klembord", "Apply to clipboard"),
     (
         "ai_apply_a11y",

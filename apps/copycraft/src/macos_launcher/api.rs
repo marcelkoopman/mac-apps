@@ -362,9 +362,21 @@ pub(crate) fn hide_at_once() {
     hide_card(false);
 }
 
+/// Send the card to the background for an Apple Intelligence run: the run and its preview stay
+/// (they are shown again with the card).
+pub(crate) fn minimize() {
+    hide_card_with(true, true);
+}
+
 fn hide_card(animated: bool) {
+    hide_card_with(animated, false);
+}
+
+fn hide_card_with(animated: bool, keep_ai: bool) {
     reset_well_dock();
-    dismiss_picker(false);
+    if !keep_ai {
+        dismiss_picker(false);
+    }
     crate::macos_symbols::close();
     set_item_find(false);
     if !is_open() && !window_is_visible() {

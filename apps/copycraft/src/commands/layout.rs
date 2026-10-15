@@ -354,6 +354,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Ai(_)
             | CommandId::AiApply
             | CommandId::AiCancel
+            | CommandId::AiMinimize
             | CommandId::AiUnavailable
             | CommandId::TextComplexity
             | CommandId::AgentCommands

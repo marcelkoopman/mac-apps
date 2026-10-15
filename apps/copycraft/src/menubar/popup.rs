@@ -13,7 +13,7 @@ fn card_stays_for_ai(ai_active: bool, card_open: bool) -> bool {
 
 impl App {
     pub(crate) fn summon_popup(&mut self) {
-        if !launcher::is_open() {
+        if !launcher::is_open() && self.ai.is_none() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
@@ -42,7 +42,7 @@ impl App {
             return;
         }
         note_icon_click(now);
-        if !launcher::is_open() {
+        if !launcher::is_open() && self.ai.is_none() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
@@ -54,6 +54,7 @@ impl App {
             let card = self.history_card(&data);
             launcher::open_under_icon(data, card, &self.tray);
         }
+        self.sync_ai_tray();
     }
 
     pub(crate) fn show_status_menu(&mut self) {

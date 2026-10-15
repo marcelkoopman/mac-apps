@@ -30,6 +30,8 @@ struct AiViews {
     spinner: progress::Spinner,
     cancel: GlassButton,
     apply: GlassButton,
+    /// Hides the card; the run goes on ([`CommandId::AiMinimize`]).
+    minimize: GlassButton,
 }
 
 fn ai_open() -> bool {
@@ -105,8 +107,14 @@ fn ai_views(mtm: MainThreadMarker) -> AiViews {
     );
     apply.button().setKeyEquivalent(&NSString::from_str("\r"));
     apply.set_prominent(true);
+    let minimize = button(
+        crate::locale::t("ai_minimize"),
+        crate::locale::t("ai_minimize_a11y"),
+        sel!(aiMinimizeClicked:),
+    );
+    minimize.set_symbol("minus");
     let mut right = width - AI_PAD;
-    for item in [&apply, &cancel] {
+    for item in [&apply, &cancel, &minimize] {
         let w = item.width_within(220.0);
         right -= w;
         item.view().setFrame(NSRect::new(
@@ -143,6 +151,7 @@ fn ai_views(mtm: MainThreadMarker) -> AiViews {
         spinner,
         cancel,
         apply,
+        minimize,
     }
 }
 
@@ -168,6 +177,7 @@ pub(crate) fn show_ai_working(title: &str, notice: Option<&str>) {
             set_ai_note(views, notice.unwrap_or(""), false);
             views.apply.button().setEnabled(false);
             views.cancel.button().setEnabled(true);
+            views.minimize.button().setEnabled(true);
             // One indicator only: out of its superview first, so a second run cannot stack it.
             views.spinner.remove();
             views

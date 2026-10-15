@@ -438,6 +438,9 @@ pub enum CommandId {
     AiApply,
     /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.
     AiCancel,
+    /// The preview's Hide button: the card goes to the background, the run and preview stay
+    /// (the menu bar icon brings the card back).
+    AiMinimize,
     /// A disabled line in the Apple Intelligence menu saying why the actions are off.
     AiUnavailable,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.

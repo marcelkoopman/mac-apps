@@ -643,6 +643,11 @@ define_class!(
             close_picker();
         }
 
+        #[unsafe(method(aiMinimizeClicked:))]
+        fn ai_minimize_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::Run(CommandId::AiMinimize));
+        }
+
         #[unsafe(method(aiApplyClicked:))]
         fn ai_apply_clicked(&self, _sender: Option<&NSButton>) {
             launcher::emit(UserEvent::Run(CommandId::AiApply));

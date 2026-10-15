@@ -179,6 +179,12 @@ pub fn ai_preview_error(message: &str) {
     let _ = message;
 }
 
+/// Hide the card but keep the AI run and its preview, for the icon to bring back.
+pub fn minimize_card() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::minimize();
+}
+
 /// Close the preview (when open) and wipe its text.
 pub fn ai_preview_close() {
     #[cfg(target_os = "macos")]

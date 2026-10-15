@@ -108,6 +108,7 @@ impl App {
             CommandId::Ai(action) => self.ai_start(action),
             CommandId::AiApply => self.ai_apply(),
             CommandId::AiCancel => self.ai_stop(),
+            CommandId::AiMinimize => self.ai_minimize(),
             CommandId::AiUnavailable => {}
             // On a picture card, undo, redo and the version capsule are the picture's.
             CommandId::TableUndo if self.shows_image() => {
