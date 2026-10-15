@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Count real `unsafe` in apps/copycraft and crates/mac-ui: blocks, `unsafe fn` and `unsafe impl`,
+# Count real `unsafe` in apps/copycraft, crates/mac-ui and crates/mac-ai: blocks, `unsafe fn` and `unsafe impl`,
 # separately per crate. Comments, string/char literals and `#[unsafe(...)]` attributes (for
 # example `#[unsafe(method(...))]` in define_class!) are ignored.
 #
@@ -12,7 +12,7 @@ counts() {
 python3 - <<'PY'
 import os, re
 
-CRATES = [("copycraft", "apps/copycraft"), ("mac-ui", "crates/mac-ui")]
+CRATES = [("copycraft", "apps/copycraft"), ("mac-ui", "crates/mac-ui"), ("mac-ai", "crates/mac-ai")]
 
 def strip(src):
     """Source with comments and string/char literals blanked out."""

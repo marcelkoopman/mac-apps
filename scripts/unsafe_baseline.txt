@@ -8,3 +8,9 @@ copycraft impl 7
 mac-ui blocks 78
 mac-ui fn 4
 mac-ui impl 4
+# mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
+# 6 blocks (availability, Job::new/cancel/run (2)/drop) and 2 `unsafe impl` (Job: Send + Sync).
+# copycraft and mac-ui stay as they were: the AI code in copycraft adds no unsafe.
+mac-ai blocks 6
+mac-ai fn 0
+mac-ai impl 2

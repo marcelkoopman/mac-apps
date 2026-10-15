@@ -1,0 +1,10 @@
+[package]
+name = "mac-ai"
+version = "0.1.0"
+edition.workspace = true
+license = "LicenseRef-Proprietary"
+publish = false
+build = "build.rs"
+
+# No dependencies: a small Swift bridge around Apple's Foundation Models framework (on-device,
+# offline) and a safe Rust API on top. All `unsafe` of the AI feature lives in this crate.

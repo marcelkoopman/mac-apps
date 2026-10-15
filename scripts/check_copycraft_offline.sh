@@ -56,6 +56,15 @@ if grep -rnE 'process::Command|Command::new|std::net|os::unix::net|TcpStream|Udp
   die "Subprocess- of netwerkcode in crates/mac-ui: de gedeelde laag heeft die niet, die hoort in de app zelf (AGENTS.md)"
 fi
 
+# mac-ai (local AI through Foundation Models, a dependency of copycraft) is offline too: no
+# network or subprocess code in its sources (build.rs may start swiftc at build time).
+if grep -rnE 'process::Command|Command::new|std::net|os::unix::net|TcpStream|UdpSocket|UnixStream' crates/mac-ai/src crates/mac-ai/swift; then
+  die "Subprocess- of netwerkcode in crates/mac-ai: de AI-laag draait lokaal en offline (AGENTS.md)"
+fi
+if grep -rnE 'URLSession|NWConnection|URLRequest|import Network' crates/mac-ai/swift; then
+  die "Netwerkcode in de Swift-bridge van crates/mac-ai (AGENTS.md)"
+fi
+
 # Bundle ids: copycraft and ticker moved to com.github.marcelkoopman.mac-apps.<app> before the
 # first Store submission. The old ids (no "mac-apps." segment) must not come back anywhere in the
 # tracked files, and the id in Cargo.toml, capture::OWN_BUNDLE and the expected value must agree.
