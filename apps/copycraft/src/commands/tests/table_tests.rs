@@ -53,7 +53,9 @@ xmas-fifth-day:
 
 #[test]
 fn markdown_opens_formatted_and_coloured_without_redact() {
-    let src = "# Notes\nCall jan@example.com\n- bring the report\n";
+    // Three addresses: in Markdown one or two are a support address, not personal data
+    // ([`crate::recognize::DOC_EMAILS`]).
+    let src = "# Notes\nCall jan@example.com\n- bring the report\n- cc piet@example.com, kees@example.com\n";
     let input = data(SubjectKind::Text, Some(src));
     let shown = chips(&input);
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::Format));

@@ -266,7 +266,8 @@ fn line_numbers_go_in_front_of_every_line_of_the_body() {
     assert_eq!(super::numbered_line_starts(""), vec![0]);
     // UTF-16 units, not bytes.
     assert_eq!(super::numbered_line_starts("é😀\nx"), vec![0, 4]);
-    assert_eq!(super::gutter_label(1, 2), " 1  ");
+    assert_eq!(super::gutter_label(1, 10), " 1  ");
+    assert_eq!(super::gutter_label(1, 9), "1  ");
     assert_eq!(super::gutter_label(10, 10), "10  ");
     assert_eq!(super::gutter_width(10), 4);
 }
