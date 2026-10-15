@@ -131,6 +131,7 @@ impl App {
             CommandId::TableMenu
             | CommandId::ImageMenu
             | CommandId::TextMenu
+            | CommandId::AiMenu
             | CommandId::TableChooseColumns => {}
             CommandId::TableDateOrder(month_first) => {
                 self.table_reread(TableTarget::Card, |options| {

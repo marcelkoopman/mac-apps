@@ -322,7 +322,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
     // At most four chips on the card; the others lead the `…` menu (Lines… stays visible).
-    let (shown, more) = commands::split_chips(commands::chips(&data));
+    let (shown, more) = commands::split_chips(commands::card_chips(&data));
     ACTIONS.with(|slot| set_commands(slot, shown));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
     OVERFLOW.with(|slot| {

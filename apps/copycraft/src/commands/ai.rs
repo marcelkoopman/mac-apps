@@ -1,4 +1,4 @@
-//! Lines… › Apple Intelligence: the local AI actions on a text or code card ([`mac_ai`]). Menu
+//! The AI chip (left of Lines…): the local AI actions on a text or code card ([`mac_ai`]). Menu
 //! items, titles and the reasons they are off. The actions run on a click only.
 
 use mac_ai::{Action, Unavailable};
@@ -44,33 +44,30 @@ pub fn ai_error_text(error: mac_ai::Error) -> &'static str {
     })
 }
 
-/// The five actions as menu items, all dimmed (with the reason as their tooltip, and as a last
-/// dimmed line) when `availability` says no.
+/// The AI chip's menu: Custom prompt… first, then the five actions; all dimmed (with the reason
+/// as their tooltip, and as a last dimmed line) when `availability` says no.
 pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
     let enabled = availability.is_ok();
     let detail = match availability {
         Ok(()) => ai_group(),
         Err(reason) => ai_reason(reason),
     };
-    let mut items: Vec<Command> = Action::ALL
-        .iter()
-        .map(|&action| {
-            command_enabled(
-                CommandId::Ai(action),
-                ai_title(action),
-                detail,
-                "ai apple intelligence summarize summary shorten formal explain translate dutch english samenvatten korter formeel uitleggen vertalen",
-                enabled,
-            )
-        })
-        .collect();
-    items.push(command_enabled(
+    let mut items = vec![command_enabled(
         CommandId::AiCustom,
         crate::locale::t("ai_custom"),
         detail,
         "ai apple intelligence custom prompt free instruction opdracht eigen",
         enabled,
-    ));
+    )];
+    items.extend(Action::ALL.iter().map(|&action| {
+        command_enabled(
+            CommandId::Ai(action),
+            ai_title(action),
+            detail,
+            "ai apple intelligence summarize summary shorten formal explain translate dutch english samenvatten korter formeel uitleggen vertalen",
+            enabled,
+        )
+    }));
     if let Err(reason) = availability {
         items.push(command_enabled(
             CommandId::AiUnavailable,
@@ -81,6 +78,31 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
         ));
     }
     items
+}
+
+/// The "AI" chip left of Lines…: dimmed, with the reason as its tooltip, when the model is not
+/// available.
+pub fn ai_button(availability: mac_ai::Availability) -> Command {
+    let (enabled, detail) = match availability {
+        Ok(()) => (true, ai_group()),
+        Err(reason) => (false, ai_reason(reason)),
+    };
+    command_enabled(
+        CommandId::AiMenu,
+        crate::locale::t("ai_button"),
+        detail,
+        "ai apple intelligence",
+        enabled,
+    )
+}
+
+/// The chips the card shows: [`chips`], with the AI chip directly left of Lines….
+pub fn card_chips(data: &LaunchData) -> Vec<Command> {
+    let mut chips = chips(data);
+    if let Some(at) = chips.iter().position(|c| c.id == CommandId::TextMenu) {
+        chips.insert(at, ai_button(mac_ai::availability()));
+    }
+    chips
 }
 
 /// Title of the preview and label of the version a free prompt makes.
@@ -129,13 +151,14 @@ mod tests {
     fn available_gives_five_enabled_actions_with_sparkles() {
         let items = ai_menu_items(Ok(()));
         let ids: Vec<_> = items.iter().map(|c| c.id.clone()).collect();
-        let mut want: Vec<_> = Action::ALL.iter().map(|&a| CommandId::Ai(a)).collect();
-        want.push(CommandId::AiCustom);
+        let mut want = vec![CommandId::AiCustom];
+        want.extend(Action::ALL.iter().map(|&a| CommandId::Ai(a)));
         assert_eq!(ids, want);
         for item in &items {
             assert!(item.enabled);
             assert_eq!(symbol_for(&item.id), Some("sparkles"));
-            assert_eq!(menu_group(&item.id), Some(ai_group()));
+            // A flat menu under the chip, no submenu.
+            assert_eq!(menu_group(&item.id), None);
         }
     }
 
@@ -144,6 +167,7 @@ mod tests {
         for reason in REASONS {
             let items = ai_menu_items(Err(reason));
             let (actions, note) = items.split_at(Action::ALL.len() + 1);
+            assert_eq!(actions[0].id, CommandId::AiCustom);
             assert!(
                 actions
                     .iter()
@@ -235,23 +259,52 @@ mod tests {
     }
 
     #[test]
-    fn lines_menu_has_the_actions_on_text_and_code_cards() {
-        for code in [false, true] {
+    fn text_and_code_cards_have_the_ai_chip_left_of_lines() {
+        for text in ["some prose to look at", "fn main() {\n    let x = 1;\n}\n"] {
+            let card = super::super::tests::data(SubjectKind::Text, Some(text));
+            let ids: Vec<_> = card_chips(&card).into_iter().map(|c| c.id).collect();
+            let lines = ids
+                .iter()
+                .position(|id| *id == CommandId::TextMenu)
+                .expect("Lines…");
+            assert_eq!(ids[lines - 1], CommandId::AiMenu);
+            // Lines… no longer holds the actions; search still finds them.
             let edit = TextShown {
                 labels: vec!["Original".into()],
                 version: 0,
                 note: None,
-                code,
+                code: false,
                 agent: false,
             };
-            let ids: Vec<_> = text_menu_items(&edit)
-                .into_iter()
-                .map(|(c, _)| c.id)
-                .collect();
-            for action in Action::ALL {
-                assert!(ids.contains(&CommandId::Ai(action)));
-            }
+            assert!(
+                text_menu_items(&edit)
+                    .iter()
+                    .all(|(c, _)| !matches!(c.id, CommandId::Ai(_) | CommandId::AiCustom))
+            );
+            assert!(
+                search_pool(&card)
+                    .iter()
+                    .any(|c| c.id == CommandId::Ai(Action::Explain))
+            );
         }
+        // Not on a link or an empty card.
+        let none = super::super::tests::data(SubjectKind::Empty, None);
+        assert!(card_chips(&none).iter().all(|c| c.id != CommandId::AiMenu));
+    }
+
+    #[test]
+    fn the_ai_chip_is_dimmed_with_the_reason_when_unavailable() {
+        let on = ai_button(Ok(()));
+        assert!(on.enabled);
+        assert_eq!(symbol_for(&on.id), Some("sparkles"));
+        for reason in REASONS {
+            let off = ai_button(Err(reason));
+            assert!(!off.enabled);
+            assert_eq!(off.detail, ai_reason(reason));
+        }
+        assert!(keeps_card_open(&CommandId::AiMenu));
+        let (shown, _) = split_chips(vec![on.clone(), command(CommandId::TextMenu, "L", "", "")]);
+        assert!(shown.iter().any(|c| c.id == CommandId::AiMenu));
     }
 
     #[test]
@@ -263,7 +316,7 @@ mod tests {
         ] {
             assert!(keeps_card_open(&id));
         }
-        // Only a pick in the menu (or search) runs one: no chip carries an AI action.
+        // Only a pick in the menu (or search) runs one: no chip carries an action.
         let card = super::super::tests::data(SubjectKind::Text, Some("some text to look at"));
         assert!(
             chips(&card)

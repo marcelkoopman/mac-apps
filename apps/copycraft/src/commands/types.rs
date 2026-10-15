@@ -426,7 +426,9 @@ pub enum CommandId {
     TextColumn,
     /// Lines… › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
-    /// Lines… › Apple Intelligence › an action: runs on this click only, never on its own. The
+    /// The "AI" chip left of Lines… on text and code cards: the card pops [`ai_menu_items`].
+    AiMenu,
+    /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The
     /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
     Ai(mac_ai::Action),
     /// Lines… › Apple Intelligence › Custom prompt…: asks for an instruction, then runs it on

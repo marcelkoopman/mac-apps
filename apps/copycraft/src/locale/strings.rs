@@ -860,6 +860,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("text_menu", "Regels…", "Lines…"),
     // Lines… › Apple Intelligence (local AI, crate mac-ai)
     ("ai_group", "Apple Intelligence", "Apple Intelligence"),
+    ("ai_button", "AI", "AI"),
     ("ai_summarize", "Samenvatten", "Summarize"),
     ("ai_shorter", "Korter herschrijven", "Rewrite shorter"),
     ("ai_formal", "Formeler herschrijven", "Rewrite more formal"),

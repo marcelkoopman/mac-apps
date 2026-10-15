@@ -179,6 +179,14 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
                 .filter(|command| command.id != CommandId::AiUnavailable),
         );
     }
+    if commands.iter().any(|c| c.id == CommandId::TextMenu) {
+        // The AI chip's actions, found by search too (not the note on why they are off).
+        commands.extend(
+            ai_menu_items(mac_ai::availability())
+                .into_iter()
+                .filter(|command| command.id != CommandId::AiUnavailable),
+        );
+    }
     if content_actions(data).preview {
         commands.push(preview_command());
     }

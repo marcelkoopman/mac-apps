@@ -350,6 +350,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextReverse
             | CommandId::TextColumn
             | CommandId::TextFilter
+            | CommandId::AiMenu
             | CommandId::Ai(_)
             | CommandId::AiCustom
             | CommandId::AiApply
@@ -366,13 +367,17 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
 }
 
 /// Split the card's chips into the ones shown (at most [`mac_ui::style::MAX_CARD_CHIPS`]) and the ones
-/// that move under `…`. Original and the menus (Lines…, Image ▾, Table ▾) always stay visible,
+/// that move under `…`. Original and the menus (AI, Lines…, Image ▾, Table ▾) always stay visible,
 /// in their order; the rest fill the room left, in order.
 pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
     let keeps = |cmd: &Command| {
         matches!(
             cmd.id,
-            CommandId::Original | CommandId::TextMenu | CommandId::ImageMenu | CommandId::TableMenu
+            CommandId::Original
+                | CommandId::AiMenu
+                | CommandId::TextMenu
+                | CommandId::ImageMenu
+                | CommandId::TableMenu
         )
     };
     let kept = chips.iter().filter(|cmd| keeps(cmd)).count();
@@ -446,7 +451,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextTail => "arrow.down.to.line",
         CommandId::TextReverse => "arrow.up.arrow.down",
         CommandId::TextFilter => "line.3.horizontal.decrease",
-        CommandId::Ai(_) | CommandId::AiCustom => AI_SYMBOL,
+        CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiCustom => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",
         _ => return None,

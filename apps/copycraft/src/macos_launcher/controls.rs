@@ -800,11 +800,6 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 Some((shown, submenu)) if *shown == name => submenu.clone(),
                 _ => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
-                    if name == commands::ai_group()
-                        && let Some(image) = mac_ui::icon::system_symbol(commands::AI_SYMBOL, name)
-                    {
-                        parent.setImage(Some(&image));
-                    }
                     let submenu =
                         NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
                     submenu.setAutoenablesItems(false);
@@ -860,6 +855,30 @@ pub(crate) fn pop_table_menu() {
                 CommandId::TableMenu | CommandId::ImageMenu | CommandId::TextMenu
             )
         })
+    });
+    let chip = index.and_then(|index| CHIPS.with(|slot| slot.borrow().get(index).cloned()));
+    match chip {
+        Some(chip) => pop_menu(items, chip.view()),
+        None => {
+            let field = FIELD.with(|slot| slot.borrow().clone());
+            if let Some(field) = field {
+                pop_menu(items, &field);
+            }
+        }
+    }
+}
+
+/// The AI chip's menu: Custom prompt…, then the five actions, under the chip. Dimmed with the
+/// reason as tooltip when the model is not available.
+pub(crate) fn pop_ai_menu() {
+    let items: Vec<(Command, bool)> = commands::ai_menu_items(mac_ai::availability())
+        .into_iter()
+        .map(|cmd| (cmd, false))
+        .collect();
+    let index = SHOWN.with(|slot| {
+        slot.borrow()
+            .iter()
+            .position(|cmd| cmd.id == CommandId::AiMenu)
     });
     let chip = index.and_then(|index| CHIPS.with(|slot| slot.borrow().get(index).cloned()));
     match chip {
