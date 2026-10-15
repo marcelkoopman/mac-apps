@@ -100,6 +100,7 @@ struct Views {
     table_button: GlassButton,
     copy_button: GlassButton,
     save_button: GlassButton,
+    ai_button: GlassButton,
     undo: GlassButton,
     title: Retained<NSButton>,
     redo: GlassButton,
@@ -160,6 +161,19 @@ define_class!(
             pop_table_menu();
         }
 
+        #[unsafe(method(tableWindowAiClicked:))]
+        fn ai_clicked(&self, sender: Option<&NSButton>) {
+            if let Some(button) = sender {
+                pop_menu(
+                    commands::ai_table_menu_items(mac_ai::availability())
+                        .into_iter()
+                        .map(|cmd| (cmd, false))
+                        .collect(),
+                    button,
+                );
+            }
+        }
+
         #[unsafe(method(tableWindowUndoClicked:))]
         fn undo_clicked(&self, _sender: Option<&NSButton>) {
             run(CommandId::TableUndo);
@@ -195,6 +209,17 @@ define_class!(
             };
             let id = POPPED.with(|slot| slot.borrow().get(index).map(|cmd| cmd.id.clone()));
             if let Some(id) = id {
+                // The AI preview is drawn over the card: bring the card forward first.
+                let ai = matches!(
+                    id,
+                    CommandId::AiCustom
+                        | CommandId::Ai(_)
+                        | CommandId::AiTableColumns
+                        | CommandId::AiTableMarkdown
+                );
+                if ai {
+                    crate::launcher::order_front();
+                }
                 run(id);
             }
         }
@@ -254,6 +279,7 @@ pub fn show(view: TableWindowView) {
     };
     ensure_views(mtm);
     SHOWN.with(|slot| slot.replace(Some(view)));
+    sync_ai_button();
     paint();
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window
@@ -265,6 +291,27 @@ pub fn show(view: TableWindowView) {
         panel::activate_app(mtm);
         panel::bring_to_front(&window);
     }
+}
+
+/// The AI button follows the model's availability: dimmed, with the reason as its tooltip
+/// and VoiceOver label, when Apple Intelligence cannot run. Cheap; asked on every paint.
+fn sync_ai_button() {
+    VIEWS.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(views) = borrowed.as_ref() else {
+            return;
+        };
+        let (enabled, detail) = match mac_ai::availability() {
+            Ok(()) => (true, crate::locale::t("ai_group")),
+            Err(reason) => (false, commands::ai_reason(reason)),
+        };
+        views.ai_button.button().setEnabled(enabled);
+        views.ai_button.set_accessibility_label(detail);
+        views
+            .ai_button
+            .button()
+            .setToolTip(Some(&NSString::from_str(detail)));
+    });
 }
 
 /// Activate the app and put the table window in front and key, also when it was already open.
@@ -338,7 +385,14 @@ pub fn relabel() {
             NSPoint::new(x, toolbar_y),
             NSSize::new(save_w, height),
         ));
-        x += save_w + PAD;
+        x += save_w + mac_ui::metrics::BUTTON_GAP;
+        views.ai_button.set_title(t("ai_button"));
+        let ai_w = views.ai_button.width_within(100.0);
+        views.ai_button.view().setFrame(NSRect::new(
+            NSPoint::new(x, toolbar_y),
+            NSSize::new(ai_w, height),
+        ));
+        x += ai_w + PAD;
         let hint = views.hint.frame();
         let hint_w = (width - PAD - commands::VERSION_SPAN - PAD - x).max(10.0);
         views.hint.setFrame(NSRect::new(

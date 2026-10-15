@@ -125,7 +125,12 @@ impl App {
     /// first [`crate::dataframe::AI_MAX_ROWS`] rows. Before that version is worked out, the table
     /// as copied.
     fn table_ai_entry(&self) -> Option<(u64, Zeroizing<String>)> {
-        let (source, home) = self.table_source()?;
+        // With the table window open, its table (the AI button there starts the action).
+        let (source, home) = if self.table_window.is_some() {
+            self.window_source().or_else(|| self.table_source())
+        } else {
+            self.table_source()
+        }?;
         let table = match home {
             TableHome::History(index) => self.history.table(index),
             TableHome::Opened => Some(&self.opened_table),
