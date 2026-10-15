@@ -1058,9 +1058,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Apply the result to the clipboard",
     ),
     (
+        "ai_tray_failed",
+        "AI mislukt of geweigerd, klik om de kaart te tonen",
+        "AI failed or was refused, click to show the card",
+    ),
+    (
         "ai_truncated",
-        "Alleen de eerste 20.000 tekens zijn gebruikt",
-        "Only the first 20,000 characters were used",
+        "Alleen de eerste 20.000 tekens zijn gebruikt; Toepassen kopieert alleen naar het klembord",
+        "Only the first 20,000 characters were used; Apply only copies to the clipboard",
     ),
     (
         "ai_preview_a11y",

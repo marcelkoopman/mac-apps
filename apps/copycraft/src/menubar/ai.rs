@@ -20,33 +20,54 @@ pub(crate) struct AiRun {
     job: Arc<mac_ai::Job>,
     /// The model's answer, once it is there.
     result: Option<Zeroizing<String>>,
-    /// The model is done (an answer or a failure): the icon shows a tick while the card is hidden.
-    done: bool,
+    /// Working, ready or failed: what the icon shows while the card is hidden.
+    state: RunState,
     /// Hash of the text the run was started on (never the text): Apply only makes a version
     /// of the card when that text is still the card's.
     input_hash: u64,
+    /// The text was cut to [`mac_ai::MAX_CHARS`]: the result covers only its start, so Apply
+    /// never replaces the card's text with it.
+    truncated: bool,
 }
 
 type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
 
-/// What the menu bar icon says about an AI run while the card is hidden.
+/// Where an AI run is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AiTray {
+pub(crate) enum RunState {
     Working,
+    /// The model gave an answer.
     Ready,
+    /// The model failed or refused (guardrail, too long, language, unavailable, empty answer).
+    Failed,
 }
 
+/// What the menu bar icon says about an AI run while the card is hidden.
+pub(crate) type AiTray = RunState;
+
 /// The icon's indicator: only while the card is hidden and a run exists (or has finished).
-pub(crate) fn ai_tray_state(
-    run_active: bool,
-    result_ready: bool,
-    card_open: bool,
-) -> Option<AiTray> {
-    match (run_active, result_ready, card_open) {
-        (true, true, false) => Some(AiTray::Ready),
-        (true, false, false) => Some(AiTray::Working),
-        _ => None,
+pub(crate) fn ai_tray_state(run: Option<RunState>, card_open: bool) -> Option<AiTray> {
+    run.filter(|_| !card_open)
+}
+
+/// The state a finished run is in: an answer with text is ready, anything else failed.
+pub(crate) fn finished_state(result: &AiResult) -> RunState {
+    match result {
+        Ok(text) if !text.trim().is_empty() => RunState::Ready,
+        _ => RunState::Failed,
     }
+}
+
+/// Whether Apply may replace the card's text with the result: the run saw all of the text, the
+/// card still shows the entry it started on, and the text is unchanged. Otherwise the result
+/// only goes to the clipboard.
+pub(crate) fn apply_makes_version_of(
+    truncated: bool,
+    entry: u64,
+    input_hash: u64,
+    now: Option<&(u64, Zeroizing<String>)>,
+) -> bool {
+    !truncated && apply_makes_version(entry, input_hash, now)
 }
 
 /// The startup warning was shown (once per session).
@@ -82,7 +103,7 @@ impl App {
     }
 
     /// Hide: the card goes to the background, the run and preview stay; the icon shows a mark
-    /// and, once the result is there, a tick.
+    /// and, once the run is over, a tick (result) or a warning sign (failed or refused).
     pub(crate) fn ai_minimize(&mut self) {
         if self.ai.is_some() {
             launcher::minimize_card();
@@ -94,14 +115,11 @@ impl App {
     pub(crate) fn sync_ai_tray(&self) {
         #[cfg(target_os = "macos")]
         {
-            let state = ai_tray_state(
-                self.ai.is_some(),
-                self.ai.as_ref().is_some_and(|run| run.done),
-                launcher::is_open(),
-            );
+            let state = ai_tray_state(self.ai.as_ref().map(|run| run.state), launcher::is_open());
             let (title, tip) = match state {
-                Some(AiTray::Working) => (Some("…"), crate::locale::t("ai_tray_working")),
-                Some(AiTray::Ready) => (Some("✓"), crate::locale::t("ai_tray_ready")),
+                Some(RunState::Working) => (Some("…"), crate::locale::t("ai_tray_working")),
+                Some(RunState::Ready) => (Some("✓"), crate::locale::t("ai_tray_ready")),
+                Some(RunState::Failed) => (Some("⚠"), crate::locale::t("ai_tray_failed")),
                 None => (None, "Copycraft"),
             };
             self.tray.set_title(title);
@@ -138,8 +156,9 @@ impl App {
             action,
             job: Arc::clone(&job),
             result: None,
-            done: false,
+            state: RunState::Working,
             input_hash: hash_text(&text),
+            truncated,
         });
         launcher::ai_preview_working(
             commands::ai_title(action),
@@ -164,7 +183,7 @@ impl App {
         let Some(run) = self.ai.as_mut().filter(|run| run.number == number) else {
             return;
         };
-        run.done = !matches!(result, Err(mac_ai::Error::Cancelled));
+        run.state = finished_state(&result);
         match result {
             Ok(text) if !text.trim().is_empty() => {
                 launcher::ai_preview_result(&text);
@@ -191,9 +210,15 @@ impl App {
             run.job.cancel();
             return;
         };
-        // A table is not overwritten, and neither is a card that is not the one the run was
-        // started for (a new copy came in meanwhile): the result only goes to the clipboard.
-        if !apply_makes_version(run.entry, run.input_hash, self.ai_entry().as_ref()) {
+        // A cut text is not overwritten (its end would be lost), and neither is a card that is
+        // not the one the run was started for (a new copy came in meanwhile): the result only
+        // goes to the clipboard.
+        if !apply_makes_version_of(
+            run.truncated,
+            run.entry,
+            run.input_hash,
+            self.ai_entry().as_ref(),
+        ) {
             self.copy_ai_result(&result);
             return;
         }
@@ -246,6 +271,21 @@ mod tests {
         assert!(!apply_makes_version(7, hash, None));
     }
     #[test]
+    fn a_cut_text_is_never_replaced_by_its_result() {
+        let text = Zeroizing::new("hello".to_string());
+        let hash = hash_text(&text);
+        let same = (7, text);
+        assert!(apply_makes_version_of(false, 7, hash, Some(&same)));
+        // The run saw only the start of the text: clipboard only, even for the same card.
+        assert!(!apply_makes_version_of(true, 7, hash, Some(&same)));
+        // The preview says so, in both languages.
+        for lang in [crate::locale::Lang::Nl, crate::locale::Lang::En] {
+            let notice = crate::locale::t_in(lang, "ai_truncated");
+            assert!(notice.contains("klembord") || notice.contains("clipboard"));
+        }
+    }
+
+    #[test]
     fn truncation_notice_counts_the_limit() {
         // The notice names the limit in digits: keep it in step with mac-ai.
         assert_eq!(mac_ai::MAX_CHARS, 20_000);
@@ -256,14 +296,34 @@ mod tests {
     }
 
     #[test]
-    fn the_icon_marks_a_hidden_run_and_its_result_only() {
+    fn the_icon_marks_a_hidden_run_and_its_outcome_only() {
+        use RunState::*;
         // Card on screen, or no run: nothing on the icon.
-        assert_eq!(ai_tray_state(true, false, true), None);
-        assert_eq!(ai_tray_state(true, true, true), None);
-        assert_eq!(ai_tray_state(false, false, false), None);
-        // Hidden: working, then ready.
-        assert_eq!(ai_tray_state(true, false, false), Some(AiTray::Working));
-        assert_eq!(ai_tray_state(true, true, false), Some(AiTray::Ready));
+        assert_eq!(ai_tray_state(Some(Working), true), None);
+        assert_eq!(ai_tray_state(Some(Ready), true), None);
+        assert_eq!(ai_tray_state(Some(Failed), true), None);
+        assert_eq!(ai_tray_state(None, false), None);
+        // Hidden: working, then a tick or a warning sign.
+        assert_eq!(ai_tray_state(Some(Working), false), Some(Working));
+        assert_eq!(ai_tray_state(Some(Ready), false), Some(Ready));
+        assert_eq!(ai_tray_state(Some(Failed), false), Some(Failed));
+    }
+
+    #[test]
+    fn only_an_answer_with_text_is_a_success() {
+        let ok: AiResult = Ok(Zeroizing::new("done".into()));
+        let empty: AiResult = Ok(Zeroizing::new("  \n".into()));
+        assert_eq!(finished_state(&ok), RunState::Ready);
+        assert_eq!(finished_state(&empty), RunState::Failed);
+        for error in [
+            mac_ai::Error::Guardrail,
+            mac_ai::Error::TooLong,
+            mac_ai::Error::Language,
+            mac_ai::Error::Unavailable,
+            mac_ai::Error::Failed,
+        ] {
+            assert_eq!(finished_state(&Err(error)), RunState::Failed);
+        }
     }
 
     #[test]
@@ -275,6 +335,7 @@ mod tests {
                 "ai_minimize_a11y",
                 "ai_tray_working",
                 "ai_tray_ready",
+                "ai_tray_failed",
             ] {
                 assert_ne!(crate::locale::t_in(lang, key), "?");
             }

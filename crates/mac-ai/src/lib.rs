@@ -119,7 +119,7 @@ impl Action {
             Action::ExplainCode => {
                 "The text is source code. Explain in a few short sentences or bullets what it \
                  does and what it returns or changes. Do not go through it line by line and do \
-                 not rewrite it. Answer in English."
+                 not rewrite it. Use the language of the text."
             }
             Action::DocComment => {
                 "The text is source code. Write one short doc comment for it, in the comment \
@@ -130,7 +130,7 @@ impl Action {
             Action::ExplainStructure => {
                 "The text is JSON or YAML. Explain what its structure means: what the data \
                  describes, what the main keys hold and how they nest. Use a few short bullets \
-                 and name the keys. Do not repeat the whole text. Answer in English."
+                 and name the keys. Do not repeat the whole text. Use the language of the text."
             }
             Action::SummarizeRules => {
                 "The text is a set of instructions for an AI coding agent. Summarize what the \
@@ -285,7 +285,7 @@ mod tests {
         assert!(availability().is_err());
         let job = Job::new();
         assert_eq!(job.run(Action::Summarize, "hello"), Err(Error::Unavailable));
-        assert_eq!(job.run_task("x", "hello"), Err(Error::Unavailable));
+        assert_eq!(job.run(Action::Summarize, "hello"), Err(Error::Unavailable));
     }
 
     /// On a real Mac the answer depends on the machine; it must be a clean answer either way.
