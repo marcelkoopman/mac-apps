@@ -48,7 +48,7 @@ polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "pa
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = "0.9"
 # Line diff of two history copies (src/diff.rs). Pure Rust: no network crates.
-similar = "2.7"
+similar = "3.2"
 zeroize = "1.9.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
