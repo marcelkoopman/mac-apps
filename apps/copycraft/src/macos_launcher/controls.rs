@@ -871,7 +871,7 @@ pub(crate) fn pop_table_menu() {
 /// The AI chip's menu: the five actions, under the chip. Dimmed with the
 /// reason as tooltip when the model is not available.
 pub(crate) fn pop_ai_menu() {
-    let menu = commands::ai_menu_items(mac_ai::availability());
+    let menu = commands::ai_menu_items(mac_ai::availability(), AI_ACTIONS.get());
     let items: Vec<(Command, bool)> = menu.into_iter().map(|cmd| (cmd, false)).collect();
     let index = SHOWN.with(|slot| {
         slot.borrow()

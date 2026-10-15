@@ -133,6 +133,11 @@ thread_local! {
 }
 
 thread_local! {
+    /// What the AI chip's menu offers for the card shown ([`commands::ai_actions`]).
+    static AI_ACTIONS: Cell<&'static [mac_ai::Action]> = const { Cell::new(&[]) };
+}
+
+thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.
     static ICON_FRAME: Cell<Option<NSRect>> = const { Cell::new(None) };

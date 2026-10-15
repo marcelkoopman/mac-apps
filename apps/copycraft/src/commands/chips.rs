@@ -182,7 +182,7 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     if commands.iter().any(|c| c.id == CommandId::TextMenu) {
         // The AI chip's actions, found by search too (not the note on why they are off).
         commands.extend(
-            ai_menu_items(mac_ai::availability())
+            ai_menu_items(mac_ai::availability(), ai_actions(data))
                 .into_iter()
                 .filter(|command| command.id != CommandId::AiUnavailable),
         );

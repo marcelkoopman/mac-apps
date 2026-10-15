@@ -16,9 +16,60 @@ pub fn ai_title(action: Action) -> &'static str {
         Action::Summarize => "ai_summarize",
         Action::Shorter => "ai_shorter",
         Action::MoreFormal => "ai_formal",
-        Action::Explain => "ai_explain",
+        Action::Proofread => "ai_proofread",
         Action::Translate => "ai_translate",
+        Action::ExplainCode => "ai_explain_code",
+        Action::DocComment => "ai_doc_comment",
+        Action::ExplainStructure => "ai_explain_structure",
+        Action::SummarizeRules => "ai_summarize_rules",
+        Action::FindConflicts => "ai_find_conflicts",
     })
+}
+
+/// The submenu a rewrite action sits in: prose gets four entries, one of them a small submenu.
+pub fn ai_submenu(action: Action) -> Option<&'static str> {
+    matches!(action, Action::Shorter | Action::MoreFormal).then(|| crate::locale::t("ai_rewrite"))
+}
+
+const PROSE: [Action; 5] = [
+    Action::Summarize,
+    Action::Shorter,
+    Action::MoreFormal,
+    Action::Proofread,
+    Action::Translate,
+];
+const CODE: [Action; 2] = [Action::ExplainCode, Action::DocComment];
+const STRUCTURE: [Action; 1] = [Action::ExplainStructure];
+const AGENT: [Action; 2] = [Action::SummarizeRules, Action::FindConflicts];
+
+/// The actions that fit a text of `kind`: prose gets Summarize, Rewrite ▸ (Shorter, More formal),
+/// Proofread and Translate; code Explain and a doc comment; JSON and YAML an explanation of the
+/// structure; agent instructions a summary and a check for conflicts. Everything else (links,
+/// XML, TOML, tables, pictures) gets none, so no AI chip.
+pub fn ai_actions_for_kind(kind: crate::format::FormatKind) -> &'static [Action] {
+    use crate::format::FormatKind as K;
+    match kind {
+        K::Text | K::Plain | K::Markdown => &PROSE,
+        K::Rust | K::Java | K::Python => &CODE,
+        K::Json | K::Yaml => &STRUCTURE,
+        K::Agent => &AGENT,
+        _ => &[],
+    }
+}
+
+/// The actions the card offers: by the kind of its text; a scanned PDF's recognized text is
+/// prose (the chip itself waits for the recognition).
+pub fn ai_actions(data: &LaunchData) -> &'static [Action] {
+    if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
+        return &PROSE;
+    }
+    if data.subject_kind != SubjectKind::Text {
+        return &[];
+    }
+    match data.subject_text.as_deref() {
+        Some(text) if offers_text_menu(text) => ai_actions_for_kind(crate::format::detect(text)),
+        _ => &[],
+    }
 }
 
 /// Why the actions are off: one short line.
@@ -71,24 +122,26 @@ pub fn ai_error_text(error: mac_ai::Error) -> &'static str {
     })
 }
 
-/// The AI chip's menu on text and code: the five actions; all dimmed (with the reason
-/// as their tooltip, and as a last dimmed line) when `availability` says no.
-pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
+/// The AI chip's menu: `actions` ([`ai_actions`]); all dimmed (with the reason as their
+/// tooltip, and as a last dimmed line) when `availability` says no.
+pub fn ai_menu_items(availability: mac_ai::Availability, actions: &[Action]) -> Vec<Command> {
     let enabled = availability.is_ok();
     let detail = match availability {
         Ok(()) => ai_group(),
         Err(reason) => ai_reason(reason),
     };
-    let mut items = Vec::new();
-    items.extend(Action::ALL.iter().map(|&action| {
-        command_enabled(
-            CommandId::Ai(action),
-            ai_title(action),
-            detail,
-            "ai apple intelligence summarize summary shorten formal explain translate dutch english samenvatten korter formeel uitleggen vertalen",
-            enabled,
-        )
-    }));
+    let mut items: Vec<Command> = actions
+        .iter()
+        .map(|&action| {
+            command_enabled(
+                CommandId::Ai(action),
+                ai_title(action),
+                detail,
+                "ai apple intelligence summarize summary shorten formal proofread spelling grammar explain translate comment structure conflicts samenvatten korter formeel corrigeren uitleggen vertalen",
+                enabled,
+            )
+        })
+        .collect();
     if let Err(reason) = availability {
         items.push(command_enabled(
             CommandId::AiUnavailable,
@@ -133,11 +186,15 @@ pub fn pdf_scan_ai_button(scan: Option<&ImageScan>) -> Command {
     button
 }
 
-/// The chips the card shows: [`chips`], with the AI chip directly left of Lines….
+/// The chips the card shows: [`chips`], with the AI chip directly left of Lines… when an action
+/// fits the text.
 pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = chips(data);
     if let Some(at) = chips.iter().position(|c| c.id == CommandId::TextMenu) {
-        chips.insert(at, ai_button(mac_ai::availability()));
+        // Only when an action fits this kind of text.
+        if !ai_actions(data).is_empty() {
+            chips.insert(at, ai_button(mac_ai::availability()));
+        }
     } else if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
         // A scanned PDF: the AI chip works on the recognized text, so it waits for it.
         let at = chips
@@ -155,8 +212,13 @@ pub fn ai_label(action: Action) -> &'static str {
         Action::Summarize => "ai_label_summarize",
         Action::Shorter => "ai_label_shorter",
         Action::MoreFormal => "ai_label_formal",
-        Action::Explain => "ai_label_explain",
+        Action::Proofread => "ai_label_proofread",
         Action::Translate => "ai_label_translate",
+        Action::ExplainCode => "ai_label_explain",
+        Action::DocComment => "ai_label_doc_comment",
+        Action::ExplainStructure => "ai_label_structure",
+        Action::SummarizeRules => "ai_label_summarize",
+        Action::FindConflicts => "ai_label_conflicts",
     })
 }
 
@@ -175,25 +237,124 @@ mod tests {
         Unavailable::Other,
     ];
 
+    use crate::format::FormatKind as K;
+
+    fn ids_of(items: &[Command]) -> Vec<CommandId> {
+        items.iter().map(|c| c.id.clone()).collect()
+    }
+
     #[test]
-    fn available_gives_five_enabled_actions_with_sparkles() {
-        let items = ai_menu_items(Ok(()));
-        let ids: Vec<_> = items.iter().map(|c| c.id.clone()).collect();
-        let want: Vec<_> = (Action::ALL.iter().map(|&a| CommandId::Ai(a))).collect();
-        assert_eq!(ids, want);
+    fn each_kind_of_text_gets_its_few_actions() {
+        let ai = |kind| ai_actions_for_kind(kind).to_vec();
+        for kind in [K::Text, K::Plain, K::Markdown] {
+            assert_eq!(
+                ai(kind),
+                vec![
+                    Action::Summarize,
+                    Action::Shorter,
+                    Action::MoreFormal,
+                    Action::Proofread,
+                    Action::Translate
+                ]
+            );
+        }
+        for kind in [K::Rust, K::Java, K::Python] {
+            assert_eq!(ai(kind), vec![Action::ExplainCode, Action::DocComment]);
+        }
+        for kind in [K::Json, K::Yaml] {
+            assert_eq!(ai(kind), vec![Action::ExplainStructure]);
+        }
+        assert_eq!(
+            ai(K::Agent),
+            vec![Action::SummarizeRules, Action::FindConflicts]
+        );
+        // Not recognized as something the model helps with: no actions, so no chip.
+        for kind in [
+            K::Csv,
+            K::Tsv,
+            K::Dataframe,
+            K::Url,
+            K::Xml,
+            K::Html,
+            K::Svg,
+            K::Toml,
+            K::Image,
+            K::Jwt,
+        ] {
+            assert!(ai(kind).is_empty(), "{kind:?}");
+        }
+        // Prose has four entries, the rewrites in a submenu; nothing else has more than two.
+        let top = |actions: &[Action]| {
+            actions.iter().filter(|&&a| ai_submenu(a).is_none()).count()
+                + usize::from(actions.iter().any(|&a| ai_submenu(a).is_some()))
+        };
+        assert_eq!(top(ai_actions_for_kind(K::Text)), 4);
+        for kind in [K::Rust, K::Json, K::Agent] {
+            assert!(top(ai_actions_for_kind(kind)) <= 2);
+        }
+    }
+
+    #[test]
+    fn the_menu_lists_exactly_the_actions_of_the_card_with_sparkles() {
+        let items = ai_menu_items(Ok(()), ai_actions_for_kind(K::Rust));
+        assert_eq!(
+            ids_of(&items),
+            vec![
+                CommandId::Ai(Action::ExplainCode),
+                CommandId::Ai(Action::DocComment)
+            ]
+        );
         for item in &items {
             assert!(item.enabled);
             assert_eq!(symbol_for(&item.id), Some("sparkles"));
-            // A flat menu under the chip, no submenu.
             assert_eq!(menu_group(&item.id), None);
         }
+        let prose = ai_menu_items(Ok(()), ai_actions_for_kind(K::Text));
+        let grouped: Vec<_> = prose
+            .iter()
+            .filter(|c| menu_group(&c.id).is_some())
+            .map(|c| c.id.clone())
+            .collect();
+        assert_eq!(
+            grouped,
+            vec![
+                CommandId::Ai(Action::Shorter),
+                CommandId::Ai(Action::MoreFormal)
+            ]
+        );
+    }
+
+    #[test]
+    fn cards_get_the_chip_only_when_an_action_fits() {
+        let chip = |kind, text: &str| {
+            let card = super::super::tests::data(kind, Some(text));
+            (
+                card_chips(&card).iter().any(|c| c.id == CommandId::AiMenu),
+                ai_actions(&card).to_vec(),
+            )
+        };
+        let (on, set) = chip(SubjectKind::Text, "some prose to look at here");
+        assert!(on && set.contains(&Action::Proofread));
+        let (on, set) = chip(SubjectKind::Text, "fn main() {\n    let x = 1;\n}\n");
+        assert!(on && set == vec![Action::ExplainCode, Action::DocComment]);
+        let (on, set) = chip(SubjectKind::Text, "{\"a\": {\"b\": [1, 2]}}");
+        assert!(on && set == vec![Action::ExplainStructure]);
+        // A table, a link, a picture and an empty card: no chip, no actions.
+        let table = crate::dataframe::tests::ENERGY_FIXTURE;
+        assert_eq!(chip(SubjectKind::Text, table), (false, vec![]));
+        assert_eq!(
+            chip(SubjectKind::Text, "https://example.com/a"),
+            (false, vec![])
+        );
+        assert_eq!(chip(SubjectKind::Image, ""), (false, vec![]));
+        assert_eq!(chip(SubjectKind::Empty, ""), (false, vec![]));
     }
 
     #[test]
     fn unavailable_dims_the_actions_and_says_why() {
         for reason in REASONS {
-            let items = ai_menu_items(Err(reason));
-            let (actions, note) = items.split_at(Action::ALL.len());
+            let items = ai_menu_items(Err(reason), ai_actions_for_kind(K::Agent));
+            let (actions, note) = items.split_at(2);
             assert!(
                 actions
                     .iter()
@@ -304,7 +465,10 @@ mod tests {
 
     #[test]
     fn text_and_code_cards_have_the_ai_chip_left_of_lines() {
-        for text in ["some prose to look at", "fn main() {\n    let x = 1;\n}\n"] {
+        for (text, found) in [
+            ("some prose to look at", Action::Proofread),
+            ("fn main() {\n    let x = 1;\n}\n", Action::ExplainCode),
+        ] {
             let card = super::super::tests::data(SubjectKind::Text, Some(text));
             let ids: Vec<_> = card_chips(&card).into_iter().map(|c| c.id).collect();
             let lines = ids
@@ -328,7 +492,7 @@ mod tests {
             assert!(
                 search_pool(&card)
                     .iter()
-                    .any(|c| c.id == CommandId::Ai(Action::Explain))
+                    .any(|c| c.id == CommandId::Ai(found))
             );
         }
         // Not on a link or an empty card.

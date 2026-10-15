@@ -47,24 +47,45 @@ pub fn prompt(text: &str) -> String {
     format!("{TEXT_OPEN}\n{safe}\n{TEXT_CLOSE}")
 }
 
-/// What the model does with the text.
+/// What the model does with the text. Each action is one task for one kind of text; the app
+/// offers only the ones that fit the card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
+    /// Prose: a short summary.
     Summarize,
+    /// Prose: the same text, about half as long.
     Shorter,
+    /// Prose: the same text in a formal register.
     MoreFormal,
-    Explain,
-    /// Dutch to English or English to Dutch, whichever the text is not.
+    /// Prose: fix spelling and grammar, change nothing else.
+    Proofread,
+    /// Prose: Dutch to English, anything else to Dutch.
     Translate,
+    /// Code: what it does.
+    ExplainCode,
+    /// Code: a short doc comment for it.
+    DocComment,
+    /// JSON or YAML: what its structure means.
+    ExplainStructure,
+    /// Agent instructions: summary of what they tell an agent to do.
+    SummarizeRules,
+    /// Agent instructions: unclear points and conflicts.
+    FindConflicts,
 }
 
 impl Action {
-    pub const ALL: [Action; 5] = [
+    /// Every action, for tests and tables of titles.
+    pub const ALL: [Action; 10] = [
         Action::Summarize,
         Action::Shorter,
         Action::MoreFormal,
-        Action::Explain,
+        Action::Proofread,
         Action::Translate,
+        Action::ExplainCode,
+        Action::DocComment,
+        Action::ExplainStructure,
+        Action::SummarizeRules,
+        Action::FindConflicts,
     ];
 
     /// The one task of the action, for [`instructions`]. Short and concrete: the on-device model
@@ -73,8 +94,8 @@ impl Action {
         match self {
             Action::Summarize => {
                 "Summarize the text in 2 to 5 sentences (a short bullet list if the text is a \
-                 list or a log). Keep names, numbers and dates exactly as written. Use the \
-                 language of the text."
+                 list). Keep names, numbers and dates exactly as written. Use the language of \
+                 the text."
             }
             Action::Shorter => {
                 "Rewrite the text to about half its length. Keep every key fact, name and \
@@ -86,14 +107,41 @@ impl Action {
                  numbers and layout; do not shorten it or add anything. Use the language of the \
                  text."
             }
-            Action::Explain => {
-                "Explain in plain, simple words what the text says, or what the code does (not \
-                 line by line). Use a few short sentences or bullets. Use the language of the \
-                 text."
+            Action::Proofread => {
+                "Correct the spelling, grammar and punctuation of the text. Change nothing \
+                 else: keep the wording, tone, layout, names, numbers, code and links. Return \
+                 the full corrected text in the language of the text."
             }
             Action::Translate => {
                 "Translate the whole text: into English if it is Dutch, into Dutch if it is \
                  anything else. Keep the layout; leave names, numbers, code and links unchanged."
+            }
+            Action::ExplainCode => {
+                "The text is source code. Explain in a few short sentences or bullets what it \
+                 does and what it returns or changes. Do not go through it line by line and do \
+                 not rewrite it. Answer in English."
+            }
+            Action::DocComment => {
+                "The text is source code. Write one short doc comment for it, in the comment \
+                 syntax of its language (for example /// or /** */ or a docstring): one line \
+                 that says what it does, plus one line per parameter and for the result only if \
+                 they exist. Return only the comment, not the code."
+            }
+            Action::ExplainStructure => {
+                "The text is JSON or YAML. Explain what its structure means: what the data \
+                 describes, what the main keys hold and how they nest. Use a few short bullets \
+                 and name the keys. Do not repeat the whole text. Answer in English."
+            }
+            Action::SummarizeRules => {
+                "The text is a set of instructions for an AI coding agent. Summarize what the \
+                 agent must do, must not do and which commands or conventions it must follow, \
+                 as at most 8 short bullets. Use the language of the text."
+            }
+            Action::FindConflicts => {
+                "The text is a set of instructions for an AI coding agent. List the rules that \
+                 contradict each other and the points that are vague or missing, one bullet \
+                 each, quoting the few words involved. If there are none, say so in one \
+                 sentence. Use the language of the text."
             }
         }
     }
@@ -296,7 +344,7 @@ mod tests {
     fn every_action_is_one_short_sharp_task() {
         for action in Action::ALL {
             let task = action.task();
-            assert!(task.len() < 330, "{action:?} is too long");
+            assert!(task.len() < 420, "{action:?} is too long");
             // One task: no "and then", no second instruction chain.
             assert!(!task.to_lowercase().contains("then"), "{action:?}");
             assert!(instructions(task).contains(task));

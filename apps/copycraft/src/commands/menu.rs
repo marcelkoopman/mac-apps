@@ -47,6 +47,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::TableStep(op) => op.group(),
         CommandId::ImageStep(op) => op.group(),
         CommandId::ImageResizeCustom => Some(crate::image_edit::resize_group()),
+        CommandId::Ai(action) => ai_submenu(*action),
         _ => None,
     }
 }
