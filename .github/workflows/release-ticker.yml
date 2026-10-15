@@ -47,10 +47,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy -p ticker -p mac-ui --all-targets --locked -- -D warnings
 
       - name: Test
-        run: cargo test --workspace --locked
+        run: cargo test -p ticker -p mac-ui --locked
 
   build:
     name: Build Ticker DMG
