@@ -299,5 +299,13 @@ pub(crate) fn paint_match_marks(ranges: &[(usize, usize)], current: Option<usize
     let Some(view) = view else {
         return;
     };
-    widgets::mark_ranges(&view, ranges, current, scroll);
+    // Line numbers sit in the text, so the body's offsets move.
+    let moved: Vec<(usize, usize)> = PAINTED.with(|slot| match slot.borrow().as_ref() {
+        Some(painted) if painted.numbers => ranges
+            .iter()
+            .map(|&(location, length)| commands::gutter_range(&painted.text, location, length))
+            .collect(),
+        _ => ranges.to_vec(),
+    });
+    widgets::mark_ranges(&view, &moved, current, scroll);
 }

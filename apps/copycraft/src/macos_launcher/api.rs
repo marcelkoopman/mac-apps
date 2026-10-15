@@ -288,6 +288,7 @@ pub(crate) fn store(data: LaunchData) {
 }
 
 pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
+    let offers_numbers = commands::offers_line_numbers(&data, &card);
     PLACEHOLDER.set(commands::is_building_card(&card));
     // Another entry is masked again. The same one stays revealed in every view, chip, version
     // and step, and when a rebuilt card or its labels arrive ([`commands::stays_revealed`]).
@@ -353,7 +354,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     });
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     CONTENT_ACTIONS.set(commands::content_actions(&data));
-    OFFERS_NUMBERS.set(commands::offers_line_numbers(&data));
+    OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
     // A picture's card has Image ▾ in the table menu's place.
     let text_menu = commands::text_shown(&data);

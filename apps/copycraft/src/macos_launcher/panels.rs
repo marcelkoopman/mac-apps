@@ -481,12 +481,14 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         }
     });
     let diff_lines = CARD_DIFF.with(Cell::get) && payload;
+    let numbers = payload && !diff_lines && OFFERS_NUMBERS.get() && commands::line_numbers_on();
     let unchanged = PAINTED.with(|slot| {
         slot.borrow().as_ref().is_some_and(|painted| {
             painted.text == body
                 && painted.highlight == highlight
                 && painted.payload == payload
                 && painted.diff_lines == diff_lines
+                && painted.numbers == numbers
         })
     }) && PAINTED_ERROR_LINE.get() == error_line;
     if unchanged {
@@ -501,7 +503,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         if diff_lines {
             crate::macos_card_text::paint_diff(view, body);
         } else {
-            crate::macos_card_text::paint(view, body, highlight, payload, error_line);
+            crate::macos_card_text::paint(view, body, highlight, payload, error_line, numbers);
         }
         // A side-by-side row stays on one line and scrolls sideways. Wrapping would
         // break the two columns.
@@ -531,6 +533,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
             highlight,
             payload,
             diff_lines,
+            numbers,
         }));
     });
     PAINTED_ERROR_LINE.set(error_line);

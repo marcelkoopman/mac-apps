@@ -302,6 +302,7 @@ fn paint_boxed_grid(views: &Views, view: &TableWindowView, previous: &str) {
         Some(FormatKind::Dataframe),
         true,
         None,
+        false,
     );
     widgets::fit_text_view(&views.grid, None);
     views.grid.scrollRangeToVisible(NSRange {

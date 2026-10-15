@@ -165,9 +165,14 @@ fn pop_complexity(rows: Vec<(Command, Band)>, footer: Vec<String>) {
 /// Scroll the card's text to `line` (1-based) and flash it.
 pub fn scroll_card_to_line(line: usize) {
     let offset = PAINTED.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .map(|p| crate::complexity::line_offset_utf16(&p.text, line))
+        slot.borrow().as_ref().map(|p| {
+            let offset = crate::complexity::line_offset_utf16(&p.text, line);
+            if p.numbers {
+                crate::commands::gutter_range(&p.text, offset, 0).0
+            } else {
+                offset
+            }
+        })
     });
     let Some(offset) = offset else {
         return;

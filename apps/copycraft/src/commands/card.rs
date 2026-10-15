@@ -410,15 +410,6 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
                 view = CardView::Format;
             }
             apply_text_view(&mut card, text, view, data.full, data.table.as_ref());
-            // Plain text gets line numbers, so a Lines… count can be checked by eye (unless the
-            // numbers button turned them off).
-            if line_numbers_on()
-                && view == CardView::Original
-                && card.highlight.is_none()
-                && is_plain_kind(format::detect(text))
-            {
-                card.excerpt = numbered_lines(&card.excerpt);
-            }
             if svg && view == CardView::Format {
                 card.title = FormatKind::Svg.source_heading().to_string();
                 card.meta = svg_meta(text);
@@ -721,22 +712,19 @@ pub fn toggle_line_numbers() -> bool {
     !LINE_NUMBERS.fetch_xor(true, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// The card for `data` is plain text in its Original view: it can show line numbers, so the
-/// numbers button shows.
-pub fn offers_line_numbers(data: &LaunchData) -> bool {
-    data.subject_kind == SubjectKind::Text
-        && data.subject_text.as_deref().is_some_and(|text| {
-            presented_view(text, data.view) == CardView::Original
-                && is_plain_kind(format::detect(text))
-                && crate::youtube::video_id(text).is_none()
-                && crate::page_preview::page_url(text).is_none()
-        })
-}
-
-/// Plain text: multi-line text (`Text`) and a single sentence or other prose (`Plain`). Both
-/// show as "Inhoud" / "Content"; line numbers apply to both.
-fn is_plain_kind(kind: FormatKind) -> bool {
-    matches!(kind, FormatKind::Text | FormatKind::Plain)
+/// The card shows a text or code body (plain text, code, Markdown, JSON/YAML, an opened file,
+/// the text of a picture or PDF): it can show line numbers, so the numbers button shows. Tables,
+/// pictures, links, a diff, the JWT breakdown and the info/QR views have no numbered lines.
+pub fn offers_line_numbers(data: &LaunchData, card: &WorkCard) -> bool {
+    !card.shows_image
+        && card.placeholder.is_empty()
+        && card.link_page.is_none()
+        && !card.excerpt.is_empty()
+        && !matches!(
+            card.highlight,
+            Some(FormatKind::Csv | FormatKind::Tsv | FormatKind::Dataframe | FormatKind::Jwt)
+        )
+        && !matches!(data.view, CardView::Diff | CardView::Info | CardView::Qr)
 }
 
 /// SF Symbol and tooltip (NL/EN) for the numbers button.
@@ -748,27 +736,43 @@ pub fn line_numbers_button_look(on: bool) -> (&'static str, &'static str) {
     }
 }
 
-/// `excerpt` with a right-aligned line number in front of every line (`  1  text`). A
+/// UTF-16 offsets (in the shown body) of the first character of every numbered line. A
 /// preview's closing `…` line is no line of the text and stays unnumbered.
-pub fn numbered_lines(excerpt: &str) -> String {
-    let (body, cut) = match excerpt.strip_suffix("\n…") {
-        Some(body) => (body, true),
-        None => (excerpt, false),
-    };
-    let count = body.lines().count().max(1);
-    let width = count.to_string().len();
-    let mut out = String::with_capacity(body.len() + count * (width + 2));
-    for (index, line) in body.lines().enumerate() {
-        if index > 0 {
-            out.push('\n');
+pub fn numbered_line_starts(body: &str) -> Vec<usize> {
+    let text = body.strip_suffix("\n…").unwrap_or(body);
+    let mut starts = vec![0];
+    let mut offset = 0;
+    for (index, ch) in text.char_indices() {
+        offset += ch.len_utf16();
+        if ch == '\n' && index + 1 < text.len() {
+            starts.push(offset);
         }
-        out.push_str(&format!("{:>width$}  {line}", index + 1));
     }
-    if body.is_empty() {
-        out.push_str(&format!("{:>width$}  ", 1));
-    }
-    if cut {
-        out.push_str("\n…");
-    }
-    out
+    starts
+}
+
+/// The gutter in front of line `number` (1-based) when there are `count` lines: right-aligned,
+/// then two spaces (`  1  `).
+pub fn gutter_label(number: usize, count: usize) -> String {
+    format!("{number:>width$}  ", width = count.to_string().len())
+}
+
+/// Characters one gutter adds in front of a line.
+pub fn gutter_width(count: usize) -> usize {
+    count.to_string().len() + 2
+}
+
+/// The UTF-16 range `(location, length)` in the shown body, as it sits once the gutters are
+/// inserted. Find marks and the scroll to a line are computed on the body.
+pub fn gutter_range(body: &str, location: usize, length: usize) -> (usize, usize) {
+    let starts = numbered_line_starts(body);
+    let width = gutter_width(starts.len());
+    let start = location + width * starts.iter().filter(|s| **s <= location).count();
+    let end = if length == 0 {
+        start
+    } else {
+        let end = location + length;
+        end + width * starts.iter().filter(|s| **s < end).count()
+    };
+    (start, end.saturating_sub(start))
 }

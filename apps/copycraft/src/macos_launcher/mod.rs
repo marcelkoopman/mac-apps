@@ -96,6 +96,7 @@ pub(crate) struct Painted {
     pub(crate) highlight: Option<FormatKind>,
     pub(crate) payload: bool,
     pub(crate) diff_lines: bool,
+    pub(crate) numbers: bool,
 }
 
 pub(crate) fn drop_highlight() -> mac_ui::drop::Highlight {

@@ -258,14 +258,60 @@ fn a_notice_shows_once_on_the_card_and_is_not_kept() {
 }
 
 #[test]
-fn plain_text_cards_number_their_lines() {
-    assert_eq!(super::numbered_lines("een\ntwee"), "1  een\n2  twee");
-    let ten: String = (1..=10).map(|n| format!("r{n}\n")).collect();
-    let numbered = super::numbered_lines(ten.trim_end());
-    assert!(numbered.starts_with(" 1  r1\n 2  r2"));
-    assert!(numbered.ends_with("10  r10"));
-    // A cut preview keeps its unnumbered "…".
-    assert_eq!(super::numbered_lines("a\nb\n…"), "1  a\n2  b\n…");
+fn line_numbers_go_in_front_of_every_line_of_the_body() {
+    assert_eq!(super::numbered_line_starts("een\ntwee"), vec![0, 4]);
+    // A closing newline starts no line; a cut preview's "…" is no line either.
+    assert_eq!(super::numbered_line_starts("a\nb\n"), vec![0, 2]);
+    assert_eq!(super::numbered_line_starts("a\nb\n…"), vec![0, 2]);
+    assert_eq!(super::numbered_line_starts(""), vec![0]);
+    // UTF-16 units, not bytes.
+    assert_eq!(super::numbered_line_starts("é😀\nx"), vec![0, 4]);
+    assert_eq!(super::gutter_label(1, 2), " 1  ");
+    assert_eq!(super::gutter_label(10, 10), "10  ");
+    assert_eq!(super::gutter_width(10), 4);
+}
+
+#[test]
+fn offsets_of_the_body_move_past_the_gutters() {
+    let body = "ab\ncd\nef";
+    // 3 lines: gutter "1  " is 3 wide.
+    assert_eq!(super::gutter_range(body, 0, 0), (3, 0));
+    assert_eq!(super::gutter_range(body, 1, 1), (4, 1));
+    // "cd" starts the second line: after two gutters.
+    assert_eq!(super::gutter_range(body, 3, 2), (9, 2));
+    // "b\nc" spans a line break: it takes the second gutter in.
+    assert_eq!(super::gutter_range(body, 1, 3), (4, 6));
+    // A match ending at a line break stays clear of the next gutter.
+    assert_eq!(super::gutter_range(body, 0, 2), (3, 2));
+}
+
+#[test]
+fn every_text_or_code_card_offers_line_numbers() {
+    let samples = [
+        "Eerste regel.\nTweede regel.",
+        "Dit is een gewone Nederlandse zin die Marcel kopieerde om te tellen.",
+        "fn main() {\n    let x = 1;\n}\n",
+        "public class A {\n  void f() {}\n}\n",
+        "def f(x):\n    return x\n",
+        "{\"a\": 1,\n \"b\": [1, 2]}",
+        "naam: a\nlijst:\n  - 1\n  - 2\n",
+        "# Titel\n\nTekst met *nadruk*.\n\n- een\n- twee\n",
+    ];
+    for text in samples {
+        let data = data(SubjectKind::Text, Some(text));
+        let card = work_card(&data);
+        assert!(
+            super::offers_line_numbers(&data, &card),
+            "no numbers button for {:?}",
+            crate::format::detect(text)
+        );
+    }
+    // Tables are no text lines.
+    let csv = data(SubjectKind::Text, Some("a,b,c\n1,2,3\n4,5,6\n"));
+    assert!(!super::offers_line_numbers(&csv, &work_card(&csv)));
+    // Nothing shown, nothing to number.
+    let empty = data(SubjectKind::Empty, None);
+    assert!(!super::offers_line_numbers(&empty, &work_card(&empty)));
 }
 
 /// The choice is global, so no test flips it: it would race with the other card tests.
@@ -273,9 +319,7 @@ fn plain_text_cards_number_their_lines() {
 fn line_numbers_are_off_by_default_and_the_button_offers_them() {
     let sentence = "Eerste regel.\nTweede regel.";
     let plain = data(SubjectKind::Text, Some(sentence));
-    assert!(super::offers_line_numbers(&plain));
-    let code = data(SubjectKind::Text, Some("fn main() {\n    let x = 1;\n}\n"));
-    assert!(!super::offers_line_numbers(&code));
+    assert!(super::offers_line_numbers(&plain, &work_card(&plain)));
     // Off: the well holds the text as copied, so search finds no numbers.
     assert!(!super::line_numbers_on());
     assert_eq!(work_card(&plain).excerpt, sentence);
@@ -298,5 +342,5 @@ fn a_single_sentence_gets_the_numbers_button_and_room_for_every_well_button() {
         crate::format::FormatKind::Plain
     );
     let card = data(SubjectKind::Text, Some(sentence));
-    assert!(super::offers_line_numbers(&card));
+    assert!(super::offers_line_numbers(&card, &work_card(&card)));
 }

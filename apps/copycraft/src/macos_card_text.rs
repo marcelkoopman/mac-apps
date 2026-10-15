@@ -15,6 +15,7 @@ pub(crate) fn paint(
     highlight: Option<FormatKind>,
     payload: bool,
     error_line: Option<usize>,
+    numbers: bool,
 ) {
     let attr = if payload {
         let attr = match highlight {
@@ -32,6 +33,9 @@ pub(crate) fn paint(
                 );
             }
         }
+        if numbers {
+            insert_gutters(&attr, body);
+        }
         attr
     } else {
         plain(
@@ -44,6 +48,21 @@ pub(crate) fn paint(
         storage.setAttributedString(&attr);
     } else {
         text.setString(&NSString::from_str(body));
+    }
+}
+
+/// A line number in front of every line of `attr` (the painted `body`), in a dim color. The
+/// colors of the text stay as they are; offsets of `body` move by [`crate::commands::gutter_range`].
+fn insert_gutters(attr: &NSMutableAttributedString, body: &str) {
+    let starts = crate::commands::numbered_line_starts(body);
+    let count = starts.len();
+    let font = editor_font();
+    let color = NSColor::tertiaryLabelColor();
+    // From the end, so the earlier offsets stay valid.
+    for (index, start) in starts.iter().enumerate().rev() {
+        let label = crate::commands::gutter_label(index + 1, count);
+        let gutter = mac_ui::text::AttrText::new(&label, &font, &color).into_attributed();
+        attr.insertAttributedString_atIndex(&gutter, *start);
     }
 }
 
