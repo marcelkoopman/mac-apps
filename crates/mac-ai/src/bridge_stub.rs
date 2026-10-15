@@ -21,7 +21,7 @@ impl Job {
         Err(Error::Unavailable)
     }
 
-    pub fn run_custom(&self, _instruction: &str, _text: &str) -> Result<String, Error> {
+    pub fn run_task(&self, _instruction: &str, _text: &str) -> Result<String, Error> {
         Err(Error::Unavailable)
     }
 }

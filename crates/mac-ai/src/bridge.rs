@@ -12,7 +12,6 @@ unsafe extern "C" {
     fn mac_ai_job_free(job: *mut c_void);
     fn mac_ai_job_run(
         job: *mut c_void,
-        action: i32,
         instruction: *const u8,
         instruction_len: usize,
         input: *const u8,
@@ -54,27 +53,22 @@ impl Job {
 
     /// Run `action` on `text` and wait for the answer. Blocks: call it from a background thread.
     pub fn run(&self, action: Action, text: &str) -> Result<String, Error> {
-        self.run_raw(action.code(), "", text)
+        self.run_task(action.task(), text)
     }
 
-    /// Run the user's own `instruction` on `text` ([`crate::custom_instructions`] and
-    /// [`crate::custom_prompt`] keep the two apart). Blocks like [`Job::run`].
-    pub fn run_custom(&self, instruction: &str, text: &str) -> Result<String, Error> {
-        self.run_raw(
-            crate::CUSTOM_CODE,
-            &crate::custom_instructions(instruction),
-            &crate::custom_prompt(text),
-        )
+    /// Run one `task` on `text`: [`crate::instructions`] and [`crate::prompt`] keep the two
+    /// apart. Blocks like [`Job::run`].
+    pub fn run_task(&self, task: &str, text: &str) -> Result<String, Error> {
+        self.run_raw(&crate::instructions(task), &crate::prompt(text))
     }
 
-    fn run_raw(&self, code: i32, instructions: &str, input: &str) -> Result<String, Error> {
+    fn run_raw(&self, instructions: &str, input: &str) -> Result<String, Error> {
         let mut out: *mut c_char = ptr::null_mut();
         // SAFETY: `self.0` is a live Swift `Job`; both strings are valid for their lengths; `out`
         // points to a writable pointer. On success Swift leaves a malloc'ed C string in it.
         let status = unsafe {
             mac_ai_job_run(
                 self.0.as_ptr(),
-                code,
                 instructions.as_ptr(),
                 instructions.len(),
                 input.as_ptr(),
