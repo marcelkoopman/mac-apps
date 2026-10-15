@@ -14,6 +14,10 @@ use std::process::Command;
 /// SDK is older (then the SDK's own version, and swiftc says what is missing).
 const MIN_MACOS_MAJOR: u32 = 26;
 
+/// The system Swift runtime (in the dyld cache on macOS 26). Present on every Mac the app runs
+/// on, so a bundled app needs no copy of it, only this rpath.
+const SWIFT_RUNTIME_DIR: &str = "/usr/lib/swift";
+
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(mac_ai_swift)");
     println!("cargo:rerun-if-changed=build.rs");
@@ -96,6 +100,12 @@ fn main() {
     println!("cargo:rustc-link-lib=framework=Foundation");
     println!("cargo:rustc-link-lib=framework=FoundationModels");
     println!("cargo:rustc-cfg=mac_ai_swift");
+    // The bridge needs the OS's Swift runtime (@rpath/libswift_*.dylib): this crate's own test
+    // binaries get the rpath here. A binary of another package gets it from its own build.rs,
+    // which sees this metadata (a dependency's link args do not propagate).
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{SWIFT_RUNTIME_DIR}");
+    println!("cargo:swift_bridge=1");
+    println!("cargo:swift_runtime_dir={SWIFT_RUNTIME_DIR}");
 }
 
 /// `$SWIFTC`, else the swiftc of the active Xcode (`xcrun --find swiftc`), else `swiftc` on the PATH.
