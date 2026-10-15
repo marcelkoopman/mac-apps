@@ -12,18 +12,18 @@ pub fn ai_group() -> &'static str {
 
 /// Menu title of `action`.
 pub fn ai_title(action: Action) -> &'static str {
-    crate::locale::t(match action {
-        Action::Summarize => "ai_summarize",
-        Action::Shorter => "ai_shorter",
-        Action::MoreFormal => "ai_formal",
-        Action::Proofread => "ai_proofread",
-        Action::Translate => "ai_translate",
-        Action::ExplainCode => "ai_explain_code",
-        Action::DocComment => "ai_doc_comment",
-        Action::ExplainStructure => "ai_explain_structure",
-        Action::SummarizeRules => "ai_summarize_rules",
-        Action::FindConflicts => "ai_find_conflicts",
-    })
+    match action {
+        Action::Summarize => crate::locale::t("ai_summarize"),
+        Action::Shorter => crate::locale::t("ai_shorter"),
+        Action::MoreFormal => crate::locale::t("ai_formal"),
+        Action::Proofread => crate::locale::t("ai_proofread"),
+        Action::Translate => crate::locale::t("ai_translate"),
+        Action::ExplainCode => crate::locale::t("ai_explain_code"),
+        Action::DocComment => crate::locale::t("ai_doc_comment"),
+        Action::ExplainStructure => crate::locale::t("ai_explain_structure"),
+        Action::SummarizeRules => crate::locale::t("ai_summarize_rules"),
+        Action::FindConflicts => crate::locale::t("ai_find_conflicts"),
+    }
 }
 
 /// The submenu a rewrite action sits in: prose gets four entries, one of them a small submenu.
@@ -74,28 +74,28 @@ pub fn ai_actions(data: &LaunchData) -> &'static [Action] {
 
 /// Why the actions are off: one short line.
 pub fn ai_reason(reason: Unavailable) -> &'static str {
-    crate::locale::t(match reason {
-        Unavailable::UnsupportedSystem => "ai_off_system",
-        Unavailable::NotAppleSilicon => "ai_off_silicon",
-        Unavailable::DeviceNotEligible => "ai_off_device",
-        Unavailable::AppleIntelligenceOff => "ai_off_disabled",
-        Unavailable::ModelNotReady => "ai_off_not_ready",
-        Unavailable::NoBridge => "ai_off_bridge",
-        Unavailable::Other => "ai_off_other",
-    })
+    match reason {
+        Unavailable::UnsupportedSystem => crate::locale::t("ai_off_system"),
+        Unavailable::NotAppleSilicon => crate::locale::t("ai_off_silicon"),
+        Unavailable::DeviceNotEligible => crate::locale::t("ai_off_device"),
+        Unavailable::AppleIntelligenceOff => crate::locale::t("ai_off_disabled"),
+        Unavailable::ModelNotReady => crate::locale::t("ai_off_not_ready"),
+        Unavailable::NoBridge => crate::locale::t("ai_off_bridge"),
+        Unavailable::Other => crate::locale::t("ai_off_other"),
+    }
 }
 
 /// What to do about `reason`: one or two short sentences, for the warning and the check.
 pub fn ai_fix(reason: Unavailable) -> &'static str {
-    crate::locale::t(match reason {
-        Unavailable::UnsupportedSystem => "ai_fix_system",
-        Unavailable::NotAppleSilicon => "ai_fix_silicon",
-        Unavailable::DeviceNotEligible => "ai_fix_device",
-        Unavailable::AppleIntelligenceOff => "ai_fix_disabled",
-        Unavailable::ModelNotReady => "ai_fix_not_ready",
-        Unavailable::NoBridge => "ai_fix_bridge",
-        Unavailable::Other => "ai_fix_other",
-    })
+    match reason {
+        Unavailable::UnsupportedSystem => crate::locale::t("ai_fix_system"),
+        Unavailable::NotAppleSilicon => crate::locale::t("ai_fix_silicon"),
+        Unavailable::DeviceNotEligible => crate::locale::t("ai_fix_device"),
+        Unavailable::AppleIntelligenceOff => crate::locale::t("ai_fix_disabled"),
+        Unavailable::ModelNotReady => crate::locale::t("ai_fix_not_ready"),
+        Unavailable::NoBridge => crate::locale::t("ai_fix_bridge"),
+        Unavailable::Other => crate::locale::t("ai_fix_other"),
+    }
 }
 
 /// Title and message of the Apple Intelligence check: that it works, or the reason and what to
@@ -113,13 +113,13 @@ pub fn ai_health(availability: mac_ai::Availability) -> (&'static str, String) {
 
 /// What a failed run says on the preview. Cancelling says nothing.
 pub fn ai_error_text(error: mac_ai::Error) -> &'static str {
-    crate::locale::t(match error {
-        mac_ai::Error::Unavailable => "ai_off_other",
-        mac_ai::Error::Guardrail => "ai_err_guardrail",
-        mac_ai::Error::TooLong => "ai_err_too_long",
-        mac_ai::Error::Language => "ai_err_language",
-        mac_ai::Error::Cancelled | mac_ai::Error::Failed => "ai_err_failed",
-    })
+    match error {
+        mac_ai::Error::Unavailable => crate::locale::t("ai_off_other"),
+        mac_ai::Error::Guardrail => crate::locale::t("ai_err_guardrail"),
+        mac_ai::Error::TooLong => crate::locale::t("ai_err_too_long"),
+        mac_ai::Error::Language => crate::locale::t("ai_err_language"),
+        mac_ai::Error::Cancelled | mac_ai::Error::Failed => crate::locale::t("ai_err_failed"),
+    }
 }
 
 /// The AI chip's menu: `actions` ([`ai_actions`]); all dimmed (with the reason as their
@@ -208,18 +208,18 @@ pub fn card_chips(data: &LaunchData) -> Vec<Command> {
 
 /// The label of the version an applied `action` makes (the version capsule and its menu).
 pub fn ai_label(action: Action) -> &'static str {
-    crate::locale::t(match action {
-        Action::Summarize => "ai_label_summarize",
-        Action::Shorter => "ai_label_shorter",
-        Action::MoreFormal => "ai_label_formal",
-        Action::Proofread => "ai_label_proofread",
-        Action::Translate => "ai_label_translate",
-        Action::ExplainCode => "ai_label_explain",
-        Action::DocComment => "ai_label_doc_comment",
-        Action::ExplainStructure => "ai_label_structure",
-        Action::SummarizeRules => "ai_label_summarize",
-        Action::FindConflicts => "ai_label_conflicts",
-    })
+    match action {
+        Action::Summarize => crate::locale::t("ai_label_summarize"),
+        Action::Shorter => crate::locale::t("ai_label_shorter"),
+        Action::MoreFormal => crate::locale::t("ai_label_formal"),
+        Action::Proofread => crate::locale::t("ai_label_proofread"),
+        Action::Translate => crate::locale::t("ai_label_translate"),
+        Action::ExplainCode => crate::locale::t("ai_label_explain"),
+        Action::DocComment => crate::locale::t("ai_label_doc_comment"),
+        Action::ExplainStructure => crate::locale::t("ai_label_structure"),
+        Action::SummarizeRules => crate::locale::t("ai_label_summarize"),
+        Action::FindConflicts => crate::locale::t("ai_label_conflicts"),
+    }
 }
 
 #[cfg(test)]

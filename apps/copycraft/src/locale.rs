@@ -212,6 +212,10 @@ mod tests {
             "sep_tab",
             "text_filter",
             "filter_label",
+            // Brand name and a two-letter label.
+            "ai_group",
+            "ai_button",
+            "ai_check_title",
         ];
         for (key, nl, en) in STRINGS {
             if nl == en {
