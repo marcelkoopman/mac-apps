@@ -871,10 +871,18 @@ pub(crate) fn pop_table_menu() {
 /// The AI chip's menu: Custom prompt…, then the five actions, under the chip. Dimmed with the
 /// reason as tooltip when the model is not available.
 pub(crate) fn pop_ai_menu() {
-    let items: Vec<(Command, bool)> = commands::ai_menu_items(mac_ai::availability())
-        .into_iter()
-        .map(|cmd| (cmd, false))
-        .collect();
+    // A table card has its own actions: its chips hold the table window chip.
+    let table = SHOWN.with(|slot| {
+        slot.borrow()
+            .iter()
+            .any(|cmd| cmd.id == CommandId::TableOpenWindow)
+    });
+    let menu = if table {
+        commands::ai_table_menu_items(mac_ai::availability())
+    } else {
+        commands::ai_menu_items(mac_ai::availability())
+    };
+    let items: Vec<(Command, bool)> = menu.into_iter().map(|cmd| (cmd, false)).collect();
     let index = SHOWN.with(|slot| {
         slot.borrow()
             .iter()

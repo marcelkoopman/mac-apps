@@ -934,6 +934,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "This build of Copycraft was made without AI support",
     ),
     ("ai_check", "Controleer AI", "Check AI"),
+    ("ai_table_columns", "Kolommen uitleggen", "Explain columns"),
+    (
+        "ai_table_markdown",
+        "Naar Markdown-tabel",
+        "To Markdown table",
+    ),
     (
         "detail_ai_check",
         "Controleer of Apple Intelligence werkt en zeg wat er mis is",

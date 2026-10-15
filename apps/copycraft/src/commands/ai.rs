@@ -107,6 +107,50 @@ pub fn ai_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
     items
 }
 
+/// The AI chip's menu on a table card: Custom prompt…, Summarize, Explain columns and To Markdown
+/// table (Shorter, More formal and Translate make no sense on a table). Dimmed like
+/// [`ai_menu_items`].
+pub fn ai_table_menu_items(availability: mac_ai::Availability) -> Vec<Command> {
+    let all = ai_menu_items(availability);
+    let enabled = availability.is_ok();
+    let detail = match availability {
+        Ok(()) => ai_group(),
+        Err(reason) => ai_reason(reason),
+    };
+    let mut items: Vec<Command> = all
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c.id,
+                CommandId::AiCustom | CommandId::Ai(Action::Summarize) | CommandId::AiUnavailable
+            )
+        })
+        .collect();
+    let at = items
+        .iter()
+        .position(|c| c.id == CommandId::AiUnavailable)
+        .unwrap_or(items.len());
+    for (offset, (id, key)) in [
+        (CommandId::AiTableColumns, "ai_table_columns"),
+        (CommandId::AiTableMarkdown, "ai_table_markdown"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        items.insert(
+            at + offset,
+            command_enabled(
+                id,
+                crate::locale::t(key),
+                detail,
+                "ai apple intelligence table tabel kolommen columns markdown explain uitleggen",
+                enabled,
+            ),
+        );
+    }
+    items
+}
+
 /// The "AI" chip left of Lines…: dimmed, with the reason as its tooltip, when the model is not
 /// available.
 pub fn ai_button(availability: mac_ai::Availability) -> Command {
@@ -143,6 +187,13 @@ pub fn pdf_scan_ai_button(scan: Option<&ImageScan>) -> Command {
 pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = chips(data);
     if let Some(at) = chips.iter().position(|c| c.id == CommandId::TextMenu) {
+        chips.insert(at, ai_button(mac_ai::availability()));
+    } else if let Some(at) = chips
+        .iter()
+        .position(|c| c.id == CommandId::TableOpenWindow)
+    {
+        // A table card has no Lines…: the AI chip sits left of the table window chip, and works
+        // on the table version shown, as CSV.
         chips.insert(at, ai_button(mac_ai::availability()));
     } else if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
         // A scanned PDF: the AI chip works on the recognized text, so it waits for it.

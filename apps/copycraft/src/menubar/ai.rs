@@ -28,6 +28,40 @@ pub(crate) struct AiRun {
 enum AiKind {
     Fixed(Action),
     Custom,
+    /// A table card's own instruction (fixed, not typed).
+    Table(TablePreset),
+}
+
+/// What a table card's own AI actions do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TablePreset {
+    Columns,
+    Markdown,
+}
+
+impl TablePreset {
+    /// The fixed instruction for the model (the table itself is sent as data).
+    pub(crate) fn instruction(self) -> &'static str {
+        match self {
+            TablePreset::Columns => {
+                "The text is a table in CSV form with a header row. Explain in a short list what \
+                 each column most likely contains and means, mention its data type and anything \
+                 notable (empty values, ranges). Answer in the language of the column names."
+            }
+            TablePreset::Markdown => {
+                "The text is a table in CSV form with a header row. Rewrite it as a Markdown \
+                 table with the same columns and rows, and nothing else. Keep every value as it \
+                 is."
+            }
+        }
+    }
+
+    fn title(self) -> &'static str {
+        crate::locale::t(match self {
+            TablePreset::Columns => "ai_table_columns",
+            TablePreset::Markdown => "ai_table_markdown",
+        })
+    }
 }
 
 type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
@@ -95,6 +129,11 @@ impl App {
         }
     }
 
+    /// One of a table card's own actions was clicked.
+    pub(crate) fn ai_table(&mut self, preset: TablePreset) {
+        self.ai_begin(AiKind::Table(preset), Zeroizing::new(String::new()));
+    }
+
     fn ai_begin(&mut self, kind: AiKind, instruction: Zeroizing<String>) {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
@@ -124,6 +163,7 @@ impl App {
             match kind {
                 AiKind::Fixed(action) => commands::ai_title(action),
                 AiKind::Custom => commands::ai_custom_label(),
+                AiKind::Table(preset) => preset.title(),
             },
             truncated.then(|| crate::locale::t("ai_truncated")),
         );
@@ -134,6 +174,7 @@ impl App {
                 match kind {
                     AiKind::Fixed(action) => job.run(action, &input),
                     AiKind::Custom => job.run_custom(&instruction, &input),
+                    AiKind::Table(preset) => job.run_custom(preset.instruction(), &input),
                 }
                 .map(Zeroizing::new)
             },
@@ -176,11 +217,17 @@ impl App {
             run.job.cancel();
             return;
         };
+        // A table is not overwritten: the result only goes to the clipboard.
+        if run.entry == TABLE_AI {
+            self.copy_ai_result(&result);
+            return;
+        }
         self.text_stepped(
             run.entry,
             match run.kind {
                 AiKind::Fixed(action) => commands::ai_label(action),
                 AiKind::Custom => commands::ai_custom_label(),
+                AiKind::Table(preset) => preset.title(),
             }
             .to_string(),
             true,

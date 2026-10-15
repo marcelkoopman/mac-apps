@@ -438,6 +438,9 @@ pub enum CommandId {
     /// Lines… › Apple Intelligence › Custom prompt…: asks for an instruction, then runs it on
     /// the card's text like the fixed actions (preview, Apply, Cancel).
     AiCustom,
+    /// Table cards: explain each column, or turn the table into a Markdown table.
+    AiTableColumns,
+    AiTableMarkdown,
     /// The preview's "Apply to clipboard": the result becomes a new text version (⌘Z undoes it).
     AiApply,
     /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.

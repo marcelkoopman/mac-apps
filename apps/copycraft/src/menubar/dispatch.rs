@@ -107,6 +107,8 @@ impl App {
             CommandId::TextFilter => self.text_filter_prompt(),
             CommandId::Ai(action) => self.ai_start(action),
             CommandId::AiCustom => self.ai_custom_prompt(),
+            CommandId::AiTableColumns => self.ai_table(TablePreset::Columns),
+            CommandId::AiTableMarkdown => self.ai_table(TablePreset::Markdown),
             CommandId::AiApply => self.ai_apply(),
             CommandId::AiCancel => self.ai_stop(),
             CommandId::AiUnavailable => {}

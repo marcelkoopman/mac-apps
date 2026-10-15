@@ -288,6 +288,28 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn the_ai_text_is_compact_csv_cut_at_the_row_limit() {
+        let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
+        assert_eq!(
+            super::frame_ai_text(&df).as_deref(),
+            Some("name,n\na,1\nb,2\nc,3\n")
+        );
+        // A version after a step is what goes in, not the copied text.
+        let first = df.head(Some(1));
+        assert_eq!(super::frame_ai_text(&first).as_deref(), Some("name,n\na,1\n"));
+        let mut big = String::from("n\n");
+        for _ in 0..super::AI_MAX_ROWS + 5 {
+            big.push_str("1\n");
+        }
+        let df = super::parse_table(&big).expect("big table");
+        let text = super::frame_ai_text(&df).expect("text");
+        assert_eq!(text.lines().count(), super::AI_MAX_ROWS + 1);
+        // Every row takes two characters, so a cut table is over the AI limit and says so.
+        assert!(text.chars().count() > mac_ai::MAX_CHARS);
+        assert!(mac_ai::truncate(&text).1);
+    }
+
+    #[test]
     fn a_table_version_renders_writes_and_saves_from_its_frame() {
         let df = super::parse_table("name,n\na,1\nb,2\nc,3").expect("table");
         let preview = super::frame_preview(&df, 2, None).expect("preview");
