@@ -30,8 +30,14 @@ fn icon_action(ai_active: bool, card_open: bool) -> IconAction {
 }
 
 impl App {
+    /// A chosen or dropped file is the card's last content and no new clipboard content has come
+    /// in: the card shows it again as it was (not reset, not the clipboard).
+    fn file_stays(&self) -> bool {
+        self.opened.is_some() && !self.opened_superseded
+    }
+
     pub(crate) fn summon_popup(&mut self) {
-        if !launcher::is_open() {
+        if !launcher::is_open() && !self.file_stays() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;
@@ -76,7 +82,7 @@ impl App {
             return;
         }
         note_icon_click(now);
-        if !launcher::is_open() {
+        if !launcher::is_open() && !self.file_stays() {
             self.reset_view();
             self.leave_opened();
             self.full_card = None;

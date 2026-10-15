@@ -79,6 +79,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         history: ClipboardHistory::with_gate(crate::capture::history_held),
         history_cursor: 0,
         clipboard_cursor: None,
+        opened_superseded: false,
         current_image: None,
         recorded_image_change: None,
         reinstall_click: Cell::new(false),

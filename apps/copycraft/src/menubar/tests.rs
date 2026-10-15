@@ -20,11 +20,21 @@ fn a_second_delivery_of_one_icon_click_does_not_toggle_again() {
 
 #[test]
 fn a_closed_card_keeps_a_file_while_its_table_window_is_open() {
-    assert!(!forget_opened_file(true, true, false));
-    assert!(forget_opened_file(false, true, false));
+    assert!(!forget_opened_file(true, true, false, true));
+    assert!(forget_opened_file(false, true, false, true));
     // Open table hides the card and the window shows the chosen file.
-    assert!(!forget_opened_file(false, true, true));
-    assert!(!forget_opened_file(false, false, true));
+    assert!(!forget_opened_file(false, true, true, true));
+    assert!(!forget_opened_file(false, false, true, true));
+}
+
+#[test]
+fn a_hidden_file_card_stays_until_new_clipboard_content_comes_in() {
+    // Hidden by the icon, the hotkey or Esc: the poll runs, nothing new on the clipboard.
+    assert!(!forget_opened_file(false, true, false, false));
+    // Another app copies something: the file gives way when the card is closed.
+    assert!(forget_opened_file(false, true, false, true));
+    // Still open: never dropped under the user.
+    assert!(!forget_opened_file(true, true, false, true));
 }
 
 #[test]
@@ -161,14 +171,19 @@ fn chosen_file_survives_open_table_and_returns_when_the_window_closes() {
     // Kies bestand…: the file is on the card (and in history, so its table lives there).
     // Open table closes the card; the window keeps the file, so it is not forgotten.
     let (file_open, window_keeps_file) = (true, true);
-    assert!(!forget_opened_file(false, file_open, window_keeps_file));
+    assert!(!forget_opened_file(
+        false,
+        file_open,
+        window_keeps_file,
+        true
+    ));
     // The window closes: the card comes back with the file, before the file could be dropped.
     assert!(card_returns_after_window(
         window_keeps_file,
         file_open,
         false
     ));
-    assert!(!forget_opened_file(true, file_open, false));
+    assert!(!forget_opened_file(true, file_open, false, true));
     // A window opened from a history entry (no file) does not bring the card back.
     assert!(!card_returns_after_window(false, false, false));
     // The card already open: nothing to do.

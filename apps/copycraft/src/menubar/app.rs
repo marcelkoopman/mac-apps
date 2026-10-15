@@ -19,6 +19,9 @@ pub(crate) struct App {
     /// While a drop is on the card (at history index 0): the clipboard's own history index,
     /// for when the card follows the clipboard again.
     pub(crate) clipboard_cursor: Option<usize>,
+    /// New clipboard content from another app arrived while a chosen or dropped file is on the
+    /// card: the file may now give way to it. Until then it stays, hidden or not.
+    pub(crate) opened_superseded: bool,
     pub(crate) current_image: Option<SecretBytes>,
     pub(crate) recorded_image_change: Option<isize>,
     /// A status menu was shown: the status button's click action must be set again.

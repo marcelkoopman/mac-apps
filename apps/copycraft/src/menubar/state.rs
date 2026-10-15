@@ -80,6 +80,8 @@ impl App {
                 .is_new_copy(&signature, matches!(view, ClipboardView::Empty))
         {
             self.blink.start(now);
+            // New clipboard content: a file on the card may give way to it when the card closes.
+            self.opened_superseded = self.opened.is_some();
         }
         // A chosen file stays on the card while the clipboard keeps its own history.
         if self.opened.is_none() {
@@ -216,14 +218,17 @@ pub(crate) fn browse_ends(polled: Option<isize>, change: isize, own: bool) -> bo
     polled.is_some_and(|seen| seen != change) && !own
 }
 
-/// A closed card drops a chosen file. Not while the table window still shows that file:
-/// Open table closes the card, and the window stays with the file until the window closes.
+/// A closed card drops a chosen file only once new clipboard content has come in
+/// (`superseded`): hiding the card, by the icon, the hotkey or Esc, keeps the file as the last
+/// content, and it is there again on the next click. Not while the table window still shows
+/// that file: Open table closes the card, and the window stays with the file until it closes.
 pub(crate) fn forget_opened_file(
     card_open: bool,
     file_open: bool,
     window_shows_file: bool,
+    superseded: bool,
 ) -> bool {
-    file_open && !card_open && !window_shows_file
+    file_open && !card_open && !window_shows_file && superseded
 }
 
 /// The table window closed: show the card again when that window was opened from a chosen

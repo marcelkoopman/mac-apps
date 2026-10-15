@@ -82,6 +82,7 @@ impl ApplicationHandler<UserEvent> for App {
             self.table_window
                 .as_ref()
                 .is_some_and(|window| window.opened || window.keeps_file),
+            self.opened_superseded,
         ) {
             self.leave_opened();
         }
