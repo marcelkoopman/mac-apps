@@ -6,7 +6,7 @@
 import Foundation
 import FoundationModels
 
-// Status codes, mirrored in src/ffi.rs.
+// Status codes, mirrored by `Error::from_code` and `decode_availability` in src/lib.rs.
 private let statusOk: Int32 = 0
 private let statusUnavailable: Int32 = 1
 private let statusCancelled: Int32 = 2

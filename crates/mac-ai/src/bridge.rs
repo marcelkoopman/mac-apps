@@ -53,13 +53,8 @@ impl Job {
 
     /// Run `action` on `text` and wait for the answer. Blocks: call it from a background thread.
     pub fn run(&self, action: Action, text: &str) -> Result<String, Error> {
-        self.run_task(action.task(), text)
-    }
-
-    /// Run one `task` on `text`: [`crate::instructions`] and [`crate::prompt`] keep the two
-    /// apart. Blocks like [`Job::run`].
-    pub fn run_task(&self, task: &str, text: &str) -> Result<String, Error> {
-        self.run_raw(&crate::instructions(task), &crate::prompt(text))
+        // Only an [`Action`]'s own task goes in: there is no way to pass a free instruction.
+        self.run_raw(&crate::instructions(action.task()), &crate::prompt(text))
     }
 
     fn run_raw(&self, instructions: &str, input: &str) -> Result<String, Error> {

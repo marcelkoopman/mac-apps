@@ -20,8 +20,4 @@ impl Job {
     pub fn run(&self, _action: Action, _text: &str) -> Result<String, Error> {
         Err(Error::Unavailable)
     }
-
-    pub fn run_task(&self, _instruction: &str, _text: &str) -> Result<String, Error> {
-        Err(Error::Unavailable)
-    }
 }
