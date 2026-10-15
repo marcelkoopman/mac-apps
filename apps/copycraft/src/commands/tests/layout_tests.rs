@@ -311,6 +311,7 @@ fn overflow_menu_sections_follow_the_requested_order() {
         CommandId::IgnoreFrontApp,
         CommandId::ClearSensitive,
         CommandId::Appearance(crate::appearance::Theme::Dark),
+        CommandId::WindowSize(crate::settings::WindowSize::Wide),
         CommandId::Settings,
         CommandId::About,
         CommandId::Welcome,
@@ -324,6 +325,7 @@ fn overflow_menu_sections_follow_the_requested_order() {
     assert_eq!(menu_section(&CommandId::ChooseFile), MenuSection::File);
     assert!(menu_submenu(&CommandId::KeepHistory(5)).is_some());
     assert!(menu_submenu(&CommandId::Appearance(crate::appearance::Theme::Light)).is_some());
+    assert!(menu_submenu(&CommandId::WindowSize(crate::settings::WindowSize::Compact)).is_some());
     assert_eq!(menu_submenu(&CommandId::Pause), None);
     assert_eq!(keep_history_short(60), "60 min");
     assert!(crate::locale::t("menu_choose_file").ends_with('…'));

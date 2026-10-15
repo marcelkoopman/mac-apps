@@ -196,6 +196,7 @@ mod tests {
         // Words and names that are the same in both languages.
         const SAME: &[&str] = &[
             "agent_tokens",
+            "window_compact",
             "label_pii",
             "title_link",
             "title_youtube",

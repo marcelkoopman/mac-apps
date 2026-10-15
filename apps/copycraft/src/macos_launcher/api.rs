@@ -339,6 +339,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     THEME.set(data.theme);
     CLEAR_SENSITIVE.set(data.settings.clear_sensitive);
     HISTORY_MINUTES.set(data.settings.history_minutes);
+    WINDOW_SIZE.set(data.settings.window_size);
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
     // At most four chips on the card; the others lead the `…` menu (Lines… stays visible).

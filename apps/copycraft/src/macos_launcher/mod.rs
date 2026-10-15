@@ -39,7 +39,6 @@ use crate::format::FormatKind;
 use crate::item_find;
 use crate::launcher::{self, UserEvent};
 
-pub(crate) const WIDTH: f64 = 440.0;
 /// The diff well is two columns, so the card grows while that view is showing.
 pub(crate) const DIFF_WIDTH: f64 = 820.0;
 use crate::card_layout::{
@@ -255,6 +254,8 @@ thread_local! {
     /// The well is a side-by-side diff, so the columns are drawn and `+` / `-` sides are colored.
     static CARD_DIFF: Cell<bool> = const { Cell::new(false) };
     /// The diff well is showing both copies, so the card uses [`DIFF_WIDTH`].
+    /// [`crate::settings::Settings::window_size`], kept in step with the menu.
+    static WINDOW_SIZE: Cell<crate::settings::WindowSize> = const { Cell::new(crate::settings::WindowSize::Normal) };
     static DIFF_WIDE: Cell<bool> = const { Cell::new(false) };
     /// A diff stays masked until reveal when either side is sensitive, even with the privacy
     /// filter off. Other views keep the filter as the master switch.
@@ -278,8 +279,26 @@ thread_local! {
     static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
 }
 
+/// The card's width: the chosen size cut to the icon's screen ([`crate::settings::WindowSize`]);
+/// the two-column diff is wider still.
 pub(crate) fn card_width() -> f64 {
-    if DIFF_WIDE.get() { DIFF_WIDTH } else { WIDTH }
+    let size = WINDOW_SIZE.with(Cell::get);
+    let visible = MainThreadMarker::new()
+        .zip(ICON_FRAME.get())
+        .and_then(|(mtm, icon)| {
+            let middle = NSPoint::new(
+                icon.origin.x + icon.size.width / 2.0,
+                icon.origin.y + icon.size.height / 2.0,
+            );
+            mac_ui::panel::screen_at(mtm, middle).map(|screen| screen.visibleFrame().size.width)
+        })
+        .unwrap_or(1440.0);
+    let width = size.width_on(visible);
+    if DIFF_WIDE.get() {
+        width.max(DIFF_WIDTH)
+    } else {
+        width
+    }
 }
 
 #[cfg(test)]

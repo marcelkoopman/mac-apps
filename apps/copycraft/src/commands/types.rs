@@ -384,6 +384,8 @@ pub enum CommandId {
     /// Render the whole text on the card instead of its preview.
     ShowAll,
     Appearance(Theme),
+    /// How wide the card is.
+    WindowSize(crate::settings::WindowSize),
     /// Turn the minute timer on copycraft's sensitive copies on or off.
     ClearSensitive,
     /// Forget history this many minutes after the last copy; 0: no time limit.

@@ -301,6 +301,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryOlder
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
+            | CommandId::WindowSize(_)
             | CommandId::ClearSensitive
             | CommandId::KeepHistory(_)
             | CommandId::ClearClipboard

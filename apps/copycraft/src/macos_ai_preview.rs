@@ -39,7 +39,7 @@ fn ai_open() -> bool {
 }
 
 fn ai_views(mtm: MainThreadMarker) -> AiViews {
-    let width = WIDTH - PAD * 2.0;
+    let width = card_width() - PAD * 2.0;
     let root = NSView::initWithFrame(
         NSView::alloc(mtm),
         NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H)),
@@ -161,6 +161,21 @@ pub(crate) fn show_ai_working(title: &str, notice: Option<&str>) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
+    // Built for the width at the time; a new window size needs new views (unless a preview is open).
+    let stale = !ai_open()
+        && AI_VIEWS.with(|slot| {
+            slot.borrow().as_ref().is_some_and(|views| {
+                let wanted = card_width() - PAD * 2.0;
+                if (views.root.frame().size.width - wanted).abs() < 0.5 {
+                    return false;
+                }
+                views.root.removeFromSuperview();
+                true
+            })
+        });
+    if stale {
+        AI_VIEWS.with(|slot| slot.replace(None));
+    }
     let fresh = AI_VIEWS.with(|slot| slot.borrow().is_none());
     if fresh {
         let views = ai_views(mtm);

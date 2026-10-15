@@ -6,7 +6,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     if WINDOW.with(|slot| slot.borrow().is_some()) {
         return;
     }
-    let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(WIDTH, 420.0));
+    let window = panel::borderless(LauncherWindow::alloc(mtm), NSSize::new(card_width(), 420.0));
     // Hover over the well's right edge shows the action dock (`mouseMoved:`).
     window.setAcceptsMouseMovedEvents(true);
     panel::configure_floating(&window);

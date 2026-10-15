@@ -317,6 +317,13 @@ pub(crate) fn pop_overflow() {
             };
             item.setState(state);
         }
+        if let CommandId::WindowSize(size) = cmd.id {
+            item.setState(if WINDOW_SIZE.with(Cell::get) == size {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        }
         if let CommandId::KeepHistory(minutes) = cmd.id {
             item.setState(if HISTORY_MINUTES.with(Cell::get) == minutes {
                 NSControlStateValueOn
@@ -392,6 +399,7 @@ fn submenu_symbol(id: &CommandId) -> Option<&'static str> {
     match id {
         CommandId::KeepHistory(_) => Some("timer"),
         CommandId::Appearance(_) => Some("circle.lefthalf.filled"),
+        CommandId::WindowSize(_) => Some("arrow.left.and.right"),
         _ => Some("clock.arrow.circlepath"),
     }
 }

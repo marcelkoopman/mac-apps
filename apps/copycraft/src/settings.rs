@@ -61,6 +61,48 @@ pub struct Settings {
     /// The card's Wis/Clear button asks first. "Don't ask again" turns it off; Settings turns
     /// it back on. On by default.
     pub confirm_clear: bool,
+    /// Width of the card under the menu bar icon. Only a size is stored, never content.
+    pub window_size: WindowSize,
+}
+
+/// How wide the card is: a choice in the `⋯` menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WindowSize {
+    Compact,
+    Normal,
+    Wide,
+}
+
+impl WindowSize {
+    pub const ALL: [WindowSize; 3] = [Self::Compact, Self::Normal, Self::Wide];
+
+    /// The card's width in points, before it is cut to the screen ([`Self::width_on`]).
+    pub fn width(self) -> f64 {
+        match self {
+            Self::Compact => 440.0,
+            Self::Normal => 640.0,
+            Self::Wide => 800.0,
+        }
+    }
+
+    /// The width on a screen whose usable width is `visible`: never more than 60% of it, and
+    /// never less than the compact width (a small screen keeps the old card).
+    pub fn width_on(self, visible: f64) -> f64 {
+        let compact = Self::Compact.width();
+        self.width().min((visible * 0.6).max(compact)).max(compact)
+    }
+
+    fn id(self) -> i64 {
+        match self {
+            Self::Compact => 0,
+            Self::Normal => 1,
+            Self::Wide => 2,
+        }
+    }
+
+    pub fn from_id(id: i64) -> Option<Self> {
+        Self::ALL.into_iter().find(|size| size.id() == id)
+    }
 }
 
 /// The choices in the `⋯` menu, in menu order. 0: no time limit.
@@ -79,6 +121,7 @@ impl Default for Settings {
             page_long_text: true,
             announce_confirmations: true,
             confirm_clear: true,
+            window_size: WindowSize::Normal,
         }
     }
 }
@@ -92,6 +135,7 @@ const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
 const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
 const ANNOUNCE_KEY: &str = "CopycraftAnnounceConfirmations";
+const WINDOW_SIZE_KEY: &str = "CopycraftWindowSize";
 const CONFIRM_CLEAR_KEY: &str = "CopycraftConfirmClear";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
@@ -139,6 +183,9 @@ pub fn load() -> Settings {
     }
     settings.announce_confirmations = announce_from(load_bool(ANNOUNCE_KEY));
     settings.confirm_clear = confirm_clear_from(load_bool(CONFIRM_CLEAR_KEY));
+    if let Some(size) = load_int(WINDOW_SIZE_KEY).and_then(WindowSize::from_id) {
+        settings.window_size = size;
+    }
     settings
 }
 
@@ -158,6 +205,11 @@ pub fn preferred_table() -> crate::table::TableVersions {
 
 pub fn set_clear_sensitive(on: bool) {
     store_bool(CLEAR_SENSITIVE_KEY, on);
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_window_size(size: WindowSize) {
+    store_int(WINDOW_SIZE_KEY, size.id());
 }
 
 pub fn set_history_minutes(minutes: u32) {
@@ -544,6 +596,34 @@ fn store_string(key: &str, value: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn window_width_follows_the_choice_and_stays_on_the_screen() {
+        use super::WindowSize::{Compact, Normal, Wide};
+        assert_eq!(super::Settings::default().window_size, Normal);
+        assert_eq!(Compact.width(), 440.0);
+        // A roomy screen gives the choice as is.
+        assert_eq!(Normal.width_on(1920.0), 640.0);
+        assert_eq!(Wide.width_on(2560.0), 800.0);
+        // Never more than 60% of the usable width.
+        assert_eq!(Wide.width_on(1280.0), 768.0);
+        assert_eq!(Normal.width_on(1000.0), 600.0);
+        // A small screen keeps the compact card, never less.
+        assert_eq!(Normal.width_on(600.0), 440.0);
+        assert_eq!(Compact.width_on(300.0), 440.0);
+        // Each size is wider than the one before on a roomy screen.
+        assert!(Compact.width_on(2000.0) < Normal.width_on(2000.0));
+        assert!(Normal.width_on(2000.0) < Wide.width_on(2000.0));
+    }
+
+    #[test]
+    fn a_stored_window_size_round_trips_and_a_bad_one_is_ignored() {
+        for size in super::WindowSize::ALL {
+            assert_eq!(super::WindowSize::from_id(size.id()), Some(size));
+        }
+        assert_eq!(super::WindowSize::from_id(7), None);
+        assert_eq!(super::WindowSize::from_id(-1), None);
+    }
+
     use super::Settings;
 
     #[test]

@@ -334,6 +334,14 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             "appearance theme",
         ));
     }
+    for size in crate::settings::WindowSize::ALL {
+        commands.push(command(
+            CommandId::WindowSize(size),
+            window_size_title(size),
+            crate::locale::t("window_size_menu"),
+            "window size width wide compact normal resize venstergrootte breed",
+        ));
+    }
     commands.push(command(
         CommandId::Settings,
         crate::locale::t("settings"),
@@ -421,7 +429,7 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         | CommandId::IgnoreNext
         | CommandId::IgnoreFrontApp
         | CommandId::ClearSensitive => MenuSection::Recording,
-        CommandId::Appearance(_) => MenuSection::Appearance,
+        CommandId::Appearance(_) | CommandId::WindowSize(_) => MenuSection::Appearance,
         CommandId::Settings
         | CommandId::About
         | CommandId::ExportDiagnostics
@@ -441,7 +449,18 @@ pub fn menu_submenu(id: &CommandId) -> Option<&'static str> {
         | CommandId::ClearPins => Some(crate::locale::t("history")),
         CommandId::KeepHistory(_) => Some(crate::locale::t("keep_history_menu")),
         CommandId::Appearance(_) => Some(crate::locale::t("appearance")),
+        CommandId::WindowSize(_) => Some(crate::locale::t("window_size_menu")),
         _ => None,
+    }
+}
+
+/// Title of a [`CommandId::WindowSize`] choice, NL/EN.
+pub fn window_size_title(size: crate::settings::WindowSize) -> &'static str {
+    use crate::settings::WindowSize;
+    match size {
+        WindowSize::Compact => crate::locale::t("window_compact"),
+        WindowSize::Normal => crate::locale::t("window_normal"),
+        WindowSize::Wide => crate::locale::t("window_wide"),
     }
 }
 

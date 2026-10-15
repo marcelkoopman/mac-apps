@@ -107,7 +107,7 @@ fn store_picker_source(data: &LaunchData, content_key: u64) {
 }
 
 fn picker_views(mtm: MainThreadMarker) -> PickerViews {
-    let width = WIDTH - PAD * 2.0;
+    let width = card_width() - PAD * 2.0;
     let root = NSView::initWithFrame(
         NSView::alloc(mtm),
         NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H)),
@@ -258,6 +258,20 @@ fn open_picker() {
         return;
     }
     PICKER.with(|slot| slot.replace(Some(ColumnPicker::new(columns))));
+    // Built for the width at the time; a new window size needs new views.
+    let stale = PICKER_VIEWS.with(|slot| {
+        slot.borrow().as_ref().is_some_and(|views| {
+            let wanted = card_width() - PAD * 2.0;
+            if (views.root.frame().size.width - wanted).abs() < 0.5 {
+                return false;
+            }
+            views.root.removeFromSuperview();
+            true
+        })
+    });
+    if stale {
+        PICKER_VIEWS.with(|slot| slot.replace(None));
+    }
     let fresh = PICKER_VIEWS.with(|slot| slot.borrow().is_none());
     if fresh {
         let views = picker_views(mtm);
