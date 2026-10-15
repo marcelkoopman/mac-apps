@@ -14,6 +14,8 @@ pub enum UserEvent {
     ShowStatusMenu,
     /// First launch: show the welcome window once the event loop runs.
     ShowWelcome,
+    /// The startup check of Apple Intelligence is done (off the main thread).
+    AiChecked(mac_ai::Availability),
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,

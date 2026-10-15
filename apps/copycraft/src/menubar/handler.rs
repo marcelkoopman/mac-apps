@@ -19,6 +19,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::ToggleUnderIcon => self.toggle_popup_under_icon(),
             UserEvent::ShowStatusMenu => self.show_status_menu(),
             UserEvent::ShowWelcome => launcher::show_welcome(),
+            UserEvent::AiChecked(availability) => self.ai_startup_checked(availability),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::PreviewReady { generation, result } => {

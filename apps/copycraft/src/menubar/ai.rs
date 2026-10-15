@@ -32,7 +32,38 @@ enum AiKind {
 
 type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
 
+/// The startup warning was shown (once per session).
+static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl App {
+    /// The startup check is done: when Apple Intelligence is not usable, say so once per session
+    /// and what to do about it. Nothing is shown when it works. Only the status is involved.
+    pub(crate) fn ai_startup_checked(&mut self, availability: mac_ai::Availability) {
+        if availability.is_ok() {
+            return;
+        }
+        if WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        self.show_ai_health(availability);
+    }
+
+    /// ⋯ › Check AI: ask again, now, and show the result either way.
+    pub(crate) fn ai_check_now(&mut self) {
+        self.show_ai_health(mac_ai::availability());
+    }
+
+    fn show_ai_health(&self, availability: mac_ai::Availability) {
+        #[cfg(target_os = "macos")]
+        if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+            let (title, message) = commands::ai_health(availability);
+            mac_ui::panel::activate_app(mtm);
+            mac_ui::dialog::alert(mtm, title, &message);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = availability;
+    }
+
     /// An AI action was clicked: open the preview and start the model.
     pub(crate) fn ai_start(&mut self, action: Action) {
         self.ai_begin(AiKind::Fixed(action), Zeroizing::new(String::new()));

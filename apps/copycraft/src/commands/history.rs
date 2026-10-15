@@ -347,6 +347,12 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "about version offline",
     ));
     commands.push(command(
+        CommandId::CheckAi,
+        crate::locale::t("ai_check"),
+        crate::locale::t("detail_ai_check"),
+        "ai apple intelligence check controleer status health gezondheid",
+    ));
+    commands.push(command(
         CommandId::ExportDiagnostics,
         crate::locale::t("export_diagnostics"),
         crate::locale::t("detail_export_diagnostics"),
@@ -419,6 +425,7 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         CommandId::Settings
         | CommandId::About
         | CommandId::ExportDiagnostics
+        | CommandId::CheckAi
         | CommandId::Welcome
         | CommandId::Quit => MenuSection::App,
         _ => MenuSection::More,

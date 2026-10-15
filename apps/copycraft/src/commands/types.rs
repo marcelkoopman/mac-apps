@@ -373,6 +373,8 @@ pub enum CommandId {
     ClearHistory,
     /// Save copycraft's own recent log, versions and settings (never content) as a .txt file.
     ExportDiagnostics,
+    /// Check Apple Intelligence again and say what is wrong, or that it works.
+    CheckAi,
     /// Wipe clipboard copies held in memory, then empty the pasteboard.
     Clear,
     /// Open a file on the card.

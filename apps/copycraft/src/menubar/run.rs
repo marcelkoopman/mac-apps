@@ -63,6 +63,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         launcher::emit(UserEvent::ShowWelcome);
     }
 
+    // Is Apple Intelligence usable? Asked in the background (cheap, but not on the main thread);
+    // a warning follows once per session when it is not.
+    if let Err(e) = std::thread::Builder::new()
+        .name("copycraft-ai-check".into())
+        .spawn(|| launcher::emit(UserEvent::AiChecked(mac_ai::availability())))
+    {
+        crate::diag::log(crate::diag::LogEvent::BackgroundStartSkipped(
+            crate::diag::ErrorKind::from_text(&e.to_string()),
+        ));
+    }
+
     let mut app = App {
         tray,
         history: ClipboardHistory::with_gate(crate::capture::history_held),

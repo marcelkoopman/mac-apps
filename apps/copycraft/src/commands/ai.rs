@@ -29,8 +29,35 @@ pub fn ai_reason(reason: Unavailable) -> &'static str {
         Unavailable::DeviceNotEligible => "ai_off_device",
         Unavailable::AppleIntelligenceOff => "ai_off_disabled",
         Unavailable::ModelNotReady => "ai_off_not_ready",
-        Unavailable::NoBridge | Unavailable::Other => "ai_off_other",
+        Unavailable::NoBridge => "ai_off_bridge",
+        Unavailable::Other => "ai_off_other",
     })
+}
+
+/// What to do about `reason`: one or two short sentences, for the warning and the check.
+pub fn ai_fix(reason: Unavailable) -> &'static str {
+    crate::locale::t(match reason {
+        Unavailable::UnsupportedSystem => "ai_fix_system",
+        Unavailable::NotAppleSilicon => "ai_fix_silicon",
+        Unavailable::DeviceNotEligible => "ai_fix_device",
+        Unavailable::AppleIntelligenceOff => "ai_fix_disabled",
+        Unavailable::ModelNotReady => "ai_fix_not_ready",
+        Unavailable::NoBridge => "ai_fix_bridge",
+        Unavailable::Other => "ai_fix_other",
+    })
+}
+
+/// Title and message of the Apple Intelligence check: that it works, or the reason and what to
+/// do. No content is involved, only the status.
+pub fn ai_health(availability: mac_ai::Availability) -> (&'static str, String) {
+    let title = crate::locale::t("ai_check_title");
+    match availability {
+        Ok(()) => (title, crate::locale::t("ai_check_ok").to_string()),
+        Err(reason) => (
+            title,
+            format!("{}\n\n{}", ai_reason(reason), ai_fix(reason)),
+        ),
+    }
 }
 
 /// What a failed run says on the preview. Cancelling says nothing.
@@ -271,6 +298,51 @@ mod tests {
         // Only the kind of the error reaches the log.
         let line = crate::diag::LogEvent::AiFailed(mac_ai::Error::Guardrail).line();
         assert!(line.ends_with("guardrail"), "{line}");
+    }
+
+    #[test]
+    fn every_reason_has_a_reason_and_a_fix_in_both_languages() {
+        let reasons = [
+            Unavailable::UnsupportedSystem,
+            Unavailable::NotAppleSilicon,
+            Unavailable::DeviceNotEligible,
+            Unavailable::AppleIntelligenceOff,
+            Unavailable::ModelNotReady,
+            Unavailable::NoBridge,
+            Unavailable::Other,
+        ];
+        for lang in [Language::Nl, Language::En] {
+            crate::locale::set_test_language(lang);
+            let mut seen = Vec::new();
+            for reason in reasons {
+                let (_, message) = ai_health(Err(reason));
+                assert!(message.contains(ai_reason(reason)));
+                assert!(message.contains(ai_fix(reason)));
+                assert!(!ai_fix(reason).is_empty());
+                assert!(!seen.contains(&message), "{reason:?} repeats a message");
+                seen.push(message);
+            }
+        }
+        crate::locale::set_test_language(Language::En);
+    }
+
+    #[test]
+    fn the_check_names_the_concrete_dutch_advice() {
+        crate::locale::set_test_language(Language::Nl);
+        let (title, ok) = ai_health(Ok(()));
+        assert_eq!(title, "Apple Intelligence");
+        assert!(ok.contains("werkt"));
+        let (_, off) = ai_health(Err(Unavailable::AppleIntelligenceOff));
+        assert!(off.contains("Zet Apple Intelligence aan in Systeeminstellingen"));
+        let (_, loading) = ai_health(Err(Unavailable::ModelNotReady));
+        assert!(loading.contains("gedownload"));
+        let (_, bridge) = ai_health(Err(Unavailable::NoBridge));
+        assert!(bridge.contains("swiftc"));
+        // The chip's tooltip uses the same reason.
+        let chip = ai_button(Err(Unavailable::NoBridge));
+        assert_eq!(chip.detail, ai_reason(Unavailable::NoBridge));
+        assert!(!chip.enabled);
+        crate::locale::set_test_language(Language::En);
     }
 
     #[test]

@@ -146,6 +146,7 @@ impl App {
             CommandId::AgentCheck => launcher::show_agent_check(),
             CommandId::GotoLine(line) => launcher::scroll_card_to_line(line),
             CommandId::ExportDiagnostics => self.export_diagnostics(),
+            CommandId::CheckAi => self.ai_check_now(),
             CommandId::Welcome => launcher::show_welcome(),
             CommandId::Diff => {
                 if self.diff_sel.pair().is_some() {

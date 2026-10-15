@@ -929,6 +929,58 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Apple Intelligence isn't available",
     ),
     (
+        "ai_off_bridge",
+        "Deze versie van Copycraft is gebouwd zonder AI-ondersteuning",
+        "This build of Copycraft was made without AI support",
+    ),
+    ("ai_check", "Controleer AI", "Check AI"),
+    (
+        "detail_ai_check",
+        "Controleer of Apple Intelligence werkt en zeg wat er mis is",
+        "Check whether Apple Intelligence works and say what is wrong",
+    ),
+    ("ai_check_title", "Apple Intelligence", "Apple Intelligence"),
+    (
+        "ai_check_ok",
+        "Apple Intelligence werkt: de AI-acties zijn beschikbaar.",
+        "Apple Intelligence works: the AI actions are available.",
+    ),
+    (
+        "ai_fix_system",
+        "Werk macOS bij naar versie 26 of nieuwer in Systeeminstellingen › Algemeen › Software-update.",
+        "Update macOS to version 26 or later in System Settings › General › Software Update.",
+    ),
+    (
+        "ai_fix_silicon",
+        "De AI-acties werken alleen op een Mac met Apple silicon.",
+        "The AI actions only work on a Mac with Apple silicon.",
+    ),
+    (
+        "ai_fix_device",
+        "Deze Mac ondersteunt Apple Intelligence niet, dus de AI-acties blijven uit.",
+        "This Mac does not support Apple Intelligence, so the AI actions stay off.",
+    ),
+    (
+        "ai_fix_disabled",
+        "Zet Apple Intelligence aan in Systeeminstellingen › Apple Intelligence en Siri en kies daarna Controleer AI in het ⋯ menu.",
+        "Turn on Apple Intelligence in System Settings › Apple Intelligence & Siri, then choose Check AI in the ⋯ menu.",
+    ),
+    (
+        "ai_fix_not_ready",
+        "Het model wordt nog gedownload of voorbereid. Probeer het later opnieuw met Controleer AI in het ⋯ menu.",
+        "The model is still being downloaded or prepared. Try again later with Check AI in the ⋯ menu.",
+    ),
+    (
+        "ai_fix_bridge",
+        "Bouw Copycraft opnieuw met swiftc (Xcode of de command line tools) of installeer een officiële versie.",
+        "Build Copycraft again with swiftc (Xcode or the command line tools) or install an official release.",
+    ),
+    (
+        "ai_fix_other",
+        "De status van Apple Intelligence is onbekend. Probeer het later opnieuw met Controleer AI in het ⋯ menu.",
+        "The status of Apple Intelligence is unknown. Try again later with Check AI in the ⋯ menu.",
+    ),
+    (
         "ai_err_guardrail",
         "Apple Intelligence wil deze tekst niet verwerken",
         "Apple Intelligence won't process this text",
