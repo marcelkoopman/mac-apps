@@ -127,20 +127,6 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     content.addSubview(save_button.view());
     actions_x += save_w + PAD;
 
-    let ai_button = GlassButton::pill(mtm, crate::locale::t("ai_button"), ButtonSize::Regular);
-    ai_button.set_symbol(commands::AI_SYMBOL);
-    wire(ai_button.button(), sel!(tableWindowAiClicked:));
-    let ai_w = ai_button.width_within(100.0);
-    ai_button.view().setFrame(NSRect::new(
-        NSPoint::new(actions_x, toolbar_y),
-        NSSize::new(ai_w, commands::CHIP_PILL_H),
-    ));
-    ai_button
-        .view()
-        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
-    content.addSubview(ai_button.view());
-    actions_x += ai_w + PAD;
-
     let capsule = NSView::initWithFrame(
         NSView::alloc(mtm),
         NSRect::new(
@@ -336,7 +322,6 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
             table_button,
             copy_button,
             save_button,
-            ai_button,
             undo,
             title,
             redo,

@@ -16,62 +16,13 @@ pub(crate) struct AiRun {
     number: u64,
     /// The history entry (or file) the action was run on.
     entry: u64,
-    kind: AiKind,
+    action: Action,
     job: Arc<mac_ai::Job>,
     /// The model's answer, once it is there.
     result: Option<Zeroizing<String>>,
     /// Hash of the text the run was started on (never the text): Apply only makes a version
     /// of the card when that text is still the card's.
     input_hash: u64,
-}
-
-/// What a run does: one of the fixed actions, or one of a table's own.
-#[derive(Clone, Copy)]
-enum AiKind {
-    Fixed(Action),
-    Table(TablePreset),
-}
-
-/// What a table card's own AI actions do.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TablePreset {
-    Columns,
-    Markdown,
-    Patterns,
-}
-
-impl TablePreset {
-    /// The one task for the model (the table itself is sent as data, as CSV with a header row).
-    pub(crate) fn task(self) -> &'static str {
-        match self {
-            TablePreset::Columns => {
-                "The text is a table as CSV; the first row holds the column names. For each \
-                 column write one line: its name, what it contains, and its data type. Mention \
-                 empty values or odd values if you see them. Use the language of the column \
-                 names."
-            }
-            TablePreset::Markdown => {
-                "The text is a table as CSV; the first row holds the column names. Write the \
-                 same table as a Markdown table: same columns, same rows, same values, nothing \
-                 else."
-            }
-            TablePreset::Patterns => {
-                "The text is a table as CSV; the first row holds the column names. List at most \
-                 5 notable patterns that are visible in the rows: trends, outliers, repeated or \
-                 missing values, strong links between columns. One bullet each, with the \
-                 numbers or values that show it. If you see none, say so in one sentence. Use \
-                 the language of the column names."
-            }
-        }
-    }
-
-    fn title(self) -> &'static str {
-        crate::locale::t(match self {
-            TablePreset::Columns => "ai_table_columns",
-            TablePreset::Markdown => "ai_table_markdown",
-            TablePreset::Patterns => "ai_table_patterns",
-        })
-    }
 }
 
 type AiResult = Result<Zeroizing<String>, mac_ai::Error>;
@@ -110,15 +61,10 @@ impl App {
 
     /// An AI action was clicked: open the preview and start the model.
     pub(crate) fn ai_start(&mut self, action: Action) {
-        self.ai_begin(AiKind::Fixed(action));
+        self.ai_begin(action);
     }
 
-    /// One of a table card's own actions was clicked.
-    pub(crate) fn ai_table(&mut self, preset: TablePreset) {
-        self.ai_begin(AiKind::Table(preset));
-    }
-
-    fn ai_begin(&mut self, kind: AiKind) {
+    fn ai_begin(&mut self, action: Action) {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
         if mac_ai::availability().is_err() {
@@ -139,28 +85,19 @@ impl App {
         self.ai = Some(AiRun {
             number,
             entry,
-            kind,
+            action,
             job: Arc::clone(&job),
             result: None,
             input_hash: hash_text(&text),
         });
         launcher::ai_preview_working(
-            match kind {
-                AiKind::Fixed(action) => commands::ai_title(action),
-                AiKind::Table(preset) => preset.title(),
-            },
+            commands::ai_title(action),
             truncated.then(|| crate::locale::t("ai_truncated")),
         );
         let done = self.start_work(
             work::Lane::Ai,
             Duration::ZERO,
-            move || -> AiResult {
-                match kind {
-                    AiKind::Fixed(action) => job.run(action, &input),
-                    AiKind::Table(preset) => job.run_task(preset.task(), &input),
-                }
-                .map(Zeroizing::new)
-            },
+            move || -> AiResult { job.run(action, &input).map(Zeroizing::new) },
             move |app, result| app.ai_finished(number, result),
         );
         if let Some(result) = done {
@@ -208,11 +145,7 @@ impl App {
         }
         self.text_stepped(
             run.entry,
-            match run.kind {
-                AiKind::Fixed(action) => commands::ai_label(action),
-                AiKind::Table(preset) => preset.title(),
-            }
-            .to_string(),
+            commands::ai_label(run.action).to_string(),
             true,
             &result,
         );
@@ -229,14 +162,13 @@ impl App {
 }
 
 /// Whether an applied result may become a version of the card: the card still shows the
-/// entry the run started on (same id, same text), and it is not a table (tables are never
-/// overwritten).
+/// entry the run started on (same id, same text).
 pub(crate) fn apply_makes_version(
     entry: u64,
     input_hash: u64,
     now: Option<&(u64, Zeroizing<String>)>,
 ) -> bool {
-    entry != TABLE_AI && now.is_some_and(|(id, text)| *id == entry && hash_text(text) == input_hash)
+    now.is_some_and(|(id, text)| *id == entry && hash_text(text) == input_hash)
 }
 
 #[cfg(test)]
@@ -249,7 +181,7 @@ mod tests {
         let hash = hash_text(&text);
         let same = (7, text.clone());
         assert!(apply_makes_version(7, hash, Some(&same)));
-        // Another entry, other text (a new copy), no card text, or a table: copy only.
+        // Another entry, other text (a new copy) or no card text: copy only.
         assert!(!apply_makes_version(8, hash, Some(&same)));
         assert!(!apply_makes_version(
             7,
@@ -257,11 +189,6 @@ mod tests {
             Some(&(7, Zeroizing::new("new".into())))
         ));
         assert!(!apply_makes_version(7, hash, None));
-        assert!(!apply_makes_version(
-            TABLE_AI,
-            hash,
-            Some(&(TABLE_AI, text))
-        ));
     }
     #[test]
     fn truncation_notice_counts_the_limit() {

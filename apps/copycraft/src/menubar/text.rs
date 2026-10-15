@@ -17,8 +17,6 @@ pub(crate) struct TextSteps {
 
 /// The id Lines… uses for an opened file: its versions live with the file, not in history.
 const OPENED_FILE: u64 = u64::MAX - 1;
-/// The AI entry of a table card: its result is only copied (see [`App::ai_entry`]).
-pub(crate) const TABLE_AI: u64 = u64::MAX - 2;
 
 /// Versions of an opened file made by Lines… steps: the file's own text first. ⌘Z, ⇧⌘Z and
 /// the version capsule move between them; the clipboard is left alone.
@@ -111,36 +109,12 @@ impl App {
     /// The text the AI chip works on: the card's text, or the recognized text of a scanned PDF
     /// (the card is its first page; the chip waits for the recognition).
     pub(crate) fn ai_entry(&self) -> Option<(u64, Zeroizing<String>)> {
-        self.text_entry()
-            .or_else(|| self.table_ai_entry())
-            .or_else(|| {
-                let image = self.opened.as_ref()?.image.as_ref()?;
-                image.pdf_source.as_ref()?;
-                let text = image.scan.as_ref()?.ocr.as_ref()?;
-                Some((OPENED_FILE, Zeroizing::new(text.clone())))
-            })
-    }
-
-    /// A table card's AI input: the table version shown (after the steps taken) as compact CSV, the
-    /// first [`crate::dataframe::AI_MAX_ROWS`] rows. Before that version is worked out, the table
-    /// as copied.
-    fn table_ai_entry(&self) -> Option<(u64, Zeroizing<String>)> {
-        // With the table window open, its table (the AI button there starts the action).
-        let (source, home) = if self.table_window.is_some() {
-            self.window_source().or_else(|| self.table_source())
-        } else {
-            self.table_source()
-        }?;
-        let table = match home {
-            TableHome::History(index) => self.history.table(index),
-            TableHome::Opened => Some(&self.opened_table),
-            TableHome::Loose => Some(&self.loose_table),
-        };
-        let text = table
-            .and_then(|table| table.frame())
-            .and_then(crate::dataframe::frame_ai_text)
-            .map_or(source, Zeroizing::new);
-        Some((TABLE_AI, text))
+        self.text_entry().or_else(|| {
+            let image = self.opened.as_ref()?.image.as_ref()?;
+            image.pdf_source.as_ref()?;
+            let text = image.scan.as_ref()?.ocr.as_ref()?;
+            Some((OPENED_FILE, Zeroizing::new(text.clone())))
+        })
     }
 
     /// An applied AI result goes to the clipboard, nowhere else.

@@ -91,16 +91,6 @@ pub fn source_separator(source: &str) -> u8 {
     delimited_separator(source.trim()).unwrap_or(b',')
 }
 
-/// Rows of a table version that go into the AI input at most. Every row takes at least two
-/// characters, so a table cut here is always over [`mac_ai::MAX_CHARS`] and the card says so.
-pub const AI_MAX_ROWS: usize = 20_000;
-
-/// A table version as compact CSV (comma, header, ISO dates) for the AI input: the first
-/// [`AI_MAX_ROWS`] rows. The caller cuts it to [`mac_ai::MAX_CHARS`].
-pub fn frame_ai_text(df: &DataFrame) -> Option<String> {
-    write_csv(df.head(Some(AI_MAX_ROWS)))
-}
-
 /// A table version as CSV, for its sensitivity labels.
 pub fn frame_csv(df: &DataFrame) -> Option<String> {
     write_csv(df.clone())

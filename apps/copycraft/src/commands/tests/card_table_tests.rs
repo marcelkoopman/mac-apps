@@ -604,51 +604,18 @@ fn a_diff_has_its_own_content_key_and_keeps_the_card_open() {
 }
 
 #[test]
-fn a_table_card_has_the_ai_chip_left_of_the_table_window_chip() {
+fn a_table_card_has_no_ai_chip() {
     let src = crate::dataframe::tests::ENERGY_FIXTURE;
     let card = data(SubjectKind::Text, Some(src));
     let chips = crate::commands::card_chips(&card);
     let all = ids(&chips);
-    let window = all
-        .iter()
-        .position(|id| *id == CommandId::TableOpenWindow)
-        .expect("table window chip");
-    assert_eq!(all[window - 1], CommandId::AiMenu);
-    // Lines… stays off a table.
-    assert!(!all.contains(&CommandId::TextMenu));
-    // Dimmed with the reason as tooltip when the model is not there.
-    let ai = chips
-        .iter()
-        .find(|c| c.id == CommandId::AiMenu)
-        .expect("AI chip");
-    if let Err(reason) = mac_ai::availability() {
-        assert!(!ai.enabled);
-        assert_eq!(ai.detail, crate::commands::ai_reason(reason));
-    }
-    // Prose has no table chip and so no table AI chip; a picture neither.
-    let prose = crate::commands::card_chips(&data(SubjectKind::Text, Some("just some words here")));
-    assert!(!ids(&prose).contains(&CommandId::TableOpenWindow));
-    let image = crate::commands::card_chips(&data(SubjectKind::Image, None));
-    assert!(!ids(&image).contains(&CommandId::AiMenu));
-}
-
-#[test]
-fn the_table_ai_menu_has_the_table_actions_only() {
-    // No Summarize: it makes no sense on rows and columns.
-    let ok = crate::commands::ai_table_menu_items(Ok(()));
-    let all = ids(&ok);
-    assert_eq!(
-        all,
-        vec![
-            CommandId::AiTableColumns,
-            CommandId::AiTableMarkdown,
-            CommandId::AiTablePatterns,
-        ]
+    assert!(all.contains(&CommandId::TableOpenWindow));
+    assert!(!all.contains(&CommandId::AiMenu));
+    assert!(!all.iter().any(|id| matches!(id, CommandId::Ai(_))));
+    // Not found by search either.
+    assert!(
+        !ids(&crate::commands::search_pool(&card))
+            .iter()
+            .any(|id| matches!(id, CommandId::Ai(_) | CommandId::AiMenu))
     );
-    assert!(ok.iter().all(|c| c.enabled));
-    let off = crate::commands::ai_table_menu_items(Err(mac_ai::Unavailable::AppleIntelligenceOff));
-    let off_ids = ids(&off);
-    assert_eq!(off_ids.last(), Some(&CommandId::AiUnavailable));
-    assert!(off_ids.contains(&CommandId::AiTableMarkdown));
-    assert!(off.iter().all(|c| !c.enabled));
 }
