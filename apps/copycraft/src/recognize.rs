@@ -165,10 +165,27 @@ pub fn warm() {
     compiled();
 }
 
-/// The classes the first layer finds in `text`. `code` (Rust, Java, Python source) skips
-/// personal and financial data: there a path or a field name is not a person, and a card
-/// number or IBAN is a test fixture. A real key or token in code still counts.
-pub fn classes(text: &str, code: bool) -> Classes {
+/// What kind of text is scanned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// Rust, Java or Python source: no personal or financial data (a path or a field name is not
+    /// a person, a card number or IBAN is a test fixture). A real key or token still counts.
+    Code,
+    /// Documentation (Markdown, agent instructions): a support address or two is part of the
+    /// text, not a person's data; see [`DOC_EMAILS`].
+    Docs,
+    /// Anything else: one e-mail address is already personal data.
+    Plain,
+}
+
+/// In documentation, e-mail addresses count as personal data from this many different ones (a
+/// contact list); one or two are a support address or an author line. A phone number, IBAN,
+/// card, BSN or labeled field in the same text still counts on its own.
+pub const DOC_EMAILS: usize = 3;
+
+/// The classes the first layer finds in `text`, for `scope`.
+pub fn classes(text: &str, scope: Scope) -> Classes {
+    let code = scope == Scope::Code;
     let mut found = Classes::default();
     let compiled = compiled();
     let present = compiled.set.matches(text);
@@ -177,9 +194,14 @@ pub fn classes(text: &str, code: bool) -> Classes {
         if found.has(pattern.label) || (code && pattern.label != Label::Credential) {
             continue;
         }
-        let hit = compiled.each[index]
+        let mut hits = compiled.each[index]
             .find_iter(text)
-            .any(|hit| valid(text.as_bytes(), hit.start(), hit.end(), pattern.check));
+            .filter(|hit| valid(text.as_bytes(), hit.start(), hit.end(), pattern.check));
+        let hit = if scope == Scope::Docs && matches!(pattern.check, Check::Email) {
+            distinct_at_least(&mut hits, DOC_EMAILS)
+        } else {
+            hits.next().is_some()
+        };
         if hit {
             found.add(pattern.label);
         }
@@ -193,6 +215,21 @@ pub fn classes(text: &str, code: bool) -> Classes {
         }
     }
     found
+}
+
+/// Whether `hits` has `wanted` different addresses (case ignored).
+fn distinct_at_least<'t>(hits: &mut dyn Iterator<Item = regex::Match<'t>>, wanted: usize) -> bool {
+    let mut seen: Vec<&str> = Vec::with_capacity(wanted);
+    for hit in hits {
+        let address = hit.as_str();
+        if !seen.iter().any(|known| known.eq_ignore_ascii_case(address)) {
+            seen.push(address);
+            if seen.len() >= wanted {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
@@ -491,10 +528,14 @@ fn field_for_label(label: &str) -> Option<Field> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Classes, classes, has_bare_bsn, iban_mod97, luhn};
+    use super::{Classes, Scope, classes, has_bare_bsn, iban_mod97, luhn};
 
     fn found(text: &str) -> Classes {
-        classes(text, false)
+        classes(text, Scope::Plain)
+    }
+
+    fn docs(text: &str) -> Classes {
+        classes(text, Scope::Docs)
     }
 
     #[test]
@@ -594,8 +635,23 @@ mod tests {
             "fn main() {\n    let name = \"jan@example.com\";\n    let key = \"AK",
             "IAIOSFODNN7EXAMPLE\";\n}\n"
         );
-        let code = classes(rust, true);
+        let code = classes(rust, Scope::Code);
         assert!(code.credential);
         assert!(!code.pii);
+    }
+
+    #[test]
+    fn documentation_with_a_support_address_is_not_personal_data() {
+        let readme = "# Tool\n\nVersion 26.0.1, build 1234.\nSupport: mac-apps-support@proton.me\n";
+        assert!(!docs(readme).pii);
+        // Two addresses (support and author) are still documentation, any case.
+        assert!(!docs("a@example.org, A@Example.org and b@example.org").pii);
+        // A contact list is not.
+        assert!(docs("a@example.org\nb@example.org\nc@example.org").pii);
+        // Anything else that is personal still counts in documentation.
+        assert!(docs("mail x@example.org, bel 06-12345678").pii);
+        assert!(docs("BSN: 123456789\nx@example.org").pii);
+        // Outside documentation one address is personal data, as before.
+        assert!(found(readme).pii);
     }
 }

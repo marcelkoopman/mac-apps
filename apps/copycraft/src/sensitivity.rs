@@ -164,17 +164,30 @@ pub fn forget_labels() {
 /// First copycraft's own recognizers ([`crate::recognize`]), then leakguard, only for the
 /// classes they did not find. Both are linear: about 60 ms for a megabyte (release build).
 fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
-    let code = is_code(crate::format::detect(text));
+    let kind = crate::format::detect(text);
+    let code = is_code(kind);
+    let scope = if code {
+        crate::recognize::Scope::Code
+    } else if is_docs(kind) {
+        crate::recognize::Scope::Docs
+    } else {
+        crate::recognize::Scope::Plain
+    };
     if cancelled() {
         return None;
     }
-    let mut classes = crate::recognize::classes(text, code);
+    let mut classes = crate::recognize::classes(text, scope);
     if !classes.all() {
         if cancelled() {
             return None;
         }
         for hit in guard_for(classes).find(text) {
             let label = label_for(&hit.kind);
+            // Documentation: the recognizers already decided on e-mail addresses (a few are a
+            // support line, not a person).
+            if scope == crate::recognize::Scope::Docs && hit.kind == Kind::Email {
+                continue;
+            }
             if counts(text, &hit) && !(code && label != Label::Credential) {
                 classes = with(classes, label);
             }
@@ -348,6 +361,10 @@ mod checker {
     }
 }
 
+fn is_docs(kind: FormatKind) -> bool {
+    matches!(kind, FormatKind::Markdown | FormatKind::Agent)
+}
+
 fn is_code(kind: FormatKind) -> bool {
     matches!(
         kind,
@@ -435,6 +452,16 @@ mod tests {
             ))),
             "credential · PII · financial"
         );
+    }
+
+    #[test]
+    fn a_readme_with_a_support_address_is_not_labeled() {
+        let readme = "# Tool\n\nA small menu bar app.\n\n## Support\n\nMail mac-apps-support@proton.me for help. Version 26.0.1.\n\n- one\n- two\n";
+        assert!(labels(readme).is_empty());
+        // The same address on its own is a person's, as is a contact list in a README.
+        assert_eq!(labels("mac-apps-support@proton.me"), vec![Label::Pii]);
+        let contacts = format!("{readme}\na@example.org\nb@example.org\nc@example.org\n");
+        assert_eq!(labels(&contacts), vec![Label::Pii]);
     }
 
     #[test]
@@ -658,7 +685,7 @@ checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
         // The Cargo project's own lock file: hex checksums, versions and registry URLs only.
         let lock = include_str!("../testdata/locks/cargo_project.lock");
         assert_eq!(labels(lock), Vec::<Label>::new());
-        assert!(!crate::recognize::classes(lock, false).pii);
+        assert!(!crate::recognize::classes(lock, crate::recognize::Scope::Plain).pii);
     }
 
     #[test]
