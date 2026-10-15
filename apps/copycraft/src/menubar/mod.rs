@@ -55,6 +55,7 @@ mod handler;
 mod history;
 mod image;
 mod menu;
+mod pdf_pages;
 mod popup;
 mod run;
 mod save;

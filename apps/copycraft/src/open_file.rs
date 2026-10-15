@@ -58,6 +58,24 @@ pub struct OpenedImage {
     pub pdf_source: Option<SecretBytes>,
     /// The text layer of that PDF, when it has one (the *Tekst* view and the AI input).
     pub pdf_text: Option<Zeroizing<String>>,
+    /// The page of that PDF the card shows (0-based) and the one asked for, which shows as soon
+    /// as it is drawn. The first page is `bytes`.
+    pub page: usize,
+    pub want: usize,
+    /// Pages drawn so far, in memory only ([`crate::pdf::PAGE_CACHE`] at most; wiped when the
+    /// file leaves the card).
+    pub pages: std::collections::HashMap<usize, SecretBytes>,
+}
+
+impl OpenedImage {
+    /// The picture the card draws: the page shown, else the first.
+    pub fn shown_bytes(&self) -> SecretBytes {
+        self.pages
+            .get(&self.page)
+            .filter(|_| self.page > 0)
+            .unwrap_or(&self.bytes)
+            .clone()
+    }
 }
 
 /// A dropped or chosen file: a picture when its contents are one (see [`is_image_file`]), else
@@ -123,6 +141,9 @@ fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
                 scan: None,
                 pdf_source: None,
                 pdf_text: None,
+                page: 0,
+                want: 0,
+                pages: Default::default(),
             }),
             pdf: None,
         },
@@ -215,6 +236,9 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                         scan: Some(scan),
                         pdf_source: Some(source),
                         pdf_text: Some(text),
+                        page: 0,
+                        want: 0,
+                        pages: Default::default(),
                     }),
                     pdf: Some(crate::pdf::PdfFacts {
                         pages,
@@ -258,6 +282,9 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                     scan: None,
                     pdf_source: Some(source),
                     pdf_text: None,
+                    page: 0,
+                    want: 0,
+                    pages: Default::default(),
                 }),
                 pdf: Some(crate::pdf::PdfFacts {
                     pages,

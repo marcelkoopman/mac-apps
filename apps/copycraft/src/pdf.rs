@@ -39,6 +39,103 @@ impl PdfFacts {
     }
 }
 
+/// Rendered pages of a PDF kept in memory besides the first (the Beeld view's page turning);
+/// the ones furthest from the page shown are dropped first. Never written anywhere.
+pub const PAGE_CACHE: usize = 12;
+
+impl PdfFacts {
+    /// Pages the Beeld view can turn to: the first [`MAX_PAGES`].
+    pub fn turnable(&self) -> usize {
+        self.pages.min(MAX_PAGES)
+    }
+
+    /// Footer of the Beeld view: "pagina 2/12", or "pagina 2/100 (van 340)" when pages were
+    /// left out. One page: [`Self::label`].
+    pub fn page_label(&self, page: usize) -> String {
+        let shown = page.min(self.turnable().saturating_sub(1)) + 1;
+        if self.pages <= 1 {
+            self.label()
+        } else if self.pages > MAX_PAGES {
+            crate::locale::tf("pdf_page_of_cut", &[&shown, &self.turnable(), &self.pages])
+        } else {
+            crate::locale::tf("pdf_page_of", &[&shown, &self.pages])
+        }
+    }
+}
+
+/// The page (0-based) after moving `delta` pages from `current` in a PDF of `pages` pages (only
+/// the first [`MAX_PAGES`] can be turned to). `None` when nothing moves: at an end, or one page.
+pub fn step_page(current: usize, delta: isize, pages: usize) -> Option<usize> {
+    let last = pages.min(MAX_PAGES).checked_sub(1)?;
+    let current = current.min(last);
+    let next = current.saturating_add_signed(delta).min(last);
+    (next != current).then_some(next)
+}
+
+/// Pages to drop from a cache holding `cached` (other than page 0, which the card owns) so that
+/// at most [`PAGE_CACHE`] remain, keeping those nearest `current`.
+pub fn pages_to_evict(cached: &[usize], current: usize) -> Vec<usize> {
+    let mut by_distance: Vec<usize> = cached.to_vec();
+    by_distance.sort_by_key(|page| (page.abs_diff(current), *page));
+    by_distance.split_off(by_distance.len().min(PAGE_CACHE))
+}
+
+/// Keys that turn pages. ← → only count where they do not step history ([`route_key`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageKey {
+    Left,
+    Right,
+    PageUp,
+    PageDown,
+}
+
+/// What a key does on a PDF card in its Beeld view with more than one page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyRoute {
+    /// Turn pages by this many.
+    Turn(isize),
+    /// Not the PDF's: the card's own rule (history, chips) applies.
+    Card,
+}
+
+/// Page Up / Page Down always turn pages. ← → turn pages with ⌥ held, or while the pointer is
+/// over the PDF view; elsewhere they keep stepping history. ⌘ is always history.
+pub fn route_key(key: PageKey, option: bool, command: bool, pointer_over: bool) -> KeyRoute {
+    match key {
+        PageKey::PageUp => KeyRoute::Turn(-1),
+        PageKey::PageDown => KeyRoute::Turn(1),
+        PageKey::Left | PageKey::Right if command => KeyRoute::Card,
+        PageKey::Left | PageKey::Right if option || pointer_over => {
+            KeyRoute::Turn(if key == PageKey::Left { -1 } else { 1 })
+        }
+        _ => KeyRoute::Card,
+    }
+}
+
+/// Scroll distance (points) of a trackpad swipe that turns one page.
+pub const SWIPE_STEP: f64 = 60.0;
+
+/// A scroll wheel or swipe over the PDF view: `accumulated` is what earlier events of this
+/// gesture left, `delta` the vertical distance of this one (negative: content moves up, the way
+/// a reader goes on). Returns the new accumulation and the pages to turn. A wheel notch
+/// (`precise` false) turns at once; a trackpad turns after [`SWIPE_STEP`] points.
+pub fn scroll_step(accumulated: f64, delta: f64, precise: bool) -> (f64, Option<isize>) {
+    if delta == 0.0 {
+        return (accumulated, None);
+    }
+    if !precise {
+        return (0.0, Some(if delta < 0.0 { 1 } else { -1 }));
+    }
+    let total = accumulated + delta;
+    if total <= -SWIPE_STEP {
+        (0.0, Some(1))
+    } else if total >= SWIPE_STEP {
+        (0.0, Some(-1))
+    } else {
+        (total, None)
+    }
+}
+
 /// The bytes start like a PDF (`%PDF-` within the first kilobyte, as the format allows).
 pub fn is_pdf(bytes: &[u8]) -> bool {
     bytes[..bytes.len().min(1024)]
@@ -227,5 +324,80 @@ mod tests {
             scanned: true,
         };
         assert!(!one.label().contains("pagina's"));
+    }
+
+    #[test]
+    fn turning_pages_stays_within_the_first_hundred() {
+        assert_eq!(step_page(0, 1, 5), Some(1));
+        assert_eq!(step_page(0, -1, 5), None);
+        assert_eq!(step_page(4, 1, 5), None);
+        assert_eq!(step_page(3, 5, 5), Some(4));
+        assert_eq!(step_page(0, 1, 1), None);
+        assert_eq!(step_page(0, 1, 0), None);
+        // Page 100 is the last one that can be turned to, however long the PDF is.
+        assert_eq!(step_page(98, 1, 340), Some(99));
+        assert_eq!(step_page(99, 1, 340), None);
+        // A stale page past the end is pulled back.
+        assert_eq!(step_page(50, -1, 5), Some(3));
+    }
+
+    #[test]
+    fn the_footer_names_the_page_shown() {
+        let facts = |pages| PdfFacts {
+            pages,
+            read: pages,
+            scanned: false,
+        };
+        assert_eq!(
+            facts(12).page_label(1),
+            crate::locale::tf("pdf_page_of", &[&2, &12])
+        );
+        let long = facts(340).page_label(4);
+        assert!(
+            long.contains('5') && long.contains("100") && long.contains("340"),
+            "{long}"
+        );
+        assert_eq!(facts(1).page_label(0), facts(1).label());
+        assert_eq!(facts(340).turnable(), MAX_PAGES);
+    }
+
+    #[test]
+    fn the_cache_keeps_the_pages_nearest_the_one_shown() {
+        let few = [1, 2, 3];
+        assert!(pages_to_evict(&few, 2).is_empty());
+        let many: Vec<usize> = (1..=20).collect();
+        let dropped = pages_to_evict(&many, 3);
+        assert_eq!(dropped.len(), 20 - PAGE_CACHE);
+        assert!(dropped.contains(&20) && !dropped.contains(&3) && !dropped.contains(&1));
+    }
+
+    #[test]
+    fn page_keys_turn_pages_only_where_they_do_not_step_history() {
+        use KeyRoute::{Card, Turn};
+        // Page Up and Page Down are the PDF's anywhere on the card.
+        assert_eq!(route_key(PageKey::PageDown, false, false, false), Turn(1));
+        assert_eq!(route_key(PageKey::PageUp, false, false, false), Turn(-1));
+        // ← → stay history unless ⌥ is held or the pointer is over the PDF.
+        assert_eq!(route_key(PageKey::Right, false, false, false), Card);
+        assert_eq!(route_key(PageKey::Right, true, false, false), Turn(1));
+        assert_eq!(route_key(PageKey::Left, false, false, true), Turn(-1));
+        // ⌘← ⌘→ are always history.
+        assert_eq!(route_key(PageKey::Left, false, true, true), Card);
+        assert_eq!(route_key(PageKey::Right, true, true, true), Card);
+    }
+
+    #[test]
+    fn a_swipe_or_wheel_turns_pages() {
+        // A wheel notch turns one page at once; down (content up) goes on.
+        assert_eq!(scroll_step(0.0, -1.0, false), (0.0, Some(1)));
+        assert_eq!(scroll_step(0.0, 1.0, false), (0.0, Some(-1)));
+        // A trackpad adds up until the step.
+        let (acc, turn) = scroll_step(0.0, -25.0, true);
+        assert_eq!(turn, None);
+        let (acc, turn) = scroll_step(acc, -25.0, true);
+        assert_eq!(turn, None);
+        assert_eq!(scroll_step(acc, -25.0, true), (0.0, Some(1)));
+        assert_eq!(scroll_step(0.0, 70.0, true), (0.0, Some(-1)));
+        assert_eq!(scroll_step(5.0, 0.0, true), (5.0, None));
     }
 }

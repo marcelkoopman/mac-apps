@@ -177,6 +177,89 @@ pub(crate) fn command_arrow(event: &NSEvent) -> Option<Key> {
 
 /// Do what an arrow key does on the card ([`commands::arrow_action`]). Returns `false` when
 /// the key is left to the text field, so its caret moves.
+/// The mouse is over the well (the PDF's page, when that is what it shows).
+fn pointer_over_well() -> bool {
+    let point = WINDOW.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|window| window.mouseLocationOutsideOfEventStream())
+    });
+    point.is_some_and(|point| {
+        point.x >= PAD
+            && point.x <= card_width() - PAD
+            && point.y >= WELL_BOTTOM.get()
+            && point.y <= WELL_TOP.get()
+    })
+}
+
+/// Turn the PDF's pages by `delta`: a beep at the first or last page. False when the card is no
+/// PDF with pages to turn.
+pub(crate) fn turn_pdf_pages(delta: isize) -> bool {
+    let Some((page, count)) = PDF_PAGES.get() else {
+        return false;
+    };
+    if crate::pdf::step_page(page, delta, count).is_some() {
+        launcher::emit(UserEvent::Run(CommandId::PdfPage(delta)));
+    } else {
+        NSBeep();
+    }
+    true
+}
+
+/// ← → ⌥← ⌥→ and Page Up / Page Down on a PDF card ([`crate::pdf::route_key`]): true when the
+/// key turned (or tried to turn) a page.
+pub(crate) fn pdf_page_key(event: &NSEvent) -> bool {
+    use crate::pdf::{KeyRoute, PageKey};
+    if PDF_PAGES.get().is_none() || SEARCHING.with(Cell::get) {
+        return false;
+    }
+    // Page Up / Page Down key codes.
+    let key = match (event.keyCode(), Key::from_key_code(event.keyCode())) {
+        (116, _) => PageKey::PageUp,
+        (121, _) => PageKey::PageDown,
+        (_, Some(Key::Left)) => PageKey::Left,
+        (_, Some(Key::Right)) => PageKey::Right,
+        _ => return false,
+    };
+    let flags = event.modifierFlags();
+    let route = crate::pdf::route_key(
+        key,
+        flags.contains(NSEventModifierFlags::Option),
+        flags.contains(NSEventModifierFlags::Command),
+        pointer_over_well(),
+    );
+    match route {
+        KeyRoute::Turn(delta) => turn_pdf_pages(delta),
+        KeyRoute::Card => false,
+    }
+}
+
+/// A scroll wheel or trackpad swipe over the PDF's page turns it ([`crate::pdf::scroll_step`]).
+/// True when the event was the PDF's.
+pub(crate) fn pdf_scroll(event: &NSEvent) -> bool {
+    if PDF_PAGES.get().is_none() || !pointer_over_well() {
+        return false;
+    }
+    // Momentum after a swipe is not another swipe.
+    if !event.momentumPhase().is_empty() {
+        return true;
+    }
+    let (accumulated, step) = crate::pdf::scroll_step(
+        PDF_SWIPE.get(),
+        event.scrollingDeltaY(),
+        event.hasPreciseScrollingDeltas(),
+    );
+    PDF_SWIPE.set(if event.phase().is_empty() || step.is_some() {
+        0.0
+    } else {
+        accumulated
+    });
+    if let Some(delta) = step {
+        turn_pdf_pages(delta);
+    }
+    true
+}
+
 pub(crate) fn on_arrow(key: Key, command: bool, focus: commands::ArrowFocus) -> bool {
     let nav = HISTORY_NAV.with(|slot| *slot.borrow());
     match commands::arrow_action(key, command, focus, nav.is_some()) {
@@ -416,7 +499,7 @@ pub(crate) fn on_key(event: &NSEvent) {
         }
         return;
     }
-    if pager_key(event) {
+    if pager_key(event) || pdf_page_key(event) {
         return;
     }
     match Key::from_key_code(event.keyCode()) {

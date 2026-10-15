@@ -90,6 +90,7 @@ fn data(text: &str, view: CardView) -> LaunchData {
         view,
         image_scan: None,
         pdf: None,
+        pdf_page: 0,
         source_name: None,
         source_note: None,
         full: false,

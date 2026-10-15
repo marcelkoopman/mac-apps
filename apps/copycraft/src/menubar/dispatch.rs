@@ -76,6 +76,7 @@ impl App {
                 }
                 self.refresh_popup();
             }
+            CommandId::PdfPage(delta) => self.pdf_turn(delta),
             CommandId::WindowSize(size) => {
                 crate::settings::set_window_size(size);
                 self.refresh_popup();

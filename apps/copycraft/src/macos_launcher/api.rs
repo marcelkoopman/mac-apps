@@ -340,6 +340,16 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CLEAR_SENSITIVE.set(data.settings.clear_sensitive);
     HISTORY_MINUTES.set(data.settings.history_minutes);
     WINDOW_SIZE.set(data.settings.window_size);
+    PDF_PAGES.set(
+        data.pdf
+            .filter(|pdf| {
+                pdf.turnable() > 1
+                    && data.subject_kind == commands::SubjectKind::Image
+                    && data.view == commands::CardView::Original
+                    && data.picture.is_some()
+            })
+            .map(|pdf| (data.pdf_page, pdf.turnable())),
+    );
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
     // At most four chips on the card; the others lead the `…` menu (Lines… stays visible).

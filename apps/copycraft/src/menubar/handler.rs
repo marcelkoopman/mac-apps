@@ -38,6 +38,11 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DroppedImageScanned { image, scan } => {
                 self.finish_dropped_scan(&image, scan);
             }
+            UserEvent::PdfPageRendered {
+                source,
+                index,
+                page,
+            } => self.finish_pdf_page(&source, index, page),
             UserEvent::LabelsChecked => self.labels_checked(),
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),

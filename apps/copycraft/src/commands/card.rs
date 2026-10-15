@@ -257,7 +257,11 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
     let mut card = compose_card(data);
     // A PDF: the pages come first, then what the card shows (text stats, or the page picture).
     if let Some(pdf) = &data.pdf {
-        let pages = pdf.label();
+        let pages = if data.subject_kind == SubjectKind::Image && data.view == CardView::Original {
+            pdf.page_label(data.pdf_page)
+        } else {
+            pdf.label()
+        };
         card.meta = if card.meta.is_empty() {
             pages
         } else {

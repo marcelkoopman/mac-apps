@@ -83,6 +83,8 @@ pub struct LaunchData {
     pub image_scan: Option<ImageScan>,
     /// The card shows a PDF (its text, or the first page of a scan): the footer counts pages.
     pub pdf: Option<crate::pdf::PdfFacts>,
+    /// The page of that PDF the Beeld view shows (0-based).
+    pub pdf_page: usize,
     /// Set when the card is showing a chosen file instead of the clipboard.
     pub source_name: Option<String>,
     /// Well text when that file cannot be shown.
@@ -384,6 +386,8 @@ pub enum CommandId {
     /// Render the whole text on the card instead of its preview.
     ShowAll,
     Appearance(Theme),
+    /// Turn the PDF's pages in the Beeld view by this many (−1: back).
+    PdfPage(isize),
     /// How wide the card is.
     WindowSize(crate::settings::WindowSize),
     /// Turn the minute timer on copycraft's sensitive copies on or off.

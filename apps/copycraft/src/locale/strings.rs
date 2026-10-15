@@ -328,6 +328,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("pdf_one_page", "1 pagina", "1 page"),
     ("pdf_n_pages", "{0} pagina's", "{0} pages"),
+    ("pdf_page_of", "pagina {0}/{1}", "page {0}/{1}"),
+    (
+        "pdf_page_of_cut",
+        "pagina {0}/{1} (van {2})",
+        "page {0}/{1} (of {2})",
+    ),
     (
         "pdf_first_pages",
         "Eerste {0} van {1} pagina's",

@@ -252,14 +252,15 @@ impl App {
         let mut data = self.launch_shell();
         data.source_name = Some(name);
         data.pdf = self.opened.as_ref().and_then(|file| file.pdf);
+        data.pdf_page = image.as_ref().map_or(0, |image| image.page);
         data.image = None;
         data.image_scan = None;
         if let Some(image) = image {
             // Drawn like a copied picture, from its own bytes instead of the clipboard's.
             data.subject_kind = SubjectKind::Image;
+            data.picture = Some(image.shown_bytes());
             data.image = image.facts;
             data.image_scan = image.scan;
-            data.picture = Some(image.bytes);
         } else if let Some(text) = text {
             data.subject_kind = SubjectKind::Text;
             data.subject_text = Some(text);
@@ -305,6 +306,7 @@ impl App {
             view: self.card_view,
             image_scan: self.image_scan.clone(),
             pdf: None,
+            pdf_page: 0,
             source_name: None,
             source_note: None,
             full: false,

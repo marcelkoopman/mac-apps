@@ -279,6 +279,15 @@ thread_local! {
     static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
 }
 
+// Its own block: one `thread_local!` this long hits the macro's recursion limit.
+thread_local! {
+    /// The PDF on the card in its Beeld view: the page shown and the pages that can be turned to
+    /// (more than one). `None` when the card is no such PDF.
+    static PDF_PAGES: Cell<Option<(usize, usize)>> = const { Cell::new(None) };
+    /// What a swipe over the PDF has added up to ([`crate::pdf::scroll_step`]).
+    static PDF_SWIPE: Cell<f64> = const { Cell::new(0.0) };
+}
+
 /// The card's width: the chosen size cut to the icon's screen ([`crate::settings::WindowSize`]);
 /// the two-column diff is wider still.
 pub(crate) fn card_width() -> f64 {
@@ -326,6 +335,14 @@ define_class!(
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, _event: &NSEvent) {
             update_well_dock_hover();
+        }
+
+        /// A swipe or wheel over a PDF page turns it.
+        #[unsafe(method(scrollWheel:))]
+        fn scroll_wheel(&self, event: &NSEvent) {
+            // Only events nothing below the window took reach it, and the window has no scroll
+            // behavior of its own, so the others end here.
+            let _ = pdf_scroll(event);
         }
 
         #[unsafe(method(keyDown:))]

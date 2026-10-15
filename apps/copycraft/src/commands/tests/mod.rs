@@ -34,6 +34,7 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         view: CardView::Original,
         image_scan: None,
         pdf: None,
+        pdf_page: 0,
         source_name: None,
         source_note: None,
         full: false,

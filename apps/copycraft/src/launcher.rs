@@ -52,6 +52,12 @@ pub enum UserEvent {
         picture: crate::clipboard::SecretBytes,
         scan: Option<crate::commands::ImageScan>,
     },
+    /// Page `index` of the PDF `source` is drawn (`None`: it could not be).
+    PdfPageRendered {
+        source: crate::clipboard::SecretBytes,
+        index: usize,
+        page: Option<crate::clipboard::SecretBytes>,
+    },
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,
