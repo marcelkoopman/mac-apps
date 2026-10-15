@@ -97,8 +97,11 @@ fn store_picker_source(data: &LaunchData, content_key: u64) {
     let key = (content_key, table.map_or(0, |table| table.frame_id));
     if PICKER_KEY.with(Cell::get) != key {
         PICKER_KEY.set(key);
-        // The card is laid out after the store.
-        dismiss_picker(false);
+        // The card is laid out after the store. An Apple Intelligence run belongs to the card it
+        // was started for: a new copy or another entry does not take its preview away.
+        if !ai_open() {
+            dismiss_picker(false);
+        }
     }
     PICKER_SOURCE.with(|slot| slot.replace(columns));
 }

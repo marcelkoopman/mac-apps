@@ -20,6 +20,9 @@ pub(crate) struct AiRun {
     job: Arc<mac_ai::Job>,
     /// The model's answer, once it is there.
     result: Option<Zeroizing<String>>,
+    /// Hash of the text the run was started on (never the text): Apply only makes a version
+    /// of the card when that text is still the card's.
+    input_hash: u64,
 }
 
 /// What a run does: a fixed action, or the user's own instruction (kept nowhere but in the
@@ -158,6 +161,7 @@ impl App {
             kind,
             job: Arc::clone(&job),
             result: None,
+            input_hash: hash_text(&text),
         });
         launcher::ai_preview_working(
             match kind {
@@ -217,8 +221,9 @@ impl App {
             run.job.cancel();
             return;
         };
-        // A table is not overwritten: the result only goes to the clipboard.
-        if run.entry == TABLE_AI {
+        // A table is not overwritten, and neither is a card that is not the one the run was
+        // started for (a new copy came in meanwhile): the result only goes to the clipboard.
+        if !apply_makes_version(run.entry, run.input_hash, self.ai_entry().as_ref()) {
             self.copy_ai_result(&result);
             return;
         }
@@ -245,8 +250,41 @@ impl App {
     }
 }
 
+/// Whether an applied result may become a version of the card: the card still shows the
+/// entry the run started on (same id, same text), and it is not a table (tables are never
+/// overwritten).
+pub(crate) fn apply_makes_version(
+    entry: u64,
+    input_hash: u64,
+    now: Option<&(u64, Zeroizing<String>)>,
+) -> bool {
+    entry != TABLE_AI && now.is_some_and(|(id, text)| *id == entry && hash_text(text) == input_hash)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_result_only_becomes_a_version_of_the_card_it_was_started_for() {
+        let text = Zeroizing::new("hello".to_string());
+        let hash = hash_text(&text);
+        let same = (7, text.clone());
+        assert!(apply_makes_version(7, hash, Some(&same)));
+        // Another entry, other text (a new copy), no card text, or a table: copy only.
+        assert!(!apply_makes_version(8, hash, Some(&same)));
+        assert!(!apply_makes_version(
+            7,
+            hash,
+            Some(&(7, Zeroizing::new("new".into())))
+        ));
+        assert!(!apply_makes_version(7, hash, None));
+        assert!(!apply_makes_version(
+            TABLE_AI,
+            hash,
+            Some(&(TABLE_AI, text))
+        ));
+    }
     #[test]
     fn truncation_notice_counts_the_limit() {
         // The notice names the limit in digits: keep it in step with mac-ai.

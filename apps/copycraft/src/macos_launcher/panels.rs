@@ -100,8 +100,11 @@ pub(crate) fn mask_again() {
     if FILE_PANEL.with(Cell::get) {
         return;
     }
-    // Focus loss closes the column picker.
-    close_picker();
+    // Focus loss closes the column picker, but not an Apple Intelligence run or its preview:
+    // they go on, and are there when the user comes back (only Cancel, Esc or Apply ends them).
+    if !ai_open() {
+        close_picker();
+    }
     if !is_open() || !MASKS.with(Cell::get) || !REVEALED.with(Cell::get) {
         return;
     }
