@@ -127,12 +127,14 @@ impl App {
         }
     }
 
-    /// An AI action was clicked: open the preview and start the model.
-    pub(crate) fn ai_start(&mut self, action: Action) {
-        self.ai_begin(action);
+    /// An AI action was clicked: open the preview and start the model. `function` is the index
+    /// of the one function of a code card to work on ([`commands::ai_function_text`]); `None`
+    /// is the whole text.
+    pub(crate) fn ai_start(&mut self, action: Action, function: Option<u8>) {
+        self.ai_begin(action, function);
     }
 
-    fn ai_begin(&mut self, action: Action) {
+    fn ai_begin(&mut self, action: Action, function: Option<u8>) {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
         if mac_ai::availability().is_err() {
@@ -144,8 +146,23 @@ impl App {
         if text.trim().is_empty() {
             return;
         }
+        // Only the chosen function goes to the model, with its signature.
+        let part = match function {
+            Some(index) => match commands::ai_function_text(&text, index) {
+                Some(part) => Some(part),
+                None => return,
+            },
+            None => None,
+        };
+        let work_on: &str = part.unwrap_or(&text);
+        // Code beyond the model's window fails with a vague error: say so before the run.
+        let too_long = matches!(action, Action::ExplainCode | Action::DocComment)
+            && !commands::ai_code_fits(work_on);
         self.ai_stop();
-        let (cut, truncated) = mac_ai::truncate(&text);
+        let (cut, cut_off) = mac_ai::truncate(work_on);
+        // The result covers only a part (a function or the start of a long text): Apply never
+        // replaces the card's text with it.
+        let truncated = cut_off || part.is_some();
         let input = Zeroizing::new(cut.to_string());
         self.ai_runs = self.ai_runs.wrapping_add(1);
         let number = self.ai_runs;
@@ -160,10 +177,20 @@ impl App {
             input_hash: hash_text(&text),
             truncated,
         });
-        launcher::ai_preview_working(
-            commands::ai_title(action),
-            truncated.then(|| crate::locale::t("ai_truncated")),
-        );
+        let note = if part.is_some() {
+            Some(crate::locale::t("ai_part_note"))
+        } else {
+            cut_off.then(|| crate::locale::t("ai_truncated"))
+        };
+        launcher::ai_preview_working(commands::ai_title(action), note);
+        if too_long {
+            if let Some(run) = self.ai.as_mut() {
+                run.state = RunState::Failed;
+            }
+            launcher::ai_preview_error(&commands::ai_code_too_long(part.is_none()));
+            self.sync_ai_tray();
+            return;
+        }
         let done = self.start_work(
             work::Lane::Ai,
             Duration::ZERO,
@@ -189,7 +216,10 @@ impl App {
                 launcher::ai_preview_result(&text);
                 run.result = Some(text);
             }
-            Ok(_) => launcher::ai_preview_error(crate::locale::t("ai_err_failed")),
+            Ok(_) => {
+                crate::diag::log(crate::diag::LogEvent::AiFailed(mac_ai::Error::Failed));
+                launcher::ai_preview_error(crate::locale::t("ai_err_failed"));
+            }
             Err(mac_ai::Error::Cancelled) => self.ai_stop(),
             Err(error) => {
                 crate::diag::log(crate::diag::LogEvent::AiFailed(error));
@@ -319,6 +349,7 @@ mod tests {
             mac_ai::Error::Guardrail,
             mac_ai::Error::TooLong,
             mac_ai::Error::Language,
+            mac_ai::Error::Refusal,
             mac_ai::Error::Unavailable,
             mac_ai::Error::Failed,
         ] {

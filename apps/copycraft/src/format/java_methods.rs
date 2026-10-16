@@ -37,13 +37,16 @@ enum Tok<'a> {
     Other,
 }
 
-/// Tokens of `text` without comments, strings, char literals and text blocks.
-fn tokens(text: &str) -> Vec<Tok<'_>> {
+/// Tokens of `text` without comments, strings, char literals and text blocks, each with its
+/// byte range.
+fn tokens_at(text: &str) -> Vec<(Tok<'_>, usize, usize)> {
     let b = text.as_bytes();
-    let mut out = Vec::new();
+    let mut out: Vec<(Tok<'_>, usize, usize)> = Vec::new();
     let mut i = 0;
     while i < b.len() {
         let c = b[i];
+        let begin = i;
+        let before = out.len();
         if c == b'/' && b.get(i + 1) == Some(&b'/') {
             while i < b.len() && b[i] != b'\n' {
                 i += 1;
@@ -60,14 +63,14 @@ fn tokens(text: &str) -> Vec<Tok<'_>> {
                 i += if b[i] == b'\\' { 2 } else { 1 };
             }
             i += 3;
-            out.push(Tok::Other);
+            out.push((Tok::Other, begin, 0));
         } else if c == b'"' || c == b'\'' {
             i += 1;
             while i < b.len() && b[i] != c && b[i] != b'\n' {
                 i += if b[i] == b'\\' { 2 } else { 1 };
             }
             i += 1;
-            out.push(Tok::Other);
+            out.push((Tok::Other, begin, 0));
         } else if c.is_ascii_alphabetic() || c == b'_' || c == b'$' || c >= 0x80 {
             let start = i;
             while i < b.len()
@@ -75,23 +78,33 @@ fn tokens(text: &str) -> Vec<Tok<'_>> {
             {
                 i += 1;
             }
-            out.push(Tok::Ident(&text[start..i]));
+            out.push((Tok::Ident(&text[start..i]), begin, 0));
         } else if c.is_ascii_digit() {
             while i < b.len() && (b[i].is_ascii_alphanumeric() || matches!(b[i], b'.' | b'_')) {
                 i += 1;
             }
-            out.push(Tok::Other);
+            out.push((Tok::Other, begin, 0));
         } else if c == b'-' && b.get(i + 1) == Some(&b'>') {
-            out.push(Tok::Arrow);
+            out.push((Tok::Arrow, begin, 0));
             i += 2;
         } else {
             if !c.is_ascii_whitespace() {
-                out.push(Tok::Punct(c));
+                out.push((Tok::Punct(c), begin, 0));
             }
             i += 1;
         }
+        if out.len() > before
+            && let Some(last) = out.last_mut()
+        {
+            last.2 = i.min(text.len());
+        }
     }
     out
+}
+
+/// Tokens of `text` without their positions.
+fn tokens(text: &str) -> Vec<Tok<'_>> {
+    tokens_at(text).into_iter().map(|(tok, _, _)| tok).collect()
 }
 
 /// Words before `(` that make it a statement or an expression, not a declaration.
@@ -150,9 +163,16 @@ const MODIFIERS: &[&str] = &[
     "transient",
 ];
 
-/// Count method declarations by access level. Constructors do not count.
-pub fn count(text: &str) -> Counts {
-    let toks = tokens(text);
+/// A method declaration: the token of its `(`, its access level and the token after its
+/// parameter list.
+struct Site<'a> {
+    at: usize,
+    level: Option<&'a str>,
+    next: usize,
+}
+
+/// The method declarations among `toks`, in order. Constructors are left out.
+fn sites<'a>(toks: &[Tok<'a>]) -> Vec<Site<'a>> {
     // Names of the classes, records, enums and interfaces: a declaration with such a name and
     // no return type is a constructor, which does not count.
     let types: Vec<&str> = toks
@@ -165,7 +185,7 @@ pub fn count(text: &str) -> Counts {
             _ => None,
         })
         .collect();
-    let mut counts = Counts::default();
+    let mut found = Vec::new();
     for (at, tok) in toks.iter().enumerate() {
         let (Tok::Punct(b'('), Some(&Tok::Ident(name))) =
             (tok, at.checked_sub(1).map(|p| &toks[p]))
@@ -234,7 +254,16 @@ pub fn count(text: &str) -> Counts {
                 _ => {}
             }
         }
-        match level {
+        found.push(Site { at, level, next });
+    }
+    found
+}
+
+/// Count method declarations by access level. Constructors do not count.
+pub fn count(text: &str) -> Counts {
+    let mut counts = Counts::default();
+    for site in sites(&tokens(text)) {
+        match site.level {
             Some("public") => counts.public += 1,
             Some("protected") => counts.protected += 1,
             Some("private") => counts.private += 1,
@@ -242,6 +271,60 @@ pub fn count(text: &str) -> Counts {
         }
     }
     counts
+}
+
+/// The methods of a Java text in file order (nested and anonymous-class methods too): the
+/// name, the line it is declared on and the range from its annotations or Javadoc to its closing
+/// `}` (or the `;` of an abstract one). Constructors are left out.
+pub fn spans(text: &str) -> Vec<super::fn_spans::FnSpan> {
+    let all = tokens_at(text);
+    let toks: Vec<Tok<'_>> = all.iter().map(|t| t.0).collect();
+    let mut out = Vec::new();
+    for site in sites(&toks) {
+        let Tok::Ident(name) = toks[site.at - 1] else {
+            continue;
+        };
+        // From the previous member's end: annotations and modifiers belong to this one.
+        let first = toks[..site.at - 1]
+            .iter()
+            .rposition(|t| matches!(t, Tok::Punct(b';' | b'{' | b'}')))
+            .map_or(0, |p| p + 1);
+        // To the `{` that opens the body (past `throws`), or the `;` of an abstract method.
+        let Some(open) =
+            (site.next..toks.len()).find(|&k| matches!(toks[k], Tok::Punct(b'{' | b';')))
+        else {
+            continue;
+        };
+        let mut close = open;
+        if toks[open] == Tok::Punct(b'{') {
+            let mut depth = 0usize;
+            let mut k = open;
+            while k < toks.len() {
+                match toks[k] {
+                    Tok::Punct(b'{') => depth += 1,
+                    Tok::Punct(b'}') => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                k += 1;
+            }
+            if depth != 0 {
+                continue;
+            }
+            close = k;
+        }
+        let start = super::fn_spans::with_leading_comment(text, all[first].1);
+        out.push(super::fn_spans::FnSpan {
+            name: name.to_string(),
+            signature_line: super::fn_spans::line_at(text, all[site.at - 1].1),
+            byte_range: start..all[close].2,
+        });
+    }
+    out
 }
 
 #[cfg(test)]

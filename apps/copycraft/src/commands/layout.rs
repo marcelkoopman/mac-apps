@@ -308,6 +308,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextFilter
             | CommandId::AiMenu
             | CommandId::Ai(_)
+            | CommandId::AiFn(..)
             | CommandId::AiApply
             | CommandId::AiCancel
             | CommandId::AiMinimize
@@ -408,7 +409,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextTail => "arrow.down.to.line",
         CommandId::TextReverse => "arrow.up.arrow.down",
         CommandId::TextFilter => "line.3.horizontal.decrease",
-        CommandId::AiMenu | CommandId::Ai(_) => AI_SYMBOL,
+        CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiFn(..) => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",
         _ => return None,

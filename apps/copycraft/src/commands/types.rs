@@ -437,6 +437,10 @@ pub enum CommandId {
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The
     /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
     Ai(mac_ai::Action),
+    /// A code action on one function of a long or multi-function code card (the index into
+    /// [`crate::format::fn_spans::function_spans`]; `AI_FN_WHOLE` is the whole text, `AI_FN_MORE`
+    /// the dimmed "and N more" line): only that function goes to the model.
+    AiFn(mac_ai::Action, u8),
     AiApply,
     /// The preview's Cancel, Esc, or the card closing: stops the run and drops the result.
     AiCancel,

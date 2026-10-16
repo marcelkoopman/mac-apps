@@ -1030,6 +1030,32 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "This language isn't supported",
     ),
     (
+        "ai_err_refusal",
+        "Het model wilde hier geen antwoord op geven",
+        "The model declined to answer this",
+    ),
+    (
+        "ai_err_code_too_long",
+        "Dit is te veel code voor het model (maximaal {0} tekens). Kies in het AI-menu een functie.",
+        "That is too much code for the model ({0} characters at most). Pick a function in the AI menu.",
+    ),
+    (
+        "ai_err_fn_too_long",
+        "Deze functie is te lang voor het model (maximaal {0} tekens). Splits haar op in kleinere functies.",
+        "This function is too long for the model ({0} characters at most). Split it into smaller functions.",
+    ),
+    ("ai_whole_file", "Hele tekst", "Whole text"),
+    (
+        "ai_more_functions",
+        "… en {0} meer (niet getoond)",
+        "… and {0} more (not shown)",
+    ),
+    (
+        "ai_part_note",
+        "Alleen de gekozen functie is gebruikt; Toepassen kopieert alleen naar het klembord",
+        "Only the chosen function was used; Apply only copies to the clipboard",
+    ),
+    (
         "ai_err_failed",
         "Dat is niet gelukt, probeer het opnieuw",
         "That didn't work, try again",

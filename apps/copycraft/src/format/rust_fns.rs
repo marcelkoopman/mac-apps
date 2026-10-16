@@ -4,9 +4,22 @@
 /// name. Comments, strings (also raw and byte strings), char literals and `fn(u8) -> u8` pointer
 /// types do not count.
 pub fn count(text: &str) -> usize {
+    let mut found = 0;
+    walk(text, |_| found += 1);
+    found
+}
+
+/// A `fn` item the lexical pass found: where its keyword starts and where its name does.
+struct Found {
+    keyword: usize,
+    name: std::ops::Range<usize>,
+}
+
+/// The `fn` items of `text` in order, each reported to `on_fn`. One lexical pass: comments,
+/// strings, char literals and `fn(u8)` pointer types are skipped.
+fn walk(text: &str, mut on_fn: impl FnMut(Found)) {
     let b = text.as_bytes();
     let mut i = 0;
-    let mut found = 0;
     while i < b.len() {
         match b[i] {
             b'/' if b.get(i + 1) == Some(&b'/') => {
@@ -14,39 +27,9 @@ pub fn count(text: &str) -> usize {
                     i += 1;
                 }
             }
-            b'/' if b.get(i + 1) == Some(&b'*') => {
-                let mut depth = 1;
-                i += 2;
-                while i < b.len() && depth > 0 {
-                    if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
-                        depth += 1;
-                        i += 2;
-                    } else if b[i] == b'*' && b.get(i + 1) == Some(&b'/') {
-                        depth -= 1;
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-            }
+            b'/' if b.get(i + 1) == Some(&b'*') => i = skip_block_comment(b, i),
             b'"' => i = skip_string(b, i + 1),
-            b'\'' => {
-                // A char literal ('a', '\n', '\u{1F600}', 'é'); else a lifetime ('a).
-                if b.get(i + 1) == Some(&b'\\') {
-                    i += 2;
-                    while i < b.len() && b[i] != b'\'' && b[i] != b'\n' {
-                        i += 1;
-                    }
-                    i += 1;
-                } else {
-                    let ch_len = text[i + 1..].chars().next().map_or(1, char::len_utf8);
-                    if b.get(i + 1 + ch_len) == Some(&b'\'') {
-                        i += 2 + ch_len;
-                    } else {
-                        i += 1;
-                    }
-                }
-            }
+            b'\'' => i = skip_char(text, i),
             c if c.is_ascii_alphabetic() || c == b'_' => {
                 let start = i;
                 while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
@@ -63,14 +46,133 @@ pub fn count(text: &str) -> usize {
                         j += 1;
                     }
                     if j < b.len() && (b[j].is_ascii_alphabetic() || b[j] == b'_') {
-                        found += 1;
+                        let mut end = j;
+                        while end < b.len() && (b[end].is_ascii_alphanumeric() || b[end] == b'_') {
+                            end += 1;
+                        }
+                        on_fn(Found {
+                            keyword: start,
+                            name: j..end,
+                        });
                     }
                 }
             }
             _ => i += 1,
         }
     }
-    found
+}
+
+/// Past the block comment (nested ones too) that starts at `i`.
+fn skip_block_comment(b: &[u8], mut i: usize) -> usize {
+    let mut depth = 1;
+    i += 2;
+    while i < b.len() && depth > 0 {
+        if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
+            depth += 1;
+            i += 2;
+        } else if b[i] == b'*' && b.get(i + 1) == Some(&b'/') {
+            depth -= 1;
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    i
+}
+
+/// Past the char literal ('a', '\n', '\u{1F600}', 'é') at `i`; for a lifetime ('a) just the `'`.
+fn skip_char(text: &str, mut i: usize) -> usize {
+    let b = text.as_bytes();
+    if b.get(i + 1) == Some(&b'\\') {
+        i += 2;
+        while i < b.len() && b[i] != b'\'' && b[i] != b'\n' {
+            i += 1;
+        }
+        i + 1
+    } else {
+        let ch_len = text[i + 1..].chars().next().map_or(1, char::len_utf8);
+        if b.get(i + 1 + ch_len) == Some(&b'\'') {
+            i + 2 + ch_len
+        } else {
+            i + 1
+        }
+    }
+}
+
+/// Past the `}` that closes the body of the item whose signature follows `from`; `None` for an
+/// item without a body (`fn f();`) or an unbalanced one. Parentheses and brackets of the
+/// signature are skipped first, so `fn(u8) -> u8` types and `[u8; 4]` do not end it.
+fn body_end(text: &str, from: usize) -> Option<usize> {
+    let b = text.as_bytes();
+    let mut i = from;
+    let mut nest = 0usize;
+    let mut braces = 0usize;
+    while i < b.len() {
+        match b[i] {
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if b.get(i + 1) == Some(&b'*') => i = skip_block_comment(b, i),
+            b'"' => i = skip_string(b, i + 1),
+            b'\'' => i = skip_char(text, i),
+            b'(' | b'[' if braces == 0 => {
+                nest += 1;
+                i += 1;
+            }
+            b')' | b']' if braces == 0 => {
+                nest = nest.saturating_sub(1);
+                i += 1;
+            }
+            b';' if braces == 0 && nest == 0 => return None,
+            b'{' if braces > 0 || nest == 0 => {
+                braces += 1;
+                i += 1;
+            }
+            b'}' if braces > 0 => {
+                braces -= 1;
+                i += 1;
+                if braces == 0 {
+                    return Some(i);
+                }
+            }
+            c if c.is_ascii_alphabetic() || c == b'_' => {
+                let start = i;
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+                    i += 1;
+                }
+                let word = &b[start..i];
+                if matches!(word, b"r" | b"br") && matches!(b.get(i), Some(b'"' | b'#')) {
+                    i = skip_raw_string(b, i);
+                } else if word == b"b" && b.get(i) == Some(&b'"') {
+                    i = skip_string(b, i + 1);
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    None
+}
+
+/// The functions of a Rust text in file order, methods in `impl` blocks and nested functions
+/// included (a nested one after the one around it). A span starts at the line of the doc
+/// comment and attributes directly above the function and ends after its closing `}`;
+/// declarations without a body (trait methods) are left out.
+pub fn spans(text: &str) -> Vec<super::fn_spans::FnSpan> {
+    let mut out = Vec::new();
+    walk(text, |found| {
+        let Some(end) = body_end(text, found.name.end) else {
+            return;
+        };
+        let start = super::fn_spans::rust_item_start(text, found.keyword);
+        out.push(super::fn_spans::FnSpan {
+            name: text[found.name.clone()].to_string(),
+            signature_line: super::fn_spans::line_at(text, found.keyword),
+            byte_range: start..end,
+        });
+    });
+    out
 }
 
 /// Past the closing `"` of a string whose body starts at `i`.

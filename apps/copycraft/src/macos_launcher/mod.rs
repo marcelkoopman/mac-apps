@@ -135,6 +135,8 @@ thread_local! {
 thread_local! {
     /// What the AI chip's menu offers for the card shown ([`commands::ai_actions`]).
     static AI_ACTIONS: Cell<&'static [mac_ai::Action]> = const { Cell::new(&[]) };
+    /// The functions of a long or multi-function code card ([`commands::ai_functions`]).
+    static AI_FNS: RefCell<Option<commands::AiFns>> = const { RefCell::new(None) };
 }
 
 thread_local! {

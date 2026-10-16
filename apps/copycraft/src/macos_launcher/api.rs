@@ -356,6 +356,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     let (shown, more) = commands::split_chips(commands::card_chips(&data));
     ACTIONS.with(|slot| set_commands(slot, shown));
     AI_ACTIONS.set(commands::ai_actions(&data));
+    AI_FNS.with(|slot| slot.replace(commands::ai_functions(&data)));
     POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
     OVERFLOW.with(|slot| {
         set_commands(

@@ -115,7 +115,11 @@ impl App {
             CommandId::TextReverse => self.run_text(crate::text_ops::TextOp::Reverse),
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
-            CommandId::Ai(action) => self.ai_start(action),
+            CommandId::Ai(action) => self.ai_start(action, None),
+            // The dimmed "and N more" line does nothing; the whole text is `AI_FN_WHOLE`.
+            CommandId::AiFn(_, commands::AI_FN_MORE) => {}
+            CommandId::AiFn(action, commands::AI_FN_WHOLE) => self.ai_start(action, None),
+            CommandId::AiFn(action, index) => self.ai_start(action, Some(index)),
             CommandId::AiApply => self.ai_apply(),
             CommandId::AiCancel => self.ai_stop(),
             CommandId::AiMinimize => self.ai_minimize(),

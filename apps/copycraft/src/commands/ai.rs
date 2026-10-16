@@ -118,30 +118,153 @@ pub fn ai_error_text(error: mac_ai::Error) -> &'static str {
         mac_ai::Error::Guardrail => crate::locale::t("ai_err_guardrail"),
         mac_ai::Error::TooLong => crate::locale::t("ai_err_too_long"),
         mac_ai::Error::Language => crate::locale::t("ai_err_language"),
+        mac_ai::Error::Refusal => crate::locale::t("ai_err_refusal"),
         mac_ai::Error::Cancelled | mac_ai::Error::Failed => crate::locale::t("ai_err_failed"),
     }
+}
+
+/// The longest code, in characters, that goes to the model in one piece: Apple's on-device
+/// model has a small context window, and longer code fails ("too long"). A longer text gets a
+/// menu of its functions instead ([`ai_functions`]).
+pub const AI_CODE_MAX_CHARS: usize = 5_000;
+/// The most functions the AI menu lists; the rest is mentioned, not listed.
+pub const AI_FN_MENU_MAX: usize = 30;
+/// [`CommandId::AiFn`] index of the whole text.
+pub const AI_FN_WHOLE: u8 = u8::MAX;
+/// [`CommandId::AiFn`] index of the dimmed line that says more functions exist.
+pub const AI_FN_MORE: u8 = u8::MAX - 1;
+
+/// The functions of a code card whose AI menu lists them: see [`ai_functions`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiFns {
+    /// The first [`AI_FN_MENU_MAX`] function names, in file order.
+    pub names: Vec<String>,
+    /// How many functions the text has.
+    pub total: usize,
+    /// The whole text is short enough to go to the model at once.
+    pub whole_fits: bool,
+}
+
+/// The functions to list in the AI menu of a code card: when the text is longer than
+/// [`AI_CODE_MAX_CHARS`] or has more than one function. `None` for other text, and for long code
+/// without recognizable functions (its actions then say it is too long).
+pub fn ai_functions(data: &LaunchData) -> Option<AiFns> {
+    if data.subject_kind != SubjectKind::Text {
+        return None;
+    }
+    ai_functions_of(data.subject_text.as_deref()?)
+}
+
+fn ai_functions_of(text: &str) -> Option<AiFns> {
+    let kind = crate::format::detect(text);
+    if !matches!(
+        kind,
+        crate::format::FormatKind::Rust
+            | crate::format::FormatKind::Java
+            | crate::format::FormatKind::Python
+    ) {
+        return None;
+    }
+    let whole_fits = text.chars().take(AI_CODE_MAX_CHARS + 1).count() <= AI_CODE_MAX_CHARS;
+    let spans = crate::format::fn_spans::function_spans(text, kind);
+    if spans.is_empty() || (whole_fits && spans.len() < 2) {
+        return None;
+    }
+    Some(AiFns {
+        names: spans
+            .iter()
+            .take(AI_FN_MENU_MAX)
+            .map(|span| span.name.clone())
+            .collect(),
+        total: spans.len(),
+        whole_fits,
+    })
+}
+
+/// The text a run of a code action on function `index` works on: the function with its
+/// signature, doc comment and body. `None` when the text has no such function.
+pub fn ai_function_text(text: &str, index: u8) -> Option<&str> {
+    let spans = crate::format::fn_spans::function_spans(text, crate::format::detect(text));
+    let span = spans.get(usize::from(index))?;
+    text.get(span.byte_range.clone())
+}
+
+/// Whether `text` is within [`AI_CODE_MAX_CHARS`].
+pub fn ai_code_fits(text: &str) -> bool {
+    text.chars().take(AI_CODE_MAX_CHARS + 1).count() <= AI_CODE_MAX_CHARS
+}
+
+/// What the preview says when code is too long for the model: with a chosen function (`whole`
+/// false) or the whole text. Names the limit.
+pub fn ai_code_too_long(whole: bool) -> String {
+    let key = if whole {
+        "ai_err_code_too_long"
+    } else {
+        "ai_err_fn_too_long"
+    };
+    crate::locale::tf(key, &[&AI_CODE_MAX_CHARS])
 }
 
 /// The AI chip's menu: `actions` ([`ai_actions`]); all dimmed (with the reason as their
 /// tooltip, and as a last dimmed line) when `availability` says no.
 pub fn ai_menu_items(availability: mac_ai::Availability, actions: &[Action]) -> Vec<Command> {
+    ai_menu_items_with(availability, actions, None)
+}
+
+/// [`ai_menu_items`] for a code card with `fns`: each code action becomes a submenu of the whole
+/// text (when it fits) and the functions, so only the chosen one goes to the model.
+pub fn ai_menu_items_with(
+    availability: mac_ai::Availability,
+    actions: &[Action],
+    fns: Option<&AiFns>,
+) -> Vec<Command> {
     let enabled = availability.is_ok();
     let detail = match availability {
         Ok(()) => ai_group(),
         Err(reason) => ai_reason(reason),
     };
-    let mut items: Vec<Command> = actions
-        .iter()
-        .map(|&action| {
-            command_enabled(
+    const KEYWORDS: &str = "ai apple intelligence summarize summary shorten formal proofread spelling grammar explain translate comment structure conflicts samenvatten korter formeel corrigeren uitleggen vertalen";
+    let mut items: Vec<Command> = Vec::new();
+    for &action in actions {
+        match fns.filter(|_| enabled && CODE.contains(&action)) {
+            Some(fns) => {
+                if fns.whole_fits {
+                    items.push(command_enabled(
+                        CommandId::AiFn(action, AI_FN_WHOLE),
+                        crate::locale::t("ai_whole_file"),
+                        detail,
+                        KEYWORDS,
+                        true,
+                    ));
+                }
+                for (index, name) in fns.names.iter().enumerate() {
+                    items.push(command_enabled(
+                        CommandId::AiFn(action, index as u8),
+                        name,
+                        detail,
+                        KEYWORDS,
+                        true,
+                    ));
+                }
+                if fns.total > fns.names.len() {
+                    items.push(command_enabled(
+                        CommandId::AiFn(action, AI_FN_MORE),
+                        &crate::locale::tf("ai_more_functions", &[&(fns.total - fns.names.len())]),
+                        detail,
+                        KEYWORDS,
+                        false,
+                    ));
+                }
+            }
+            None => items.push(command_enabled(
                 CommandId::Ai(action),
                 ai_title(action),
                 detail,
-                "ai apple intelligence summarize summary shorten formal proofread spelling grammar explain translate comment structure conflicts samenvatten korter formeel corrigeren uitleggen vertalen",
+                KEYWORDS,
                 enabled,
-            )
-        })
-        .collect();
+            )),
+        }
+    }
     if let Err(reason) = availability {
         items.push(command_enabled(
             CommandId::AiUnavailable,
@@ -379,6 +502,7 @@ mod tests {
                 mac_ai::Error::Guardrail,
                 mac_ai::Error::TooLong,
                 mac_ai::Error::Language,
+                mac_ai::Error::Refusal,
                 mac_ai::Error::Failed,
             ] {
                 assert_ne!(ai_error_text(error), "?");
@@ -584,5 +708,117 @@ mod tests {
                 .iter()
                 .all(|c| !matches!(c.id, CommandId::Ai(_)))
         );
+    }
+
+    fn rust_with(count: usize) -> String {
+        (0..count)
+            .map(|n| format!("fn f{n}() {{\n    let x = {n};\n}}\n"))
+            .collect()
+    }
+
+    #[test]
+    fn short_code_with_one_function_keeps_the_plain_menu() {
+        let text = "fn main() {\n    let x = 1;\n}\n";
+        assert_eq!(ai_functions_of(text), None);
+    }
+
+    #[test]
+    fn code_with_several_functions_lists_them_per_action() {
+        let text = rust_with(3);
+        let fns = ai_functions_of(&text).expect("functions");
+        assert_eq!(fns.names, ["f0", "f1", "f2"]);
+        assert!(fns.whole_fits);
+        let items = ai_menu_items_with(Ok(()), ai_actions_for_kind(K::Rust), Some(&fns));
+        let ids: Vec<_> = items.iter().map(|c| c.id.clone()).collect();
+        let explain = Action::ExplainCode;
+        assert_eq!(
+            &ids[..4],
+            [
+                CommandId::AiFn(explain, AI_FN_WHOLE),
+                CommandId::AiFn(explain, 0),
+                CommandId::AiFn(explain, 1),
+                CommandId::AiFn(explain, 2),
+            ]
+        );
+        assert_eq!(items.len(), 8);
+        assert!(items.iter().all(|c| c.enabled));
+        // One submenu per action, named after it.
+        assert_eq!(
+            menu_group(&CommandId::AiFn(explain, 1)),
+            Some(ai_title(explain))
+        );
+        // A function goes to the model with its signature.
+        assert_eq!(
+            ai_function_text(&text, 1),
+            Some("fn f1() {\n    let x = 1;\n}")
+        );
+        assert_eq!(ai_function_text(&text, 3), None);
+    }
+
+    #[test]
+    fn long_code_has_no_whole_text_item_and_the_list_is_capped() {
+        let text = rust_with(AI_FN_MENU_MAX + 5);
+        let fns = ai_functions_of(&text).expect("functions");
+        assert_eq!(fns.names.len(), AI_FN_MENU_MAX);
+        assert_eq!(fns.total, AI_FN_MENU_MAX + 5);
+        let items = ai_menu_items_with(Ok(()), &[Action::ExplainCode], Some(&fns));
+        assert_eq!(
+            items.len(),
+            usize::from(fns.whole_fits) + AI_FN_MENU_MAX + 1
+        );
+        let last = items.last().expect("note");
+        assert_eq!(last.id, CommandId::AiFn(Action::ExplainCode, AI_FN_MORE));
+        assert!(!last.enabled);
+        assert!(last.title.contains('5'));
+
+        let long = format!(
+            "fn big() {{\n{}}}\nfn small() {{}}\n",
+            "    let a = 1;\n".repeat(500)
+        );
+        assert!(!ai_code_fits(&long));
+        let fns = ai_functions_of(&long).expect("functions");
+        assert!(!fns.whole_fits);
+        let items = ai_menu_items_with(Ok(()), &[Action::DocComment], Some(&fns));
+        assert!(
+            items
+                .iter()
+                .all(|c| c.id != CommandId::AiFn(Action::DocComment, AI_FN_WHOLE))
+        );
+    }
+
+    #[test]
+    fn unavailable_model_keeps_the_flat_dimmed_menu() {
+        let fns = ai_functions_of(&rust_with(3)).expect("functions");
+        let items = ai_menu_items_with(
+            Err(Unavailable::NoBridge),
+            ai_actions_for_kind(K::Rust),
+            Some(&fns),
+        );
+        assert!(items.iter().all(|c| !c.enabled));
+        assert!(
+            items
+                .iter()
+                .any(|c| c.id == CommandId::Ai(Action::ExplainCode))
+        );
+    }
+
+    #[test]
+    fn the_code_limit_is_named_in_both_languages() {
+        assert_eq!(AI_CODE_MAX_CHARS, 5_000);
+        for lang in [Language::Nl, Language::En] {
+            crate::locale::set_test_language(lang);
+            for whole in [true, false] {
+                let message = ai_code_too_long(whole);
+                assert!(message.contains("5000"), "{message}");
+                assert!(!message.contains("{0}") && !message.contains('?'));
+            }
+            assert_ne!(ai_code_too_long(true), ai_code_too_long(false));
+            for key in ["ai_whole_file", "ai_part_note", "ai_err_refusal"] {
+                assert_ne!(crate::locale::t(key), "?");
+            }
+        }
+        crate::locale::set_test_language(Language::En);
+        assert!(ai_code_fits(&"a".repeat(AI_CODE_MAX_CHARS)));
+        assert!(!ai_code_fits(&"a".repeat(AI_CODE_MAX_CHARS + 1)));
     }
 }

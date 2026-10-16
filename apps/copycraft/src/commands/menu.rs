@@ -48,6 +48,8 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::ImageStep(op) => op.group(),
         CommandId::ImageResizeCustom => Some(crate::image_edit::resize_group()),
         CommandId::Ai(action) => ai_submenu(*action),
+        // The functions of one code action sit in a submenu named after it.
+        CommandId::AiFn(action, _) => Some(ai_title(*action)),
         _ => None,
     }
 }
