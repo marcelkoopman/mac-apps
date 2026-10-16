@@ -354,6 +354,9 @@ pub fn load(path: &Path) -> OpenedFile {
     if !meta.is_file() {
         return noted(name, unreadable());
     }
+    if let Some(opened) = load_docx(path, &name, meta.len()) {
+        return opened;
+    }
     if meta.len() > MAX_FILE_BYTES {
         return noted(name, too_large());
     }
@@ -377,6 +380,51 @@ pub fn load(path: &Path) -> OpenedFile {
         Classified::NotText => noted(name, not_text()),
         Classified::TooLarge => noted(name, too_large()),
     }
+}
+
+/// A Word document (.docx): its text as the card's text. `None` when the file is not one (no
+/// zip, or a zip without `word/document.xml`), so the caller goes on with it as any other file.
+/// Read into zeroizing memory and unpacked in memory only; nothing is written anywhere.
+fn load_docx(path: &Path, name: &str, len: u64) -> Option<OpenedFile> {
+    use crate::docx::{DocxError, MAX_DOCX_BYTES};
+    let named = is_docx_name(path);
+    // A zip, or (for a .docx name) an encrypted Office container: both start with their magic.
+    let mut magic = [0u8; 8];
+    std::io::Read::read_exact(&mut std::fs::File::open(path).ok()?, &mut magic).ok()?;
+    let zip = crate::docx::has_zip_magic(&magic);
+    if !zip && !(named && crate::docx::has_ole_magic(&magic)) {
+        return None;
+    }
+    if len > MAX_DOCX_BYTES {
+        // Only a file named .docx gets the Word note; any other big zip stays "not text".
+        return named.then(|| noted(name.to_string(), crate::locale::t("docx_too_large")));
+    }
+    let bytes = Zeroizing::new(std::fs::read(path).ok()?);
+    if zip && !crate::docx::is_docx(&bytes) {
+        return None;
+    }
+    let name = name.to_string();
+    Some(match crate::docx::extract(&bytes) {
+        Ok(text) => OpenedFile {
+            name,
+            text: Some(text),
+            note: None,
+            image: None,
+            pdf: None,
+        },
+        Err(DocxError::NotDocx) => return None,
+        Err(DocxError::Locked) => noted(name, crate::locale::t("docx_locked")),
+        Err(DocxError::Bomb) => noted(name, crate::locale::t("docx_bomb")),
+        Err(DocxError::TooLarge) => noted(name, text_too_large()),
+        Err(DocxError::NoText) => noted(name, crate::locale::t("docx_no_text")),
+        Err(DocxError::Unreadable) => noted(name, unreadable()),
+    })
+}
+
+fn is_docx_name(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("docx"))
 }
 
 /// Dropped text, shown on the card like a file called `name`. It has the file size limit.
@@ -633,6 +681,46 @@ mod tests {
         assert_eq!(opened.name, path.file_name().unwrap().to_str().unwrap());
         assert_eq!(opened.text.unwrap().as_str(), "hello file\n");
         assert!(opened.note.is_none());
+    }
+
+    fn temp_file(tag: &str, name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("copycraft-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn load_reads_a_docx_as_text() {
+        let zipped = crate::docx::tests::docx("<w:p><w:r><w:t>Hallo docx</w:t></w:r></w:p>", true);
+        let path = temp_file("docx", "brief.docx", &zipped);
+        let opened = load(&path);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+        assert_eq!(opened.name, "brief.docx");
+        assert_eq!(opened.text.unwrap().as_str(), "Hallo docx");
+        assert!(opened.note.is_none() && opened.image.is_none());
+    }
+
+    #[test]
+    fn a_docx_without_text_or_a_locked_one_gets_a_note() {
+        let empty = crate::docx::tests::docx("<w:p/>", false);
+        let path = temp_file("docx-empty", "leeg.docx", &empty);
+        let opened = load(&path);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+        assert!(opened.text.is_none());
+        assert_eq!(
+            opened.note.as_deref(),
+            Some("This Word document has no text")
+        );
+
+        let mut ole = vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        ole.extend_from_slice(&[0; 64]);
+        let path = temp_file("docx-locked", "geheim.docx", &ole);
+        let opened = load(&path);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+        assert!(opened.text.is_none());
+        assert!(opened.note.is_some());
     }
 
     #[test]

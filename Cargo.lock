@@ -695,6 +695,7 @@ dependencies = [
  "arboard",
  "base64 0.23.1",
  "dispatch2",
+ "flate2",
  "global-hotkey",
  "image",
  "infer",

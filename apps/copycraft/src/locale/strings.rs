@@ -405,6 +405,26 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "PDF is larger than 32 MB",
     ),
     (
+        "docx_too_large",
+        "Word-bestand is groter dan 32 MB",
+        "Word document is larger than 32 MB",
+    ),
+    (
+        "docx_locked",
+        "Dit Word-bestand is met een wachtwoord beveiligd",
+        "This Word document is protected with a password",
+    ),
+    (
+        "docx_bomb",
+        "Dit Word-bestand is uitgepakt te groot om te lezen",
+        "This Word document is too large to read once unpacked",
+    ),
+    (
+        "docx_no_text",
+        "Dit Word-bestand bevat geen tekst",
+        "This Word document has no text",
+    ),
+    (
         "ai_pdf_ocr_pending",
         "Wacht tot de tekst in de PDF is herkend",
         "Wait until the text in the PDF is recognized",

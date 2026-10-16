@@ -14,6 +14,7 @@ mod dataframe;
 mod decode;
 mod diag;
 mod diff;
+mod docx;
 mod format;
 mod highlight;
 mod hotkey;

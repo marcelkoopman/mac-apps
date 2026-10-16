@@ -33,6 +33,10 @@ global-hotkey = "0.8"
 # Not inherited from the workspace: copycraft needs default-features = false, ticker does not.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
+# Word documents (src/docx.rs): inflating `word/document.xml` from the docx zip, in memory. Already
+# in the tree (polars); pure Rust backend (miniz_oxide), no zlib/C. No zip crate: the zip
+# directory is read by hand. Approved by Marcel (2026-10-16).
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 leakguard = "1.0.0"
 memchr = "2.8"
 # `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
