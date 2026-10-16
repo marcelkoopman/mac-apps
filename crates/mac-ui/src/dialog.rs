@@ -375,6 +375,149 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
     })
 }
 
+/// What [`fields`] asks: a bold `title`, a `message`, one labelled text field per entry of
+/// `fields` (each `lines` high; Return ends the dialog like the default button) and a preview
+/// under them. The default button is titled `ok`, the second one is Cancel.
+#[cfg(feature = "widgets")]
+pub struct Fields<'a> {
+    pub title: &'a str,
+    pub message: &'a str,
+    pub ok: &'a str,
+    pub fields: &'a [FieldAsk<'a>],
+    pub preview_label: &'a str,
+}
+
+/// One text field of [`fields`]: its label above it and its height in lines of text.
+#[cfg(feature = "widgets")]
+pub struct FieldAsk<'a> {
+    pub label: &'a str,
+    pub lines: usize,
+}
+
+/// Works out [`fields`]'s preview from the typed texts, in the order of the fields.
+#[cfg(feature = "widgets")]
+pub type FieldsPreview = Box<dyn Fn(&[String]) -> String>;
+
+/// Ask for several texts at once, with a live preview that is worked out from all of them on
+/// every keystroke (on the main thread, so keep it cheap). Returns the texts as typed, in the
+/// order of `ask.fields`, on the default button; `None` on Cancel. The typed texts may be
+/// private: the fields, their editors and the preview are overwritten and emptied before this
+/// returns.
+#[cfg(feature = "widgets")]
+pub fn fields(
+    mtm: MainThreadMarker,
+    ask: &Fields<'_>,
+    preview: FieldsPreview,
+) -> Option<Vec<String>> {
+    use std::rc::Rc;
+
+    use objc2_app_kit::{NSTextFieldBezelStyle, NSView};
+
+    const WIDTH: f64 = 440.0;
+    const LABEL_H: f64 = 18.0;
+    const LINE_H: f64 = 17.0;
+    const FIELD_PAD: f64 = 8.0;
+    const GAP: f64 = 10.0;
+    const PREVIEW_H: f64 = 120.0;
+    let alert = new_alert(mtm, ask.title, ask.message, &[ask.ok, cancel()]);
+    let field_h = |lines: usize| lines.max(1) as f64 * LINE_H + FIELD_PAD;
+    let height: f64 = ask
+        .fields
+        .iter()
+        .map(|f| LABEL_H + 2.0 + field_h(f.lines) + GAP)
+        .sum::<f64>()
+        + LABEL_H
+        + 2.0
+        + PREVIEW_H;
+    let view = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, height)),
+    );
+    let label = |text: &str, y: f64| {
+        let label = NSTextField::labelWithString(&NSString::from_str(text), mtm);
+        label.setFrame(NSRect::new(
+            NSPoint::new(0.0, y),
+            NSSize::new(WIDTH, LABEL_H),
+        ));
+        view.addSubview(&label);
+    };
+    let mut y = height;
+    let mut inputs: Vec<Retained<NSTextField>> = Vec::new();
+    for ask_field in ask.fields {
+        y -= LABEL_H;
+        label(ask_field.label, y);
+        y -= 2.0 + field_h(ask_field.lines);
+        // A wrapping label made editable: a bezeled field that wraps to several lines.
+        let input = NSTextField::wrappingLabelWithString(&NSString::from_str(""), mtm);
+        input.setFrame(NSRect::new(
+            NSPoint::new(0.0, y),
+            NSSize::new(WIDTH, field_h(ask_field.lines)),
+        ));
+        input.setEditable(true);
+        input.setSelectable(true);
+        input.setBezeled(true);
+        input.setBezelStyle(NSTextFieldBezelStyle::SquareBezel);
+        input.setDrawsBackground(true);
+        // Every keystroke sends the action, so the preview follows the typing.
+        input.setContinuous(true);
+        input.setAccessibilityLabel(Some(&NSString::from_str(ask_field.label)));
+        view.addSubview(&input);
+        inputs.push(input);
+        y -= GAP;
+    }
+    y -= LABEL_H;
+    label(ask.preview_label, y);
+    let shown = NSTextField::wrappingLabelWithString(&NSString::from_str(""), mtm);
+    shown.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(WIDTH, PREVIEW_H),
+    ));
+    shown.setFont(Some(&crate::fonts::monospace(
+        crate::style::FONT_CAPTION,
+        &[],
+    )));
+    shown.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+    shown.setAccessibilityLabel(Some(&NSString::from_str(ask.preview_label)));
+    view.addSubview(&shown);
+
+    let read = {
+        let inputs = inputs.clone();
+        move || -> Vec<String> {
+            inputs
+                .iter()
+                .map(|input| input.stringValue().to_string())
+                .collect()
+        }
+    };
+    #[allow(clippy::type_complexity)]
+    let preview: Rc<dyn Fn(&[String]) -> String> = Rc::from(preview);
+    let watcher = preview::Watcher::new(mtm, {
+        let read = read.clone();
+        let shown = shown.clone();
+        Box::new(move || shown.setStringValue(&NSString::from_str(&preview(&read()))))
+    });
+    watcher.refresh();
+    for input in &inputs {
+        crate::actions::connect(input, &watcher, objc2::sel!(refresh:));
+    }
+
+    alert.setAccessoryView(Some(&view));
+    alert.layout();
+    if let Some(first) = inputs.first() {
+        alert.window().setInitialFirstResponder(Some(first));
+    }
+    let answer = button_index(run(mtm, &alert));
+    let typed = read();
+    // The controls hold the watcher weakly; it lives until here.
+    drop(watcher);
+    for input in &inputs {
+        crate::widgets::wipe_field_editor(input);
+        crate::widgets::wipe_text_field(input);
+    }
+    shown.setStringValue(&NSString::from_str(""));
+    (answer == Some(0)).then_some(typed)
+}
+
 /// The target of [`form`]'s controls, and the preview's way back from its thread.
 #[cfg(feature = "widgets")]
 mod preview {
