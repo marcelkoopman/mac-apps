@@ -99,6 +99,37 @@ fn is_scheme(text: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
+/// Where the parts of a URL sit in the text shown for it, as byte ranges: `lead` is everything
+/// before the host (scheme, `://`, and any `user@` that is still there), `host` the host and
+/// port, `rest` the path, query and fragment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UrlSpans {
+    pub lead: std::ops::Range<usize>,
+    pub host: std::ops::Range<usize>,
+    pub rest: std::ops::Range<usize>,
+}
+
+/// The spans of `url` (one line, as shown) for the card's styling. `None` when [`split_url`]
+/// cannot read it: invalid URLs are not styled. String work only; nothing is logged.
+pub(crate) fn url_spans(url: &str) -> Option<UrlSpans> {
+    split_url(url)?;
+    // `split_url` trims; spans are of the text as given, so skip the same white space.
+    let start = url.len() - url.trim_start().len();
+    let end = url.trim_end().len();
+    let body = &url[start..end];
+    let after_scheme = body.find("://").map_or(0, |at| at + 3);
+    let authority_end = body[after_scheme..]
+        .find(['/', '?', '#'])
+        .map_or(body.len(), |at| after_scheme + at);
+    let authority = &body[after_scheme..authority_end];
+    let host_start = after_scheme + authority.rfind('@').map_or(0, |at| at + 1);
+    Some(UrlSpans {
+        lead: start..start + host_start,
+        host: start + host_start..start + authority_end,
+        rest: start + authority_end..end,
+    })
+}
+
 /// At most `max` characters of `text` on one line (control characters and line breaks become
 /// spaces), cut with `…`.
 fn one_line(text: &str, max: usize) -> String {
@@ -155,6 +186,67 @@ pub(crate) fn card_text(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn spans_of(url: &str) -> (&str, &str, &str) {
+        let spans = url_spans(url).unwrap();
+        (&url[spans.lead], &url[spans.host], &url[spans.rest])
+    }
+
+    #[test]
+    fn spans_split_scheme_host_and_rest() {
+        assert_eq!(
+            spans_of("https://example.com:8080/a/b?x=1#top"),
+            ("https://", "example.com:8080", "/a/b?x=1#top")
+        );
+        assert_eq!(
+            spans_of("https://example.com"),
+            ("https://", "example.com", "")
+        );
+        assert_eq!(spans_of("https://e.com?q=1"), ("https://", "e.com", "?q=1"));
+        assert_eq!(spans_of("www.example.com/x"), ("", "www.example.com", "/x"));
+    }
+
+    #[test]
+    fn spans_keep_userinfo_out_of_the_host() {
+        assert_eq!(
+            spans_of("https://user:secret@example.com/x"),
+            ("https://user:secret@", "example.com", "/x")
+        );
+        assert_eq!(
+            spans_of("https://a@b@example.com/x"),
+            ("https://a@b@", "example.com", "/x")
+        );
+        // An `@` in the path is not userinfo.
+        assert_eq!(
+            spans_of("https://example.com/@me"),
+            ("https://", "example.com", "/@me")
+        );
+    }
+
+    #[test]
+    fn spans_use_byte_ranges_for_non_ascii() {
+        let url = "https://bücher.example/café?naïve=ü…";
+        let (lead, host, rest) = spans_of(url);
+        assert_eq!(
+            (lead, host, rest),
+            ("https://", "bücher.example", "/café?naïve=ü…")
+        );
+        assert_eq!(url_spans(url).unwrap().rest.end, url.len());
+    }
+
+    #[test]
+    fn spans_are_none_for_invalid_urls() {
+        for text in [
+            "",
+            "not a url",
+            "ht tp://x.com",
+            "1x://e.com",
+            "https://",
+            "https://:80/x",
+        ] {
+            assert_eq!(url_spans(text), None, "{text}");
+        }
+    }
 
     fn pairs(parts: &LinkParts) -> Vec<(&str, &str)> {
         parts

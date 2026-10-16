@@ -12,12 +12,19 @@ pub enum TokenKind {
     Comment,
     Punct,
     Text,
+    /// A valid link's scheme (and `://`): dimmed.
+    LinkScheme,
+    /// A valid link's host: bold, link colour.
+    LinkHost,
+    /// A valid link's path, query and fragment: link colour, dimmed.
+    LinkRest,
 }
 
 pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
     match kind {
         FormatKind::Json => tokenize_json(source),
         FormatKind::Jwt => tokenize_jwt(source),
+        FormatKind::Url => tokenize_link(source),
         FormatKind::Yaml => tokenize_yaml(source),
         FormatKind::Rust => tokenize_rust(source),
         FormatKind::Java => tokenize_code(source, kind),
@@ -31,6 +38,26 @@ pub fn tokens(source: &str, kind: FormatKind) -> Vec<(TokenKind, String)> {
         _ if looks_redacted(source) => tokenize_redacted(source),
         _ => vec![(TokenKind::Text, source.to_string())],
     }
+}
+
+/// The Link card: its first line is the URL, the rest (the parameter table) stays plain. A first
+/// line that is not a valid URL is all plain.
+fn tokenize_link(source: &str) -> Vec<(TokenKind, String)> {
+    let line_end = source.find('\n').unwrap_or(source.len());
+    let Some(spans) = crate::link_view::url_spans(&source[..line_end]) else {
+        return vec![(TokenKind::Text, source.to_string())];
+    };
+    [
+        (TokenKind::Text, 0..spans.lead.start),
+        (TokenKind::LinkScheme, spans.lead),
+        (TokenKind::LinkHost, spans.host),
+        (TokenKind::LinkRest, spans.rest.clone()),
+        (TokenKind::Text, spans.rest.end..source.len()),
+    ]
+    .into_iter()
+    .filter(|(_, range)| !range.is_empty())
+    .map(|(kind, range)| (kind, source[range].to_string()))
+    .collect()
 }
 
 fn tokenize_xml(source: &str) -> Vec<(TokenKind, String)> {
@@ -824,6 +851,23 @@ include!("highlight_extra.rs");
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn link_tokens_style_only_the_url_line() {
+        let toks = tokens("https://u@e.com/p?a=1\n\nQuery\na │ 1", FormatKind::Url);
+        let joined: String = toks.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(joined, "https://u@e.com/p?a=1\n\nQuery\na │ 1");
+        assert_eq!(toks[0], (TokenKind::LinkScheme, "https://u@".to_string()));
+        assert_eq!(toks[1], (TokenKind::LinkHost, "e.com".to_string()));
+        assert_eq!(toks[2], (TokenKind::LinkRest, "/p?a=1".to_string()));
+        assert_eq!(toks[3].0, TokenKind::Text);
+        assert_eq!(toks.len(), 4);
+        // Invalid: plain.
+        assert_eq!(
+            tokens("not a url", FormatKind::Url),
+            vec![(TokenKind::Text, "not a url".to_string())]
+        );
+    }
+
     use super::{TokenKind, tokens};
     use crate::format::FormatKind;
 

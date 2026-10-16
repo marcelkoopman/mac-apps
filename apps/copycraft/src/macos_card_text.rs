@@ -144,6 +144,14 @@ fn editor_font() -> Retained<NSFont> {
     mac_ui::fonts::monospace(mac_ui::style::FONT_CODE, &[])
 }
 
+/// The host of a valid link: the code font, semibold.
+fn link_host_font() -> Retained<NSFont> {
+    NSFont::monospacedSystemFontOfSize_weight(
+        mac_ui::style::FONT_CODE,
+        mac_ui::fonts::semibold_weight(),
+    )
+}
+
 fn plain(body: &str, font: &NSFont, color: &NSColor) -> Retained<NSMutableAttributedString> {
     AttrText::new(body, font, color).into_attributed()
 }
@@ -162,13 +170,14 @@ fn colored(source: &str, kind: FormatKind) -> Retained<NSMutableAttributedString
     let attr = AttrText::new(&display, &font, &tone_color(kind, TokenKind::Text));
     let mut offset = 0usize;
     for (token_kind, len) in spans {
-        attr.color_utf16(
-            NSRange {
-                location: offset,
-                length: len,
-            },
-            &tone_color(kind, token_kind),
-        );
+        let range = NSRange {
+            location: offset,
+            length: len,
+        };
+        attr.color_utf16(range, &tone_color(kind, token_kind));
+        if token_kind == TokenKind::LinkHost {
+            attr.font_utf16(range, &link_host_font());
+        }
         offset += len;
     }
     attr.into_attributed()
@@ -216,6 +225,9 @@ fn color_for(kind: TokenKind) -> Retained<NSColor> {
         TokenKind::Comment => NSColor::secondaryLabelColor(),
         TokenKind::Punct => NSColor::tertiaryLabelColor(),
         TokenKind::Text => NSColor::labelColor(),
+        TokenKind::LinkScheme => NSColor::secondaryLabelColor(),
+        TokenKind::LinkHost => NSColor::linkColor(),
+        TokenKind::LinkRest => NSColor::linkColor().colorWithAlphaComponent(0.65),
     }
 }
 

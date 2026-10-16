@@ -101,7 +101,9 @@ pub(crate) fn page_card(text: &str) -> Option<WorkCard> {
         excerpt: crate::link_view::card_text(text).unwrap_or_else(|| payload_excerpt(text)),
         placeholder: String::new(),
         shows_image: false,
-        highlight: None,
+        // A URL that splits is drawn as a link (scheme dim, host bold, path dim); text that does
+        // not stays plain.
+        highlight: crate::link_view::card_text(text).map(|_| crate::format::FormatKind::Url),
         // The URL can be selected and copied.
         selectable: true,
         link_page: Some(page.to_string()),

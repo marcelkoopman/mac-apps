@@ -513,7 +513,12 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
             (highlight.is_none()
                 || matches!(
                     highlight,
-                    Some(FormatKind::Markdown | FormatKind::Agent | FormatKind::Jwt)
+                    Some(
+                        FormatKind::Markdown
+                            | FormatKind::Agent
+                            | FormatKind::Jwt
+                            | FormatKind::Url
+                    )
                 ))
             .then(preview_wrap_width)
         };
