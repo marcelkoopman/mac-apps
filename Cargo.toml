@@ -29,7 +29,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
     "NSVisualEffectView",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAttributedString", "NSGeometry", "NSRange", "NSString"] }
-# mac-ui `notify` only: posting a notification with a completion-handler block.
+# mac-ui `notify` only: posting a notification with a completion-handler block, the permission
+# state (UNNotificationSettings) and the click on a notification (UNNotificationResponse).
 block2 = { version = "0.6", default-features = false, features = ["alloc"] }
 objc2-user-notifications = { version = "0.3", default-features = false, features = [
     "std",
@@ -37,6 +38,8 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNNotification",
     "UNNotificationContent",
     "UNNotificationRequest",
+    "UNNotificationResponse",
+    "UNNotificationSettings",
     "UNNotificationTrigger",
     "UNUserNotificationCenter",
 ] }

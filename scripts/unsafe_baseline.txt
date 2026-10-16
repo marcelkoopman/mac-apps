@@ -1,14 +1,15 @@
 # Upper bounds for scripts/count_unsafe.sh --check (CI). Lower them when unsafe goes down.
-# mac-ui blocks 78: +1 for the NSObject `init` of dialog::form's preview target (Lines… > Column…, Filter…),
+# mac-ui blocks 79: +1 for the NSObject `init` of dialog::form's preview target (Lines… > Column…, Filter…),
 # +1 for actions::run_on_main (background results back to the main queue),
 # +1 for log: os_log has no safe binding in the crates we use; one block calls os_log_create and _os_log_impl.
+# +1 for notify::permission: the settings object the system hands to the completion block (NonNull deref).
 # copycraft blocks 106: +6 for the PDF card (macos_pdf.rs: PDFDocument init, page count/lock and page text
 # reads (2), page reference, and macos_image_io::with_bitmap's CGBitmapContextCreate + ownership). The PDFKit
 # calls are `unsafe` in objc2-pdf-kit; they run on the main thread only.
 copycraft blocks 106
 copycraft fn 5
 copycraft impl 7
-mac-ui blocks 78
+mac-ui blocks 79
 mac-ui fn 4
 mac-ui impl 4
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
