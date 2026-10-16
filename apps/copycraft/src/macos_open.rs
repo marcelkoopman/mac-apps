@@ -56,6 +56,38 @@ pub fn open_web_url(url: &str) -> bool {
     NSWorkspace::sharedWorkspace().openURL(&nsurl)
 }
 
+/// Why a `mailto:` link was not opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MailtoError {
+    /// The link could not be parsed.
+    Invalid,
+    /// No app is set up to handle `mailto:` links.
+    NoMailApp,
+    /// The system found an app but could not open the link.
+    NotOpened,
+}
+
+/// Open a `mailto:` link in the default mail app via `NSWorkspace`. First asks which app handles
+/// the link (`URLForApplicationToOpenURL`), so "no mail app" is told apart from a failed open;
+/// then `openURL`, whose result is returned. The link text is never logged. Only the `mailto`
+/// scheme is accepted.
+pub fn open_mailto(url: &str) -> Result<(), MailtoError> {
+    let nsurl = NSURL::URLWithString(&NSString::from_str(url)).ok_or(MailtoError::Invalid)?;
+    let scheme = nsurl.scheme().map(|s| s.to_string().to_ascii_lowercase());
+    if scheme.as_deref() != Some("mailto") {
+        return Err(MailtoError::Invalid);
+    }
+    let workspace = NSWorkspace::sharedWorkspace();
+    if workspace.URLForApplicationToOpenURL(&nsurl).is_none() {
+        return Err(MailtoError::NoMailApp);
+    }
+    if workspace.openURL(&nsurl) {
+        Ok(())
+    } else {
+        Err(MailtoError::NotOpened)
+    }
+}
+
 const PREVIEW_DIR: &str = "copycraft-preview";
 const PREVIEW_PREFIX: &str = "copycraft-preview-";
 

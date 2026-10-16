@@ -284,6 +284,8 @@ fn overflow_menu_sections_follow_the_requested_order() {
         CommandId::WindowSize(crate::settings::WindowSize::Wide),
         CommandId::Settings,
         CommandId::About,
+        CommandId::SuggestFeature,
+        CommandId::ReportProblem,
         CommandId::Welcome,
         CommandId::Quit,
     ];

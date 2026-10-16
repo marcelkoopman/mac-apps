@@ -210,6 +210,7 @@ mod tests {
             "language_nl",
             "language_en",
             "group_privacy",
+            "group_feedback",
             "sep_tab",
             "text_filter",
             "filter_label",

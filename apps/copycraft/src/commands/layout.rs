@@ -271,6 +271,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::ClearPins
             | CommandId::Settings
             | CommandId::About
+            | CommandId::SuggestFeature
+            | CommandId::ReportProblem
             | CommandId::Welcome
             | CommandId::Clear
             | CommandId::ChooseFile
@@ -382,6 +384,8 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",
         CommandId::About => "info.circle",
+        CommandId::SuggestFeature => "lightbulb",
+        CommandId::ReportProblem => "exclamationmark.bubble",
         CommandId::ExportDiagnostics => "stethoscope",
         CommandId::CheckAi => "sparkles",
         CommandId::Welcome => "hand.wave",

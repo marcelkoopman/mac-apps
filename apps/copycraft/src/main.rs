@@ -25,6 +25,7 @@ mod item_find;
 mod launcher;
 mod link_view;
 mod locale;
+mod mailto;
 mod memo;
 mod menubar;
 mod notifications;
@@ -62,6 +63,8 @@ static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 mod macos_about;
 #[cfg(target_os = "macos")]
 mod macos_card_text;
+#[cfg(target_os = "macos")]
+mod macos_feedback;
 #[cfg(target_os = "macos")]
 mod macos_image_edit;
 #[cfg(target_os = "macos")]

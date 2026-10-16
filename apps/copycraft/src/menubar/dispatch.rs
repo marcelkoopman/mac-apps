@@ -155,6 +155,8 @@ impl App {
             }
             CommandId::Settings => launcher::show_settings(),
             CommandId::About => launcher::show_about(),
+            CommandId::SuggestFeature => launcher::show_feedback(crate::mailto::Kind::Feature),
+            CommandId::ReportProblem => launcher::show_feedback(crate::mailto::Kind::Problem),
             CommandId::TextComplexity => launcher::show_complexity(),
             CommandId::AgentCommands => self.run_text(crate::text_ops::TextOp::AgentCommands),
             CommandId::AgentOutline => launcher::show_agent_outline(),

@@ -468,6 +468,10 @@ pub enum CommandId {
     Settings,
     /// Open the About window (name, version, offline promise).
     About,
+    /// Feature voorstellen…: a small form that opens a draft mail ([`crate::mailto`]).
+    SuggestFeature,
+    /// Probleem melden…: the same form for a problem report.
+    ReportProblem,
     /// Open the welcome window again.
     Welcome,
     /// Stop recording foreign copies until it is switched off. Not stored.

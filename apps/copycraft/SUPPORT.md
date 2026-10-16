@@ -19,6 +19,8 @@ Heb je een vraag of een bug gevonden? Mail naar mac-apps-support@proton.me. Bugs
 7. **Een app moet genegeerd worden.** Voeg die toe bij Genegeerde apps in Instellingen.
 8. **Hoe start ik Copycraft bij inloggen?** Zet "Openen bij inloggen" aan in Instellingen.
 
+9. **Hoe stel ik een feature voor of meld ik een probleem?** Kies "Feature voorstellen…" of "Probleem melden…" in het ⋯-menu of in Instellingen. Vul een onderwerp en je tekst in en kies "Maak e-mail": je mailapp opent met een concept naar mac-apps-support@proton.me. Jij verstuurt de e-mail zelf; Copycraft verstuurt niets. De mail bevat alleen je eigen tekst plus de versie van Copycraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen. Is je tekst te lang voor een e-maillink, of heb je geen mailapp, dan kun je de tekst naar het klembord kopiëren en zelf in een mail plakken.
+
 ## English
 
 ### Support
@@ -35,6 +37,8 @@ Question or found a bug? Email mac-apps-support@proton.me. I fix bugs as best I 
 6. **How do I take a screenshot of the card?** Copycraft blocks that by default. Choose "Allow screenshots" in the menu to allow it for this session.
 7. **An app should be ignored.** Add it under Ignored apps in Settings.
 8. **How do I start Copycraft at login?** Turn on "Open at Login" in Settings.
+
+9. **How do I suggest a feature or report a problem?** Choose "Suggest a feature…" or "Report a problem…" in the ⋯ menu or in Settings. Fill in a subject and your text and choose "Create email": your mail app opens with a draft to mac-apps-support@proton.me. You send the mail yourself; Copycraft sends nothing. The mail holds only your own text plus the Copycraft and macOS versions, never your clipboard, history, file names or settings. If your text is too long for an email link, or you have no mail app, you can copy the text to the clipboard and paste it into a mail yourself.
 
 ## Logs and diagnostics
 

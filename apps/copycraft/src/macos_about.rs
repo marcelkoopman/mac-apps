@@ -92,7 +92,7 @@ impl AboutDelegate {
     }
 }
 
-fn bundle_version() -> String {
+pub(crate) fn bundle_version() -> String {
     NSBundle::mainBundle()
         .objectForInfoDictionaryKey(&NSString::from_str("CFBundleShortVersionString"))
         .and_then(|value| value.downcast_ref::<NSString>().map(|s| s.to_string()))

@@ -249,6 +249,17 @@ pub fn show_about() {
     crate::macos_about::show();
 }
 
+/// Feature voorstellen… / Probleem melden…: the form that opens a draft mail.
+pub fn show_feedback(kind: crate::mailto::Kind) {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_feedback::run(kind);
+        order_front();
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = kind;
+}
+
 /// Open the first-run welcome window (also from the status menu).
 pub fn show_welcome() {
     #[cfg(target_os = "macos")]

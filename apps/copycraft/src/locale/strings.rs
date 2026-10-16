@@ -592,6 +592,102 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Sneltoets, datumvolgorde, privacyfilter, vervagen, genegeerde apps, Openen bij inloggen",
         "Hotkey, date order, privacy filter, blur, ignored apps, Open at Login",
     ),
+    // Feedback by mail (Feature voorstellen… / Probleem melden…)
+    (
+        "feedback_feature_menu",
+        "Feature voorstellen…",
+        "Suggest a feature…",
+    ),
+    (
+        "feedback_problem_menu",
+        "Probleem melden…",
+        "Report a problem…",
+    ),
+    (
+        "detail_feedback_feature",
+        "Maakt een concept-e-mail in je mailapp; jij verstuurt hem zelf",
+        "Creates a draft in your mail app; you send it yourself",
+    ),
+    (
+        "detail_feedback_problem",
+        "Maakt een concept-e-mail in je mailapp; jij verstuurt hem zelf",
+        "Creates a draft in your mail app; you send it yourself",
+    ),
+    ("group_feedback", "Feedback", "Feedback"),
+    (
+        "feedback_feature_title",
+        "Feature voorstellen",
+        "Suggest a feature",
+    ),
+    (
+        "feedback_problem_title",
+        "Probleem melden",
+        "Report a problem",
+    ),
+    (
+        "feedback_message",
+        "Je mailapp opent met een concept. Jij verstuurt de e-mail zelf; Copycraft verstuurt niets en voegt geen klembord, geschiedenis of bestanden toe.",
+        "Your mail app opens with a draft. You send the mail yourself; Copycraft sends nothing and adds no clipboard, history or files.",
+    ),
+    ("feedback_subject", "Onderwerp", "Subject"),
+    (
+        "feedback_feature_what",
+        "Wat wil je dat de app kan?",
+        "What do you want the app to do?",
+    ),
+    (
+        "feedback_feature_why",
+        "Waarom is dat nuttig?",
+        "Why is that useful?",
+    ),
+    (
+        "feedback_problem_what",
+        "Wat ging er mis?",
+        "What went wrong?",
+    ),
+    (
+        "feedback_problem_expected",
+        "Wat verwachtte je?",
+        "What did you expect?",
+    ),
+    (
+        "feedback_preview",
+        "Voorbeeld van de e-mail",
+        "Preview of the mail",
+    ),
+    ("feedback_to", "Aan:", "To:"),
+    ("feedback_subject_line", "Onderwerp:", "Subject:"),
+    ("feedback_make_mail", "Maak e-mail", "Create email"),
+    (
+        "feedback_too_long_note",
+        "\n\nLet op: te lang voor een e-maillink. Je kunt de tekst straks naar het klembord kopiëren.",
+        "\n\nNote: too long for an email link. You can copy the text to the clipboard instead.",
+    ),
+    (
+        "feedback_copy",
+        "Kopieer naar klembord",
+        "Copy to clipboard",
+    ),
+    (
+        "feedback_fallback_long",
+        "De tekst is te lang voor een e-maillink. Kopieer hem naar het klembord en plak hem in een e-mail aan {0}.",
+        "The text is too long for an email link. Copy it to the clipboard and paste it into an email to {0}.",
+    ),
+    (
+        "feedback_fallback_no_app",
+        "Er is geen mailapp gevonden die e-maillinks opent. Kopieer de tekst naar het klembord en plak hem in een e-mail aan {0}.",
+        "No mail app was found that opens email links. Copy the text to the clipboard and paste it into an email to {0}.",
+    ),
+    (
+        "feedback_copied",
+        "De e-mail staat op het klembord. Plak hem in een e-mail aan {0}.",
+        "The mail is on the clipboard. Paste it into an email to {0}.",
+    ),
+    (
+        "feedback_copy_failed",
+        "Kopiëren naar het klembord is niet gelukt.",
+        "Copying to the clipboard failed.",
+    ),
     (
         "detail_export_diagnostics",
         "Logboek van de laatste 24 uur als .txt, zonder klembordinhoud",

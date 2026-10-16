@@ -361,6 +361,18 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "about version offline",
     ));
     commands.push(command(
+        CommandId::SuggestFeature,
+        crate::locale::t("feedback_feature_menu"),
+        crate::locale::t("detail_feedback_feature"),
+        "feature suggest suggestion idea feedback voorstel idee mail",
+    ));
+    commands.push(command(
+        CommandId::ReportProblem,
+        crate::locale::t("feedback_problem_menu"),
+        crate::locale::t("detail_feedback_problem"),
+        "problem report bug issue feedback probleem melden fout mail",
+    ));
+    commands.push(command(
         CommandId::CheckAi,
         crate::locale::t("ai_check"),
         crate::locale::t("detail_ai_check"),
@@ -440,6 +452,8 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         }
         CommandId::Settings
         | CommandId::About
+        | CommandId::SuggestFeature
+        | CommandId::ReportProblem
         | CommandId::ExportDiagnostics
         | CommandId::CheckAi
         | CommandId::Welcome
