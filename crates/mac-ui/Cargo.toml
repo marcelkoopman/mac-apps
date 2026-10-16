@@ -179,6 +179,7 @@ tray-icon = { workspace = true }
 winit = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+zeroize = "1.9.1"
 objc2 = { workspace = true }
 # `NSArray`: `lang` reads `NSLocale::preferredLanguages()` (an array). `NSProcessInfo`: `log`
 # checks the running macOS version before using the system log. Not a new crate.

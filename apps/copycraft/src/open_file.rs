@@ -405,7 +405,7 @@ fn load_docx(path: &Path, name: &str, len: u64, preview: bool) -> Option<OpenedF
         // Only a file named .docx gets the Word note; any other big zip stays "not text".
         return named.then(|| noted(name.to_string(), crate::locale::t("docx_too_large")));
     }
-    let bytes = Zeroizing::new(std::fs::read(path).ok()?);
+    let bytes = crate::docx::read_file(path, MAX_DOCX_BYTES)?;
     if zip && !crate::docx::is_docx(&bytes) {
         return None;
     }

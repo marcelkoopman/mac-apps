@@ -2,7 +2,11 @@
 //!
 //! A docx is a zip. This module reads its central directory, inflates the one entry it needs
 //! and pulls the text out with a small tolerant scanner (no XML crate). Nothing is extracted to
-//! disk, nothing is logged, and every buffer that holds document content is zeroizing. Limits
+//! disk, nothing is logged, and every buffer that holds document content is zeroizing and of
+//! fixed size: it is allocated once at the declared (and checked) size and never grows, so no
+//! reallocation leaves an un-wiped copy behind. Not covered: the inflate state of `flate2` (its
+//! 32 KiB window holds the last bytes of the document and is freed without wiping) and
+//! whatever the allocator or the OS did with the pages. Limits
 //! guard against zip bombs: the packed file, the unpacked `document.xml`, the number of entries
 //! and the extracted text are all capped, and a declared size that the data does not match is
 //! refused. Only the entry name `word/document.xml` is ever looked at, so a crafted entry path
@@ -58,6 +62,21 @@ fn u16_at(bytes: &[u8], at: usize) -> Option<usize> {
 fn u32_at(bytes: &[u8], at: usize) -> Option<usize> {
     let raw = bytes.get(at..at.checked_add(4)?)?;
     Some(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize)
+}
+
+/// The bytes of the file at `path`, in one zeroizing buffer of exactly the file's size, which is
+/// at most `max` (else `None`). The buffer never grows: a file that changes size while it is read
+/// is refused rather than reallocated (`fs::read` would leave the old, un-wiped buffer behind).
+pub fn read_file(path: &std::path::Path, max: u64) -> Option<Zeroizing<Vec<u8>>> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let size = file.metadata().ok()?.len();
+    if size > max {
+        return None;
+    }
+    let mut buf = Zeroizing::new(vec![0u8; usize::try_from(size).ok()?]);
+    file.read_exact(&mut buf).ok()?;
+    let mut probe = Zeroizing::new([0u8; 1]);
+    (file.read(&mut *probe).ok()? == 0).then_some(buf)
 }
 
 /// Where `word/document.xml` sits in the zip.
@@ -128,7 +147,7 @@ fn find_document(zip: &[u8]) -> Result<Entry, DocxError> {
     Err(DocxError::NotDocx)
 }
 
-/// The inflated `word/document.xml`, in one exact-size zeroizing buffer.
+/// The inflated `word/document.xml`, in one exact-size zeroizing buffer (allocated once, never grown).
 fn read_document(zip: &[u8]) -> Result<Zeroizing<Vec<u8>>, DocxError> {
     let entry = find_document(zip)?;
     if entry.unpacked > MAX_XML_BYTES {
@@ -148,26 +167,27 @@ fn read_document(zip: &[u8]) -> Result<Zeroizing<Vec<u8>>, DocxError> {
                     .ok_or(DocxError::Unreadable)?,
         )
         .ok_or(DocxError::Unreadable)?;
-    let mut out = Zeroizing::new(Vec::with_capacity(entry.unpacked));
+    // One buffer of the declared size (checked above against MAX_XML_BYTES), filled in place:
+    // nothing is ever appended, so it cannot reallocate.
+    let mut out = Zeroizing::new(vec![0u8; entry.unpacked]);
     match entry.method {
         0 => {
             if entry.packed != entry.unpacked {
                 return Err(DocxError::Unreadable);
             }
-            out.extend_from_slice(data);
+            out.copy_from_slice(data);
         }
         8 => {
-            // One byte more than declared tells a stream that outgrows its header.
-            let mut inflate =
-                flate2::read::DeflateDecoder::new(data).take(entry.unpacked as u64 + 1);
+            let mut inflate = flate2::read::DeflateDecoder::new(data);
             inflate
-                .read_to_end(&mut out)
-                .map_err(|_| DocxError::Unreadable)?;
-            if out.len() > entry.unpacked {
-                return Err(DocxError::Bomb);
-            }
-            if out.len() != entry.unpacked {
-                return Err(DocxError::Unreadable);
+                .read_exact(&mut out)
+                .map_err(|_| DocxError::Unreadable)?; // shorter than declared, or corrupt
+            // One more byte tells a stream that outgrows its header (a bomb).
+            let mut probe = Zeroizing::new([0u8; 1]);
+            match inflate.read(&mut *probe) {
+                Ok(0) => {}
+                Ok(_) => return Err(DocxError::Bomb),
+                Err(_) => return Err(DocxError::Unreadable),
             }
         }
         _ => return Err(DocxError::Unreadable),
@@ -198,7 +218,11 @@ pub fn is_docx(zip: &[u8]) -> bool {
 /// break for `w:br`, table cells separated by a tab and rows by a newline. The scanner is
 /// tolerant: it never fails on odd markup, it only skips what it does not understand.
 pub fn text_of(xml: &str) -> Result<Zeroizing<String>, DocxError> {
-    let mut out = Zeroizing::new(String::with_capacity(xml.len().min(MAX_TEXT_BYTES) + 16));
+    // The output never outgrows this capacity: every push is checked first (see `put`), so the
+    // buffer is never reallocated and no un-wiped copy is left behind. The text is never longer
+    // than the markup it comes from, so the limit is only reached by the 8 MB cap.
+    let limit = text_limit(xml.len());
+    let mut out = Zeroizing::new(String::with_capacity(limit));
     let bytes = xml.as_bytes();
     let mut at = 0;
     // Depth of cells (tables nest), of `w:tabs` (tab stop definitions, not tabs) and of
@@ -248,12 +272,12 @@ pub fn text_of(xml: &str) -> Result<Zeroizing<String>, DocxError> {
         match (name, closing) {
             ("w:t", false) if !self_closing => {
                 let stop = find(bytes, at, b"</").unwrap_or(bytes.len());
-                push_text(&mut out, &xml[at..stop]);
+                push_text(&mut out, limit, &xml[at..stop])?;
                 at = stop;
             }
-            ("w:tab" | "w:ptab", false) if tab_stops == 0 => out.push('\t'),
-            ("w:br" | "w:cr", false) => out.push('\n'),
-            ("w:noBreakHyphen", false) => out.push('-'),
+            ("w:tab" | "w:ptab", false) if tab_stops == 0 => put(&mut out, limit, "\t")?,
+            ("w:br" | "w:cr", false) => put(&mut out, limit, "\n")?,
+            ("w:noBreakHyphen", false) => put(&mut out, limit, "-")?,
             ("w:tabs", false) if !self_closing => tab_stops += 1,
             ("w:tabs", true) => tab_stops = tab_stops.saturating_sub(1),
             ("w:tc", false) if !self_closing => cells += 1,
@@ -261,28 +285,25 @@ pub fn text_of(xml: &str) -> Result<Zeroizing<String>, DocxError> {
                 if cells > 0 {
                     // Paragraphs of one cell stay on its line.
                     if !out.ends_with(['\t', '\n', ' ']) && !out.is_empty() {
-                        out.push(' ');
+                        put(&mut out, limit, " ")?;
                     }
                 } else {
-                    out.push('\n');
+                    put(&mut out, limit, "\n")?;
                 }
             }
             ("w:tc", true) => {
                 cells = cells.saturating_sub(1);
                 let kept = out.trim_end_matches(' ').len();
                 out.truncate(kept);
-                out.push('\t');
+                put(&mut out, limit, "\t")?;
             }
             ("w:tr", true) => {
                 if out.ends_with('\t') {
                     out.pop();
                 }
-                out.push('\n');
+                put(&mut out, limit, "\n")?;
             }
             _ => {}
-        }
-        if out.len() > MAX_TEXT_BYTES {
-            return Err(DocxError::TooLarge);
         }
     }
     let kept = out.trim_end().len();
@@ -291,6 +312,20 @@ pub fn text_of(xml: &str) -> Result<Zeroizing<String>, DocxError> {
         return Err(DocxError::NoText);
     }
     Ok(out)
+}
+
+/// The capacity (and hard limit) of the text buffer for `xml_len` bytes of markup.
+fn text_limit(xml_len: usize) -> usize {
+    xml_len.saturating_add(16).min(MAX_TEXT_BYTES)
+}
+
+/// Append `text` unless it would not fit in the capacity the buffer started with.
+fn put(out: &mut String, limit: usize, text: &str) -> Result<(), DocxError> {
+    if out.len() + text.len() > limit {
+        return Err(DocxError::TooLarge);
+    }
+    out.push_str(text);
+    Ok(())
 }
 
 fn find(bytes: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
@@ -312,31 +347,30 @@ fn tag_end(bytes: &[u8], from: usize) -> Option<usize> {
 }
 
 /// The text of a `w:t`: CDATA sections as they are, the rest with its entities decoded.
-fn push_text(out: &mut String, text: &str) {
+fn push_text(out: &mut String, limit: usize, text: &str) -> Result<(), DocxError> {
     let mut rest = text;
     while let Some(open) = rest.find("<![CDATA[") {
-        push_decoded(out, &rest[..open]);
+        push_decoded(out, limit, &rest[..open])?;
         rest = &rest[open + 9..];
         match rest.find("]]>") {
             Some(close) => {
-                out.push_str(&rest[..close]);
+                put(out, limit, &rest[..close])?;
                 rest = &rest[close + 3..];
             }
             None => {
-                out.push_str(rest);
-                return;
+                return put(out, limit, rest);
             }
         }
     }
-    push_decoded(out, rest);
+    push_decoded(out, limit, rest)
 }
 
 /// Text with its XML entities decoded: the five named ones and numeric references. Anything
 /// else (an unknown `&name;`, a stray `&`) stays as written.
-fn push_decoded(out: &mut String, text: &str) {
+fn push_decoded(out: &mut String, limit: usize, text: &str) -> Result<(), DocxError> {
     let mut rest = text;
     while let Some(amp) = rest.find('&') {
-        out.push_str(&rest[..amp]);
+        put(out, limit, &rest[..amp])?;
         rest = &rest[amp..];
         let decoded = rest.find(';').filter(|&semi| semi <= 10).and_then(|semi| {
             let entity = &rest[1..semi];
@@ -358,16 +392,16 @@ fn push_decoded(out: &mut String, text: &str) {
         });
         match decoded {
             Some((ch, used)) => {
-                out.push(ch);
+                put(out, limit, ch.encode_utf8(&mut [0; 4]))?;
                 rest = &rest[used..];
             }
             None => {
-                out.push('&');
+                put(out, limit, "&")?;
                 rest = &rest[1..];
             }
         }
     }
-    out.push_str(rest);
+    put(out, limit, rest)
 }
 
 #[cfg(test)]
@@ -561,5 +595,56 @@ pub(crate) mod tests {
         let big = "<w:p><w:r><w:t>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</w:t></w:r></w:p>"
             .repeat(MAX_TEXT_BYTES / 60);
         assert_eq!(text_of(&doc(&big)).unwrap_err(), DocxError::TooLarge);
+    }
+
+    #[test]
+    fn text_buffer_never_grows() {
+        // The output is allocated once at its limit and stays within it.
+        let body =
+            "<w:p><w:r><w:t>a &amp; b &#x1F600; <![CDATA[x]]></w:t><w:tab/></w:r></w:p>".repeat(50);
+        let xml = doc(&body);
+        let text = text_of(&xml).unwrap();
+        assert_eq!(text.capacity(), text_limit(xml.len()));
+        assert!(text.len() <= text.capacity());
+        // Pushing past the limit is refused, and does not touch the capacity.
+        let mut out = String::with_capacity(4);
+        let cap = out.capacity();
+        assert!(put(&mut out, 4, "abcd").is_ok());
+        assert_eq!(put(&mut out, 4, "e"), Err(DocxError::TooLarge));
+        assert_eq!(out.capacity(), cap);
+        assert_eq!(
+            push_decoded(&mut String::new(), 3, "ab&amp;c"),
+            Err(DocxError::TooLarge)
+        );
+    }
+
+    #[test]
+    fn inflated_buffer_has_exactly_the_declared_size() {
+        let body = "<w:p><w:r><w:t>exact</w:t></w:r></w:p>".repeat(20);
+        for deflate in [false, true] {
+            let zipped = docx(&body, deflate);
+            let xml = read_document(&zipped).unwrap();
+            assert_eq!(xml.len(), doc(&body).len());
+            assert_eq!(xml.capacity(), xml.len());
+        }
+        // Declared larger than the stream holds: refused, not padded.
+        let mut short = docx(&body, true);
+        let dir = short.windows(4).rposition(|w| w == b"PK\x01\x02").unwrap();
+        let real = u32::from_le_bytes(short[dir + 24..dir + 28].try_into().unwrap());
+        short[dir + 24..dir + 28].copy_from_slice(&(real + 10).to_le_bytes());
+        assert_eq!(extract(&short).unwrap_err(), DocxError::Unreadable);
+    }
+
+    #[test]
+    fn read_file_is_exact_size_and_limited() {
+        let path =
+            std::env::temp_dir().join(format!("copycraft-docx-test-{}.bin", std::process::id()));
+        std::fs::write(&path, b"hello world").unwrap();
+        let bytes = read_file(&path, 100).unwrap();
+        assert_eq!(&bytes[..], b"hello world");
+        assert_eq!(bytes.capacity(), 11);
+        assert!(read_file(&path, 10).is_none());
+        std::fs::remove_file(&path).unwrap();
+        assert!(read_file(&path, 100).is_none());
     }
 }

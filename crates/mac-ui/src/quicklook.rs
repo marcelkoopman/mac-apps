@@ -6,6 +6,12 @@
 //! `saveBestRepresentation…` calls are not used). The completion handler runs on a system
 //! queue; the caller waits for it on its own thread with a timeout, so call this from a
 //! background thread, never the main one.
+//!
+//! The PNG bytes are copied once, at their exact size, into a zeroizing `Vec` that the caller
+//! takes over (no growth, so no un-wiped copy), also when the receiver is gone after a timeout.
+//! Not wipeable from here: the `NSData` of the encoded PNG, the `NSBitmapImageRep` and the
+//! `CGImage` are system objects that are freed without wiping, and Quick Look's own process
+//! and thumbnail cache are outside the app.
 
 use std::path::Path;
 use std::sync::mpsc;
@@ -19,6 +25,7 @@ use objc2_quick_look_thumbnailing::{
     QLThumbnailGenerationRequest, QLThumbnailGenerationRequestRepresentationTypes,
     QLThumbnailGenerator, QLThumbnailRepresentation, QLThumbnailRepresentationType,
 };
+use zeroize::Zeroizing;
 
 /// PNG bytes of the first page of the file at `path`, at most `width` × `height` points at
 /// `scale` (so `width * scale` pixels wide at most). `None` when the system has no thumbnail
@@ -32,7 +39,7 @@ pub fn first_page_png(
     timeout: Duration,
 ) -> Option<Vec<u8>> {
     let url = NSURL::fileURLWithPath(&NSString::from_str(path.to_str()?));
-    let (tx, rx) = mpsc::channel::<Option<Vec<u8>>>();
+    let (tx, rx) = mpsc::channel::<Option<Zeroizing<Vec<u8>>>>();
     let handler = RcBlock::new(
         move |rep: *mut QLThumbnailRepresentation, _err: *mut NSError| {
             // SAFETY: `rep` is null or a representation the system keeps alive for the duration of
@@ -51,7 +58,7 @@ pub fn first_page_png(
                             &NSDictionary::new(),
                         )
                     })
-                    .map(|data| data.to_vec())
+                    .map(|data| Zeroizing::new(data.to_vec()))
             };
             // The receiver is gone after a timeout.
             let _ = tx.send(png);
@@ -72,7 +79,7 @@ pub fn first_page_png(
             );
         generator.generateBestRepresentationForRequest_completionHandler(&request, &handler);
         match rx.recv_timeout(timeout) {
-            Ok(png) => png,
+            Ok(png) => png.map(|mut png| std::mem::take(&mut *png)),
             Err(_) => {
                 generator.cancelRequest(&request);
                 None
