@@ -6,16 +6,16 @@ use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 #[cfg_attr(not(test), allow(dead_code))]
 pub const DEFAULT_LABEL: &str = "⌃⌘C";
 
-/// Storage form of the default ([`open`]).
+/// Storage form of the default ([`open`]). An older stored `super` still parses as Command.
 #[cfg_attr(not(test), allow(dead_code))]
-pub const DEFAULT_STORAGE: &str = "control+super+KeyC";
+pub const DEFAULT_STORAGE: &str = "control+meta+KeyC";
 
 /// The previous default. A stored copy of it follows [`open`] so the chord moves with the app.
 const PREVIOUS_DEFAULT_STORAGE: &str = "control+alt+super+KeyC";
 
 /// The chord registered at launch when none is stored.
 pub fn open() -> HotKey {
-    HotKey::new(Some(Modifiers::CONTROL | Modifiers::SUPER), Code::KeyC)
+    HotKey::new(Some(Modifiers::CONTROL | Modifiers::META), Code::KeyC)
 }
 
 /// The chord from `storage` (a [`HotKey`] string), or the default when missing, unsafe, or still
@@ -32,7 +32,7 @@ pub fn from_storage(storage: Option<&str>) -> HotKey {
 /// (Option-C while typing is too easy to hit). Control-Option-C and Control-Command-C are fine.
 pub fn is_safe(chord: &HotKey) -> bool {
     let mods =
-        chord.mods & (Modifiers::CONTROL | Modifiers::ALT | Modifiers::SUPER | Modifiers::SHIFT);
+        chord.mods & (Modifiers::CONTROL | Modifiers::ALT | Modifiers::META | Modifiers::SHIFT);
     if mods.is_empty() || mods == Modifiers::ALT || mods == Modifiers::SHIFT {
         return false;
     }
@@ -51,7 +51,7 @@ pub fn label(chord: &HotKey) -> String {
     if chord.mods.contains(Modifiers::SHIFT) {
         out.push('⇧');
     }
-    if chord.mods.contains(Modifiers::SUPER) {
+    if chord.mods.contains(Modifiers::META) {
         out.push('⌘');
     }
     out.push_str(&key_glyph(chord.key));
@@ -163,11 +163,12 @@ mod tests {
         assert_eq!(to_storage(&open()), DEFAULT_STORAGE);
         let chord = open();
         assert_eq!(chord.key, Code::KeyC);
-        assert_eq!(chord.mods, Modifiers::CONTROL | Modifiers::SUPER);
+        assert_eq!(chord.mods, Modifiers::CONTROL | Modifiers::META);
         assert_eq!(
             from_storage(Some("control+alt+super+KeyC")).id(),
             open().id()
         );
+        assert_eq!(from_storage(Some("control+super+KeyC")).id(), open().id());
     }
 
     #[test]
@@ -179,6 +180,7 @@ mod tests {
             Some(Modifiers::CONTROL | Modifiers::ALT),
             Code::KeyC
         )));
+        assert!(is_safe(&HotKey::new(Some(Modifiers::META), Code::KeyC)));
         assert!(is_safe(&open()));
     }
 
@@ -194,7 +196,7 @@ mod tests {
     #[test]
     fn hotkey_leaves_plain_copy_and_find_to_the_card() {
         let chord = open();
-        assert_ne!(chord, HotKey::new(Some(Modifiers::SUPER), Code::KeyC));
-        assert_ne!(chord, HotKey::new(Some(Modifiers::SUPER), Code::KeyF));
+        assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyC));
+        assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyF));
     }
 }

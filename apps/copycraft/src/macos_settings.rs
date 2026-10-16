@@ -386,7 +386,7 @@ fn handle_record_key(event: &NSEvent) {
         mods |= Modifiers::SHIFT;
     }
     if flags.contains(NSEventModifierFlags::Command) {
-        mods |= Modifiers::SUPER;
+        mods |= Modifiers::META;
     }
     let Some(code) = hotkey::code_from_key_code(key_code) else {
         return;

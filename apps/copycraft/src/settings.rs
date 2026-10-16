@@ -48,7 +48,7 @@ pub struct Settings {
     pub blur: bool,
     /// Prefer `mm/dd/yyyy` when a date column fits both orders. Off (dd/mm) by default.
     pub date_month_first: bool,
-    /// Global hotkey as a [`global_hotkey::hotkey::HotKey`] string (`control+super+KeyC`).
+    /// Global hotkey as a [`global_hotkey::hotkey::HotKey`] string (`control+meta+KeyC`).
     /// `None` means the default ([`hotkey::open`]).
     pub hotkey: Option<String>,
     /// Interface language. [`Language::System`] until a choice is stored.

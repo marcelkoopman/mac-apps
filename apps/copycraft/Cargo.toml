@@ -29,7 +29,7 @@ info_plist_exts = ["assets/Info.plist.ext"]
 anyhow = "1.0.104"
 arboard = { workspace = true }
 base64 = "0.23"
-global-hotkey = "0.8"
+global-hotkey = "0.9"
 # Not inherited from the workspace: copycraft needs default-features = false, ticker does not.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 infer = "0.22"
