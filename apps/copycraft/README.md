@@ -171,11 +171,13 @@ reports the actions as unavailable). The binary also says macOS 26 as its minimu
 `MACOSX_DEPLOYMENT_TARGET=26.0` for every cargo build; CI and the release workflow check that the
 release binary's Mach-O `minos` is 26.0 (`scripts/check_minos.sh`). The `unsafe` count is capped by
 `scripts/count_unsafe.sh --check` against `scripts/unsafe_baseline.txt` (copycraft 106 blocks, mac-ui 82,
-mac-ai 6; the AI, strip, line-number, window-size and notification code added none to copycraft; the one
-new mac-ui block is the permission check in `mac_ui::notify`). PDFs use the `objc2-pdf-kit`
+mac-ai 6; the AI, strip, line-number, window-size and notification code added none to copycraft). mac-ui went from
+78 to 82 in three steps: +1 in `mac_ui::notify` (the permission settings object handed to the completion block,
+79), +1 for the `scrollWheel:` override of `PassiveTextScroll` in `mac_ui::widgets` (⌘ + scroll zooms; the rest goes
+to `super` with `msg_send!`, 80) and +2 in `mac_ui::quicklook` (the Word first page: CGImage → PNG, and the thumbnail
+request; 82). The per-block history is in the comments of `scripts/unsafe_baseline.txt`. PDFs use the `objc2-pdf-kit`
 and `objc2-core-graphics` bindings (PDFKit and CoreGraphics, on the main thread only). The Word
-first page uses `objc2-quick-look-thumbnailing` (two more mac-ui blocks, in `mac_ui::quicklook`; on a
-background thread).
+first page uses `objc2-quick-look-thumbnailing` (on a background thread).
 
 ```bash
 cargo run -p copycraft

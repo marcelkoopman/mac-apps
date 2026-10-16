@@ -33,7 +33,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── check_copycraft_offline.sh # CI: no network crates in copycraft's tree, no osascript
 │   ├── check_minos.sh      # CI/release: every binary's Mach-O minos must be 26.0
 │   ├── count_unsafe.sh     # CI: `unsafe` blocks per crate must not exceed unsafe_baseline.txt
-│   ├── unsafe_baseline.txt # upper bounds (copycraft 106, mac-ui 78, mac-ai 6 blocks)
+│   ├── unsafe_baseline.txt # upper bounds (copycraft 106, mac-ui 82, mac-ai 6 blocks)
 │   ├── check_commits.sh    # CI: Conventional Commit subjects
 │   ├── check_privacy_manifest.sh # plutil -lint of the privacy manifests
 │   └── tag_release.sh      # maintainer only: bump + tag + push a release for one app

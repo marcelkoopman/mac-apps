@@ -1,11 +1,14 @@
 # Upper bounds for scripts/count_unsafe.sh --check (CI). Lower them when unsafe goes down.
-# mac-ui blocks 82: +1 for the NSObject `init` of dialog::form's preview target (Lines… > Column…, Filter…),
-# +1 for actions::run_on_main (background results back to the main queue),
-# +1 for log: os_log has no safe binding in the crates we use; one block calls os_log_create and _os_log_impl.
-# +1 for notify::permission: the settings object the system hands to the completion block (NonNull deref).
-# +1 for widgets::PassiveTextScroll's scrollWheel: override (⌘ + scroll zooms in copycraft; the rest is forwarded to super).
-# +2 for quicklook::first_page_png (Word first page: the completion handler's CGImage → PNG, and the
-# QLThumbnailGenerator request/wait/cancel; objc2-quick-look-thumbnailing marks these calls `unsafe`).
+# mac-ui blocks 82 (checked with scripts/count_unsafe.sh; every block has a SAFETY comment). History:
+#   75  after the safe-helper clean-up (4a9a6db), the floor before the additions below
+#   76  +1 dialog::form / choose_with_number: the NSObject `init` of the preview target (Lines… > Column…, Filter…) (56cd1c6)
+#   77  +1 actions::run_on_main: background results back to the main queue (4be748e)
+#   78  +1 log: os_log has no safe binding in the crates we use; one block calls os_log_create and _os_log_impl (649e7c2)
+#   79  +1 notify::permission: the settings object the system hands to the completion block (NonNull deref) (2cf8558)
+#   80  +1 widgets::PassiveTextScroll's scrollWheel: override, `msg_send![super(self), scrollWheel: event]`
+#       (⌘ + scroll zooms in copycraft; the rest is forwarded to super) (24e44a9)
+#   82  +2 quicklook::first_page_png (Word first page: the completion handler's CGImage → PNG, and the
+#       QLThumbnailGenerator request/wait/cancel; objc2-quick-look-thumbnailing marks these calls `unsafe`) (d58714f)
 # copycraft blocks 106: +6 for the PDF card (macos_pdf.rs: PDFDocument init, page count/lock and page text
 # reads (2), page reference, and macos_image_io::with_bitmap's CGBitmapContextCreate + ownership). The PDFKit
 # calls are `unsafe` in objc2-pdf-kit; they run on the main thread only.
