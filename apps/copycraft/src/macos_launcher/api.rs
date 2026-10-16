@@ -350,6 +350,24 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
             })
             .map(|pdf| (data.pdf_page, pdf.turnable())),
     );
+    // The zoom of a PDF page: only on its picture (the Beeld view).
+    let pdf_picture = data.pdf.is_some()
+        && data.subject_kind == commands::SubjectKind::Image
+        && data.view == commands::CardView::Original
+        && data.picture.is_some();
+    ZOOM_CARD.set(pdf_picture.then_some(data.pdf_zoom));
+    ZOOM_SHOWN.set(if pdf_picture {
+        data.pdf_zoom
+    } else {
+        crate::pdf::ZOOM_FIT
+    });
+    ZOOM_PICTURE.with(|slot| {
+        slot.replace(
+            data.pdf_zoom_picture
+                .clone()
+                .filter(|_| pdf_picture && data.pdf_zoom > crate::pdf::ZOOM_FIT),
+        )
+    });
     PAUSED.set(data.paused);
     IGNORE_NEXT.set(data.ignore_next);
     // At most four chips on the card; the others lead the `…` menu (Lines… stays visible).

@@ -97,6 +97,8 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     preview_clip.setClipsToBounds(true);
     preview_clip.addSubview(&preview_scroll);
     let preview_image = image_view(mtm);
+    let zoom_views = zoom::make_views(mtm);
+    widgets::set_command_wheel_hook(zoom::wheel);
     let pills = glass::group(mtm, GLASS_MERGE);
     let more = header_symbol(
         mtm,
@@ -174,6 +176,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&empty_line);
     content.addSubview(&preview_clip);
     content.addSubview(&preview_image);
+    content.addSubview(zoom::scroll_view(&zoom_views));
     content.addSubview(&reveal.root);
     content.addSubview(&meta);
     content.addSubview(&field);
@@ -196,6 +199,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     PREVIEW_SCROLL.with(|slot| slot.replace(Some(preview_scroll)));
     PREVIEW_CLIP.with(|slot| slot.replace(Some(preview_clip)));
     PREVIEW_IMAGE.with(|slot| slot.replace(Some(preview_image)));
+    ZOOM_VIEWS.with(|slot| slot.replace(Some(zoom_views)));
     PILLS.with(|slot| slot.replace(Some(pills)));
     HEADER_GROUP.with(|slot| slot.replace(Some(header_group)));
     MORE.with(|slot| slot.replace(Some(more)));
@@ -402,6 +406,14 @@ pub(crate) fn layout(fresh_place: bool) {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
     let mut meta = card_meta();
+    // A zoomed picture or text says so (a PDF's footer has it from the app).
+    if let Some(label) = zoom::local_label() {
+        meta = if meta.is_empty() {
+            label
+        } else {
+            format!("{meta}  ·  {label}")
+        };
+    }
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };

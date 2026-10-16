@@ -89,6 +89,10 @@ pub struct LaunchData {
     pub pdf: Option<crate::pdf::PdfFacts>,
     /// The page of that PDF the Beeld view shows (0-based).
     pub pdf_page: usize,
+    /// The zoom of that page (percent; [`crate::pdf::ZOOM_FIT`]: fit in the well), and, above fit,
+    /// the page drawn at it. `picture` stays the page at fit.
+    pub pdf_zoom: u32,
+    pub pdf_zoom_picture: Option<crate::clipboard::SecretBytes>,
     /// Set when the card is showing a chosen file instead of the clipboard.
     pub source_name: Option<String>,
     /// Well text when that file cannot be shown.
@@ -384,6 +388,8 @@ pub enum CommandId {
     ToggleStrip,
     /// Turn the PDF's pages in the Beeld view by this many (−1: back).
     PdfPage(isize),
+    /// Zoom the PDF page in the Beeld view (⌘+ ⌘− ⌘0, pinch).
+    PdfZoom(crate::pdf::ZoomStep),
     /// How wide the card is.
     WindowSize(crate::settings::WindowSize),
     /// Turn the minute timer on copycraft's sensitive copies on or off.

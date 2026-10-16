@@ -254,6 +254,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
             | CommandId::PdfPage(_)
+            | CommandId::PdfZoom(_)
             | CommandId::HistoryView(_)
             | CommandId::ToggleStrip
             | CommandId::WindowSize(_)

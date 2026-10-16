@@ -100,9 +100,113 @@ impl App {
         }
     }
 
+    /// ⌘+ ⌘− ⌘0 or a pinch: the zoom asked for. Above fit the page is drawn again at that zoom
+    /// on a worker; the card keeps what it shows until then.
+    pub(crate) fn pdf_zoom(&mut self, step: crate::pdf::ZoomStep) {
+        let Some((image, _)) = self.pdf_on_card() else {
+            return;
+        };
+        let target = crate::pdf::zoom_step(image.want_zoom, step);
+        if target == image.want_zoom {
+            return;
+        }
+        image.want_zoom = target;
+        self.pdf_apply_zoom();
+    }
+
+    /// Make what the card shows follow the zoom asked for, for the page shown.
+    fn pdf_apply_zoom(&mut self) {
+        let Some((image, _)) = self.pdf_on_card() else {
+            return;
+        };
+        let (page, want) = (image.page, image.want_zoom);
+        let ready = want <= crate::pdf::ZOOM_FIT
+            || image
+                .zoomed
+                .as_ref()
+                .is_some_and(|(shown, zoom, _)| *shown == page && *zoom == want);
+        if ready {
+            let changed = image.zoom != want;
+            image.zoom = want;
+            if changed && launcher::is_open() {
+                self.refresh_popup();
+            }
+            return;
+        }
+        // Only the page's picture and its zoom: the old drawing goes now, not when the next
+        // one arrives (zoomed pages are big).
+        if image
+            .zoomed
+            .as_ref()
+            .is_some_and(|(shown, _, _)| *shown != page)
+        {
+            image.zoomed = None;
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(source) = image.pdf_source.clone() {
+            let spawned = std::thread::Builder::new()
+                .name("copycraft-pdf-zoom".into())
+                .spawn(move || {
+                    let drawn = crate::macos_pdf::render_page_zoomed(&source, page, true, want)
+                        .and_then(|(mut png, _)| SecretBytes::new(std::mem::take(&mut *png)));
+                    launcher::emit(UserEvent::PdfZoomRendered {
+                        source,
+                        index: page,
+                        zoom: want,
+                        page: drawn,
+                    });
+                });
+            if let Err(e) = spawned {
+                crate::diag::log(crate::diag::LogEvent::DroppedImageScanFailed(
+                    crate::diag::ErrorKind::io(&e),
+                ));
+            }
+        }
+    }
+
+    /// Page `index` is drawn at `zoom` on its thread.
+    pub(crate) fn finish_pdf_zoom(
+        &mut self,
+        source: &SecretBytes,
+        index: usize,
+        zoom: u32,
+        page: Option<SecretBytes>,
+    ) {
+        let Some(image) = self
+            .opened
+            .as_mut()
+            .and_then(|file| file.image.as_mut())
+            .filter(|image| {
+                image
+                    .pdf_source
+                    .as_ref()
+                    .is_some_and(|own| own.same_allocation(source))
+            })
+        else {
+            return;
+        };
+        // Asked for again, or turned to another page, meanwhile: this drawing is not wanted.
+        if image.want_zoom != zoom || image.page != index {
+            return;
+        }
+        let Some(page) = page else {
+            // It cannot be drawn (too big, say): back to what shows.
+            image.want_zoom = image.shown_zoom();
+            image.zoom = image.want_zoom;
+            return;
+        };
+        image.zoomed = Some((index, zoom, page));
+        image.zoom = zoom;
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
     fn pdf_page_changed(&mut self) {
         // Edits of the picture belonged to the page they were made on.
         self.opened_image = ImageVersions::default();
+        // The zoom stays; the new page is drawn at it.
+        self.pdf_apply_zoom();
         if launcher::is_open() {
             self.refresh_popup();
         }

@@ -58,6 +58,14 @@ pub enum UserEvent {
         index: usize,
         page: Option<crate::clipboard::SecretBytes>,
     },
+    /// Page `index` of the PDF `source` is drawn again for `zoom` percent (`None`: it could not
+    /// be).
+    PdfZoomRendered {
+        source: crate::clipboard::SecretBytes,
+        index: usize,
+        zoom: u32,
+        page: Option<crate::clipboard::SecretBytes>,
+    },
     /// The scan (info, data URL, text, barcodes) of the dropped picture `image` is done.
     DroppedImageScanned {
         image: crate::clipboard::SecretBytes,

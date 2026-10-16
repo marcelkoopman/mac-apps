@@ -26,9 +26,6 @@ use crate::clipboard::SecretBytes;
 use crate::commands::ImageScan;
 use crate::pdf::{MAX_PAGES, OCR_MAX_PAGES};
 
-/// Longest edge of a rendered page in pixels, and the most pixels one page may have.
-const RENDER_EDGE: f64 = 3000.0;
-const RENDER_MAX_PIXELS: usize = 12_000_000;
 /// A main-thread step that takes longer than this is given up on.
 const MAIN_WAIT: Duration = Duration::from_secs(120);
 
@@ -101,14 +98,26 @@ pub(crate) fn render_page(
     index: usize,
     crop: bool,
 ) -> Option<(Zeroizing<Vec<u8>>, usize)> {
+    render_page_zoomed(source, index, crop, crate::pdf::ZOOM_FIT)
+}
+
+/// [`render_page`] at `zoom` percent: more pixels, within [`crate::pdf::ZOOM_MAX_PIXELS`], so the
+/// zoomed page is drawn again from the PDF instead of a bitmap stretched.
+pub(crate) fn render_page_zoomed(
+    source: &SecretBytes,
+    index: usize,
+    crop: bool,
+    zoom: u32,
+) -> Option<(Zeroizing<Vec<u8>>, usize)> {
     let source = source.clone();
-    on_main(move || render_on_main(&source, index, crop)).flatten()
+    on_main(move || render_on_main(&source, index, crop, zoom)).flatten()
 }
 
 fn render_on_main(
     source: &SecretBytes,
     index: usize,
     crop: bool,
+    zoom: u32,
 ) -> Option<(Zeroizing<Vec<u8>>, usize)> {
     let document = document(source)?;
     // SAFETY: plain property reads of a PDFDocument on the main thread.
@@ -118,29 +127,19 @@ fn render_on_main(
     }
     // SAFETY: `index` is below the page count; reads on the main thread.
     let page_ref = unsafe { document.pageAtIndex(index)?.pageRef() }?;
-    Some((draw_png(&page_ref, crop)?, pages))
+    Some((draw_png(&page_ref, crop, zoom)?, pages))
 }
 
-fn draw_png(page: &CGPDFPage, crop: bool) -> Option<Zeroizing<Vec<u8>>> {
+fn draw_png(page: &CGPDFPage, crop: bool, zoom: u32) -> Option<Zeroizing<Vec<u8>>> {
     let area = CGPDFBox::CropBox;
     let bounds = CGPDFPage::box_rect(Some(page), area);
     let (mut width, mut height) = (bounds.size.width, bounds.size.height);
     if CGPDFPage::rotation_angle(Some(page)).rem_euclid(180) == 90 {
         std::mem::swap(&mut width, &mut height);
     }
-    if !(width >= 1.0 && height >= 1.0) {
-        return None;
-    }
-    // Three times the page size (216 dpi, readable text), within the edge and pixel limits.
-    let scale = (RENDER_EDGE / width.max(height)).min(3.0);
-    let (px_w, px_h) = (
-        (width * scale).round() as usize,
-        (height * scale).round() as usize,
-    );
-    let (px_w, px_h) = (px_w.max(1), px_h.max(1));
-    if px_w.checked_mul(px_h)? > RENDER_MAX_PIXELS {
-        return None;
-    }
+    // Three times the page size (216 dpi, readable text) at fit, more when zoomed in, within the
+    // edge and pixel limits ([`crate::pdf::render_size`]).
+    let (px_w, px_h) = crate::pdf::render_size(width, height, zoom)?;
     let mut rgba = Zeroizing::new(vec![0u8; px_w * px_h * 4]);
     let target = CGRect {
         origin: CGPoint { x: 0.0, y: 0.0 },

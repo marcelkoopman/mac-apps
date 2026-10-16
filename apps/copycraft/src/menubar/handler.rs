@@ -43,6 +43,12 @@ impl ApplicationHandler<UserEvent> for App {
                 index,
                 page,
             } => self.finish_pdf_page(&source, index, page),
+            UserEvent::PdfZoomRendered {
+                source,
+                index,
+                zoom,
+                page,
+            } => self.finish_pdf_zoom(&source, index, zoom, page),
             UserEvent::LabelsChecked => self.labels_checked(),
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),

@@ -172,6 +172,10 @@ pub(crate) fn gaussian_blurs() -> Option<(Retained<AnyObject>, Retained<AnyObjec
 
 pub(crate) fn set_well_blur(on: bool) {
     set_well_accessible(!on);
+    if on {
+        // The blur filter is on the fit picture's view: the zoomed page gives way to it.
+        zoom::hide_now();
+    }
     // The cover and the find bar follow the same mask. Revealed text can be searched.
     set_item_find(!on);
     if !on {
@@ -261,6 +265,8 @@ pub(crate) fn card_meta() -> String {
 }
 
 pub(crate) fn apply_preview(y: f64) {
+    zoom::decide();
+    TEXT_ZOOMABLE.set(false);
     if !well_is_masked() {
         SHADE_ON.set(false);
         show_mask_shade(false);
@@ -278,7 +284,7 @@ pub(crate) fn apply_preview(y: f64) {
     );
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
-            view.setFrame(image_frame);
+            view.setFrame(zoom::fit_frame(image_frame));
         }
     });
     PREVIEW_CLIP.with(|slot| {
@@ -298,6 +304,7 @@ pub(crate) fn apply_preview(y: f64) {
         set_preview_text_hidden(true);
         show_preview_image();
         load_thumbnail();
+        zoom::place(image_frame);
         finish_preview();
         return;
     }
@@ -396,6 +403,9 @@ pub(crate) fn clear_preview_text() {
 }
 
 pub(crate) fn set_preview_image_hidden(hidden: bool) {
+    if hidden {
+        zoom::hide_now();
+    }
     PREVIEW_IMAGE.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             view.setHidden(hidden);
@@ -442,7 +452,8 @@ pub(crate) fn show_preview_image() {
     let Some(view) = image else {
         return;
     };
-    view.setHidden(false);
+    // The zoomed page's scroller shows it instead.
+    view.setHidden(ZOOM_ACTIVE.get());
     if let Some(parent) = mac_ui::widgets::superview(&view) {
         parent.addSubview(&view);
     }
@@ -481,6 +492,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         }
     });
     let diff_lines = CARD_DIFF.with(Cell::get) && payload;
+    TEXT_ZOOMABLE.set(payload && !diff_lines);
     let numbers = payload && !diff_lines && OFFERS_NUMBERS.get() && commands::line_numbers_on();
     let unchanged = PAINTED.with(|slot| {
         slot.borrow().as_ref().is_some_and(|painted| {
@@ -503,7 +515,13 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         if diff_lines {
             crate::macos_card_text::paint_diff(view, body);
         } else {
+            crate::macos_card_text::set_font_zoom(if payload {
+                crate::macos_card_text::font_zoom_setting()
+            } else {
+                crate::pdf::ZOOM_FIT
+            });
             crate::macos_card_text::paint(view, body, highlight, payload, error_line, numbers);
+            crate::macos_card_text::set_font_zoom(crate::pdf::ZOOM_FIT);
         }
         // A side-by-side row stays on one line and scrolls sideways. Wrapping would
         // break the two columns.

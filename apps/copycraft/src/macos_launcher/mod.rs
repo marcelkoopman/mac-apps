@@ -17,10 +17,10 @@ use mac_ui::objc2_app_kit::{
     NSAccessibility, NSAnimatablePropertyContainer, NSAnimationContext, NSApplication,
     NSApplicationDidResignActiveNotification, NSAttributedStringNSStringDrawing, NSBeep, NSBox,
     NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
-    NSEventModifierFlags, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage, NSImageView,
-    NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSScrollView, NSSearchField,
-    NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView, NSWindow,
-    NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
+    NSEventModifierFlags, NSEventPhase, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage,
+    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSScrollView,
+    NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView,
+    NSWindow, NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
@@ -281,6 +281,26 @@ thread_local! {
     static PDF_PAGES: Cell<Option<(usize, usize)>> = const { Cell::new(None) };
     /// What a swipe over the PDF has added up to ([`crate::pdf::scroll_step`]).
     static PDF_SWIPE: Cell<f64> = const { Cell::new(0.0) };
+    /// The zoom shown on a PDF page card in its Beeld view (`None`: the card is no such PDF; the
+    /// zoom shortcuts and a pinch then do nothing).
+    static ZOOM_CARD: Cell<Option<u32>> = const { Cell::new(None) };
+    /// The zoom the well shows, and the page drawn at it (above fit).
+    static ZOOM_SHOWN: Cell<u32> = const { Cell::new(100) };
+    static ZOOM_PICTURE: RefCell<Option<SecretBytes>> = const { RefCell::new(None) };
+    /// The scroller takes over the well from the fit picture's view.
+    static ZOOM_ACTIVE: Cell<bool> = const { Cell::new(false) };
+    static ZOOM_VIEWS: RefCell<Option<zoom::ZoomViews>> = const { RefCell::new(None) };
+    /// The picture in the scroller (allocation id and size) and the layout it last got
+    /// (id, zoom, well size), to scroll to the middle only when those change.
+    static ZOOM_DRAWN: Cell<(usize, (f64, f64))> = const { Cell::new((0, (0.0, 0.0))) };
+    static ZOOM_PLACED: Cell<(usize, u32, f64, f64)> = const { Cell::new((0, 0, 0.0, 0.0)) };
+    /// What a pinch has added up to.
+    static ZOOM_PINCH: Cell<f64> = const { Cell::new(0.0) };
+    static ZOOM_WHEEL: Cell<f64> = const { Cell::new(0.0) };
+    /// The zoom asked for on a picture that is no PDF: (card key, percent).
+    static IMAGE_ZOOM: Cell<(u64, u32)> = const { Cell::new((0, 100)) };
+    /// The text well shows text or code that zooms (its font size).
+    static TEXT_ZOOMABLE: Cell<bool> = const { Cell::new(false) };
 }
 
 /// The card's width: the chosen size cut to the icon's screen ([`crate::settings::WindowSize`]);
@@ -332,12 +352,20 @@ define_class!(
             update_well_dock_hover();
         }
 
+        /// A pinch over a PDF page zooms it.
+        #[unsafe(method(magnifyWithEvent:))]
+        fn magnify_with_event(&self, event: &NSEvent) {
+            let _ = zoom::pinch(event);
+        }
+
         /// A swipe or wheel over a PDF page turns it.
         #[unsafe(method(scrollWheel:))]
         fn scroll_wheel(&self, event: &NSEvent) {
             // Only events nothing below the window took reach it, and the window has no scroll
             // behavior of its own, so the others end here.
-            let _ = pdf_scroll(event);
+            if !zoom::wheel(event) {
+                let _ = pdf_scroll(event);
+            }
         }
 
         #[unsafe(method(keyDown:))]
@@ -386,6 +414,9 @@ define_class!(
             } else if let Some(id) = undo_chord(event) {
                 // ⌘Z / ⇧⌘Z step through the table's versions (typed search text keeps them).
                 launcher::emit(UserEvent::Run(id));
+                true
+            } else if zoom::zoom_chord(event) {
+                // ⌘+ ⌘= ⌘− ⌘0 zoom a PDF page; on any other card they do nothing here.
                 true
             } else if let Some(key) = command_arrow(event) {
                 // ⌘← / ⌘→ step through history from anywhere on the card, also from a field
@@ -724,6 +755,7 @@ mod pager;
 mod panels;
 mod strip;
 mod window;
+mod zoom;
 
 pub use api::*;
 pub use complexity::*;

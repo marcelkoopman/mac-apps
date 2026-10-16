@@ -37,6 +37,8 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         image_scan: None,
         pdf: None,
         pdf_page: 0,
+        pdf_zoom: crate::pdf::ZOOM_FIT,
+        pdf_zoom_picture: None,
         source_name: None,
         source_note: None,
         full: false,

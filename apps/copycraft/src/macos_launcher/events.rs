@@ -178,7 +178,7 @@ pub(crate) fn command_arrow(event: &NSEvent) -> Option<Key> {
 /// Do what an arrow key does on the card ([`commands::arrow_action`]). Returns `false` when
 /// the key is left to the text field, so its caret moves.
 /// The mouse is over the well (the PDF's page, when that is what it shows).
-fn pointer_over_well() -> bool {
+pub(crate) fn pointer_over_well() -> bool {
     let point = WINDOW.with(|slot| {
         slot.borrow()
             .as_ref()
@@ -639,6 +639,7 @@ pub(crate) fn wipe_shown_views() {
             view.setImage(None);
         }
     });
+    zoom::wipe();
     THUMB_TOKEN.set(-1);
     PICTURE.with(|slot| slot.replace(None));
     PICTURE_SHOWN.set(0);

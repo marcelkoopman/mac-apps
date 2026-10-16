@@ -269,6 +269,10 @@ impl App {
         data.source_name = Some(name);
         data.pdf = self.opened.as_ref().and_then(|file| file.pdf);
         data.pdf_page = image.as_ref().map_or(0, |image| image.page);
+        if let Some(image) = image.as_ref() {
+            data.pdf_zoom = image.shown_zoom();
+            data.pdf_zoom_picture = image.zoomed_bytes();
+        }
         data.image = None;
         data.image_scan = None;
         if let Some(image) = image {
@@ -358,6 +362,8 @@ impl App {
             image_scan: self.image_scan.clone(),
             pdf: None,
             pdf_page: 0,
+            pdf_zoom: crate::pdf::ZOOM_FIT,
+            pdf_zoom_picture: None,
             source_name: None,
             source_note: None,
             full: false,

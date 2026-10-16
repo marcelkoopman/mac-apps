@@ -136,6 +136,134 @@ pub fn scroll_step(accumulated: f64, delta: f64, precise: bool) -> (f64, Option<
     }
 }
 
+/// Zoom of the PDF page in the Beeld view, in percent. 100 is "fit in the well".
+pub const ZOOM_FIT: u32 = 100;
+pub const ZOOM_MIN: u32 = 50;
+pub const ZOOM_MAX: u32 = 400;
+/// One ⌘+ or ⌘− moves the zoom to the next multiple of this.
+pub const ZOOM_STEP: u32 = 25;
+
+/// What a zoom shortcut or a pinch asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ZoomStep {
+    In,
+    Out,
+    /// ⌘0: back to fit.
+    Reset,
+    /// A pinch ended on this zoom ([`pinch_zoom`]).
+    Set(u32),
+}
+
+/// The zoom after `step` from `current`, kept within [`ZOOM_MIN`]..=[`ZOOM_MAX`]. In and out go
+/// to the next multiple of [`ZOOM_STEP`] (from 110 %: 125 % up, 100 % down).
+pub fn zoom_step(current: u32, step: ZoomStep) -> u32 {
+    let current = current.clamp(ZOOM_MIN, ZOOM_MAX);
+    let next = match step {
+        ZoomStep::In => (current / ZOOM_STEP + 1) * ZOOM_STEP,
+        ZoomStep::Out => current.div_ceil(ZOOM_STEP).saturating_sub(1) * ZOOM_STEP,
+        ZoomStep::Reset => ZOOM_FIT,
+        ZoomStep::Set(zoom) => zoom,
+    };
+    next.clamp(ZOOM_MIN, ZOOM_MAX)
+}
+
+/// The zoom after a pinch of `magnification` (the sum of the gesture's magnification values: 0.25
+/// is a quarter larger, −0.5 half as large), rounded to 5 % and clamped. A non-number changes
+/// nothing. Close to fit it snaps to 100 %.
+pub fn pinch_zoom(current: u32, magnification: f64) -> u32 {
+    if !magnification.is_finite() {
+        return current.clamp(ZOOM_MIN, ZOOM_MAX);
+    }
+    let factor = (1.0 + magnification).max(0.0);
+    let zoom = (f64::from(current.clamp(ZOOM_MIN, ZOOM_MAX)) * factor / 5.0).round() * 5.0;
+    let zoom = zoom.clamp(f64::from(ZOOM_MIN), f64::from(ZOOM_MAX)) as u32;
+    if zoom.abs_diff(ZOOM_FIT) <= 5 {
+        ZOOM_FIT
+    } else {
+        zoom
+    }
+}
+
+/// What the footer says about the zoom: "zoom 125%", nothing at 100 %.
+pub fn zoom_label(zoom: u32) -> Option<String> {
+    (zoom != ZOOM_FIT).then(|| crate::locale::tf("pdf_zoom", &[&zoom]))
+}
+
+/// The zoom shortcut for a key press: ⌘= ⌘+ (Shift allowed, as "+" needs it on many layouts),
+/// ⌘− ⌘- and ⌘0. `chars` is the key's characters without modifiers. Control and Option make it
+/// another chord.
+pub fn zoom_key(chars: &str, command: bool, option: bool, control: bool) -> Option<ZoomStep> {
+    if !command || option || control {
+        return None;
+    }
+    match chars {
+        "=" | "+" => Some(ZoomStep::In),
+        "-" | "\u{2212}" | "_" => Some(ZoomStep::Out),
+        "0" => Some(ZoomStep::Reset),
+        _ => None,
+    }
+}
+
+/// Scroll distance (points) of a trackpad that zooms one step with ⌘ held.
+pub const WHEEL_ZOOM_STEP: f64 = 40.0;
+
+/// ⌘ + scroll wheel or trackpad: `accumulated` is what earlier events of the gesture left,
+/// `delta` this event's vertical distance (positive: scrolling up, which zooms in). A wheel notch
+/// (`precise` false) is one step; a trackpad adds up to [`WHEEL_ZOOM_STEP`].
+pub fn wheel_zoom(accumulated: f64, delta: f64, precise: bool) -> (f64, Option<ZoomStep>) {
+    if delta == 0.0 || !delta.is_finite() {
+        return (accumulated, None);
+    }
+    let direction = |up: bool| if up { ZoomStep::In } else { ZoomStep::Out };
+    if !precise {
+        return (0.0, Some(direction(delta > 0.0)));
+    }
+    let total = accumulated + delta;
+    if total.abs() >= WHEEL_ZOOM_STEP {
+        (0.0, Some(direction(total > 0.0)))
+    } else {
+        (total, None)
+    }
+}
+
+/// Most pixels and longest edge of a page drawn zoomed in (the fit picture has its own, smaller
+/// limits in `macos_pdf.rs`).
+pub const ZOOM_MAX_PIXELS: usize = 24_000_000;
+pub const ZOOM_MAX_EDGE: f64 = 8192.0;
+
+/// Pixel size to draw a page of `width` × `height` points at `zoom` percent: three times the page
+/// size at fit (216 dpi, within a 3000 px edge), growing with the zoom until the edge or the
+/// pixel cap ([`ZOOM_MAX_PIXELS`]) holds it. `None` for an unusable page.
+pub fn render_size(width: f64, height: f64, zoom: u32) -> Option<(usize, usize)> {
+    if !(width >= 1.0 && height >= 1.0 && width.is_finite() && height.is_finite()) {
+        return None;
+    }
+    let (edge, pixels) = if zoom > ZOOM_FIT {
+        (ZOOM_MAX_EDGE, ZOOM_MAX_PIXELS as f64)
+    } else {
+        (3000.0, 12_000_000.0)
+    };
+    let wanted = 3.0 * f64::from(zoom.max(ZOOM_FIT)) / 100.0;
+    let scale = wanted
+        .min(edge / width.max(height))
+        .min((pixels / (width * height)).sqrt());
+    let mut w = ((width * scale).round() as usize).max(1);
+    let mut h = ((height * scale).round() as usize).max(1);
+    if w.checked_mul(h)? > pixels as usize {
+        // Rounding up went over the cap by a hair.
+        w = ((width * scale).floor() as usize).max(1);
+        h = ((height * scale).floor() as usize).max(1);
+    }
+    (w.checked_mul(h)? <= pixels as usize).then_some((w, h))
+}
+
+/// The size, in points, of the picture in the scroll view at `zoom` percent: the fit size
+/// (`fit_w` × `fit_h`, the picture fitted into the well) times the zoom.
+pub fn zoomed_extent(fit_w: f64, fit_h: f64, zoom: u32) -> (f64, f64) {
+    let factor = f64::from(zoom.clamp(ZOOM_MIN, ZOOM_MAX)) / 100.0;
+    (fit_w * factor, fit_h * factor)
+}
+
 /// The bytes start like a PDF (`%PDF-` within the first kilobyte, as the format allows).
 pub fn is_pdf(bytes: &[u8]) -> bool {
     bytes[..bytes.len().min(1024)]
@@ -399,5 +527,101 @@ mod tests {
         assert_eq!(scroll_step(acc, -25.0, true), (0.0, Some(1)));
         assert_eq!(scroll_step(0.0, 70.0, true), (0.0, Some(-1)));
         assert_eq!(scroll_step(5.0, 0.0, true), (5.0, None));
+    }
+
+    #[test]
+    fn zoom_steps_by_quarters_within_limits() {
+        use ZoomStep::*;
+        assert_eq!(zoom_step(100, In), 125);
+        assert_eq!(zoom_step(100, Out), 75);
+        assert_eq!(zoom_step(110, In), 125);
+        assert_eq!(zoom_step(110, Out), 100);
+        assert_eq!(zoom_step(125, Out), 100);
+        assert_eq!(zoom_step(400, In), 400);
+        assert_eq!(zoom_step(50, Out), 50);
+        assert_eq!(zoom_step(60, Out), 50);
+        assert_eq!(zoom_step(250, Reset), 100);
+        assert_eq!(zoom_step(100, Set(900)), 400);
+        assert_eq!(zoom_step(100, Set(1)), 50);
+        // Out of range input is pulled in first.
+        assert_eq!(zoom_step(9999, Out), 375);
+    }
+
+    #[test]
+    fn a_pinch_scales_rounds_snaps_and_clamps() {
+        assert_eq!(pinch_zoom(100, 0.5), 150);
+        assert_eq!(pinch_zoom(100, -0.5), 50);
+        assert_eq!(pinch_zoom(100, 0.02), 100);
+        assert_eq!(pinch_zoom(100, 0.07), 100);
+        assert_eq!(pinch_zoom(100, 0.12), 110);
+        assert_eq!(pinch_zoom(300, 2.0), 400);
+        assert_eq!(pinch_zoom(100, -3.0), 50);
+        assert_eq!(pinch_zoom(125, f64::NAN), 125);
+    }
+
+    #[test]
+    fn the_footer_names_the_zoom_only_when_not_fit() {
+        assert_eq!(zoom_label(100), None);
+        assert_eq!(zoom_label(125).as_deref(), Some("zoom 125%"));
+        assert_eq!(zoom_label(50).as_deref(), Some("zoom 50%"));
+    }
+
+    #[test]
+    fn only_command_plus_minus_zero_zoom() {
+        use ZoomStep::*;
+        assert_eq!(zoom_key("=", true, false, false), Some(In));
+        assert_eq!(zoom_key("+", true, false, false), Some(In));
+        assert_eq!(zoom_key("-", true, false, false), Some(Out));
+        assert_eq!(zoom_key("\u{2212}", true, false, false), Some(Out));
+        assert_eq!(zoom_key("0", true, false, false), Some(Reset));
+        // No ⌘: typing a minus or a digit is search text. ⌥ and ⌃ make other chords.
+        assert_eq!(zoom_key("-", false, false, false), None);
+        assert_eq!(zoom_key("=", true, true, false), None);
+        assert_eq!(zoom_key("0", true, false, true), None);
+        // Other ⌘ chords keep their meaning.
+        for other in ["c", "f", "y", "s", "o", "z", "1"] {
+            assert_eq!(zoom_key(other, true, false, false), None);
+        }
+    }
+
+    #[test]
+    fn zoomed_pages_stay_within_the_pixel_cap() {
+        // At fit: as before (3x, 3000 px edge).
+        assert_eq!(render_size(595.0, 842.0, 100), Some((1785, 2526)));
+        assert_eq!(render_size(2000.0, 1000.0, 100), Some((3000, 1500)));
+        // 200 %: twice the pixels per side, until the cap.
+        assert_eq!(render_size(595.0, 842.0, 200), Some((3570, 5052)));
+        let (w, h) = render_size(595.0, 842.0, 400).expect("size");
+        assert!(w * h <= ZOOM_MAX_PIXELS && w.max(h) as f64 <= ZOOM_MAX_EDGE);
+        // A huge page is scaled down, not refused.
+        let (w, h) = render_size(14_400.0, 14_400.0, 400).expect("size");
+        assert!(w * h <= ZOOM_MAX_PIXELS);
+        assert_eq!(render_size(0.0, 10.0, 100), None);
+        assert_eq!(render_size(f64::NAN, 10.0, 100), None);
+        // Below fit draws like fit.
+        assert_eq!(
+            render_size(595.0, 842.0, 50),
+            render_size(595.0, 842.0, 100)
+        );
+    }
+
+    #[test]
+    fn the_extent_follows_the_zoom() {
+        assert_eq!(zoomed_extent(400.0, 300.0, 200), (800.0, 600.0));
+        assert_eq!(zoomed_extent(400.0, 300.0, 9999), (1600.0, 1200.0));
+        assert_eq!(zoomed_extent(400.0, 300.0, 50), (200.0, 150.0));
+    }
+
+    #[test]
+    fn command_scroll_zooms_in_steps() {
+        use ZoomStep::*;
+        assert_eq!(wheel_zoom(0.0, 1.0, false), (0.0, Some(In)));
+        assert_eq!(wheel_zoom(0.0, -1.0, false), (0.0, Some(Out)));
+        assert_eq!(wheel_zoom(0.0, 0.0, false), (0.0, None));
+        let (acc, step) = wheel_zoom(0.0, 25.0, true);
+        assert_eq!(step, None);
+        assert_eq!(wheel_zoom(acc, 25.0, true), (0.0, Some(In)));
+        assert_eq!(wheel_zoom(0.0, -45.0, true), (0.0, Some(Out)));
+        assert_eq!(wheel_zoom(5.0, f64::NAN, true), (5.0, None));
     }
 }

@@ -258,7 +258,10 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
     // A PDF: the pages come first, then what the card shows (text stats, or the page picture).
     if let Some(pdf) = &data.pdf {
         let pages = if data.subject_kind == SubjectKind::Image && data.view == CardView::Original {
-            pdf.page_label(data.pdf_page)
+            match crate::pdf::zoom_label(data.pdf_zoom) {
+                Some(zoom) => format!("{}  ·  {zoom}", pdf.page_label(data.pdf_page)),
+                None => pdf.page_label(data.pdf_page),
+            }
         } else {
             pdf.label()
         };

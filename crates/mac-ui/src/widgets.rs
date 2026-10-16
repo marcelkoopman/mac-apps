@@ -10,9 +10,10 @@ use objc2::runtime::{AnyObject, Sel};
 use objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
-    NSColor, NSControl, NSFont, NSForegroundColorAttributeName, NSImageAlignment, NSImageScaling,
-    NSImageView, NSLayoutManager, NSLineBreakMode, NSMenuItem, NSScrollView, NSSearchField,
-    NSTextContainer, NSTextField, NSTextStorage, NSTextView, NSTitlePosition, NSView,
+    NSColor, NSControl, NSEvent, NSEventModifierFlags, NSFont, NSForegroundColorAttributeName,
+    NSImageAlignment, NSImageScaling, NSImageView, NSLayoutManager, NSLineBreakMode, NSMenuItem,
+    NSScrollView, NSSearchField, NSTextContainer, NSTextField, NSTextStorage, NSTextView,
+    NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
@@ -248,19 +249,45 @@ define_class!(
         fn accepts_first_responder(&self) -> bool {
             false
         }
+
+        #[unsafe(method(scrollWheel:))]
+        fn scroll_wheel(&self, event: &NSEvent) {
+            if event.modifierFlags().contains(NSEventModifierFlags::Command)
+                && COMMAND_WHEEL.get().is_some_and(|hook| hook(event))
+            {
+                return;
+            }
+            // SAFETY: forwards the event to the superclass implementation of the same selector,
+            // with the same argument type.
+            let _: () = unsafe { msg_send![super(self), scrollWheel: event] };
+        }
     }
 );
 
 /// A [`configure_text_scroll`] scroller for `text` that never becomes first responder, for
 /// previews the keyboard should pass over.
 pub fn passive_text_scroll(mtm: MainThreadMarker, text: &NSTextView) -> Retained<NSScrollView> {
+    let scroll = passive_scroll(mtm);
+    configure_text_scroll(&scroll, text);
+    scroll
+}
+
+/// A bare scroller that never becomes first responder and offers ⌘ + scroll to the hook of
+/// [`set_command_wheel_hook`] first.
+pub fn passive_scroll(mtm: MainThreadMarker) -> Retained<NSScrollView> {
     let allocated = PassiveTextScroll::alloc(mtm);
     // SAFETY: NSScrollView's `initWithFrame:` initialiser, with a matching argument type.
     let scroll: Retained<PassiveTextScroll> =
         unsafe { msg_send![allocated, initWithFrame: NSRect::ZERO] };
-    let scroll = scroll.into_super();
-    configure_text_scroll(&scroll, text);
-    scroll
+    scroll.into_super()
+}
+
+static COMMAND_WHEEL: std::sync::OnceLock<fn(&NSEvent) -> bool> = std::sync::OnceLock::new();
+
+/// The app's answer to a scroll with ⌘ held over one of these scrollers: `true` when it took the
+/// event (zoom), `false` to scroll as usual. Set once; a second call is ignored.
+pub fn set_command_wheel_hook(hook: fn(&NSEvent) -> bool) {
+    let _ = COMMAND_WHEEL.set(hook);
 }
 
 /// Send `action` to `target` when `control` is clicked.

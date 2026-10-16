@@ -65,9 +65,35 @@ pub struct OpenedImage {
     /// Pages drawn so far, in memory only ([`crate::pdf::PAGE_CACHE`] at most; wiped when the
     /// file leaves the card).
     pub pages: std::collections::HashMap<usize, SecretBytes>,
+    /// The zoom (percent, [`crate::pdf::ZOOM_FIT`] = fit) the card shows and the one asked for,
+    /// which shows once the page is drawn at it. Another file starts at fit.
+    pub zoom: u32,
+    pub want_zoom: u32,
+    /// The page `.0` drawn again for zoom `.1` (above fit), in memory only like `pages`.
+    pub zoomed: Option<(usize, u32, SecretBytes)>,
 }
 
 impl OpenedImage {
+    /// The page drawn again for the zoom shown, when there is one (above fit).
+    pub fn zoomed_bytes(&self) -> Option<SecretBytes> {
+        self.zoomed
+            .as_ref()
+            .filter(|(page, zoom, _)| {
+                *page == self.page && *zoom == self.zoom && self.zoom > crate::pdf::ZOOM_FIT
+            })
+            .map(|(_, _, bytes)| bytes.clone())
+    }
+
+    /// The zoom the card shows: the one asked for once its picture is there (above fit it is
+    /// drawn again for it), else fit.
+    pub fn shown_zoom(&self) -> u32 {
+        if self.zoom > crate::pdf::ZOOM_FIT && self.zoomed_bytes().is_none() {
+            crate::pdf::ZOOM_FIT
+        } else {
+            self.zoom
+        }
+    }
+
     /// The picture the card draws: the page shown, else the first.
     pub fn shown_bytes(&self) -> SecretBytes {
         self.pages
@@ -144,6 +170,9 @@ fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
                 page: 0,
                 want: 0,
                 pages: Default::default(),
+                zoom: crate::pdf::ZOOM_FIT,
+                want_zoom: crate::pdf::ZOOM_FIT,
+                zoomed: None,
             }),
             pdf: None,
         },
@@ -239,6 +268,9 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                         page: 0,
                         want: 0,
                         pages: Default::default(),
+                        zoom: crate::pdf::ZOOM_FIT,
+                        want_zoom: crate::pdf::ZOOM_FIT,
+                        zoomed: None,
                     }),
                     pdf: Some(crate::pdf::PdfFacts {
                         pages,
@@ -285,6 +317,9 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                     page: 0,
                     want: 0,
                     pages: Default::default(),
+                    zoom: crate::pdf::ZOOM_FIT,
+                    want_zoom: crate::pdf::ZOOM_FIT,
+                    zoomed: None,
                 }),
                 pdf: Some(crate::pdf::PdfFacts {
                     pages,

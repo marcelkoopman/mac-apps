@@ -213,6 +213,8 @@ mod tests {
             "sep_tab",
             "text_filter",
             "filter_label",
+            // "zoom 125%": the same word.
+            "pdf_zoom",
             // Brand name and a two-letter label.
             "ai_group",
             "ai_button",

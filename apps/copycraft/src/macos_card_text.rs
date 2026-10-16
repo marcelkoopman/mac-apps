@@ -40,7 +40,7 @@ pub(crate) fn paint(
     } else {
         plain(
             body,
-            &NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY),
+            &NSFont::systemFontOfSize(zoomed(mac_ui::metrics::FONT_BODY)),
             &crate::appearance::caption_color(),
         )
     };
@@ -139,9 +139,34 @@ fn push_side(
     }
 }
 
+thread_local! {
+    /// The zoom (percent) of the text being painted, and the one asked for in this session.
+    static FONT_ZOOM: std::cell::Cell<u32> = const { std::cell::Cell::new(100) };
+    static FONT_ZOOM_SETTING: std::cell::Cell<u32> = const { std::cell::Cell::new(100) };
+}
+
+/// Paint at this zoom (percent); 100 for everything that must keep its metrics (tables).
+pub(crate) fn set_font_zoom(zoom: u32) {
+    FONT_ZOOM.with(|slot| slot.set(zoom));
+}
+
+/// The zoom asked for on text and code, kept for the session (never written anywhere).
+pub(crate) fn font_zoom_setting() -> u32 {
+    FONT_ZOOM_SETTING.with(std::cell::Cell::get)
+}
+
+pub(crate) fn set_font_zoom_setting(zoom: u32) {
+    FONT_ZOOM_SETTING.with(|slot| slot.set(zoom));
+}
+
+/// `size` points at the zoom being painted.
+fn zoomed(size: f64) -> f64 {
+    size * f64::from(FONT_ZOOM.with(std::cell::Cell::get)) / 100.0
+}
+
 /// Code on the card: SF Mono (the system monospaced font) at the shared code size.
 fn editor_font() -> Retained<NSFont> {
-    mac_ui::fonts::monospace(mac_ui::style::FONT_CODE, &[])
+    mac_ui::fonts::monospace(zoomed(mac_ui::style::FONT_CODE), &[])
 }
 
 /// The host of a valid link: the code font, semibold.

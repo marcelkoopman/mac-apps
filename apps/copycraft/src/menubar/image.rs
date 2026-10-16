@@ -302,6 +302,11 @@ impl App {
             note,
         });
         if let Some(shown) = versions.shown() {
+            // An edited picture (a step shown) is not the page the zoom was drawn for.
+            if versions.cursor() > 0 {
+                data.pdf_zoom = crate::pdf::ZOOM_FIT;
+                data.pdf_zoom_picture = None;
+            }
             data.picture = Some(shown.picture.clone());
             data.image = Some(shown.facts.clone());
             data.image_scan = shown.scan.clone();
