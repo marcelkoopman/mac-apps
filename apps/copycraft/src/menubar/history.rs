@@ -282,6 +282,9 @@ impl App {
         if index == self.history_cursor || index >= self.history.len() {
             return;
         }
+        if self.ai_hide_for_history() {
+            return;
+        }
         let previous = self.history_cursor;
         self.history_cursor = index;
         self.browsing = None;
@@ -293,6 +296,9 @@ impl App {
     }
 
     pub(crate) fn step_history(&mut self, older: bool) {
+        if self.ai_hide_for_history() {
+            return;
+        }
         let Some(next) = commands::step_history(self.history.len(), self.history_cursor, older)
         else {
             return;

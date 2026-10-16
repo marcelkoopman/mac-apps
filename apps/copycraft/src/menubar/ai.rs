@@ -71,6 +71,13 @@ pub(crate) fn apply_makes_version_of(
     !truncated && apply_makes_version(entry, input_hash, now)
 }
 
+/// Whether switching to another history entry first hides the card like "Hide": a run or preview
+/// is on the open card. The card is the run's then (it comes back as it was, from the icon), so
+/// the result is never shown on, or applied to, the entry switched to.
+pub(crate) fn history_switch_hides_ai(ai_active: bool, card_open: bool) -> bool {
+    ai_active && card_open
+}
+
 /// The startup warning was shown (once per session).
 static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -110,6 +117,17 @@ impl App {
             launcher::minimize_card();
             self.sync_ai_tray();
         }
+    }
+
+    /// History navigation while the AI panel is open acts as "Hide" and goes no further: the
+    /// run goes on in the background and the card, with its preview, stays tied to the entry it
+    /// was started on. `true`: the navigation is handled.
+    pub(crate) fn ai_hide_for_history(&mut self) -> bool {
+        if !history_switch_hides_ai(self.ai.is_some(), launcher::is_open()) {
+            return false;
+        }
+        self.ai_minimize();
+        true
     }
 
     /// Mark the menu bar icon with the state of the run ([`ai_tray_state`]), or clear it.
@@ -313,6 +331,15 @@ mod tests {
         ));
         assert!(!apply_makes_version(7, hash, None));
     }
+    #[test]
+    fn switching_history_hides_an_open_ai_panel_only() {
+        assert!(history_switch_hides_ai(true, true));
+        // No run, or the card already hidden: history works as before.
+        assert!(!history_switch_hides_ai(false, true));
+        assert!(!history_switch_hides_ai(true, false));
+        assert!(!history_switch_hides_ai(false, false));
+    }
+
     #[test]
     fn a_cut_text_is_never_replaced_by_its_result() {
         let text = Zeroizing::new("hello".to_string());
