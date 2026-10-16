@@ -14,6 +14,7 @@ private let statusGuardrail: Int32 = 3
 private let statusTooLong: Int32 = 4
 private let statusLanguage: Int32 = 5
 private let statusFailed: Int32 = 6
+private let statusRefusal: Int32 = 7
 
 /// One run that can be cancelled from another thread.
 private final class Job: @unchecked Sendable {
@@ -115,6 +116,7 @@ public func macAiJobRun(
             case .guardrailViolation: outcome.status = statusGuardrail
             case .exceededContextWindowSize: outcome.status = statusTooLong
             case .unsupportedLanguageOrLocale: outcome.status = statusLanguage
+            case .refusal: outcome.status = statusRefusal
             default: outcome.status = Task.isCancelled ? statusCancelled : statusFailed
             }
         } catch {

@@ -211,6 +211,8 @@ pub enum Error {
     TooLong,
     /// The model does not support the language of the text.
     Language,
+    /// The model declined to answer (its own refusal, not the guardrails).
+    Refusal,
     Failed,
 }
 
@@ -223,6 +225,7 @@ impl Error {
             Error::Guardrail => "guardrail",
             Error::TooLong => "too-long",
             Error::Language => "language",
+            Error::Refusal => "refusal",
             Error::Failed => "failed",
         }
     }
@@ -236,6 +239,7 @@ impl Error {
             3 => Error::Guardrail,
             4 => Error::TooLong,
             5 => Error::Language,
+            7 => Error::Refusal,
             _ => Error::Failed,
         }
     }
@@ -369,6 +373,23 @@ mod tests {
     fn errors_show_only_their_kind() {
         assert_eq!(Error::from_code(2), Error::Cancelled);
         assert_eq!(Error::from_code(99), Error::Failed);
+        // Each status of the bridge has its own kind; only unknown codes are `failed`.
+        let kinds: Vec<&str> = [1, 2, 3, 4, 5, 6, 7]
+            .into_iter()
+            .map(|code| Error::from_code(code).kind())
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                "unavailable",
+                "cancelled",
+                "guardrail",
+                "too-long",
+                "language",
+                "failed",
+                "refusal"
+            ]
+        );
         assert_eq!(Error::TooLong.to_string(), "too-long");
     }
 }
