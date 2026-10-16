@@ -186,7 +186,32 @@ fn parse_json(text: &str) -> Result<JsonValue, String> {
 
 /// The documents of a YAML copy (one, or several split by `---`), empty ones left out. Each
 /// must be a mapping or a sequence.
+/// YAML larger than this is not parsed: aliases expand while parsing, so a small text can
+/// become a huge value (a "billion laughs" bomb). The clipboard limit alone (5 MB) is too wide.
+const YAML_MAX_BYTES: usize = 256 * 1024;
+/// More aliases (`*name`) than this is not parsed, whatever the size.
+const YAML_MAX_ALIASES: usize = 1000;
+
+/// Number of alias references (`*name` after a space, `[`, `,`, `:` or `-`) in `text`.
+fn yaml_alias_count(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    (0..bytes.len().saturating_sub(1))
+        .filter(|&i| {
+            bytes[i] == b'*'
+                && bytes[i + 1].is_ascii_alphanumeric()
+                && (i == 0
+                    || matches!(
+                        bytes[i - 1],
+                        b' ' | b'\t' | b'\n' | b'[' | b',' | b':' | b'-' | b'{'
+                    ))
+        })
+        .count()
+}
+
 fn parse_yaml_documents(text: &str) -> Result<Vec<YamlValue>, String> {
+    if text.len() > YAML_MAX_BYTES || yaml_alias_count(text) > YAML_MAX_ALIASES {
+        return Err("YAML too large or too many aliases".into());
+    }
     let mut documents = Vec::new();
     for part in yaml_document_texts(text.trim()) {
         if part.trim().is_empty() {
@@ -299,6 +324,23 @@ Salaris: [MONEY]";
 
     fn json(text: &str) -> serde_json::Value {
         serde_json::from_str(&yaml_to_json(text).expect("converts")).expect("JSON")
+    }
+
+    #[test]
+    fn a_yaml_bomb_is_refused_instead_of_expanded() {
+        let mut bomb = String::from("a: &a [x, x, x, x, x, x, x, x, x]\n");
+        for (prev, next) in [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e")] {
+            let refs = vec![format!("*{prev}"); 9].join(", ");
+            bomb.push_str(&format!("{next}: &{next} [{refs}]\n"));
+        }
+        // Small but many aliases: still fine below the limits.
+        assert!(yaml_to_json(&bomb).is_some());
+        // Too many aliases: refused.
+        let many = format!("a: &a x\nb: [{}]\n", vec!["*a"; 1001].join(", "));
+        assert!(yaml_to_json(&many).is_none());
+        // Too large: refused.
+        let big = format!("k: \"{}\"\n", "x".repeat(300 * 1024));
+        assert!(yaml_to_json(&big).is_none());
     }
 
     #[test]
