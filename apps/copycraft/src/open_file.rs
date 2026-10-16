@@ -117,7 +117,7 @@ pub fn load_dropped(path: &Path) -> OpenedFile {
     if !is_svg_name(path) && is_image_file(path) {
         return load_image(path);
     }
-    let opened = load(path);
+    let opened = load_file(path, true);
     if opened.note.as_deref() == Some(not_text()) {
         return load_image(path);
     }
@@ -344,6 +344,12 @@ fn file_name(path: &Path) -> String {
 }
 
 pub fn load(path: &Path) -> OpenedFile {
+    load_file(path, false)
+}
+
+/// [`load`]; with `preview` (a drop or Kies bestand) a Word document also gets the picture of
+/// its first page, when Quick Look makes one.
+fn load_file(path: &Path, preview: bool) -> OpenedFile {
     if is_pdf_file(path) {
         return load_pdf(path, false);
     }
@@ -354,7 +360,7 @@ pub fn load(path: &Path) -> OpenedFile {
     if !meta.is_file() {
         return noted(name, unreadable());
     }
-    if let Some(opened) = load_docx(path, &name, meta.len()) {
+    if let Some(opened) = load_docx(path, &name, meta.len(), preview) {
         return opened;
     }
     if meta.len() > MAX_FILE_BYTES {
@@ -385,7 +391,7 @@ pub fn load(path: &Path) -> OpenedFile {
 /// A Word document (.docx): its text as the card's text. `None` when the file is not one (no
 /// zip, or a zip without `word/document.xml`), so the caller goes on with it as any other file.
 /// Read into zeroizing memory and unpacked in memory only; nothing is written anywhere.
-fn load_docx(path: &Path, name: &str, len: u64) -> Option<OpenedFile> {
+fn load_docx(path: &Path, name: &str, len: u64, preview: bool) -> Option<OpenedFile> {
     use crate::docx::{DocxError, MAX_DOCX_BYTES};
     let named = is_docx_name(path);
     // A zip, or (for a .docx name) an encrypted Office container: both start with their magic.
@@ -405,13 +411,20 @@ fn load_docx(path: &Path, name: &str, len: u64) -> Option<OpenedFile> {
     }
     let name = name.to_string();
     Some(match crate::docx::extract(&bytes) {
-        Ok(text) => OpenedFile {
-            name,
-            text: Some(text),
-            note: None,
-            image: None,
-            pdf: None,
-        },
+        Ok(text) => {
+            // The picture of the first page (Quick Look), with the text behind the *Tekst*
+            // button. Without one (it failed or timed out): the text card.
+            if preview && let Some(picture) = first_page_picture(path) {
+                return Some(document_with_picture(name, text, picture));
+            }
+            OpenedFile {
+                name,
+                text: Some(text),
+                note: None,
+                image: None,
+                pdf: None,
+            }
+        }
         Err(DocxError::NotDocx) => return None,
         Err(DocxError::Locked) => noted(name, crate::locale::t("docx_locked")),
         Err(DocxError::Bomb) => noted(name, crate::locale::t("docx_bomb")),
@@ -419,6 +432,68 @@ fn load_docx(path: &Path, name: &str, len: u64) -> Option<OpenedFile> {
         Err(DocxError::NoText) => noted(name, crate::locale::t("docx_no_text")),
         Err(DocxError::Unreadable) => noted(name, unreadable()),
     })
+}
+
+/// A document's text with the picture of its first page: an image card whose *Tekst* view is
+/// the text (like a PDF page and its text layer; `pdf_text` without `pdf_source` marks it).
+fn document_with_picture(
+    name: String,
+    text: Zeroizing<String>,
+    picture: SecretBytes,
+) -> OpenedFile {
+    let scan = ImageScan {
+        info: String::new(),
+        data_url: None,
+        ocr: Some(text.to_string()),
+        qr: None,
+    };
+    OpenedFile {
+        name,
+        text: None,
+        note: None,
+        image: Some(OpenedImage {
+            bytes: picture,
+            facts: None,
+            scan: Some(scan),
+            pdf_source: None,
+            pdf_text: Some(text),
+            page: 0,
+            want: 0,
+            pages: Default::default(),
+            zoom: crate::pdf::ZOOM_FIT,
+            want_zoom: crate::pdf::ZOOM_FIT,
+            zoomed: None,
+        }),
+        pdf: None,
+    }
+}
+
+/// Width and height (points) and scale of the Quick Look page: 1280 × 1800 pixels at most.
+#[cfg(target_os = "macos")]
+const PREVIEW_POINTS: (f64, f64) = (640.0, 900.0);
+#[cfg(target_os = "macos")]
+const PREVIEW_SCALE: f64 = 2.0;
+/// Quick Look gets this long; the loader thread waits, never the main thread.
+#[cfg(target_os = "macos")]
+const PREVIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The first page of the document as PNG, drawn by Quick Look in memory (nothing is written
+/// to disk by the app). `None` when it cannot or takes too long.
+#[cfg(target_os = "macos")]
+fn first_page_picture(path: &Path) -> Option<SecretBytes> {
+    let mut png = Zeroizing::new(mac_ui::quicklook::first_page_png(
+        path,
+        PREVIEW_POINTS.0,
+        PREVIEW_POINTS.1,
+        PREVIEW_SCALE,
+        PREVIEW_TIMEOUT,
+    )?);
+    SecretBytes::new(std::mem::take(&mut *png))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn first_page_picture(_path: &Path) -> Option<SecretBytes> {
+    None
 }
 
 fn is_docx_name(path: &Path) -> bool {
@@ -721,6 +796,42 @@ mod tests {
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
         assert!(opened.text.is_none());
         assert!(opened.note.is_some());
+    }
+
+    #[test]
+    fn a_document_picture_keeps_its_text_behind_the_tekst_button() {
+        let picture = crate::clipboard::SecretBytes::new(vec![1, 2, 3]).unwrap();
+        let opened = super::document_with_picture(
+            "brief.docx".to_string(),
+            Zeroizing::new("Hallo".to_string()),
+            picture,
+        );
+        assert!(opened.text.is_none() && opened.note.is_none() && opened.pdf.is_none());
+        let image = opened.image.unwrap();
+        assert!(image.pdf_source.is_none());
+        assert_eq!(image.pdf_text.as_deref().map(String::as_str), Some("Hallo"));
+        assert_eq!(image.scan.unwrap().ocr.as_deref(), Some("Hallo"));
+    }
+
+    #[test]
+    fn a_dropped_docx_without_a_preview_is_the_text_card() {
+        // Linux has no Quick Look; on a Mac the preview may or may not come: the text is there
+        // either way (as the card's text or behind the picture).
+        let zipped = crate::docx::tests::docx("<w:p><w:r><w:t>Hallo</w:t></w:r></w:p>", true);
+        let path = temp_file("docx-drop", "brief.docx", &zipped);
+        let opened = load_dropped(&path);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+        let text = opened
+            .text
+            .as_ref()
+            .map(|text| text.to_string())
+            .or_else(|| {
+                opened
+                    .image
+                    .as_ref()
+                    .and_then(|image| image.pdf_text.as_ref().map(|text| text.to_string()))
+            });
+        assert_eq!(text.as_deref(), Some("Hallo"));
     }
 
     #[test]

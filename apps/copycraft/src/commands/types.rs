@@ -93,6 +93,9 @@ pub struct LaunchData {
     /// the page drawn at it. `picture` stays the page at fit.
     pub pdf_zoom: u32,
     pub pdf_zoom_picture: Option<crate::clipboard::SecretBytes>,
+    /// The picture is the first page of a document (a .docx, drawn by Quick Look) and its text
+    /// is the *Tekst* view. No pages to turn, no PDF footer.
+    pub document_preview: bool,
     /// Set when the card is showing a chosen file instead of the clipboard.
     pub source_name: Option<String>,
     /// Well text when that file cannot be shown.

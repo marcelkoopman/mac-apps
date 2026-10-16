@@ -25,6 +25,8 @@
 //!   on every platform.
 //! - `blur`: `blur`, a `CIGaussianBlur` content filter on a view.
 //! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
+//! - `quicklook`: `quicklook`, the first page of a document (docx, …) as PNG bytes through
+//!   `QLThumbnailGenerator`, in memory, waited for with a timeout.
 //! - `wake`: `wake::observe_sleep_wake`, a callback when the Mac goes to sleep and wakes up.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
@@ -84,6 +86,8 @@ pub mod panel;
 pub mod pasteboard_types;
 #[cfg(all(target_os = "macos", feature = "progress"))]
 pub mod progress;
+#[cfg(all(target_os = "macos", feature = "quicklook"))]
+pub mod quicklook;
 pub mod style;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod text;

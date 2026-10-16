@@ -111,7 +111,8 @@ impl App {
     pub(crate) fn ai_entry(&self) -> Option<(u64, Zeroizing<String>)> {
         self.text_entry().or_else(|| {
             let image = self.opened.as_ref()?.image.as_ref()?;
-            image.pdf_source.as_ref()?;
+            // A scanned PDF or a document's picture (its text is behind the picture).
+            (image.pdf_source.is_some() || image.pdf_text.is_some()).then_some(())?;
             let text = image.scan.as_ref()?.ocr.as_ref()?;
             Some((OPENED_FILE, Zeroizing::new(text.clone())))
         })
@@ -303,7 +304,7 @@ impl App {
             let scanned_pdf = opened
                 .image
                 .as_ref()
-                .is_some_and(|image| image.pdf_source.is_some());
+                .is_some_and(|image| image.pdf_source.is_some() || image.pdf_text.is_some());
             if scanned_pdf {
                 match self.write_own(result) {
                     Ok(()) => save_feedback(crate::locale::t("copied_toast")),

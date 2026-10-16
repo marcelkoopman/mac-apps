@@ -60,7 +60,7 @@ pub fn ai_actions_for_kind(kind: crate::format::FormatKind) -> &'static [Action]
 /// The actions the card offers: by the kind of its text; a scanned PDF's recognized text is
 /// prose (the chip itself waits for the recognition).
 pub fn ai_actions(data: &LaunchData) -> &'static [Action] {
-    if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
+    if data.subject_kind == SubjectKind::Image && (data.pdf.is_some() || data.document_preview) {
         return &PROSE;
     }
     if data.subject_kind != SubjectKind::Text {
@@ -327,7 +327,9 @@ pub fn card_chips(data: &LaunchData) -> Vec<Command> {
         if !ai_actions(data).is_empty() {
             chips.insert(at, ai_button(mac_ai::availability()));
         }
-    } else if data.subject_kind == SubjectKind::Image && data.pdf.is_some() {
+    } else if data.subject_kind == SubjectKind::Image
+        && (data.pdf.is_some() || data.document_preview)
+    {
         // A scanned PDF: the AI chip works on the recognized text, so it waits for it.
         let at = chips
             .iter()
@@ -687,6 +689,24 @@ mod tests {
         card.pdf = None;
         assert!(card_chips(&card).iter().all(|c| c.id != CommandId::AiMenu));
         crate::locale::set_test_language(Language::En);
+    }
+
+    #[test]
+    fn a_document_picture_offers_the_ai_chip_and_names_its_first_page() {
+        let mut card = super::super::tests::data(SubjectKind::Image, None);
+        card.document_preview = true;
+        card.image_scan = Some(ImageScan {
+            info: String::new(),
+            data_url: None,
+            ocr: Some("tekst".to_string()),
+            qr: None,
+        });
+        assert_eq!(ai_actions(&card).len(), PROSE.len());
+        assert!(card_chips(&card).iter().any(|c| c.id == CommandId::AiMenu));
+        card.view = CardView::Original;
+        assert!(work_card(&card).meta.starts_with("First page"));
+        card.document_preview = false;
+        assert!(ai_actions(&card).is_empty());
     }
 
     #[test]

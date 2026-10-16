@@ -76,7 +76,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow past `scripts/unsafe_baseline.txt`; lower it when it shrinks) and `scripts/check_minos.sh` on the release binaries. Copycraft's PDF support uses the `objc2-pdf-kit` bindings (PDFKit); its AI actions use the `mac-ai` crate.
+Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow past `scripts/unsafe_baseline.txt`; lower it when it shrinks) and `scripts/check_minos.sh` on the release binaries. Copycraft's PDF support uses the `objc2-pdf-kit` bindings (PDFKit); its Word (.docx) support inflates `word/document.xml` with `flate2` (already in the tree) and draws the first page with Quick Look through `objc2-quick-look-thumbnailing` (all in memory; mac-ui `quicklook`); its AI actions use the `mac-ai` crate.
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 

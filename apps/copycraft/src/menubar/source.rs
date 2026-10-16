@@ -80,7 +80,13 @@ impl App {
             self.history_cursor = 0;
             self.refresh_status_menu();
         }
-        if let Some(image) = opened.image.as_ref() {
+        // A document's picture (Quick Look) has its text already; recognizing the picture would
+        // only replace it.
+        if let Some(image) = opened
+            .image
+            .as_ref()
+            .filter(|image| image.pdf_text.is_none() || image.pdf_source.is_some())
+        {
             self.scan_dropped_image(
                 image.bytes.clone(),
                 image.pdf_source.clone(),
@@ -275,6 +281,9 @@ impl App {
         }
         data.image = None;
         data.image_scan = None;
+        data.document_preview = image
+            .as_ref()
+            .is_some_and(|image| image.pdf_text.is_some() && image.pdf_source.is_none());
         if let Some(image) = image {
             // Drawn like a copied picture, from its own bytes instead of the clipboard's.
             data.subject_kind = SubjectKind::Image;
@@ -364,6 +373,7 @@ impl App {
             pdf_page: 0,
             pdf_zoom: crate::pdf::ZOOM_FIT,
             pdf_zoom_picture: None,
+            document_preview: false,
             source_name: None,
             source_note: None,
             full: false,

@@ -45,6 +45,17 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
 ] }
 # mac-ui `file_panel` only: `UTType`s for `NSSavePanel::setAllowedContentTypes`.
 objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTType"] }
+# mac-ui `quicklook` only: QLThumbnailGenerator (the first page of an office document, in memory).
+objc2-quick-look-thumbnailing = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "bitflags",
+    "block2",
+    "QLThumbnailGenerationRequest",
+    "QLThumbnailGenerator",
+    "QLThumbnailRepresentation",
+    "objc2-core-foundation",
+    "objc2-core-graphics",
+] }
 tray-icon = "0.26"
 winit = "0.30"
 

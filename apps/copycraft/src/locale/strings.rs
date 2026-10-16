@@ -404,6 +404,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "PDF is groter dan 32 MB",
         "PDF is larger than 32 MB",
     ),
+    ("document_first_page", "Eerste pagina", "First page"),
     (
         "docx_too_large",
         "Word-bestand is groter dan 32 MB",

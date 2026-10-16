@@ -271,6 +271,15 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             format!("{pages}  ·  {}", card.meta)
         };
     }
+    // A document's picture is its first page only.
+    if data.document_preview && data.view == CardView::Original {
+        let first = crate::locale::t("document_first_page");
+        card.meta = if card.meta.is_empty() {
+            first.to_string()
+        } else {
+            format!("{first}  ·  {}", card.meta)
+        };
+    }
     if let Some(name) = &data.source_name {
         card.meta = if card.meta.is_empty() {
             name.clone()
