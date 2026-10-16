@@ -1,372 +1,571 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1888" viewBox="0 0 1920 1888" font-family="DejaVu Sans, Verdana, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="2773" viewBox="0 0 1920 2773" font-family="DejaVu Sans, Verdana, sans-serif">
 <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
-<rect width="1920" height="1888" fill="#ffffff"/>
+<rect width="1920" height="2773" fill="#ffffff"/>
 <text x="40" y="54" font-size="32" font-weight="bold" fill="#111827">STRIDE-dreigingsmodel — copycraft</text>
-<text x="40" y="86" font-size="16" fill="#4b5563">Offline macOS-klembordapp in Rust (marcelkoopman/mac-apps). Basis: dreigingsmodel v0.1.78, aangevuld met wat sinds v0.1.80 nieuw is: lokale AI-acties, pdf-verwerking, historielimieten.</text>
-<text x="40" y="128" font-size="22" font-weight="bold" fill="#111827">Dataflowdiagram met vertrouwensgrenzen</text>
-<rect x="380" y="480" width="330" height="250" rx="14" fill="#b45309" fill-opacity="0.06" stroke="#b45309" stroke-width="2.5" stroke-dasharray="10 7"/>
-<rect x="396" y="468" width="216.640625" height="24" rx="6" fill="#fff" stroke="#b45309" stroke-width="1.5"/>
-<text x="406.0" y="485.0" font-size="15" font-weight="bold" fill="#b45309" text-anchor="start">OS-klembord (gedeeld)</text>
-<rect x="770" y="160" width="690" height="600" rx="14" fill="#2563eb" fill-opacity="0.06" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="10 7"/>
-<rect x="786" y="148" width="372.15625" height="24" rx="6" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
-<text x="796.0" y="165.0" font-size="15" font-weight="bold" fill="#2563eb" text-anchor="start">App Sandbox (geen netwerk-entitlement)</text>
-<rect x="1530" y="160" width="350" height="270" rx="14" fill="#059669" fill-opacity="0.06" stroke="#059669" stroke-width="2.5" stroke-dasharray="10 7"/>
-<rect x="1546" y="148" width="297.046875" height="24" rx="6" fill="#fff" stroke="#059669" stroke-width="1.5"/>
-<text x="1556.0" y="165.0" font-size="15" font-weight="bold" fill="#059669" text-anchor="start">On-device model (geen netwerk)</text>
-<rect x="1530" y="490" width="350" height="270" rx="14" fill="#7c3aed" fill-opacity="0.06" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="10 7"/>
-<rect x="1546" y="478" width="211.625" height="24" rx="6" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="1556.0" y="495.0" font-size="15" font-weight="bold" fill="#7c3aed" text-anchor="start">OS-frameworks via FFI</text>
-<rect x="40" y="210" width="250" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
-<text x="165.0" y="255.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Gebruiker</text>
-<text x="165.0" y="277.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">sneltoets, kaart, drop/open</text>
-<circle cx="42" cy="212" r="13" fill="#111827"/>
-<text x="42.0" y="217.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
-<circle cx="278" cy="312" r="11" fill="#7c3aed"/>
-<text x="278.0" y="317.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
-<rect x="40" y="550" width="250" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
-<text x="165.0" y="595.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Andere apps</text>
-<text x="165.0" y="617.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">Finder, Safari, Foto’s …</text>
-<circle cx="42" cy="552" r="13" fill="#111827"/>
-<text x="42.0" y="557.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
-<circle cx="278" cy="652" r="11" fill="#7c3aed"/>
-<text x="278.0" y="657.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
-<rect x="410" y="570" width="270" height="64" fill="#fffbeb"/>
-<line x1="410" y1="570" x2="680" y2="570" stroke="#92400e" stroke-width="2.5"/><line x1="410" y1="634" x2="680" y2="634" stroke="#92400e" stroke-width="2.5"/><line x1="410" y1="570" x2="410" y2="634" stroke="#92400e" stroke-width="2.5"/>
-<text x="545.0" y="596.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">NSPasteboard</text>
-<text x="545.0" y="618.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">changeCount + inhoud</text>
-<circle cx="410" cy="570" r="13" fill="#111827"/>
-<text x="410.0" y="575.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">2</text>
-<circle cx="668" cy="636" r="11" fill="#2563eb"/>
-<text x="668.0" y="641.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<circle cx="1040" cy="350" r="125" fill="#eef2ff" stroke="#4338ca" stroke-width="2.5"/>
-<text x="1040.0" y="323.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Copycraft</text>
-<text x="1040.0" y="345.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Rust-proces</text>
-<text x="1040.0" y="367.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">detectie, decoders,</text>
-<text x="1040.0" y="389.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">regex, tabellen</text>
-<circle cx="950.0" cy="260.0" r="13" fill="#111827"/>
-<text x="950.0" y="265.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
-<circle cx="1108.75" cy="243.75" r="11" fill="#dc2626"/>
-<text x="1108.8" y="248.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<circle cx="1134.75" cy="243.75" r="11" fill="#2563eb"/>
-<text x="1134.8" y="248.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<circle cx="1160.75" cy="243.75" r="11" fill="#059669"/>
-<text x="1160.8" y="248.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<circle cx="1186.75" cy="243.75" r="11" fill="#db2777"/>
-<text x="1186.8" y="248.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<rect x="800" y="620" width="200" height="86" fill="#fffbeb"/>
-<line x1="800" y1="620" x2="1000" y2="620" stroke="#92400e" stroke-width="2.5"/><line x1="800" y1="706" x2="1000" y2="706" stroke="#92400e" stroke-width="2.5"/><line x1="800" y1="620" x2="800" y2="706" stroke="#92400e" stroke-width="2.5"/>
-<text x="900.0" y="646.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Geschiedenis</text>
-<text x="900.0" y="668.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">alleen in geheugen</text>
-<text x="900.0" y="690.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">5 / 20 / 200 MB</text>
-<circle cx="800" cy="620" r="13" fill="#111827"/>
-<text x="800.0" y="625.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">4</text>
-<circle cx="962" cy="708" r="11" fill="#2563eb"/>
-<text x="962.0" y="713.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<circle cx="988" cy="708" r="11" fill="#059669"/>
-<text x="988.0" y="713.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<rect x="1025" y="620" width="190" height="86" fill="#fffbeb"/>
-<line x1="1025" y1="620" x2="1215" y2="620" stroke="#92400e" stroke-width="2.5"/><line x1="1025" y1="706" x2="1215" y2="706" stroke="#92400e" stroke-width="2.5"/><line x1="1025" y1="620" x2="1025" y2="706" stroke="#92400e" stroke-width="2.5"/>
-<text x="1120.0" y="646.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Instellingen</text>
-<text x="1120.0" y="668.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">user defaults</text>
-<text x="1120.0" y="690.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">(schijf)</text>
-<circle cx="1025" cy="620" r="13" fill="#111827"/>
-<text x="1025.0" y="625.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">5</text>
-<circle cx="1203" cy="708" r="11" fill="#dc2626"/>
-<text x="1203.0" y="713.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<rect x="1240" y="620" width="195" height="86" fill="#fffbeb"/>
-<line x1="1240" y1="620" x2="1435" y2="620" stroke="#92400e" stroke-width="2.5"/><line x1="1240" y1="706" x2="1435" y2="706" stroke="#92400e" stroke-width="2.5"/><line x1="1240" y1="620" x2="1240" y2="706" stroke="#92400e" stroke-width="2.5"/>
-<text x="1337.5" y="646.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Logs/diagnostiek</text>
-<text x="1337.5" y="668.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">os_log, export</text>
-<text x="1337.5" y="690.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">vaste events</text>
-<circle cx="1240" cy="620" r="13" fill="#111827"/>
-<text x="1240.0" y="625.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">6</text>
-<circle cx="1397" cy="708" r="11" fill="#2563eb"/>
-<text x="1397.0" y="713.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<circle cx="1423" cy="708" r="11" fill="#d97706"/>
-<text x="1423.0" y="713.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
-<circle cx="1705" cy="300" r="95" fill="#ecfdf5" stroke="#047857" stroke-width="2.5"/>
-<text x="1705.0" y="273.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">mac-ai</text>
-<text x="1705.0" y="295.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Swift-bridge →</text>
-<text x="1705.0" y="317.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Foundation</text>
-<text x="1705.0" y="339.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Models</text>
-<circle cx="1636.6" cy="231.60000000000002" r="13" fill="#111827"/>
-<text x="1636.6" y="236.6" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">7</text>
-<circle cx="1757.25" cy="219.25" r="11" fill="#2563eb"/>
-<text x="1757.2" y="224.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<circle cx="1783.25" cy="219.25" r="11" fill="#dc2626"/>
-<text x="1783.2" y="224.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<circle cx="1809.25" cy="219.25" r="11" fill="#db2777"/>
-<text x="1809.2" y="224.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<circle cx="1705" cy="630" r="95" fill="#f5f3ff" stroke="#6d28d9" stroke-width="2.5"/>
-<text x="1705.0" y="614.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">PDFKit</text>
-<text x="1705.0" y="636.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Vision (OCR)</text>
-<text x="1705.0" y="658.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">ImageIO</text>
-<circle cx="1636.6" cy="561.6" r="13" fill="#111827"/>
-<text x="1636.6" y="566.6" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">8</text>
-<circle cx="1757.25" cy="549.25" r="11" fill="#059669"/>
-<text x="1757.2" y="554.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<circle cx="1783.25" cy="549.25" r="11" fill="#db2777"/>
-<text x="1783.2" y="554.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<path d="M290,245 L912,305" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="427.875" y="243.5" width="344.25" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="600.0" y="259.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">sneltoets, drop/open (tekst 8 MB, beeld/pdf 32 MB)</text>
-<path d="M922,385 C700,410 460,380 292,290" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="478.8984375" y="368.5" width="242.203125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="600.0" y="384.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kaart, resultaat, Save naar bestand</text>
-<path d="M290,600 L408,600" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="321.5625" y="570.5" width="46.875" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="345.0" y="586.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kopie</text>
-<path d="M600,568 C640,480 820,450 935,420" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="456.5390625" y="418.0" width="206.921875" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="560.0" y="434.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">poll changeCount,</text>
-<text x="560.0" y="451.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">lezen volgens accessBehavior</text>
-<path d="M965,455 C880,570 760,620 682,628" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="721.21875" y="555.0" width="137.5625" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="790.0" y="571.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">Copy (marker-type,</text>
-<text x="790.0" y="588.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">concealed)</text>
-<path d="M960,450 L915,616" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="913.9375" y="538.5" width="48.125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="938.0" y="554.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">items</text>
-<path d="M1040,475 L1110,616" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1046.09375" y="538.5" width="63.8125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1078.0" y="554.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">settings</text>
-<path d="M1110,470 L1305,616" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1202.109375" y="528.5" width="55.78125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1230.0" y="544.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">events</text>
-<path d="M1165,300 L1608,285" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1317.984375" y="250.0" width="134.03125" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1385.0" y="266.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kaarttekst als data</text>
-<text x="1385.0" y="283.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">tussen markers</text>
-<path d="M1612,325 L1168,365" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1296.9609375" y="338.5" width="176.078125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1385.0" y="354.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">resultaat (niets bewaard)</text>
-<path d="M1155,400 L1615,600" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1206.4140625" y="451.5" width="187.171875" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1300.0" y="467.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">pdf ≤32 MB / 100 p., beeld</text>
-<path d="M1612,655 C1450,580 1300,480 1145,425" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<rect x="1333.2734375" y="520.5" width="85.453125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
-<text x="1376.0" y="536.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">tekst / OCR</text>
-<text x="40.0" y="826.0" font-size="22" font-weight="bold" fill="#1f2937" text-anchor="start">Bedreigingen en bestaande mitigaties per element</text>
-<rect x="24.5" y="840" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="52.5" cy="866" r="13" fill="#111827"/>
-<text x="52.5" y="871.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
-<text x="72.5" y="871.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Externe entiteiten (gebruiker, andere apps)</text>
-<line x1="40.5" y1="886" x2="463.5" y2="886" stroke="#e5e7eb"/>
-<circle cx="51.5" cy="903" r="11" fill="#7c3aed"/>
-<text x="51.5" y="908.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
-<text x="74.5" y="908.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere app vervalst een kopie als Copycraft of</text>
-<text x="74.5" y="926.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">als app op de negeerlijst.</text>
-<text x="74.5" y="944.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Alleen eigen marker-type [README]; geen</text>
-<text x="74.5" y="962.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">bron-authenticatie gezien.</text>
-<rect x="74.5" y="970" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="81.5" y="984.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<circle cx="51.5" cy="1011" r="11" fill="#7c3aed"/>
-<text x="51.5" y="1016.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
-<text x="74.5" y="1016.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere app vangt de sneltoets ⌃⌘C of bootst de</text>
-<text x="74.5" y="1034.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">overlay na.</text>
-<text x="74.5" y="1052.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Geen mitigatie gezien.</text>
-<rect x="74.5" y="1060" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="81.5" y="1074.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<rect x="496.5" y="840" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="524.5" cy="866" r="13" fill="#111827"/>
-<text x="524.5" y="871.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">2</text>
-<text x="544.5" y="871.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">OS-klembord (NSPasteboard)</text>
-<line x1="512.5" y1="886" x2="935.5" y2="886" stroke="#e5e7eb"/>
-<circle cx="523.5" cy="903" r="11" fill="#2563eb"/>
-<text x="523.5" y="908.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="546.5" y="908.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere apps lezen het klembord, ook wat</text>
-<text x="546.5" y="926.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Copycraft terugschrijft.</text>
-<text x="546.5" y="944.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Gevoelige resultaten "concealed" [README; code</text>
-<text x="546.5" y="962.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">onbevestigd]. Meelezen door andere apps is een</text>
-<text x="546.5" y="980.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">OS-eigenschap.</text>
-<rect x="546.5" y="988" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="553.5" y="1002.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<rect x="968.5" y="840" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="996.5" cy="866" r="13" fill="#111827"/>
-<text x="996.5" y="871.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
-<text x="1016.5" y="871.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Copycraft-proces</text>
-<line x1="984.5" y1="886" x2="1407.5" y2="886" stroke="#e5e7eb"/>
-<circle cx="995.5" cy="903" r="11" fill="#dc2626"/>
-<text x="995.5" y="908.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<text x="1018.5" y="908.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Supply chain: kwaadaardige crate of gekaapte</text>
-<text x="1018.5" y="926.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Action.</text>
-<text x="1018.5" y="944.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ cargo audit op push/PR/wekelijks [code];</text>
-<text x="1018.5" y="962.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">offline-check [README]. Actions op tag, niet SHA;</text>
-<text x="1018.5" y="980.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">yanked-check uit [code].</text>
-<rect x="1018.5" y="988" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1025.5" y="1002.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="995.5" cy="1029" r="11" fill="#2563eb"/>
-<text x="995.5" y="1034.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="1018.5" y="1034.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Leest secrets of inhoud van genegeerde apps.</text>
-<text x="1018.5" y="1052.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ accessBehavior-strategie, RegexSet-labels [code];</text>
-<text x="1018.5" y="1070.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">negeerlijst, concealed overslaan [README].</text>
-<rect x="1018.5" y="1078" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1025.5" y="1092.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="995.5" cy="1119" r="11" fill="#059669"/>
-<text x="995.5" y="1124.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<text x="1018.5" y="1124.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Enorme of misvormde input (CSV, YAML,</text>
-<text x="1018.5" y="1142.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Base64), ReDoS.</text>
-<text x="1018.5" y="1160.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ regex lineair [code]; drop 8/32 MB, tabel ≤100k</text>
-<text x="1018.5" y="1178.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">rijen, achtergrondthread [README]. YAML-bomlimiet</text>
-<text x="1018.5" y="1196.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
-<rect x="1018.5" y="1204" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1025.5" y="1218.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="995.5" cy="1245" r="11" fill="#db2777"/>
-<text x="995.5" y="1250.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<text x="1018.5" y="1250.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">unsafe/FFI-fouten; Visit opent kwaadaardige</text>
-<text x="1018.5" y="1268.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">URL.</text>
-<text x="1018.5" y="1286.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Sandbox: alleen user-selected rw, geen netwerk;</text>
-<text x="1018.5" y="1304.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Visit alleen http/https [README]. unsafe-audit</text>
-<text x="1018.5" y="1322.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
-<rect x="1018.5" y="1330" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1025.5" y="1344.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<rect x="1440.5" y="840" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="1468.5" cy="866" r="13" fill="#111827"/>
-<text x="1468.5" y="871.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">4</text>
-<text x="1488.5" y="871.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Geschiedenis (alleen geheugen)</text>
-<line x1="1456.5" y1="886" x2="1879.5" y2="886" stroke="#e5e7eb"/>
-<circle cx="1467.5" cy="903" r="11" fill="#2563eb"/>
-<text x="1467.5" y="908.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="1490.5" y="908.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Memory- of core dump bevat de geschiedenis.</text>
-<text x="1490.5" y="926.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ zeroize + leakguard [code]; wissen bij lock, slaap,</text>
-<text x="1490.5" y="944.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">gebruikerswissel, na 15 min [README]. Volledigheid</text>
-<text x="1490.5" y="962.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
-<rect x="1490.5" y="970" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1497.5" y="984.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="1467.5" cy="1011" r="11" fill="#2563eb"/>
-<text x="1467.5" y="1016.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="1490.5" y="1016.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Persistentie op schijf (temp, oude bestanden).</text>
-<text x="1490.5" y="1034.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Niet op schijf; oude copycraft-history-* en temp-map</text>
-<text x="1490.5" y="1052.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Foto’s worden gewist [README]. Swap valt buiten de</text>
-<text x="1490.5" y="1070.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">app.</text>
-<rect x="1490.5" y="1078" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="1497.5" y="1092.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<circle cx="1467.5" cy="1119" r="11" fill="#059669"/>
-<text x="1467.5" y="1124.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<text x="1490.5" y="1124.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Geheugen loopt vol.</text>
-<text x="1490.5" y="1142.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Limiet 5 MB tekst, 20 MB afbeelding, 200 MB totaal</text>
-<text x="1490.5" y="1160.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README] [nieuw].</text>
-<rect x="1490.5" y="1168" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="1497.5" y="1182.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<rect x="24.5" y="1379" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="52.5" cy="1405" r="13" fill="#111827"/>
-<text x="52.5" y="1410.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">5</text>
-<text x="72.5" y="1410.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Instellingen (user defaults)</text>
-<line x1="40.5" y1="1425" x2="463.5" y2="1425" stroke="#e5e7eb"/>
-<circle cx="51.5" cy="1442" r="11" fill="#dc2626"/>
-<text x="51.5" y="1447.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<text x="74.5" y="1447.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Negeerlijst leeg, privacyfilter uit, bewaartermijn</text>
-<text x="74.5" y="1465.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">"tot gewist".</text>
-<text x="74.5" y="1483.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Negeerlijst-validatie: reverse-DNS, max. 50</text>
-<text x="74.5" y="1501.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README]. Geen integriteitscontrole.</text>
-<rect x="74.5" y="1509" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="81.5" y="1523.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="51.5" cy="1550" r="11" fill="#dc2626"/>
-<text x="51.5" y="1555.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<text x="74.5" y="1555.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Login item: bundle vervangen.</text>
-<text x="74.5" y="1573.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ SMAppService, standaard uit [README].</text>
-<text x="74.5" y="1591.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Signing/notarisatie [onbevestigd].</text>
-<rect x="74.5" y="1599" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="81.5" y="1613.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<rect x="496.5" y="1379" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="524.5" cy="1405" r="13" fill="#111827"/>
-<text x="524.5" y="1410.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">6</text>
-<text x="544.5" y="1410.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Logs en diagnostiek</text>
-<line x1="512.5" y1="1425" x2="935.5" y2="1425" stroke="#e5e7eb"/>
-<circle cx="523.5" cy="1442" r="11" fill="#2563eb"/>
-<text x="523.5" y="1447.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="546.5" y="1447.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Logs of export lekken klembordinhoud.</text>
-<text x="546.5" y="1465.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Geen vrije tekst; ErrorKind zonder fouttekst; export</text>
-<text x="546.5" y="1483.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">alleen huidige run [code].</text>
-<rect x="546.5" y="1491" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="553.5" y="1505.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<circle cx="523.5" cy="1532" r="11" fill="#d97706"/>
-<text x="523.5" y="1537.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
-<text x="546.5" y="1537.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Achteraf niet na te gaan wat gelezen of geplakt</text>
-<text x="546.5" y="1555.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">is.</text>
-<text x="546.5" y="1573.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Bewust: alleen vaste events (enum zonder String,</text>
-<text x="546.5" y="1591.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">met test) [code].</text>
-<rect x="546.5" y="1599" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
-<text x="553.5" y="1613.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
-<rect x="968.5" y="1379" width="455" height="252" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
-<circle cx="996.5" cy="1405" r="13" fill="#111827"/>
-<text x="996.5" y="1410.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">7</text>
-<text x="1016.5" y="1410.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">On-device model (mac-ai)</text>
-<line x1="984.5" y1="1425" x2="1407.5" y2="1425" stroke="#e5e7eb"/>
-<circle cx="995.5" cy="1442" r="11" fill="#2563eb"/>
-<text x="995.5" y="1447.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="1018.5" y="1447.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Kaartinhoud verlaat het apparaat of blijft achter.</text>
-<text x="1018.5" y="1465.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Apple Foundation Models on-device, geen netwerk;</text>
-<text x="1018.5" y="1483.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">niets gelogd of bewaard [nieuw].</text>
-<circle cx="995.5" cy="1510" r="11" fill="#dc2626"/>
-<text x="995.5" y="1515.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<text x="1018.5" y="1515.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Prompt-injectie via gekopieerde tekst.</text>
-<text x="1018.5" y="1533.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Kaarttekst als data tussen markers [nieuw].</text>
-<circle cx="995.5" cy="1560" r="11" fill="#db2777"/>
-<text x="995.5" y="1565.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<text x="1018.5" y="1565.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Model voert acties uit namens aanvaller.</text>
-<text x="1018.5" y="1583.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Model krijgt geen tools [nieuw]. Swift-bridge is FFI:</text>
-<text x="1018.5" y="1601.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">unsafe-audit [onbevestigd].</text>
-<rect x="1440.5" y="1379" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-<circle cx="1468.5" cy="1405" r="13" fill="#111827"/>
-<text x="1468.5" y="1410.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">8</text>
-<text x="1488.5" y="1410.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">OS-frameworks (PDFKit, Vision, ImageIO)</text>
-<line x1="1456.5" y1="1425" x2="1879.5" y2="1425" stroke="#e5e7eb"/>
-<circle cx="1467.5" cy="1442" r="11" fill="#059669"/>
-<text x="1467.5" y="1447.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<text x="1490.5" y="1447.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">pdf- of beeldbom, dure OCR.</text>
-<text x="1490.5" y="1465.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ pdf ≤32 MB en ≤100 pagina’s [nieuw]; beeld ≤20</text>
-<text x="1490.5" y="1483.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">MB gedecodeerd, 50 MP [README]; image-crate alleen</text>
-<text x="1490.5" y="1501.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">jpeg/png/tiff [code].</text>
-<rect x="1490.5" y="1509" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1497.5" y="1523.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<circle cx="1467.5" cy="1550" r="11" fill="#db2777"/>
-<text x="1467.5" y="1555.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<text x="1490.5" y="1555.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Kwaadaardige pdf of afbeelding in native parser.</text>
-<text x="1490.5" y="1573.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ App Sandbox [README]. Native parsers blijven</text>
-<text x="1490.5" y="1591.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">OS-aanvalsoppervlak.</text>
-<rect x="1490.5" y="1599" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
-<text x="1497.5" y="1613.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
-<rect x="24.5" y="1668" width="1871.0" height="200" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
-<text x="44.5" y="1700.0" font-size="18" font-weight="bold" fill="#1f2937" text-anchor="start">Legenda</text>
-<rect x="44.5" y="1716" width="34" height="22" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
-<text x="90.5" y="1732.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Externe entiteit</text>
-<circle cx="61.5" cy="1760" r="13" fill="#eef2ff" stroke="#4338ca" stroke-width="2"/>
-<text x="90.5" y="1765.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Proces</text>
-<line x1="44.5" y1="1784" x2="78.5" y2="1784" stroke="#92400e" stroke-width="2.5"/><line x1="44.5" y1="1804" x2="78.5" y2="1804" stroke="#92400e" stroke-width="2.5"/>
-<text x="90.5" y="1799.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Datastore</text>
-<rect x="44.5" y="1818" width="34" height="22" rx="4" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="90.5" y="1834.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Vertrouwensgrens</text>
-<path d="M244.5,1727 L278.5,1727" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
-<text x="290.5" y="1732.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Dataflow</text>
-<circle cx="261.5" cy="1760" r="13" fill="#111827"/>
-<text x="261.5" y="1765.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
-<text x="290.5" y="1765.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Element-nr. (DFD ↔ kaart)</text>
-<circle cx="505.5" cy="1726" r="10" fill="#7c3aed"/>
-<text x="505.5" y="1731.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
-<text x="524.5" y="1731.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Spoofing – vervalsing van identiteit</text>
-<circle cx="505.5" cy="1749" r="10" fill="#dc2626"/>
-<text x="505.5" y="1754.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
-<text x="524.5" y="1754.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Tampering – manipulatie</text>
-<circle cx="505.5" cy="1772" r="10" fill="#d97706"/>
-<text x="505.5" y="1777.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
-<text x="524.5" y="1777.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Repudiation – ontkenbaarheid</text>
-<circle cx="505.5" cy="1795" r="10" fill="#2563eb"/>
-<text x="505.5" y="1800.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
-<text x="524.5" y="1800.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Information disclosure – lekken</text>
-<circle cx="505.5" cy="1818" r="10" fill="#059669"/>
-<text x="505.5" y="1823.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
-<text x="524.5" y="1823.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Denial of service – onbeschikbaar</text>
-<circle cx="505.5" cy="1841" r="10" fill="#db2777"/>
-<text x="505.5" y="1846.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
-<text x="524.5" y="1846.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Elevation of privilege – meer rechten</text>
-<text x="904.5" y="1732.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[code]</text>
-<text x="1024.5" y="1732.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">gezien in code of config</text>
-<text x="904.5" y="1757.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[README]</text>
-<text x="1024.5" y="1757.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">alleen in de README beschreven</text>
-<text x="904.5" y="1782.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[onbevestigd]</text>
-<text x="1024.5" y="1782.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">niet gezien; niet als feit lezen</text>
-<text x="904.5" y="1807.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[nieuw]</text>
-<text x="1024.5" y="1807.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">sinds v0.1.80 (AI-acties, pdf, historielimieten); niet in deze run in code nagelezen</text>
-<text x="904.5" y="1834.0" font-size="13" font-weight="normal" fill="#475569" text-anchor="start" font-style="italic">restrisico laag/middel = inschatting uit het model; nieuwe items hebben nog geen inschatting.</text>
+<text x="40" y="86" font-size="16" fill="#4b5563">Offline macOS-klembordapp in Rust (marcelkoopman/mac-apps). Basis: dreigingsmodel v0.1.78, aangevuld met lokale AI-acties, pdf-verwerking en historielimieten (sinds v0.1.80),</text>
+<text x="40" y="104" font-size="16" fill="#4b5563">en met docx-verwerking, feedback per mail, lokale meldingen en de Quick Look-/thumbnailcache van het systeem (elementen 9–12).</text>
+<text x="40" y="126" font-size="15" fill="#b45309">Niet op een echte Mac getest. Nieuw in elementen 9–12: [code] = in de code gezien; [onbevestigd] (o.a. sandbox-gedrag van Quick Look, systeem-thumbnailcache) is niet geverifieerd.</text>
+<text x="40" y="152" font-size="22" font-weight="bold" fill="#111827">Dataflowdiagram met vertrouwensgrenzen</text>
+<rect x="380" y="500" width="330" height="250" rx="14" fill="#b45309" fill-opacity="0.06" stroke="#b45309" stroke-width="2.5" stroke-dasharray="10 7"/>
+<rect x="396" y="488" width="216.640625" height="24" rx="6" fill="#fff" stroke="#b45309" stroke-width="1.5"/>
+<text x="406.0" y="505.0" font-size="15" font-weight="bold" fill="#b45309" text-anchor="start">OS-klembord (gedeeld)</text>
+<rect x="770" y="180" width="690" height="795" rx="14" fill="#2563eb" fill-opacity="0.06" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="10 7"/>
+<rect x="786" y="168" width="372.15625" height="24" rx="6" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="796.0" y="185.0" font-size="15" font-weight="bold" fill="#2563eb" text-anchor="start">App Sandbox (geen netwerk-entitlement)</text>
+<rect x="1530" y="180" width="350" height="270" rx="14" fill="#059669" fill-opacity="0.06" stroke="#059669" stroke-width="2.5" stroke-dasharray="10 7"/>
+<rect x="1546" y="168" width="297.046875" height="24" rx="6" fill="#fff" stroke="#059669" stroke-width="1.5"/>
+<text x="1556.0" y="185.0" font-size="15" font-weight="bold" fill="#059669" text-anchor="start">On-device model (geen netwerk)</text>
+<rect x="1530" y="510" width="350" height="270" rx="14" fill="#7c3aed" fill-opacity="0.06" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="10 7"/>
+<rect x="1546" y="498" width="211.625" height="24" rx="6" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="1556.0" y="515.0" font-size="15" font-weight="bold" fill="#7c3aed" text-anchor="start">OS-frameworks via FFI</text>
+<rect x="760" y="1020" width="560" height="160" rx="14" fill="#6b7280" fill-opacity="0.06" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="10 7"/>
+<rect x="776" y="1168" width="446.46875" height="24" rx="6" fill="#fff" stroke="#6b7280" stroke-width="1.5"/>
+<text x="786.0" y="1185.0" font-size="15" font-weight="bold" fill="#6b7280" text-anchor="start">Systeem, buiten de app (gedrag niet geverifieerd)</text>
+<rect x="40" y="230" width="250" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="165.0" y="275.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Gebruiker</text>
+<text x="165.0" y="297.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">sneltoets, kaart, drop/open</text>
+<circle cx="42" cy="232" r="13" fill="#111827"/>
+<text x="42.0" y="237.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<circle cx="278" cy="332" r="11" fill="#7c3aed"/>
+<text x="278.0" y="337.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<rect x="40" y="570" width="250" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="165.0" y="615.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Andere apps</text>
+<text x="165.0" y="637.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">Finder, Safari, Foto’s …</text>
+<circle cx="42" cy="572" r="13" fill="#111827"/>
+<text x="42.0" y="577.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<circle cx="278" cy="672" r="11" fill="#7c3aed"/>
+<text x="278.0" y="677.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<rect x="410" y="590" width="270" height="64" fill="#fffbeb"/>
+<line x1="410" y1="590" x2="680" y2="590" stroke="#92400e" stroke-width="2.5"/><line x1="410" y1="654" x2="680" y2="654" stroke="#92400e" stroke-width="2.5"/><line x1="410" y1="590" x2="410" y2="654" stroke="#92400e" stroke-width="2.5"/>
+<text x="545.0" y="616.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">NSPasteboard</text>
+<text x="545.0" y="638.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">changeCount + inhoud</text>
+<circle cx="410" cy="590" r="13" fill="#111827"/>
+<text x="410.0" y="595.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">2</text>
+<circle cx="668" cy="656" r="11" fill="#2563eb"/>
+<text x="668.0" y="661.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1040" cy="370" r="125" fill="#eef2ff" stroke="#4338ca" stroke-width="2.5"/>
+<text x="1040.0" y="343.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Copycraft</text>
+<text x="1040.0" y="365.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Rust-proces</text>
+<text x="1040.0" y="387.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">detectie, decoders,</text>
+<text x="1040.0" y="409.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">regex, tabellen</text>
+<circle cx="950.0" cy="280.0" r="13" fill="#111827"/>
+<text x="950.0" y="285.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
+<circle cx="1108.75" cy="263.75" r="11" fill="#dc2626"/>
+<text x="1108.8" y="268.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<circle cx="1134.75" cy="263.75" r="11" fill="#2563eb"/>
+<text x="1134.8" y="268.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1160.75" cy="263.75" r="11" fill="#059669"/>
+<text x="1160.8" y="268.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<circle cx="1186.75" cy="263.75" r="11" fill="#db2777"/>
+<text x="1186.8" y="268.8" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<rect x="800" y="640" width="200" height="86" fill="#fffbeb"/>
+<line x1="800" y1="640" x2="1000" y2="640" stroke="#92400e" stroke-width="2.5"/><line x1="800" y1="726" x2="1000" y2="726" stroke="#92400e" stroke-width="2.5"/><line x1="800" y1="640" x2="800" y2="726" stroke="#92400e" stroke-width="2.5"/>
+<text x="900.0" y="666.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Geschiedenis</text>
+<text x="900.0" y="688.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">alleen in geheugen</text>
+<text x="900.0" y="710.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">5 / 20 / 200 MB</text>
+<circle cx="800" cy="640" r="13" fill="#111827"/>
+<text x="800.0" y="645.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">4</text>
+<circle cx="962" cy="728" r="11" fill="#2563eb"/>
+<text x="962.0" y="733.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="988" cy="728" r="11" fill="#059669"/>
+<text x="988.0" y="733.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<rect x="1025" y="640" width="190" height="86" fill="#fffbeb"/>
+<line x1="1025" y1="640" x2="1215" y2="640" stroke="#92400e" stroke-width="2.5"/><line x1="1025" y1="726" x2="1215" y2="726" stroke="#92400e" stroke-width="2.5"/><line x1="1025" y1="640" x2="1025" y2="726" stroke="#92400e" stroke-width="2.5"/>
+<text x="1120.0" y="666.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Instellingen</text>
+<text x="1120.0" y="688.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">user defaults</text>
+<text x="1120.0" y="710.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">(schijf)</text>
+<circle cx="1025" cy="640" r="13" fill="#111827"/>
+<text x="1025.0" y="645.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">5</text>
+<circle cx="1203" cy="728" r="11" fill="#dc2626"/>
+<text x="1203.0" y="733.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<rect x="1240" y="640" width="195" height="86" fill="#fffbeb"/>
+<line x1="1240" y1="640" x2="1435" y2="640" stroke="#92400e" stroke-width="2.5"/><line x1="1240" y1="726" x2="1435" y2="726" stroke="#92400e" stroke-width="2.5"/><line x1="1240" y1="640" x2="1240" y2="726" stroke="#92400e" stroke-width="2.5"/>
+<text x="1337.5" y="666.0" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">Logs/diagnostiek</text>
+<text x="1337.5" y="688.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">os_log, export</text>
+<text x="1337.5" y="710.0" font-size="13" font-weight="normal" fill="#1f2937" text-anchor="middle">vaste events</text>
+<circle cx="1240" cy="640" r="13" fill="#111827"/>
+<text x="1240.0" y="645.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">6</text>
+<circle cx="1397" cy="728" r="11" fill="#2563eb"/>
+<text x="1397.0" y="733.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1423" cy="728" r="11" fill="#d97706"/>
+<text x="1423.0" y="733.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
+<circle cx="1705" cy="320" r="95" fill="#ecfdf5" stroke="#047857" stroke-width="2.5"/>
+<text x="1705.0" y="293.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">mac-ai</text>
+<text x="1705.0" y="315.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Swift-bridge →</text>
+<text x="1705.0" y="337.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Foundation</text>
+<text x="1705.0" y="359.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Models</text>
+<circle cx="1636.6" cy="251.60000000000002" r="13" fill="#111827"/>
+<text x="1636.6" y="256.6" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">7</text>
+<circle cx="1757.25" cy="239.25" r="11" fill="#2563eb"/>
+<text x="1757.2" y="244.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1783.25" cy="239.25" r="11" fill="#dc2626"/>
+<text x="1783.2" y="244.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<circle cx="1809.25" cy="239.25" r="11" fill="#db2777"/>
+<text x="1809.2" y="244.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<circle cx="1705" cy="650" r="95" fill="#f5f3ff" stroke="#6d28d9" stroke-width="2.5"/>
+<text x="1705.0" y="634.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">PDFKit</text>
+<text x="1705.0" y="656.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Vision (OCR)</text>
+<text x="1705.0" y="678.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">ImageIO</text>
+<circle cx="1636.6" cy="581.6" r="13" fill="#111827"/>
+<text x="1636.6" y="586.6" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">8</text>
+<circle cx="1757.25" cy="569.25" r="11" fill="#059669"/>
+<text x="1757.2" y="574.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<circle cx="1783.25" cy="569.25" r="11" fill="#db2777"/>
+<text x="1783.2" y="574.2" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<circle cx="880" cy="895" r="62" fill="#fefce8" stroke="#a16207" stroke-width="2.5"/>
+<text x="880.0" y="879.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Feedback</text>
+<text x="880.0" y="901.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">mailto-</text>
+<text x="880.0" y="923.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">venster</text>
+<circle cx="835.36" cy="850.36" r="13" fill="#111827"/>
+<text x="835.4" y="855.4" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">9</text>
+<circle cx="914.1" cy="842.3" r="11" fill="#2563eb"/>
+<text x="914.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="940.1" cy="842.3" r="11" fill="#059669"/>
+<text x="940.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<circle cx="1040" cy="895" r="62" fill="#eef2ff" stroke="#4338ca" stroke-width="2.5"/>
+<text x="1040.0" y="879.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">docx-lezer</text>
+<text x="1040.0" y="901.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">zip + XML,</text>
+<text x="1040.0" y="923.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">geheugen</text>
+<circle cx="995.36" cy="850.36" r="13" fill="#111827"/>
+<text x="995.4" y="855.4" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">10</text>
+<circle cx="1074.1" cy="842.3" r="11" fill="#059669"/>
+<text x="1074.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<circle cx="1100.1" cy="842.3" r="11" fill="#dc2626"/>
+<text x="1100.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<circle cx="1126.1" cy="842.3" r="11" fill="#2563eb"/>
+<text x="1126.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1235" cy="895" r="62" fill="#fdf2f8" stroke="#be185d" stroke-width="2.5"/>
+<text x="1235.0" y="879.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Meldingen</text>
+<text x="1235.0" y="901.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">lokaal,</text>
+<text x="1235.0" y="923.0" font-size="13.5" font-weight="normal" fill="#1f2937" text-anchor="middle">geen inhoud</text>
+<circle cx="1190.36" cy="850.36" r="13" fill="#111827"/>
+<text x="1190.4" y="855.4" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">11</text>
+<circle cx="1269.1" cy="842.3" r="11" fill="#2563eb"/>
+<text x="1269.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1295.1" cy="842.3" r="11" fill="#059669"/>
+<text x="1295.1" y="847.3" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<rect x="805" y="1055" width="150" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="880.0" y="1089.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Mail-app</text>
+<text x="880.0" y="1111.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">(mailto)</text>
+<text x="880.0" y="1133.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">jij verstuurt</text>
+<circle cx="807" cy="1057" r="13" fill="#111827"/>
+<text x="807.0" y="1062.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">9</text>
+<circle cx="943" cy="1157" r="11" fill="#2563eb"/>
+<text x="943.0" y="1162.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<rect x="965" y="1055" width="150" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="1040.0" y="1089.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Quick Look</text>
+<text x="1040.0" y="1111.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">+ thumbnail-</text>
+<text x="1040.0" y="1133.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">cache (systeem)</text>
+<circle cx="967" cy="1057" r="13" fill="#111827"/>
+<text x="967.0" y="1062.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">12</text>
+<circle cx="1051" cy="1157" r="11" fill="#2563eb"/>
+<text x="1051.0" y="1162.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<circle cx="1077" cy="1157" r="11" fill="#db2777"/>
+<text x="1077.0" y="1162.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<circle cx="1103" cy="1157" r="11" fill="#059669"/>
+<text x="1103.0" y="1162.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<rect x="1160" y="1055" width="150" height="100" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="1235.0" y="1089.0" font-size="17" font-weight="bold" fill="#1f2937" text-anchor="middle">Meldingen-</text>
+<text x="1235.0" y="1111.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">centrum</text>
+<text x="1235.0" y="1133.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="middle">(macOS)</text>
+<circle cx="1162" cy="1057" r="13" fill="#111827"/>
+<text x="1162.0" y="1062.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">11</text>
+<circle cx="1298" cy="1157" r="11" fill="#2563eb"/>
+<text x="1298.0" y="1162.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<path d="M290,265 L912,325" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="410.171875" y="263.5" width="379.65625" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="600.0" y="279.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">sneltoets, drop/open (tekst 8 MB, beeld/pdf/docx 32 MB)</text>
+<path d="M922,405 C700,430 460,400 292,310" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="478.8984375" y="388.5" width="242.203125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="600.0" y="404.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kaart, resultaat, Save naar bestand</text>
+<path d="M290,620 L408,620" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="321.5625" y="590.5" width="46.875" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="345.0" y="606.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kopie</text>
+<path d="M600,588 C640,500 820,470 935,440" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="456.5390625" y="438.0" width="206.921875" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="560.0" y="454.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">poll changeCount,</text>
+<text x="560.0" y="471.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">lezen volgens accessBehavior</text>
+<path d="M965,475 C880,590 760,640 682,648" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="721.21875" y="575.0" width="137.5625" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="790.0" y="591.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">Copy (marker-type,</text>
+<text x="790.0" y="608.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">concealed)</text>
+<path d="M960,470 L915,636" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="913.9375" y="558.5" width="48.125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="938.0" y="574.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">items</text>
+<path d="M1040,495 L1110,636" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1046.09375" y="558.5" width="63.8125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1078.0" y="574.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">settings</text>
+<path d="M1110,490 L1305,636" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1202.109375" y="548.5" width="55.78125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1230.0" y="564.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">events</text>
+<path d="M1165,320 L1608,305" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1317.984375" y="270.0" width="134.03125" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1385.0" y="286.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">kaarttekst als data</text>
+<text x="1385.0" y="303.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">tussen markers</text>
+<path d="M1612,345 L1168,385" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1296.9609375" y="358.5" width="176.078125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1385.0" y="374.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">resultaat (niets bewaard)</text>
+<path d="M1155,420 L1615,620" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1206.4140625" y="471.5" width="187.171875" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1300.0" y="487.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">pdf ≤32 MB / 100 p., beeld</text>
+<path d="M1612,675 C1450,600 1300,500 1145,445" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1333.2734375" y="540.5" width="85.453125" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1376.0" y="556.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">tekst / OCR</text>
+<path d="M935,455 C830,470 785,530 785,640 L785,810 C785,860 790,882 820,890" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="690.40625" y="775.0" width="89.1875" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="735.0" y="791.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">formulier</text>
+<text x="735.0" y="808.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">(jouw tekst)</text>
+<path d="M1012,495 L1012,838" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1037.21875" y="770.0" width="125.5625" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1100.0" y="786.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">bytes in, tekst uit</text>
+<text x="1100.0" y="803.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">(≤ 32 / 8 MB)</text>
+<path d="M1129,453 L1227,510 L1227,832" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1267.90625" y="763.5" width="124.1875" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1330.0" y="779.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">alleen actienaam</text>
+<path d="M880,957 L880,1053" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="803.8125" y="986.5" width="152.375" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="880.0" y="1002.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">mailto ≤ 2000 tekens</text>
+<path d="M1040,957 L1040,1053" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="992.1015625" y="978.0" width="95.796875" height="40" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1040.0" y="994.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">bestandspad</text>
+<text x="1040.0" y="1011.0" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">(1e pagina)</text>
+<path d="M1235,957 L1235,1053" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<rect x="1194.6796875" y="986.5" width="80.640625" height="23" rx="4" fill="#fff" fill-opacity="0.95"/>
+<text x="1235.0" y="1002.5" font-size="13" font-weight="normal" fill="#334155" text-anchor="middle">actienaam</text>
+<text x="40.0" y="1256.0" font-size="22" font-weight="bold" fill="#1f2937" text-anchor="start">Bedreigingen en bestaande mitigaties per element</text>
+<rect x="24.5" y="1270" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="52.5" cy="1296" r="13" fill="#111827"/>
+<text x="52.5" y="1301.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<text x="72.5" y="1301.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Externe entiteiten (gebruiker, andere apps)</text>
+<line x1="40.5" y1="1316" x2="463.5" y2="1316" stroke="#e5e7eb"/>
+<circle cx="51.5" cy="1333" r="11" fill="#7c3aed"/>
+<text x="51.5" y="1338.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<text x="74.5" y="1338.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere app vervalst een kopie als Copycraft of</text>
+<text x="74.5" y="1356.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">als app op de negeerlijst.</text>
+<text x="74.5" y="1374.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Alleen eigen marker-type [README]; geen</text>
+<text x="74.5" y="1392.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">bron-authenticatie gezien.</text>
+<rect x="74.5" y="1400" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="81.5" y="1414.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<circle cx="51.5" cy="1441" r="11" fill="#7c3aed"/>
+<text x="51.5" y="1446.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<text x="74.5" y="1446.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere app vangt de sneltoets ⌃⌘C of bootst de</text>
+<text x="74.5" y="1464.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">overlay na.</text>
+<text x="74.5" y="1482.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Geen mitigatie gezien.</text>
+<rect x="74.5" y="1490" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="81.5" y="1504.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<rect x="496.5" y="1270" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="524.5" cy="1296" r="13" fill="#111827"/>
+<text x="524.5" y="1301.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">2</text>
+<text x="544.5" y="1301.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">OS-klembord (NSPasteboard)</text>
+<line x1="512.5" y1="1316" x2="935.5" y2="1316" stroke="#e5e7eb"/>
+<circle cx="523.5" cy="1333" r="11" fill="#2563eb"/>
+<text x="523.5" y="1338.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="546.5" y="1338.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Andere apps lezen het klembord, ook wat</text>
+<text x="546.5" y="1356.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Copycraft terugschrijft.</text>
+<text x="546.5" y="1374.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Gevoelige resultaten "concealed" [README; code</text>
+<text x="546.5" y="1392.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">onbevestigd]. Meelezen door andere apps is een</text>
+<text x="546.5" y="1410.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">OS-eigenschap.</text>
+<rect x="546.5" y="1418" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="553.5" y="1432.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<rect x="968.5" y="1270" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="996.5" cy="1296" r="13" fill="#111827"/>
+<text x="996.5" y="1301.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
+<text x="1016.5" y="1301.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Copycraft-proces</text>
+<line x1="984.5" y1="1316" x2="1407.5" y2="1316" stroke="#e5e7eb"/>
+<circle cx="995.5" cy="1333" r="11" fill="#dc2626"/>
+<text x="995.5" y="1338.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="1018.5" y="1338.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Supply chain: kwaadaardige crate of gekaapte</text>
+<text x="1018.5" y="1356.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Action.</text>
+<text x="1018.5" y="1374.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ cargo audit op push/PR/wekelijks [code];</text>
+<text x="1018.5" y="1392.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">offline-check [README]. Actions op tag, niet SHA;</text>
+<text x="1018.5" y="1410.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">yanked-check uit [code].</text>
+<rect x="1018.5" y="1418" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1025.5" y="1432.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="995.5" cy="1459" r="11" fill="#2563eb"/>
+<text x="995.5" y="1464.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1018.5" y="1464.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Leest secrets of inhoud van genegeerde apps.</text>
+<text x="1018.5" y="1482.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ accessBehavior-strategie, RegexSet-labels [code];</text>
+<text x="1018.5" y="1500.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">negeerlijst, concealed overslaan [README].</text>
+<rect x="1018.5" y="1508" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1025.5" y="1522.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="995.5" cy="1549" r="11" fill="#059669"/>
+<text x="995.5" y="1554.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="1018.5" y="1554.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Enorme of misvormde input (CSV, YAML,</text>
+<text x="1018.5" y="1572.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Base64), ReDoS.</text>
+<text x="1018.5" y="1590.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ regex lineair [code]; drop 8/32 MB, tabel ≤100k</text>
+<text x="1018.5" y="1608.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">rijen, achtergrondthread [README]. YAML-bomlimiet</text>
+<text x="1018.5" y="1626.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
+<rect x="1018.5" y="1634" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1025.5" y="1648.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="995.5" cy="1675" r="11" fill="#db2777"/>
+<text x="995.5" y="1680.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<text x="1018.5" y="1680.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">unsafe/FFI-fouten; Visit opent kwaadaardige</text>
+<text x="1018.5" y="1698.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">URL.</text>
+<text x="1018.5" y="1716.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Sandbox: alleen user-selected rw, geen netwerk;</text>
+<text x="1018.5" y="1734.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Visit alleen http/https [README]. unsafe-audit</text>
+<text x="1018.5" y="1752.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
+<rect x="1018.5" y="1760" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1025.5" y="1774.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<rect x="1440.5" y="1270" width="455" height="522" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="1468.5" cy="1296" r="13" fill="#111827"/>
+<text x="1468.5" y="1301.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">4</text>
+<text x="1488.5" y="1301.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Geschiedenis (alleen geheugen)</text>
+<line x1="1456.5" y1="1316" x2="1879.5" y2="1316" stroke="#e5e7eb"/>
+<circle cx="1467.5" cy="1333" r="11" fill="#2563eb"/>
+<text x="1467.5" y="1338.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1490.5" y="1338.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Memory- of core dump bevat de geschiedenis.</text>
+<text x="1490.5" y="1356.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ zeroize + leakguard [code]; wissen bij lock, slaap,</text>
+<text x="1490.5" y="1374.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">gebruikerswissel, na 15 min [README]. Volledigheid</text>
+<text x="1490.5" y="1392.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
+<rect x="1490.5" y="1400" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1497.5" y="1414.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="1467.5" cy="1441" r="11" fill="#2563eb"/>
+<text x="1467.5" y="1446.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1490.5" y="1446.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Persistentie op schijf (temp, oude bestanden).</text>
+<text x="1490.5" y="1464.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Niet op schijf; oude copycraft-history-* en temp-map</text>
+<text x="1490.5" y="1482.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Foto’s worden gewist [README]. Swap valt buiten de</text>
+<text x="1490.5" y="1500.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">app.</text>
+<rect x="1490.5" y="1508" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="1497.5" y="1522.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<circle cx="1467.5" cy="1549" r="11" fill="#059669"/>
+<text x="1467.5" y="1554.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="1490.5" y="1554.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Geheugen loopt vol.</text>
+<text x="1490.5" y="1572.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Limiet 5 MB tekst, 20 MB afbeelding, 200 MB totaal</text>
+<text x="1490.5" y="1590.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README] [nieuw].</text>
+<rect x="1490.5" y="1598" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="1497.5" y="1612.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<rect x="24.5" y="1809" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="52.5" cy="1835" r="13" fill="#111827"/>
+<text x="52.5" y="1840.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">5</text>
+<text x="72.5" y="1840.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Instellingen (user defaults)</text>
+<line x1="40.5" y1="1855" x2="463.5" y2="1855" stroke="#e5e7eb"/>
+<circle cx="51.5" cy="1872" r="11" fill="#dc2626"/>
+<text x="51.5" y="1877.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="74.5" y="1877.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Negeerlijst leeg, privacyfilter uit, bewaartermijn</text>
+<text x="74.5" y="1895.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">"tot gewist".</text>
+<text x="74.5" y="1913.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Negeerlijst-validatie: reverse-DNS, max. 50</text>
+<text x="74.5" y="1931.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README]. Geen integriteitscontrole.</text>
+<rect x="74.5" y="1939" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="81.5" y="1953.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="51.5" cy="1980" r="11" fill="#dc2626"/>
+<text x="51.5" y="1985.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="74.5" y="1985.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Login item: bundle vervangen.</text>
+<text x="74.5" y="2003.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ SMAppService, standaard uit [README].</text>
+<text x="74.5" y="2021.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Signing/notarisatie [onbevestigd].</text>
+<rect x="74.5" y="2029" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="81.5" y="2043.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<rect x="496.5" y="1809" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="524.5" cy="1835" r="13" fill="#111827"/>
+<text x="524.5" y="1840.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">6</text>
+<text x="544.5" y="1840.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Logs en diagnostiek</text>
+<line x1="512.5" y1="1855" x2="935.5" y2="1855" stroke="#e5e7eb"/>
+<circle cx="523.5" cy="1872" r="11" fill="#2563eb"/>
+<text x="523.5" y="1877.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="546.5" y="1877.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Logs of export lekken klembordinhoud.</text>
+<text x="546.5" y="1895.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Geen vrije tekst; ErrorKind zonder fouttekst; export</text>
+<text x="546.5" y="1913.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">alleen huidige run [code].</text>
+<rect x="546.5" y="1921" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="553.5" y="1935.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<circle cx="523.5" cy="1962" r="11" fill="#d97706"/>
+<text x="523.5" y="1967.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
+<text x="546.5" y="1967.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Achteraf niet na te gaan wat gelezen of geplakt</text>
+<text x="546.5" y="1985.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">is.</text>
+<text x="546.5" y="2003.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Bewust: alleen vaste events (enum zonder String,</text>
+<text x="546.5" y="2021.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">met test) [code].</text>
+<rect x="546.5" y="2029" width="102.328125" height="19" rx="9" fill="#16a34a" fill-opacity="0.12" stroke="#16a34a"/>
+<text x="553.5" y="2043.0" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="start">restrisico: laag</text>
+<rect x="968.5" y="1809" width="455" height="252" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+<circle cx="996.5" cy="1835" r="13" fill="#111827"/>
+<text x="996.5" y="1840.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">7</text>
+<text x="1016.5" y="1840.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">On-device model (mac-ai)</text>
+<line x1="984.5" y1="1855" x2="1407.5" y2="1855" stroke="#e5e7eb"/>
+<circle cx="995.5" cy="1872" r="11" fill="#2563eb"/>
+<text x="995.5" y="1877.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1018.5" y="1877.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Kaartinhoud verlaat het apparaat of blijft achter.</text>
+<text x="1018.5" y="1895.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Apple Foundation Models on-device, geen netwerk;</text>
+<text x="1018.5" y="1913.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">niets gelogd of bewaard [nieuw].</text>
+<circle cx="995.5" cy="1940" r="11" fill="#dc2626"/>
+<text x="995.5" y="1945.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="1018.5" y="1945.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Prompt-injectie via gekopieerde tekst.</text>
+<text x="1018.5" y="1963.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Kaarttekst als data tussen markers [nieuw].</text>
+<circle cx="995.5" cy="1990" r="11" fill="#db2777"/>
+<text x="995.5" y="1995.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<text x="1018.5" y="1995.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Model voert acties uit namens aanvaller.</text>
+<text x="1018.5" y="2013.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Model krijgt geen tools [nieuw]. Swift-bridge is FFI:</text>
+<text x="1018.5" y="2031.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">unsafe-audit [onbevestigd].</text>
+<rect x="1440.5" y="1809" width="455" height="252" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="1468.5" cy="1835" r="13" fill="#111827"/>
+<text x="1468.5" y="1840.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">8</text>
+<text x="1488.5" y="1840.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">OS-frameworks (PDFKit, Vision, ImageIO)</text>
+<line x1="1456.5" y1="1855" x2="1879.5" y2="1855" stroke="#e5e7eb"/>
+<circle cx="1467.5" cy="1872" r="11" fill="#059669"/>
+<text x="1467.5" y="1877.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="1490.5" y="1877.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">pdf- of beeldbom, dure OCR.</text>
+<text x="1490.5" y="1895.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ pdf ≤32 MB en ≤100 pagina’s [nieuw]; beeld ≤20</text>
+<text x="1490.5" y="1913.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">MB gedecodeerd, 50 MP [README]; image-crate alleen</text>
+<text x="1490.5" y="1931.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">jpeg/png/tiff [code].</text>
+<rect x="1490.5" y="1939" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1497.5" y="1953.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<circle cx="1467.5" cy="1980" r="11" fill="#db2777"/>
+<text x="1467.5" y="1985.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<text x="1490.5" y="1985.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Kwaadaardige pdf of afbeelding in native parser.</text>
+<text x="1490.5" y="2003.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ App Sandbox [README]. Native parsers blijven</text>
+<text x="1490.5" y="2021.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">OS-aanvalsoppervlak.</text>
+<rect x="1490.5" y="2029" width="117.640625" height="19" rx="9" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c"/>
+<text x="1497.5" y="2043.0" font-size="12" font-weight="normal" fill="#ea580c" text-anchor="start">restrisico: middel</text>
+<rect x="24.5" y="2078" width="455" height="438" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="52.5" cy="2104" r="13" fill="#111827"/>
+<text x="52.5" y="2109.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">9</text>
+<text x="72.5" y="2109.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Feedback per mail (mailto)</text>
+<line x1="40.5" y1="2124" x2="463.5" y2="2124" stroke="#e5e7eb"/>
+<circle cx="51.5" cy="2141" r="11" fill="#2563eb"/>
+<text x="51.5" y="2146.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="74.5" y="2146.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Mail bevat per ongeluk klembordinhoud of</text>
+<text x="74.5" y="2164.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">persoonsgegevens.</text>
+<text x="74.5" y="2182.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Alleen wat je zelf typt plus Copycraft- en</text>
+<text x="74.5" y="2200.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">macOS-versie; niets automatisch (geen klembord,</text>
+<text x="74.5" y="2218.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">geschiedenis, bestandsnamen, paden, instellingen)</text>
+<text x="74.5" y="2236.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README; code-doc in mailto.rs]. Jij ziet een concept in</text>
+<text x="74.5" y="2254.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">je mail-app en verstuurt zelf; Copycraft maakt geen</text>
+<text x="74.5" y="2272.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">netwerkverbinding ervoor [README].</text>
+<circle cx="51.5" cy="2299" r="11" fill="#2563eb"/>
+<text x="51.5" y="2304.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="74.5" y="2304.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Klembord-terugval zet de hele mail als platte</text>
+<text x="74.5" y="2322.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">tekst op het klembord.</text>
+<text x="74.5" y="2340.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Alleen als jij die kiest; als eigen schrijfactie</text>
+<text x="74.5" y="2358.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">gemarkeerd, dus niet in de geschiedenis [README].</text>
+<text x="74.5" y="2376.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">Andere apps kunnen het klembord lezen</text>
+<text x="74.5" y="2394.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">(OS-eigenschap).</text>
+<circle cx="51.5" cy="2421" r="11" fill="#059669"/>
+<text x="51.5" y="2426.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="74.5" y="2426.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Te lange of misvormde mailto-link.</text>
+<text x="74.5" y="2444.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Limiet 2000 tekens (MAX_MAILTO_LEN) [code];</text>
+<text x="74.5" y="2462.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">daarboven, of zonder mail-app: melding en</text>
+<text x="74.5" y="2480.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">klembord-terugval [README]. Wat de mail-app met het</text>
+<text x="74.5" y="2498.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">concept doet (bewaren) [onbevestigd].</text>
+<rect x="496.5" y="2078" width="455" height="438" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="524.5" cy="2104" r="13" fill="#111827"/>
+<text x="524.5" y="2109.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">10</text>
+<text x="544.5" y="2109.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">docx-lezer (zip + XML, in geheugen)</text>
+<line x1="512.5" y1="2124" x2="935.5" y2="2124" stroke="#e5e7eb"/>
+<circle cx="523.5" cy="2141" r="11" fill="#059669"/>
+<text x="523.5" y="2146.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="546.5" y="2146.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Zip-bom of misvormd archief.</text>
+<text x="546.5" y="2164.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Limieten: bestand 32 MB, uitgepakt 32 MB, 10.000</text>
+<text x="546.5" y="2182.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">items, tekst 8 MB; opgegeven grootte moet kloppen,</text>
+<text x="546.5" y="2200.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">anders geweigerd [code, unit-tests]. Zip64 en</text>
+<text x="546.5" y="2218.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">versleuteld: melding.</text>
+<circle cx="523.5" cy="2245" r="11" fill="#dc2626"/>
+<text x="523.5" y="2250.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="546.5" y="2250.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Zip-slip of uitpakken naar schijf.</text>
+<text x="546.5" y="2268.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Niets naar schijf; alleen het item word/document.xml</text>
+<text x="546.5" y="2286.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">wordt, op naam, gelezen; geen zip-crate [code, test].</text>
+<circle cx="523.5" cy="2313" r="11" fill="#2563eb"/>
+<text x="523.5" y="2318.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="546.5" y="2318.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Documentinhoud blijft in geheugen achter.</text>
+<text x="546.5" y="2336.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Bestandsbytes, uitgepakte XML en tekst: elk één</text>
+<text x="546.5" y="2354.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">zeroizing buffer van vaste grootte, nooit gegroeid</text>
+<text x="546.5" y="2372.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[code, tests op invarianten]. Niet gedekt:</text>
+<text x="546.5" y="2390.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">inflate-venster van flate2 (32 KiB), vrijgegeven</text>
+<text x="546.5" y="2408.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">geheugen zelf [onbevestigd].</text>
+<circle cx="523.5" cy="2435" r="11" fill="#059669"/>
+<text x="523.5" y="2440.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="546.5" y="2440.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Fouten in de zelfgeschreven parser.</text>
+<text x="546.5" y="2458.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Tolerante scanner zonder unsafe; fuzzing</text>
+<text x="546.5" y="2476.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
+<rect x="968.5" y="2078" width="455" height="438" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="996.5" cy="2104" r="13" fill="#111827"/>
+<text x="996.5" y="2109.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">11</text>
+<text x="1016.5" y="2109.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Lokale meldingen</text>
+<line x1="984.5" y1="2124" x2="1407.5" y2="2124" stroke="#e5e7eb"/>
+<circle cx="995.5" cy="2141" r="11" fill="#2563eb"/>
+<text x="995.5" y="2146.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1018.5" y="2146.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Inhoud in een melding (scherm,</text>
+<text x="1018.5" y="2164.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">meldingencentrum).</text>
+<text x="1018.5" y="2182.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Alleen de actienaam of een vaste tekst; nooit</text>
+<text x="1018.5" y="2200.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">klembordinhoud, AI-resultaat, bestandsnaam of</text>
+<text x="1018.5" y="2218.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">regelnummer; niets gelogd [README]. Schakelaar per</text>
+<text x="1018.5" y="2236.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">soort (4) in Instellingen [README]. Hoe macOS</text>
+<text x="1018.5" y="2254.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">meldingen bewaart [onbevestigd].</text>
+<circle cx="995.5" cy="2281" r="11" fill="#059669"/>
+<text x="995.5" y="2286.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="1018.5" y="2286.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Meldingenspam.</text>
+<text x="1018.5" y="2304.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Max. 1 per 5 s, 1 per soort per sessie, alleen met</text>
+<text x="1018.5" y="2322.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">verborgen kaart of op de achtergrond [README].</text>
+<circle cx="995.5" cy="2349" r="11" fill="#7c3aed"/>
+<text x="995.5" y="2354.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<text x="1018.5" y="2354.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Toestemming en push.</text>
+<text x="1018.5" y="2372.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Eenmaal gevraagd, na uitleg; weigering is definitief</text>
+<text x="1018.5" y="2390.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[README]. Alleen lokaal: geen push, geen</text>
+<text x="1018.5" y="2408.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">netwerk-entitlement [README]. Niet op een echte Mac</text>
+<text x="1018.5" y="2426.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">getest.</text>
+<rect x="1440.5" y="2078" width="455" height="438" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+<circle cx="1468.5" cy="2104" r="13" fill="#111827"/>
+<text x="1468.5" y="2109.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">12</text>
+<text x="1488.5" y="2109.0" font-size="15.5" font-weight="bold" fill="#1f2937" text-anchor="start">Quick Look en thumbnail-cache (systeem)</text>
+<line x1="1456.5" y1="2124" x2="1879.5" y2="2124" stroke="#e5e7eb"/>
+<circle cx="1467.5" cy="2141" r="11" fill="#2563eb"/>
+<text x="1467.5" y="2146.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="1490.5" y="2146.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Systeem bewaart zelf een thumbnail-cache</text>
+<text x="1490.5" y="2164.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">buiten de app.</text>
+<text x="1490.5" y="2182.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ README noemt dit; Copycraft schrijft zelf geen</text>
+<text x="1490.5" y="2200.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">thumbnail of cache [README]. Of, waar en hoe lang</text>
+<text x="1490.5" y="2218.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">het systeem iets bewaart, en dat Wipe dit niet leegt, is</text>
+<text x="1490.5" y="2236.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd].</text>
+<circle cx="1467.5" cy="2263" r="11" fill="#db2777"/>
+<text x="1467.5" y="2268.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<text x="1490.5" y="2268.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Het systeem parset het document buiten de</text>
+<text x="1490.5" y="2286.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">app.</text>
+<text x="1490.5" y="2304.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Sandbox-gedrag van Quick Look voor dit bestand</text>
+<text x="1490.5" y="2322.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">[onbevestigd]; alleen de eerste pagina, nooit op de</text>
+<text x="1490.5" y="2340.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">hoofdthread [code]. Native parser blijft</text>
+<text x="1490.5" y="2358.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">OS-aanvalsoppervlak.</text>
+<circle cx="1467.5" cy="2385" r="11" fill="#059669"/>
+<text x="1467.5" y="2390.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="1490.5" y="2390.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">Quick Look reageert niet.</text>
+<text x="1490.5" y="2408.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">→ Time-out 10 s, verzoek geannuleerd, kaart valt terug</text>
+<text x="1490.5" y="2426.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">op tekst [code]. PNG alleen in geheugen; NSData en</text>
+<text x="1490.5" y="2444.0" font-size="14" font-weight="normal" fill="#374151" text-anchor="start">CGImage van het systeem niet te wissen.</text>
+<rect x="24.5" y="2553" width="1871.0" height="200" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="44.5" y="2585.0" font-size="18" font-weight="bold" fill="#1f2937" text-anchor="start">Legenda</text>
+<rect x="44.5" y="2601" width="34" height="22" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="90.5" y="2617.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Externe entiteit</text>
+<circle cx="61.5" cy="2645" r="13" fill="#eef2ff" stroke="#4338ca" stroke-width="2"/>
+<text x="90.5" y="2650.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Proces</text>
+<line x1="44.5" y1="2669" x2="78.5" y2="2669" stroke="#92400e" stroke-width="2.5"/><line x1="44.5" y1="2689" x2="78.5" y2="2689" stroke="#92400e" stroke-width="2.5"/>
+<text x="90.5" y="2684.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Datastore</text>
+<rect x="44.5" y="2703" width="34" height="22" rx="4" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="90.5" y="2719.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Vertrouwensgrens</text>
+<path d="M244.5,2612 L278.5,2612" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+<text x="290.5" y="2617.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Dataflow</text>
+<circle cx="261.5" cy="2645" r="13" fill="#111827"/>
+<text x="261.5" y="2650.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
+<text x="290.5" y="2650.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Element-nr. (DFD ↔ kaart)</text>
+<circle cx="505.5" cy="2611" r="10" fill="#7c3aed"/>
+<text x="505.5" y="2616.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S</text>
+<text x="524.5" y="2616.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Spoofing – vervalsing van identiteit</text>
+<circle cx="505.5" cy="2634" r="10" fill="#dc2626"/>
+<text x="505.5" y="2639.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">T</text>
+<text x="524.5" y="2639.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Tampering – manipulatie</text>
+<circle cx="505.5" cy="2657" r="10" fill="#d97706"/>
+<text x="505.5" y="2662.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text>
+<text x="524.5" y="2662.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Repudiation – ontkenbaarheid</text>
+<circle cx="505.5" cy="2680" r="10" fill="#2563eb"/>
+<text x="505.5" y="2685.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">I</text>
+<text x="524.5" y="2685.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Information disclosure – lekken</text>
+<circle cx="505.5" cy="2703" r="10" fill="#059669"/>
+<text x="505.5" y="2708.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">D</text>
+<text x="524.5" y="2708.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Denial of service – onbeschikbaar</text>
+<circle cx="505.5" cy="2726" r="10" fill="#db2777"/>
+<text x="505.5" y="2731.0" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">E</text>
+<text x="524.5" y="2731.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">Elevation of privilege – meer rechten</text>
+<text x="904.5" y="2617.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[code]</text>
+<text x="1024.5" y="2617.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">gezien in code of config</text>
+<text x="904.5" y="2642.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[README]</text>
+<text x="1024.5" y="2642.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">alleen in de README beschreven</text>
+<text x="904.5" y="2667.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[onbevestigd]</text>
+<text x="1024.5" y="2667.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">niet gezien; niet als feit lezen</text>
+<text x="904.5" y="2692.0" font-size="14" font-weight="bold" fill="#1f2937" text-anchor="start">[nieuw]</text>
+<text x="1024.5" y="2692.0" font-size="14" font-weight="normal" fill="#1f2937" text-anchor="start">sinds v0.1.80 (AI-acties, pdf, historielimieten); niet in code nagelezen</text>
+<text x="904.5" y="2719.0" font-size="13" font-weight="normal" fill="#475569" text-anchor="start" font-style="italic">restrisico laag/middel = inschatting uit het model; nieuwe items hebben nog geen inschatting.</text>
 </svg>
