@@ -67,7 +67,17 @@ pub fn ai_actions(data: &LaunchData) -> &'static [Action] {
         return &[];
     }
     match data.subject_text.as_deref() {
-        Some(text) if offers_text_menu(text) => ai_actions_for_kind(crate::format::detect(text)),
+        Some(text) if offers_text_menu(text) => {
+            let kind = crate::format::detect(text);
+            // A copy with a decoder chip (JWT, Base64, URL, hash, UUID, Unix time) is data to
+            // decode, not prose: no AI chip.
+            if crate::toolbar_visibility::tries_decode(kind, text)
+                && crate::decode::detect(text).is_some()
+            {
+                return &[];
+            }
+            ai_actions_for_kind(kind)
+        }
         _ => &[],
     }
 }
@@ -444,6 +454,26 @@ mod tests {
                 CommandId::Ai(Action::MoreFormal)
             ]
         );
+    }
+
+    #[test]
+    fn decodable_text_gets_no_ai_chip() {
+        for text in [
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+            "SGVsbG8sIHdvcmxkIQ==",
+            "hello%20world%21",
+            "550e8400-e29b-41d4-a716-446655440000",
+        ] {
+            let card = super::super::tests::data(SubjectKind::Text, Some(text));
+            assert!(ai_actions(&card).is_empty(), "{text}");
+            assert!(card_chips(&card).iter().all(|c| c.id != CommandId::AiMenu));
+            assert!(
+                card_chips(&card).iter().any(|c| c.id == CommandId::Decode),
+                "{text}"
+            );
+        }
+        let prose = super::super::tests::data(SubjectKind::Text, Some("some prose to look at"));
+        assert!(!ai_actions(&prose).is_empty());
     }
 
     #[test]
