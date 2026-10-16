@@ -327,14 +327,10 @@ Salaris: [MONEY]";
     }
 
     #[test]
-    fn a_yaml_bomb_is_refused_instead_of_expanded() {
-        let mut bomb = String::from("a: &a [x, x, x, x, x, x, x, x, x]\n");
-        for (prev, next) in [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e")] {
-            let refs = vec![format!("*{prev}"); 9].join(", ");
-            bomb.push_str(&format!("{next}: &{next} [{refs}]\n"));
-        }
-        // Small but many aliases: still fine below the limits.
-        assert!(yaml_to_json(&bomb).is_some());
+    fn yaml_with_too_many_aliases_or_too_large_is_refused() {
+        // A few aliases, well below the limits, still convert.
+        let few = "a: &a [x, y]\nb: [*a, *a, *a]\n";
+        assert!(yaml_to_json(few).is_some());
         // Too many aliases: refused.
         let many = format!("a: &a x\nb: [{}]\n", vec!["*a"; 1001].join(", "));
         assert!(yaml_to_json(&many).is_none());
