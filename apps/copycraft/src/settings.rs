@@ -233,6 +233,18 @@ pub fn notify_switches() -> crate::notifications::Switches {
     }
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_notify(switch: crate::notifications::Switch, on: bool) {
+    use crate::notifications::Switch;
+    let key = match switch {
+        Switch::Ai => NOTIFY_AI_KEY,
+        Switch::Ocr => NOTIFY_OCR_KEY,
+        Switch::Errors => NOTIFY_ERRORS_KEY,
+        Switch::Secret => NOTIFY_SECRET_KEY,
+    };
+    store_bool(key, on);
+}
+
 /// Whether notifications may be shown. [`crate::notifications::Permission::Unknown`] until the
 /// first notification asked.
 pub fn notify_permission() -> crate::notifications::Permission {
@@ -679,6 +691,10 @@ mod tests {
         assert_eq!(super::notify_permission(), Permission::Unknown);
         let switches = super::notify_switches();
         assert!(switches.ocr && switches.ai && switches.errors && switches.secret);
+        // A switch round-trips on its own; the others stay on.
+        super::set_notify(crate::notifications::Switch::Ocr, false);
+        let switches = super::notify_switches();
+        assert!(!switches.ocr && switches.ai && switches.errors && switches.secret);
         super::set_notify_permission(Permission::Refused);
         assert_eq!(super::notify_permission(), Permission::Refused);
     }

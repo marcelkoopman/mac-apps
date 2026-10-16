@@ -62,6 +62,20 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "De vastgezette lijst is vol",
         "The pin list is full",
     ),
+    ("group_notifications", "Meldingen", "Notifications"),
+    ("notify_switch_ai", "AI-actie klaar", "AI action done"),
+    (
+        "notify_switch_ocr",
+        "PDF-herkenning klaar",
+        "PDF recognition done",
+    ),
+    ("notify_switch_errors", "Fouten", "Errors"),
+    ("notify_switch_secret", "Gevoelige kopie", "Sensitive copy"),
+    (
+        "notify_note",
+        "Een melding bevat nooit je tekst.",
+        "A notification never contains your text.",
+    ),
     ("notify_ai_done", "{0} is klaar", "{0} is ready"),
     (
         "notify_ocr_done",

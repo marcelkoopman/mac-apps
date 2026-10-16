@@ -44,7 +44,17 @@ const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S
 /// Weergave: heading, the pages, announce and ask-before-clearing settings, three gaps and the
 /// symbols block.
 const DISPLAY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-const HEIGHT: f64 = MARGIN + GENERAL_H + SECTION_GAP + PRIVACY_H + SECTION_GAP + DISPLAY_H + MARGIN;
+/// Meldingen: heading, the four switches in two rows of two, one gap and a note.
+const NOTIFY_H: f64 = HEAD_H + 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
+const HEIGHT: f64 = MARGIN
+    + GENERAL_H
+    + SECTION_GAP
+    + PRIVACY_H
+    + SECTION_GAP
+    + NOTIFY_H
+    + SECTION_GAP
+    + DISPLAY_H
+    + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
 const _: () = assert!(SETTING_H == 46.0);
@@ -52,7 +62,17 @@ const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(GENERAL_H == 230.0);
 const _: () = assert!(PRIVACY_H == 248.0);
 const _: () = assert!(DISPLAY_H == 302.0);
-const _: () = assert!(HEIGHT == 844.0);
+const _: () = assert!(NOTIFY_H == 104.0);
+const _: () = assert!(HEIGHT == 964.0);
+
+/// The notification switches in the order of their checkboxes (row by row), with the title key.
+/// The checkbox's tag is the index.
+const NOTIFY_SWITCHES: [(crate::notifications::Switch, &str); 4] = [
+    (crate::notifications::Switch::Ai, "notify_switch_ai"),
+    (crate::notifications::Switch::Ocr, "notify_switch_ocr"),
+    (crate::notifications::Switch::Errors, "notify_switch_errors"),
+    (crate::notifications::Switch::Secret, "notify_switch_secret"),
+];
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -222,6 +242,21 @@ define_class!(
                 return;
             };
             settings::set_confirm_clear(button.state() == NSControlStateValueOn);
+        }
+
+        /// One of the four notification switches; its tag is the index in [`NOTIFY_SWITCHES`].
+        #[unsafe(method(notifyToggled:))]
+        fn notify_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            let Some(switch) = usize::try_from(button.tag())
+                .ok()
+                .and_then(|index| NOTIFY_SWITCHES.get(index))
+            else {
+                return;
+            };
+            settings::set_notify(switch.0, button.state() == NSControlStateValueOn);
         }
 
         #[unsafe(method(blurToggled:))]
@@ -530,6 +565,35 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(add.view());
     IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
     refresh_ignore_button();
+
+    gap(&mut top, SECTION_GAP);
+    place_heading(
+        mtm,
+        &body,
+        crate::locale::t("group_notifications"),
+        take(&mut top, HEAD_H),
+    );
+    let switches = settings::notify_switches();
+    let column = (WIDTH - MARGIN * 2.0) / 2.0;
+    for (row_index, pair) in NOTIFY_SWITCHES.chunks(2).enumerate() {
+        let y = take(&mut top, BUTTON_H);
+        for (column_index, (switch, key)) in pair.iter().enumerate() {
+            let at = row_index * 2 + column_index;
+            let box_ = checkbox(mtm, crate::locale::t(key), y);
+            box_.setFrame(NSRect::new(
+                NSPoint::new(MARGIN + column * column_index as f64, y),
+                NSSize::new(column, BUTTON_H),
+            ));
+            box_.setTag(at as isize);
+            box_.setState(state_of(switches.is_on(*switch)));
+            wire(&box_, sel!(notifyToggled:));
+            body.addSubview(&box_);
+        }
+        if row_index == 0 {
+            gap(&mut top, mac_ui::metrics::SPACE_S);
+        }
+    }
+    place_explanation(mtm, &body, crate::locale::t("notify_note"), &mut top);
 
     gap(&mut top, SECTION_GAP);
     place_heading(
