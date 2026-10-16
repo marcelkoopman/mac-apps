@@ -71,12 +71,23 @@ const _: () = assert!(HEIGHT == 964.0 + SECTION_GAP + FEEDBACK_H);
 
 /// The notification switches in the order of their checkboxes (row by row), with the title key.
 /// The checkbox's tag is the index.
-const NOTIFY_SWITCHES: [(crate::notifications::Switch, &str); 4] = [
-    (crate::notifications::Switch::Ai, "notify_switch_ai"),
-    (crate::notifications::Switch::Ocr, "notify_switch_ocr"),
-    (crate::notifications::Switch::Errors, "notify_switch_errors"),
-    (crate::notifications::Switch::Secret, "notify_switch_secret"),
+const NOTIFY_SWITCHES: [crate::notifications::Switch; 4] = [
+    crate::notifications::Switch::Ai,
+    crate::notifications::Switch::Ocr,
+    crate::notifications::Switch::Errors,
+    crate::notifications::Switch::Secret,
 ];
+
+/// The checkbox title of a notification switch (literal keys, for the locale scan test).
+fn notify_title(switch: crate::notifications::Switch) -> &'static str {
+    use crate::notifications::Switch;
+    match switch {
+        Switch::Ai => crate::locale::t("notify_switch_ai"),
+        Switch::Ocr => crate::locale::t("notify_switch_ocr"),
+        Switch::Errors => crate::locale::t("notify_switch_errors"),
+        Switch::Secret => crate::locale::t("notify_switch_secret"),
+    }
+}
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -260,7 +271,7 @@ define_class!(
             else {
                 return;
             };
-            settings::set_notify(switch.0, button.state() == NSControlStateValueOn);
+            settings::set_notify(*switch, button.state() == NSControlStateValueOn);
         }
 
         #[unsafe(method(blurToggled:))]
@@ -591,9 +602,9 @@ fn build(mtm: MainThreadMarker) {
     let column = (WIDTH - MARGIN * 2.0) / 2.0;
     for (row_index, pair) in NOTIFY_SWITCHES.chunks(2).enumerate() {
         let y = take(&mut top, BUTTON_H);
-        for (column_index, (switch, key)) in pair.iter().enumerate() {
+        for (column_index, switch) in pair.iter().enumerate() {
             let at = row_index * 2 + column_index;
-            let box_ = checkbox(mtm, crate::locale::t(key), y);
+            let box_ = checkbox(mtm, notify_title(*switch), y);
             box_.setFrame(NSRect::new(
                 NSPoint::new(MARGIN + column * column_index as f64, y),
                 NSSize::new(column, BUTTON_H),
