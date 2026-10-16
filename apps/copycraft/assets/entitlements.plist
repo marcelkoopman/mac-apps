@@ -12,7 +12,8 @@
   - app-sandbox: required for the Mac App Store.
   - files.user-selected.read-write: "Choose file" NSOpenPanel (macos_open::choose_path)
     and "Save" NSSavePanel + std::fs::write (macos_save::choose_path, SaveJob::write_to).
-  Not needed: the on-device Foundation Models of the Apple Intelligence actions (crates/mac-ai:
+  Not needed: local notifications (UserNotifications, `mac_ui::notify`: no entitlement, no
+  Info.plist key; no push, so no `aps-environment`), the on-device Foundation Models of the Apple Intelligence actions (crates/mac-ai:
   no network, no entitlement), NSPasteboard (clipboard), Carbon global hotkey (global-hotkey crate),
   Vision text and barcode reading and the CoreImage blur (all on the device),
   NSUserDefaults, drag and drop, and Visit:
