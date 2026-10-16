@@ -197,12 +197,11 @@ pub fn ai_code_fits(text: &str) -> bool {
 /// What the preview says when code is too long for the model: with a chosen function (`whole`
 /// false) or the whole text. Names the limit.
 pub fn ai_code_too_long(whole: bool) -> String {
-    let key = if whole {
-        "ai_err_code_too_long"
+    if whole {
+        crate::locale::tf("ai_err_code_too_long", &[&AI_CODE_MAX_CHARS])
     } else {
-        "ai_err_fn_too_long"
-    };
-    crate::locale::tf(key, &[&AI_CODE_MAX_CHARS])
+        crate::locale::tf("ai_err_fn_too_long", &[&AI_CODE_MAX_CHARS])
+    }
 }
 
 /// The AI chip's menu: `actions` ([`ai_actions`]); all dimmed (with the reason as their
