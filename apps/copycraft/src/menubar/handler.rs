@@ -69,6 +69,7 @@ impl ApplicationHandler<UserEvent> for App {
                 entry,
                 result,
             } => self.finish_text(generation, entry, *result),
+            UserEvent::Notification(event) => self.notification_event(event),
         }
     }
 
@@ -79,6 +80,7 @@ impl ApplicationHandler<UserEvent> for App {
         if self.reinstall_click.take() {
             crate::macos_status_click::install(&self.tray);
         }
+        self.clear_notices_when_card_opens();
         // A closed card forgets the file, so the next hotkey shows the clipboard.
         // Open table closes the card on purpose; that window keeps the file until it closes.
         if forget_opened_file(

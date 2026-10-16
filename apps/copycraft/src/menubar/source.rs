@@ -117,13 +117,15 @@ impl App {
     /// Info text, data URL, text and barcodes of a dropped picture, on a background thread
     /// like a copied one's ([`UserEvent::DroppedImageScanned`]).
     pub(crate) fn scan_dropped_image(
-        &self,
+        &mut self,
         image: SecretBytes,
         pdf: Option<SecretBytes>,
         pdf_text: Option<Zeroizing<String>>,
     ) {
         #[cfg(target_os = "macos")]
         {
+            // Only a PDF's recognition can take long enough for a notification.
+            self.notices.pdf_scan_started = pdf.is_some().then(Instant::now);
             let spawned = std::thread::Builder::new()
                 .name("copycraft-drop-scan".into())
                 .spawn(move || {
@@ -164,8 +166,22 @@ impl App {
             return;
         };
         // A PDF keeps the text of its text layer when the scan fails.
+        let scanned = scan.is_some();
         if scan.is_some() || shown.pdf_text.is_none() {
             shown.scan = scan;
+        }
+        // A slow recognition of a PDF: a notification when the card is hidden (a failed scan
+        // says nothing).
+        let is_pdf = shown.pdf_source.is_some();
+        if let Some(started) = self.notices.pdf_scan_started.take()
+            && is_pdf
+        {
+            self.notify(
+                crate::notifications::Kind::OcrDone,
+                !scanned,
+                started.elapsed(),
+                None,
+            );
         }
         if launcher::is_open() {
             self.refresh_popup();

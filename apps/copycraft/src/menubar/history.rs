@@ -99,6 +99,14 @@ impl App {
         }
         if pin {
             self.pin_refused = !self.history.pin(id);
+            if self.pin_refused {
+                self.notify(
+                    crate::notifications::Kind::PinListFull,
+                    false,
+                    Duration::ZERO,
+                    None,
+                );
+            }
         } else {
             self.pin_refused = false;
             if !self.history.unpin(id) {
@@ -413,6 +421,7 @@ impl App {
     /// The checker has labels for a long copy: rebuild the open card (its meta line said
     /// "Checking…"), and conceal copycraft's own write that was waiting for them.
     pub(crate) fn labels_checked(&mut self) {
+        self.secret_labels_checked();
         #[cfg(target_os = "macos")]
         if let Some(change) = self.conceal_when_checked
             && crate::macos_pasteboard::change_count() == change

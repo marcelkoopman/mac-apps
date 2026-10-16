@@ -8,6 +8,7 @@
 //! only its kind ([`crate::diag::LogEvent::AiFailed`]).
 
 use super::*;
+use crate::notifications::Kind;
 use mac_ai::Action;
 
 /// The run the preview belongs to.
@@ -138,6 +139,7 @@ impl App {
         // The menu has the actions dimmed when the model is not there, and search can still
         // pick one: check again here.
         if mac_ai::availability().is_err() {
+            self.notify(Kind::AiUnavailable, false, Duration::ZERO, None);
             return;
         }
         let Some((entry, text)) = self.ai_entry() else {
@@ -211,6 +213,9 @@ impl App {
             return;
         };
         run.state = finished_state(&result);
+        let action = run.action;
+        let ready = run.state == RunState::Ready;
+        let unavailable = matches!(result, Err(mac_ai::Error::Unavailable));
         match result {
             Ok(text) if !text.trim().is_empty() => {
                 launcher::ai_preview_result(&text);
@@ -227,6 +232,14 @@ impl App {
             }
         }
         self.sync_ai_tray();
+        // Only the action's name goes into the notification, never the text or the result. A
+        // failed run says nothing (except once that the model is not available).
+        if ready {
+            let name = commands::ai_title(action);
+            self.notify(Kind::AiDone, false, Duration::ZERO, Some(name));
+        } else if unavailable {
+            self.notify(Kind::AiUnavailable, false, Duration::ZERO, None);
+        }
     }
 
     /// "Apply to clipboard": the result becomes the next text version. Undoable.

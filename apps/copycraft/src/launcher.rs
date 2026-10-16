@@ -94,6 +94,17 @@ pub enum UserEvent {
         entry: u64,
         result: Box<crate::text_ops::TextResult>,
     },
+    /// Something about notifications ([`crate::notifications`]).
+    Notification(NotificationEvent),
+}
+
+/// From the notification center (a system queue), handed to the main thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationEvent {
+    /// The user clicked a notification of this kind.
+    Clicked(crate::notifications::Kind),
+    /// The system's answer about the permission (checked, or asked after the explanation).
+    Permission(crate::notifications::Answer),
 }
 
 /// What the table window asks for: a command on its table (a step, undo, redo, a version,

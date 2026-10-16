@@ -132,6 +132,8 @@ pub(crate) struct App {
     pub(crate) diff_outcome: Option<crate::diff::Outcome>,
     /// The diff thread. One at a time.
     pub(crate) diffing: Option<Background>,
+    /// Local notifications: this session's record and what is on screen ([`super::notice`]).
+    pub(crate) notices: super::notice::Notices,
 }
 
 /// A Base64 picture on its way to the card ([`UserEvent::DecodedPicture`]): the hash of the

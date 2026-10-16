@@ -62,6 +62,39 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "De vastgezette lijst is vol",
         "The pin list is full",
     ),
+    ("notify_ai_done", "{0} is klaar", "{0} is ready"),
+    (
+        "notify_ocr_done",
+        "Tekstherkenning van de pdf is klaar",
+        "PDF text recognition is done",
+    ),
+    (
+        "notify_pin_full",
+        "De vastgezette lijst is vol",
+        "The pin list is full",
+    ),
+    (
+        "notify_ai_unavailable",
+        "Apple Intelligence is niet beschikbaar",
+        "Apple Intelligence is not available",
+    ),
+    (
+        "notify_secret",
+        "Mogelijk gevoelige tekst gekopieerd",
+        "Possibly sensitive text copied",
+    ),
+    (
+        "notify_ask_title",
+        "Meldingen toestaan?",
+        "Allow notifications?",
+    ),
+    (
+        "notify_ask_message",
+        "Copycraft kan een melding sturen als een AI-actie of tekstherkenning klaar is, of als er mogelijk gevoelige tekst is gekopieerd. Een melding bevat nooit je tekst. Alles blijft lokaal op je Mac. Na Doorgaan vraagt macOS om toestemming.",
+        "Copycraft can send a notification when an AI action or text recognition is done, or when possibly sensitive text was copied. A notification never contains your text. Everything stays local on your Mac. After Continue, macOS asks for permission.",
+    ),
+    ("notify_ask_ok", "Doorgaan", "Continue"),
+    ("notify_ask_no", "Geen meldingen", "No notifications"),
     ("tip_paused", "Gepauzeerd", "Paused"),
     ("tip_copy_ignored", "Kopie genegeerd", "Copy ignored"),
     (

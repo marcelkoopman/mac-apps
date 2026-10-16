@@ -1,0 +1,204 @@
+//! Local notifications ([`crate::notifications`]): the App side. The decision is
+//! [`crate::notifications::decide`]; this asks the permission the first time one is needed,
+//! posts it, takes it away again when the card opens, and opens the card on a click. Nothing
+//! about a notification or its content is logged.
+
+use super::*;
+#[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
+use crate::notifications::{self, Answer, Facts, Kind, Permission, Verdict};
+
+/// A notification waiting for the permission to be settled.
+pub(crate) struct NoticeWait {
+    kind: Kind,
+    /// The AI action's name for [`Kind::AiDone`].
+    action: Option<String>,
+    /// The system's own question was asked (after the explanation).
+    asked: bool,
+}
+
+/// What the App keeps about notifications: this session's record and what is on screen.
+#[derive(Default)]
+pub(crate) struct Notices {
+    session: notifications::Session,
+    /// Posted by this session and not yet taken away.
+    posted: Vec<Kind>,
+    /// The card was open when the last one was posted (it only comes off when the card opens
+    /// again, not at once).
+    posted_card_open: bool,
+    waiting: Option<NoticeWait>,
+    /// The pasteboard change a "possibly sensitive" notification was already shown for.
+    secret_told: Option<isize>,
+    /// A long copy whose labels are still being checked (its pasteboard change).
+    secret_pending: Option<isize>,
+    /// When the text recognition of the PDF on the card started.
+    pub(crate) pdf_scan_started: Option<Instant>,
+}
+
+impl App {
+    /// `kind` happened. `card_hidden` is read here; `failed` and `took` come from the caller.
+    pub(crate) fn notify(
+        &mut self,
+        kind: Kind,
+        failed: bool,
+        took: Duration,
+        action: Option<&str>,
+    ) {
+        #[cfg(target_os = "macos")]
+        {
+            let facts = Facts {
+                card_hidden: !launcher::is_open(),
+                app_frontmost: crate::macos_notify::app_is_frontmost(),
+                failed,
+                took,
+            };
+            let verdict = notifications::decide(
+                kind,
+                facts,
+                crate::settings::notify_switches(),
+                crate::settings::notify_permission(),
+                &self.notices.session,
+                Instant::now(),
+            );
+            match verdict {
+                Verdict::Send => self.post_notice(kind, action),
+                Verdict::AskPermission => {
+                    self.notices.waiting = Some(NoticeWait {
+                        kind,
+                        action: action.map(str::to_string),
+                        asked: false,
+                    });
+                    crate::macos_notify::probe_permission();
+                }
+                Verdict::Skip(_) => {}
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (kind, failed, took, action);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn post_notice(&mut self, kind: Kind, action: Option<&str>) {
+        if crate::macos_notify::post(kind, action) {
+            self.notices.session.sent(kind, Instant::now());
+            if !self.notices.posted.contains(&kind) {
+                self.notices.posted.push(kind);
+            }
+            self.notices.posted_card_open = launcher::is_open();
+        }
+    }
+
+    /// The permission question has an answer: from the check, or from the system's question.
+    pub(crate) fn notification_event(&mut self, event: launcher::NotificationEvent) {
+        match event {
+            launcher::NotificationEvent::Clicked(_) => self.notice_clicked(),
+            launcher::NotificationEvent::Permission(answer) => self.notice_permission(answer),
+        }
+    }
+
+    /// A click on a notification opens the card; with an AI run it comes back with its preview.
+    fn notice_clicked(&mut self) {
+        if !launcher::is_open() {
+            self.summon_popup();
+        }
+    }
+
+    fn notice_permission(&mut self, answer: Answer) {
+        let Some(wait) = self.notices.waiting.take() else {
+            return;
+        };
+        match answer {
+            Answer::Granted => {
+                crate::settings::set_notify_permission(Permission::Granted);
+                #[cfg(target_os = "macos")]
+                self.post_notice(wait.kind, wait.action.as_deref());
+            }
+            Answer::Denied => {
+                crate::settings::set_notify_permission(Permission::Refused);
+            }
+            Answer::NotDetermined if !wait.asked => {
+                #[cfg(target_os = "macos")]
+                {
+                    let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                        return;
+                    };
+                    if crate::macos_notify::explain(mtm) {
+                        self.notices.waiting = Some(NoticeWait {
+                            asked: true,
+                            ..wait
+                        });
+                        crate::macos_notify::request_permission();
+                    } else {
+                        crate::settings::set_notify_permission(Permission::Refused);
+                    }
+                }
+            }
+            // Still undecided after the question: ask nothing more.
+            Answer::NotDetermined => {}
+        }
+    }
+
+    /// The card opened: its notifications have done their job.
+    pub(crate) fn clear_notices_when_card_opens(&mut self) {
+        if !launcher::is_open() {
+            self.notices.posted_card_open = false;
+            return;
+        }
+        if self.notices.posted_card_open || self.notices.posted.is_empty() {
+            return;
+        }
+        for kind in std::mem::take(&mut self.notices.posted) {
+            #[cfg(target_os = "macos")]
+            crate::macos_notify::remove(kind);
+            #[cfg(not(target_os = "macos"))]
+            let _ = kind;
+        }
+    }
+
+    /// A copy from another app that may hold a secret: a notification, without the content.
+    /// Follows the privacy filter: with it off nothing is said. A copy another app marked
+    /// concealed is never read, so it does not get here.
+    pub(crate) fn note_secret_copy(&mut self, text: &str, change: isize) {
+        if !crate::settings::privacy_filter() {
+            return;
+        }
+        match crate::sensitivity::labeling(text) {
+            crate::sensitivity::Labeling::Known(found) => {
+                self.notices.secret_pending = None;
+                if found
+                    .labels
+                    .contains(&crate::sensitivity::Label::Credential)
+                    && self.notices.secret_told != Some(change)
+                {
+                    self.notices.secret_told = Some(change);
+                    self.notify(Kind::SecretCopied, false, Duration::ZERO, None);
+                }
+            }
+            crate::sensitivity::Labeling::Checking => self.notices.secret_pending = Some(change),
+        }
+    }
+
+    /// The checker has labels: a long copy that was waiting for them is looked at again.
+    pub(crate) fn secret_labels_checked(&mut self) {
+        #[cfg(target_os = "macos")]
+        if let Some(change) = self.notices.secret_pending
+            && crate::macos_pasteboard::change_count() == change
+        {
+            let view = ClipboardView::from_os();
+            if let Some(text) = view.text() {
+                self.note_secret_copy(text, change);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_default_session_has_posted_nothing() {
+        let notices = Notices::default();
+        assert!(notices.posted.is_empty());
+        assert!(notices.waiting.is_none());
+    }
+}

@@ -26,6 +26,7 @@ mod link_view;
 mod locale;
 mod memo;
 mod menubar;
+mod notifications;
 mod open_file;
 mod page_preview;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -68,6 +69,8 @@ mod macos_image_io;
 mod macos_launcher;
 #[cfg(target_os = "macos")]
 mod macos_login;
+#[cfg(target_os = "macos")]
+mod macos_notify;
 #[cfg(target_os = "macos")]
 mod macos_open;
 #[cfg(target_os = "macos")]

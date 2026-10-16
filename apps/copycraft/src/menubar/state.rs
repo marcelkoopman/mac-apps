@@ -80,6 +80,10 @@ impl App {
                 .is_new_copy(&signature, matches!(view, ClipboardView::Empty))
         {
             self.blink.start(now);
+            #[cfg(target_os = "macos")]
+            if let Some(text) = view.text() {
+                self.note_secret_copy(text, crate::macos_pasteboard::change_count());
+            }
             // New clipboard content: a file on the card may give way to it when the card closes.
             self.opened_superseded = self.opened.is_some();
         }

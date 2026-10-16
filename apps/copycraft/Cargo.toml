@@ -38,12 +38,13 @@ memchr = "2.8"
 # `appkit-full`: all objc2-app-kit/objc2-foundation features (their defaults), as before.
 # `blur`, `dialog`, `drop`, `file_panel`, `image`, `panel`, `progress`, `theme`, `widgets`: the
 # mac_ui::blur, mac_ui::dialog (Image ▾ › Resize › Custom…), mac_ui::drop, mac_ui::file_panel,
-# mac_ui::image, mac_ui::panel, mac_ui::progress, mac_ui::theme and mac_ui::widgets modules. No feature with network code:
+# mac_ui::image, mac_ui::panel, mac_ui::progress, mac_ui::theme and mac_ui::widgets modules. `notify`:
+# local notifications (UserNotifications; no push, no network). No feature with network code:
 # copycraft works offline (README, Privacy).
 # Local AI actions on text (Apple Foundation Models, on the device; no network). All unsafe of
 # that feature lives in mac-ai.
 mac-ai = { path = "../../crates/mac-ai" }
-mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "dialog", "drop", "file_panel", "image", "panel", "progress", "theme", "widgets"] }
+mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "dialog", "drop", "file_panel", "image", "notify", "panel", "progress", "theme", "widgets"] }
 # One RegexSet for the first layer of the sensitivity check (src/recognize.rs). Already in
 # the tree through polars.
 regex = "1.13"

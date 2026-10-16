@@ -136,7 +136,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         diff_generation: 0,
         diff_outcome: None,
         diffing: None,
+        notices: Default::default(),
     };
+    #[cfg(target_os = "macos")]
+    crate::macos_notify::init();
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(
         || launcher::emit(UserEvent::SessionEnded),

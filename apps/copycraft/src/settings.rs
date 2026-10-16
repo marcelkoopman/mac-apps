@@ -63,6 +63,16 @@ pub struct Settings {
     pub confirm_clear: bool,
     /// Width of the card under the menu bar icon. Only a size is stored, never content.
     pub window_size: WindowSize,
+    /// Notification when an AI action finished while the card is hidden or the app is in the
+    /// background. On by default. See `notifications.rs`.
+    pub notify_ai: bool,
+    /// Notification when a PDF's text recognition took a while and the card is hidden. On.
+    pub notify_ocr: bool,
+    /// Notification for an error the user must know (pin list full, AI unavailable), once per
+    /// kind per session. On by default.
+    pub notify_errors: bool,
+    /// Notification "Possibly sensitive text copied" (no content). On by default.
+    pub notify_secret: bool,
 }
 
 /// How wide the card is: a choice in the `⋯` menu.
@@ -122,6 +132,10 @@ impl Default for Settings {
             announce_confirmations: true,
             confirm_clear: true,
             window_size: WindowSize::Normal,
+            notify_ai: true,
+            notify_ocr: true,
+            notify_errors: true,
+            notify_secret: true,
         }
     }
 }
@@ -137,6 +151,13 @@ const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
 const ANNOUNCE_KEY: &str = "CopycraftAnnounceConfirmations";
 const WINDOW_SIZE_KEY: &str = "CopycraftWindowSize";
 const CONFIRM_CLEAR_KEY: &str = "CopycraftConfirmClear";
+const NOTIFY_AI_KEY: &str = "CopycraftNotifyAi";
+const NOTIFY_OCR_KEY: &str = "CopycraftNotifyOcr";
+const NOTIFY_ERRORS_KEY: &str = "CopycraftNotifyErrors";
+const NOTIFY_SECRET_KEY: &str = "CopycraftNotifySecret";
+/// Whether notifications may be shown: [`crate::notifications::Permission`], as a number. Not
+/// content.
+const NOTIFY_PERMISSION_KEY: &str = "CopycraftNotifyPermission";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Stored (true) once the welcome window closed; missing on first launch.
@@ -186,7 +207,41 @@ pub fn load() -> Settings {
     if let Some(size) = load_int(WINDOW_SIZE_KEY).and_then(WindowSize::from_id) {
         settings.window_size = size;
     }
+    if let Some(value) = load_bool(NOTIFY_AI_KEY) {
+        settings.notify_ai = value;
+    }
+    if let Some(value) = load_bool(NOTIFY_OCR_KEY) {
+        settings.notify_ocr = value;
+    }
+    if let Some(value) = load_bool(NOTIFY_ERRORS_KEY) {
+        settings.notify_errors = value;
+    }
+    if let Some(value) = load_bool(NOTIFY_SECRET_KEY) {
+        settings.notify_secret = value;
+    }
     settings
+}
+
+/// The notification switches, from the stored values (a missing one is on).
+pub fn notify_switches() -> crate::notifications::Switches {
+    let settings = load();
+    crate::notifications::Switches {
+        ai: settings.notify_ai,
+        ocr: settings.notify_ocr,
+        errors: settings.notify_errors,
+        secret: settings.notify_secret,
+    }
+}
+
+/// Whether notifications may be shown. [`crate::notifications::Permission::Unknown`] until the
+/// first notification asked.
+pub fn notify_permission() -> crate::notifications::Permission {
+    crate::notifications::Permission::from_id(load_int(NOTIFY_PERMISSION_KEY).unwrap_or(0))
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_notify_permission(permission: crate::notifications::Permission) {
+    store_int(NOTIFY_PERMISSION_KEY, permission.id());
 }
 
 /// How a new table is read: the stored date-order preference.
@@ -613,6 +668,19 @@ mod tests {
         // Each size is wider than the one before on a roomy screen.
         assert!(Compact.width_on(2000.0) < Normal.width_on(2000.0));
         assert!(Normal.width_on(2000.0) < Wide.width_on(2000.0));
+    }
+
+    #[test]
+    fn notifications_are_on_by_default_and_the_permission_starts_unknown() {
+        use crate::notifications::Permission;
+        let settings = super::Settings::default();
+        assert!(settings.notify_ai && settings.notify_ocr);
+        assert!(settings.notify_errors && settings.notify_secret);
+        assert_eq!(super::notify_permission(), Permission::Unknown);
+        let switches = super::notify_switches();
+        assert!(switches.ocr && switches.ai && switches.errors && switches.secret);
+        super::set_notify_permission(Permission::Refused);
+        assert_eq!(super::notify_permission(), Permission::Refused);
     }
 
     #[test]
