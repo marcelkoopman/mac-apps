@@ -299,6 +299,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("title_clipboard", "Klembord", "Clipboard"),
     ("title_file", "Bestand", "File"),
     ("title_link", "Link", "Link"),
+    ("link_query_heading", "Queryparameters", "Query parameters"),
+    ("link_query_more", "… en nog {0}", "… and {0} more"),
     ("title_youtube", "YouTube", "YouTube"),
     ("title_image", "Afbeelding", "Image"),
     ("title_image_info", "Afbeeldingsinfo", "Image info"),

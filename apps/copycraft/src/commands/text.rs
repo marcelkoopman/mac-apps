@@ -97,7 +97,8 @@ pub(crate) fn page_card(text: &str) -> Option<WorkCard> {
     Some(WorkCard {
         title: crate::locale::t("title_link").to_string(),
         meta: text_meta(text),
-        excerpt: payload_excerpt(text),
+        // The whole URL and its parameters; text that does not split reads as before.
+        excerpt: crate::link_view::card_text(text).unwrap_or_else(|| payload_excerpt(text)),
         placeholder: String::new(),
         shows_image: false,
         highlight: None,
