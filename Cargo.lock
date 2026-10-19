@@ -4994,7 +4994,7 @@ dependencies = [
 
 [[package]]
 name = "ticker"
-version = "0.1.46"
+version = "0.1.47"
 dependencies = [
  "arboard",
  "chrono",
