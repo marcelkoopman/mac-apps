@@ -60,6 +60,12 @@ enum UserEvent {
     /// The Mac goes to sleep (`true`) or woke up (`false`). Only sent on macOS.
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Sleep(bool),
+    /// A notification was clicked: open the status item menu.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    OpenTrayMenu,
+    /// Notifications are denied: show the one-shot System Settings hint.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    ShowNotifyHint,
 }
 
 struct App {
@@ -129,6 +135,13 @@ impl ApplicationHandler<UserEvent> for App {
                 ));
                 self.asleep = false;
                 self.next_check = SystemTime::now() + POLL_AFTER_WAKE;
+            }
+            UserEvent::OpenTrayMenu => {
+                self.tray.borrow().show_menu();
+            }
+            UserEvent::ShowNotifyHint => {
+                #[cfg(target_os = "macos")]
+                watch_ui::show_notify_hint();
             }
         }
     }
@@ -543,7 +556,7 @@ impl App {
             for (w, p) in self.update_watches(|list| fired_watches(list, &current)) {
                 let unit = self.unit_of(&w.asset_name);
                 let msg = WatchUIBuilder::format_trigger_notification(&w, p, &unit);
-                watch_ui::send_macos_notification("Ticker Price Alert", &msg);
+                watch_ui::send_price_alert(&w.asset_name, "Ticker Price Alert", &msg);
             }
         }
         self.prices = Some(rows);
@@ -983,11 +996,20 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         &tray_icon,
         &MenuBuilder::tray_accessibility_label(None, false),
     );
+    let tray = Rc::new(RefCell::new(tray_icon));
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     // Menu clicks go through the event loop proxy instead of `MenuEvent::receiver()`: sending a
     // user event wakes the loop, so a click is never left sitting in the channel until the next
     // timer tick. muda calls this on the main thread, from the menu item action.
     let menu_proxy = event_loop.create_proxy();
+    let notify_proxy = event_loop.create_proxy();
+    watch_ui::set_notify_ui_handler(move |ui| {
+        let event = match ui {
+            watch_ui::NotifyUi::OpenMenu => UserEvent::OpenTrayMenu,
+            watch_ui::NotifyUi::ShowHint => UserEvent::ShowNotifyHint,
+        };
+        let _ = notify_proxy.send_event(event);
+    });
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         log_message(&format!("menu: clicked {:?}", event.id.0));
         if menu_proxy.send_event(UserEvent::Menu(event.id.0)).is_err() {
@@ -995,7 +1017,7 @@ pub fn run_menubar() -> Result<(), Box<dyn std::error::Error>> {
         }
     }));
     let mut app = App {
-        tray: Rc::new(RefCell::new(tray_icon)),
+        tray,
         fetcher: Some(fetcher),
         proxy: event_loop.create_proxy(),
         poll_gate: PollGate::new(),

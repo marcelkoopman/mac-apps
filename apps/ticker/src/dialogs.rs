@@ -54,14 +54,25 @@ const BUTTONS: &[(&str, &str, &str)] = &[
     ("close", "Sluit", "Close"),
     ("reset", "Herstel", "Reset"),
     ("clear_all", "Wis alles", "Clear All"),
+    (
+        "open_settings",
+        "Open Systeeminstellingen",
+        "Open System Settings",
+    ),
 ];
 
-/// Button title for `key` (`cancel`, `close`, `reset`, `clear_all`).
-pub fn button(key: &str) -> &'static str {
-    if key == "cancel" {
-        return mac_ui::lang::t("cancel");
-    }
-    let Some((_, nl, en)) = BUTTONS.iter().find(|(name, _, _)| *name == key) else {
+/// Longer strings (dialog titles and bodies), same Dutch/English table as [`BUTTONS`].
+const STRINGS: &[(&str, &str, &str)] = &[
+    ("notify_hint_title", "Meldingen uit", "Notifications off"),
+    (
+        "notify_hint_message",
+        "Ticker mag geen meldingen tonen. Zet meldingen aan in Systeeminstellingen › Meldingen om bij een prijsalert te worden gewaarschuwd.",
+        "Ticker cannot show notifications. Turn notifications on in System Settings › Notifications to get price alerts.",
+    ),
+];
+
+fn pick(table: &[(&'static str, &'static str, &'static str)], key: &str) -> &'static str {
+    let Some((_, nl, en)) = table.iter().find(|(name, _, _)| *name == key) else {
         eprintln!("ticker: missing dialog key {key}");
         return "?";
     };
@@ -71,14 +82,31 @@ pub fn button(key: &str) -> &'static str {
     }
 }
 
+/// Button title for `key` (`cancel`, `close`, `reset`, `clear_all`, `open_settings`).
+pub fn button(key: &str) -> &'static str {
+    if key == "cancel" {
+        return mac_ui::lang::t("cancel");
+    }
+    pick(BUTTONS, key)
+}
+
+/// Localised dialog string for `key` (`notify_hint_title`, `notify_hint_message`).
+pub fn text(key: &str) -> &'static str {
+    pick(STRINGS, key)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::BUTTONS;
+    use super::{BUTTONS, STRINGS};
 
     #[test]
     fn every_button_has_dutch_and_english() {
         let mut seen = std::collections::HashSet::new();
         for (key, nl, en) in BUTTONS {
+            assert!(seen.insert(*key), "duplicate key {key}");
+            assert!(!nl.is_empty() && !en.is_empty(), "{key}");
+        }
+        for (key, nl, en) in STRINGS {
             assert!(seen.insert(*key), "duplicate key {key}");
             assert!(!nl.is_empty() && !en.is_empty(), "{key}");
         }
@@ -95,16 +123,23 @@ mod tests {
         assert_eq!(super::button("close"), "Sluit");
         assert_eq!(super::button("reset"), "Herstel");
         assert_eq!(super::button("clear_all"), "Wis alles");
+        assert_eq!(super::button("open_settings"), "Open Systeeminstellingen");
+        assert_eq!(super::text("notify_hint_title"), "Meldingen uit");
+        assert!(super::text("notify_hint_message").contains("Systeeminstellingen"));
         assert!(mac_ui::lang::is_cancel(super::button("cancel")));
         mac_ui::lang::set_lang(mac_ui::lang::Lang::En);
         assert_eq!(super::button("cancel"), "Cancel");
         assert_eq!(super::button("reset"), "Reset");
         assert_eq!(super::button("clear_all"), "Clear All");
+        assert_eq!(super::button("open_settings"), "Open System Settings");
+        assert_eq!(super::text("notify_hint_title"), "Notifications off");
+        assert!(super::text("notify_hint_message").contains("System Settings"));
         assert!(mac_ui::lang::is_cancel(super::button("cancel")));
         assert!(!mac_ui::lang::is_cancel(super::button("close")));
         assert!(!mac_ui::lang::is_cancel(super::button("reset")));
         assert!(!mac_ui::lang::is_cancel(super::button("clear_all")));
         assert_eq!(super::button("missing"), "?");
+        assert_eq!(super::text("missing"), "?");
     }
 }
 

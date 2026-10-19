@@ -307,6 +307,32 @@ pub fn save_menubar_pin(name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn notify_hint_path() -> Result<PathBuf, Box<dyn Error>> {
+    if let Ok(path) = std::env::var("TICKER_NOTIFY_HINT_PATH")
+        && !path.is_empty()
+    {
+        return Ok(PathBuf::from(path));
+    }
+    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+    Ok(home.join(".ticker_notify_hint_shown"))
+}
+
+/// Whether the "notifications are off" hint was already shown (persisted like the menubar pin).
+pub fn load_notify_hint_shown() -> bool {
+    let Ok(path) = notify_hint_path() else {
+        return false;
+    };
+    fs::read_to_string(path)
+        .ok()
+        .is_some_and(|raw| raw.trim() == "1")
+}
+
+pub fn save_notify_hint_shown() -> Result<(), Box<dyn Error>> {
+    let path = notify_hint_path()?;
+    write_atomic(&path, b"1\n")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -428,6 +454,25 @@ url = "https://example.com"
         let _ = fs::remove_file(&path);
         unsafe {
             std::env::remove_var("TICKER_MENUBAR_PIN_PATH");
+        }
+    }
+
+    #[test]
+    fn notify_hint_shown_roundtrip() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("ticker-notify-hint-{stamp}"));
+        unsafe {
+            std::env::set_var("TICKER_NOTIFY_HINT_PATH", &path);
+        }
+        assert!(!load_notify_hint_shown());
+        save_notify_hint_shown().expect("save");
+        assert!(load_notify_hint_shown());
+        let _ = fs::remove_file(&path);
+        unsafe {
+            std::env::remove_var("TICKER_NOTIFY_HINT_PATH");
         }
     }
 

@@ -141,8 +141,15 @@ pub fn prompt_text(
     }
     let typed = field.stringValue().to_string();
     // The text may be private (a prompt about copied text): do not leave it in the field.
-    crate::widgets::wipe_field_editor(&field);
-    crate::widgets::wipe_text_field(&field);
+    // `wipe_*` lives in `widgets`; without that feature (ticker builds -p ticker alone) clear the
+    // string only so dialog still compiles.
+    #[cfg(feature = "widgets")]
+    {
+        crate::widgets::wipe_field_editor(&field);
+        crate::widgets::wipe_text_field(&field);
+    }
+    #[cfg(not(feature = "widgets"))]
+    field.setStringValue(&NSString::from_str(""));
     Some(typed)
 }
 
