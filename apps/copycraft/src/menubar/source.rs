@@ -65,7 +65,14 @@ impl App {
                     .record_image_tracking(image.bytes.clone(), base),
             )
         } else if let Some(text) = opened.text.as_deref() {
-            self.history.record_tracking(text.to_string(), base)
+            // A file that holds a token, key or URL password is shown, not kept in history.
+            if crate::sensitivity::admission(&crate::sensitivity::labeling(text))
+                == crate::sensitivity::Admission::Refuse
+            {
+                None
+            } else {
+                self.history.record_tracking(text.to_string(), base)
+            }
         } else {
             None
         };

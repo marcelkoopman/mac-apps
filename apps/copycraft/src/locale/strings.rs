@@ -24,8 +24,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "welcome_sensitive",
-        "Gevoelige gegevens worden gefilterd en niet bewaard.",
-        "Sensitive data is filtered and not stored.",
+        "Wachtwoorden uit een wachtwoordbeheerder en herkende tokens en sleutels blijven buiten de geschiedenis.",
+        "Passwords from password managers and recognised tokens and keys stay out of history.",
     ),
     ("welcome_start", "Aan de slag", "Get started"),
     (
@@ -1510,6 +1510,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "text_not_kept",
         "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)",
         "Copied, not in history (recording paused or app ignored)",
+    ),
+    (
+        "text_not_kept_secret",
+        "Gekopieerd, niet in de geschiedenis (bevat een token of sleutel)",
+        "Copied, not in history (holds a token or key)",
     ),
     (
         "work_failed",

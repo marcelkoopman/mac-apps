@@ -109,6 +109,8 @@ pub enum Skip {
     Paused,
     IgnoreNext,
     IgnoredApp,
+    /// It holds a credential ([`crate::sensitivity::Admission::Refuse`]).
+    Credential,
 }
 
 /// Everything copycraft logs. Only fixed names, numbers and kinds: see the module docs.

@@ -265,9 +265,14 @@ impl App {
         // The new version is the clipboard's: the card follows it again.
         self.browsing = None;
         if !self.record_own_copy(result) {
-            // Recording is paused or the app is ignored: the result is on the clipboard but
-            // not in history, so it makes no version either.
-            self.text_note = Some((id, crate::locale::t("text_not_kept").to_string()));
+            // Recording is paused, the app is ignored, or the result holds a credential: it is on
+            // the clipboard but not in history, so it makes no version either.
+            let note = if self.history.held() {
+                crate::locale::t("text_not_kept")
+            } else {
+                crate::locale::t("text_not_kept_secret")
+            };
+            self.text_note = Some((id, note.to_string()));
             self.refresh_popup();
             return;
         }

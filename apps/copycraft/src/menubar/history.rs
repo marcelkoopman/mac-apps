@@ -428,6 +428,10 @@ impl App {
     /// "Checking…"), and conceal copycraft's own write that was waiting for them.
     pub(crate) fn labels_checked(&mut self) {
         self.secret_labels_checked();
+        // A long copy from another app waits for its labels before it goes into history
+        // ([`crate::sensitivity::Admission::Wait`]): record it now, unless it holds a credential.
+        let view = ClipboardView::from_os();
+        self.record_current(&view);
         #[cfg(target_os = "macos")]
         if let Some(change) = self.conceal_when_checked
             && crate::macos_pasteboard::change_count() == change
@@ -486,6 +490,13 @@ impl App {
     /// paused, or an ignored app in front): the clipboard has it, history does not.
     pub(crate) fn record_own_copy(&mut self, text: &str) -> bool {
         self.last_copy = Some(Instant::now());
+        // Copycraft's own copy of a token, key or URL password stays out of history too. A long
+        // copy whose labels are not in yet is kept: it was already in history or a step on it.
+        if crate::sensitivity::admission(&crate::sensitivity::labeling(text))
+            == crate::sensitivity::Admission::Refuse
+        {
+            return false;
+        }
         if !self.history.record(text.to_string()) {
             return false;
         }
@@ -590,6 +601,21 @@ impl App {
             && self.should_record(text)
             && is_new_copy(self.history.get(0), text)
         {
+            match crate::sensitivity::admission(&crate::sensitivity::labeling(text)) {
+                crate::sensitivity::Admission::Keep => {}
+                // A token, key or URL password stays out of history. The card still shows the
+                // clipboard; the copy is not looked at again until the clipboard changes.
+                crate::sensitivity::Admission::Refuse => {
+                    self.skip_record = Some(Zeroizing::new(text.to_string()));
+                    self.browsing = None;
+                    crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                        crate::diag::Skip::Credential,
+                    ));
+                    return;
+                }
+                // A long copy still being checked: `labels_checked` looks again.
+                crate::sensitivity::Admission::Wait => return,
+            }
             self.skip_record = None;
             self.last_copy = Some(Instant::now());
             self.history.record(text.to_string());
