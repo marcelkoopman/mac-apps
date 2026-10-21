@@ -153,8 +153,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "hotkey_rejected",
-        "⌃ of ⌘ nodig (niet alleen Option) — opnieuw",
-        "Need ⌃ or ⌘ (not Option alone) — try again",
+        "⌃ of ⌘ nodig (niet alleen Option of Shift) — opnieuw",
+        "Need ⌃ or ⌘ (not Option or Shift alone) — try again",
     ),
     ("date_order", "Datumvolgorde", "Date order"),
     (
