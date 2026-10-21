@@ -19,6 +19,8 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 ├── Cargo.lock
 ├── rust-toolchain.toml     # pinned Rust version (local and CI)
 ├── AGENTS.md               # rules for coding agents
+├── SECURITY.md             # supported versions, vulnerability scanning, reporting
+├── CONTRIBUTING.md         # commit messages and contribution policy
 ├── apps/
 │   ├── copycraft/          # bin: Cargo.toml, src/, assets/, LICENSE (proprietary)
 │   └── ticker/             # bin: Cargo.toml, src/, assets/, config.toml, LICENSE (proprietary)
@@ -37,10 +39,15 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── check_commits.sh    # CI: Conventional Commit subjects
 │   ├── check_privacy_manifest.sh # plutil -lint of the privacy manifests
 │   └── tag_release.sh      # maintainer only: bump + tag + push a release for one app
-└── .github/workflows/
-    ├── ci.yml              # fmt+clippy (macos-26), tests on macos-26, app icon check; cargo audit weekly/manual
-    ├── release-copycraft.yml
-    └── release-ticker.yml
+├── docs/                   # privacy policy and support page (GitHub Pages), review notes, threat model, signing notes
+└── .github/
+    ├── dependabot.yml      # weekly update PRs for Cargo and GitHub Actions
+    ├── secret_scanning.yml # keeps Copycraft's synthetic test secrets out of secret scanning
+    └── workflows/
+        ├── ci.yml          # fmt+clippy (macos-26), tests on macos-26, app icon check
+        ├── security.yml    # cargo audit (RustSec): push/PR to main, weekly, manual
+        ├── release-copycraft.yml
+        └── release-ticker.yml
 ```
 
 ## Requirements
@@ -80,7 +87,7 @@ Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow p
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 
-CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clippy once on `macos-26`, the tests on `macos-26` (Xcode 26.6) (no macOS 15 runner any more: Copycraft needs macOS 26 and links FoundationModels), and the app icon check. Changes that only touch Markdown, `docs/` or `LICENSE` files skip CI (`main` has no required checks, so nothing waits on a skipped run). `cargo audit` runs weekly and on manual dispatch.
+CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clippy once on `macos-26`, the tests on `macos-26` (Xcode 26.6) (no macOS 15 runner any more: Copycraft needs macOS 26 and links FoundationModels), and the app icon check. Changes that only touch Markdown, `docs/` or `LICENSE` files skip CI (`main` has no required checks, so nothing waits on a skipped run). `cargo audit` runs in its own workflow, `.github/workflows/security.yml` (*Security audit*, the badge at the top): on pushes and PRs to `main` (with the same Markdown, `docs/` and `LICENSE` skip), weekly on Mondays and on manual dispatch; ignores live in `.cargo/audit.toml`, each with its reason. Dependabot (`.github/dependabot.yml`) opens weekly update PRs for Cargo and GitHub Actions, and `.github/secret_scanning.yml` keeps Copycraft's synthetic test secrets (`apps/copycraft/testdata/…`) out of secret scanning.
 
 CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
@@ -93,7 +100,18 @@ This is a private repository. Open contributions and public GitHub issues are no
 - **Offline by design:** Copycraft has no network access.
 - **Releases:** only the maintainer makes releases.
 
-Today the apps are ad-hoc signed, not notarized, so Gatekeeper may block the first launch.
+Today the apps are ad-hoc signed, not notarized, so Gatekeeper may block the first launch. Developer ID signing and notarization are prepared in the release workflows but stay off until the signing secrets are set; see [`docs/maintainer-signing.md`](docs/maintainer-signing.md) (maintainer only).
+
+## Documentation
+
+- [`SECURITY.md`](SECURITY.md): supported versions, vulnerability scanning and how to report a vulnerability.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): commit message rules and the contribution policy.
+- [`docs/privacy.md`](docs/privacy.md) and [`docs/support.md`](docs/support.md): Copycraft's privacy policy and support page, published on GitHub Pages as <https://marcelkoopman.github.io/mac-apps/privacy> and <https://marcelkoopman.github.io/mac-apps/support>.
+- [`docs/app-review-notes.md`](docs/app-review-notes.md): draft App Store Connect review notes for Copycraft.
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): STRIDE threat model for Copycraft (Dutch).
+- [`docs/sandbox-check.md`](docs/sandbox-check.md): how to check the App Sandbox of a built app (Dutch).
+- [`docs/maintainer-signing.md`](docs/maintainer-signing.md): Developer ID signing and notarization, for the maintainer (Dutch).
+- [`docs/pasteboard-privacy/`](docs/pasteboard-privacy/README.md): PasteProbe, a test of macOS pasteboard privacy prompts (Dutch).
 
 ## License
 
