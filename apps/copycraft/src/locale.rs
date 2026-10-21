@@ -237,6 +237,7 @@ mod tests {
             "welcome_menu",
             "welcome_title",
             "welcome_hotkey",
+            "welcome_history",
             "welcome_local",
             "welcome_sensitive",
             "welcome_start",

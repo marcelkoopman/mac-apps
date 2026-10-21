@@ -18,6 +18,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Open Copycraft from any app with {0}.",
     ),
     (
+        "welcome_history",
+        "Copycraft houdt een geschiedenis bij van wat je kopieert, alleen in het geheugen; die verlaat je Mac nooit.",
+        "Copycraft keeps a history of what you copy, only in memory; it never leaves your Mac.",
+    ),
+    (
         "welcome_local",
         "Alles blijft lokaal op je Mac, zonder internet.",
         "Everything stays local on your Mac, no internet.",

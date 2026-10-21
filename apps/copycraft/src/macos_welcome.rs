@@ -1,5 +1,5 @@
-//! The first-run welcome window: the hotkey, the offline promise, the privacy filter, Open at
-//! Login, and buttons for Settings and "Get started". Shown once (see
+//! The first-run welcome window: the hotkey, the in-memory history, the offline promise, what
+//! stays out of history, Open at Login, and buttons for Settings and "Get started". Shown once (see
 //! [`crate::settings::should_show_welcome`]) and again from the status menu.
 
 use std::cell::{Cell, RefCell};
@@ -265,6 +265,7 @@ fn build(mtm: MainThreadMarker) {
     let body_font = NSFont::systemFontOfSize(NSFont::systemFontSize());
     let points = [
         crate::locale::tf("welcome_hotkey", &[&crate::settings::hotkey_label()]),
+        crate::locale::t("welcome_history").to_string(),
         crate::locale::t("welcome_local").to_string(),
         crate::locale::t("welcome_sensitive").to_string(),
     ];
