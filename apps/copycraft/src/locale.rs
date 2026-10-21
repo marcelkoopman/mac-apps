@@ -211,6 +211,8 @@ mod tests {
             "language_en",
             "group_privacy",
             "group_feedback",
+            // The same word in Dutch.
+            "support_link",
             "sep_tab",
             "text_filter",
             "filter_label",
@@ -255,6 +257,19 @@ mod tests {
         assert_eq!(
             tf_in(Lang::En, "welcome_hotkey", &[&"⌃⌘C"]),
             "Open Copycraft from any app with ⌃⌘C."
+        );
+    }
+
+    /// The About and Settings links to the privacy policy and support page.
+    #[test]
+    fn page_links_are_in_both_languages() {
+        assert_eq!(t_in(Lang::Nl, "privacy_policy"), "Privacybeleid");
+        assert_eq!(t_in(Lang::En, "privacy_policy"), "Privacy Policy");
+        assert_eq!(t_in(Lang::Nl, "support_link"), "Support");
+        assert_eq!(t_in(Lang::En, "support_link"), "Support");
+        assert_ne!(
+            t_in(Lang::Nl, "link_open_failed"),
+            t_in(Lang::En, "link_open_failed")
         );
     }
 

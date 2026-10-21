@@ -1,6 +1,12 @@
 //! Which URLs Visit may hand to the browser. Pure string checks: copycraft itself never opens a
 //! connection, it only asks macOS (`NSWorkspace`) to open the link in the default browser.
 
+/// Copycraft's privacy policy (`docs/privacy.md`, served by GitHub Pages). Opened in the default
+/// browser from About and Settings; the browser loads it, not Copycraft.
+pub const PRIVACY_URL: &str = "https://marcelkoopman.github.io/mac-apps/privacy";
+/// Copycraft's support page (`docs/support.md`, served by GitHub Pages), like [`PRIVACY_URL`].
+pub const SUPPORT_URL: &str = "https://marcelkoopman.github.io/mac-apps/support";
+
 /// May Visit open `url` in the browser? Only `http://` and `https://` URLs with a host.
 pub fn may_visit(url: &str) -> bool {
     let url = url.trim();
@@ -54,6 +60,17 @@ fn host_of(authority: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_privacy_and_support_pages_may_be_opened() {
+        for url in [PRIVACY_URL, SUPPORT_URL] {
+            assert!(may_visit(url), "{url}");
+            assert!(
+                url.starts_with("https://marcelkoopman.github.io/mac-apps/"),
+                "{url}"
+            );
+        }
+    }
 
     #[test]
     fn visit_allows_only_http_and_https() {

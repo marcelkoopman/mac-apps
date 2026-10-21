@@ -46,8 +46,9 @@ const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S
 const DISPLAY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 /// Meldingen: heading, the four switches in two rows of two, one gap and a note.
 const NOTIFY_H: f64 = HEAD_H + 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
-/// Feedback: heading and one row with the two mail buttons.
-const FEEDBACK_H: f64 = HEAD_H + BUTTON_H;
+/// Feedback: heading, one row with the two mail buttons, a gap and one row with the privacy
+/// policy and support links.
+const FEEDBACK_H: f64 = HEAD_H + BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
 const HEIGHT: f64 = MARGIN
     + GENERAL_H
     + SECTION_GAP
@@ -297,6 +298,16 @@ define_class!(
         #[unsafe(method(reportProblem:))]
         fn report_problem(&self, _sender: Option<&NSButton>) {
             launcher::emit(UserEvent::Run(CommandId::ReportProblem));
+        }
+
+        #[unsafe(method(openPrivacy:))]
+        fn open_privacy(&self, _sender: Option<&NSButton>) {
+            crate::macos_about::open_page(crate::url_policy::PRIVACY_URL);
+        }
+
+        #[unsafe(method(openSupport:))]
+        fn open_support(&self, _sender: Option<&NSButton>) {
+            crate::macos_about::open_page(crate::url_policy::SUPPORT_URL);
         }
 
         #[unsafe(method(restoreSymbols:))]
@@ -697,33 +708,58 @@ fn build(mtm: MainThreadMarker) {
         crate::locale::t("group_feedback"),
         take(&mut top, HEAD_H),
     );
-    let row = take(&mut top, BUTTON_H);
-    let mut x = MARGIN;
-    for (title, symbol, action) in [
+    let mail_row = take(&mut top, BUTTON_H);
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    // The privacy policy and support page open in the default browser (NSWorkspace).
+    let link_row = take(&mut top, BUTTON_H);
+    for (row, buttons) in [
         (
-            crate::locale::t("feedback_feature_menu"),
-            "lightbulb",
-            sel!(suggestFeature:),
+            mail_row,
+            [
+                (
+                    crate::locale::t("feedback_feature_menu"),
+                    "lightbulb",
+                    sel!(suggestFeature:),
+                ),
+                (
+                    crate::locale::t("feedback_problem_menu"),
+                    "exclamationmark.bubble",
+                    sel!(reportProblem:),
+                ),
+            ],
         ),
         (
-            crate::locale::t("feedback_problem_menu"),
-            "exclamationmark.bubble",
-            sel!(reportProblem:),
+            link_row,
+            [
+                (
+                    crate::locale::t("privacy_policy"),
+                    "hand.raised",
+                    sel!(openPrivacy:),
+                ),
+                (
+                    crate::locale::t("support_link"),
+                    "questionmark.circle",
+                    sel!(openSupport:),
+                ),
+            ],
         ),
     ] {
-        let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
-        pill.set_symbol(symbol);
-        pill.set_accessibility_label(title);
-        let width = pill
-            .width_within((WIDTH - MARGIN * 2.0) / 2.0 - 4.0)
-            .max(BUTTON_H);
-        pill.view().setFrame(NSRect::new(
-            NSPoint::new(x, row),
-            NSSize::new(width, BUTTON_H),
-        ));
-        x += width + mac_ui::metrics::BUTTON_GAP;
-        wire(pill.button(), action);
-        body.addSubview(pill.view());
+        let mut x = MARGIN;
+        for (title, symbol, action) in buttons {
+            let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
+            pill.set_symbol(symbol);
+            pill.set_accessibility_label(title);
+            let width = pill
+                .width_within((WIDTH - MARGIN * 2.0) / 2.0 - 4.0)
+                .max(BUTTON_H);
+            pill.view().setFrame(NSRect::new(
+                NSPoint::new(x, row),
+                NSSize::new(width, BUTTON_H),
+            ));
+            x += width + mac_ui::metrics::BUTTON_GAP;
+            wire(pill.button(), action);
+            body.addSubview(pill.view());
+        }
     }
     debug_assert!((top - MARGIN).abs() < 0.5);
 

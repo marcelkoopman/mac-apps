@@ -1,9 +1,11 @@
-//! About Copycraft: name, bundle version, offline promise, GitHub URL as plain text (not opened).
+//! About Copycraft: name, bundle version, offline promise, GitHub URL as plain text (not opened),
+//! and buttons that open the privacy policy and the support page in the default browser.
 
 use std::cell::{Cell, RefCell};
 
+use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSBackingStoreType, NSColor, NSEvent, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
     NSWindowStyleMask, NSWindowTabbingMode,
@@ -17,7 +19,9 @@ use crate::commands::CommandId;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 380.0;
-const HEIGHT: f64 = 220.0;
+const HEIGHT: f64 = 250.0;
+/// Height of the row with the privacy and support buttons.
+const LINK_H: f64 = mac_ui::metrics::BUTTON_H;
 const PAD: f64 = 20.0;
 const RADIUS: f64 = 16.0;
 
@@ -81,7 +85,32 @@ define_class!(
             });
         }
     }
+
+    impl AboutDelegate {
+        #[unsafe(method(openPrivacy:))]
+        fn open_privacy(&self, _sender: Option<&NSObject>) {
+            open_page(crate::url_policy::PRIVACY_URL);
+        }
+
+        #[unsafe(method(openSupport:))]
+        fn open_support(&self, _sender: Option<&NSObject>) {
+            open_page(crate::url_policy::SUPPORT_URL);
+        }
+    }
 );
+
+/// Open one of Copycraft's own pages (privacy policy, support) in the default browser through
+/// `NSWorkspace` ([`crate::macos_open::open_web_url`]): the browser loads it, Copycraft makes no
+/// connection. When the system cannot open it, an alert shows the address to open by hand.
+pub(crate) fn open_page(url: &str) {
+    if crate::macos_open::open_web_url(url) {
+        return;
+    }
+    crate::diag::log(crate::diag::LogEvent::VisitFailed);
+    if let Some(mtm) = MainThreadMarker::new() {
+        mac_ui::dialog::alert(mtm, crate::locale::t("link_open_failed"), url);
+    }
+}
 
 impl AboutDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
@@ -187,6 +216,39 @@ fn build(mtm: MainThreadMarker) {
         NSSize::new(WIDTH - PAD * 2.0, 22.0),
     ));
     body.addSubview(&url);
+
+    // Privacy policy and Support, side by side on the bottom row.
+    let mut x = PAD;
+    for (title, symbol, action) in [
+        (
+            crate::locale::t("privacy_policy"),
+            "hand.raised",
+            sel!(openPrivacy:),
+        ),
+        (
+            crate::locale::t("support_link"),
+            "questionmark.circle",
+            sel!(openSupport:),
+        ),
+    ] {
+        let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
+        pill.set_symbol(symbol);
+        pill.set_accessibility_label(title);
+        let width = pill
+            .width_within((WIDTH - PAD * 2.0) / 2.0 - 4.0)
+            .max(LINK_H);
+        pill.view().setFrame(NSRect::new(
+            NSPoint::new(x, PAD),
+            NSSize::new(width, LINK_H),
+        ));
+        x += width + mac_ui::metrics::BUTTON_GAP;
+        DELEGATE.with(|slot| {
+            if let Some(delegate) = slot.borrow().as_ref() {
+                mac_ui::actions::connect(pill.button(), delegate, action);
+            }
+        });
+        body.addSubview(pill.view());
+    }
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);

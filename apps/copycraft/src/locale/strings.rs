@@ -215,6 +215,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // About
     ("about_title", "Over Copycraft", "About Copycraft"),
     ("version", "Versie", "Version"),
+    ("privacy_policy", "Privacybeleid", "Privacy Policy"),
+    ("support_link", "Support", "Support"),
+    (
+        "link_open_failed",
+        "Kon de pagina niet openen in je browser.",
+        "Could not open the page in your browser.",
+    ),
     (
         "offline_promise",
         "Werkt offline. Gekopieerde tekst en afbeeldingen blijven op deze Mac — Copycraft opent nooit een netwerkverbinding.",
