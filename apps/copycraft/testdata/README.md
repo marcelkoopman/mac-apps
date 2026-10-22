@@ -1,7 +1,7 @@
-# Copycraft test data
+# CopyCraft test data
 
-Synthetic inputs for every Copycraft scenario. Copy a file's contents (or the matching Notion
-code block) and open Copycraft: the card should show what the manifest below says. Nothing
+Synthetic inputs for every CopyCraft scenario. Copy a file's contents (or the matching Notion
+code block) and open CopyCraft: the card should show what the manifest below says. Nothing
 here is real: tokens are documented example or test values (AWS `AKIAIOSFODNN7EXAMPLE`,
 a Stripe-style example key, the jwt.io example token, the test IBAN `NL91ABNA0417164300`,
 the test card `4111 1111 1111 1111`, test BSN `111222333`, SSN `078-05-1120`, IPs from
@@ -278,14 +278,14 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
       the date column as dates and the prices as numbers (24.95), with no step taken.
 - [ ] `tables/leading_zero_ids.csv`: the id column shows `007` and `012` as copied (text, not 7 and 12).
 - [ ] App icon: the Dock / About icon matches `assets/icon.icns` (or `AppIcon.icon` when present). On macOS 26+, the card, Settings and About show Liquid Glass (frosted on older macOS); chips look like system glass buttons.
-- [ ] Language: set the system language to Dutch (Nederlands), restart Copycraft: menu bar shows *Instellingen…* / *Over Copycraft* / *Stop*, Settings and About are in Dutch; switch back to English and they follow.
-- [ ] About Copycraft (menu bar or `⋯`): shows Copycraft, the version, the offline promise, and the GitHub URL as selectable text (not opened by the app).
-- [ ] Settings tabs (menu bar *Settings…* or card `⋯`): the window shows five tabs, *General*, *Privacy*, *Display*, *Notifications* and *Feedback* (Dutch: *Algemeen*, *Privacy*, *Weergave*, *Meldingen*, *Feedback*), and fits on a 13" MacBook Air screen with nothing cut off on any tab. Click each tab and press ⌘1…⌘5: only that tab's settings show. Pick *Display*, close Settings and open it again: *Display* is still selected (after quitting Copycraft it starts on *General*). Switch the language: the window reopens on the same tab with the tab titles in the new language. Turn *Keep clipboard history* off on *Privacy*: *Ignored apps* and *Add frontmost app* are greyed out; on again, they are not. While the hotkey field says *Press a shortcut… (Esc cancels)*, switch tab: recording stops and the old hotkey is shown again. Type in *Symbols* (Display) and switch tab without pressing Return: the list is kept.
+- [ ] Language: set the system language to Dutch (Nederlands), restart CopyCraft: menu bar shows *Instellingen…* / *Over CopyCraft* / *Stop*, Settings and About are in Dutch; switch back to English and they follow.
+- [ ] About CopyCraft (menu bar or `⋯`): shows CopyCraft, the version, the offline promise, and the GitHub URL as selectable text (not opened by the app).
+- [ ] Settings tabs (menu bar *Settings…* or card `⋯`): the window shows five tabs, *General*, *Privacy*, *Display*, *Notifications* and *Feedback* (Dutch: *Algemeen*, *Privacy*, *Weergave*, *Meldingen*, *Feedback*), and fits on a 13" MacBook Air screen with nothing cut off on any tab. Click each tab and press ⌘1…⌘5: only that tab's settings show. Pick *Display*, close Settings and open it again: *Display* is still selected (after quitting CopyCraft it starts on *General*). Switch the language: the window reopens on the same tab with the tab titles in the new language. Turn *Keep clipboard history* off on *Privacy*: *Ignored apps* and *Add frontmost app* are greyed out; on again, they are not. While the hotkey field says *Press a shortcut… (Esc cancels)*, switch tab: recording stops and the old hotkey is shown again. Type in *Symbols* (Display) and switch tab without pressing Return: the list is kept.
 - [ ] Settings › *General*: change the hotkey to Control-Option-C (not Option-C alone — that is rejected); the tray tip and menu show the new label and the hotkey summons the card. Set date order to mm/dd/yyyy, copy a table with `01/02/2026`, and check the dates read month-first (chip still switches). On *Privacy*, turn blur off: a masked well uses the shade instead of gaussian blur; turn it back on. Open at Login: switch on (may open System Settings › Login Items for approval); switch off.
-- [ ] Settings › *Privacy* › *Use privacy filter* (*Gebruik privacyfilter*; on by default, also after a fresh install): with it on, a copied text, a picture, a table, a dropped file and a Decode chip (`decode/base64_png_image.txt`) are blurred until clicked, as before. Turn it **off**: the open card shows its text or picture unblurred right away (no click), the *Base64* picture too, and the card's table and *Open table* window show sharp with no reveal click; the meta line still shows sensitivity labels, the blur checkbox is dimmed, and Wipe, *Clear history*, lock, *Allow screenshots* and the pasteboard behaviour are unchanged. Copy something new and step through history: all unblurred. Turn it back **on** while the card and table window are open and showing content: both are masked at once (hint, click to reveal) and nothing stays readable; a click reveals again; quit and reopen Copycraft: the choice is kept.
+- [ ] Settings › *Privacy* › *Use privacy filter* (*Gebruik privacyfilter*; on by default, also after a fresh install): with it on, a copied text, a picture, a table, a dropped file and a Decode chip (`decode/base64_png_image.txt`) are blurred until clicked, as before. Turn it **off**: the open card shows its text or picture unblurred right away (no click), the *Base64* picture too, and the card's table and *Open table* window show sharp with no reveal click; the meta line still shows sensitivity labels, the blur checkbox is dimmed, and Wipe, *Clear history*, lock, *Allow screenshots* and the pasteboard behaviour are unchanged. Copy something new and step through history: all unblurred. Turn it back **on** while the card and table window are open and showing content: both are masked at once (hint, click to reveal) and nothing stays readable; a click reveals again; quit and reopen CopyCraft: the choice is kept.
 - [ ] Pasteboard privacy, Always Deny (macOS with pasteboard privacy on; see
       `docs/pasteboard-privacy/README.md` for the developer flag): set *Privacy & Security ›
-      Paste from Other Apps › Copycraft* to Deny, copy text and open the card: it says
+      Paste from Other Apps › CopyCraft* to Deny, copy text and open the card: it says
       "Clipboard access denied in Privacy & Security" (not "Nothing copied"), no alert shows,
       and the log (Console or a terminal launch) has `pasteboard accessBehavior alwaysDeny`
       at start-up. Set it back to Allow (or Ask, after one alert): the card shows the copy without a new
@@ -304,7 +304,7 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
       no further alert for it (also with the card open), one alert for the next copy.
 - [ ] Pasteboard privacy, Always Allow: copies are read as they come (no alert, history fills
       with the card closed), as before.
-- [ ] Pasteboard privacy, switch while running: with the card closed, switch Copycraft from
+- [ ] Pasteboard privacy, switch while running: with the card closed, switch CopyCraft from
       Allow to Ask to Deny and back in Privacy & Security; after each, copy and open the card:
       it follows the setting (the log shows `pasteboard accessBehavior now …`).
 - [ ] `tables/datetime_first_column.csv` (datetimes in the first column): copied from a text
@@ -317,7 +317,7 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 - [ ] Allow screenshots: in the menu bar menu turn on *Allow screenshots* (checkmark shows):
       a ⇧⌘4 › Space screenshot of the card (and of an open table window) shows it, still
       blurred until clicked. Turn it off: screenshots leave both out again. Turn it on,
-      quit and start Copycraft: the checkmark is off and screenshots exclude the card again.
+      quit and start CopyCraft: the checkmark is off and screenshots exclude the card again.
 - [ ] Frozen column clipped + grid scrolls: a wide table (`tables/wide_six_columns.csv`, or a
       long wide CSV) in the Dataframe view — trackpad/wheel scroll right and down: other columns
       and rows move; the pinned first column stays inside the table area (never over the meta
@@ -327,6 +327,6 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
       € appears. The popover briefly says "Gekopieerd: €" / "Copied: €".
 - [ ] That character is not in history.
 - [ ] Click a few characters: those move to the front of the list (at most eight, no duplicates).
-- [ ] Settings › *Weergave* / *Display* › *Tekens* / *Symbols*: add, remove and reorder characters, quit Copycraft and start it again.
+- [ ] Settings › *Weergave* / *Display* › *Tekens* / *Symbols*: add, remove and reorder characters, quit CopyCraft and start it again.
       The change is still there.
 - [ ] Standaard herstellen / Restore defaults puts the standard list back.

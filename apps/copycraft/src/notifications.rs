@@ -3,7 +3,7 @@
 //!
 //! Privacy: a notification never holds clipboard text, an AI result, a file name or a line
 //! number. The text is a fixed sentence, or (AI) the name of the action the user clicked. Nothing
-//! about notifications or their content is logged. Copycraft stays offline: these are local
+//! about notifications or their content is logged. CopyCraft stays offline: these are local
 //! notifications only (no push, no `aps-environment`, no network entitlement).
 
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -99,7 +99,7 @@ impl Switches {
     }
 }
 
-/// Whether Copycraft may show notifications. Asked only the first time one is needed; a refusal
+/// Whether CopyCraft may show notifications. Asked only the first time one is needed; a refusal
 /// is final and never asked again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Permission {
@@ -144,7 +144,7 @@ pub enum Answer {
 pub struct Facts {
     /// The card is not on screen.
     pub card_hidden: bool,
-    /// Copycraft is the active app.
+    /// CopyCraft is the active app.
     pub app_frontmost: bool,
     /// The run or job failed (AI).
     pub failed: bool,
@@ -201,7 +201,7 @@ impl Session {
 /// the rules of the kind, the rate limit, and last whether the permission still has to be asked.
 ///
 /// - [`Kind::AiDone`]: only after a result (not a failure), and only when the card is hidden or
-///   Copycraft is not the active app.
+///   CopyCraft is not the active app.
 /// - [`Kind::OcrDone`]: only when it took at least [`OCR_MIN`] and the card is hidden.
 /// - errors: the same visibility rule as AI, and once per kind per session.
 /// - [`Kind::SecretCopied`]: always (the copy came from another app, so the card is no help).
@@ -264,7 +264,7 @@ pub fn decide(
 }
 
 /// The notification's title: the app name.
-pub const TITLE: &str = "Copycraft";
+pub const TITLE: &str = "CopyCraft";
 
 /// The notification's text. Never clipboard or result content: `action` is the AI action's name
 /// (a menu title), and the rest are fixed sentences.

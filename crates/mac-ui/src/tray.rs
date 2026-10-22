@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn version_label_joins_app_and_version() {
-        assert_eq!(version_label("Copycraft", "1.2.3"), "Copycraft 1.2.3");
+        assert_eq!(version_label("CopyCraft", "1.2.3"), "CopyCraft 1.2.3");
     }
 
     #[test]

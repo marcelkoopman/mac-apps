@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build a Mac App Store installer package of Copycraft (maintainer only, macOS only; NOT run in CI).
+# Build a Mac App Store installer package of CopyCraft (maintainer only, macOS only; NOT run in CI).
 #
-#   scripts/build_store_pkg.sh [output.pkg]       default: target/store/Copycraft.pkg
+#   scripts/build_store_pkg.sh [output.pkg]       default: target/store/CopyCraft.pkg
 #
 # Steps: release build for aarch64-apple-darwin, cargo bundle, Info.plist finish, app icon,
 # privacy manifest check, embed the provisioning profile as Contents/embedded.provisionprofile,
@@ -33,7 +33,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT/apps/$PKG"
 TOML="$APP_DIR/Cargo.toml"
 ENTITLEMENTS_SRC="$APP_DIR/assets/entitlements.store.plist"
-OUT="${1:-$ROOT/target/store/Copycraft.pkg}"
+OUT="${1:-$ROOT/target/store/CopyCraft.pkg}"
 
 [ "$(uname -s)" = Darwin ] || die "alleen op macOS (codesign, security, productbuild)"
 for tool in codesign security productbuild plutil cargo; do

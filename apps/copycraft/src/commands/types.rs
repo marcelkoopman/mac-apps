@@ -68,7 +68,7 @@ pub struct LaunchData {
     pub paused: bool,
     /// The next foreign copy will be skipped.
     pub ignore_next: bool,
-    /// A frontmost app other than Copycraft was seen, so it can be ignored.
+    /// A frontmost app other than CopyCraft was seen, so it can be ignored.
     pub can_ignore_app: bool,
     /// One line for the card meta, such as a full pin list.
     pub notice: Option<String>,

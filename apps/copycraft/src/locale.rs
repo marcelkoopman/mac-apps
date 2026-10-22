@@ -154,7 +154,7 @@ mod tests {
         set_test_language(crate::settings::Language::Nl);
         assert_eq!(lang(), Lang::Nl);
         assert_eq!(t("settings"), "Instellingen…");
-        assert_eq!(t("about"), "Over Copycraft");
+        assert_eq!(t("about"), "Over CopyCraft");
         set_test_language(crate::settings::Language::En);
         assert_eq!(lang(), Lang::En);
         assert_eq!(t("settings"), "Settings…");
@@ -295,11 +295,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("{key} is missing"));
             assert!(!nl.is_empty() && !en.is_empty(), "{key}");
         }
-        assert_eq!(t_in(Lang::En, "welcome_title"), "Welcome to Copycraft");
-        assert_eq!(t_in(Lang::Nl, "welcome_title"), "Welkom bij Copycraft");
+        assert_eq!(t_in(Lang::En, "welcome_title"), "Welcome to CopyCraft");
+        assert_eq!(t_in(Lang::Nl, "welcome_title"), "Welkom bij CopyCraft");
         assert_eq!(
             tf_in(Lang::En, "welcome_hotkey", &[&"⌃⌘C"]),
-            "Open Copycraft from any app with ⌃⌘C."
+            "Open CopyCraft from any app with ⌃⌘C."
         );
     }
 
@@ -320,6 +320,99 @@ mod tests {
     fn placeholders_are_filled() {
         assert_eq!(tf_in(Lang::En, "item_of", &[&2, &5]), "Item 2 of 5");
         assert_eq!(tf_in(Lang::Nl, "item_of", &[&2, &5]), "Item 2 van 5");
+    }
+
+    /// The words of `text` that spell the app's name in another case than `CopyCraft`. Links
+    /// and identifiers (a word with `.`, `/`, `:` or `_` inside, such as the bundle id
+    /// `nl.marcelkoopman.copycraft` or a GitHub Pages URL) keep their lowercase spelling, and so
+    /// do names that only start with it (`CopycraftAppearance`, a defaults key or class name).
+    fn misspelled_app_names(text: &str) -> Vec<String> {
+        text.split(|c: char| c.is_whitespace() || "\"'`()[]{}<>,;*!?|".contains(c))
+            .map(|word| word.trim_end_matches(['.', ':']))
+            .filter(|word| !word.contains(['.', '/', ':', '_']))
+            .flat_map(|word| word.split('-'))
+            .filter(|word| {
+                word.to_lowercase()
+                    .strip_prefix("copycraft")
+                    .is_some_and(str::is_empty)
+                    && !word.starts_with("CopyCraft")
+            })
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn misspelled_app_names_spots_only_visible_words() {
+        assert_eq!(misspelled_app_names("Over Copycraft"), ["Copycraft"]);
+        assert_eq!(misspelled_app_names("Quit copycraft."), ["copycraft"]);
+        assert_eq!(misspelled_app_names("Copycraft's card"), ["Copycraft"]);
+        assert!(misspelled_app_names("Over CopyCraft, CopyCraft's card.").is_empty());
+        assert!(misspelled_app_names("nl.marcelkoopman.copycraft").is_empty());
+        assert!(
+            misspelled_app_names("https://marcelkoopman.github.io/mac-apps/copycraft").is_empty()
+        );
+        assert!(misspelled_app_names("CopycraftAppearance").is_empty());
+        assert_eq!(
+            misspelled_app_names("Copycraft-instellingen"),
+            ["Copycraft"]
+        );
+    }
+
+    /// Every Dutch and English string spells the app name `CopyCraft`; only links and
+    /// identifiers keep it lowercase.
+    #[test]
+    fn visible_strings_spell_the_app_name_copycraft() {
+        for (key, nl, en) in STRINGS {
+            for text in [nl, en] {
+                let wrong = misspelled_app_names(text);
+                assert!(wrong.is_empty(), "{key}: {wrong:?} should be CopyCraft");
+            }
+        }
+        assert_eq!(t_in(Lang::En, "about"), "About CopyCraft");
+        assert_eq!(t_in(Lang::Nl, "detail_quit"), "CopyCraft stoppen");
+        assert_eq!(t_in(Lang::En, "detail_quit"), "Quit CopyCraft");
+        assert_eq!(crate::notifications::TITLE, "CopyCraft");
+    }
+
+    /// The literals in the app's own code (menu bar tooltip, About, notification titles, the
+    /// feedback mail) spell the name `CopyCraft` as well. Test code is skipped: its synthetic
+    /// copies may say anything.
+    #[test]
+    fn source_literals_spell_the_app_name_copycraft() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = vec![dir];
+        while let Some(path) = files.pop() {
+            if path.is_dir() {
+                for entry in std::fs::read_dir(&path).expect("read dir") {
+                    files.push(entry.expect("entry").path());
+                }
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            let in_tests = path.components().any(|part| part.as_os_str() == "tests");
+            if !name.ends_with(".rs")
+                || in_tests
+                || name == "tests.rs"
+                || name.ends_with("_tests.rs")
+            {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("read source");
+            let code = text.split("#[cfg(test)]").next().unwrap_or_default();
+            let wrong = misspelled_app_names(code)
+                .into_iter()
+                // Lowercase `copycraft` in code is the crate, a file or thread name.
+                .filter(|word| word.starts_with('C'))
+                .collect::<Vec<_>>();
+            assert!(
+                wrong.is_empty(),
+                "{}: {wrong:?} should be CopyCraft",
+                path.display()
+            );
+        }
     }
 
     /// Every `t("key")` / `tf("key", …)` in the sources names a catalog key, and every catalog

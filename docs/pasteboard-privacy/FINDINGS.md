@@ -98,7 +98,7 @@ zelf gemeten met PasteProbe.
 - **VERWACHT** De globale sneltoets van copycraft (Carbon `RegisterEventHotKey` via
   global-hotkey) en de klik op het status item (tray-icon) zijn door de gebruiker gestart, maar
   niet paste-related. Ze geven dus een melding bij `ask` en worden stil geweigerd bij
-  `alwaysDeny`. Copycraft leest bovendien pas later in `about_to_wait`, niet in de
+  `alwaysDeny`. CopyCraft leest bovendien pas later in `about_to_wait`, niet in de
   event-handler zelf. Onbekend: of een menu-item met de `paste:`-action in een status-item-menu,
   of ⌘V in het (key) kaartpaneel via een hoofdmenu-item Edit › Paste, meetelt (test 2g/2h).
 
@@ -107,7 +107,7 @@ zelf gemeten met PasteProbe.
 - **VERWACHT** Achtergrondgeschiedenis werkt alleen met `alwaysAllow`, want de inhoud moet
   gelezen worden voordat de volgende kopie hem vervangt. Bij `ask`: bij elke nieuwe kopie een
   modale melding op de main thread, en "Allow" geldt één keer. Bij Deny geeft de leesactie `nil`
-  terug. Copycraft ziet dan "NoText", zet `poll_again` en kijkt elke tick opnieuw: zie het
+  terug. CopyCraft ziet dan "NoText", zet `poll_again` en kijkt elke tick opnieuw: zie het
   risico hieronder.
 - **VERWACHT** ConcealedType blijft werken: `read_marks` gebruikt alleen `types()` en draait al
   vóór `read_view`. Dat is de goede volgorde.
@@ -130,7 +130,7 @@ zelf gemeten met PasteProbe.
   ontbrak in 26 beta 4 (FB19085787).
   https://github.com/feedback-assistant/reports/issues/655
 
-## Copycraft: aanroepen ↔ bevindingen
+## CopyCraft: aanroepen ↔ bevindingen
 
 Polling (`menubar.rs` `about_to_wait` → `note_clipboard`, r. 2589):
 

@@ -1,6 +1,6 @@
 //! Versions of a copied table. Each operation on the card (sort, dedupe, …) adds a version to
 //! the history entry instead of a new entry: the original, then one per step, at most
-//! [`MAX_VERSIONS`]. Only the steps are kept for every version ([`TableOp`], a plan Copycraft
+//! [`MAX_VERSIONS`]. Only the steps are kept for every version ([`TableOp`], a plan CopyCraft
 //! replays itself, not polars' lazy engine, which would bring network crates); the original
 //! and the version shown are kept as frames. A step taken from an older version drops the
 //! versions after it.

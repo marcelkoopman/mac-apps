@@ -1,4 +1,4 @@
-# Copycraft – App Store Connect review notes (draft)
+# CopyCraft – App Store Connect review notes (draft)
 
 Draft for the *Notes* field under App Review Information in App Store Connect. Every statement
 below was checked against the code at the time of writing; check it again before submitting.
@@ -8,9 +8,9 @@ files without front matter, so leaving out the front matter is not enough.)
 
 ---
 
-Thank you for reviewing Copycraft.
+Thank you for reviewing CopyCraft.
 
-**What it is.** Copycraft is a menu bar app (no Dock icon) for looking at and working with what
+**What it is.** CopyCraft is a menu bar app (no Dock icon) for looking at and working with what
 you copy: text, code, JSON, tables, links and pictures. It runs fully offline: the app has no
 network entitlement and makes no network connections. No account or sign-in is needed, and
 there is no in-app purchase.
@@ -20,16 +20,16 @@ has a "Keep clipboard history" checkbox (off), an "Open at Login" checkbox (off)
 started" button. The welcome window can be shown again from the
 menu bar menu ("Welcome screen…").
 
-**Global shortcut.** Press Control-Command-C (⌃⌘C) in any app to open the Copycraft card for the
+**Global shortcut.** Press Control-Command-C (⌃⌘C) in any app to open the CopyCraft card for the
 current clipboard; the menu bar icon opens it too. The shortcut can be changed in Settings (a
 bare key, or Option or Shift as the only modifier, is refused). It is registered as a regular
 global hotkey and needs no Accessibility or Input Monitoring permission.
 
-**Clipboard history and guideline 2.5.14.** Copycraft does not monitor the clipboard by default.
+**Clipboard history and guideline 2.5.14.** CopyCraft does not monitor the clipboard by default.
 It records nothing in the background unless the user explicitly opts in, and the user can always
 see and stop it:
 
-- **Off by default.** On a new install "Keep clipboard history" is off. Copycraft then does not
+- **Off by default.** On a new install "Keep clipboard history" is off. CopyCraft then does not
   poll the pasteboard (not even its change count) and does not read it when the card opens. It
   reads the pasteboard only when the user presses ⌘V in the card, and works on what is pasted or
   dropped on the card. The card says "Paste here (⌘V) or turn on history in Settings".
@@ -44,25 +44,25 @@ see and stop it:
   copy** (the next copy from another app is not read). Settings › Privacy has **Ignored apps**: a
   copy made while one of those apps is in front is not read. With history off these controls are
   greyed out, because nothing is read on its own.
-- With history on, unless the user sets Copycraft to *Always Allow* under Paste from Other Apps, macOS's
-  pasteboard privacy applies and Copycraft reads a copy only when the user opens the card
+- With history on, unless the user sets CopyCraft to *Always Allow* under Paste from Other Apps, macOS's
+  pasteboard privacy applies and CopyCraft reads a copy only when the user opens the card
   (hotkey or menu bar icon). In the background it only looks at the pasteboard's change count and
   type names, which read no content. With *Always Deny* it reads nothing.
 
-**Clipboard access prompt.** Copycraft reads the clipboard of other apps (on ⌘V in the card, and
+**Clipboard access prompt.** CopyCraft reads the clipboard of other apps (on ⌘V in the card, and
 with history on also on its own), so macOS may show its "Paste from Other Apps" privacy prompt.
 Please choose **Allow**. To review history watching, tick "Keep clipboard history" in the welcome
 window or in Settings › Privacy first. While the setting is Default or
-Ask, Copycraft reads a new copy only when the card is opened (so the prompt appears when you open
-the card, once per copy under Ask). To avoid repeated prompts during review, set Copycraft to
+Ask, CopyCraft reads a new copy only when the card is opened (so the prompt appears when you open
+the card, once per copy under Ask). To avoid repeated prompts during review, set CopyCraft to
 *Always Allow* in System Settings › Privacy & Security › Paste from Other Apps. With *Always
 Deny*, the card shows "Clipboard access denied in Privacy & Security" and nothing is read.
 
-**Screenshots.** By default the Copycraft windows are excluded from screenshots and screen
+**Screenshots.** By default the CopyCraft windows are excluded from screenshots and screen
 recordings (window sharing type "none"), because the card shows copied, possibly sensitive data.
 To capture the card, turn on **"Allow screenshots"** in the menu bar menu (Dutch UI:
 "Schermafbeeldingen toestaan"). It applies to the card and the table window immediately and to
-other Copycraft windows opened after that. It is off again at every launch and is never stored.
+other CopyCraft windows opened after that. It is off again at every launch and is never stored.
 
 **Apple Intelligence.** The AI features require Apple Intelligence. The AI actions (for example Summarize and Rewrite, under the card's *AI*
 chip and *Lines…* › Apple Intelligence) use Apple's on-device Foundation Models framework. They
@@ -71,9 +71,9 @@ Without that, the actions are shown dimmed with the reason (for example "Turn on
 Intelligence in System Settings"); the rest of the app works normally. No text is sent off the
 device.
 
-**Open at Login.** Copycraft is not added as a login item unless the user turns on "Open at
+**Open at Login.** CopyCraft is not added as a login item unless the user turns on "Open at
 Login" in the welcome window or in Settings (off by default). It uses `SMAppService`; when macOS
-asks for approval, Copycraft opens System Settings › General › Login Items.
+asks for approval, CopyCraft opens System Settings › General › Login Items.
 
 **Privacy.** By default only what the user pastes (⌘V) or drops on the card is kept. History is kept in memory only and is cleared on quit, Wipe, screen lock, sleep and
 user switch. Copies another app marks private (nspasteboard.org Concealed, Transient,
@@ -88,7 +88,7 @@ pages in the default browser.
 **Sandbox entitlements.** `com.apple.security.app-sandbox` and
 `com.apple.security.files.user-selected.read-write` (for "Choose file" and "Save"). Nothing else.
 
-**System log.** Copycraft writes diagnostic events (never clipboard content, file names or
+**System log.** CopyCraft writes diagnostic events (never clipboard content, file names or
 paths) to the unified system log through `os_log_create` and `_os_log_impl`
 (`crates/mac-ui/src/log.rs`). `_os_log_impl` is the function the `os_log` macro expands to; it is
 declared in the public SDK header `<os/log.h>` and exported by libSystem. No private framework or

@@ -47,10 +47,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let tray = mac_ui::tray::with_icon(TrayIconBuilder::new(), icons.normal.clone(), true)
         .with_menu(Box::new(status_menu(&[])))
         .with_menu_on_left_click(false)
-        .with_tooltip("Copycraft")
+        .with_tooltip("CopyCraft")
         .build()?;
     // Icon only: name the button for VoiceOver. `sync_tooltip` adds the kind.
-    mac_ui::tray::set_accessibility_label(&tray, &tray_label("Copycraft"));
+    mac_ui::tray::set_accessibility_label(&tray, &tray_label("CopyCraft"));
     // Above `tray-icon`'s view, so a click reaches us while that window is not key.
     #[cfg(target_os = "macos")]
     crate::macos_status_click::install(&tray);

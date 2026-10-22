@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Usage: scripts/finish_info_plist.sh <pkg> <path/to/App.app>
 # macOS only (PlistBuddy). Run after cargo bundle and before signing: it changes the bundle.
-# cargo-bundle always writes CFBundleDevelopmentRegion=English. Copycraft is localised (en, nl,
+# cargo-bundle always writes CFBundleDevelopmentRegion=English. CopyCraft is localised (en, nl,
 # CFBundleLocalizations in assets/Info.plist.ext), so its development region is the ISO code
-# `en`. Then checks the Info.plist keys App Store review looks at.
+# `en`. CFBundleDisplayName (the name Finder, the Dock and the menu bar show) is set to the
+# bundle name, CopyCraft. Then checks the Info.plist keys App Store review looks at.
 set -euo pipefail
 PKG="${1:?pkg}"
 APP="${2:?app path}"
@@ -21,7 +22,12 @@ expect() {
   got="$("$PB" -c "Print :$1" "$PLIST" 2>/dev/null)" || die "$1 missing"
   [ "$got" = "$2" ] || die "$1 is '$got', expected '$2'"
 }
+"$PB" -c 'Set :CFBundleDisplayName CopyCraft' "$PLIST" 2>/dev/null \
+  || "$PB" -c 'Add :CFBundleDisplayName string CopyCraft' "$PLIST"
+
 expect CFBundleDevelopmentRegion en
+expect CFBundleName CopyCraft
+expect CFBundleDisplayName CopyCraft
 expect 'CFBundleLocalizations:0' en
 expect 'CFBundleLocalizations:1' nl
 expect NSHumanReadableCopyright '© 2026 Marcel Koopman'

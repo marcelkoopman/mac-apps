@@ -4,28 +4,28 @@
 pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Tray / overflow
     ("settings", "Instellingen…", "Settings…"),
-    ("about", "Over Copycraft", "About Copycraft"),
+    ("about", "Over CopyCraft", "About CopyCraft"),
     ("welcome_menu", "Welkomstscherm…", "Welcome screen…"),
     // Welcome window
     (
         "welcome_title",
-        "Welkom bij Copycraft",
-        "Welcome to Copycraft",
+        "Welkom bij CopyCraft",
+        "Welcome to CopyCraft",
     ),
     (
         "welcome_hotkey",
-        "Open Copycraft vanuit elke app met {0}.",
-        "Open Copycraft from any app with {0}.",
+        "Open CopyCraft vanuit elke app met {0}.",
+        "Open CopyCraft from any app with {0}.",
     ),
     (
         "welcome_history",
-        "Standaard leest Copycraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
-        "By default Copycraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
+        "Standaard leest CopyCraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
+        "By default CopyCraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
     ),
     (
         "welcome_history_choice",
-        "Zet je dit aan, dan leest Copycraft elke kopie en bewaart die alleen in het geheugen; anders alleen wat je in de kaart plakt of neerzet.",
-        "When on, Copycraft reads every copy and keeps it in memory only; otherwise only what you paste or drop on the card.",
+        "Zet je dit aan, dan leest CopyCraft elke kopie en bewaart die alleen in het geheugen; anders alleen wat je in de kaart plakt of neerzet.",
+        "When on, CopyCraft reads every copy and keeps it in memory only; otherwise only what you paste or drop on the card.",
     ),
     (
         "clipboard_history",
@@ -124,8 +124,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "notify_ask_message",
-        "Copycraft kan een melding sturen als een AI-actie of tekstherkenning klaar is, of als er mogelijk gevoelige tekst is gekopieerd. Een melding bevat nooit je tekst. Alles blijft lokaal op je Mac. Na Doorgaan vraagt macOS om toestemming.",
-        "Copycraft can send a notification when an AI action or text recognition is done, or when possibly sensitive text was copied. A notification never contains your text. Everything stays local on your Mac. After Continue, macOS asks for permission.",
+        "CopyCraft kan een melding sturen als een AI-actie of tekstherkenning klaar is, of als er mogelijk gevoelige tekst is gekopieerd. Een melding bevat nooit je tekst. Alles blijft lokaal op je Mac. Na Doorgaan vraagt macOS om toestemming.",
+        "CopyCraft can send a notification when an AI action or text recognition is done, or when possibly sensitive text was copied. A notification never contains your text. Everything stays local on your Mac. After Continue, macOS asks for permission.",
     ),
     ("notify_ask_ok", "Doorgaan", "Continue"),
     ("notify_ask_no", "Geen meldingen", "No notifications"),
@@ -147,8 +147,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Settings window
     (
         "settings_title",
-        "Copycraft-instellingen",
-        "Copycraft Settings",
+        "CopyCraft-instellingen",
+        "CopyCraft Settings",
     ),
     ("hotkey", "Sneltoets", "Hotkey"),
     (
@@ -232,8 +232,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("open_at_login", "Openen bij inloggen", "Open at Login"),
     (
         "login_note",
-        "Start Copycraft wanneer je inlogt (standaard uit)",
-        "Starts Copycraft when you log in (off by default)",
+        "Start CopyCraft wanneer je inlogt (standaard uit)",
+        "Starts CopyCraft when you log in (off by default)",
     ),
     (
         "login_approval",
@@ -251,7 +251,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Open at Login is not available for this build",
     ),
     // About
-    ("about_title", "Over Copycraft", "About Copycraft"),
+    ("about_title", "Over CopyCraft", "About CopyCraft"),
     ("version", "Versie", "Version"),
     ("privacy_policy", "Privacybeleid", "Privacy Policy"),
     ("support_link", "Support", "Support"),
@@ -262,8 +262,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "offline_promise",
-        "Werkt offline. Gekopieerde tekst en afbeeldingen blijven op deze Mac — Copycraft opent nooit een netwerkverbinding.",
-        "Works offline. Copied text and pictures stay on this Mac — Copycraft never opens a network connection.",
+        "Werkt offline. Gekopieerde tekst en afbeeldingen blijven op deze Mac — CopyCraft opent nooit een netwerkverbinding.",
+        "Works offline. Copied text and pictures stay on this Mac — CopyCraft never opens a network connection.",
     ),
     // Card chips (common)
     ("copy", "Kopieer", "Copy"),
@@ -365,13 +365,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "paste_ask_note",
-        "macOS vraagt eerst of Copycraft een kopie uit een andere app mag lezen.\nKies Sta toe om de kopie hier te zien.\nPrivacy en beveiliging › Plakken vanuit andere apps kan Copycraft op Altijd toestaan zetten.",
-        "macOS asks before Copycraft may read a copy from another app.\nChoose Allow to see the copy here.\nPrivacy & Security › Paste from Other Apps can set Copycraft to Always Allow.",
+        "macOS vraagt eerst of CopyCraft een kopie uit een andere app mag lezen.\nKies Sta toe om de kopie hier te zien.\nPrivacy en beveiliging › Plakken vanuit andere apps kan CopyCraft op Altijd toestaan zetten.",
+        "macOS asks before CopyCraft may read a copy from another app.\nChoose Allow to see the copy here.\nPrivacy & Security › Paste from Other Apps can set CopyCraft to Always Allow.",
     ),
     (
         "paste_denied_detail",
-        "Plakken vanuit andere apps staat voor Copycraft op Weiger.",
-        "Paste from Other Apps is set to Deny for Copycraft.",
+        "Plakken vanuit andere apps staat voor CopyCraft op Weiger.",
+        "Paste from Other Apps is set to Deny for CopyCraft.",
     ),
     (
         "drop_hint",
@@ -400,8 +400,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "private_copy_note",
-        "De app die dit kopieerde heeft het als privé gemarkeerd.\nCopycraft toont het niet en bewaart het niet in de geschiedenis.",
-        "The app that copied this marked it private.\nCopycraft does not show it or keep it in history.",
+        "De app die dit kopieerde heeft het als privé gemarkeerd.\nCopyCraft toont het niet en bewaart het niet in de geschiedenis.",
+        "The app that copied this marked it private.\nCopyCraft does not show it or keep it in history.",
     ),
     ("title_clipboard", "Klembord", "Clipboard"),
     ("title_file", "Bestand", "File"),
@@ -641,8 +641,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "detail_clear_sensitive",
-        "Leeg het klembord een minuut nadat Copycraft inloggegevens, PII of financiële gegevens heeft gekopieerd",
-        "Empty the pasteboard a minute after Copycraft copied a credential, PII or financial data",
+        "Leeg het klembord een minuut nadat CopyCraft inloggegevens, PII of financiële gegevens heeft gekopieerd",
+        "Empty the pasteboard a minute after CopyCraft copied a credential, PII or financial data",
     ),
     (
         "detail_history_forgotten",
@@ -688,8 +688,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "feedback_message",
-        "Je mailapp opent met een concept. Jij verstuurt de e-mail zelf; Copycraft verstuurt niets en voegt geen klembord, geschiedenis of bestanden toe.",
-        "Your mail app opens with a draft. You send the mail yourself; Copycraft sends nothing and adds no clipboard, history or files.",
+        "Je mailapp opent met een concept. Jij verstuurt de e-mail zelf; CopyCraft verstuurt niets en voegt geen klembord, geschiedenis of bestanden toe.",
+        "Your mail app opens with a draft. You send the mail yourself; CopyCraft sends nothing and adds no clipboard, history or files.",
     ),
     ("feedback_subject", "Onderwerp", "Subject"),
     (
@@ -770,7 +770,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Versie en belofte om offline te werken",
         "Version and offline promise",
     ),
-    ("detail_quit", "Copycraft stoppen", "Quit Copycraft"),
+    ("detail_quit", "CopyCraft stoppen", "Quit CopyCraft"),
     ("chip_choose_file", "Kies bestand", "Choose file"),
     ("menu_choose_file", "Kies bestand…", "Choose file…"),
     ("section_file", "Bestand", "File"),
@@ -1193,8 +1193,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "ai_off_bridge",
-        "Deze versie van Copycraft is gebouwd zonder AI-ondersteuning",
-        "This build of Copycraft was made without AI support",
+        "Deze versie van CopyCraft is gebouwd zonder AI-ondersteuning",
+        "This build of CopyCraft was made without AI support",
     ),
     ("ai_check", "Controleer AI", "Check AI"),
     (
@@ -1235,8 +1235,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "ai_fix_bridge",
-        "Bouw Copycraft opnieuw met swiftc (Xcode of de command line tools) of installeer een officiële versie.",
-        "Build Copycraft again with swiftc (Xcode or the command line tools) or install an official release.",
+        "Bouw CopyCraft opnieuw met swiftc (Xcode of de command line tools) of installeer een officiële versie.",
+        "Build CopyCraft again with swiftc (Xcode or the command line tools) or install an official release.",
     ),
     (
         "ai_fix_other",
@@ -1734,8 +1734,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "table_window_title",
-        "Copycraft · Tabel",
-        "Copycraft · Table",
+        "CopyCraft · Tabel",
+        "CopyCraft · Table",
     ),
     ("table_steps_a11y", "Tabelstappen", "Table steps"),
     ("copy_table_a11y", "Kopieer de tabel", "Copy the table"),

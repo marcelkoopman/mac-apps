@@ -6,7 +6,7 @@ license = "LicenseRef-Proprietary"
 publish = false
 
 [package.metadata.bundle]
-name = "Copycraft"
+name = "CopyCraft"
 identifier = "nl.marcelkoopman.copycraft"
 icon = ["assets/icon.icns"]
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
@@ -15,7 +15,7 @@ version = "0.1.89"
 category = "Utilities"
 copyright = "© 2026 Marcel Koopman"
 short_description = "Clipboard transformer"
-long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that Copycraft is running."
+long_description = "A macOS clipboard command. A hotkey opens a card at the cursor for what you copied. The menu bar icon shows that CopyCraft is running."
 
 [package.metadata.bundle.macos]
 # Apple silicon only. macOS 26 (Tahoe) or later (local AI actions use Foundation Models):

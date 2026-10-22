@@ -1,6 +1,6 @@
 # Ticker
 
-A menu bar price ticker for macOS. It shows one asset's price in the menu bar and lists every configured asset in the menu. The default assets are Bitcoin, ETH, gold, TTF gas, NL petrol/diesel and NL power. The app has no Dock icon. It needs macOS 26 (Tahoe) or later on Apple silicon, the same floor as Copycraft: `minimum_system_version = "26.0"` in `Cargo.toml` and `MACOSX_DEPLOYMENT_TARGET=26.0`, so the release binary's `minos` is 26.0 (`scripts/check_minos.sh`).
+A menu bar price ticker for macOS. It shows one asset's price in the menu bar and lists every configured asset in the menu. The default assets are Bitcoin, ETH, gold, TTF gas, NL petrol/diesel and NL power. The app has no Dock icon. It needs macOS 26 (Tahoe) or later on Apple silicon, the same floor as CopyCraft: `minimum_system_version = "26.0"` in `Cargo.toml` and `MACOSX_DEPLOYMENT_TARGET=26.0`, so the release binary's `minos` is 26.0 (`scripts/check_minos.sh`).
 
 Part of the [mac-apps](../../README.md) monorepo.
 

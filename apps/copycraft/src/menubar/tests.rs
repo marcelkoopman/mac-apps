@@ -53,15 +53,15 @@ fn history_is_forgotten_minutes_after_the_last_copy() {
 fn version_label_includes_package_version() {
     assert_eq!(
         version_label(),
-        format!("Copycraft {}", env!("CARGO_PKG_VERSION"))
+        format!("CopyCraft {}", env!("CARGO_PKG_VERSION"))
     );
 }
 
 #[test]
 fn tooltip_and_voiceover_label_name_the_kind() {
     let text = |s: &str| ClipboardView::Text(Zeroizing::new(s.into()));
-    assert_eq!(icon_tip(&ClipboardView::Empty), "Copycraft");
-    assert_eq!(icon_tip(&ClipboardView::NoText), "Copycraft");
+    assert_eq!(icon_tip(&ClipboardView::Empty), "CopyCraft");
+    assert_eq!(icon_tip(&ClipboardView::NoText), "CopyCraft");
     assert_eq!(icon_tip(&ClipboardView::Image), "Image");
     let kinds = [
         ("hello", FormatKind::Plain),
@@ -75,10 +75,10 @@ fn tooltip_and_voiceover_label_name_the_kind() {
     for (src, kind) in kinds {
         let tip = icon_tip(&text(src));
         assert_eq!(tip, kind.source_heading(), "{src}");
-        assert_eq!(tray_label(&tip), format!("Copycraft, {tip}"));
+        assert_eq!(tray_label(&tip), format!("CopyCraft, {tip}"));
     }
-    assert_eq!(tray_label("Copycraft"), "Copycraft");
-    assert_eq!(tray_label("Image"), "Copycraft, Image");
+    assert_eq!(tray_label("CopyCraft"), "CopyCraft");
+    assert_eq!(tray_label("Image"), "CopyCraft, Image");
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn browsing_history_ends_only_with_a_new_copy() {
     use super::state::browse_ends;
     // The same pasteboard (a poll, a background refresh): the card keeps the browsed item.
     assert!(!browse_ends(Some(7), 7, false));
-    // Copycraft's own write (Copy) is not a new copy from elsewhere.
+    // CopyCraft's own write (Copy) is not a new copy from elsewhere.
     assert!(!browse_ends(Some(7), 8, true));
     // Another app copied: the card follows the clipboard again.
     assert!(browse_ends(Some(7), 8, false));

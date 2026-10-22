@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Copycraft entitlements for the Mac App Store build (scripts/build_store_pkg.sh), not used by
+  CopyCraft entitlements for the Mac App Store build (scripts/build_store_pkg.sh), not used by
   the GitHub releases or CI. The same two sandbox keys as entitlements.plist (see the reasons
   there; no network, no hardened-runtime exceptions, no apple-events), plus the two identifier
   keys the provisioning profile must match.

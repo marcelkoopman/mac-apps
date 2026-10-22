@@ -1,4 +1,4 @@
-# Copycraft app icon
+# CopyCraft app icon
 
 `scripts/build_app_icon.sh copycraft` compiles the icon into the `.app` (Assets.car + AppIcon.icns) before signing. Source, first match in this folder:
 

@@ -7,7 +7,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 | Path | Kind | Description |
 | --- | --- | --- |
 | [`apps/copycraft`](apps/copycraft/README.md) | app | Clipboard transformer, paste-first: a global hotkey opens a card at the cursor, and you paste (⌘V) or drop text, a picture or a file on it. Watching the clipboard (every copy into an in-memory history) is opt-in under "Keep clipboard history". The card offers: format, convert, decode, table view, schema, OCR/QR, PDFs (the page itself with page turning, its text layer through PDFKit, or OCR on scans), line numbers for text and code, line tools (head, tail, reverse, column, regex filter) and a paged view for long text, on-device AI actions per card type (Apple Foundation Models, macOS 26 on Apple silicon; none on tables), with sensitivity labels and in-memory history shown as a strip of small cards (search; with history watching on also pause and an ignore list; and pins that still die on lock, sleep and quit), a window size you can choose, and card themes (System, Light, Dark, Night, Solarized Light/Dark, High contrast, Sepia). Offline by design: no network code and no network entitlement. |
-| `crates/mac-ai` | library | Swift bridge to Apple Foundation Models for Copycraft's local AI actions (compiled by `build.rs` with `swiftc`, all `unsafe` of the feature lives here). Needs macOS 26 and Apple silicon; elsewhere the actions report as unavailable. Copycraft only; ticker does not use it. |
+| `crates/mac-ai` | library | Swift bridge to Apple Foundation Models for CopyCraft's local AI actions (compiled by `build.rs` with `swiftc`, all `unsafe` of the feature lives here). Needs macOS 26 and Apple silicon; elsewhere the actions report as unavailable. CopyCraft only; ticker does not use it. |
 | [`apps/ticker`](apps/ticker/README.md) | app | Menu bar price ticker (Bitcoin, ETH, gold, TTF gas, NL fuel and power prices) with day change and price-watch notifications. |
 | `crates/mac-ui` | library | Shared look & feel for the apps. Owns and re-exports the UI frameworks (tray-icon, winit, objc2*) and holds generic helpers. Always on: `tray` (info/version/quit rows, grey titles for enabled rows, template icons, VoiceOver label of the menu bar button, the normal/flash/alert icon set and the timing of a short icon blink), `icon` (RGBA canvas, image-file icons with a plain-square fallback, template masks for monochrome menu bar icons, SF Symbols), `keys` (named key codes), `corners` (concentric corner radii), `find` (case-insensitive matches, "3/12" counter, wrapping steps), `wake` (earliest event-loop deadline as a winit control flow), and on macOS `glass` (Liquid Glass background with a frosted fallback before macOS 26, glass groups with a plain-view fallback). Opt-in features: `theme` (System/Light/Dark appearance), `widgets` (AppKit label/field/box, SF Symbol and pill buttons, read-only text view/scroller and one that Tab skips, target/action and text-delegate wiring, ⌘-chord and Shift checks on key events in `keys`, text view sizing, find marks and wiping of text views, fields and field editors, `button`: Liquid Glass push buttons with a FlexiblePush fallback before macOS 26, `fonts`: monospace font with a fallback list, `text`: attributed strings with font/colour/background runs over byte ranges and byte → UTF-16 ranges), `panel` (borderless floating panel setup, activation and near-cursor placement), `dialog` (modal NSAlert message, confirm, button choice, text prompt and list pick), `file_panel` (open and save panels, a save panel with a format popup), `progress` (busy spinner), `notify` (user notifications via UserNotifications from an app bundle; without one `send` returns `false` and ticker's debug builds fall back on osascript themselves: mac-ui starts no subprocesses), `wake` (a callback when the Mac goes to sleep and wakes up, from NSWorkspace's notifications) and `appkit-full`. Both apps depend on it (both need macOS 26). |
 
@@ -43,7 +43,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 ├── docs/                   # privacy policy and support page (GitHub Pages), review notes, threat model, signing notes
 └── .github/
     ├── dependabot.yml      # weekly update PRs for Cargo and GitHub Actions
-    ├── secret_scanning.yml # keeps Copycraft's synthetic test secrets out of secret scanning
+    ├── secret_scanning.yml # keeps CopyCraft's synthetic test secrets out of secret scanning
     └── workflows/
         ├── ci.yml          # fmt+clippy (macos-26), tests on macos-26, app icon check
         ├── security.yml    # cargo audit (RustSec): push/PR to main, weekly, manual
@@ -71,7 +71,7 @@ Local `.app` bundle (run it from the package directory, because cargo-bundle res
 
 ```bash
 cd apps/copycraft && cargo bundle --release
-# -> target/release/bundle/osx/Copycraft.app
+# -> target/release/bundle/osx/CopyCraft.app
 ```
 
 ## Test and lint
@@ -84,11 +84,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow past `scripts/unsafe_baseline.txt`; lower it when it shrinks) and `scripts/check_minos.sh` on the release binaries. Copycraft's PDF support uses the `objc2-pdf-kit` bindings (PDFKit); its Word (.docx) support inflates `word/document.xml` with `flate2` (already in the tree) and draws the first page with Quick Look through `objc2-quick-look-thumbnailing` (all in memory; mac-ui `quicklook`); its AI actions use the `mac-ai` crate.
+Also in CI: `scripts/count_unsafe.sh --check` (the `unsafe` count may not grow past `scripts/unsafe_baseline.txt`; lower it when it shrinks) and `scripts/check_minos.sh` on the release binaries. CopyCraft's PDF support uses the `objc2-pdf-kit` bindings (PDFKit); its Word (.docx) support inflates `word/document.xml` with `flate2` (already in the tree) and draws the first page with Quick Look through `objc2-quick-look-thumbnailing` (all in memory; mac-ui `quicklook`); its AI actions use the `mac-ai` crate.
 
 Per crate: `cargo check -p <crate>`, `cargo test -p <crate> <filter>`, `cargo clippy -p <crate> --all-targets -- -D warnings`.
 
-CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clippy once on `macos-26`, the tests on `macos-26` (Xcode 26.6) (no macOS 15 runner any more: Copycraft needs macOS 26 and links FoundationModels), and the app icon check. Changes that only touch Markdown, `docs/` or `LICENSE` files skip CI (`main` has no required checks, so nothing waits on a skipped run). `cargo audit` runs in its own workflow, `.github/workflows/security.yml` (*Security audit*, the badge at the top): on pushes and PRs to `main` (with the same Markdown, `docs/` and `LICENSE` skip), weekly on Mondays and on manual dispatch; ignores live in `.cargo/audit.toml`, each with its reason. Dependabot (`.github/dependabot.yml`) opens weekly update PRs for Cargo and GitHub Actions, and `.github/secret_scanning.yml` keeps Copycraft's synthetic test secrets (`apps/copycraft/testdata/…`) out of secret scanning.
+CI (`.github/workflows/ci.yml`) runs for pushes and PRs to `main`: fmt and clippy once on `macos-26`, the tests on `macos-26` (Xcode 26.6) (no macOS 15 runner any more: CopyCraft needs macOS 26 and links FoundationModels), and the app icon check. Changes that only touch Markdown, `docs/` or `LICENSE` files skip CI (`main` has no required checks, so nothing waits on a skipped run). `cargo audit` runs in its own workflow, `.github/workflows/security.yml` (*Security audit*, the badge at the top): on pushes and PRs to `main` (with the same Markdown, `docs/` and `LICENSE` skip), weekly on Mondays and on manual dispatch; ignores live in `.cargo/audit.toml`, each with its reason. Dependabot (`.github/dependabot.yml`) opens weekly update PRs for Cargo and GitHub Actions, and `.github/secret_scanning.yml` keeps CopyCraft's synthetic test secrets (`apps/copycraft/testdata/…`) out of secret scanning.
 
 CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04` for the audit), Xcode via `sudo xcode-select -s /Applications/Xcode_<XCODE_VERSION>.app` (`XCODE_VERSION` at the top of each workflow), Rust via `rust-toolchain.toml` (`rustup toolchain install`), and actions on major versions (`actions/checkout@v7`, `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`). Bump these on purpose, one at a time; the Xcode versions an image has are listed in its README in [actions/runner-images](https://github.com/actions/runner-images).
 
@@ -98,7 +98,7 @@ The repository is public so the code can be read, but open contributions and pub
 
 - **Support:** email **mac-apps-support@proton.me** (see also [`apps/copycraft/SUPPORT.md`](apps/copycraft/SUPPORT.md)).
 - **Security:** see [`SECURITY.md`](SECURITY.md) for supported versions, scanning and how to report a vulnerability.
-- **Offline by design:** Copycraft has no network access.
+- **Offline by design:** CopyCraft has no network access.
 - **Releases:** only the maintainer makes releases.
 
 Today the apps are ad-hoc signed, not notarized, so Gatekeeper may block the first launch. Developer ID signing and notarization are prepared in the release workflows but stay off until the signing secrets are set; see [`docs/maintainer-signing.md`](docs/maintainer-signing.md) (maintainer only).
@@ -107,9 +107,9 @@ Today the apps are ad-hoc signed, not notarized, so Gatekeeper may block the fir
 
 - [`SECURITY.md`](SECURITY.md): supported versions, vulnerability scanning and how to report a vulnerability.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): commit message rules and the contribution policy.
-- [`docs/privacy.md`](docs/privacy.md) and [`docs/support.md`](docs/support.md): Copycraft's privacy policy and support page, published on GitHub Pages as <https://marcelkoopman.github.io/mac-apps/privacy> and <https://marcelkoopman.github.io/mac-apps/support>.
-- [`docs/app-review-notes.md`](docs/app-review-notes.md): draft App Store Connect review notes for Copycraft.
-- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): STRIDE threat model for Copycraft (Dutch).
+- [`docs/privacy.md`](docs/privacy.md) and [`docs/support.md`](docs/support.md): CopyCraft's privacy policy and support page, published on GitHub Pages as <https://marcelkoopman.github.io/mac-apps/privacy> and <https://marcelkoopman.github.io/mac-apps/support>.
+- [`docs/app-review-notes.md`](docs/app-review-notes.md): draft App Store Connect review notes for CopyCraft.
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): STRIDE threat model for CopyCraft (Dutch).
 - [`docs/sandbox-check.md`](docs/sandbox-check.md): how to check the App Sandbox of a built app (Dutch).
 - [`docs/maintainer-signing.md`](docs/maintainer-signing.md): Developer ID signing and notarization, for the maintainer (Dutch).
 - [`docs/pasteboard-privacy/`](docs/pasteboard-privacy/README.md): PasteProbe, a test of macOS pasteboard privacy prompts (Dutch).

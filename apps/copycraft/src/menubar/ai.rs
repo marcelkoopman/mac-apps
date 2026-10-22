@@ -139,7 +139,7 @@ impl App {
                 Some(RunState::Working) => (Some("…"), crate::locale::t("ai_tray_working")),
                 Some(RunState::Ready) => (Some("✓"), crate::locale::t("ai_tray_ready")),
                 Some(RunState::Failed) => (Some("⚠"), crate::locale::t("ai_tray_failed")),
-                None => (None, "Copycraft"),
+                None => (None, "CopyCraft"),
             };
             self.tray.set_title(title);
             mac_ui::tray::set_accessibility_label(&self.tray, &tray_label(tip));

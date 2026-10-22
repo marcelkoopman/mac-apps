@@ -1,5 +1,5 @@
 # GitHub Pages (Jekyll) settings for the docs/ folder.
-# Only the Copycraft privacy policy (privacy.md, /privacy) and support page (support.md,
+# Only the CopyCraft privacy policy (privacy.md, /privacy) and support page (support.md,
 # /support), both NL + EN, are public. GitHub Pages also turns Markdown files WITHOUT front
 # matter into pages (jekyll-optional-front-matter), so every other file in docs/ must be listed
 # here. A new file in docs/ that is not meant for the web belongs in this list too.

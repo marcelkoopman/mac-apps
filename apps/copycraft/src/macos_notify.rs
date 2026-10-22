@@ -19,7 +19,7 @@ fn clicked(id: &str) {
     }
 }
 
-/// Copycraft is the active app.
+/// CopyCraft is the active app.
 pub fn app_is_frontmost() -> bool {
     MainThreadMarker::new().is_some_and(|mtm| NSApplication::sharedApplication(mtm).isActive())
 }
@@ -50,7 +50,7 @@ pub fn probe_permission() {
     });
 }
 
-/// Explain, in a short dialog, why Copycraft wants to send notifications. `true`: continue to
+/// Explain, in a short dialog, why CopyCraft wants to send notifications. `true`: continue to
 /// the system's question.
 pub fn explain(mtm: MainThreadMarker) -> bool {
     mac_ui::panel::activate_app(mtm);

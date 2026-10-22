@@ -6,7 +6,7 @@ use super::*;
 /// background thread.
 pub(crate) struct CardImageInput {
     pub(super) source: ImageSource,
-    /// TIFF from the pasteboard for a copied file Copycraft cannot open (sandbox), to decode
+    /// TIFF from the pasteboard for a copied file CopyCraft cannot open (sandbox), to decode
     /// instead.
     pub(super) tiff: Option<Vec<u8>>,
 }

@@ -167,7 +167,7 @@ impl App {
 pub(crate) fn icon_tip(view: &ClipboardView) -> String {
     match view {
         // History off (paste-first): Held means "not watching", nothing was ignored.
-        ClipboardView::Held if !crate::settings::clipboard_history() => "Copycraft".to_string(),
+        ClipboardView::Held if !crate::settings::clipboard_history() => "CopyCraft".to_string(),
         ClipboardView::Held => {
             if crate::capture::paused() {
                 crate::locale::t("tip_paused").to_string()
@@ -176,7 +176,7 @@ pub(crate) fn icon_tip(view: &ClipboardView) -> String {
             }
         }
         ClipboardView::Image => crate::locale::t("title_image").to_string(),
-        ClipboardView::Empty | ClipboardView::NoText => "Copycraft".to_string(),
+        ClipboardView::Empty | ClipboardView::NoText => "CopyCraft".to_string(),
         ClipboardView::Denied => crate::paste_access::denied_note().to_string(),
         ClipboardView::Pending => crate::paste_access::pending_note().to_string(),
         ClipboardView::Hidden => clipboard::hidden_content().to_string(),
@@ -196,10 +196,10 @@ pub(crate) fn icon_tip(view: &ClipboardView) -> String {
 
 /// VoiceOver label of the menu bar button: the app name, then the kind from the tooltip.
 pub(crate) fn tray_label(tip: &str) -> String {
-    if tip == "Copycraft" {
+    if tip == "CopyCraft" {
         tip.to_string()
     } else {
-        format!("Copycraft, {tip}")
+        format!("CopyCraft, {tip}")
     }
 }
 
@@ -396,7 +396,7 @@ pub(crate) fn hash_text(text: &str) -> u64 {
 }
 
 pub(crate) fn version_label() -> String {
-    tray::version_label("Copycraft", env!("CARGO_PKG_VERSION"))
+    tray::version_label("CopyCraft", env!("CARGO_PKG_VERSION"))
 }
 
 thread_local! {

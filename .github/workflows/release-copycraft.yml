@@ -1,4 +1,4 @@
-name: Release Copycraft
+name: Release CopyCraft
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ env:
   # Pinned runner image: macos-26 (arm64). Xcode path as listed in the image README
   # (actions/runner-images, macos-26-arm64), also printed by the "Select Xcode" step.
   XCODE_VERSION: "26.6"
-  APP_NAME: Copycraft
+  APP_NAME: CopyCraft
   PKG: copycraft
   APP_DIR: apps/copycraft
   ENTITLEMENTS: apps/copycraft/assets/entitlements.plist
@@ -51,11 +51,11 @@ jobs:
         run: cargo test -p copycraft -p mac-ui -p mac-ai --locked
 
   build:
-    name: Build Copycraft DMG
+    name: Build CopyCraft DMG
     needs: check
     runs-on: macos-26
     env:
-      # Copycraft needs macOS 26 (minimum_system_version in apps/copycraft/Cargo.toml); also set
+      # CopyCraft needs macOS 26 (minimum_system_version in apps/copycraft/Cargo.toml); also set
       # by .cargo/config.toml, repeated here so the release never depends on that file.
       MACOSX_DEPLOYMENT_TARGET: "26.0"
 

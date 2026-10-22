@@ -4,7 +4,7 @@ use super::*;
 
 impl App {
     /// The pasteboard's current change is not read: history is off, paused, ignore-next, or an
-    /// ignored app. Copycraft's own write is never suppressed while history is on.
+    /// ignored app. CopyCraft's own write is never suppressed while history is on.
     pub(crate) fn pasteboard_suppressed(&self) -> bool {
         #[cfg(target_os = "macos")]
         {

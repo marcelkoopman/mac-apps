@@ -1,4 +1,4 @@
-//! Copycraft's own settings in the standard user defaults. None of them holds clipboard data.
+//! CopyCraft's own settings in the standard user defaults. None of them holds clipboard data.
 
 use crate::dataframe::ReadOptions;
 use crate::hotkey;
@@ -73,7 +73,7 @@ pub struct Settings {
     pub notify_errors: bool,
     /// Notification "Possibly sensitive text copied" (no content). On by default.
     pub notify_secret: bool,
-    /// "Keep clipboard history": Copycraft reads every copy (polling, and on opening the card).
+    /// "Keep clipboard history": CopyCraft reads every copy (polling, and on opening the card).
     /// Off: paste-first, only what is pasted (⌘V) or dropped. Off for a new install, on for an
     /// existing one ([`crate::history_mode::keep_history_default`]).
     pub clipboard_history: bool,
@@ -257,7 +257,7 @@ pub fn load() -> Settings {
     settings
 }
 
-/// Whether Copycraft keeps clipboard history (watches the clipboard). Not stored yet: decided by
+/// Whether CopyCraft keeps clipboard history (watches the clipboard). Not stored yet: decided by
 /// [`crate::history_mode::keep_history_default`] from what the settings store holds.
 pub fn clipboard_history() -> bool {
     let stored = load_bool(CLIPBOARD_HISTORY_KEY);
@@ -537,7 +537,7 @@ pub fn set_symbol_catalog(raw: &str) {
     store_string(SYMBOLS_KEY, &crate::symbols::format_list(&list));
 }
 
-/// A bundle id Copycraft will keep: reverse-DNS, so it contains a dot. A letter or digit,
+/// A bundle id CopyCraft will keep: reverse-DNS, so it contains a dot. A letter or digit,
 /// then letters, digits, dots and hyphens, with no empty segment and no trailing dot.
 /// A word without a dot (`not an id`) is not an id.
 pub fn valid_bundle_id(id: &str) -> bool {
@@ -556,7 +556,7 @@ pub fn valid_bundle_id(id: &str) -> bool {
 }
 
 /// Bundle ids from `raw` (one per line, or separated by spaces or commas). Invalid lines,
-/// duplicates and Copycraft's own id are dropped. At most [`IGNORED_APP_MAX`].
+/// duplicates and CopyCraft's own id are dropped. At most [`IGNORED_APP_MAX`].
 pub fn parse_ignored(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     for piece in raw.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {

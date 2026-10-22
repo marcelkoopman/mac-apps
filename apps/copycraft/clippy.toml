@@ -1,4 +1,4 @@
-# Copycraft works offline and starts no subprocesses (AGENTS.md, README "Privacy"). Clippy reads
+# CopyCraft works offline and starts no subprocesses (AGENTS.md, README "Privacy"). Clippy reads
 # this file for the copycraft crate only: it looks for clippy.toml in the crate's own directory
 # (CARGO_MANIFEST_DIR) first, so ticker and mac-ui are not affected. CI runs clippy with
 # -D warnings, so any of these fails the build.

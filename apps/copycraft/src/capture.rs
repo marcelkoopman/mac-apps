@@ -154,7 +154,7 @@ pub fn observe_front(bundle: Option<&str>) {
 }
 
 /// History takes nothing new: recording is paused, or the frontmost app (the last foreign
-/// one, as Copycraft's own card is in front while it is used) is on the ignore list. The gate
+/// one, as CopyCraft's own card is in front while it is used) is on the ignore list. The gate
 /// of [`crate::clipboard::ClipboardHistory`].
 pub fn history_held() -> bool {
     // Pause and the ignored apps belong to watching the clipboard: with history off they hold

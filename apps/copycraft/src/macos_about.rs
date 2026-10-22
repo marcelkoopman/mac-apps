@@ -1,4 +1,4 @@
-//! About Copycraft: name, bundle version, offline promise, GitHub URL as plain text (not opened),
+//! About CopyCraft: name, bundle version, offline promise, GitHub URL as plain text (not opened),
 //! and buttons that open the privacy policy and the support page in the default browser.
 
 use std::cell::{Cell, RefCell};
@@ -25,7 +25,7 @@ const LINK_H: f64 = mac_ui::metrics::BUTTON_H;
 const PAD: f64 = 20.0;
 const RADIUS: f64 = 16.0;
 
-/// Shown as plain text; the user may copy or open it themselves. Copycraft does not.
+/// Shown as plain text; the user may copy or open it themselves. CopyCraft does not.
 pub const GITHUB_URL: &str = "https://github.com/marcelkoopman/mac-apps";
 
 thread_local! {
@@ -99,8 +99,8 @@ define_class!(
     }
 );
 
-/// Open one of Copycraft's own pages (privacy policy, support) in the default browser through
-/// `NSWorkspace` ([`crate::macos_open::open_web_url`]): the browser loads it, Copycraft makes no
+/// Open one of CopyCraft's own pages (privacy policy, support) in the default browser through
+/// `NSWorkspace` ([`crate::macos_open::open_web_url`]): the browser loads it, CopyCraft makes no
 /// connection. When the system cannot open it, an alert shows the address to open by hand.
 pub(crate) fn open_page(url: &str) {
     if crate::macos_open::open_web_url(url) {
@@ -176,7 +176,7 @@ fn build(mtm: MainThreadMarker) {
 
     let mut y = HEIGHT - PAD - 28.0;
     let name = widgets::label(mtm, 20.0, &NSColor::labelColor());
-    name.setStringValue(&NSString::from_str("Copycraft"));
+    name.setStringValue(&NSString::from_str("CopyCraft"));
     name.setFrame(NSRect::new(
         NSPoint::new(PAD, y),
         NSSize::new(WIDTH - PAD * 2.0, 28.0),

@@ -33,7 +33,7 @@ impl Kind {
 }
 
 /// The two version lines that end every body. They are the only text that is not the user's.
-pub const APP_VERSION_LABEL: &str = "Copycraft versie: ";
+pub const APP_VERSION_LABEL: &str = "CopyCraft versie: ";
 pub const MACOS_VERSION_LABEL: &str = "macOS versie: ";
 
 /// A mail as it will be created.
@@ -212,14 +212,14 @@ mod tests {
         let m = mail("Ik wil X", "Omdat Y");
         assert_eq!(
             m.body,
-            "Ik wil X\n\nOmdat Y\n\nCopycraft versie: 1.2.3\nmacOS versie: Version 15.0"
+            "Ik wil X\n\nOmdat Y\n\nCopyCraft versie: 1.2.3\nmacOS versie: Version 15.0"
         );
         // Take the user's text and the version lines away: nothing is left.
         let rest = m
             .body
             .replace("Ik wil X", "")
             .replace("Omdat Y", "")
-            .replace("Copycraft versie: 1.2.3", "")
+            .replace("CopyCraft versie: 1.2.3", "")
             .replace("macOS versie: Version 15.0", "");
         assert!(rest.trim().is_empty(), "{rest:?}");
     }
@@ -229,12 +229,12 @@ mod tests {
         let m = mail("", "  ");
         assert_eq!(
             m.body,
-            "Copycraft versie: 1.2.3\nmacOS versie: Version 15.0"
+            "CopyCraft versie: 1.2.3\nmacOS versie: Version 15.0"
         );
         let one = mail("", "Alleen dit");
         assert_eq!(
             one.body,
-            "Alleen dit\n\nCopycraft versie: 1.2.3\nmacOS versie: Version 15.0"
+            "Alleen dit\n\nCopyCraft versie: 1.2.3\nmacOS versie: Version 15.0"
         );
     }
 
@@ -253,7 +253,7 @@ mod tests {
         ));
         assert!(url.contains("a%26b%0D%0A%0D%0Ac%0D%0Ad"));
         assert!(
-            url.contains("Copycraft%20versie%3A%201.2.3%0D%0AmacOS%20versie%3A%20Version%2015.0")
+            url.contains("CopyCraft%20versie%3A%201.2.3%0D%0AmacOS%20versie%3A%20Version%2015.0")
         );
         // Only one `?`, and the two separators are the only raw `&` and `=` pairs we made.
         assert_eq!(url.matches('?').count(), 1);

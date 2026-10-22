@@ -427,7 +427,7 @@ impl MenuSection {
             MenuSection::History => Some(crate::locale::t("history")),
             MenuSection::Recording => Some(crate::locale::t("section_recording")),
             MenuSection::Appearance => Some(crate::locale::t("appearance")),
-            MenuSection::App => Some("Copycraft"),
+            MenuSection::App => Some("CopyCraft"),
         }
     }
 }

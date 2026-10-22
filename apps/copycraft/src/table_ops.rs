@@ -1,5 +1,5 @@
 //! The steps of [`crate::table::TableOp`], and the typing of text columns when a table is
-//! read, on eager polars frames with only the features Copycraft has (no `lazy`, `rows`,
+//! read, on eager polars frames with only the features CopyCraft has (no `lazy`, `rows`,
 //! `strings` or `dtype-full`): where polars needs one of those, the step is written out here.
 
 use polars::prelude::*;

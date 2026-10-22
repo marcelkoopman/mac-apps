@@ -562,7 +562,7 @@ pub fn recent_lines(now: SystemTime) -> Vec<String> {
 pub fn export_text(macos: &str, now: SystemTime) -> String {
     let settings = crate::settings::load();
     let mut out = String::new();
-    out.push_str("Copycraft diagnostics\n");
+    out.push_str("CopyCraft diagnostics\n");
     out.push_str("No clipboard content, history, file names or table data are included.\n\n");
     out.push_str(&format!("app version: {}\n", env!("CARGO_PKG_VERSION")));
     out.push_str(&format!("macOS: {macos}\n"));

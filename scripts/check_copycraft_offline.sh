@@ -15,7 +15,7 @@
 #
 # Allowlisted: socket2, only as a dependency of tokio, and tokio only as a dependency of polars
 # crates. polars-core and polars-async (0.55) turn on tokio's "net" feature unconditionally (no
-# polars feature turns it off), which pulls in socket2 and mio. Copycraft never uses tokio's net
+# polars feature turns it off), which pulls in socket2 and mio. CopyCraft never uses tokio's net
 # types; polars uses tokio for its async runtime (and object stores copycraft does not enable).
 #
 # Usage: scripts/check_copycraft_offline.sh   (from anywhere; needs cargo, works on Linux too)
@@ -47,7 +47,7 @@ fi
 
 [ -z "$found" ] || die "Netwerk-crates in de dependency tree van copycraft ($TARGET):
 $found
-Copycraft is offline (AGENTS.md). Zie: cargo tree -p copycraft -e normal --target $TARGET -i <crate>"
+CopyCraft is offline (AGENTS.md). Zie: cargo tree -p copycraft -e normal --target $TARGET -i <crate>"
 
 if grep -rn osascript apps/copycraft/src apps/copycraft/Cargo.toml; then
   die "osascript in copycraft: dialogen en panels zijn native in-process (AGENTS.md)"

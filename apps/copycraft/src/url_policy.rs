@@ -1,10 +1,10 @@
 //! Which URLs Visit may hand to the browser. Pure string checks: copycraft itself never opens a
 //! connection, it only asks macOS (`NSWorkspace`) to open the link in the default browser.
 
-/// Copycraft's privacy policy (`docs/privacy.md`, served by GitHub Pages). Opened in the default
-/// browser from About and Settings; the browser loads it, not Copycraft.
+/// CopyCraft's privacy policy (`docs/privacy.md`, served by GitHub Pages). Opened in the default
+/// browser from About and Settings; the browser loads it, not CopyCraft.
 pub const PRIVACY_URL: &str = "https://marcelkoopman.github.io/mac-apps/privacy";
-/// Copycraft's support page (`docs/support.md`, served by GitHub Pages), like [`PRIVACY_URL`].
+/// CopyCraft's support page (`docs/support.md`, served by GitHub Pages), like [`PRIVACY_URL`].
 pub const SUPPORT_URL: &str = "https://marcelkoopman.github.io/mac-apps/support";
 
 /// May Visit open `url` in the browser? Only `http://` and `https://` URLs with a host.

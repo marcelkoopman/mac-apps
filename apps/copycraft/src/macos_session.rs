@@ -1,5 +1,5 @@
 //! The end of a session: the screen locks, the Mac goes to sleep, or another user takes over
-//! (fast user switching). Copycraft then forgets its history, whatever the retention setting.
+//! (fast user switching). CopyCraft then forgets its history, whatever the retention setting.
 
 use std::cell::OnceCell;
 

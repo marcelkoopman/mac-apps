@@ -1,5 +1,5 @@
 //! Pasteboard privacy (macOS 15.4+, see `docs/pasteboard-privacy/FINDINGS.md`): which reads
-//! Copycraft makes of the general pasteboard, and when.
+//! CopyCraft makes of the general pasteboard, and when.
 //!
 //! The change count, the list of types and `availableTypeFromArray:` read no content and are
 //! not expected to show the privacy alert; `stringForType:`, `dataForType:`,
@@ -61,12 +61,12 @@ pub fn pending_note() -> &'static str {
     crate::locale::t("paste_pending_note")
 }
 
-/// The card's one-time explanation the first time Copycraft reads with Default or Ask.
+/// The card's one-time explanation the first time CopyCraft reads with Default or Ask.
 pub fn ask_note() -> &'static str {
     crate::locale::t("paste_ask_note")
 }
 
-/// How Copycraft reads the pasteboard's contents for an access setting.
+/// How CopyCraft reads the pasteboard's contents for an access setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReadStrategy {
     /// Read each copy as it comes, while polling (Always Allow; macOS before 15.4, which has no

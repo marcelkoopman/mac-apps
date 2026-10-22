@@ -1,5 +1,5 @@
 //! The global allocator: the system allocator, but every heap block is overwritten with zeros
-//! before it is given back. Copied text passes through buffers Copycraft does not own (Polars'
+//! before it is given back. Copied text passes through buffers CopyCraft does not own (Polars'
 //! table columns, the CSV reader's chunks, hash tables, rendered grids, AppKit bridging), and
 //! `zeroize` only reaches the ones it does. With this, none of them lingers in freed memory.
 //! The cost is a memset per free (and a copy per `realloc`, which the system could otherwise do

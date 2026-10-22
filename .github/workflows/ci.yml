@@ -94,7 +94,7 @@ jobs:
       # No HTTP/TLS/socket crates in copycraft's dependency tree, no osascript in its sources, and
       # no subprocess or network code in mac-ui (socket2 via polars → tokio is allowlisted, see
       # the script).
-      - name: Copycraft offline guards
+      - name: CopyCraft offline guards
         run: scripts/check_copycraft_offline.sh
 
       # plutil -lint and key checks on both source manifests (the release workflows check the
@@ -142,7 +142,7 @@ jobs:
             target/aarch64-apple-darwin/release/ticker
 
   # Tests on the pinned macOS 26 runner (Xcode 26.6, keep in step with XCODE_VERSION). No macOS 15
-  # runner any more: Copycraft needs macOS 26, and its binary links FoundationModels (mac-ai).
+  # runner any more: CopyCraft needs macOS 26, and its binary links FoundationModels (mac-ai).
   test:
     name: test (${{ matrix.os }}, Xcode ${{ matrix.xcode }})
     runs-on: ${{ matrix.os }}

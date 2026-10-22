@@ -41,14 +41,14 @@ static CACHE: Mutex<Option<CachedView>> = Mutex::new(None);
 /// The card is shown (or being opened): with Default or Ask a new copy is read now.
 static CARD_SHOWN: AtomicBool = AtomicBool::new(false);
 
-/// The access setting last seen, to log a change while Copycraft runs.
+/// The access setting last seen, to log a change while CopyCraft runs.
 static LAST_BEHAVIOR: Mutex<Option<Option<AccessBehavior>>> = Mutex::new(None);
 
 /// A picture as the pasteboard held it, read once.
 #[derive(Clone)]
 struct ImageGrab {
     source: ImageSource,
-    /// TIFF for a copied file Copycraft cannot open (sandbox).
+    /// TIFF for a copied file CopyCraft cannot open (sandbox).
     tiff: Option<Vec<u8>>,
 }
 
@@ -170,7 +170,7 @@ pub(crate) fn current_view() -> ClipboardView {
     view
 }
 
-/// Whether Copycraft may read the pasteboard on its own now: the poll, or the card opening
+/// Whether CopyCraft may read the pasteboard on its own now: the poll, or the card opening
 /// ([`crate::history_mode::read_allowed`]). ⌘V does not ask: [`read_for_paste`] always reads.
 pub(crate) fn background_read_allowed() -> bool {
     let trigger = if CARD_SHOWN.load(Ordering::Relaxed) {

@@ -6,13 +6,13 @@ Beide apps worden ad-hoc gesigned met `apps/<app>/assets/entitlements.plist`, in
 
 ```bash
 codesign -d --entitlements - /Applications/Ticker.app
-codesign -d --entitlements - /Applications/Copycraft.app
+codesign -d --entitlements - /Applications/CopyCraft.app
 ```
 
 Je hoort `com.apple.security.app-sandbox` = `true` te zien, plus:
 
 - Ticker: `com.apple.security.network.client`
-- Copycraft: `com.apple.security.network.client` en `com.apple.security.files.user-selected.read-write`
+- CopyCraft: `com.apple.security.network.client` en `com.apple.security.files.user-selected.read-write`
 
 `codesign -dv <App>.app` toont `flags=0x10002(adhoc,runtime)`: ad-hoc gesigned, met hardened runtime.
 
@@ -21,7 +21,7 @@ Je hoort `com.apple.security.app-sandbox` = `true` te zien, plus:
 1. Start de app.
 2. Open **Activiteitenweergave** (Activity Monitor).
 3. Kies **Weergave › Kolommen › Sandbox** (Engels: View › Columns › Sandbox).
-4. Zoek `Ticker` of `Copycraft`. In de kolom **Sandbox** hoort **Ja** te staan.
+4. Zoek `Ticker` of `CopyCraft`. In de kolom **Sandbox** hoort **Ja** te staan.
 
 ## 3. Waar staan de bestanden nu?
 
@@ -38,4 +38,4 @@ Draai je `cargo run -p ticker`, dan werk je zonder sandbox en gebruikt de app no
 
 Zie je sandbox-meldingen? Kijk in **Console** en filter op `Sandbox` of `deny` terwijl de app draait.
 
-> Let op: de bundle id's zijn gewijzigd: Ticker heeft nu een `mac-apps.`-segment (`com.github.marcelkoopman.mac-apps.ticker`) en Copycraft heet `nl.marcelkoopman.copycraft` (eerder `com.github.marcelkoopman.mac-apps.copycraft`). Een nieuwe id is een nieuwe container en een nieuw defaults-domein: instellingen en rechten (meldingen, Plak vanuit andere apps, Open bij inloggen) beginnen eenmalig opnieuw.
+> Let op: de bundle id's zijn gewijzigd: Ticker heeft nu een `mac-apps.`-segment (`com.github.marcelkoopman.mac-apps.ticker`) en CopyCraft heet `nl.marcelkoopman.copycraft` (eerder `com.github.marcelkoopman.mac-apps.copycraft`). Een nieuwe id is een nieuwe container en een nieuw defaults-domein: instellingen en rechten (meldingen, Plak vanuit andere apps, Open bij inloggen) beginnen eenmalig opnieuw.

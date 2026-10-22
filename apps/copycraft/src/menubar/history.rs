@@ -499,7 +499,7 @@ impl App {
     /// paused, or an ignored app in front): the clipboard has it, history does not.
     pub(crate) fn record_own_copy(&mut self, text: &str) -> bool {
         self.last_copy = Some(Instant::now());
-        // Copycraft's own copy of a token, key or URL password stays out of history too. A long
+        // CopyCraft's own copy of a token, key or URL password stays out of history too. A long
         // copy whose labels are not in yet is kept: it was already in history or a step on it.
         if crate::sensitivity::admission(&crate::sensitivity::labeling(text))
             == crate::sensitivity::Admission::Refuse
@@ -628,7 +628,7 @@ impl App {
         {
             return;
         }
-        // Copycraft's own write: what belongs in history was recorded when it was written (see
+        // CopyCraft's own write: what belongs in history was recorded when it was written (see
         // `record_own_copy`), and a history step stays where it is.
         #[cfg(target_os = "macos")]
         if crate::macos_pasteboard::current_marks().own {

@@ -1,4 +1,4 @@
-//! "Keep clipboard history" (Klembordgeschiedenis bijhouden): whether Copycraft watches the
+//! "Keep clipboard history" (Klembordgeschiedenis bijhouden): whether CopyCraft watches the
 //! clipboard on its own, or works paste-first and takes only what the user pastes into the card
 //! (⌘V) or drops on it. Pure logic; the setting is stored in `settings.rs`, and the pasteboard
 //! reader (`macos_pasteboard`) and the poller (`menubar/state.rs`) ask [`read_allowed`].
@@ -10,7 +10,7 @@
 
 use zeroize::Zeroizing;
 
-/// Why Copycraft would read the general pasteboard.
+/// Why CopyCraft would read the general pasteboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadTrigger {
     /// The background poll: the change count, then a new copy.

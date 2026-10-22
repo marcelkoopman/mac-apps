@@ -1,8 +1,8 @@
-# Dreigingsmodel (STRIDE) — Copycraft
+# Dreigingsmodel (STRIDE) — CopyCraft
 
 Taal: Nederlands, zowel in dit document als in het plaatje (het bestaande diagram was al Nederlands).
 
-![STRIDE-dreigingsmodel voor Copycraft](stride-threat-model.png)
+![STRIDE-dreigingsmodel voor CopyCraft](stride-threat-model.png)
 
 Vectorversie: [stride-threat-model.svg](stride-threat-model.svg).
 
@@ -21,7 +21,7 @@ Het diagram is gebaseerd op het dreigingsmodel van v0.1.78 en aangevuld met wat 
 
 ### 10. docx-lezer (zipbom, uitpakken, geheugen)
 
-Copycraft leest een `.docx` met een eigen zip-lezer en een eigen XML-scanner (`apps/copycraft/src/docx.rs`), zonder zip-crate en zonder `unsafe`.
+CopyCraft leest een `.docx` met een eigen zip-lezer en een eigen XML-scanner (`apps/copycraft/src/docx.rs`), zonder zip-crate en zonder `unsafe`.
 
 | Dreiging | Maatregel | Status |
 | --- | --- | --- |
@@ -34,10 +34,10 @@ Copycraft leest een `.docx` met een eigen zip-lezer en een eigen XML-scanner (`a
 
 | Dreiging | Maatregel | Status |
 | --- | --- | --- |
-| **I**: de mail bevat klembordinhoud of persoonsgegevens | De mail bevat alleen wat de gebruiker zelf typt plus de Copycraft- en macOS-versie. Er wordt niets automatisch toegevoegd (geen klembord, geschiedenis, bestandsnamen, paden of instellingen). De mail-app toont een concept; de **gebruiker verstuurt zelf**. Copycraft maakt er geen netwerkverbinding voor. | [README], moduledocumentatie in `mailto.rs`; niet op een Mac geprobeerd |
+| **I**: de mail bevat klembordinhoud of persoonsgegevens | De mail bevat alleen wat de gebruiker zelf typt plus de CopyCraft- en macOS-versie. Er wordt niets automatisch toegevoegd (geen klembord, geschiedenis, bestandsnamen, paden of instellingen). De mail-app toont een concept; de **gebruiker verstuurt zelf**. CopyCraft maakt er geen netwerkverbinding voor. | [README], moduledocumentatie in `mailto.rs`; niet op een Mac geprobeerd |
 | **D**: te lange link | Limiet van 2000 tekens (`MAX_MAILTO_LEN`). Bij een langere tekst, of als geen mail-app `mailto:` afhandelt, volgt een melding en een klembord-terugval. | [code] (limiet), [README] (terugval) |
 | **I**: klembord-terugval | De hele mail komt als platte tekst op het klembord, alleen als de gebruiker dat kiest, gemarkeerd als eigen schrijfactie (dus niet in de geschiedenis). Andere apps kunnen het klembord lezen (eigenschap van het OS). | [README] |
-| **I**: wat de mail-app met het concept doet (bewaren) | Valt buiten Copycraft. | [onbevestigd] |
+| **I**: wat de mail-app met het concept doet (bewaren) | Valt buiten CopyCraft. | [onbevestigd] |
 
 ### 11. Lokale meldingen
 
@@ -46,15 +46,15 @@ Copycraft leest een `.docx` met een eigen zip-lezer en een eigen XML-scanner (`a
 | **I**: inhoud in een melding | Alleen de naam van de actie of een vaste tekst; nooit klembordinhoud, AI-resultaat, bestandsnaam of regelnummer. Niets over meldingen wordt gelogd. | [README] |
 | **I/S**: toestemming | Eén schakelaar per soort melding in Instellingen. Toestemming wordt één keer gevraagd, na uitleg; een weigering is definitief. Alleen lokale meldingen: geen push, geen netwerk-entitlement. | [README] |
 | **D**: meldingenspam | Hooguit één melding per 5 s en één per soort per sessie, en alleen bij verborgen kaart of een app op de achtergrond. | [README] |
-| **I**: hoe macOS meldingen bewaart of toont (meldingencentrum, vergrendeld scherm) | Valt buiten Copycraft. | [onbevestigd] |
+| **I**: hoe macOS meldingen bewaart of toont (meldingencentrum, vergrendeld scherm) | Valt buiten CopyCraft. | [onbevestigd] |
 
 ### 12. Quick Look en thumbnailcache van het systeem (buiten de app)
 
-Voor de eerste pagina van een `.docx` vraagt Copycraft de thumbnail-dienst van het systeem om een plaatje (`mac_ui::quicklook`). Het systeem rendert dat buiten de app.
+Voor de eerste pagina van een `.docx` vraagt CopyCraft de thumbnail-dienst van het systeem om een plaatje (`mac_ui::quicklook`). Het systeem rendert dat buiten de app.
 
 | Dreiging | Maatregel | Status |
 | --- | --- | --- |
-| **I**: het systeem bewaart een eigen cache | De README zegt dat de Quick Look-thumbnaildienst een eigen cache buiten de app kan houden. Copycraft schrijft zelf geen thumbnail- of cachebestand; het PNG blijft in geheugen. Of, waar en hoe lang het systeem iets bewaart, en dat Wipe dit niet leegt, is niet geverifieerd. | [README]; systeemgedrag [onbevestigd] |
+| **I**: het systeem bewaart een eigen cache | De README zegt dat de Quick Look-thumbnaildienst een eigen cache buiten de app kan houden. CopyCraft schrijft zelf geen thumbnail- of cachebestand; het PNG blijft in geheugen. Of, waar en hoe lang het systeem iets bewaart, en dat Wipe dit niet leegt, is niet geverifieerd. | [README]; systeemgedrag [onbevestigd] |
 | **E**: het systeem leest en parset het document buiten de app | Alleen de eerste pagina, nooit op de hoofdthread. Het sandbox-gedrag van Quick Look voor dit bestand is niet geverifieerd; een native parser blijft aanvalsoppervlak van het OS. | [code]; sandbox [onbevestigd] |
 | **D**: Quick Look reageert niet | Time-out van 10 s, het verzoek wordt geannuleerd en de kaart valt terug op de tekst. | [code] |
 | **I**: geheugen van het plaatje | Het PNG wordt één keer, op exacte grootte, in een zeroizing buffer gekopieerd. De `NSData`, bitmap en `CGImage` van het systeem worden niet gewist en kunnen we niet wissen. | [code]; rest [onbevestigd] |
