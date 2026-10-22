@@ -79,8 +79,8 @@ fn overflow_empties_only_the_pasteboard() {
         .iter()
         .find(|cmd| cmd.id == CommandId::ClearClipboard)
         .unwrap();
-    assert_eq!(item.title, "Empty pasteboard");
-    assert_eq!(item.detail, "Pasteboard only");
+    assert_eq!(item.title, "Empty clipboard");
+    assert_eq!(item.detail, "Clipboard only");
     assert!(menu.iter().all(|cmd| cmd.id != CommandId::Clear));
     assert!(keeps_card_open(&CommandId::Clear));
 }

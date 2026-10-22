@@ -1,4 +1,4 @@
-//! Feature voorstellen… and Probleem melden…: a small form (subject, two texts, a live preview of
+//! Idee voorstellen… and Probleem melden…: a small form (subject, two texts, a live preview of
 //! the mail) that opens a draft in the default mail app through `mailto:`. The user sends it.
 //!
 //! Privacy: the body is only what the user typed plus the app and macOS versions

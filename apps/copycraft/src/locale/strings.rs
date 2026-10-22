@@ -1,5 +1,14 @@
 //! The NL/EN catalog: `(key, Dutch, English)`. Placeholders are `{0}`, `{1}`, … (see `locale::tf`).
-//! Keep terminology consistent: a term has one Dutch word everywhere (Tabel, Beeld, Kolommen, …).
+//! Keep terminology consistent: a term has one word everywhere. Glossary (Dutch / English):
+//!
+//! - klembord / clipboard: never "pasteboard" in a visible string (`NSPasteboard` is code).
+//! - geschiedenis / history: never "historie" or "historiestrook".
+//! - afbeelding / image: never "beeld" on its own, "plaatje" or "foto", never "picture" or
+//!   "photo". Compounds of their own stay: *beeldverhouding* (aspect ratio), *voorbeeld*.
+//! - idee voorstellen / suggest a feature: never "feature" in Dutch.
+//! - tabel / table, kolommen / columns, kaart / card, regels / lines.
+//!
+//! `locale::tests::visible_strings_follow_the_glossary` rejects the forbidden variants.
 
 pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Tray / overflow
@@ -60,7 +69,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Schermafbeeldingen toestaan",
         "Allow screenshots",
     ),
-    ("empty_pasteboard", "Klembord legen", "Empty pasteboard"),
+    ("empty_pasteboard", "Klembord legen", "Empty clipboard"),
     ("clear_history", "Geschiedenis wissen", "Clear history"),
     ("pause_recording", "Opname pauzeren", "Pause recording"),
     ("ignore_next", "Volgende kopie negeren", "Ignore next copy"),
@@ -280,16 +289,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "offline_promise",
         "Werkt offline. Gekopieerde tekst en afbeeldingen blijven op deze Mac — CopyCraft opent nooit een netwerkverbinding.",
-        "Works offline. Copied text and pictures stay on this Mac — CopyCraft never opens a network connection.",
+        "Works offline. Copied text and images stay on this Mac — CopyCraft never opens a network connection.",
     ),
     // Card chips (common)
     ("copy", "Kopieer", "Copy"),
     ("save", "Bewaar", "Save"),
     ("original", "Origineel", "Original"),
-    ("show_image", "Toon beeld", "Show image"),
+    ("show_image", "Toon afbeelding", "Show image"),
     (
         "image_view_only",
-        "Alleen in beeldweergave",
+        "Alleen in afbeeldingsweergave",
         "Image view only",
     ),
     ("show_text", "Toon tekst", "Show text"),
@@ -303,13 +312,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "detail_original_image",
         "Toon de afbeelding zoals gekopieerd",
-        "Show the picture as copied",
+        "Show the image as copied",
     ),
     ("chip_diff", "Diff", "Diff"),
     ("table_menu", "Tabel ▾", "Table ▾"),
     ("open_table", "Open tabel", "Open table"),
     ("table_view", "Tabel", "Table"),
-    ("image_menu", "Beeld ▾", "Image ▾"),
+    ("image_menu", "Afbeelding ▾", "Image ▾"),
     ("show_columns", "Toon kolommen", "Show columns"),
     ("show_table", "Toon tabel", "Show table"),
     ("decode_unix_time", "Unix-tijd", "Unix time"),
@@ -408,7 +417,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "paste_nothing",
         "Geen tekst of afbeelding op het klembord om te plakken",
-        "No text or picture on the clipboard to paste",
+        "No text or image on the clipboard to paste",
     ),
     (
         "no_text_on_clipboard",
@@ -531,7 +540,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // History navigation
     ("item_of", "Item {0} van {1}", "Item {0} of {1}"),
-    ("strip_group", "Historie", "History"),
+    ("strip_group", "Geschiedenis", "History"),
     ("strip_current", "getoond", "shown"),
     (
         "strip_compare_hint",
@@ -550,10 +559,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "strip_hide",
-        "Historiestrook verbergen",
+        "Geschiedenisstrook verbergen",
         "Hide history strip",
     ),
-    ("strip_show", "Historiestrook tonen", "Show history strip"),
+    (
+        "strip_show",
+        "Geschiedenisstrook tonen",
+        "Show history strip",
+    ),
     // Card status, counts
     ("working", "Bezig…", "Working…"),
     (
@@ -592,10 +605,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("redo_table_step", "Tabelstap opnieuw", "Redo table step"),
     (
         "undo_image_step",
-        "Beeldstap ongedaan maken",
+        "Afbeeldingsstap ongedaan maken",
         "Undo image step",
     ),
-    ("redo_image_step", "Beeldstap opnieuw", "Redo image step"),
+    (
+        "redo_image_step",
+        "Afbeeldingsstap opnieuw",
+        "Redo image step",
+    ),
     ("choose_columns_title", "Kies kolommen…", "Choose columns…"),
     (
         "choose_columns_detail",
@@ -633,7 +650,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "detail_pasteboard_only",
         "Alleen het klembord",
-        "Pasteboard only",
+        "Clipboard only",
     ),
     ("detail_forget_copies", "Kopieën vergeten", "Forget copies"),
     (
@@ -674,7 +691,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "detail_clear_sensitive",
         "Leeg het klembord een minuut nadat CopyCraft inloggegevens, PII of financiële gegevens heeft gekopieerd",
-        "Empty the pasteboard a minute after CopyCraft copied a credential, PII or financial data",
+        "Empty the clipboard a minute after CopyCraft copied a credential, PII or financial data",
     ),
     (
         "detail_history_forgotten",
@@ -686,10 +703,10 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Sneltoets, datumvolgorde, privacyfilter, vervagen, genegeerde apps, Openen bij inloggen",
         "Hotkey, date order, privacy filter, blur, ignored apps, Open at Login",
     ),
-    // Feedback by mail (Feature voorstellen… / Probleem melden…)
+    // Feedback by mail (Idee voorstellen… / Probleem melden…)
     (
         "feedback_feature_menu",
-        "Feature voorstellen…",
+        "Idee voorstellen…",
         "Suggest a feature…",
     ),
     (
@@ -710,7 +727,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("group_feedback", "Feedback", "Feedback"),
     (
         "feedback_feature_title",
-        "Feature voorstellen",
+        "Idee voorstellen",
         "Suggest a feature",
     ),
     (
@@ -855,7 +872,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "detail_image_steps",
         "Stappen op de afbeelding",
-        "Steps on the picture",
+        "Steps on the image",
     ),
     ("diff_add", "Toevoegen aan diff", "Add to diff"),
     ("diff_compare", "Vergelijk met A", "Compare with A"),
@@ -1059,12 +1076,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "image_cannot_read",
         "Kan deze afbeelding niet lezen",
-        "Can't read this picture",
+        "Can't read this image",
     ),
     (
         "image_cannot_write",
         "Kan deze afbeelding niet schrijven",
-        "Can't write this picture",
+        "Can't write this image",
     ),
     ("image_aspect_line", "Beeldverhouding: {0}", "Aspect: {0}"),
     ("image_pixels_line", "Pixels: {0}", "Pixels: {0}"),
@@ -1731,7 +1748,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "resize_prompt",
         "Een breedte (1200 of w 1200) of een hoogte (h 800), in pixels. De afbeelding behoudt haar verhoudingen en wordt nooit groter.",
-        "A width (1200 or w 1200) or a height (h 800), in pixels. The picture keeps its proportions and never gets larger.",
+        "A width (1200 or w 1200) or a height (h 800), in pixels. The image keeps its proportions and never gets larger.",
     ),
     (
         "resize_invalid",
@@ -1846,7 +1863,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Panels, Settings
     ("save_panel_clipboard", "Bewaar klembord", "Save clipboard"),
-    ("save_panel_picture", "Bewaar afbeelding", "Save picture"),
+    ("save_panel_picture", "Bewaar afbeelding", "Save image"),
     ("save_panel_table", "Bewaar tabel", "Save table"),
     (
         "login_change_failed",

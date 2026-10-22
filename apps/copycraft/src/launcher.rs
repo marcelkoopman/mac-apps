@@ -253,7 +253,7 @@ pub fn show_about() {
     crate::macos_about::show();
 }
 
-/// Feature voorstellen… / Probleem melden…: the form that opens a draft mail.
+/// Idee voorstellen… / Probleem melden…: the form that opens a draft mail.
 pub fn show_feedback(kind: crate::mailto::Kind) {
     #[cfg(target_os = "macos")]
     {

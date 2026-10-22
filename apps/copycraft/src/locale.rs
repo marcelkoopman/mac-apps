@@ -414,6 +414,65 @@ mod tests {
             .collect()
     }
 
+    /// The words of `text` (lowercase, split at anything but letters) that start with one of
+    /// `stems` and are not one of `allowed`.
+    fn forbidden_terms(text: &str, stems: &[&str], allowed: &[&str]) -> Vec<String> {
+        text.split(|c: char| !c.is_alphabetic())
+            .map(str::to_lowercase)
+            .filter(|word| {
+                stems.iter().any(|stem| word.starts_with(stem)) && !allowed.contains(&word.as_str())
+            })
+            .collect()
+    }
+
+    /// Dutch words the glossary in `strings.rs` rules out, as word starts.
+    const NL_FORBIDDEN: &[&str] = &["historie", "beeld", "plaatje", "foto", "feature"];
+    /// Dutch compounds that start like a forbidden word but are their own term.
+    const NL_ALLOWED: &[&str] = &["beeldverhouding"];
+    /// English words the glossary rules out.
+    const EN_FORBIDDEN: &[&str] = &["pasteboard", "picture", "photo"];
+
+    #[test]
+    fn forbidden_terms_spots_word_starts_only() {
+        assert_eq!(
+            forbidden_terms("Historiestrook tonen", NL_FORBIDDEN, NL_ALLOWED),
+            ["historiestrook"]
+        );
+        assert_eq!(
+            forbidden_terms("Toon beeld", NL_FORBIDDEN, NL_ALLOWED),
+            ["beeld"]
+        );
+        assert!(
+            forbidden_terms("Voorbeeld, Beeldverhouding: 4:3", NL_FORBIDDEN, NL_ALLOWED).is_empty()
+        );
+        assert!(forbidden_terms("Toon afbeelding", NL_FORBIDDEN, NL_ALLOWED).is_empty());
+        assert_eq!(
+            forbidden_terms("Empty pasteboard", EN_FORBIDDEN, &[]),
+            ["pasteboard"]
+        );
+        assert!(forbidden_terms("Show image", EN_FORBIDDEN, &[]).is_empty());
+    }
+
+    /// Every visible string follows the glossary at the head of `strings.rs`: Geschiedenis,
+    /// afbeelding, Idee; history, image, clipboard.
+    #[test]
+    fn visible_strings_follow_the_glossary() {
+        for (key, nl, en) in STRINGS {
+            let wrong = forbidden_terms(nl, NL_FORBIDDEN, NL_ALLOWED);
+            assert!(
+                wrong.is_empty(),
+                "{key} (nl): {wrong:?} is not in the glossary"
+            );
+            let wrong = forbidden_terms(en, EN_FORBIDDEN, &[]);
+            assert!(
+                wrong.is_empty(),
+                "{key} (en): {wrong:?} is not in the glossary"
+            );
+        }
+        assert_eq!(t_in(Lang::Nl, "strip_group"), "Geschiedenis");
+        assert_eq!(t_in(Lang::En, "image_cannot_read"), "Can't read this image");
+    }
+
     #[test]
     fn misspelled_app_names_spots_only_visible_words() {
         assert_eq!(misspelled_app_names("Over Copycraft"), ["Copycraft"]);

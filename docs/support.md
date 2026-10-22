@@ -13,7 +13,7 @@ permalink: /support
 
 Heb je een vraag of een bug gevonden? Mail naar [mac-apps-support@proton.me](mailto:mac-apps-support@proton.me). Bugs los ik zo goed mogelijk op, maar zonder vaste reactietijd, zonder garantie en zonder terugbetaling door mij. Terugbetalingen lopen via Apple.
 
-Je kunt ook in CopyCraft "Feature voorstellen…" of "Probleem melden…" kiezen (in het ⋯-menu of in Instellingen › Feedback). Je mailapp opent dan met een concept; jij verstuurt het zelf. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen.
+Je kunt ook in CopyCraft "Idee voorstellen…" of "Probleem melden…" kiezen (in het ⋯-menu of in Instellingen › Feedback). Je mailapp opent dan met een concept; jij verstuurt het zelf. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen.
 
 ### Veelgestelde vragen
 

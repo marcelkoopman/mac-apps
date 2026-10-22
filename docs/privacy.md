@@ -27,7 +27,7 @@ CopyCraft is een klembordhulp voor de menubalk van macOS. Het is gemaakt om gevo
 
 **Logboek.** CopyCraft schrijft alleen gebeurtenissen naar het macOS-logboek (wat er gebeurde, aantallen, groottes, soorten en fouten), nooit klembord- of geschiedenistekst, bestandsnamen, paden of AI-invoer en -uitvoer.
 
-**E-mail en links.** Feedback via "Feature voorstellen…" of "Probleem melden…" opent een concept in je eigen mailapp; jij verstuurt het zelf, CopyCraft verstuurt niets. Links (zoals deze pagina) opent CopyCraft in je standaardbrowser; die laadt de pagina, niet CopyCraft. Deze pagina wordt gehost op GitHub Pages; daarvoor geldt het privacybeleid van GitHub.
+**E-mail en links.** Feedback via "Idee voorstellen…" of "Probleem melden…" opent een concept in je eigen mailapp; jij verstuurt het zelf, CopyCraft verstuurt niets. Links (zoals deze pagina) opent CopyCraft in je standaardbrowser; die laadt de pagina, niet CopyCraft. Deze pagina wordt gehost op GitHub Pages; daarvoor geldt het privacybeleid van GitHub.
 
 **Kinderen.** CopyCraft verzamelt van niemand gegevens, dus ook niet van kinderen.
 

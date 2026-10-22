@@ -19,7 +19,7 @@ Heb je een vraag of een bug gevonden? Mail naar mac-apps-support@proton.me. Bugs
 7. **Een app moet genegeerd worden.** Voeg die toe bij Genegeerde apps in Instellingen.
 8. **Hoe start ik CopyCraft bij inloggen?** Zet "Openen bij inloggen" aan in Instellingen.
 
-9. **Hoe stel ik een feature voor of meld ik een probleem?** Kies "Feature voorstellen…" of "Probleem melden…" in het ⋯-menu of in Instellingen. Vul een onderwerp en je tekst in en kies "Maak e-mail": je mailapp opent met een concept naar mac-apps-support@proton.me. Jij verstuurt de e-mail zelf; CopyCraft verstuurt niets. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen. Is je tekst te lang voor een e-maillink, of heb je geen mailapp, dan kun je de tekst naar het klembord kopiëren en zelf in een mail plakken.
+9. **Hoe stel ik een feature voor of meld ik een probleem?** Kies "Idee voorstellen…" of "Probleem melden…" in het ⋯-menu of in Instellingen. Vul een onderwerp en je tekst in en kies "Maak e-mail": je mailapp opent met een concept naar mac-apps-support@proton.me. Jij verstuurt de e-mail zelf; CopyCraft verstuurt niets. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen. Is je tekst te lang voor een e-maillink, of heb je geen mailapp, dan kun je de tekst naar het klembord kopiëren en zelf in een mail plakken.
 
 ## English
 
