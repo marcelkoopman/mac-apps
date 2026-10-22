@@ -52,9 +52,12 @@ const PRIVACY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_
 const DISPLAY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 /// Meldingen: the four switches in two rows of two, one gap and a note.
 const NOTIFY_H: f64 = 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
-/// Feedback: one row with the two mail buttons, a gap and one row with the privacy policy and
-/// support links.
-const FEEDBACK_H: f64 = BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
+/// Feedback: four buttons stacked one per row: the two mail buttons, a wider gap, then the
+/// privacy policy and support links.
+const FEEDBACK_H: f64 =
+    4.0 * BUTTON_H + 2.0 * mac_ui::metrics::SPACE_S + mac_ui::metrics::SECTION_GAP;
+/// Width of every Feedback button: the widest title, capped at half the window.
+const FEEDBACK_BUTTON_MAX_W: f64 = WIDTH / 2.0;
 /// Every tab gets the height of the tallest one, so the window keeps one size.
 const PANE_H: f64 = max(
     max(max(GENERAL_H, PRIVACY_H), max(DISPLAY_H, NOTIFY_H)),
@@ -73,7 +76,7 @@ const _: () = assert!(GENERAL_H == 208.0);
 const _: () = assert!(PRIVACY_H == 280.0);
 const _: () = assert!(DISPLAY_H == 280.0);
 const _: () = assert!(NOTIFY_H == 82.0);
-const _: () = assert!(FEEDBACK_H == 64.0);
+const _: () = assert!(FEEDBACK_H == 144.0);
 const _: () = assert!(PANE_H == 280.0);
 /// Fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
 const _: () = assert!(HEIGHT == 356.0);
@@ -830,59 +833,55 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
 /// Feedback: Suggest a feature, Report a problem, the privacy policy and support. Returns the
 /// unused height.
 fn build_feedback(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = PANE_H;
-    let mail_row = take(&mut top, BUTTON_H);
-    gap(&mut top, mac_ui::metrics::SPACE_S);
     // The privacy policy and support page open in the default browser (NSWorkspace).
-    let link_row = take(&mut top, BUTTON_H);
-    for (row, buttons) in [
+    let buttons = [
         (
-            mail_row,
-            [
-                (
-                    crate::locale::t("feedback_feature_menu"),
-                    "lightbulb",
-                    sel!(suggestFeature:),
-                ),
-                (
-                    crate::locale::t("feedback_problem_menu"),
-                    "exclamationmark.bubble",
-                    sel!(reportProblem:),
-                ),
-            ],
+            crate::locale::t("feedback_feature_menu"),
+            "lightbulb",
+            sel!(suggestFeature:),
         ),
         (
-            link_row,
-            [
-                (
-                    crate::locale::t("privacy_policy"),
-                    "hand.raised",
-                    sel!(openPrivacy:),
-                ),
-                (
-                    crate::locale::t("support_link"),
-                    "questionmark.circle",
-                    sel!(openSupport:),
-                ),
-            ],
+            crate::locale::t("feedback_problem_menu"),
+            "exclamationmark.bubble",
+            sel!(reportProblem:),
         ),
-    ] {
-        let mut x = MARGIN;
-        for (title, symbol, action) in buttons {
-            let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
-            pill.set_symbol(symbol);
-            pill.set_accessibility_label(title);
-            let width = pill
-                .width_within((WIDTH - MARGIN * 2.0) / 2.0 - 4.0)
-                .max(BUTTON_H);
-            pill.view().setFrame(NSRect::new(
-                NSPoint::new(x, row),
-                NSSize::new(width, BUTTON_H),
-            ));
-            x += width + mac_ui::metrics::BUTTON_GAP;
-            wire(pill.button(), action);
-            body.addSubview(pill.view());
+        (
+            crate::locale::t("privacy_policy"),
+            "hand.raised",
+            sel!(openPrivacy:),
+        ),
+        (
+            crate::locale::t("support_link"),
+            "questionmark.circle",
+            sel!(openSupport:),
+        ),
+    ]
+    .map(|(title, symbol, action)| {
+        let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
+        pill.set_symbol(symbol);
+        pill.set_accessibility_label(title);
+        (pill, action)
+    });
+    // One width for all four: the widest title, so the column reads as one block.
+    let width = buttons
+        .iter()
+        .map(|(pill, _)| pill.width_within(FEEDBACK_BUTTON_MAX_W))
+        .fold(BUTTON_H, f64::max);
+    let mut top = PANE_H;
+    for (at, (pill, action)) in buttons.into_iter().enumerate() {
+        match at {
+            0 => {}
+            // A wider gap between the mail buttons and the links.
+            2 => gap(&mut top, mac_ui::metrics::SECTION_GAP),
+            _ => gap(&mut top, mac_ui::metrics::SPACE_S),
         }
+        let y = take(&mut top, BUTTON_H);
+        pill.view().setFrame(NSRect::new(
+            NSPoint::new(MARGIN, y),
+            NSSize::new(width, BUTTON_H),
+        ));
+        wire(pill.button(), action);
+        body.addSubview(pill.view());
     }
     top
 }
