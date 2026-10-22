@@ -57,7 +57,10 @@ objc2-quick-look-thumbnailing = { version = "0.3.2", default-features = false, f
     "objc2-core-graphics",
 ] }
 tray-icon = "0.26"
-winit = "0.30"
+# Defaults off: they are the Linux backends (x11, wayland, wayland-dlopen, wayland-csd-adwaita, which
+# pulls sctk-adwaita, ab_glyph and the unmaintained ttf-parser). The apps only run winit's AppKit
+# event loop; rwh_06 keeps the raw-window-handle 0.6 impls winit has by default.
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 
 # Profiles moved from apps/copycraft/Cargo.toml (Cargo ignores profiles in non-root members).
 [profile.dev]
