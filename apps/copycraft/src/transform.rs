@@ -1,5 +1,5 @@
 use serde_json::Value as JsonValue;
-use serde_yaml::Value as YamlValue;
+use serde_norway::Value as YamlValue;
 
 /// YAML re-indented. A copy of several documents (`---`) stays several documents.
 pub fn pretty_yaml(text: &str) -> Result<String, String> {
@@ -9,7 +9,7 @@ pub fn pretty_yaml(text: &str) -> Result<String, String> {
         if index > 0 || documents.len() > 1 {
             out.push_str("---\n");
         }
-        out.push_str(&serde_yaml::to_string(value).map_err(|e| e.to_string())?);
+        out.push_str(&serde_norway::to_string(value).map_err(|e| e.to_string())?);
     }
     Ok(out)
 }
@@ -58,7 +58,7 @@ fn yaml_value_to_json(value: YamlValue) -> Option<JsonValue> {
     })
 }
 
-fn json_number(number: serde_yaml::Number) -> Option<JsonValue> {
+fn json_number(number: serde_norway::Number) -> Option<JsonValue> {
     if let Some(value) = number.as_i64() {
         return Some(JsonValue::Number(value.into()));
     }
@@ -217,7 +217,8 @@ fn parse_yaml_documents(text: &str) -> Result<Vec<YamlValue>, String> {
         if part.trim().is_empty() {
             continue;
         }
-        let value: YamlValue = serde_yaml::from_str(part).map_err(|e| format!("not YAML: {e}"))?;
+        let value: YamlValue =
+            serde_norway::from_str(part).map_err(|e| format!("not YAML: {e}"))?;
         match value {
             YamlValue::Null => {}
             YamlValue::Mapping(_) | YamlValue::Sequence(_) | YamlValue::Tagged(_) => {

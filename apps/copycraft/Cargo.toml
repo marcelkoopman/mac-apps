@@ -57,7 +57,9 @@ regex = "1.13"
 # parquet it pulls in polars-stream and with it object_store and reqwest (network crates).
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet", "temporal"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
-serde_yaml = "0.9"
+# YAML (src/transform.rs): serde_norway, the maintained fork of the deprecated serde_yaml
+# (whose unsafe-libyaml is unmaintained, RUSTSEC-2024-0449); same API. Approved by Marcel (2026-10-22).
+serde_norway = "0.9.42"
 # Line diff of two history copies (src/diff.rs). Pure Rust: no network crates.
 similar = "3.2"
 zeroize = "1.9.1"
