@@ -252,6 +252,11 @@ impl App {
                 op,
                 text: Some(result),
             } => self.text_stepped(id, op.label(), matches!(op, TextOp::AgentCommands), &result),
+            // Names the code and the problem; the text itself is never shown or logged.
+            text_ops::TextResult::Invalid { codec, reason } => {
+                self.text_note = Some((id, codec.invalid_note(reason)));
+                self.refresh_popup();
+            }
         }
     }
 

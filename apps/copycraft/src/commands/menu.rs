@@ -51,6 +51,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         // The functions of one code action sit in a submenu named after it.
         CommandId::AiFn(action, _) => Some(ai_title(*action)),
         CommandId::TextCase(_) => Some(crate::locale::t("case_menu")),
+        CommandId::TextEncode(_) => Some(crate::locale::t("encoding_menu")),
         _ => None,
     }
 }
@@ -116,9 +117,10 @@ pub fn text_section(id: &CommandId) -> Option<TextSection> {
         | CommandId::TextReverse
         | CommandId::TextColumn
         | CommandId::TextFilter => Some(TextSection::Lines),
-        CommandId::TextCase(_) | CommandId::TextCleanUrl | CommandId::TextJson => {
-            Some(TextSection::Convert)
-        }
+        CommandId::TextCase(_)
+        | CommandId::TextEncode(_)
+        | CommandId::TextCleanUrl
+        | CommandId::TextJson => Some(TextSection::Convert),
         CommandId::AgentCommands
         | CommandId::AgentOutline
         | CommandId::AgentCheck
@@ -187,6 +189,15 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
                 )
             }),
     );
+    // Encoding › Base64, URL, hex: a submenu too.
+    commands.extend(crate::text_ops::encoding::Codec::ALL.iter().map(|codec| {
+        command(
+            CommandId::TextEncode(*codec),
+            codec.title(),
+            crate::locale::t("detail_encoding"),
+            "encode decode base64 base64url url percent escape hex bytes",
+        )
+    }));
     if edit.tracking {
         commands.push(clean_url_command());
     }

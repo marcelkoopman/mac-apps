@@ -13,6 +13,11 @@ pub enum TextResult {
         op: TextOp,
         text: Option<zeroize::Zeroizing<String>>,
     },
+    /// A decode the text did not fit: why, without the text.
+    Invalid {
+        codec: encoding::Codec,
+        reason: encoding::Invalid,
+    },
 }
 
 /// Copied text is never printed.
@@ -20,6 +25,7 @@ impl std::fmt::Debug for TextResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TextResult::Step { text, .. } => write!(f, "Step(changed: {})", text.is_some()),
+            TextResult::Invalid { codec, reason } => write!(f, "Invalid({codec:?}, {reason:?})"),
         }
     }
 }
@@ -27,6 +33,14 @@ impl std::fmt::Debug for TextResult {
 impl TextResult {
     /// Work `op` out on `text`. Runs on a background thread.
     pub fn work(text: &str, op: &TextOp) -> Self {
+        if let TextOp::Encode(codec) = op
+            && let Err(reason) = codec.apply(text)
+        {
+            return TextResult::Invalid {
+                codec: *codec,
+                reason,
+            };
+        }
         let out = op
             .apply(text)
             .filter(|out| out.as_str() != text)
@@ -64,6 +78,8 @@ pub enum TextOp {
     Json(json_style::JsonStyle),
     /// Every line in a case style ([`case_style`]).
     Case(case_style::CaseStyle),
+    /// The whole text encoded or decoded ([`encoding`]).
+    Encode(encoding::Codec),
 }
 
 impl TextOp {
@@ -92,6 +108,7 @@ impl TextOp {
             TextOp::CleanUrls => url_clean::clean(text).text,
             TextOp::Json(style) => json_style::restyle(text, *style).ok()?,
             TextOp::Case(style) => case_style::convert(text, *style),
+            TextOp::Encode(codec) => codec.apply(text).ok()?,
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -105,6 +122,7 @@ impl TextOp {
             TextOp::AgentCommands => crate::locale::t("agent_commands").to_string(),
             TextOp::CleanUrls => crate::locale::t("url_clean_label").to_string(),
             TextOp::Case(style) => crate::locale::tf("case_label", &[&style.title()]),
+            TextOp::Encode(codec) => codec.label(),
             TextOp::Json(style) => match (style.compress, style.sort) {
                 (false, false) => crate::locale::t("json_label_format"),
                 (false, true) => crate::locale::t("json_label_format_sorted"),
@@ -292,6 +310,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
 }
 
 pub mod case_style;
+pub mod encoding;
 pub mod filter;
 pub mod json_style;
 pub mod pager;

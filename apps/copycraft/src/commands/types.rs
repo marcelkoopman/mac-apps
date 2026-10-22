@@ -468,6 +468,8 @@ pub enum CommandId {
     /// Text ▾ › Case style › a style: the dialog with that style picked, a preview, then
     /// Apply to Clipboard as a new version.
     TextCase(crate::text_ops::case_style::CaseStyle),
+    /// Text ▾ › Convert › Encoding: Base64, URL or hex, either way.
+    TextEncode(crate::text_ops::encoding::Codec),
     /// The "AI" chip left of Text ▾ on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The

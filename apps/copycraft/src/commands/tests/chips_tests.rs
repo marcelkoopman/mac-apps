@@ -572,6 +572,40 @@ fn case_style_is_a_submenu_of_lines() {
 }
 
 #[test]
+fn encoding_is_a_submenu_of_convert() {
+    use crate::commands::{TextSection, menu_group, text_menu_items, text_section, text_shown};
+    use crate::text_ops::encoding::Codec;
+    let card = data(SubjectKind::Text, Some("foobar\n"));
+    let menu = text_menu_items(&text_shown(&card).expect("Text ▾"));
+    let at: Vec<usize> = menu
+        .iter()
+        .enumerate()
+        .filter(|(_, (c, _))| matches!(c.id, CommandId::TextEncode(_)))
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(at.len(), Codec::ALL.len());
+    assert!(at.windows(2).all(|pair| pair[1] == pair[0] + 1));
+    for index in at {
+        let id = &menu[index].0.id;
+        assert_eq!(menu_group(id), Some(crate::locale::t("encoding_menu")));
+        assert_eq!(text_section(id), Some(TextSection::Convert));
+    }
+    let step = crate::text_ops::TextOp::Encode(Codec::Base64Encode);
+    assert_eq!(step.apply("foobar").as_deref(), Some("Zm9vYmFy"));
+    // A bad decode comes back as a reason, without the text.
+    match crate::text_ops::TextResult::work(
+        "abc$",
+        &crate::text_ops::TextOp::Encode(Codec::Base64Decode),
+    ) {
+        crate::text_ops::TextResult::Invalid { codec, reason } => {
+            assert_eq!(codec, Codec::Base64Decode);
+            assert_eq!(reason, crate::text_ops::encoding::Invalid::NotEncoded);
+        }
+        other => panic!("expected Invalid, got {other:?}"),
+    }
+}
+
+#[test]
 fn the_text_menu_is_split_into_lines_convert_and_analysis() {
     use crate::commands::{TextSection, text_menu_items, text_sections, text_shown};
     let card = data(SubjectKind::Text, Some("{\"a\": 1}\n"));

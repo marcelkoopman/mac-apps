@@ -1202,6 +1202,43 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("text_menu", "Tekst ▾", "Text ▾"),
     ("text_section_lines", "Regels", "Lines"),
     ("text_section_convert", "Omzetten", "Convert"),
+    // Text ▾ › Convert › Encoding (src/text_ops/encoding.rs)
+    ("encoding_menu", "Codering", "Encoding"),
+    ("encode_base64", "Codeer als Base64", "Encode as Base64"),
+    ("decode_base64", "Decodeer Base64", "Decode Base64"),
+    (
+        "encode_base64_url",
+        "Codeer als Base64 (URL-veilig)",
+        "Encode as Base64 (URL-Safe)",
+    ),
+    (
+        "decode_base64_url",
+        "Decodeer Base64 (URL-veilig)",
+        "Decode Base64 (URL-Safe)",
+    ),
+    ("encode_url", "Codeer voor URL", "Encode for URL"),
+    ("decode_url", "Decodeer URL", "Decode URL"),
+    ("encode_hex", "Codeer als hex", "Encode as Hex"),
+    ("decode_hex", "Decodeer hex", "Decode Hex"),
+    (
+        "detail_encoding",
+        "Hele tekst coderen of decoderen; ⌘Z zet hem terug",
+        "Encode or decode the whole text; ⌘Z undoes it",
+    ),
+    ("encoding_url_name", "URL-codering", "URL encoding"),
+    ("encoding_hex_name", "hex", "hex"),
+    ("encoding_label_encoded", "{0} gecodeerd", "{0} encoded"),
+    ("encoding_label_decoded", "{0} gedecodeerd", "{0} decoded"),
+    (
+        "encoding_invalid",
+        "Dit is geen geldige {0}",
+        "This isn't valid {0}",
+    ),
+    (
+        "encoding_not_text",
+        "Gedecodeerd is dit geen tekst",
+        "The decoded bytes aren't text",
+    ),
     ("text_section_analyse", "Analyse", "Analysis"),
     // Text ▾ › Apple Intelligence (local AI, crate mac-ai)
     ("ai_group", "Apple Intelligence", "Apple Intelligence"),

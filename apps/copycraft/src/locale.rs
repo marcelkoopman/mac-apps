@@ -195,6 +195,8 @@ mod tests {
     fn dutch_differs_from_english_unless_listed() {
         // Words and names that are the same in both languages.
         const SAME: &[&str] = &[
+            // "hex" in a message, the same word in Dutch.
+            "encoding_hex_name",
             // Case style names are written in the style itself.
             "case_camel",
             "case_pascal",
@@ -503,7 +505,16 @@ mod tests {
         "diff_add",
         "diff_compare",
         "diff_remove",
+        "decode_base64",
+        "decode_base64_url",
+        "decode_hex",
+        "decode_url",
         "empty_pasteboard",
+        "encode_base64",
+        "encode_base64_url",
+        "encode_hex",
+        "encode_url",
+        "encoding_menu",
         "export_diagnostics",
         "feedback_copy",
         "feedback_feature_menu",
@@ -574,6 +585,7 @@ mod tests {
     /// English words that stay lowercase inside a Title Case command.
     const TITLE_SMALL_WORDS: &[&str] = &[
         "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "from", "with",
+        "as",
     ];
 
     /// The words of `text` that break Title Case: a small word in the middle stays lowercase,
