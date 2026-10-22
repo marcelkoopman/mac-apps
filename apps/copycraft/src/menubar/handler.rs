@@ -3,7 +3,12 @@
 use super::*;
 
 impl ApplicationHandler<UserEvent> for App {
-    fn resumed(&mut self, _: &ActiveEventLoop) {}
+    /// Once, right after launch: winit's app menu exists by now, so Edit and Window go next
+    /// to it.
+    fn resumed(&mut self, _: &ActiveEventLoop) {
+        #[cfg(target_os = "macos")]
+        crate::macos_main_menu::install();
+    }
 
     fn window_event(
         &mut self,

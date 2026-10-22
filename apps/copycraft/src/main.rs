@@ -76,6 +76,8 @@ mod macos_launcher;
 #[cfg(target_os = "macos")]
 mod macos_login;
 #[cfg(target_os = "macos")]
+mod macos_main_menu;
+#[cfg(target_os = "macos")]
 mod macos_notify;
 #[cfg(target_os = "macos")]
 mod macos_open;

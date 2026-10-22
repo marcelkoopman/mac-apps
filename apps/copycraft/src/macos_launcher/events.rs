@@ -704,14 +704,10 @@ pub(crate) fn focus_card() {
     }
 }
 
-/// ⌘V with the caret in a field (search, find, column filter): paste the clipboard's text
-/// there. Returns `false` when ⌘V is the card's ([`commands::paste_target`]).
-///
-/// The card has no Edit menu, and a text view does not answer ⌘V itself (the Paste menu item
-/// does that in other apps), so handing the key to `super` would only beep. The field editor
-/// reads the pasteboard the way its own `paste:` does: at the caret, replacing the selection,
-/// as one undoable edit that tells the field its text changed.
-pub(crate) fn paste_into_field(window: &NSWindow) -> bool {
+/// ⌘V belongs to the field with the caret (search, find, column filter), not the card
+/// ([`commands::paste_target`]). The hidden Edit menu's *Paste* then pastes there
+/// ([`crate::macos_main_menu`]): at the caret, replacing the selection, one undoable edit.
+pub(crate) fn caret_in_field(window: &NSWindow) -> bool {
     let Some(editor) = window
         .firstResponder()
         .and_then(|responder| responder.downcast::<NSTextView>().ok())
@@ -729,11 +725,7 @@ pub(crate) fn paste_into_field(window: &NSWindow) -> bool {
                 })
             })
         });
-    if commands::paste_target(editor.isEditable(), hidden_search) != commands::PasteTarget::Field {
-        return false;
-    }
-    let _ = editor.readSelectionFromPasteboard(&NSPasteboard::generalPasteboard());
-    true
+    commands::paste_target(editor.isEditable(), hidden_search) == commands::PasteTarget::Field
 }
 
 pub(crate) fn focus_field() {

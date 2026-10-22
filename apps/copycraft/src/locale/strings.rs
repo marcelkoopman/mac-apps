@@ -447,6 +447,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("dropped_text", "Neergezette tekst", "Dropped text"),
     ("dropped_image", "Neergezette afbeelding", "Dropped image"),
     ("pasted_text", "Geplakte tekst", "Pasted text"),
+    // The hidden main menu (src/macos_main_menu.rs): its key equivalents, as in macOS.
+    ("menu_edit", "Wijzig", "Edit"),
+    ("menu_undo", "Herstel", "Undo"),
+    ("menu_redo", "Opnieuw", "Redo"),
+    ("menu_cut", "Knip", "Cut"),
+    ("menu_paste", "Plak", "Paste"),
+    ("menu_select_all", "Selecteer alles", "Select All"),
+    ("menu_window", "Venster", "Window"),
+    ("menu_close", "Sluit venster", "Close Window"),
+    ("menu_minimize", "Minimaliseer", "Minimize"),
     ("pasted_image", "Geplakte afbeelding", "Pasted image"),
     (
         "file_not_text",

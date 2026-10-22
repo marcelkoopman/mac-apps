@@ -257,6 +257,9 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
       copying, dropping or pasting it, also `images/ocr_text.png`.
 - [ ] ⌘V in the search field (type `/` on the card) and in the column picker's filter pastes
       the clipboard text into the field; ⌘V with search closed still pastes onto the card.
+- [ ] Hidden Edit menu: in Settings › AI's prompt fields and the card's search field, ⌘X ⌘C ⌘V
+      ⌘A and ⌘Z/⇧⌘Z work on the text; on the card without a field, ⌘Z still steps back
+      through the card's versions. ⌘H hides CopyCraft and ⌘Q quits it (winit's app menu).
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,
       unlock, and check that history is empty.
 - [ ] `edge/empty.txt`: copying an empty Notion code block copies nothing, so the card keeps
