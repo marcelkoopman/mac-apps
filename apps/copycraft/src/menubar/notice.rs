@@ -230,4 +230,49 @@ mod tests {
         }
         crate::settings::set_privacy_filter(false);
     }
+
+    /// A polled copy of a token, the way [`App::record_current`] and [`App::note_secret_copy`]
+    /// take it: with the filter off and on, it stays out of history and the notification goes
+    /// out. (An `App` needs the menu bar item and the hotkey manager, so this runs their parts.)
+    #[test]
+    fn a_copied_token_stays_out_of_history_and_is_told_with_the_filter_off_and_on() {
+        let token = format!("ghp_{}", "1234567890abcdefghijklmnopqrstuvwxyzAB");
+        for (filter, change) in [(false, 1), (true, 2)] {
+            crate::settings::set_privacy_filter(filter);
+            assert_eq!(crate::settings::privacy_filter(), filter);
+            let mut history = crate::clipboard::ClipboardHistory::default();
+            assert_eq!(
+                admit_text(&mut history, &token),
+                TextAdmit::Refused,
+                "filter {filter}"
+            );
+            assert!(history.is_empty(), "filter {filter}");
+            assert_eq!(
+                admit_text(&mut history, "plain shopping list"),
+                TextAdmit::Kept
+            );
+            assert_eq!(history.len(), 1, "filter {filter}");
+            let mut notices = Notices::default();
+            assert!(notices.secret_to_tell(&token, change), "filter {filter}");
+            let facts = Facts {
+                card_hidden: true,
+                app_frontmost: false,
+                failed: false,
+                took: Duration::ZERO,
+            };
+            assert_eq!(
+                notifications::decide(
+                    Kind::SecretCopied,
+                    facts,
+                    crate::settings::notify_switches(),
+                    Permission::Granted,
+                    &notices.session,
+                    Instant::now(),
+                ),
+                Verdict::Send,
+                "filter {filter}"
+            );
+        }
+        crate::settings::set_privacy_filter(false);
+    }
 }

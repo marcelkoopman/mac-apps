@@ -726,11 +726,11 @@ impl App {
             && self.should_record(text)
             && is_new_copy(self.history.get(0), text)
         {
-            match crate::sensitivity::admission(&crate::sensitivity::labeling(text)) {
-                crate::sensitivity::Admission::Keep => {}
+            match admit_text(&mut self.history, text) {
+                TextAdmit::Kept => {}
                 // A token, key or URL password stays out of history. The card still shows the
                 // clipboard; the copy is not looked at again until the clipboard changes.
-                crate::sensitivity::Admission::Refuse => {
+                TextAdmit::Refused => {
                     self.skip_record = Some(Zeroizing::new(text.to_string()));
                     self.browsing = None;
                     crate::diag::log(crate::diag::LogEvent::CopySkipped(
@@ -739,11 +739,10 @@ impl App {
                     return;
                 }
                 // A long copy still being checked: `labels_checked` looks again.
-                crate::sensitivity::Admission::Wait => return,
+                TextAdmit::Waiting => return,
             }
             self.skip_record = None;
             self.last_copy = Some(Instant::now());
-            self.history.record(text.to_string());
             self.history_cursor = 0;
             self.clipboard_cursor = None;
             // A new copy: the card follows the clipboard again.

@@ -276,6 +276,30 @@ pub(crate) fn history_forgettable(history: &ClipboardHistory) -> bool {
     history.has_unpinned() || history.can_restore()
 }
 
+/// What [`App::record_current`] did with a copied text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TextAdmit {
+    /// In history now (or already there).
+    Kept,
+    /// A token, key or URL password: left out of history.
+    Refused,
+    /// A long copy still being checked: looked at again once its labels are in.
+    Waiting,
+}
+
+/// History's part of a copied text: kept unless it holds a credential. The privacy filter
+/// plays no part (it only masks what is shown).
+pub(crate) fn admit_text(history: &mut ClipboardHistory, text: &str) -> TextAdmit {
+    match crate::sensitivity::admission(&crate::sensitivity::labeling(text)) {
+        crate::sensitivity::Admission::Keep => {
+            history.record(text.to_string());
+            TextAdmit::Kept
+        }
+        crate::sensitivity::Admission::Refuse => TextAdmit::Refused,
+        crate::sensitivity::Admission::Wait => TextAdmit::Waiting,
+    }
+}
+
 /// Lock, sleep or user switch, history's half: the copy kept for ⌘Z goes at once, also when
 /// history is empty now. True when entries remain to be wiped ([`App::forget_entries`]).
 pub(crate) fn end_session_history(history: &mut ClipboardHistory) -> bool {
