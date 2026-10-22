@@ -1377,9 +1377,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Agent-instructies",
         "Agent instructions",
     ),
-    ("agent_commands", "Commando's", "Commands"),
-    ("agent_outline", "Overzicht", "Outline"),
-    ("agent_check", "Controle", "Check"),
+    (
+        "agent_commands",
+        "Commando's uit AGENTS.md",
+        "Commands from AGENTS.md",
+    ),
+    ("agent_outline", "Koppenoverzicht", "Heading Outline"),
+    ("agent_check", "AGENTS.md controleren", "Check AGENTS.md"),
     (
         "detail_agent_commands",
         "De shell-commando's, één per regel, als nieuwe versie en op het klembord",

@@ -138,12 +138,12 @@ Markdown with several typical headings (Build, Test, Setup, Code style, Conventi
 Commands, PR instructions) and a shell code block. A README stays Markdown. The footer shows
 a rough token estimate (characters / 4). *Text ▾* then offers:
 
-- *Commands* (*Commando's*): the lines of shell/bash/sh/console blocks and inline commands
+- *Commands from AGENTS.md* (*Commando's uit AGENTS.md*; also on CLAUDE.md and the others): the lines of shell/bash/sh/console blocks and inline commands
   in lists (cargo, npm, pnpm, yarn, make, pytest, go, git, gradle, mvn), in order, each
   once, as a new version on the clipboard (⌘Z goes back for a copied text; an opened file
   is left for the clipboard).
-- *Outline* (*Overzicht*): the headings; pick one to scroll the card there.
-- *Check* (*Controle*): possible secrets (line and kind only, never the value), a very long
+- *Heading Outline* (*Koppenoverzicht*): the headings; pick one to scroll the card there.
+- *Check AGENTS.md* (*AGENTS.md controleren*): possible secrets (line and kind only, never the value), a very long
   file (over 500 lines or about 8k tokens), empty sections, duplicate headings, in-file
   `#anchor` links that match no heading (links to other files are not checked) and a missing
   Build or Test section. A section counts only when its heading is exactly a known name

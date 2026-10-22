@@ -439,11 +439,11 @@ pub enum CommandId {
     TextMenu,
     /// Text ▾ › Complexity: cognitive complexity per function, in a menu.
     TextComplexity,
-    /// Text ▾ › Commands on agent instructions: their shell commands as a new version.
+    /// Text ▾ › Commands from AGENTS.md on agent instructions: their shell commands as a new version.
     AgentCommands,
-    /// Text ▾ › Outline: the headings, each going to its line.
+    /// Text ▾ › Heading Outline: the headings, each going to its line.
     AgentOutline,
-    /// Text ▾ › Check: warnings about the instructions, each going to its line.
+    /// Text ▾ › Check AGENTS.md: warnings about the instructions, each going to its line.
     AgentCheck,
     /// A row of the Complexity, Outline or Check menu: scroll the card to this (1-based) line.
     GotoLine(usize),

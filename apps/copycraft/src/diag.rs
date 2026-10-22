@@ -187,15 +187,15 @@ pub enum LogEvent {
         spinner: bool,
     },
     SaveFailed(ErrorKind),
-    /// Text ▾ › Commands found this many commands.
+    /// Text ▾ › Commands from AGENTS.md found this many commands.
     AgentCommands {
         count: usize,
     },
-    /// Text ▾ › Outline listed this many headings.
+    /// Text ▾ › Heading Outline listed this many headings.
     AgentOutline {
         headings: usize,
     },
-    /// Text ▾ › Check found this many warnings, this many of them possible secrets.
+    /// Text ▾ › Check AGENTS.md found this many warnings, this many of them possible secrets.
     AgentChecked {
         warnings: usize,
         secrets: usize,
