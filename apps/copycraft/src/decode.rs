@@ -1,11 +1,12 @@
 //! The decoder chip: one chip next to Original, titled with what the copy decodes as (JWT,
-//! UUID, Unix time, URL, Hash, Base64), that shows the decoded text read-only. Detection is string work only and runs
+//! UUID, Unix time, ISO 8601, URL, Hash, Base64), that shows the decoded text read-only. Detection is string work only and runs
 //! with the other chips ([`crate::commands::warm_chips`] off the main thread for a large copy).
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
 mod base64;
 pub(crate) mod clock;
 mod hash;
+mod iso_date;
 mod jwt;
 mod unix_time;
 mod url;
@@ -19,6 +20,7 @@ pub enum DecodeKind {
     Jwt,
     Uuid,
     UnixTime,
+    IsoDate,
     Url,
     Hash,
     Base64,
@@ -31,6 +33,7 @@ impl DecodeKind {
             Self::Jwt => "JWT",
             Self::Uuid => "UUID",
             Self::UnixTime => crate::locale::t("decode_unix_time"),
+            Self::IsoDate => "ISO 8601",
             Self::Url => "URL",
             Self::Hash => "Hash",
             Self::Base64 => "Base64",
@@ -43,6 +46,7 @@ impl DecodeKind {
             Self::Jwt => "decode jwt token",
             Self::Uuid => "decode uuid guid version",
             Self::UnixTime => "decode unix time timestamp epoch date",
+            Self::IsoDate => "decode iso 8601 date time unix timestamp epoch",
             Self::Url => "decode url percent query",
             Self::Hash => "decode hash md5 sha digest",
             Self::Base64 => "decode base64",
@@ -76,6 +80,7 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
     let decoded = found(DecodeKind::Jwt, jwt::decode(peeled, env))
         .or_else(|| found(DecodeKind::Uuid, uuid::decode(peeled, env)))
         .or_else(|| found(DecodeKind::UnixTime, unix_time::decode(peeled, env)))
+        .or_else(|| found(DecodeKind::IsoDate, iso_date::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Url, url::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Hash, hash::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;
@@ -281,6 +286,10 @@ mod tests {
             Some(DecodeKind::Uuid)
         );
         assert_eq!(detect("1700000000"), Some(DecodeKind::UnixTime));
+        assert_eq!(
+            detect("2026-10-22T14:03:05+02:00"),
+            Some(DecodeKind::IsoDate)
+        );
         assert_eq!(detect(&testdata("hash_sha256.txt")), Some(DecodeKind::Hash));
     }
 
