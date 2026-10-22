@@ -3,7 +3,8 @@
 //! `tray-icon` lays a view over the status button and waits for that view's mouse-up. On this
 //! macOS a real click is delivered to the status button, not to a subview, so the click hit the
 //! overlay and stopped there. The overlay is taken off the button. The button's action opens
-//! the card on left click and the status menu on right click.
+//! the card on left click and the status menu on right click or Control-click, as for any
+//! menu bar extra.
 
 use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
@@ -12,7 +13,7 @@ use std::time::{Duration, Instant};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::AnyObject;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use mac_ui::objc2_app_kit::{NSEvent, NSEventMask, NSStatusBarButton};
+use mac_ui::objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags, NSStatusBarButton};
 use mac_ui::objc2_foundation::NSObject;
 use mac_ui::tray_icon::TrayIcon;
 
@@ -47,7 +48,7 @@ define_class!(
             if SHOWING_MENU.with(Cell::get) || !accept_click(Instant::now()) {
                 return;
             }
-            if right_button_down() {
+            if opens_menu(right_button_down(), control_down()) {
                 launcher::emit(UserEvent::ShowStatusMenu);
             } else {
                 launcher::emit(UserEvent::ToggleUnderIcon);
@@ -124,6 +125,16 @@ fn right_button_down() -> bool {
     pressed & RIGHT_BUTTON != 0
 }
 
+/// Control held: a Control-click is a right click on the Mac.
+fn control_down() -> bool {
+    NSEvent::modifierFlags_class().contains(NSEventModifierFlags::Control)
+}
+
+/// A right click or a Control-click opens the status menu; any other click toggles the card.
+fn opens_menu(right_button: bool, control: bool) -> bool {
+    right_button || control
+}
+
 fn same_ptr<T: ?Sized, U: ?Sized>(left: Option<&T>, right: Option<&U>) -> bool {
     match (left, right) {
         (Some(left), Some(right)) => std::ptr::eq(
@@ -137,7 +148,15 @@ fn same_ptr<T: ?Sized, U: ?Sized>(left: Option<&T>, right: Option<&U>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CLICK_GAP, LAST_CLICK, accept_click};
+    use super::{CLICK_GAP, LAST_CLICK, accept_click, opens_menu};
+
+    #[test]
+    fn a_right_click_or_a_control_click_opens_the_menu() {
+        assert!(opens_menu(true, false));
+        assert!(opens_menu(false, true));
+        assert!(opens_menu(true, true));
+        assert!(!opens_menu(false, false));
+    }
 
     #[test]
     fn a_second_status_click_inside_the_gap_is_ignored() {

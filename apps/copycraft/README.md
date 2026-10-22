@@ -107,7 +107,7 @@ Manual check of the language (NL/EN): open Settings › Language and choose Nede
 | Click the menu bar icon | Open the card under the icon, or close it |
 | ⌘V on the card | Paste the clipboard onto the card (read once, also with history off); it goes into history like a drop |
 | ⌘Z ⇧⌘Z ⌘X ⌘C ⌘V ⌘A, ⌘W ⌘M | The hidden main menu (`src/macos_main_menu.rs`): *Edit* and *Window* next to the app menu winit builds (Hide ⌘H, Quit ⌘Q). The menu bar never shows them (no Dock icon), but the keys work in every text field, and ⌘W/⌘M close or minimise the key window. The card's own chords come first (⌘Z on the card is its version stack) |
-| Right-click the menu bar icon | Hotkey hint, *Pause Recording*, *Ignore Next Copy*, *History* (once there is one), *Allow screenshots*, *Settings…*, *Welcome Screen…*, *About CopyCraft*, version, *Quit* |
+| Right-click or Control-click the menu bar icon | Hotkey hint, *Pause Recording*, *Ignore Next Copy*, *History* (once there is one), *Allow screenshots*, *Settings…*, *Welcome Screen…*, *About CopyCraft*, version, *Quit* |
 | Type any text, or `/` | Search actions, history and appearance. With the privacy filter on, a history hit is titled with its type and size; with it off, one line of the text (about 80 characters). The menu bar *History* rows stay type and size |
 | ← → | Newer / older copy in history (the strip's marked card moves; a beep at the newest or the oldest). On a PDF in the image view with several pages they turn pages while the pointer is over the page. Without history they move the selection. In the search or find field with text they move the caret |
 | ⌘← ⌘→ | Newer / older copy in history, always, also while typing |
