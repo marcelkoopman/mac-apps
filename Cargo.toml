@@ -56,7 +56,10 @@ objc2-quick-look-thumbnailing = { version = "0.3.2", default-features = false, f
     "objc2-core-foundation",
     "objc2-core-graphics",
 ] }
-tray-icon = "0.26"
+# Defaults off: the only default is libappindicator, the Linux tray backend (libappindicator and
+# muda/gtk3, which pull gtk, the unsound glib 0.18 and the unmaintained proc-macro-error). macOS
+# uses NSStatusItem and needs no feature.
+tray-icon = { version = "0.26", default-features = false }
 # Defaults off: they are the Linux backends (x11, wayland, wayland-dlopen, wayland-csd-adwaita, which
 # pulls sctk-adwaita, ab_glyph and the unmaintained ttf-parser). The apps only run winit's AppKit
 # event loop; rwh_06 keeps the raw-window-handle 0.6 impls winit has by default.
