@@ -52,6 +52,50 @@ pub(crate) fn scan_image_bytes(bytes: &[u8]) -> Option<ImageScan> {
     scan_decoded(decode_bytes(bytes.to_vec(), is_png)?, data_url)
 }
 
+/// How long a picture's text recognition may take before it goes into history without it.
+pub(crate) const RECOGNITION_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// [`scan_image_bytes`] on a thread of its own, at most [`RECOGNITION_LIMIT`]: `None` when it
+/// took longer (its late result is wiped) or could not start.
+pub(crate) fn scan_image_bytes_within(bytes: Zeroizing<Vec<u8>>) -> Option<ImageScan> {
+    crate::work::within(
+        "copycraft-image-scan",
+        RECOGNITION_LIMIT,
+        move || scan_image_bytes(&bytes),
+        |scan| {
+            if let Some(mut scan) = scan {
+                scan.wipe();
+            }
+        },
+    )
+    .flatten()
+}
+
+/// Only the text recognised in an encoded picture, for the history gate of a copied picture
+/// ([`crate::sensitivity::picture_admission`]), at most [`RECOGNITION_LIMIT`]. `None` when the
+/// picture holds no text, cannot be read, recognition fails or takes too long. No data URL or
+/// size info is made; a barcode's text is wiped. Never logged.
+pub(crate) fn recognized_text_within(bytes: Zeroizing<Vec<u8>>) -> Option<Zeroizing<String>> {
+    crate::work::within(
+        "copycraft-image-text",
+        RECOGNITION_LIMIT,
+        move || {
+            let decoded = decode_bytes(bytes.to_vec(), infer::image::is_png(&bytes))?;
+            let png = match decoded.source_png {
+                Some(png) => Zeroizing::new(png),
+                None => Zeroizing::new(decoded.image.png_bytes().ok()?),
+            };
+            let (ocr, qr) = crate::macos_vision::scan_png(&png);
+            if let Some(mut qr) = qr {
+                qr.zeroize();
+            }
+            ocr.map(Zeroizing::new)
+        },
+        drop,
+    )
+    .flatten()
+}
+
 /// Format, pixel size and byte length of an encoded picture that is not the clipboard's, or
 /// `None` when it can't be read.
 pub(crate) fn image_bytes_facts(bytes: &[u8]) -> Option<ImageFacts> {

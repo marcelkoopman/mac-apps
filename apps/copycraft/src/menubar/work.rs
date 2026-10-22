@@ -108,6 +108,36 @@ impl App {
         value
     }
 
+    /// Run `compute` on a thread of its own and give its result to `later` on the main thread.
+    /// No lane: nothing makes it stale (`later` checks that itself), and the card shows no
+    /// spinner for it. `false` when the thread could not start (logged; `later` is not run).
+    pub(crate) fn run_detached<T: Send + 'static>(
+        &mut self,
+        name: &str,
+        compute: impl FnOnce() -> T + Send + 'static,
+        later: impl FnOnce(&mut App, T) + Send + 'static,
+    ) -> bool {
+        let spawned = std::thread::Builder::new()
+            .name(name.to_string())
+            .spawn(move || {
+                let value = compute();
+                let finish: Finish = Box::new(move |app: &mut App| later(app, value));
+                launcher::emit(UserEvent::WorkDone(WorkDone(Arc::new(Mutex::new(Some(
+                    finish,
+                ))))));
+            });
+        match spawned {
+            Ok(_) => true,
+            Err(e) => {
+                crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
+                    crate::diag::Work::Lane,
+                    crate::diag::ErrorKind::io(&e),
+                ));
+                false
+            }
+        }
+    }
+
     /// A worker thread could not start: say so on the card (NL/EN), drop the Working… state
     /// and the spinner. The card is refreshed once, from the event loop (never from inside a
     /// card update), so a failing refresh cannot loop.

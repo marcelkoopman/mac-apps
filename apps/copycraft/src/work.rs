@@ -74,6 +74,28 @@ impl Sequence {
     }
 }
 
+/// Run `job` on a thread of its own and wait at most `limit` for its result. `None` when it
+/// took longer, or when the thread could not start; a late result goes to `discard` on that
+/// thread (to wipe it), and nobody else sees it.
+pub fn within<T: Send + 'static>(
+    name: &str,
+    limit: Duration,
+    job: impl FnOnce() -> T + Send + 'static,
+    discard: fn(T),
+) -> Option<T> {
+    let handoff = Handoff::default();
+    let worker = handoff.clone();
+    std::thread::Builder::new()
+        .name(name.to_string())
+        .spawn(move || {
+            if let Some(late) = worker.give(job()) {
+                discard(late);
+            }
+        })
+        .ok()?;
+    handoff.take_within(limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +133,36 @@ mod tests {
             let back = thread.join().unwrap();
             assert!(main.is_some() != back.is_some(), "round {round}");
         }
+    }
+
+    #[test]
+    fn within_gives_a_quick_result_and_discards_a_late_one() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static DISCARDED: AtomicU32 = AtomicU32::new(0);
+        fn discard(value: u32) {
+            DISCARDED.store(value, Ordering::SeqCst);
+        }
+        assert_eq!(
+            within("quick", Duration::from_secs(5), || 3, discard),
+            Some(3)
+        );
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let late = within(
+            "late",
+            Duration::from_millis(1),
+            move || {
+                let _ = wait.recv();
+                9
+            },
+            discard,
+        );
+        assert_eq!(late, None);
+        go.send(()).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while DISCARDED.load(Ordering::SeqCst) != 9 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(DISCARDED.load(Ordering::SeqCst), 9);
     }
 
     #[test]

@@ -91,6 +91,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         card_view: CardView::Original,
         opened: None,
         dropped_text_wait: None,
+        dropped_image_wait: None,
+        polled_image_wait: None,
         image_scan: None,
         image_scan_change: None,
         image_scan_for: None,

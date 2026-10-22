@@ -44,6 +44,12 @@ pub(crate) struct App {
     /// by [`App::labels_checked`] once they are in, if it holds no credential and is still on
     /// the card ([`crate::sensitivity::Record::AfterCheck`]).
     pub(crate) dropped_text_wait: Option<Zeroizing<String>>,
+    /// A dropped or pasted picture whose text recognition is still running: recorded by
+    /// [`App::finish_dropped_scan`] unless its recognised text holds a credential.
+    pub(crate) dropped_image_wait: Option<SecretBytes>,
+    /// The pasteboard change of a copied picture whose text recognition is still running
+    /// ([`App::finish_polled_image`]).
+    pub(crate) polled_image_wait: Option<isize>,
     pub(crate) image_scan: Option<commands::ImageScan>,
     /// Pasteboard change the stored scan belongs to.
     pub(crate) image_scan_change: Option<isize>,

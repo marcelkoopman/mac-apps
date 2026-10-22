@@ -92,6 +92,21 @@ pub fn record_when(admission: Admission) -> Record {
     }
 }
 
+/// May a picture go into history, now that its text recognition is done? `recognised` is the
+/// text recognition found in it: `None` when it found no text, failed, timed out or there is no
+/// text recogniser (then the picture is kept, as before). A picture whose recognised text holds
+/// a token, key or URL password stays out ([`Admission::Refuse`]); the card still shows it.
+/// Never [`Admission::Wait`]: a long recognised text is checked here and now (not by the
+/// background checker, and its labels are not remembered). Pure.
+pub fn picture_admission(recognised: Option<&str>) -> Admission {
+    match recognised {
+        None => Admission::Keep,
+        Some(text) => admission(&Labeling::Known(Found {
+            labels: scan_labels(text),
+        })),
+    }
+}
+
 /// The labels for the card: a short copy is checked now, a longer one is remembered or handed
 /// to the background checker ([`Labeling::Checking`]).
 pub fn labeling(text: &str) -> Labeling {
@@ -645,6 +660,29 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
             admission(&Labeling::Known(Found { labels: vec![] })),
             Admission::Keep
         );
+    }
+
+    #[test]
+    fn a_picture_showing_a_token_stays_out_of_history() {
+        use super::{Admission, SYNC_LIMIT, picture_admission};
+        let token = concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5");
+        // A screenshot of a terminal with the token: refused.
+        let screenshot = format!("$ gh auth token\n{token}\n$");
+        assert_eq!(picture_admission(Some(&screenshot)), Admission::Refuse);
+        // A long recognised text is decided at once, never left waiting.
+        let long = format!("{}\n{token}\n", "lorem ipsum ".repeat(SYNC_LIMIT / 10));
+        assert_eq!(picture_admission(Some(&long)), Admission::Refuse);
+        // An ordinary screenshot (also with PII, which the privacy filter masks) is kept.
+        assert_eq!(
+            picture_admission(Some("Quarterly report\nRevenue up 4%")),
+            Admission::Keep
+        );
+        assert_eq!(
+            picture_admission(Some("Contact: jan@example.com")),
+            Admission::Keep
+        );
+        // No text found, recognition failed, timed out or unavailable: kept as before.
+        assert_eq!(picture_admission(None), Admission::Keep);
     }
 
     #[test]

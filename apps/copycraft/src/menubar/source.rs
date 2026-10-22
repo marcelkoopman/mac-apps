@@ -59,12 +59,20 @@ impl App {
     pub(crate) fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
         let opened = self.look_at_dropped_image(opened);
         self.dropped_text_wait = None;
+        self.dropped_image_wait = None;
         let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
         let clipboard_at = if let Some(image) = opened.image.as_ref() {
-            Some(
-                self.history
-                    .record_image_tracking(image.bytes.clone(), base),
-            )
+            if waits_for_recognition(image) {
+                // A picture goes into history once its text is recognised: one that shows a
+                // token or key stays out ([`Self::finish_dropped_scan`]).
+                self.dropped_image_wait = Some(image.bytes.clone());
+                None
+            } else {
+                Some(
+                    self.history
+                        .record_image_tracking(image.bytes.clone(), base),
+                )
+            }
         } else if let Some(text) = opened.text.as_deref() {
             // A file that holds a token, key or URL password is shown, not kept in history. A
             // long one is checked in the background first: `labels_checked` decides then.
@@ -238,15 +246,23 @@ impl App {
                         return;
                     }
                     // Copied out first: the scan (text recognition) takes a while, and the card
-                    // reads the same bytes to draw the picture.
+                    // reads the same bytes to draw the picture. A scan that takes too long
+                    // counts as failed: the picture then goes into history without it.
                     let bytes = Zeroizing::new(image.with(<[u8]>::to_vec));
-                    let scan = crate::macos_pasteboard::scan_image_bytes(&bytes);
+                    let scan = crate::macos_pasteboard::scan_image_bytes_within(bytes);
                     launcher::emit(UserEvent::DroppedImageScanned { image, scan });
                 });
             if let Err(e) = spawned {
                 crate::diag::log(crate::diag::LogEvent::DroppedImageScanFailed(
                     crate::diag::ErrorKind::io(&e),
                 ));
+                // No scan: a picture waiting for it goes into history as before.
+                if let Some(waiting) = self.dropped_image_wait.clone() {
+                    launcher::emit(UserEvent::DroppedImageScanned {
+                        image: waiting,
+                        scan: None,
+                    });
+                }
             }
         }
         #[cfg(not(target_os = "macos"))]
@@ -258,6 +274,20 @@ impl App {
         image: &SecretBytes,
         scan: Option<commands::ImageScan>,
     ) {
+        // The picture was not recorded yet: its recognised text decides
+        // ([`crate::sensitivity::picture_admission`]). Never logged.
+        let waited = self
+            .dropped_image_wait
+            .as_ref()
+            .is_some_and(|waiting| waiting.same_allocation(image));
+        if waited {
+            self.dropped_image_wait = None;
+        }
+        let admission = waited.then(|| {
+            crate::sensitivity::picture_admission(
+                scan.as_ref().and_then(|scan| scan.ocr.as_deref()),
+            )
+        });
         // The card moved on (the clipboard, another drop, Wipe) while the thread ran.
         let Some(shown) = self
             .opened
@@ -285,6 +315,19 @@ impl App {
                 None,
             );
         }
+        match admission {
+            Some(crate::sensitivity::Admission::Keep) => {
+                let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+                let clipboard_at = self.history.record_image_tracking(image.clone(), base);
+                if self.history.holds_image(image) {
+                    self.dropped_recorded(clipboard_at);
+                }
+            }
+            Some(_) => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                crate::diag::Skip::Credential,
+            )),
+            None => {}
+        }
         if launcher::is_open() {
             self.refresh_popup();
         }
@@ -302,6 +345,7 @@ impl App {
         }
         self.opened = None;
         self.dropped_text_wait = None;
+        self.dropped_image_wait = None;
         self.opened_superseded = false;
         self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
@@ -596,4 +640,14 @@ impl App {
             .filter(|(at, _)| *at == change)
             .map(|(_, bytes)| bytes.clone())
     }
+}
+
+/// A dropped, pasted or chosen picture that goes into history only after its text recognition
+/// ([`App::finish_dropped_scan`]). A document's picture (Quick Look) is not recognised, and a
+/// PDF's first page goes in at once, as before; so does a picture too large for history.
+pub(crate) fn waits_for_recognition(image: &crate::open_file::OpenedImage) -> bool {
+    cfg!(target_os = "macos")
+        && image.pdf_source.is_none()
+        && image.pdf_text.is_none()
+        && image.bytes.byte_len() <= clipboard::MAX_IMAGE_BYTES
 }
