@@ -6,11 +6,21 @@
 //!
 //! Each small card has a ✕ in its top-right corner, shown on the marked card and the one under
 //! the pointer: it takes that copy out of history ([`CommandId::RemoveHistory`]), and ⌘Z puts
-//! it back. The clipboard is left alone.
+//! it back. The clipboard is left alone. VoiceOver has the same as actions on each card:
+//! *Remove from History* and, on the other cards, *Compare with Shown*. A card's tooltip names
+//! its type and how long ago it was copied, never its content.
 
 use super::*;
 
 const RADIUS: f64 = 8.0;
+
+/// A small card's button, its type name and when it was copied, by history position.
+type ThumbButton = (
+    usize,
+    Retained<NSButton>,
+    &'static str,
+    Option<std::time::Instant>,
+);
 
 /// What the strip draws, kept for the layout passes.
 pub(crate) struct StripViews {
@@ -31,6 +41,10 @@ thread_local! {
     static THUMB_IMAGES: RefCell<Vec<(usize, Retained<NSImage>)>> = const { RefCell::new(Vec::new()) };
     /// The ✕ of each small card, by history position.
     static REMOVE_BUTTONS: RefCell<Vec<(usize, Retained<NSButton>)>> = const { RefCell::new(Vec::new()) };
+    /// Each small card's button, its type name and when it was copied, by history position,
+    /// so the tooltip's age is fresh when the pointer comes over it.
+    static THUMB_BUTTONS: RefCell<Vec<ThumbButton>> =
+        const { RefCell::new(Vec::new()) };
     /// The history position of the small card under the pointer.
     static STRIP_HOVER: Cell<Option<usize>> = const { Cell::new(None) };
     /// A copy was just removed from history: ⌘Z puts it back.
@@ -119,6 +133,7 @@ pub(crate) fn clear_strip() {
     CAN_RESTORE.set(false);
     STRIP_HOVER.set(None);
     REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
+    THUMB_BUTTONS.with(|slot| slot.borrow_mut().clear());
     THUMB_IMAGES.with(|slot| slot.borrow_mut().clear());
     STRIP_SIGNATURE.set(0);
     STRIP_HINT.set(commands::StripHint::None);
@@ -180,7 +195,26 @@ pub(crate) fn update_strip_hover() {
     if hovered != STRIP_HOVER.get() {
         STRIP_HOVER.set(hovered);
         show_remove_buttons();
+        if let Some(index) = hovered {
+            refresh_tooltip(index);
+        }
     }
+}
+
+/// Set the tooltip of the small card at history position `index`: type and age.
+fn refresh_tooltip(index: usize) {
+    THUMB_BUTTONS.with(|slot| {
+        for (at, button, kind, copied) in slot.borrow().iter() {
+            if *at == index {
+                set_tooltip(button, kind, *copied);
+            }
+        }
+    });
+}
+
+fn set_tooltip(button: &NSButton, kind: &str, copied: Option<std::time::Instant>) {
+    let tip = commands::thumb_tooltip(kind, copied.map(|at| at.elapsed()));
+    button.setToolTip(Some(&NSString::from_str(&tip)));
 }
 
 /// The ✕ shows on the marked small card and on the one under the pointer.
@@ -281,6 +315,7 @@ pub(crate) fn place_strip(
             old.removeFromSuperview();
         }
         REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
+        THUMB_BUTTONS.with(|slot| slot.borrow_mut().clear());
         document.setFrame(NSRect::new(
             NSPoint::new(0.0, 0.0),
             NSSize::new(
@@ -397,9 +432,24 @@ fn thumb_card(
     button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
         "strip_compare_hint",
     ))));
-    button.setToolTip(Some(&NSString::from_str(crate::locale::t(
-        "strip_compare_hint",
-    ))));
+    // Type and age only: the ⌘-click hint is in VoiceOver's help and the one-time hint row.
+    set_tooltip(&button, thumb.kind, thumb.copied);
+    let index = thumb.index;
+    let mut actions: Vec<(String, Box<dyn Fn() + 'static>)> = vec![(
+        crate::locale::t("history_remove_item").to_string(),
+        Box::new(move || launcher::emit(UserEvent::Run(CommandId::RemoveHistory(index)))),
+    )];
+    if !current {
+        actions.push((
+            crate::locale::t("strip_action_compare").to_string(),
+            Box::new(move || launcher::emit(UserEvent::Run(CommandId::StripCompare(index)))),
+        ));
+    }
+    mac_ui::a11y::set_custom_actions(&button, actions);
+    THUMB_BUTTONS.with(|slot| {
+        slot.borrow_mut()
+            .push((index, button.clone(), thumb.kind, thumb.copied));
+    });
     wire_button(&button, sel!(thumbClicked:));
     let picture = (!masked)
         .then(|| thumb.picture.as_ref().and_then(thumb_image))

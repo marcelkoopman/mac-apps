@@ -66,7 +66,8 @@ impl ClipboardHistory {
     /// picture's bytes are shared with the handles that point at it.
     pub(super) fn move_to_front(&mut self, index: usize) {
         if index > 0 {
-            let entry = self.entries.remove(index);
+            let mut entry = self.entries.remove(index);
+            entry.copied = std::time::Instant::now();
             self.entries.insert(0, entry);
         }
     }
@@ -240,6 +241,16 @@ impl ClipboardHistory {
             HistoryBody::Image(bytes) => Some(bytes.clone()),
             HistoryBody::Text(_) => None,
         }
+    }
+
+    /// The type of entry `index`, for a label that shows no content.
+    pub fn kind(&self, index: usize) -> Option<format::FormatKind> {
+        Some(self.entries.get(index)?.kind)
+    }
+
+    /// When entry `index` was copied (or copied again).
+    pub fn copied_at(&self, index: usize) -> Option<std::time::Instant> {
+        Some(self.entries.get(index)?.copied)
     }
 
     pub fn mark(&self, index: usize) -> Option<&'static str> {

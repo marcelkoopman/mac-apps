@@ -474,6 +474,12 @@ impl App {
                         .history
                         .id_at(index)
                         .and_then(|id| self.diff_sel.label(id)),
+                    kind: self
+                        .history
+                        .kind(index)
+                        .map(commands::thumb_kind_name)
+                        .unwrap_or(""),
+                    copied: self.history.copied_at(index),
                 }
             })
             .collect()

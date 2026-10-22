@@ -19,10 +19,12 @@ theme = ["objc2-app-kit/NSAppearance", "objc2-app-kit/NSApplication", "objc2-fou
 # attributed strings (NSAttributedString, already on in the workspace entry). NSEvent and
 # NSApplication are for the modifier checks in `mac_ui::keys`. `mac_ui::motion`, `mac_ui::toast`
 # and `mac_ui::a11y`: NSAnimationContext groups, the Reduce Motion/Transparency settings
-# (NSWorkspace), the toast window with its SF Symbol, and VoiceOver announcements.
+# (NSWorkspace), the toast window with its SF Symbol, VoiceOver announcements and custom actions
+# (NSAccessibilityCustomAction with a block handler).
 widgets = [
     "objc2-app-kit/block2",
     "objc2-app-kit/NSAccessibility",
+    "objc2-app-kit/NSAccessibilityCustomAction",
     "objc2-app-kit/NSAccessibilityConstants",
     "objc2-app-kit/NSAccessibilityProtocols",
     "objc2-app-kit/NSAnimation",

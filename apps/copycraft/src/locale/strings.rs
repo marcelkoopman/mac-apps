@@ -547,6 +547,23 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "⌘-klik om te vergelijken met de getoonde kopie",
         "⌘-click to compare with the copy on screen",
     ),
+    ("strip_kind_text", "Tekst", "Text"),
+    ("strip_age_now", "zojuist gekopieerd", "copied just now"),
+    (
+        "strip_age_minutes",
+        "{0} min geleden gekopieerd",
+        "copied {0} min ago",
+    ),
+    (
+        "strip_age_hours",
+        "{0} uur geleden gekopieerd",
+        "copied {0} h ago",
+    ),
+    (
+        "strip_action_compare",
+        "Vergelijk met getoonde",
+        "Compare with Shown",
+    ),
     (
         "strip_compare_tip",
         "⌘-klik op een tegel om te vergelijken",

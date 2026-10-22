@@ -1,4 +1,4 @@
-//! VoiceOver helpers shared by the drop target and the toast.
+//! VoiceOver helpers shared by the drop target and the toast, and custom actions for controls.
 
 use objc2::runtime::AnyObject;
 use objc2_app_kit::{
@@ -53,4 +53,31 @@ pub fn announce_at(element: &NSView, text: &str, priority: Priority) {
             Some(&info),
         );
     }
+}
+
+/// Give `element` VoiceOver actions (the Actions rotor, VO-⌘-Space): each a name and what runs
+/// when it is chosen, on the main thread. Replaces the actions it had; an empty list removes
+/// them.
+#[cfg(feature = "widgets")]
+pub fn set_custom_actions(element: &NSView, actions: Vec<(String, Box<dyn Fn() + 'static>)>) {
+    use objc2::AllocAnyThread;
+    use objc2::runtime::Bool;
+    use objc2_app_kit::{NSAccessibility, NSAccessibilityCustomAction};
+    let made: Vec<objc2::rc::Retained<NSAccessibilityCustomAction>> = actions
+        .into_iter()
+        .map(|(name, run)| {
+            let handler = block2::RcBlock::new(move || -> Bool {
+                run();
+                Bool::YES
+            });
+            NSAccessibilityCustomAction::initWithName_handler(
+                NSAccessibilityCustomAction::alloc(),
+                &NSString::from_str(&name),
+                Some(&handler),
+            )
+        })
+        .collect();
+    element.setAccessibilityCustomActions(Some(&objc2_foundation::NSArray::from_retained_slice(
+        &made,
+    )));
 }

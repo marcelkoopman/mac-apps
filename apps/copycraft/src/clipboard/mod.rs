@@ -297,6 +297,8 @@ struct HistoryEntry {
     /// Skips the unpinned cap and the minute timer. Still dropped by Wipe, lock, sleep,
     /// user switch and quit.
     pinned: bool,
+    /// When it was copied (or copied again and moved to the front), for the strip's tooltip.
+    copied: std::time::Instant,
 }
 
 impl HistoryEntry {
@@ -311,6 +313,7 @@ impl HistoryEntry {
             table: None,
             images: None,
             pinned: false,
+            copied: std::time::Instant::now(),
         }
     }
 
@@ -324,6 +327,7 @@ impl HistoryEntry {
             table: None,
             images: None,
             pinned: false,
+            copied: std::time::Instant::now(),
         }
     }
 

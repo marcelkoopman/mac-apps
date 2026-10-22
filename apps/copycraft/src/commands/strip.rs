@@ -16,8 +16,9 @@ pub const THUMB_GAP: f64 = 7.0;
 /// Space between a card's edge and its text or picture.
 pub const THUMB_PAD: f64 = 6.0;
 /// The ✕ in a card's top-right corner: its size and its distance to the card's edges.
-pub const THUMB_REMOVE_SIZE: f64 = 18.0;
-pub const THUMB_REMOVE_INSET: f64 = 5.0;
+/// At least 20 pt, so it is easy to hit.
+pub const THUMB_REMOVE_SIZE: f64 = 20.0;
+pub const THUMB_REMOVE_INSET: f64 = 4.0;
 /// Text on a card: at most this many lines, each at most [`THUMB_LINE_CHARS`] characters.
 pub const THUMB_LINES: usize = 3;
 pub const THUMB_LINE_CHARS: usize = 20;
@@ -41,6 +42,10 @@ pub struct Thumb {
     pub picture: Option<crate::clipboard::SecretBytes>,
     /// `A` (before) or `B` (after) while this copy is one side of the diff, else `None`.
     pub side: Option<&'static str>,
+    /// The type's name for the tooltip ([`thumb_kind_name`]): no content.
+    pub kind: &'static str,
+    /// When it was copied, for the tooltip's age.
+    pub copied: Option<std::time::Instant>,
 }
 
 impl Thumb {
@@ -78,6 +83,40 @@ pub fn thumb_lines(text: &str) -> String {
 /// The strip shows with two or more copies, unless it was turned off with ⌘Y.
 pub fn strip_shown(len: usize, turned_off: bool) -> bool {
     len > 1 && !turned_off
+}
+
+/// The type's name on a card's tooltip: *JSON*, *Afbeelding*, *Tekst*.
+pub fn thumb_kind_name(kind: crate::format::FormatKind) -> &'static str {
+    use crate::format::FormatKind;
+    match kind {
+        FormatKind::Text | FormatKind::Plain => crate::locale::t("strip_kind_text"),
+        other => other.source_heading(),
+    }
+}
+
+/// A card's tooltip: its type and how long ago it was copied, never its content.
+pub fn thumb_tooltip(kind: &str, age: Option<std::time::Duration>) -> String {
+    thumb_tooltip_in(crate::locale::lang(), kind, age)
+}
+
+fn thumb_tooltip_in(
+    lang: crate::locale::Lang,
+    kind: &str,
+    age: Option<std::time::Duration>,
+) -> String {
+    use crate::locale::{t_in, tf_in};
+    let Some(age) = age else {
+        return kind.to_string();
+    };
+    let minutes = age.as_secs() / 60;
+    let ago = if minutes == 0 {
+        t_in(lang, "strip_age_now").to_string()
+    } else if minutes < 60 {
+        tf_in(lang, "strip_age_minutes", &[&minutes])
+    } else {
+        tf_in(lang, "strip_age_hours", &[&(minutes / 60)])
+    };
+    format!("{kind} · {ago}")
 }
 
 /// Whether a card is masked: with the privacy filter on every copy is, like the card's well,
@@ -399,7 +438,42 @@ mod tests {
             lines: String::new(),
             picture: None,
             side,
+            kind: "JSON",
+            copied: None,
         }
+    }
+
+    #[test]
+    fn the_tooltip_names_the_type_and_age_and_no_content() {
+        use crate::locale::Lang::{En, Nl};
+        use std::time::Duration;
+        assert_eq!(thumb_tooltip_in(En, "JSON", None), "JSON");
+        assert_eq!(
+            thumb_tooltip_in(En, "JSON", Some(Duration::from_secs(20))),
+            "JSON · copied just now"
+        );
+        assert_eq!(
+            thumb_tooltip_in(En, "Text", Some(Duration::from_secs(150))),
+            "Text · copied 2 min ago"
+        );
+        assert_eq!(
+            thumb_tooltip_in(En, "Image", Some(Duration::from_secs(7300))),
+            "Image · copied 2 h ago"
+        );
+        assert_eq!(
+            thumb_tooltip_in(Nl, "Tekst", Some(Duration::from_secs(150))),
+            "Tekst · 2 min geleden gekopieerd"
+        );
+        assert_eq!(
+            thumb_kind_name(crate::format::FormatKind::Plain),
+            crate::locale::t("strip_kind_text")
+        );
+    }
+
+    #[test]
+    fn the_remove_cross_is_at_least_20_points() {
+        let (_, _, side) = remove_frame();
+        assert!(side >= 20.0);
     }
 
     #[test]
