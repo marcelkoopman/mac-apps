@@ -18,15 +18,16 @@ Je kunt ook in Copycraft "Feature voorstellen…" of "Probleem melden…" kiezen
 ### Veelgestelde vragen
 
 1. **Hoe open ik Copycraft?** Met de sneltoets (standaard ⌃⌘C) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
-2. **Waarom is mijn tekst vaag?** Dat is het privacyfilter. Klik op de tekst om hem te tonen. Wil je het uit, zet dan "Gebruik privacyfilter" uit in Instellingen.
-3. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of Copycraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Systeeminstellingen › Privacy en beveiliging › Plakken vanuit andere apps. Zolang je het niet altijd toestaat, leest Copycraft een kopie pas als je de kaart opent.
-4. **Gaat mijn data het internet op?** Nee. Copycraft werkt volledig offline en heeft geen netwerktoegang. De geschiedenis staat alleen in het geheugen en is weg als je Copycraft stopt. Zie het [privacybeleid](privacy).
-5. **Komt mijn wachtwoord of token in de geschiedenis?** Herkende tokens en sleutels (bijvoorbeeld GitHub-, AWS- of Slack-tokens en private keys) houdt Copycraft bewust buiten de geschiedenis. Een wachtwoord blijft er alleen buiten als je wachtwoordbeheerder de kopie als privé markeert (de nspasteboard.org-types Concealed of Transient); de meeste wachtwoordbeheerders doen dat. Een gewoon wachtwoord dat je zelf typt en kopieert, herkent Copycraft niet: dat komt wel in de geschiedenis (alleen in het geheugen). Wis het dan met Uit geschiedenis verwijderen of Wis.
-6. **Hoe wis ik wat ik gekopieerd heb?** Gebruik Wis of Geschiedenis wissen in de kaart of in het menu.
-7. **Hoe maak ik een schermafbeelding van de kaart?** Standaard blokkeert Copycraft dat. Kies in het menubalkmenu "Schermafbeeldingen toestaan" om het voor deze sessie toe te staan.
-8. **Een app moet genegeerd worden.** Voeg die toe bij Genegeerde apps in Instellingen.
-9. **Hoe start ik Copycraft bij inloggen?** Zet "Openen bij inloggen" aan in Instellingen of in het welkomstscherm. Het staat standaard uit.
-10. **Werken de AI-functies niet?** Die vragen Apple Intelligence: een Mac met Apple silicon, macOS 26 of nieuwer, en Apple Intelligence aan in Systeeminstellingen. De AI draait op je Mac.
+2. **Waarom zie ik niet wat ik net kopieerde?** Standaard leest Copycraft je klembord niet zelf. Druk in de kaart op ⌘V of sleep tekst of een afbeelding op de kaart; alle hulpmiddelen werken daarop. Wil je dat Copycraft elke kopie zelf leest, zet dan **Klembordgeschiedenis bijhouden** aan in het welkomstscherm of in Instellingen › Privacy. Opname pauzeren, Volgende kopie negeren en Genegeerde apps werken alleen als die instelling aan staat.
+3. **Waarom is mijn tekst vaag?** Dat is het privacyfilter. Klik op de tekst om hem te tonen. Wil je het uit, zet dan "Gebruik privacyfilter" uit in Instellingen.
+4. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of Copycraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Systeeminstellingen › Privacy en beveiliging › Plakken vanuit andere apps. Met de geschiedenis uit leest Copycraft het klembord alleen als je ⌘V in de kaart indrukt. Met de geschiedenis aan, en zolang je het niet altijd toestaat, leest Copycraft een kopie pas als je de kaart opent.
+5. **Gaat mijn data het internet op?** Nee. Copycraft werkt volledig offline en heeft geen netwerktoegang. De geschiedenis staat alleen in het geheugen en is weg als je Copycraft stopt. Zie het [privacybeleid](privacy).
+6. **Komt mijn wachtwoord of token in de geschiedenis?** Herkende tokens en sleutels (bijvoorbeeld GitHub-, AWS- of Slack-tokens en private keys) houdt Copycraft bewust buiten de geschiedenis. Een wachtwoord blijft er alleen buiten als je wachtwoordbeheerder de kopie als privé markeert (de nspasteboard.org-types Concealed of Transient); de meeste wachtwoordbeheerders doen dat. Een gewoon wachtwoord dat je zelf typt en kopieert, herkent Copycraft niet: dat komt wel in de geschiedenis (alleen in het geheugen). Wis het dan met Uit geschiedenis verwijderen of Wis.
+7. **Hoe wis ik wat ik gekopieerd heb?** Gebruik Wis of Geschiedenis wissen in de kaart of in het menu.
+8. **Hoe maak ik een schermafbeelding van de kaart?** Standaard blokkeert Copycraft dat. Kies in het menubalkmenu "Schermafbeeldingen toestaan" om het voor deze sessie toe te staan.
+9. **Een app moet genegeerd worden.** Voeg die toe bij Genegeerde apps in Instellingen (alleen met de geschiedenis aan).
+10. **Hoe start ik Copycraft bij inloggen?** Zet "Openen bij inloggen" aan in Instellingen of in het welkomstscherm. Het staat standaard uit.
+11. **Werken de AI-functies niet?** Die vragen Apple Intelligence: een Mac met Apple silicon, macOS 26 of nieuwer, en Apple Intelligence aan in Systeeminstellingen. De AI draait op je Mac.
 
 ### Logboek en diagnose
 
@@ -43,15 +44,16 @@ You can also choose "Suggest a feature…" or "Report a problem…" in Copycraft
 ### FAQ
 
 1. **How do I open Copycraft?** With the hotkey (default ⌃⌘C) or from the menu bar icon. Change the hotkey in Settings.
-2. **Why is my text blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings.
-3. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether Copycraft may read the clipboard from other apps. Choose Allow, or set it in System Settings › Privacy & Security › Paste from Other Apps. Unless you always allow it, Copycraft reads a copy only when you open the card.
-4. **Does my data leave my Mac?** No. Copycraft works fully offline and has no network access. History is kept in memory only and is gone when you quit Copycraft. See the [privacy policy](privacy).
-5. **Does my password or token end up in history?** Recognised tokens and keys (for example GitHub, AWS or Slack tokens and private keys) are deliberately kept out of history. A password stays out only when your password manager marks the copy private (the nspasteboard.org Concealed or Transient types); most password managers do. An ordinary password you type and copy yourself is not recognised: it does go into history (in memory only). Remove it with Remove from history or Wipe.
-6. **How do I clear what I copied?** Use Wipe or Clear history on the card or in the menu.
-7. **How do I take a screenshot of the card?** Copycraft blocks that by default. Choose "Allow screenshots" in the menu bar menu to allow it for this session.
-8. **An app should be ignored.** Add it under Ignored apps in Settings.
-9. **How do I start Copycraft at login?** Turn on "Open at Login" in Settings or on the welcome screen. It is off by default.
-10. **The AI features don't work?** They need Apple Intelligence: a Mac with Apple silicon, macOS 26 or later, and Apple Intelligence turned on in System Settings. The AI runs on your Mac.
+2. **Why don't I see what I just copied?** By default Copycraft does not read your clipboard on its own. Press ⌘V in the card, or drop text or a picture on the card; all tools work on it. If you want Copycraft to read every copy itself, turn on **Keep clipboard history** on the welcome screen or in Settings › Privacy. Pause, Ignore next copy and Ignored apps only work while that setting is on.
+3. **Why is my text blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings.
+4. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether Copycraft may read the clipboard from other apps. Choose Allow, or set it in System Settings › Privacy & Security › Paste from Other Apps. With history off, Copycraft reads the clipboard only when you press ⌘V in the card. With history on, and unless you always allow it, Copycraft reads a copy only when you open the card.
+5. **Does my data leave my Mac?** No. Copycraft works fully offline and has no network access. History is kept in memory only and is gone when you quit Copycraft. See the [privacy policy](privacy).
+6. **Does my password or token end up in history?** Recognised tokens and keys (for example GitHub, AWS or Slack tokens and private keys) are deliberately kept out of history. A password stays out only when your password manager marks the copy private (the nspasteboard.org Concealed or Transient types); most password managers do. An ordinary password you type and copy yourself is not recognised: it does go into history (in memory only). Remove it with Remove from history or Wipe.
+7. **How do I clear what I copied?** Use Wipe or Clear history on the card or in the menu.
+8. **How do I take a screenshot of the card?** Copycraft blocks that by default. Choose "Allow screenshots" in the menu bar menu to allow it for this session.
+9. **An app should be ignored.** Add it under Ignored apps in Settings (only with history on).
+10. **How do I start Copycraft at login?** Turn on "Open at Login" in Settings or on the welcome screen. It is off by default.
+11. **The AI features don't work?** They need Apple Intelligence: a Mac with Apple silicon, macOS 26 or later, and Apple Intelligence turned on in System Settings. The AI runs on your Mac.
 
 ### Logs and diagnostics
 
