@@ -590,6 +590,7 @@ define_class!(
                 );
                 if answer.dont_ask_again {
                     crate::settings::set_confirm_clear(false);
+                    crate::macos_settings::refresh_history_controls();
                 }
                 if !answer.confirmed {
                     focus_card();

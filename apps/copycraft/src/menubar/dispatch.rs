@@ -111,6 +111,9 @@ impl App {
                 if !on {
                     self.sensitive_clear = None;
                 }
+                // Settings › Privacy shows the same setting.
+                #[cfg(target_os = "macos")]
+                crate::macos_settings::refresh_history_controls();
                 self.refresh_popup();
             }
             CommandId::PdfPage(delta) => self.pdf_turn(delta),
@@ -122,6 +125,8 @@ impl App {
             CommandId::KeepHistory(minutes) => {
                 crate::settings::set_history_minutes(minutes);
                 self.history_minutes = minutes;
+                #[cfg(target_os = "macos")]
+                crate::macos_settings::refresh_history_controls();
                 self.refresh_popup();
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),

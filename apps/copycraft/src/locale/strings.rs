@@ -827,6 +827,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("section_recording", "Opname", "Recording"),
     ("keep_history_menu", "Bewaartermijn", "Keep History"),
     ("keep_until_cleared", "Tot wissen", "Until Cleared"),
+    ("keep_history_setting", "Bewaartermijn", "Keep history"),
+    (
+        "keep_after_last_copy",
+        "{0} min na de laatste kopie",
+        "{0} min after the last copy",
+    ),
     (
         "detail_welcome",
         "Toon het welkomstscherm opnieuw",

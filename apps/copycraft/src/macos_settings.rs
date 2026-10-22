@@ -1,6 +1,7 @@
 //! Settings window, in five tabs (a segmented control above one pane per tab):
-//! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history, privacy
-//! filter, blur, ignored apps), Display (card theme, pages, announce, ask before clearing, symbols),
+//! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history with
+//! retention, sensitive-copy clearing and ask before clearing under it, privacy filter, blur,
+//! ignored apps), Display (card theme, pages, announce, symbols),
 //! Notifications (four switches) and Feedback (mail, privacy policy, support). ⌘1…⌘5 pick a tab;
 //! the last tab is remembered for the session only.
 
@@ -44,15 +45,22 @@ const LABEL_W: f64 = 136.0;
 const TAB_BAR_H: f64 = BUTTON_H;
 /// Algemeen: four settings, three gaps.
 const GENERAL_H: f64 = 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
-/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the ignored-apps
-/// block, three gaps.
-const PRIVACY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// How far a setting that depends on the one above it is indented.
+const INDENT: f64 = 20.0;
+/// The settings under "Keep clipboard history": retention, sensitive copies and ask before
+/// clearing, one row each without a note (the note is the tooltip), after a gap.
+const HISTORY_SUB_H: f64 =
+    mac_ui::metrics::SPACE_S + 3.0 * BUTTON_H + 2.0 * mac_ui::style::SPACE_XS;
+/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the rows under
+/// history, the ignored-apps block, three gaps.
+const PRIVACY_H: f64 =
+    3.0 * SETTING_H + HISTORY_SUB_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 /// The symbols on Weergave: the labelled setting, then the field with Restore on the same row.
 const FIELD_ROW_BLOCK_H: f64 = SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H;
-/// Weergave: the card theme row (popup and preview, no note), the pages, announce and
-/// ask-before-clearing settings, four gaps and the symbols block.
+/// Weergave: the card theme row (popup and preview, no note), the pages and announce settings,
+/// three gaps and the symbols block.
 const DISPLAY_H: f64 =
-    BUTTON_H + 3.0 * SETTING_H + 4.0 * mac_ui::metrics::SPACE_S + FIELD_ROW_BLOCK_H;
+    BUTTON_H + 2.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_ROW_BLOCK_H;
 /// Width of the card theme popup; the preview takes the rest of the row.
 const THEME_POPUP_W: f64 = 176.0;
 /// Meldingen: the four switches in two rows of two, one gap and a note.
@@ -79,13 +87,14 @@ const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
 const _: () = assert!(GENERAL_H == 208.0);
-const _: () = assert!(PRIVACY_H == 280.0);
-const _: () = assert!(DISPLAY_H == 280.0);
+const _: () = assert!(HISTORY_SUB_H == 100.0);
+const _: () = assert!(PRIVACY_H == 380.0);
+const _: () = assert!(DISPLAY_H == 226.0);
 const _: () = assert!(NOTIFY_H == 82.0);
 const _: () = assert!(FEEDBACK_H == 144.0);
-const _: () = assert!(PANE_H == 280.0);
+const _: () = assert!(PANE_H == 380.0);
 /// Fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
-const _: () = assert!(HEIGHT == 356.0);
+const _: () = assert!(HEIGHT == 456.0);
 
 /// The tabs of the window, in the order of the segments.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -158,6 +167,13 @@ thread_local! {
     static PRIVACY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static HISTORY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static BLUR_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    /// Under "Keep clipboard history": the retention name and popup, sensitive copies, ask
+    /// before clearing.
+    static RETENTION_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static RETENTION_POPUP: RefCell<Option<Retained<NSPopUpButton>>> =
+        const { RefCell::new(None) };
+    static SENSITIVE_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    static ASK_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -364,6 +380,35 @@ define_class!(
             settings::set_announce_confirmations(button.state() == NSControlStateValueOn);
         }
 
+        /// Retention: the same choice as ⋯ › Keep History, run as that command so the app's
+        /// timer follows.
+        #[unsafe(method(retentionChanged:))]
+        fn retention_changed(&self, sender: Option<&NSPopUpButton>) {
+            let Some(popup) = sender else {
+                return;
+            };
+            let Some(minutes) = usize::try_from(popup.indexOfSelectedItem())
+                .ok()
+                .and_then(|index| settings::HISTORY_MINUTES.get(index))
+            else {
+                return;
+            };
+            if *minutes != settings::load().history_minutes {
+                launcher::emit(UserEvent::Run(CommandId::KeepHistory(*minutes)));
+            }
+        }
+
+        /// Clear sensitive copies after 60 s: the ⋯ menu's toggle, so a running timer stops too.
+        #[unsafe(method(clearSensitiveToggled:))]
+        fn clear_sensitive_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            if (button.state() == NSControlStateValueOn) != settings::load().clear_sensitive {
+                launcher::emit(UserEvent::Run(CommandId::ClearSensitive));
+            }
+        }
+
         #[unsafe(method(confirmClearToggled:))]
         fn confirm_clear_toggled(&self, sender: Option<&NSButton>) {
             let Some(button) = sender else {
@@ -471,6 +516,10 @@ fn clear_controls() {
     THEME_PLATE.with(|s| *s.borrow_mut() = None);
     THEME_SAMPLE.with(|s| *s.borrow_mut() = None);
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
+    RETENTION_LABEL.with(|s| *s.borrow_mut() = None);
+    RETENTION_POPUP.with(|s| *s.borrow_mut() = None);
+    SENSITIVE_BOX.with(|s| *s.borrow_mut() = None);
+    ASK_BOX.with(|s| *s.borrow_mut() = None);
     PRIVACY_BOX.with(|s| *s.borrow_mut() = None);
     HISTORY_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_BOX.with(|s| *s.borrow_mut() = None);
@@ -716,6 +765,7 @@ fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
         crate::locale::t("clipboard_history_note"),
         &mut top,
     );
+    place_history_settings(mtm, body, &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
@@ -772,6 +822,79 @@ fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
     top
 }
 
+/// The settings that only matter while history is kept, indented under it and greyed out
+/// while it is off: retention, sensitive copies after 60 s and ask before clearing. Their notes
+/// are tooltips, so the pane stays short.
+fn place_history_settings(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
+    gap(top, mac_ui::metrics::SPACE_S);
+    let y = take(top, BUTTON_H);
+    let label = widgets::label(mtm, mac_ui::metrics::FONT_BODY, &NSColor::labelColor());
+    label.setStringValue(&NSString::from_str(crate::locale::t(
+        "keep_history_setting",
+    )));
+    label.setFrame(NSRect::new(
+        NSPoint::new(MARGIN + INDENT, y),
+        NSSize::new(LABEL_W - INDENT, BUTTON_H),
+    ));
+    body.addSubview(&label);
+    RETENTION_LABEL.with(|slot| *slot.borrow_mut() = Some(label));
+    let retention = popup(mtm, y);
+    retention.removeAllItems();
+    for minutes in settings::HISTORY_MINUTES {
+        retention.addItemWithTitle(&NSString::from_str(&retention_title(minutes)));
+    }
+    retention.setToolTip(Some(&NSString::from_str(crate::locale::t(
+        "detail_history_forgotten",
+    ))));
+    retention.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "keep_history_setting",
+    ))));
+    wire(retention.as_ref(), sel!(retentionChanged:));
+    body.addSubview(&retention);
+    RETENTION_POPUP.with(|slot| *slot.borrow_mut() = Some(retention));
+
+    gap(top, mac_ui::style::SPACE_XS);
+    let sensitive = indented_checkbox(
+        mtm,
+        crate::locale::t("clear_sensitive"),
+        take(top, BUTTON_H),
+    );
+    sensitive.setToolTip(Some(&NSString::from_str(crate::locale::t(
+        "detail_clear_sensitive",
+    ))));
+    wire(&sensitive, sel!(clearSensitiveToggled:));
+    body.addSubview(&sensitive);
+    SENSITIVE_BOX.with(|slot| *slot.borrow_mut() = Some(sensitive));
+
+    gap(top, mac_ui::style::SPACE_XS);
+    let ask = indented_checkbox(mtm, crate::locale::t("confirm_clear"), take(top, BUTTON_H));
+    ask.setToolTip(Some(&NSString::from_str(crate::locale::t(
+        "confirm_clear_note",
+    ))));
+    wire(&ask, sel!(confirmClearToggled:));
+    body.addSubview(&ask);
+    ASK_BOX.with(|slot| *slot.borrow_mut() = Some(ask));
+}
+
+/// A retention choice in the Settings popup: "15 min na de laatste kopie", "Tot wissen".
+fn retention_title(minutes: u32) -> String {
+    if minutes == 0 {
+        crate::locale::t("keep_until_cleared").to_string()
+    } else {
+        crate::locale::tf("keep_after_last_copy", &[&minutes])
+    }
+}
+
+/// A checkbox for a setting that depends on the one above it, [`INDENT`] in.
+fn indented_checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSButton> {
+    let button = checkbox(mtm, title, y);
+    button.setFrame(NSRect::new(
+        NSPoint::new(MARGIN + INDENT, y),
+        NSSize::new(WIDTH - MARGIN * 2.0 - INDENT, BUTTON_H),
+    ));
+    button
+}
+
 /// Meldingen: the four notification switches. Returns the unused height.
 fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
     let mut top = PANE_H;
@@ -799,8 +922,8 @@ fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
     top
 }
 
-/// Weergave: the card theme, long text in pages, Announce confirmations, Ask before clearing
-/// and the symbols. Returns the unused height.
+/// Weergave: the card theme, long text in pages, Announce confirmations and the symbols.
+/// Returns the unused height.
 fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     let mut top = PANE_H;
     let y = take(&mut top, BUTTON_H);
@@ -824,13 +947,6 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
         crate::locale::t("announce_confirmations_note"),
         &mut top,
     );
-    gap(&mut top, mac_ui::metrics::SPACE_S);
-    let y = take(&mut top, BUTTON_H);
-    let ask = checkbox(mtm, crate::locale::t("confirm_clear"), y);
-    ask.setState(state_of(settings::confirm_clear()));
-    wire(&ask, sel!(confirmClearToggled:));
-    body.addSubview(&ask);
-    place_explanation(mtm, body, crate::locale::t("confirm_clear_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
@@ -1295,13 +1411,47 @@ fn show_ignored_apps() {
     });
 }
 
-/// The history checkbox follows the setting; the ignored apps only apply while history is on,
-/// so their field and button are greyed out otherwise.
+/// The history checkbox and the settings under it follow the stored values (also when the ⋯
+/// menu or the clear dialog changed them); those settings and the ignored apps only apply
+/// while history is on, so they are greyed out otherwise.
 pub fn refresh_history_controls() {
     let on = settings::clipboard_history();
+    let stored = settings::load();
     HISTORY_BOX.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             button.setState(state_of(on));
+        }
+    });
+    RETENTION_LABEL.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            let color = if on {
+                NSColor::labelColor()
+            } else {
+                NSColor::disabledControlTextColor()
+            };
+            label.setTextColor(Some(&color));
+        }
+    });
+    RETENTION_POPUP.with(|slot| {
+        if let Some(popup) = slot.borrow().as_ref() {
+            let index = settings::HISTORY_MINUTES
+                .iter()
+                .position(|minutes| *minutes == stored.history_minutes)
+                .unwrap_or(0);
+            popup.selectItemAtIndex(index as isize);
+            popup.setEnabled(on);
+        }
+    });
+    SENSITIVE_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(state_of(stored.clear_sensitive));
+            button.setEnabled(on);
+        }
+    });
+    ASK_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(state_of(settings::confirm_clear()));
+            button.setEnabled(on);
         }
     });
     let active = crate::history_mode::capture_controls_active(on);
