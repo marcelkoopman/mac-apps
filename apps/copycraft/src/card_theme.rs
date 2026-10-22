@@ -89,19 +89,58 @@ pub enum CardTheme {
     SolarizedDark,
     HighContrast,
     Sepia,
+    Nord,
+    GruvboxDark,
+    Dracula,
+    Monokai,
+    CatppuccinMocha,
+    TokyoNight,
+    /// CopyCraft's own vivid blue and teal.
+    Ocean,
+    /// CopyCraft's own vivid green.
+    Forest,
 }
 
 impl CardTheme {
-    pub const ALL: [CardTheme; 8] = [
+    /// In popup order: the basic themes, the classic ones, then the colourful ones
+    /// ([`CardTheme::group`]; the popup puts a separator between groups).
+    pub const ALL: [CardTheme; 16] = [
         CardTheme::System,
         CardTheme::Light,
         CardTheme::Dark,
+        CardTheme::HighContrast,
         CardTheme::Night,
+        CardTheme::Sepia,
         CardTheme::SolarizedLight,
         CardTheme::SolarizedDark,
-        CardTheme::HighContrast,
-        CardTheme::Sepia,
+        CardTheme::Nord,
+        CardTheme::GruvboxDark,
+        CardTheme::Dracula,
+        CardTheme::Monokai,
+        CardTheme::CatppuccinMocha,
+        CardTheme::TokyoNight,
+        CardTheme::Ocean,
+        CardTheme::Forest,
     ];
+
+    /// The popup group: 0 basic, 1 classic, 2 colourful.
+    pub fn group(self) -> usize {
+        match self {
+            CardTheme::System | CardTheme::Light | CardTheme::Dark | CardTheme::HighContrast => 0,
+            CardTheme::Night
+            | CardTheme::Sepia
+            | CardTheme::SolarizedLight
+            | CardTheme::SolarizedDark
+            | CardTheme::Nord
+            | CardTheme::GruvboxDark => 1,
+            CardTheme::Dracula
+            | CardTheme::Monokai
+            | CardTheme::CatppuccinMocha
+            | CardTheme::TokyoNight
+            | CardTheme::Ocean
+            | CardTheme::Forest => 2,
+        }
+    }
 
     /// Value stored in the user defaults.
     pub fn as_str(self) -> &'static str {
@@ -114,6 +153,14 @@ impl CardTheme {
             CardTheme::SolarizedDark => "solarized-dark",
             CardTheme::HighContrast => "high-contrast",
             CardTheme::Sepia => "sepia",
+            CardTheme::Nord => "nord",
+            CardTheme::GruvboxDark => "gruvbox-dark",
+            CardTheme::Dracula => "dracula",
+            CardTheme::Monokai => "monokai",
+            CardTheme::CatppuccinMocha => "catppuccin-mocha",
+            CardTheme::TokyoNight => "tokyo-night",
+            CardTheme::Ocean => "ocean",
+            CardTheme::Forest => "forest",
         }
     }
 
@@ -157,6 +204,14 @@ impl CardTheme {
             CardTheme::SolarizedDark => Some(SOLARIZED_DARK),
             CardTheme::HighContrast => Some(HIGH_CONTRAST),
             CardTheme::Sepia => Some(SEPIA),
+            CardTheme::Nord => Some(NORD),
+            CardTheme::GruvboxDark => Some(GRUVBOX_DARK),
+            CardTheme::Dracula => Some(DRACULA),
+            CardTheme::Monokai => Some(MONOKAI),
+            CardTheme::CatppuccinMocha => Some(CATPPUCCIN_MOCHA),
+            CardTheme::TokyoNight => Some(TOKYO_NIGHT),
+            CardTheme::Ocean => Some(OCEAN),
+            CardTheme::Forest => Some(FOREST),
         }
     }
 }
@@ -335,6 +390,202 @@ const SEPIA: Palette = Palette {
     dark: false,
 };
 
+/// Dracula (draculatheme.com): the official palette. The comment colour is lightened
+/// (#6272A4 is 3.0:1 on the background) and the secondary text is a lighter tint of it.
+const DRACULA: Palette = Palette {
+    background: hex(0x282A36),
+    text: hex(0xF8F8F2),
+    secondary: hex(0xBFC1D0),
+    tertiary: hex(0x8A93B8),
+    accent: hex(0xBD93F9),
+    link: hex(0x8BE9FD),
+    link_dim: hex(0x6FB8CC),
+    selection: hex(0x44475A),
+    key: hex(0x8BE9FD),
+    string: hex(0xF1FA8C),
+    number: hex(0xFFB86C),
+    keyword: hex(0xFF79C6),
+    type_name: hex(0x8BE9FD),
+    function: hex(0x50FA7B),
+    comment: hex(0x8C9AC9),
+    diff_add: hex(0x50FA7B),
+    diff_add_bg: hex(0x1F3B2B),
+    diff_remove: hex(0xFF5555),
+    diff_remove_bg: hex(0x3D2230),
+    dark: true,
+};
+
+/// Nord (nordtheme.com): Polar Night nord0 background, Snow Storm text, Frost and Aurora
+/// accents. Lightened where the originals stay under 4.5:1: orange #D08770, purple #B48EAD,
+/// red #BF616A (the diff); the comment is a lighter nord3 (#4C566A is 1.7:1).
+const NORD: Palette = Palette {
+    background: hex(0x2E3440),
+    text: hex(0xECEFF4),
+    secondary: hex(0xD8DEE9),
+    tertiary: hex(0x8C97AD),
+    accent: hex(0x88C0D0),
+    link: hex(0x88C0D0),
+    link_dim: hex(0x81A1C1),
+    selection: hex(0x434C5E),
+    key: hex(0x81A1C1),
+    string: hex(0xA3BE8C),
+    number: hex(0xD8916F),
+    keyword: hex(0xBD98B6),
+    type_name: hex(0x8FBCBB),
+    function: hex(0x88C0D0),
+    comment: hex(0x9AA5BA),
+    diff_add: hex(0xA3BE8C),
+    diff_add_bg: hex(0x34403A),
+    diff_remove: hex(0xD8919A),
+    diff_remove_bg: hex(0x3B2F3A),
+    dark: true,
+};
+
+/// Gruvbox Dark (morhetz): bg0, fg1 and the bright accents. The bright red #FB4934 is
+/// lightened (4.3:1); comments use fg4 #A89984, since gray #928374 is 4.0:1.
+const GRUVBOX_DARK: Palette = Palette {
+    background: hex(0x282828),
+    text: hex(0xEBDBB2),
+    secondary: hex(0xBDAE93),
+    tertiary: hex(0x928374),
+    accent: hex(0xFABD2F),
+    link: hex(0x83A598),
+    link_dim: hex(0x7C9A8E),
+    selection: hex(0x504945),
+    key: hex(0x83A598),
+    string: hex(0xB8BB26),
+    number: hex(0xD3869B),
+    keyword: hex(0xFB5D4A),
+    type_name: hex(0xFABD2F),
+    function: hex(0x8EC07C),
+    comment: hex(0xA89984),
+    diff_add: hex(0xB8BB26),
+    diff_add_bg: hex(0x32361A),
+    diff_remove: hex(0xFB5D4A),
+    diff_remove_bg: hex(0x351C1B),
+    dark: true,
+};
+
+/// Monokai (Wimer Hazenberg): the classic palette. The pink #F92672 is lightened (3.9:1) and
+/// the comment #75715E too (3.0:1).
+const MONOKAI: Palette = Palette {
+    background: hex(0x272822),
+    text: hex(0xF8F8F2),
+    secondary: hex(0xCFCFC2),
+    tertiary: hex(0x90908A),
+    accent: hex(0xA6E22E),
+    link: hex(0x66D9EF),
+    link_dim: hex(0x5AB0C2),
+    selection: hex(0x49483E),
+    key: hex(0x66D9EF),
+    string: hex(0xE6DB74),
+    number: hex(0xAE81FF),
+    keyword: hex(0xFF4F8B),
+    type_name: hex(0x66D9EF),
+    function: hex(0xA6E22E),
+    comment: hex(0x9D9883),
+    diff_add: hex(0xA6E22E),
+    diff_add_bg: hex(0x2F3A1C),
+    diff_remove: hex(0xFF4F8B),
+    diff_remove_bg: hex(0x361B24),
+    dark: true,
+};
+
+/// Catppuccin Mocha (catppuccin.com): base, text, subtext0 and the accents, all as published.
+const CATPPUCCIN_MOCHA: Palette = Palette {
+    background: hex(0x1E1E2E),
+    text: hex(0xCDD6F4),
+    secondary: hex(0xA6ADC8),
+    tertiary: hex(0x7F849C),
+    accent: hex(0xCBA6F7),
+    link: hex(0x89B4FA),
+    link_dim: hex(0x7F849C),
+    selection: hex(0x45475A),
+    key: hex(0x89B4FA),
+    string: hex(0xA6E3A1),
+    number: hex(0xFAB387),
+    keyword: hex(0xCBA6F7),
+    type_name: hex(0xF9E2AF),
+    function: hex(0x89DCEB),
+    comment: hex(0x9399B2),
+    diff_add: hex(0xA6E3A1),
+    diff_add_bg: hex(0x263A2E),
+    diff_remove: hex(0xF38BA8),
+    diff_remove_bg: hex(0x3B2633),
+    dark: true,
+};
+
+/// Tokyo Night (enkia): the Night variant. The comment #565F89 is lightened (2.8:1).
+const TOKYO_NIGHT: Palette = Palette {
+    background: hex(0x1A1B26),
+    text: hex(0xC0CAF5),
+    secondary: hex(0xA9B1D6),
+    tertiary: hex(0x737AA2),
+    accent: hex(0x7AA2F7),
+    link: hex(0x7DCFFF),
+    link_dim: hex(0x6A8BC9),
+    selection: hex(0x33467C),
+    key: hex(0x7AA2F7),
+    string: hex(0x9ECE6A),
+    number: hex(0xFF9E64),
+    keyword: hex(0xBB9AF7),
+    type_name: hex(0x2AC3DE),
+    function: hex(0x7DCFFF),
+    comment: hex(0x8189B5),
+    diff_add: hex(0x9ECE6A),
+    diff_add_bg: hex(0x20303B),
+    diff_remove: hex(0xF7768E),
+    diff_remove_bg: hex(0x37222C),
+    dark: true,
+};
+
+/// CopyCraft's own deep sea blue, with teal and cyan accents.
+const OCEAN: Palette = Palette {
+    background: hex(0x06324F),
+    text: hex(0xEAF7FF),
+    secondary: hex(0xA9D3EA),
+    tertiary: hex(0x6FA3C2),
+    accent: hex(0x3EE0F0),
+    link: hex(0x5CC8FF),
+    link_dim: hex(0x4E9CC9),
+    selection: hex(0x0E5C86),
+    key: hex(0x5CC8FF),
+    string: hex(0x5EF2C4),
+    number: hex(0xFFC46B),
+    keyword: hex(0xC9A6FF),
+    type_name: hex(0x3EE0F0),
+    function: hex(0x8FD9FF),
+    comment: hex(0x93BCD3),
+    diff_add: hex(0x5EF2C4),
+    diff_add_bg: hex(0x0A4A4E),
+    diff_remove: hex(0xFF9C9C),
+    diff_remove_bg: hex(0x3E2B48),
+    dark: true,
+};
+
+/// CopyCraft's own deep forest green, with bright leaf and lime accents.
+const FOREST: Palette = Palette {
+    background: hex(0x0F3A24),
+    text: hex(0xEEF9EF),
+    secondary: hex(0xB3D9BC),
+    tertiary: hex(0x75A884),
+    accent: hex(0x7CF08C),
+    link: hex(0x8FE3FF),
+    link_dim: hex(0x6FB5A0),
+    selection: hex(0x1E6640),
+    key: hex(0x8FE3FF),
+    string: hex(0xC4F27A),
+    number: hex(0xFFC870),
+    keyword: hex(0xF2A6E0),
+    type_name: hex(0x7CF0C8),
+    function: hex(0xA7F59A),
+    comment: hex(0x9CC7A6),
+    diff_add: hex(0xC4F27A),
+    diff_add_bg: hex(0x1C4A20),
+    diff_remove: hex(0xFFA8A0),
+    diff_remove_bg: hex(0x43302A),
+    dark: true,
+};
 #[cfg(test)]
 mod tests {
     use super::{CardTheme, Palette, Rgb, contrast};
@@ -368,7 +619,7 @@ mod tests {
         for theme in CardTheme::ALL {
             assert_eq!(theme.palette().is_none(), theme == CardTheme::System);
         }
-        assert_eq!(fixed().count(), 7);
+        assert_eq!(fixed().count(), 15);
     }
 
     #[test]
@@ -451,5 +702,39 @@ mod tests {
         assert_eq!(CardTheme::parse("purple"), None);
         assert_eq!(CardTheme::at(99), CardTheme::System);
         assert_eq!(CardTheme::default(), CardTheme::System);
+    }
+
+    #[test]
+    fn the_popup_groups_follow_each_other() {
+        let groups: Vec<usize> = CardTheme::ALL.iter().map(|theme| theme.group()).collect();
+        assert!(
+            groups.windows(2).all(|pair| pair[0] <= pair[1]),
+            "{groups:?}"
+        );
+        assert_eq!(groups.first(), Some(&0));
+        assert_eq!(groups.last(), Some(&2));
+        // Every stored value is distinct, so no theme shadows another.
+        let mut values: Vec<&str> = CardTheme::ALL.iter().map(|theme| theme.as_str()).collect();
+        values.sort_unstable();
+        values.dedup();
+        assert_eq!(values.len(), CardTheme::ALL.len());
+    }
+
+    #[test]
+    fn the_colourful_themes_keep_the_published_colours_that_pass() {
+        // The well-known palettes keep their background and body text exactly.
+        for (theme, background, text) in [
+            (CardTheme::Dracula, 0x282A36, 0xF8F8F2),
+            (CardTheme::Nord, 0x2E3440, 0xECEFF4),
+            (CardTheme::GruvboxDark, 0x282828, 0xEBDBB2),
+            (CardTheme::Monokai, 0x272822, 0xF8F8F2),
+            (CardTheme::CatppuccinMocha, 0x1E1E2E, 0xCDD6F4),
+            (CardTheme::TokyoNight, 0x1A1B26, 0xC0CAF5),
+        ] {
+            let p = theme.palette().expect("palette");
+            assert_eq!(p.background, super::hex(background), "{theme:?}");
+            assert_eq!(p.text, super::hex(text), "{theme:?}");
+            assert!(p.dark, "{theme:?}");
+        }
     }
 }

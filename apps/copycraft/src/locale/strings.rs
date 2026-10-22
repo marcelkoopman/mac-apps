@@ -182,6 +182,18 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("card_theme_high_contrast", "Hoog contrast", "High contrast"),
     ("card_theme_sepia", "Sepia", "Sepia"),
+    ("card_theme_nord", "Nord", "Nord"),
+    ("card_theme_gruvbox_dark", "Gruvbox donker", "Gruvbox Dark"),
+    ("card_theme_dracula", "Dracula", "Dracula"),
+    ("card_theme_monokai", "Monokai", "Monokai"),
+    (
+        "card_theme_catppuccin_mocha",
+        "Catppuccin Mocha",
+        "Catppuccin Mocha",
+    ),
+    ("card_theme_tokyo_night", "Tokyo Night", "Tokyo Night"),
+    ("card_theme_ocean", "Oceaan", "Ocean"),
+    ("card_theme_forest", "Bos", "Forest"),
     (
         "card_theme_preview",
         "Voorbeeld van het kaartthema",

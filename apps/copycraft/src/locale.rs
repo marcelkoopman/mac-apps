@@ -226,6 +226,12 @@ mod tests {
             "pdf_zoom",
             // A colour name, the same word in Dutch.
             "card_theme_sepia",
+            // Card theme brand names, the same in Dutch.
+            "card_theme_nord",
+            "card_theme_dracula",
+            "card_theme_monokai",
+            "card_theme_catppuccin_mocha",
+            "card_theme_tokyo_night",
             // Brand name and a two-letter label.
             "ai_group",
             "ai_button",

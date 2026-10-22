@@ -12,9 +12,9 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSBox, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSSegmentDistribution,
-    NSSegmentSwitchTracking, NSSegmentedControl, NSTextField, NSView, NSWindow, NSWindowDelegate,
-    NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSMenuItem, NSPopUpButton,
+    NSSegmentDistribution, NSSegmentSwitchTracking, NSSegmentedControl, NSTextField, NSView,
+    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
@@ -288,7 +288,11 @@ define_class!(
             let Some(popup) = sender else {
                 return;
             };
-            let index = usize::try_from(popup.indexOfSelectedItem()).unwrap_or(0);
+            // The tag is the theme's place in `CardTheme::ALL`; separators sit between groups.
+            let Some(item) = popup.selectedItem() else {
+                return;
+            };
+            let index = usize::try_from(item.tag()).unwrap_or(0);
             let theme = crate::card_theme::CardTheme::at(index);
             if theme == settings::card_theme() {
                 return;
@@ -883,7 +887,41 @@ fn card_theme_name(theme: crate::card_theme::CardTheme) -> &'static str {
         CardTheme::SolarizedDark => crate::locale::t("card_theme_solarized_dark"),
         CardTheme::HighContrast => crate::locale::t("card_theme_high_contrast"),
         CardTheme::Sepia => crate::locale::t("card_theme_sepia"),
+        CardTheme::Nord => crate::locale::t("card_theme_nord"),
+        CardTheme::GruvboxDark => crate::locale::t("card_theme_gruvbox_dark"),
+        CardTheme::Dracula => crate::locale::t("card_theme_dracula"),
+        CardTheme::Monokai => crate::locale::t("card_theme_monokai"),
+        CardTheme::CatppuccinMocha => crate::locale::t("card_theme_catppuccin_mocha"),
+        CardTheme::TokyoNight => crate::locale::t("card_theme_tokyo_night"),
+        CardTheme::Ocean => crate::locale::t("card_theme_ocean"),
+        CardTheme::Forest => crate::locale::t("card_theme_forest"),
     }
+}
+
+/// The theme names, a separator between the basic, classic and colourful groups, each item
+/// tagged with its place in [`crate::card_theme::CardTheme::ALL`]; the stored theme selected.
+fn fill_theme_popup(mtm: MainThreadMarker, popup: &NSPopUpButton) {
+    popup.removeAllItems();
+    let menu = popup.menu();
+    let mut group = None;
+    for (index, theme) in crate::card_theme::CardTheme::ALL.into_iter().enumerate() {
+        if group.is_some_and(|previous| previous != theme.group())
+            && let Some(menu) = &menu
+        {
+            menu.addItem(&NSMenuItem::separatorItem(mtm));
+        }
+        group = Some(theme.group());
+        popup.addItemWithTitle(&NSString::from_str(card_theme_name(theme)));
+        if let Some(item) = popup.lastItem() {
+            item.setTag(index as isize);
+        }
+    }
+    select_card_theme(popup);
+}
+
+/// Select the stored theme by its tag (the separators make item positions differ).
+fn select_card_theme(popup: &NSPopUpButton) {
+    popup.selectItemWithTag(settings::card_theme().index() as isize);
 }
 
 /// "Card theme", its popup, and a small preview plate to the right of it, on one row at `y`.
@@ -892,11 +930,7 @@ fn place_card_theme(mtm: MainThreadMarker, body: &NSView, y: f64) {
     let popup = popup(mtm, y);
     let x = popup.frame().origin.x;
     popup.setFrameSize(NSSize::new(THEME_POPUP_W, BUTTON_H));
-    popup.removeAllItems();
-    for theme in crate::card_theme::CardTheme::ALL {
-        popup.addItemWithTitle(&NSString::from_str(card_theme_name(theme)));
-    }
-    popup.selectItemAtIndex(settings::card_theme().index() as isize);
+    fill_theme_popup(mtm, &popup);
     popup.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("card_theme"))));
     wire(popup.as_ref(), sel!(cardThemeChanged:));
     body.addSubview(&popup);
@@ -1191,7 +1225,7 @@ fn refresh_all() {
     set_hotkey_text(&settings::hotkey_label());
     THEME_POPUP.with(|slot| {
         if let Some(popup) = slot.borrow().as_ref() {
-            popup.selectItemAtIndex(settings::card_theme().index() as isize);
+            select_card_theme(popup);
         }
     });
     paint_theme_preview();
