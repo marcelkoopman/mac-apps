@@ -224,6 +224,8 @@ mod tests {
             "filter_label",
             // "zoom 125%": the same word.
             "pdf_zoom",
+            // A colour name, the same word in Dutch.
+            "card_theme_sepia",
             // Brand name and a two-letter label.
             "ai_group",
             "ai_button",

@@ -1,6 +1,7 @@
 //! Building the card window, labelling its controls and laying it out.
 
 use super::*;
+use mac_ui::objc2_app_kit::NSAppearanceCustomization;
 
 pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     if WINDOW.with(|slot| slot.borrow().is_some()) {
@@ -82,7 +83,8 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     item_count.setAlignment(NSTextAlignment::Right);
     item_count.setHidden(true);
     let well = filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
-    crate::appearance::apply_well(&well, false, true);
+    crate::appearance::apply_card_well(&well);
+    window.setAppearance(crate::appearance::card_window_appearance().as_deref());
     let empty_line = widgets::label(
         mtm,
         mac_ui::metrics::FONT_BODY,
@@ -372,7 +374,7 @@ pub(crate) fn apply_window_chrome() {
     });
     WELL.with(|slot| {
         if let Some(well) = slot.borrow().as_ref() {
-            crate::appearance::apply_well(well, false, true);
+            crate::appearance::apply_card_well(well);
         }
     });
     let color = crate::appearance::caption_color();
@@ -381,9 +383,10 @@ pub(crate) fn apply_window_chrome() {
             label.setTextColor(Some(&color));
         }
     });
+    let well_caption = crate::appearance::card_caption_color(crate::appearance::card_palette());
     EMPTY_LINE.with(|slot| {
         if let Some(label) = slot.borrow().as_ref() {
-            label.setTextColor(Some(&color));
+            label.setTextColor(Some(&well_caption));
         }
     });
     VERSION_ROW.with(|slot| {
@@ -391,6 +394,22 @@ pub(crate) fn apply_window_chrome() {
             row.title.setContentTintColor(Some(&color));
         }
     });
+}
+
+/// The card theme changed in Settings: the card window takes the theme's light or dark
+/// appearance (System: the app's, which follows macOS), the well its fill, and an open card is
+/// painted again in the new colours right away. No restart, nothing written but the setting.
+pub(crate) fn apply_card_theme() {
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref() {
+            window.setAppearance(crate::appearance::card_window_appearance().as_deref());
+        }
+    });
+    apply_window_chrome();
+    clear_painted();
+    if window_is_visible() {
+        layout(false);
+    }
 }
 
 pub(crate) fn layout(fresh_place: bool) {

@@ -5,8 +5,46 @@ use mac_ui::objc2_app_kit::{NSColor, NSFont, NSTextView};
 use mac_ui::objc2_foundation::{NSMutableAttributedString, NSRange, NSString};
 use mac_ui::text::AttrText;
 
+use crate::card_theme::Palette;
 use crate::format::FormatKind;
 use crate::highlight::{self, TokenKind};
+
+thread_local! {
+    /// The fixed card theme the next paint uses; `None` paints in the dynamic system colours
+    /// (card theme System, and every window other than the card, such as the table window).
+    static PALETTE: std::cell::Cell<Option<Palette>> = const { std::cell::Cell::new(None) };
+}
+
+/// Paint with `palette` until the next call (the card sets it around its paint, like the zoom).
+pub(crate) fn set_palette(palette: Option<Palette>) {
+    PALETTE.with(|slot| slot.set(palette));
+}
+
+fn palette() -> Option<Palette> {
+    PALETTE.with(std::cell::Cell::get)
+}
+
+fn srgb(pick: impl Fn(&Palette) -> crate::card_theme::Rgb) -> Option<Retained<NSColor>> {
+    palette().map(|palette| crate::appearance::srgb(pick(&palette)))
+}
+
+/// Body text: the theme's text, or the system label colour.
+fn label_color() -> Retained<NSColor> {
+    srgb(|p| p.text).unwrap_or_else(NSColor::labelColor)
+}
+
+fn secondary_color() -> Retained<NSColor> {
+    srgb(|p| p.secondary).unwrap_or_else(NSColor::secondaryLabelColor)
+}
+
+fn tertiary_color() -> Retained<NSColor> {
+    srgb(|p| p.tertiary).unwrap_or_else(NSColor::tertiaryLabelColor)
+}
+
+/// A caption in the well (placeholders): Increase Contrast promotes it to the body colour.
+fn caption_color() -> Retained<NSColor> {
+    crate::appearance::card_caption_color(palette())
+}
 
 /// `error_line`: a 1-based line of `body` to mark (copied JSON that stops parsing there).
 pub(crate) fn paint(
@@ -20,7 +58,7 @@ pub(crate) fn paint(
     let attr = if payload {
         let attr = match highlight {
             Some(kind) => colored_capped(body, kind),
-            None => plain(body, &editor_font(), &NSColor::labelColor()),
+            None => plain(body, &editor_font(), &label_color()),
         };
         if let Some(range) = error_line.and_then(|line| crate::commands::line_range(body, line)) {
             let mark = NSColor::systemRedColor().colorWithAlphaComponent(0.22);
@@ -41,7 +79,7 @@ pub(crate) fn paint(
         plain(
             body,
             &NSFont::systemFontOfSize(zoomed(mac_ui::metrics::FONT_BODY)),
-            &crate::appearance::caption_color(),
+            &caption_color(),
         )
     };
     if let Some(storage) = mac_ui::widgets::text_storage(text) {
@@ -57,7 +95,7 @@ fn insert_gutters(attr: &NSMutableAttributedString, body: &str) {
     let starts = crate::commands::numbered_line_starts(body);
     let count = starts.len();
     let font = editor_font();
-    let color = NSColor::tertiaryLabelColor();
+    let color = tertiary_color();
     // From the end, so the earlier offsets stay valid.
     for (index, start) in starts.iter().enumerate().rev() {
         let label = crate::commands::gutter_label(index + 1, count);
@@ -86,15 +124,16 @@ pub(crate) fn paint_diff(text: &NSTextView, body: &str) {
             push_plain(&mut display, &mut location, "\n");
         }
     }
-    let attr = AttrText::new(&display, &font, &NSColor::secondaryLabelColor());
-    let green = NSColor::systemGreenColor();
-    let red = NSColor::systemRedColor();
+    let attr = AttrText::new(&display, &font, &secondary_color());
+    let green = srgb(|p| p.diff_add).unwrap_or_else(NSColor::systemGreenColor);
+    let red = srgb(|p| p.diff_remove).unwrap_or_else(NSColor::systemRedColor);
     for (range, added) in &marks {
         attr.color_utf16(*range, if *added { &green } else { &red });
     }
     let attr = attr.into_attributed();
-    let green_bg = green.colorWithAlphaComponent(0.16);
-    let red_bg = red.colorWithAlphaComponent(0.16);
+    // A theme has opaque row colours (tested for contrast); the system colours get a wash.
+    let green_bg = srgb(|p| p.diff_add_bg).unwrap_or_else(|| green.colorWithAlphaComponent(0.16));
+    let red_bg = srgb(|p| p.diff_remove_bg).unwrap_or_else(|| red.colorWithAlphaComponent(0.16));
     for (range, added) in &marks {
         let bg: &NSColor = if *added { &green_bg } else { &red_bg };
         // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
@@ -218,11 +257,7 @@ fn colored_capped(body: &str, kind: FormatKind) -> Retained<NSMutableAttributedS
     }
     let split = highlight_split(body);
     let attr = colored(&body[..split], kind);
-    attr.appendAttributedString(&plain(
-        &body[split..],
-        &editor_font(),
-        &NSColor::labelColor(),
-    ));
+    attr.appendAttributedString(&plain(&body[split..], &editor_font(), &label_color()));
     attr
 }
 
@@ -240,6 +275,9 @@ fn highlight_split(body: &str) -> usize {
 }
 
 fn color_for(kind: TokenKind) -> Retained<NSColor> {
+    if let Some(p) = palette() {
+        return crate::appearance::srgb(themed_token(&p, kind));
+    }
     match kind {
         TokenKind::Key | TokenKind::Function => NSColor::systemBlueColor(),
         TokenKind::String => NSColor::systemGreenColor(),
@@ -253,6 +291,24 @@ fn color_for(kind: TokenKind) -> Retained<NSColor> {
         TokenKind::LinkScheme => NSColor::secondaryLabelColor(),
         TokenKind::LinkHost => NSColor::linkColor(),
         TokenKind::LinkRest => NSColor::linkColor().colorWithAlphaComponent(0.65),
+    }
+}
+
+/// The colour of a token in a fixed theme. Same roles as the system mapping in [`color_for`].
+fn themed_token(p: &Palette, kind: TokenKind) -> crate::card_theme::Rgb {
+    match kind {
+        TokenKind::Key => p.key,
+        TokenKind::Function | TokenKind::Macro => p.function,
+        TokenKind::String => p.string,
+        TokenKind::Number => p.number,
+        TokenKind::Keyword => p.keyword,
+        TokenKind::Type => p.type_name,
+        TokenKind::Comment => p.comment,
+        TokenKind::LinkScheme => p.secondary,
+        TokenKind::Punct => p.tertiary,
+        TokenKind::Text => p.text,
+        TokenKind::LinkHost => p.link,
+        TokenKind::LinkRest => p.link_dim,
     }
 }
 
@@ -278,9 +334,9 @@ fn tone_color(format: FormatKind, kind: TokenKind) -> Retained<NSColor> {
         return color_for(kind);
     }
     match csv_tone(kind) {
-        CsvTone::Accent => NSColor::controlAccentColor(),
-        CsvTone::Secondary => NSColor::secondaryLabelColor(),
-        CsvTone::Label => NSColor::labelColor(),
+        CsvTone::Accent => srgb(|p| p.accent).unwrap_or_else(NSColor::controlAccentColor),
+        CsvTone::Secondary => secondary_color(),
+        CsvTone::Label => label_color(),
     }
 }
 
@@ -392,6 +448,20 @@ mod tests {
         let split = highlight_split(&body);
         assert!(body.is_char_boundary(split));
         assert!(split <= HIGHLIGHT_CAP);
+    }
+
+    #[test]
+    fn themed_tokens_take_the_palette_roles() {
+        use super::themed_token;
+        use crate::card_theme::CardTheme;
+        use crate::highlight::TokenKind;
+        let p = CardTheme::Night.palette().expect("palette");
+        assert_eq!(themed_token(&p, TokenKind::Text), p.text);
+        assert_eq!(themed_token(&p, TokenKind::Comment), p.comment);
+        assert_eq!(themed_token(&p, TokenKind::Punct), p.tertiary);
+        assert_eq!(themed_token(&p, TokenKind::LinkHost), p.link);
+        assert_eq!(themed_token(&p, TokenKind::LinkRest), p.link_dim);
+        assert_eq!(themed_token(&p, TokenKind::Macro), p.function);
     }
 
     #[test]

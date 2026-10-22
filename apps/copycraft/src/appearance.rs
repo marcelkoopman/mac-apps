@@ -107,6 +107,72 @@ pub fn apply_well(well: &mac_ui::objc2_app_kit::NSBox, force_opaque: bool, borde
     }
 }
 
+/// An opaque sRGB colour from a card theme palette.
+#[cfg(target_os = "macos")]
+pub fn srgb(
+    rgb: crate::card_theme::Rgb,
+) -> mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor> {
+    let (r, g, b) = rgb.unit();
+    mac_ui::objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, 1.0)
+}
+
+/// The palette of the stored card theme; `None` for System.
+#[cfg(target_os = "macos")]
+pub fn card_palette() -> Option<crate::card_theme::Palette> {
+    crate::settings::card_theme().palette()
+}
+
+/// [`apply_well`] for the card's own well. A fixed card theme fills it opaque in the theme's
+/// background, whatever Reduce Transparency says, so the tested contrast is what is on screen;
+/// Increase Contrast still gets the strong border (in the theme's text colour). System keeps
+/// the see-through glass well.
+#[cfg(target_os = "macos")]
+pub fn apply_card_well(well: &mac_ui::objc2_app_kit::NSBox) {
+    apply_well(well, false, true);
+    let Some(palette) = card_palette() else {
+        return;
+    };
+    well.setFillColor(&srgb(palette.background));
+    if chrome().strong_borders {
+        well.setBorderColor(&srgb(palette.text));
+    }
+}
+
+/// Caption colour inside the card's well: the theme's secondary text (its text under Increase
+/// Contrast), or [`caption_color`] without a fixed theme.
+#[cfg(target_os = "macos")]
+pub fn card_caption_color(
+    palette: Option<crate::card_theme::Palette>,
+) -> mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor> {
+    match palette {
+        Some(p) if chrome().primary_captions => srgb(p.text),
+        Some(p) => srgb(p.secondary),
+        None => caption_color(),
+    }
+}
+
+/// The AppKit appearance a fixed card theme puts on the card window (light or dark controls,
+/// glass and system selection around its well). `None` for System: the window inherits the
+/// app's appearance, so it follows macOS live.
+///
+/// The names are the documented string values of `NSAppearanceNameAqua` and
+/// `NSAppearanceNameDarkAqua`; building them from a string keeps this free of `unsafe` (the
+/// extern constants are `unsafe` to read). An unknown name gives `None`: the window then simply
+/// inherits.
+#[cfg(target_os = "macos")]
+pub fn card_window_appearance()
+-> Option<mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSAppearance>> {
+    let palette = card_palette()?;
+    let name = if palette.dark {
+        "NSAppearanceNameDarkAqua"
+    } else {
+        "NSAppearanceNameAqua"
+    };
+    mac_ui::objc2_app_kit::NSAppearance::appearanceNamed(
+        &mac_ui::objc2_foundation::NSString::from_str(name),
+    )
+}
+
 /// Caption colour. Increase Contrast promotes it to the primary label.
 #[cfg(target_os = "macos")]
 pub fn caption_color() -> mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor> {

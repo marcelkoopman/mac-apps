@@ -159,6 +159,29 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("group_general", "Algemeen", "General"),
     ("group_privacy", "Privacy", "Privacy"),
     ("group_display", "Weergave", "Display"),
+    // Settings › Display › Card theme
+    ("card_theme", "Kaartthema", "Card theme"),
+    ("card_theme_system", "Systeem", "System"),
+    ("card_theme_light", "Licht", "Light"),
+    ("card_theme_dark", "Donker", "Dark"),
+    ("card_theme_night", "Nacht", "Night"),
+    (
+        "card_theme_solarized_light",
+        "Solarized licht",
+        "Solarized Light",
+    ),
+    (
+        "card_theme_solarized_dark",
+        "Solarized donker",
+        "Solarized Dark",
+    ),
+    ("card_theme_high_contrast", "Hoog contrast", "High contrast"),
+    ("card_theme_sepia", "Sepia", "Sepia"),
+    (
+        "card_theme_preview",
+        "Voorbeeld van het kaartthema",
+        "Card theme preview",
+    ),
     ("change_hotkey", "Wijzigen…", "Change…"),
     ("change_hotkey_a11y", "Sneltoets wijzigen", "Change hotkey"),
     (

@@ -342,7 +342,9 @@ pub(crate) fn show_empty_line(text: &str, well: NSRect) {
         };
         let line_h = mac_ui::metrics::FONT_BODY + 6.0;
         label.setStringValue(&NSString::from_str(text));
-        label.setTextColor(Some(&crate::appearance::caption_color()));
+        label.setTextColor(Some(&crate::appearance::card_caption_color(
+            crate::appearance::card_palette(),
+        )));
         label.setFrame(NSRect::new(
             NSPoint::new(
                 well.origin.x + WELL_INSET,
@@ -512,6 +514,8 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         let Some(view) = borrowed.as_ref() else {
             return;
         };
+        // The card's own colours; reset after, so other windows paint in the system colours.
+        crate::macos_card_text::set_palette(crate::appearance::card_palette());
         if diff_lines {
             crate::macos_card_text::paint_diff(view, body);
         } else {
@@ -523,6 +527,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
             crate::macos_card_text::paint(view, body, highlight, payload, error_line, numbers);
             crate::macos_card_text::set_font_zoom(crate::pdf::ZOOM_FIT);
         }
+        crate::macos_card_text::set_palette(None);
         // A side-by-side row stays on one line and scrolls sideways. Wrapping would
         // break the two columns.
         let wrap = if diff_lines {

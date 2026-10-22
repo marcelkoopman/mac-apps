@@ -176,6 +176,8 @@ const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 const SYMBOLS_KEY: &str = "CopycraftSymbols";
 /// Bundle ids whose copies are never read. One id per line. Not clipboard data.
 const IGNORED_APPS_KEY: &str = "CopycraftIgnoredApps";
+/// The card theme (Settings › Display), as [`crate::card_theme::CardTheme::as_str`].
+const CARD_THEME_KEY: &str = "CopycraftCardTheme";
 
 /// Keys an install that ran before stores: any of them means it is not a new install.
 const EARLIER_KEYS: &[&str] = &[
@@ -403,6 +405,18 @@ pub fn set_confirm_clear(on: bool) {
 
 pub fn set_date_month_first(on: bool) {
     store_bool(DATE_MONTH_FIRST_KEY, on);
+}
+
+/// The stored card theme. A missing or unknown value is [`crate::card_theme::CardTheme::System`].
+pub fn card_theme() -> crate::card_theme::CardTheme {
+    load_string(CARD_THEME_KEY)
+        .and_then(|text| crate::card_theme::CardTheme::parse(&text))
+        .unwrap_or_default()
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_card_theme(theme: crate::card_theme::CardTheme) {
+    store_string(CARD_THEME_KEY, theme.as_str());
 }
 
 // Choice set by `set_language` on this test thread. Unset means `Language::System`, so a
@@ -731,6 +745,18 @@ fn store_string(key: &str, value: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn card_theme_defaults_to_system_and_roundtrips() {
+        use crate::card_theme::CardTheme;
+        assert_eq!(super::card_theme(), CardTheme::System);
+        for theme in CardTheme::ALL {
+            super::set_card_theme(theme);
+            assert_eq!(super::card_theme(), theme);
+        }
+        super::store_string(super::CARD_THEME_KEY, "purple");
+        assert_eq!(super::card_theme(), CardTheme::System);
+    }
+
     #[test]
     fn window_width_follows_the_choice_and_stays_on_the_screen() {
         use super::WindowSize::{Compact, Normal, Wide};

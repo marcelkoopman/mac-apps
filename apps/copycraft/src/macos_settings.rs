@@ -1,6 +1,6 @@
 //! Settings window, in five tabs (a segmented control above one pane per tab):
 //! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history, privacy
-//! filter, blur, ignored apps), Display (pages, announce, ask before clearing, symbols),
+//! filter, blur, ignored apps), Display (card theme, pages, announce, ask before clearing, symbols),
 //! Notifications (four switches) and Feedback (mail, privacy policy, support). ⌘1…⌘5 pick a tab;
 //! the last tab is remembered for the session only.
 
@@ -11,7 +11,7 @@ use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
+    NSAccessibility, NSBackingStoreType, NSBox, NSButton, NSColor, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSSegmentDistribution,
     NSSegmentSwitchTracking, NSSegmentedControl, NSTextField, NSView, NSWindow, NSWindowDelegate,
     NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
@@ -47,9 +47,14 @@ const GENERAL_H: f64 = 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
 /// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the ignored-apps
 /// block, three gaps.
 const PRIVACY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Weergave: the pages, announce and ask-before-clearing settings, three gaps and the symbols
-/// block.
-const DISPLAY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// The symbols on Weergave: the labelled setting, then the field with Restore on the same row.
+const FIELD_ROW_BLOCK_H: f64 = SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H;
+/// Weergave: the card theme row (popup and preview, no note), the pages, announce and
+/// ask-before-clearing settings, four gaps and the symbols block.
+const DISPLAY_H: f64 =
+    BUTTON_H + 3.0 * SETTING_H + 4.0 * mac_ui::metrics::SPACE_S + FIELD_ROW_BLOCK_H;
+/// Width of the card theme popup; the preview takes the rest of the row.
+const THEME_POPUP_W: f64 = 176.0;
 /// Meldingen: the four switches in two rows of two, one gap and a note.
 const NOTIFY_H: f64 = 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
 /// Feedback: four buttons stacked one per row: the two mail buttons, a wider gap, then the
@@ -72,6 +77,7 @@ const fn max(a: f64, b: f64) -> f64 {
 
 const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
+const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
 const _: () = assert!(GENERAL_H == 208.0);
 const _: () = assert!(PRIVACY_H == 280.0);
 const _: () = assert!(DISPLAY_H == 280.0);
@@ -145,6 +151,10 @@ thread_local! {
     static DELEGATE: RefCell<Option<Retained<SettingsDelegate>>> = const { RefCell::new(None) };
     static HOTKEY_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static DATE_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
+    static THEME_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
+    /// The card theme preview: its plate and the sample text on it.
+    static THEME_PLATE: RefCell<Option<Retained<NSBox>>> = const { RefCell::new(None) };
+    static THEME_SAMPLE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static PRIVACY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static HISTORY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static BLUR_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
@@ -270,6 +280,22 @@ define_class!(
             };
             settings::set_date_month_first(popup.indexOfSelectedItem() == 1);
             launcher::emit(UserEvent::SettingsChanged);
+        }
+
+        /// Card theme: store it, repaint the preview, and restyle an open card right away.
+        #[unsafe(method(cardThemeChanged:))]
+        fn card_theme_changed(&self, sender: Option<&NSPopUpButton>) {
+            let Some(popup) = sender else {
+                return;
+            };
+            let index = usize::try_from(popup.indexOfSelectedItem()).unwrap_or(0);
+            let theme = crate::card_theme::CardTheme::at(index);
+            if theme == settings::card_theme() {
+                return;
+            }
+            settings::set_card_theme(theme);
+            paint_theme_preview();
+            crate::macos_launcher::apply_card_theme();
         }
 
         #[unsafe(method(languageChanged:))]
@@ -437,6 +463,9 @@ fn clear_controls() {
     PANES.with(|s| s.borrow_mut().clear());
     HOTKEY_LABEL.with(|s| *s.borrow_mut() = None);
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
+    THEME_POPUP.with(|s| *s.borrow_mut() = None);
+    THEME_PLATE.with(|s| *s.borrow_mut() = None);
+    THEME_SAMPLE.with(|s| *s.borrow_mut() = None);
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
     PRIVACY_BOX.with(|s| *s.borrow_mut() = None);
     HISTORY_BOX.with(|s| *s.borrow_mut() = None);
@@ -766,10 +795,13 @@ fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
     top
 }
 
-/// Weergave: long text in pages, Announce confirmations, Ask before clearing and the symbols.
-/// Returns the unused height.
+/// Weergave: the card theme, long text in pages, Announce confirmations, Ask before clearing
+/// and the symbols. Returns the unused height.
 fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     let mut top = PANE_H;
+    let y = take(&mut top, BUTTON_H);
+    place_card_theme(mtm, body, y);
+    gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
     let pages = checkbox(mtm, crate::locale::t("page_long_text"), y);
     pages.setState(state_of(settings::load().page_long_text));
@@ -805,7 +837,23 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     );
     place_explanation(mtm, body, crate::locale::t("symbols_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
-    let field = text_field(mtm, take(&mut top, BUTTON_H));
+    // The field and Restore share one row, so the card theme fits in the pane.
+    let y = take(&mut top, BUTTON_H);
+    let restore = GlassButton::pill(mtm, crate::locale::t("symbols_restore"), ButtonSize::Small);
+    restore.set_symbol("arrow.counterclockwise");
+    restore.set_accessibility_label(crate::locale::t("symbols_restore"));
+    let restore_w = restore.width_within(200.0).max(BUTTON_H);
+    restore.view().setFrame(NSRect::new(
+        NSPoint::new(WIDTH - MARGIN - restore_w, y),
+        NSSize::new(restore_w, BUTTON_H),
+    ));
+    wire(restore.button(), sel!(restoreSymbols:));
+    body.addSubview(restore.view());
+    let field = text_field(mtm, y);
+    field.setFrameSize(NSSize::new(
+        WIDTH - MARGIN * 2.0 - mac_ui::metrics::BUTTON_GAP - restore_w,
+        BUTTON_H,
+    ));
     field.setStringValue(&NSString::from_str(&settings::symbol_catalog_text()));
     field.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
         "symbols_field_a11y",
@@ -820,14 +868,106 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     });
     body.addSubview(&field);
     SYMBOLS_FIELD.with(|slot| *slot.borrow_mut() = Some(field));
-    gap(&mut top, mac_ui::metrics::SPACE_S);
-    let restore = GlassButton::pill(mtm, crate::locale::t("symbols_restore"), ButtonSize::Small);
-    restore.set_symbol("arrow.counterclockwise");
-    restore.set_accessibility_label(crate::locale::t("symbols_restore"));
-    place_pill(&restore, take(&mut top, BUTTON_H), 240.0);
-    wire(restore.button(), sel!(restoreSymbols:));
-    body.addSubview(restore.view());
     top
+}
+
+/// The name of a card theme in the popup (literal keys, for the locale scan test).
+fn card_theme_name(theme: crate::card_theme::CardTheme) -> &'static str {
+    use crate::card_theme::CardTheme;
+    match theme {
+        CardTheme::System => crate::locale::t("card_theme_system"),
+        CardTheme::Light => crate::locale::t("card_theme_light"),
+        CardTheme::Dark => crate::locale::t("card_theme_dark"),
+        CardTheme::Night => crate::locale::t("card_theme_night"),
+        CardTheme::SolarizedLight => crate::locale::t("card_theme_solarized_light"),
+        CardTheme::SolarizedDark => crate::locale::t("card_theme_solarized_dark"),
+        CardTheme::HighContrast => crate::locale::t("card_theme_high_contrast"),
+        CardTheme::Sepia => crate::locale::t("card_theme_sepia"),
+    }
+}
+
+/// "Card theme", its popup, and a small preview plate to the right of it, on one row at `y`.
+fn place_card_theme(mtm: MainThreadMarker, body: &NSView, y: f64) {
+    place_name(mtm, body, crate::locale::t("card_theme"), y);
+    let popup = popup(mtm, y);
+    let x = popup.frame().origin.x;
+    popup.setFrameSize(NSSize::new(THEME_POPUP_W, BUTTON_H));
+    popup.removeAllItems();
+    for theme in crate::card_theme::CardTheme::ALL {
+        popup.addItemWithTitle(&NSString::from_str(card_theme_name(theme)));
+    }
+    popup.selectItemAtIndex(settings::card_theme().index() as isize);
+    popup.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("card_theme"))));
+    wire(popup.as_ref(), sel!(cardThemeChanged:));
+    body.addSubview(&popup);
+    THEME_POPUP.with(|slot| *slot.borrow_mut() = Some(popup));
+
+    let plate_x = x + THEME_POPUP_W + mac_ui::metrics::BUTTON_GAP;
+    let plate_w = WIDTH - MARGIN - plate_x;
+    let plate = widgets::filled_box(
+        mtm,
+        mac_ui::style::SPACE_XS,
+        &NSColor::textBackgroundColor(),
+    );
+    plate.setBorderColor(&NSColor::separatorColor());
+    plate.setBorderWidth(1.0);
+    plate.setFrame(NSRect::new(
+        NSPoint::new(plate_x, y),
+        NSSize::new(plate_w, BUTTON_H),
+    ));
+    body.addSubview(&plate);
+    let sample = widgets::label(mtm, mac_ui::style::FONT_CODE, &NSColor::labelColor());
+    let inset = mac_ui::metrics::SPACE_S;
+    sample.setFrame(NSRect::new(
+        NSPoint::new(plate_x + inset, y + (BUTTON_H - NOTE_H) / 2.0),
+        NSSize::new(plate_w - inset * 2.0, NOTE_H),
+    ));
+    sample.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "card_theme_preview",
+    ))));
+    body.addSubview(&sample);
+    THEME_PLATE.with(|slot| *slot.borrow_mut() = Some(plate));
+    THEME_SAMPLE.with(|slot| *slot.borrow_mut() = Some(sample));
+    paint_theme_preview();
+}
+
+/// The preview sample: "Aa" on the selection colour, then a JSON key and number, in the stored
+/// theme on its background (System: the dynamic system colours, which follow the appearance).
+fn paint_theme_preview() {
+    const SAMPLE: &str = "Aa {\"k\": 42}";
+    let palette = settings::card_theme().palette();
+    let srgb = crate::appearance::srgb;
+    let (background, text, key, number, selection) = match palette {
+        Some(p) => (
+            srgb(p.background),
+            srgb(p.text),
+            srgb(p.key),
+            srgb(p.number),
+            srgb(p.selection),
+        ),
+        None => (
+            NSColor::textBackgroundColor(),
+            NSColor::labelColor(),
+            NSColor::systemBlueColor(),
+            NSColor::systemOrangeColor(),
+            NSColor::selectedTextBackgroundColor(),
+        ),
+    };
+    THEME_PLATE.with(|slot| {
+        if let Some(plate) = slot.borrow().as_ref() {
+            plate.setFillColor(&background);
+        }
+    });
+    THEME_SAMPLE.with(|slot| {
+        if let Some(sample) = slot.borrow().as_ref() {
+            let font = mac_ui::fonts::monospace(mac_ui::style::FONT_CODE, &[]);
+            let attr = mac_ui::text::AttrText::new(SAMPLE, &font, &text);
+            attr.background(&(0..2), &selection);
+            attr.color(&(4..7), &key);
+            attr.color(&(9..11), &number);
+            sample.setAttributedStringValue(&attr.into_attributed());
+        }
+    });
 }
 
 /// Feedback: Suggest a feature, Report a problem, the privacy policy and support. Returns the
@@ -1049,6 +1189,12 @@ fn state_of(on: bool) -> isize {
 
 fn refresh_all() {
     set_hotkey_text(&settings::hotkey_label());
+    THEME_POPUP.with(|slot| {
+        if let Some(popup) = slot.borrow().as_ref() {
+            popup.selectItemAtIndex(settings::card_theme().index() as isize);
+        }
+    });
+    paint_theme_preview();
     DATE_POPUP.with(|slot| {
         if let Some(popup) = slot.borrow().as_ref() {
             popup.selectItemAtIndex(isize::from(settings::load().date_month_first));

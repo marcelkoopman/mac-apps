@@ -50,6 +50,11 @@ fn refresh_frozen_column(body: &str, highlight: Option<FormatKind>, payload: boo
     let Some(frozen) = frozen_view(mtm) else {
         return;
     };
+    // The plate takes the card theme's opaque background, like the well under it.
+    let plate = crate::appearance::card_palette().map_or_else(NSColor::controlBackgroundColor, |p| {
+        crate::appearance::srgb(p.background)
+    });
+    frozen.setBackgroundColor(&plate);
     crate::macos_card_text::copy_frozen_column(&text, &frozen, &lines);
     frozen.setHidden(false);
     // The well's blur covers the frozen column too.
