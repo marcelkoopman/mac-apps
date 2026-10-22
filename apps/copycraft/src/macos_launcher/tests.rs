@@ -15,6 +15,22 @@ impl Drop for ForceBlurOff {
     }
 }
 
+/// The privacy filter is off by default; tests of the mask turn it on for their run.
+struct FilterOn;
+
+impl FilterOn {
+    fn arm() -> Self {
+        crate::settings::set_privacy_filter(true);
+        Self
+    }
+}
+
+impl Drop for FilterOn {
+    fn drop(&mut self) {
+        crate::settings::set_privacy_filter(false);
+    }
+}
+
 #[test]
 fn header_title_is_the_kind_and_the_hotkey() {
     assert_eq!(super::header_title("Rust"), "Rust · ⌃⌘C");
@@ -80,6 +96,7 @@ fn failed_blur_covers_the_well_until_reveal() {
     }
     let _force = ForceBlurOff::arm();
     let _reset = Reset;
+    let _filter = FilterOn::arm();
     super::MASKS.set(true);
     super::REVEALED.set(false);
     super::BLUR_ON.set(false);
@@ -96,11 +113,12 @@ fn failed_blur_covers_the_well_until_reveal() {
     assert!(super::SHADE_ON.get());
 }
 
-struct ResetFind;
+/// Resets the card's state after a test, and turns the privacy filter on for its run.
+struct ResetFind(FilterOn);
 
 impl ResetFind {
     fn arm() -> Self {
-        Self
+        Self(FilterOn::arm())
     }
 }
 
@@ -227,7 +245,7 @@ fn picture() -> crate::commands::LaunchData {
 }
 
 #[test]
-fn a_sensitive_diff_stays_masked_with_the_filter_off() {
+fn a_sensitive_diff_is_masked_only_with_the_filter_on() {
     let _reset = ResetFind::arm();
     super::DIFF_LOCK.set(true);
     super::REVEALED.set(false);
@@ -235,6 +253,29 @@ fn a_sensitive_diff_stays_masked_with_the_filter_off() {
     assert!(super::well_is_masked());
     super::REVEALED.set(true);
     assert!(!super::well_is_masked());
+    // Filter off: shown directly, no cover to click.
+    crate::settings::set_privacy_filter(false);
+    super::REVEALED.set(false);
+    assert!(!super::well_is_masked());
+}
+
+#[test]
+fn with_the_filter_off_the_well_has_no_cover() {
+    let _reset = ResetFind::arm();
+    let _force = ForceBlurOff::arm();
+    crate::settings::set_privacy_filter(false);
+    super::MASKS.set(true);
+    super::DIFF_LOCK.set(true);
+    super::REVEALED.set(false);
+    super::finish_preview();
+    assert!(!super::well_is_masked());
+    assert!(!super::SHADE_ON.get());
+    super::REVEAL.with(|slot| {
+        if let Some(cover) = slot.borrow().as_ref() {
+            assert!(cover.root.isHidden());
+            assert!(cover.hint.isHidden());
+        }
+    });
 }
 
 #[test]

@@ -138,13 +138,16 @@ pub fn apply_card_well(well: &mac_ui::objc2_app_kit::NSBox) {
     }
 }
 
-/// The opaque cover over a masked well without blur (the default): the system text background,
-/// or the card theme's background, so a masked card keeps its theme.
+/// The opaque cover over a masked well without blur (the default): the card theme's background,
+/// so a masked card keeps its theme. With *System* it is the window background (light grey, or
+/// dark grey in Dark Mode), not the text background, which is black in Dark Mode and made the
+/// cover read as a black slab. The well's "Click to reveal" caption sits on it.
 #[cfg(target_os = "macos")]
 pub fn apply_card_shade(shade: &mac_ui::objc2_app_kit::NSBox) {
     apply_well(shade, true, false);
-    if let Some(palette) = card_palette() {
-        shade.setFillColor(&srgb(palette.background));
+    match card_palette() {
+        Some(palette) => shade.setFillColor(&srgb(palette.background)),
+        None => shade.setFillColor(&mac_ui::objc2_app_kit::NSColor::windowBackgroundColor()),
     }
 }
 

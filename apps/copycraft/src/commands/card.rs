@@ -79,14 +79,27 @@ pub fn effective_mask(privacy_filter: bool, content_masks: bool, revealed: bool)
 }
 
 /// Whether the well is masked, including the card's hide button: `hidden` hides the current
-/// entry whatever the privacy filter or blur settings say.
+/// entry whatever the privacy filter or blur settings say (the user asked for that). Otherwise
+/// the privacy filter is the master switch: with it off nothing is covered, not even a diff of a
+/// sensitive copy (`diff_lock`); with it on, such a diff is masked like other content.
 pub fn well_masked(
     privacy_filter: bool,
     content_masks: bool,
+    diff_lock: bool,
     revealed: bool,
     hidden: bool,
 ) -> bool {
-    hidden || effective_mask(privacy_filter, content_masks, revealed)
+    hidden || effective_mask(privacy_filter, content_masks || diff_lock, revealed)
+}
+
+/// The caption on the opaque cover of a masked well (blur off, or no blur filter), so a covered
+/// well reads as a placeholder to click rather than a blank slab. `None` while nothing covers it.
+pub fn cover_hint(shade: bool, checking: bool) -> Option<&'static str> {
+    match (shade, checking) {
+        (false, _) => None,
+        (true, true) => Some(crate::locale::t("checking_sensitive")),
+        (true, false) => Some(crate::locale::t("click_to_reveal")),
+    }
 }
 
 /// The hide/show button was clicked on a well that is `masked`: the new (hidden, revealed).

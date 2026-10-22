@@ -6,6 +6,8 @@ pub(crate) struct RevealCover {
     pub(crate) root: Retained<NSView>,
     /// Opaque stand-in when the gaussian blur cannot be installed.
     pub(crate) shade: Retained<NSBox>,
+    /// "Click to reveal" on the shade, so a covered well reads as a placeholder.
+    pub(crate) hint: Retained<NSTextField>,
     pub(crate) hit: Retained<NSButton>,
 }
 
@@ -17,6 +19,16 @@ pub(crate) fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     crate::appearance::apply_card_shade(&shade);
     shade.setFrame(frame);
     shade.setHidden(true);
+    let hint = widgets::label(
+        mtm,
+        mac_ui::metrics::FONT_BODY,
+        &crate::appearance::caption_color(),
+    );
+    hint.setAlignment(NSTextAlignment::Center);
+    // The cover button carries the label for accessibility; this is only what the eye sees.
+    hint.setAccessibilityElement(false);
+    hint.setHidden(true);
+    place_cover_hint(&hint, width);
     let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
     hit.setBordered(false);
     hit.setTransparent(true);
@@ -26,9 +38,24 @@ pub(crate) fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     hit.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("reveal_hidden"))));
     wire_button(&hit, sel!(revealClicked:));
     root.addSubview(&shade);
+    root.addSubview(&hint);
     root.addSubview(&hit);
     root.setHidden(true);
-    RevealCover { root, shade, hit }
+    RevealCover {
+        root,
+        shade,
+        hint,
+        hit,
+    }
+}
+
+/// One line, centred in the well.
+fn place_cover_hint(hint: &NSTextField, width: f64) {
+    let line_h = mac_ui::metrics::FONT_BODY + 6.0;
+    hint.setFrame(NSRect::new(
+        NSPoint::new(WELL_INSET, (PREVIEW_H - line_h) / 2.0),
+        NSSize::new((width - WELL_INSET * 2.0).max(0.0), line_h),
+    ));
 }
 
 pub(crate) fn place_reveal_cover(y: f64) {
@@ -50,6 +77,7 @@ pub(crate) fn place_reveal_cover(y: f64) {
             NSPoint::new(0.0, 0.0),
             NSSize::new(width, PREVIEW_H),
         ));
+        place_cover_hint(&cover.hint, width);
     });
 }
 
@@ -62,7 +90,19 @@ pub(crate) fn show_mask_shade(shown: bool) {
         if shown {
             // The theme may have changed since the cover was made.
             crate::appearance::apply_card_shade(&cover.shade);
+            cover
+                .hint
+                .setTextColor(Some(&crate::appearance::card_caption_color(
+                    crate::appearance::card_palette(),
+                )));
         }
+        let checking =
+            crate::sensitivity::meta_status(&card_meta()) == Some(crate::sensitivity::checking());
+        let hint = commands::cover_hint(shown, checking);
+        cover
+            .hint
+            .setStringValue(&NSString::from_str(hint.unwrap_or("")));
+        cover.hint.setHidden(hint.is_none());
         cover.shade.setHidden(!shown);
     });
 }
@@ -128,12 +168,10 @@ pub(crate) fn mask_again() {
 /// The one place the card decides the well is masked: the privacy filter setting (read live, so
 /// a change in Settings counts at once), whether this content masks, and whether it was revealed.
 pub(crate) fn well_is_masked() -> bool {
-    if DIFF_LOCK.with(Cell::get) && !REVEALED.with(Cell::get) {
-        return true;
-    }
     commands::well_masked(
         crate::settings::privacy_filter(),
         MASKS.with(Cell::get),
+        DIFF_LOCK.with(Cell::get),
         REVEALED.with(Cell::get),
         HIDDEN.with(Cell::get),
     )

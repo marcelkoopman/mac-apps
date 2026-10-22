@@ -17,11 +17,11 @@ Each small card in the history strip now has a ✕ (on the card shown and the on
 
 ### Blur is now off by default
 
-Blur is now off by default. Masked content is hidden under a plain cover in your card theme's colours. To get the blur back, tick **Blur masked content** in Settings › Privacy. If you turned the blur on or off yourself before, that choice is kept.
+Blur is now off by default. Masked content is hidden under a plain cover in your card theme's colours that says **Click to reveal**. To get the blur back, tick **Blur masked content** in Settings › Privacy. If you turned the blur on or off yourself before, that choice is kept.
 
 ### The privacy filter is now off by default
 
-The privacy filter is now off by default, so copied content shows on the card straight away, without a click to reveal it. To hide it again until you click, tick **Use privacy filter** in Settings › Privacy. If you turned the filter on or off yourself before, that choice is kept. Sensitive copies such as tokens, keys and passwords in links are still kept out of history, whatever this setting says. The **Possibly sensitive text copied** notification also no longer depends on the privacy filter: it follows its own **Sensitive copy** switch in Settings › Notifications, which is on by default.
+The privacy filter is now off by default, so copied content shows on the card straight away, without a click to reveal it. To hide it again until you click, tick **Use privacy filter** in Settings › Privacy. With the filter off, nothing on the card or in the table window needs a click to show, a diff of a sensitive copy included. If you turned the filter on or off yourself before, that choice is kept. Sensitive copies such as tokens, keys and passwords in links are still kept out of history, whatever this setting says. The **Possibly sensitive text copied** notification also no longer depends on the privacy filter: it follows its own **Sensitive copy** switch in Settings › Notifications, which is on by default.
 
 ### Upgrading from Copycraft 0.1.87 or earlier
 
@@ -45,11 +45,11 @@ Elk kaartje in de geschiedenisstrook heeft nu een ✕ (op het getoonde kaartje e
 
 ### Vervagen staat nu standaard uit
 
-Vervagen staat nu standaard uit. Gemaskeerde inhoud zit onder een effen afdekking in de kleuren van je kaartthema. Wil je het vervagen terug, vink dan **Gemaskeerde inhoud vervagen** aan in Instellingen › Privacy. Heb je het vervagen eerder zelf aan- of uitgezet, dan blijft die keuze bewaard.
+Vervagen staat nu standaard uit. Gemaskeerde inhoud zit onder een effen afdekking in de kleuren van je kaartthema, met **Klik om te tonen** erop. Wil je het vervagen terug, vink dan **Gemaskeerde inhoud vervagen** aan in Instellingen › Privacy. Heb je het vervagen eerder zelf aan- of uitgezet, dan blijft die keuze bewaard.
 
 ### Het privacyfilter staat nu standaard uit
 
-Het privacyfilter staat nu standaard uit, dus gekopieerde inhoud staat meteen op de kaart, zonder klik om hem te tonen. Wil je hem weer verborgen houden tot je klikt, vink dan **Gebruik privacyfilter** aan in Instellingen › Privacy. Heb je het filter eerder zelf aan- of uitgezet, dan blijft die keuze bewaard. Gevoelige kopieën zoals tokens, sleutels en wachtwoorden in links komen nog steeds niet in de geschiedenis, wat deze instelling ook zegt. Ook de melding **Mogelijk gevoelige tekst gekopieerd** hangt niet meer af van het privacyfilter: die volgt zijn eigen schakelaar **Gevoelige kopie** in Instellingen › Meldingen, die standaard aan staat.
+Het privacyfilter staat nu standaard uit, dus gekopieerde inhoud staat meteen op de kaart, zonder klik om hem te tonen. Wil je hem weer verborgen houden tot je klikt, vink dan **Gebruik privacyfilter** aan in Instellingen › Privacy. Met het filter uit hoeft er op de kaart en in het tabelvenster nergens meer op geklikt te worden om iets te zien, ook niet bij een vergelijking met een gevoelige kopie. Heb je het filter eerder zelf aan- of uitgezet, dan blijft die keuze bewaard. Gevoelige kopieën zoals tokens, sleutels en wachtwoorden in links komen nog steeds niet in de geschiedenis, wat deze instelling ook zegt. Ook de melding **Mogelijk gevoelige tekst gekopieerd** hangt niet meer af van het privacyfilter: die volgt zijn eigen schakelaar **Gevoelige kopie** in Instellingen › Meldingen, die standaard aan staat.
 
 ### Bijwerken vanaf Copycraft 0.1.87 of eerder
 

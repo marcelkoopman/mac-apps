@@ -258,8 +258,8 @@ thread_local! {
     /// [`crate::settings::Settings::window_size`], kept in step with the menu.
     static WINDOW_SIZE: Cell<crate::settings::WindowSize> = const { Cell::new(crate::settings::WindowSize::Normal) };
     static DIFF_WIDE: Cell<bool> = const { Cell::new(false) };
-    /// A diff stays masked until reveal when either side is sensitive, even with the privacy
-    /// filter off. Other views keep the filter as the master switch.
+    /// A diff of a sensitive copy (either side): with the privacy filter on it is masked until
+    /// reveal. With the filter off it shows directly, like everything else.
     static DIFF_LOCK: Cell<bool> = const { Cell::new(false) };
     static CONTENT_KEY: Cell<u64> = const { Cell::new(0) };
     static DELEGATE: RefCell<Option<Retained<LauncherDelegate>>> = const { RefCell::new(None) };

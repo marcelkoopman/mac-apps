@@ -577,10 +577,10 @@ fn link_with_a_query_shows_its_url_view() {
 fn hide_button_masks_the_entry_whatever_the_settings() {
     use crate::commands::{hide_button_look, toggle_hidden, well_masked};
     // Hidden by the button: masked even with the privacy filter off and content that never masks.
-    assert!(well_masked(false, false, false, true));
-    assert!(well_masked(false, false, true, true));
-    assert!(!well_masked(false, true, false, false));
-    assert!(well_masked(true, true, false, false));
+    assert!(well_masked(false, false, false, false, true));
+    assert!(well_masked(false, false, false, true, true));
+    assert!(!well_masked(false, true, false, false, false));
+    assert!(well_masked(true, true, false, false, false));
     // A click on visible content hides it; on masked content shows it.
     assert_eq!(toggle_hidden(false), (true, false));
     assert_eq!(toggle_hidden(true), (false, true));
@@ -613,4 +613,42 @@ fn the_eye_choice_sticks_per_item() {
     assert_eq!(choices.choice(1), None);
     choices.clear();
     assert_eq!(choices.choice(150), None);
+}
+
+#[test]
+fn with_the_privacy_filter_off_nothing_covers_the_well() {
+    use crate::commands::well_masked;
+    // Filter off: no cover for content that masks, a sensitive diff, or both; revealed or not.
+    for content_masks in [false, true] {
+        for diff_lock in [false, true] {
+            for revealed in [false, true] {
+                assert!(
+                    !well_masked(false, content_masks, diff_lock, revealed, false),
+                    "{content_masks} {diff_lock} {revealed}"
+                );
+            }
+        }
+    }
+    // Filter on: a sensitive diff is masked until reveal, like content that masks.
+    assert!(well_masked(true, false, true, false, false));
+    assert!(!well_masked(true, false, true, true, false));
+    assert!(!well_masked(true, false, false, false, false));
+    // Only the hide button covers with the filter off: the user asked for it.
+    assert!(well_masked(false, true, true, false, true));
+}
+
+#[test]
+fn an_opaque_cover_says_to_click_it() {
+    use crate::commands::cover_hint;
+    assert_eq!(cover_hint(false, false), None);
+    assert_eq!(cover_hint(false, true), None);
+    assert_eq!(
+        cover_hint(true, false),
+        Some(crate::locale::t("click_to_reveal"))
+    );
+    assert_eq!(
+        cover_hint(true, true),
+        Some(crate::locale::t("checking_sensitive"))
+    );
+    assert!(!crate::locale::t("click_to_reveal").is_empty());
 }
