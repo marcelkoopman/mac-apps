@@ -102,14 +102,8 @@ pub(crate) fn symbols_button_width() -> f64 {
     })
 }
 
-pub(crate) fn clear_button_width() -> f64 {
-    CLEAR.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .map(|button| button.width_within(140.0).max(mac_ui::metrics::BUTTON_H))
-            .unwrap_or(mac_ui::metrics::BUTTON_H)
-    })
-}
+/// Space between Clear All and the ⋯ ✕ pair: wider than the usual button gap.
+pub(crate) const CLEAR_GAP: f64 = mac_ui::metrics::SPACE_L;
 
 /// Place a header button at `x` inside the header group (which is one button tall).
 pub(crate) fn place_header_button(slot: &RefCell<Option<GlassButton>>, x: f64, width: f64) {

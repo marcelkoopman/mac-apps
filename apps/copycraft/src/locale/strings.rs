@@ -1675,19 +1675,19 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Show line numbers",
     ),
     ("show_content", "Toon", "Show"),
-    ("clear_confirm_title", "Alles wissen?", "Clear all?"),
+    ("clear_confirm_title", "Alles wissen?", "Clear All?"),
     (
         "clear_confirm_message",
         "De geschiedenis, vastgezette items en het klembord worden uit het geheugen gewist.",
         "History, pins and the clipboard are wiped from memory.",
     ),
-    ("clear_confirm_action", "Alles wissen", "Clear all"),
+    ("clear_confirm_action", "Alles wissen", "Clear All"),
     ("clear_dont_ask", "Niet meer vragen", "Don't ask again"),
     ("confirm_clear", "Vragen voor wissen", "Ask before clearing"),
     (
         "confirm_clear_note",
         "Alles wissen op de kaart vraagt eerst om bevestiging.",
-        "Clear all on the card asks for confirmation first.",
+        "Clear All on the card asks for confirmation first.",
     ),
     (
         "announce_confirmations",
@@ -1800,11 +1800,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("drop_to_open", "Laat los om te openen", "Drop to open"),
     ("more", "Meer", "More"),
     ("close", "Sluit", "Close"),
-    ("wipe", "Alles wissen", "Clear all"),
+    ("wipe", "Alles wissen", "Clear All"),
     (
         "wipe_tip",
-        "Wis gekopieerde gegevens uit het geheugen",
-        "Wipe copied data from memory",
+        "Alles wissen: geschiedenis, pins en klembord",
+        "Clear All: history, pins and clipboard",
     ),
     (
         "reveal_hidden",

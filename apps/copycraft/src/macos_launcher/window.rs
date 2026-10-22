@@ -109,8 +109,15 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         "⋯",
         sel!(moreClicked:),
     );
-    let clear = GlassButton::pill(mtm, crate::locale::t("wipe"), ButtonSize::Regular);
-    wire_button(clear.button(), sel!(clearClicked:));
+    // Clear All: a trash icon on its own, apart from ⋯ and ✕. Its VoiceOver label and tooltip
+    // say the same words; the confirmation stays (`clearClicked:`).
+    let clear = header_symbol(
+        mtm,
+        "trash",
+        crate::locale::t("wipe"),
+        "⌫",
+        sel!(clearClicked:),
+    );
     clear
         .button()
         .setToolTip(Some(&NSString::from_str(crate::locale::t("wipe_tip"))));
@@ -128,7 +135,6 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         .setToolTip(Some(&NSString::from_str(crate::locale::t("symbols_tip"))));
     wire_button(symbols.button(), sel!(symbolsClicked:));
     let header_group = glass::group(mtm, GLASS_MERGE);
-    header_group.content().addSubview(clear.view());
     header_group.content().addSubview(more.view());
     header_group.content().addSubview(close.view());
     let copy_button = well_action(
@@ -172,6 +178,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&header);
     content.addSubview(&item_find);
     content.addSubview(&item_count);
+    content.addSubview(clear.view());
     content.addSubview(header_group.view());
     content.addSubview(symbols.view());
     content.addSubview(&well);
@@ -225,7 +232,7 @@ pub fn relabel() {
     let t = crate::locale::t;
     CLEAR.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            button.set_title(t("wipe"));
+            label_symbol(button, t("wipe"));
             button
                 .button()
                 .setToolTip(Some(&NSString::from_str(t("wipe_tip"))));
@@ -483,8 +490,9 @@ pub(crate) fn layout(fresh_place: bool) {
     let button_gap = mac_ui::metrics::BUTTON_GAP;
     let close_x = card_width() - PAD - button_h;
     let more_x = close_x - button_gap - button_h;
-    let clear_w = clear_button_width();
-    let clear_x = more_x - button_gap - clear_w;
+    let clear_w = button_h;
+    // A wider gap keeps the destructive button apart from ⋯ and ✕.
+    let clear_x = more_x - CLEAR_GAP - clear_w;
     let symbols_w = symbols_button_width();
     let symbols_x = clear_x - button_gap - symbols_w;
     let title_w = (symbols_x - PAD - button_gap).max(40.0);
@@ -495,14 +503,21 @@ pub(crate) fn layout(fresh_place: bool) {
     HEADER_GROUP.with(|slot| {
         if let Some(group) = slot.borrow().as_ref() {
             group.view().setFrame(NSRect::new(
-                NSPoint::new(clear_x, button_y),
-                NSSize::new(close_x + button_h - clear_x, button_h),
+                NSPoint::new(more_x, button_y),
+                NSSize::new(close_x + button_h - more_x, button_h),
             ));
         }
     });
-    CLEAR.with(|slot| place_header_button(slot, 0.0, clear_w));
-    MORE.with(|slot| place_header_button(slot, more_x - clear_x, button_h));
-    CLOSE.with(|slot| place_header_button(slot, close_x - clear_x, button_h));
+    CLEAR.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.view().setFrame(NSRect::new(
+                NSPoint::new(clear_x, button_y),
+                NSSize::new(clear_w, button_h),
+            ));
+        }
+    });
+    MORE.with(|slot| place_header_button(slot, 0.0, button_h));
+    CLOSE.with(|slot| place_header_button(slot, close_x - more_x, button_h));
     SYMBOLS.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             button.view().setFrame(NSRect::new(

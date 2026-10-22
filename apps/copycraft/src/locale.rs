@@ -345,7 +345,7 @@ mod tests {
         }
     }
 
-    /// The strip's ✕ and the card's Clear all button.
+    /// The strip's ✕ and the card's Clear All button.
     #[test]
     fn history_remove_and_clear_all_are_in_both_languages() {
         assert_eq!(
@@ -354,11 +354,18 @@ mod tests {
         );
         assert_eq!(t_in(Lang::En, "history_remove_item"), "Remove from history");
         assert_eq!(t_in(Lang::Nl, "wipe"), "Alles wissen");
-        assert_eq!(t_in(Lang::En, "wipe"), "Clear all");
+        assert_eq!(t_in(Lang::En, "wipe"), "Clear All");
         assert_eq!(t_in(Lang::Nl, "clear_confirm_title"), "Alles wissen?");
-        assert_eq!(t_in(Lang::En, "clear_confirm_title"), "Clear all?");
+        assert_eq!(t_in(Lang::En, "clear_confirm_title"), "Clear All?");
         assert_eq!(t_in(Lang::Nl, "clear_confirm_action"), "Alles wissen");
-        assert_eq!(t_in(Lang::En, "clear_confirm_action"), "Clear all");
+        assert_eq!(t_in(Lang::En, "clear_confirm_action"), "Clear All");
+        // The tooltip starts with the same words as the label.
+        for lang in [Lang::Nl, Lang::En] {
+            assert!(
+                t_in(lang, "wipe_tip").starts_with(t_in(lang, "wipe")),
+                "{lang:?}"
+            );
+        }
         for key in [
             "history_remove_item",
             "wipe",
