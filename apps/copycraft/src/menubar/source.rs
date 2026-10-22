@@ -470,6 +470,10 @@ impl App {
                         .map(commands::thumb_lines)
                         .unwrap_or_default(),
                     picture,
+                    side: self
+                        .history
+                        .id_at(index)
+                        .and_then(|id| self.diff_sel.label(id)),
                 }
             })
             .collect()

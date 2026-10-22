@@ -303,6 +303,30 @@ mod tests {
         );
     }
 
+    /// ⌘-click on a strip card compares it; a compared card says its side.
+    #[test]
+    fn strip_compare_is_in_both_languages() {
+        assert_eq!(
+            t_in(Lang::Nl, "strip_compare_hint"),
+            "⌘-klik om te vergelijken met de getoonde kopie"
+        );
+        assert_eq!(
+            t_in(Lang::En, "strip_compare_hint"),
+            "⌘-click to compare with the copy on screen"
+        );
+        assert_eq!(
+            tf_in(Lang::Nl, "strip_compare_side", &[&"A"]),
+            "vergelijking, kant A"
+        );
+        assert_eq!(
+            tf_in(Lang::En, "strip_compare_side", &[&"B"]),
+            "compared, side B"
+        );
+        for key in ["strip_compare_hint", "strip_compare_side"] {
+            assert_ne!(t_in(Lang::Nl, key), t_in(Lang::En, key), "{key}");
+        }
+    }
+
     /// The strip's ✕ and the card's Clear all button.
     #[test]
     fn history_remove_and_clear_all_are_in_both_languages() {

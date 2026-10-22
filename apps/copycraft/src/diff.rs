@@ -70,6 +70,22 @@ impl Selection {
         self.picks.len() != before
     }
 
+    /// Compare two strip cards: `first` (the copy on screen) and `second` (the one ⌘-clicked),
+    /// each `(history position, id)`, 0 the newest. The older copy is A (before), the newer B.
+    /// Earlier picks are replaced. `false` (picks unchanged) when both are the same copy.
+    pub fn compare_tiles(&mut self, first: (usize, u64), second: (usize, u64)) -> bool {
+        if first.1 == second.1 {
+            return false;
+        }
+        let (older, newer) = if first.0 >= second.0 {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        self.picks = vec![older.1, newer.1];
+        true
+    }
+
     /// Turn A and B around. `false` unless two are chosen.
     pub fn swap(&mut self) -> bool {
         if self.picks.len() == 2 {
@@ -983,5 +999,27 @@ mod tests {
         );
         assert!(sensitive);
         assert_eq!(labeling, known(&[Label::Pii, Label::Financial]));
+    }
+
+    #[test]
+    fn two_strip_cards_compare_older_as_a_and_replace_earlier_picks() {
+        let mut sel = Selection::default();
+        // On screen: position 0 (newest, id 10); ⌘-clicked: position 2 (id 30).
+        assert!(sel.compare_tiles((0, 10), (2, 30)));
+        assert_eq!(sel.pair(), Some((30, 10)));
+        assert_eq!(sel.label(30), Some("A"));
+        assert_eq!(sel.label(10), Some("B"));
+        // The other way round gives the same sides.
+        assert!(sel.compare_tiles((2, 30), (0, 10)));
+        assert_eq!(sel.pair(), Some((30, 10)));
+        // A new pair replaces both picks.
+        assert!(sel.compare_tiles((1, 20), (3, 40)));
+        assert_eq!(sel.pair(), Some((40, 20)));
+        assert!(!sel.contains(10) && !sel.contains(30));
+        // The same copy twice: nothing changes.
+        assert!(!sel.compare_tiles((1, 20), (1, 20)));
+        assert_eq!(sel.pair(), Some((40, 20)));
+        sel.clear();
+        assert!(sel.is_empty());
     }
 }

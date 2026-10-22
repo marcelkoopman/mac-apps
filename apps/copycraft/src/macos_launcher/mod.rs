@@ -603,7 +603,13 @@ define_class!(
         #[unsafe(method(thumbClicked:))]
         fn thumb_clicked(&self, sender: Option<&NSButton>) {
             if let Some(sender) = sender {
-                launcher::emit(UserEvent::Run(CommandId::HistoryView(sender.tag() as usize)));
+                // ⌘ or ⇧ held: compare that copy with the one on screen.
+                let flags = mac_ui::objc2_app_kit::NSEvent::modifierFlags_class();
+                launcher::emit(UserEvent::Run(commands::thumb_click(
+                    sender.tag() as usize,
+                    flags.contains(NSEventModifierFlags::Command),
+                    flags.contains(NSEventModifierFlags::Shift),
+                )));
             }
         }
 

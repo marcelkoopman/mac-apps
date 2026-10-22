@@ -58,7 +58,24 @@ impl App {
                     ));
                 }
             }
-            CommandId::HistoryView(index) => self.view_history(index),
+            CommandId::HistoryView(index) => {
+                // A normal click on the strip ends a comparison of two of its cards.
+                if self.diff_sel.is_empty() {
+                    self.view_history(index);
+                } else {
+                    self.clear_diff();
+                    if index == self.history_cursor {
+                        self.refresh_popup();
+                    } else {
+                        self.view_history(index);
+                    }
+                }
+            }
+            CommandId::StripCompare(index) => self.compare_tiles(index),
+            CommandId::EndCompare => {
+                self.clear_diff();
+                self.refresh_popup();
+            }
             CommandId::RemoveHistory(index) => self.remove_from_history(index),
             CommandId::RestoreHistory => self.restore_removed(),
             CommandId::ToggleStrip => {
@@ -266,6 +283,35 @@ impl App {
             if !self.kick_diff() {
                 self.reset_view();
             }
+        }
+        self.refresh_popup();
+    }
+
+    /// ⌘-click on strip card `index`: compare that copy with the one on screen (the older of the
+    /// two is A). Both must be text; the same card, or a copy that is not text, does nothing.
+    pub(crate) fn compare_tiles(&mut self, index: usize) {
+        if self.opened.is_some() {
+            return;
+        }
+        let shown = self.history_cursor;
+        let (Some(shown_id), Some(other_id)) =
+            (self.history.id_at(shown), self.history.id_at(index))
+        else {
+            return;
+        };
+        if !self.history.is_text_id(shown_id) || !self.history.is_text_id(other_id) {
+            return;
+        }
+        if !self
+            .diff_sel
+            .compare_tiles((shown, shown_id), (index, other_id))
+        {
+            return;
+        }
+        self.invalidate_diff();
+        self.card_view = CardView::Diff;
+        if !self.kick_diff() {
+            self.reset_view();
         }
         self.refresh_popup();
     }

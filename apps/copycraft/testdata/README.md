@@ -218,6 +218,7 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 - [ ] *Wissel* / *Swap* turns A and B around (left was old, right was new).
 - [ ] A third *Add to diff* replaces the oldest pick. *Verwijder uit diff* / *Remove from diff* drops a pick. Wipe, lock or restart clears the selection.
 - [ ] A picture's *Add to diff* item is dimmed.
+- [ ] Compare from the strip: copy `diff/a.txt`, then `diff/b.txt`, and open the card (it shows `b.txt`). ⌘-click the `a.txt` card in the strip: the card switches to the *Diff* view with A = `a.txt` (older, left) and B = `b.txt` (newer, right), the same result as *Add to diff* twice (`+2 / −1`). Both strip cards have an orange frame and `A ·` / `B ·` before their type mark. ⇧-click does the same. Esc ends the comparison (orange frames gone, the card shows `b.txt` again, still open); a second Esc closes the card. A plain click on a strip card also ends it and shows that copy. ⌘-click on a picture card does nothing. VoiceOver reads a compared card as *…, compared, side A* (Dutch: *vergelijking, kant A*) and the hint *⌘-click to compare with the copy on screen* (*⌘-klik om te vergelijken met de getoonde kopie*).
 
 ## Manual checks (Mac only, no data)
 

@@ -280,6 +280,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryView(_)
             | CommandId::RemoveHistory(_)
             | CommandId::RestoreHistory
+            | CommandId::StripCompare(_)
+            | CommandId::EndCompare
             | CommandId::ToggleStrip
             | CommandId::WindowSize(_)
             | CommandId::ClearSensitive

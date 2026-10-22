@@ -521,13 +521,19 @@ pub(crate) fn on_key(event: &NSEvent) {
             }
         }
         Some(Key::Escape) => {
-            // Esc empties the in-item field. A second Esc closes the popup.
-            if !item_query().is_empty() {
-                clear_item_query();
-            } else if SEARCHING.with(Cell::get) {
-                close_search();
-            } else {
-                hide();
+            // Esc empties the in-item field, then ends a comparison of two strip cards. Then
+            // it closes the popup.
+            match commands::escape_step(
+                item_query().is_empty(),
+                SEARCHING.with(Cell::get),
+                strip_comparing(),
+            ) {
+                commands::EscapeStep::ClearQuery => clear_item_query(),
+                commands::EscapeStep::CloseSearch => close_search(),
+                commands::EscapeStep::EndCompare => {
+                    launcher::emit(UserEvent::Run(CommandId::EndCompare));
+                }
+                commands::EscapeStep::Close => hide(),
             }
         }
         _ => begin_search_from_key(event),

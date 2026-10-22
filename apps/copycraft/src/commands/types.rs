@@ -398,6 +398,11 @@ pub enum CommandId {
     RemoveHistory(usize),
     /// ⌘Z after [`CommandId::RemoveHistory`]: put the copy back where it was.
     RestoreHistory,
+    /// ⌘-click (or ⇧-click) on strip card `n`: compare that copy with the one on screen in
+    /// the diff view (the older of the two is A, before).
+    StripCompare(usize),
+    /// Esc or a normal click on the strip while two cards are compared: drop the comparison.
+    EndCompare,
     /// ⌘Y: show or hide the history strip.
     ToggleStrip,
     /// Turn the PDF's pages in the Beeld view by this many (−1: back).

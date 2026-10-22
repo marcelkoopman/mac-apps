@@ -522,6 +522,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("strip_group", "Historie", "History"),
     ("strip_current", "getoond", "shown"),
     (
+        "strip_compare_hint",
+        "⌘-klik om te vergelijken met de getoonde kopie",
+        "⌘-click to compare with the copy on screen",
+    ),
+    (
+        "strip_compare_side",
+        "vergelijking, kant {0}",
+        "compared, side {0}",
+    ),
+    (
         "strip_hide",
         "Historiestrook verbergen",
         "Hide history strip",

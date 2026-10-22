@@ -39,6 +39,8 @@ pub struct Thumb {
     /// A small picture's bytes (shared, not copied), when the copy is a picture that is light
     /// enough ([`THUMB_PICTURE_MAX_BYTES`]).
     pub picture: Option<crate::clipboard::SecretBytes>,
+    /// `A` (before) or `B` (after) while this copy is one side of the diff, else `None`.
+    pub side: Option<&'static str>,
 }
 
 impl Thumb {
@@ -125,6 +127,51 @@ pub fn remove_frame() -> (f64, f64, f64) {
         THUMB_H - THUMB_REMOVE_SIZE - THUMB_REMOVE_INSET,
         THUMB_REMOVE_SIZE,
     )
+}
+
+/// What a click on strip card `index` does: show that copy, or with ⌘ or ⇧ held compare it
+/// with the copy on screen ([`super::CommandId::StripCompare`]).
+pub fn thumb_click(index: usize, command: bool, shift: bool) -> super::CommandId {
+    if command || shift {
+        super::CommandId::StripCompare(index)
+    } else {
+        super::CommandId::HistoryView(index)
+    }
+}
+
+/// The type mark of a card, with the diff side in front while it is compared (`A · {}`).
+pub fn thumb_mark(thumb: &Thumb) -> String {
+    match thumb.side {
+        Some(side) => format!("{side} · {}", thumb.mark),
+        None => thumb.mark.clone(),
+    }
+}
+
+/// Some card of the strip is one side of a diff.
+pub fn strip_comparing(items: &[Thumb]) -> bool {
+    items.iter().any(|thumb| thumb.side.is_some())
+}
+
+/// What Esc on the card does, in order: empty the in-item field, close the search, end a
+/// comparison of two strip cards, close the card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EscapeStep {
+    ClearQuery,
+    CloseSearch,
+    EndCompare,
+    Close,
+}
+
+pub fn escape_step(query_empty: bool, searching: bool, comparing: bool) -> EscapeStep {
+    if !query_empty {
+        EscapeStep::ClearQuery
+    } else if searching {
+        EscapeStep::CloseSearch
+    } else if comparing {
+        EscapeStep::EndCompare
+    } else {
+        EscapeStep::Close
+    }
 }
 
 /// A card's ✕ shows on the marked card (history position `cursor`) and on the one under the
@@ -296,6 +343,37 @@ mod tests {
         for slot in 0..3 {
             assert_eq!(thumb_at(thumb_x(slot) + x + side / 2.0, 3), Some(slot));
         }
+    }
+
+    fn thumb(index: usize, side: Option<&'static str>) -> Thumb {
+        Thumb {
+            index,
+            mark: "{}".to_string(),
+            lines: String::new(),
+            picture: None,
+            side,
+        }
+    }
+
+    #[test]
+    fn command_or_shift_click_compares_a_plain_click_shows() {
+        use crate::commands::CommandId;
+        assert_eq!(thumb_click(2, false, false), CommandId::HistoryView(2));
+        assert_eq!(thumb_click(2, true, false), CommandId::StripCompare(2));
+        assert_eq!(thumb_click(2, false, true), CommandId::StripCompare(2));
+        assert_eq!(thumb_click(0, true, true), CommandId::StripCompare(0));
+    }
+
+    #[test]
+    fn compared_cards_carry_their_side_and_esc_ends_the_comparison_first() {
+        assert_eq!(thumb_mark(&thumb(0, None)), "{}");
+        assert_eq!(thumb_mark(&thumb(0, Some("A"))), "A · {}");
+        assert!(!strip_comparing(&[thumb(0, None), thumb(1, None)]));
+        assert!(strip_comparing(&[thumb(0, Some("B")), thumb(1, Some("A"))]));
+        assert_eq!(escape_step(false, true, true), EscapeStep::ClearQuery);
+        assert_eq!(escape_step(true, true, true), EscapeStep::CloseSearch);
+        assert_eq!(escape_step(true, false, true), EscapeStep::EndCompare);
+        assert_eq!(escape_step(true, false, false), EscapeStep::Close);
     }
 
     #[test]

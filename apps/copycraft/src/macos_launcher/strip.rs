@@ -52,6 +52,11 @@ pub(crate) fn store_strip(items: &[commands::Thumb], cursor: usize, can_restore:
     STRIP_CURSOR.set(cursor);
 }
 
+/// Two cards of the strip are being compared (Esc ends it first).
+pub(crate) fn strip_comparing() -> bool {
+    STRIP_ITEMS.with(|slot| commands::strip_comparing(&slot.borrow()))
+}
+
 /// Forget the strip's text, pictures and views (the card closes or is wiped).
 pub(crate) fn clear_strip() {
     STRIP_ITEMS.with(|slot| {
@@ -268,6 +273,7 @@ fn signature_of(
     for thumb in items {
         thumb.index.hash(&mut hasher);
         thumb.mark.hash(&mut hasher);
+        thumb.side.hash(&mut hasher);
         thumb.lines.hash(&mut hasher);
         thumb
             .picture
@@ -277,6 +283,7 @@ fn signature_of(
     }
     (cursor, width.to_bits(), filter, current_masked).hash(&mut hasher);
     crate::locale::t("strip_current").hash(&mut hasher);
+    crate::locale::t("strip_compare_hint").hash(&mut hasher);
     hasher.finish() | 1
 }
 
@@ -293,10 +300,15 @@ fn thumb_card(
         NSColor::labelColor().colorWithAlphaComponent(0.07)
     };
     let card = filled_box(mtm, RADIUS, &fill);
-    if current {
+    if thumb.side.is_some() {
+        // One side of the diff: an orange frame, and `A ·` / `B ·` before the type mark.
+        card.setBorderWidth(2.0);
+        card.setBorderColor(&NSColor::systemOrangeColor());
+    } else if current {
         card.setBorderWidth(2.0);
         card.setBorderColor(&NSColor::controlAccentColor());
     }
+    let mark = commands::thumb_mark(thumb);
     // Inset by the card's padding, so text and picture keep clear of the rounded edge.
     let button = NSButton::initWithFrame(
         NSButton::alloc(mtm),
@@ -313,10 +325,23 @@ fn thumb_card(
     button.setAlignment(NSTextAlignment::Left);
     button.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
     button.setTag(thumb.index as isize);
-    button.setAccessibilityLabel(Some(&NSString::from_str(&format!(
+    let mut spoken = format!(
         "{}, {}",
         commands::thumb_spoken(thumb.index + 1, total, current),
         thumb.mark
+    );
+    if let Some(side) = thumb.side {
+        spoken = format!(
+            "{spoken}, {}",
+            crate::locale::tf("strip_compare_side", &[&side])
+        );
+    }
+    button.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
+    button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
+        "strip_compare_hint",
+    ))));
+    button.setToolTip(Some(&NSString::from_str(crate::locale::t(
+        "strip_compare_hint",
     ))));
     wire_button(&button, sel!(thumbClicked:));
     let picture = (!masked)
@@ -333,11 +358,14 @@ fn thumb_card(
         } else {
             thumb.lines.clone()
         };
-        let text = format!("{}\n{body}", thumb.mark);
+        let text = format!("{mark}\n{body}");
         let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
         let attributed = AttrText::new(&text, &font, &NSColor::labelColor());
-        let mark_end = thumb.mark.len();
+        let mark_end = mark.len();
         attributed.color(&(0..mark_end), &crate::appearance::caption_color());
+        if let Some(side) = thumb.side {
+            attributed.color(&(0..side.len()), &NSColor::systemOrangeColor());
+        }
         button.setAttributedTitle(&attributed.into_attributed());
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     }
