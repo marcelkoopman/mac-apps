@@ -61,6 +61,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # All history and tags: scripts/release_notes.sh finds the previous $PKG-v* tag.
+          fetch-depth: 0
 
       - name: Select Xcode ${{ env.XCODE_VERSION }}
         run: |
@@ -293,10 +296,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Generated notes start at this app's previous tag (never another app's), with
+          # apps/$PKG/RELEASE_NOTES_NEXT.md on top when it changed since then.
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          PREV=$(scripts/release_notes.sh "$PKG" "$GITHUB_REF_NAME" "$NOTES")
+          ARGS=(--generate-notes)
+          if [ -n "$PREV" ]; then
+            echo "Release notes since $PREV"
+            ARGS+=(--notes-start-tag "$PREV")
+          fi
+          if [ -s "$NOTES" ]; then
+            ARGS+=(--notes-file "$NOTES")
+          fi
           gh release create "$GITHUB_REF_NAME" \
             "$DMG_DIR/$PKG-$VERSION.dmg" \
             --title "$APP_NAME $VERSION" \
-            --generate-notes
+            "${ARGS[@]}"
 
       - name: Release summary
         if: success()

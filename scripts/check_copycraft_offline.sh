@@ -79,6 +79,7 @@ fi
 # The docs that explain the move (and its consequences) may name copycraft's previous id.
 if git grep -nIF 'com.github.marcelkoopman.mac-apps.copycraft' -- . \
   ':!docs/pasteboard-privacy/FINDINGS.md' ':!apps/copycraft/README.md' ':!docs/sandbox-check.md' \
+  ':!apps/copycraft/RELEASE_NOTES_NEXT.md' \
   ':!scripts/check_copycraft_offline.sh'; then
   die "Oude bundle id van copycraft in de repo (nu nl.marcelkoopman.copycraft); zie hierboven"
 fi

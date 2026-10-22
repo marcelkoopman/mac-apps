@@ -38,6 +38,7 @@ Monorepo for small macOS menu bar apps written in Rust, organised as one Cargo w
 │   ├── unsafe_baseline.txt # upper bounds (copycraft 106, mac-ui 82, mac-ai 6 blocks)
 │   ├── check_commits.sh    # CI: Conventional Commit subjects
 │   ├── check_privacy_manifest.sh # plutil -lint of the privacy manifests
+│   ├── release_notes.sh    # release: previous <app>-v* tag for the notes + apps/<app>/RELEASE_NOTES_NEXT.md
 │   └── tag_release.sh      # maintainer only: bump + tag + push a release for one app
 ├── docs/                   # privacy policy and support page (GitHub Pages), review notes, threat model, signing notes
 └── .github/
