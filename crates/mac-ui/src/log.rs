@@ -85,11 +85,12 @@ mod imp {
     // macro expands to `_os_log_impl` (libSystem, exported since macOS 10.12). It is only called
     // on macOS 14 or later: `set_subsystem` checks the running version at startup against
     // `MIN_MACOS` (copycraft's `minimum_system_version`) and on an older Mac no line goes to the
-    // system log at all, the rest of the app works on. The alternative without an
-    // internal symbol is a small C or Swift shim calling `os_log` (a build step and a C
-    // compiler, which this workspace avoids) or a logging crate (a new dependency). CI checks
-    // that a line written here reads back with `log show` (`os_log_round_trip`), so a change
-    // in the private ABI fails there instead of on a user's Mac.
+    // system log at all, the rest of the app works on. `_os_log_impl` is declared in the public
+    // SDK header <os/log.h> (the macro's own expansion), so this is no private API. The
+    // alternative is a small C or Swift shim calling `os_log` (a build step and a C compiler,
+    // which this workspace avoids) or a logging crate (a new dependency). CI checks that a line
+    // written here reads back with `log show` (`os_log_round_trip`), so a change in how the
+    // macro calls it fails there instead of on a user's Mac.
     unsafe extern "C" {
         fn os_log_create(subsystem: *const c_char, category: *const c_char) -> *mut c_void;
         fn _os_log_impl(

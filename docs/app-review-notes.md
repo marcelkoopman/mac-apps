@@ -2,7 +2,9 @@
 
 Draft for the *Notes* field under App Review Information in App Store Connect. Every statement
 below was checked against the code at the time of writing; check it again before submitting.
-Not published on GitHub Pages (no front matter needed; it is a working document).
+Not published on GitHub Pages: it is listed under `exclude:` in `docs/_config.yml`, like every
+other file in `docs/` except `privacy.md` and `support.md`. (GitHub Pages also publishes Markdown
+files without front matter, so leaving out the front matter is not enough.)
 
 ---
 
@@ -22,6 +24,21 @@ current clipboard; the menu bar icon opens it too. The shortcut can be changed i
 bare key, or Option or Shift as the only modifier, is refused). It is registered as a regular
 global hotkey and needs no Accessibility or Input Monitoring permission.
 
+**Clipboard history and guideline 2.5.14.** Copycraft does not record anything in the
+background without the user knowing and being able to stop it:
+
+- History is kept in memory only (at most 20 unpinned entries plus pins). It is never written to
+  disk and is cleared on quit, Wipe, screen lock, sleep and user switch, and by default 15
+  minutes after the last copy.
+- The menu bar menu and the card's ⋯ menu have **Pause recording** (no copy is read or kept
+  until it is turned off again; it is not stored, so a restart turns it off) and **Ignore next
+  copy** (the next copy from another app is not read). Settings › Privacy has **Ignored apps**: a
+  copy made while one of those apps is in front is not read.
+- Unless the user sets Copycraft to *Always Allow* under Paste from Other Apps, macOS's
+  pasteboard privacy applies and Copycraft reads a copy only when the user opens the card
+  (hotkey or menu bar icon). In the background it only looks at the pasteboard's change count and
+  type names, which read no content. With *Always Deny* it reads nothing.
+
 **Clipboard access prompt.** Copycraft reads the clipboard of other apps, so macOS shows its
 "Paste from Other Apps" privacy prompt. Please choose **Allow**. While the setting is Default or
 Ask, Copycraft reads a new copy only when the card is opened (so the prompt appears when you open
@@ -35,7 +52,7 @@ To capture the card, turn on **"Allow screenshots"** in the menu bar menu (Dutch
 "Schermafbeeldingen toestaan"). It applies to the card and the table window immediately and to
 other Copycraft windows opened after that. It is off again at every launch and is never stored.
 
-**Apple Intelligence.** The AI actions (for example Summarize and Rewrite, under the card's *AI*
+**Apple Intelligence.** The AI features require Apple Intelligence. The AI actions (for example Summarize and Rewrite, under the card's *AI*
 chip and *Lines…* › Apple Intelligence) use Apple's on-device Foundation Models framework. They
 need a Mac with Apple silicon, macOS 26 and Apple Intelligence turned on in System Settings.
 Without that, the actions are shown dimmed with the reason (for example "Turn on Apple
@@ -57,6 +74,12 @@ pages in the default browser.
 
 **Sandbox entitlements.** `com.apple.security.app-sandbox` and
 `com.apple.security.files.user-selected.read-write` (for "Choose file" and "Save"). Nothing else.
+
+**System log.** Copycraft writes diagnostic events (never clipboard content, file names or
+paths) to the unified system log through `os_log_create` and `_os_log_impl`
+(`crates/mac-ui/src/log.rs`). `_os_log_impl` is the function the `os_log` macro expands to; it is
+declared in the public SDK header `<os/log.h>` and exported by libSystem. No private framework or
+private API is used.
 
 **Language.** The app is in Dutch and English and follows the macOS language by default
 (Settings › Language).
