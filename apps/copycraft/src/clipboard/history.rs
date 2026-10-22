@@ -8,6 +8,9 @@ pub struct ClipboardHistory {
     /// ignored ([`crate::capture::history_held`]). The one guard for every way into history
     /// (copies, own copies such as Lines… steps and filter results, pictures).
     gate: Option<fn() -> bool>,
+    /// The entry the card's ✕ (or ⌫) took out last, and where it was, so ⌘Z can put it back.
+    /// Only one; anything that adds or wipes entries drops it (zeroized with the entry).
+    removed: Option<(usize, HistoryEntry)>,
 }
 
 impl ClipboardHistory {
@@ -45,6 +48,7 @@ impl ClipboardHistory {
             HistoryBody::Text(existing) => existing.as_str() != text,
             HistoryBody::Image(_) => true,
         });
+        self.removed = None;
         let id = self.alloc_id();
         self.entries.insert(0, HistoryEntry::text(id, text));
         self.trim_unpinned();
@@ -158,6 +162,7 @@ impl ClipboardHistory {
             HistoryBody::Image(existing) => existing != &bytes,
             HistoryBody::Text(_) => true,
         });
+        self.removed = None;
         let id = self.alloc_id();
         self.entries
             .insert(0, HistoryEntry::image(id, bytes.clone()));
@@ -480,20 +485,59 @@ impl ClipboardHistory {
         self.contains_id(id)
     }
 
-    /// Drop one entry. The body's [`Drop`] zeroizes it. The index it had, when it was there.
-    pub fn remove_id(&mut self, id: u64) -> Option<usize> {
+    /// Take one entry out so [`restore_removed`](Self::restore_removed) can put it back at the
+    /// same place. The entry taken out before is dropped (zeroized). The index it had.
+    pub fn take_id(&mut self, id: u64) -> Option<usize> {
         let index = self.index_of(id)?;
-        self.entries.remove(index);
+        let entry = self.entries.remove(index);
+        self.removed = Some((index, entry));
         Some(index)
+    }
+
+    /// An entry taken out by [`take_id`](Self::take_id) can be put back.
+    pub fn can_restore(&self) -> bool {
+        self.removed.is_some()
+    }
+
+    /// Put the entry [`take_id`](Self::take_id) took out back where it was (or at the end when
+    /// history got shorter). Its text is in history again by now: nothing is added. At
+    /// [`PIN_MAX`] pins it comes back unpinned. Where it is now.
+    pub fn restore_removed(&mut self) -> Option<usize> {
+        let (index, mut entry) = self.removed.take()?;
+        let duplicate = match &entry.body {
+            HistoryBody::Text(text) => self.text_pos(text.as_str()).is_some(),
+            HistoryBody::Image(bytes) => self.entries.iter().any(|other| match &other.body {
+                HistoryBody::Image(existing) => existing == bytes,
+                HistoryBody::Text(_) => false,
+            }),
+        };
+        if duplicate {
+            return None;
+        }
+        if entry.pinned && self.pin_count() >= PIN_MAX {
+            entry.pinned = false;
+        }
+        let id = entry.id;
+        let at = index.min(self.entries.len());
+        self.entries.insert(at, entry);
+        self.trim_unpinned();
+        self.index_of(id)
+    }
+
+    /// Drop the entry kept for ⌘Z (zeroized).
+    pub fn forget_removed(&mut self) {
+        self.removed = None;
     }
 
     /// Drop every entry that is not pinned.
     pub fn clear_unpinned(&mut self) {
+        self.removed = None;
         self.entries.retain(|entry| entry.pinned);
     }
 
     /// Drop every pin. Unpinned entries stay.
     pub fn clear_pins(&mut self) {
+        self.removed = None;
         self.entries.retain(|entry| !entry.pinned);
     }
 
@@ -507,6 +551,7 @@ impl ClipboardHistory {
     }
 
     pub fn clear(&mut self) {
+        self.removed = None;
         self.entries.clear();
     }
 

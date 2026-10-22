@@ -356,6 +356,7 @@ define_class!(
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, _event: &NSEvent) {
             update_well_dock_hover();
+            update_strip_hover();
         }
 
         /// A pinch over a PDF page zooms it.
@@ -603,6 +604,15 @@ define_class!(
         fn thumb_clicked(&self, sender: Option<&NSButton>) {
             if let Some(sender) = sender {
                 launcher::emit(UserEvent::Run(CommandId::HistoryView(sender.tag() as usize)));
+            }
+        }
+
+        /// The ✕ on a card of the history strip: take that copy out of history (the clipboard
+        /// keeps it). ⌘Z puts it back.
+        #[unsafe(method(thumbRemoveClicked:))]
+        fn thumb_remove_clicked(&self, sender: Option<&NSButton>) {
+            if let Some(sender) = sender {
+                launcher::emit(UserEvent::Run(CommandId::RemoveHistory(sender.tag() as usize)));
             }
         }
 

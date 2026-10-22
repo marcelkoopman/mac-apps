@@ -303,6 +303,30 @@ mod tests {
         );
     }
 
+    /// The strip's ✕ and the card's Clear all button.
+    #[test]
+    fn history_remove_and_clear_all_are_in_both_languages() {
+        assert_eq!(
+            t_in(Lang::Nl, "history_remove_item"),
+            "Verwijder uit geschiedenis"
+        );
+        assert_eq!(t_in(Lang::En, "history_remove_item"), "Remove from history");
+        assert_eq!(t_in(Lang::Nl, "wipe"), "Alles wissen");
+        assert_eq!(t_in(Lang::En, "wipe"), "Clear all");
+        assert_eq!(t_in(Lang::Nl, "clear_confirm_title"), "Alles wissen?");
+        assert_eq!(t_in(Lang::En, "clear_confirm_title"), "Clear all?");
+        assert_eq!(t_in(Lang::Nl, "clear_confirm_action"), "Alles wissen");
+        assert_eq!(t_in(Lang::En, "clear_confirm_action"), "Clear all");
+        for key in [
+            "history_remove_item",
+            "wipe",
+            "clear_confirm_title",
+            "confirm_clear_note",
+        ] {
+            assert_ne!(t_in(Lang::Nl, key), t_in(Lang::En, key), "{key}");
+        }
+    }
+
     /// The About and Settings links to the privacy policy and support page.
     #[test]
     fn page_links_are_in_both_languages() {

@@ -312,3 +312,35 @@ fn two_picks_offer_a_diff_and_a_third_menu_says_add() {
     assert_eq!(idle.title, crate::locale::t("diff_add"));
     assert!(!idle.enabled);
 }
+
+#[test]
+fn command_z_puts_a_removed_copy_back_before_a_table_undo() {
+    use crate::commands::{keeps_card_open, restore_key};
+    assert_eq!(
+        restore_key("z", true, false, false, true),
+        Some(CommandId::RestoreHistory)
+    );
+    assert_eq!(
+        restore_key("Z", true, false, false, true),
+        Some(CommandId::RestoreHistory)
+    );
+    // Nothing removed, ⇧⌘Z, another modifier, no ⌘ or another key: not a restore.
+    assert_eq!(restore_key("z", true, false, false, false), None);
+    assert_eq!(restore_key("z", true, true, false, true), None);
+    assert_eq!(restore_key("z", true, false, true, true), None);
+    assert_eq!(restore_key("z", false, false, false, true), None);
+    assert_eq!(restore_key("x", true, false, false, true), None);
+    assert!(keeps_card_open(&CommandId::RestoreHistory));
+    assert!(keeps_card_open(&CommandId::RemoveHistory(1)));
+}
+
+#[test]
+fn delete_removes_the_marked_strip_card_but_not_while_searching() {
+    use crate::commands::delete_key;
+    assert_eq!(
+        delete_key(false, true, 1),
+        Some(CommandId::RemoveHistory(1))
+    );
+    assert_eq!(delete_key(true, true, 1), None);
+    assert_eq!(delete_key(false, false, 0), None);
+}

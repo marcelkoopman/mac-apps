@@ -105,6 +105,9 @@ pub(crate) struct App {
     /// The history entry (id) a Lines… version step shows instead of the clipboard: going
     /// between versions only shows them; Copy puts one on the clipboard.
     pub(crate) browsing: Option<u64>,
+    /// The card's last history entry was removed ([`App::remove_from_history`]): the card shows
+    /// the paste hint instead of what the clipboard still holds, until history has an entry.
+    pub(crate) history_emptied: bool,
     /// Table versions for card text that is in history nor a chosen file, and that text.
     pub(crate) loose_table: TableVersions,
     pub(crate) loose_text: Option<Zeroizing<String>>,

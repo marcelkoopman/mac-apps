@@ -4,6 +4,19 @@ use super::*;
 
 impl App {
     pub(crate) fn run_command(&mut self, event_loop: &ActiveEventLoop, id: CommandId) {
+        // ⌘Z puts back only the copy removed just now: anything else done on the card first
+        // lets it go (zeroized). Looking around history keeps it.
+        if !matches!(
+            id,
+            CommandId::RemoveHistory(_)
+                | CommandId::RestoreHistory
+                | CommandId::DeleteHistory
+                | CommandId::HistoryView(_)
+                | CommandId::HistoryOlder
+                | CommandId::HistoryNewer
+        ) {
+            self.history.forget_removed();
+        }
         match id {
             CommandId::Visit => self.visit_current(),
             CommandId::Copy => {
@@ -46,6 +59,8 @@ impl App {
                 }
             }
             CommandId::HistoryView(index) => self.view_history(index),
+            CommandId::RemoveHistory(index) => self.remove_from_history(index),
+            CommandId::RestoreHistory => self.restore_removed(),
             CommandId::ToggleStrip => {
                 commands::toggle_strip();
                 self.refresh_popup();
@@ -218,7 +233,7 @@ impl App {
             }
             CommandId::Pin => self.pin_shown(true),
             CommandId::Unpin => self.pin_shown(false),
-            CommandId::DeleteHistory => self.delete_shown(),
+            CommandId::DeleteHistory => self.remove_from_history(self.history_cursor),
             CommandId::ClearPins => self.clear_pins(),
             CommandId::Quit => {
                 discard_preview_files();

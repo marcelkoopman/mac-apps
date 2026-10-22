@@ -3,6 +3,10 @@
 //! shows that copy ([`CommandId::HistoryView`]); nothing is copied. Masked copies (privacy
 //! filter) show their type mark only. Views are rebuilt only when what they show changes; the
 //! few decoded pictures are kept in memory only, and nothing is logged.
+//!
+//! Each small card has a ✕ in its top-right corner, shown on the marked card and the one under
+//! the pointer: it takes that copy out of history ([`CommandId::RemoveHistory`]), and ⌘Z puts
+//! it back. The clipboard is left alone.
 
 use super::*;
 
@@ -25,12 +29,22 @@ thread_local! {
     static STRIP_SIGNATURE: Cell<u64> = const { Cell::new(0) };
     /// Small pictures already decoded, by the allocation of their bytes (a few, memory only).
     static THUMB_IMAGES: RefCell<Vec<(usize, Retained<NSImage>)>> = const { RefCell::new(Vec::new()) };
+    /// The ✕ of each small card, by history position.
+    static REMOVE_BUTTONS: RefCell<Vec<(usize, Retained<NSButton>)>> = const { RefCell::new(Vec::new()) };
+    /// The history position of the small card under the pointer.
+    static STRIP_HOVER: Cell<Option<usize>> = const { Cell::new(None) };
+    /// A copy was just removed from history: ⌘Z puts it back.
+    static CAN_RESTORE: Cell<bool> = const { Cell::new(false) };
 }
+
+const REMOVE_SIZE: f64 = 16.0;
+const REMOVE_INSET: f64 = 3.0;
 
 const IMAGE_KEEP: usize = 24;
 
 /// Take the strip's cards from the card being shown. The previous ones' text is wiped.
-pub(crate) fn store_strip(items: &[commands::Thumb], cursor: usize) {
+pub(crate) fn store_strip(items: &[commands::Thumb], cursor: usize, can_restore: bool) {
+    CAN_RESTORE.set(can_restore);
     STRIP_ITEMS.with(|slot| {
         let mut slot = slot.borrow_mut();
         for thumb in slot.iter_mut() {
@@ -50,6 +64,9 @@ pub(crate) fn clear_strip() {
         }
         slot.clear();
     });
+    CAN_RESTORE.set(false);
+    STRIP_HOVER.set(None);
+    REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
     THUMB_IMAGES.with(|slot| slot.borrow_mut().clear());
     STRIP_SIGNATURE.set(0);
     STRIP_VIEWS.with(|slot| {
@@ -57,6 +74,64 @@ pub(crate) fn clear_strip() {
             for card in views.document.subviews().iter() {
                 card.removeFromSuperview();
             }
+        }
+    });
+}
+
+/// ⌘Z puts back the copy removed just now ([`commands::restore_key`]).
+pub(crate) fn strip_can_restore() -> bool {
+    CAN_RESTORE.get()
+}
+
+/// The history position ⌫ removes: the marked small card, while the strip shows.
+pub(crate) fn strip_delete_target() -> (bool, usize) {
+    let shown = STRIP_ITEMS.with(|slot| !slot.borrow().is_empty())
+        && STRIP_VIEWS.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .is_some_and(|views| !views.scroll.isHidden())
+        });
+    (shown, STRIP_CURSOR.get())
+}
+
+/// The pointer moved over the card: show the ✕ of the small card under it.
+pub(crate) fn update_strip_hover() {
+    let hovered = STRIP_VIEWS.with(|slot| {
+        let slot = slot.borrow();
+        let views = slot.as_ref()?;
+        if views.scroll.isHidden() {
+            return None;
+        }
+        let window = WINDOW.with(|slot| slot.borrow().clone())?;
+        let point = window.mouseLocationOutsideOfEventStream();
+        let clip = views.scroll.contentView();
+        let in_clip = clip.convertPoint_fromView(point, None);
+        let bounds = clip.bounds();
+        if in_clip.x < bounds.origin.x
+            || in_clip.y < bounds.origin.y
+            || in_clip.x > bounds.origin.x + bounds.size.width
+            || in_clip.y > bounds.origin.y + bounds.size.height
+        {
+            return None;
+        }
+        let local = views.document.convertPoint_fromView(point, None);
+        let count = STRIP_ITEMS.with(|items| items.borrow().len());
+        let slot = commands::thumb_at(local.x, count)?;
+        STRIP_ITEMS.with(|items| items.borrow().get(slot).map(|thumb| thumb.index))
+    });
+    if hovered != STRIP_HOVER.get() {
+        STRIP_HOVER.set(hovered);
+        show_remove_buttons();
+    }
+}
+
+/// The ✕ shows on the marked small card and on the one under the pointer.
+fn show_remove_buttons() {
+    let cursor = STRIP_CURSOR.get();
+    let hovered = STRIP_HOVER.get();
+    REMOVE_BUTTONS.with(|slot| {
+        for (index, button) in slot.borrow().iter() {
+            button.setHidden(!commands::remove_shown(*index, cursor, hovered));
         }
     });
 }
@@ -146,6 +221,7 @@ pub(crate) fn place_strip(
         for old in document.subviews().iter() {
             old.removeFromSuperview();
         }
+        REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
         document.setFrame(NSRect::new(
             NSPoint::new(0.0, 0.0),
             NSSize::new(
@@ -167,6 +243,7 @@ pub(crate) fn place_strip(
             ));
             document.addSubview(&card);
         }
+        show_remove_buttons();
     }
     // The marked card scrolls into view (only the strip moves, never the card).
     if let Some(slot) = items.iter().position(|thumb| thumb.index == cursor) {
@@ -264,5 +341,36 @@ fn thumb_card(
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     }
     card.addSubview(&button);
+    card.addSubview(&remove_button(mtm, thumb.index));
     card
+}
+
+/// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]).
+fn remove_button(mtm: MainThreadMarker, index: usize) -> Retained<NSButton> {
+    let label = crate::locale::t("history_remove_item");
+    let button = NSButton::initWithFrame(
+        NSButton::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(
+                commands::THUMB_W - REMOVE_SIZE - REMOVE_INSET,
+                commands::STRIP_H - 4.0 - REMOVE_SIZE - REMOVE_INSET,
+            ),
+            NSSize::new(REMOVE_SIZE, REMOVE_SIZE),
+        ),
+    );
+    button.setBordered(false);
+    button.setTag(index as isize);
+    if let Some(image) = mac_ui::icon::system_symbol("xmark.circle.fill", label) {
+        button.setImage(Some(&image));
+        button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::ImageOnly);
+        button.setContentTintColor(Some(&crate::appearance::caption_color()));
+    } else {
+        button.setTitle(&NSString::from_str("✕"));
+    }
+    button.setToolTip(Some(&NSString::from_str(label)));
+    button.setAccessibilityLabel(Some(&NSString::from_str(label)));
+    button.setHidden(true);
+    REMOVE_BUTTONS.with(|slot| slot.borrow_mut().push((index, button.clone())));
+    wire_button(&button, sel!(thumbRemoveClicked:));
+    button
 }

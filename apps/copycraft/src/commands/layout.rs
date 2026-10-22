@@ -278,6 +278,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::PdfPage(_)
             | CommandId::PdfZoom(_)
             | CommandId::HistoryView(_)
+            | CommandId::RemoveHistory(_)
+            | CommandId::RestoreHistory
             | CommandId::ToggleStrip
             | CommandId::WindowSize(_)
             | CommandId::ClearSensitive

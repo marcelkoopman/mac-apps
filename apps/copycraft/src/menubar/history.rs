@@ -49,6 +49,7 @@ impl App {
             }
         }
         self.pin_refused = false;
+        self.history_emptied = false;
         // A drop still waiting for its check stays out, like what was cleared.
         self.dropped_text_wait = None;
         self.dropped_image_wait = None;
@@ -126,23 +127,78 @@ impl App {
         }
     }
 
-    pub(crate) fn delete_shown(&mut self) {
+    /// Take history entry `index` out: the ✕ on its strip card, ⌫, or ⋯ › Remove from history.
+    /// Only history changes; the clipboard keeps what it holds. The card shows the copy that
+    /// took its place, or the paste hint when history is empty now. ⌘Z puts it back
+    /// ([`Self::restore_removed`]).
+    pub(crate) fn remove_from_history(&mut self, index: usize) {
         if self.opened.is_some() {
             return;
         }
-        let Some(id) = self.history.id_at(self.history_cursor) else {
+        let Some(id) = self.history.id_at(index) else {
             return;
         };
-        let Some(removed) = self.history.remove_id(id) else {
+        // The newest entry is usually what the clipboard holds: the next poll must not record
+        // it again.
+        if index == 0 {
+            if let Some(text) = self.history.get(0) {
+                self.skip_record = Some(Zeroizing::new(text.to_string()));
+            } else {
+                #[cfg(target_os = "macos")]
+                {
+                    self.skip_image_change = Some(crate::macos_pasteboard::change_count());
+                }
+            }
+        }
+        let shown = self.history_cursor;
+        let Some(removed) = self.history.take_id(id) else {
             return;
         };
         self.pin_refused = false;
         let len = self.history.len();
-        self.history_cursor = clipboard::cursor_after_remove(removed, self.history_cursor, len);
+        self.history_cursor = clipboard::cursor_after_remove(removed, shown, len);
         if let Some(cursor) = self.clipboard_cursor {
             self.clipboard_cursor =
                 (len > 0).then(|| clipboard::cursor_after_remove(removed, cursor, len));
         }
+        if removed == shown {
+            self.browsing = self.history.id_at(self.history_cursor);
+            self.reset_view();
+        }
+        self.history_emptied = self.history.is_empty();
+        self.after_history_edit();
+    }
+
+    /// ⌘Z: the copy [`Self::remove_from_history`] took out goes back where it was, and the
+    /// card shows it.
+    pub(crate) fn restore_removed(&mut self) {
+        if self.opened.is_some() {
+            return;
+        }
+        let Some(index) = self.history.restore_removed() else {
+            return;
+        };
+        if let Some(text) = self.history.get(index)
+            && self
+                .skip_record
+                .as_ref()
+                .is_some_and(|skipped| skipped.as_str() == text)
+        {
+            self.skip_record = None;
+        }
+        self.history_emptied = false;
+        if let Some(cursor) = self.clipboard_cursor
+            && cursor >= index
+        {
+            self.clipboard_cursor = Some(cursor + 1);
+        }
+        self.history_cursor = index;
+        self.browsing = self.history.id_at(index);
+        self.reset_view();
+        self.after_history_edit();
+    }
+
+    fn after_history_edit(&mut self) {
         self.sync_diff_picks();
         self.refresh_table_window();
         self.refresh_status_menu();
@@ -246,6 +302,7 @@ impl App {
         self.full_card = None;
         self.history.clear();
         self.pin_refused = false;
+        self.history_emptied = false;
         self.current_image = None;
         self.image_on_pasteboard = None;
         self.history_cursor = 0;

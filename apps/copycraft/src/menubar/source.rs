@@ -506,6 +506,7 @@ impl App {
             history_nav: commands::history_nav(self.history.len(), self.history_cursor),
             strip: self.strip_thumbs(),
             strip_cursor: self.history_cursor,
+            can_restore_history: self.history.can_restore(),
             theme: appearance::load(),
             settings: crate::settings::load(),
             view: self.card_view,

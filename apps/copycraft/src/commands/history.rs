@@ -107,6 +107,25 @@ pub fn undo_key(
     }
 }
 
+/// ⌘Z right after a copy was taken out of history (`can_restore`) puts it back
+/// ([`CommandId::RestoreHistory`]). It goes before a table's undo; ⇧⌘Z is the table's.
+pub fn restore_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    can_restore: bool,
+) -> Option<CommandId> {
+    (can_restore && command && !shift && !other_modifier && chars.eq_ignore_ascii_case("z"))
+        .then_some(CommandId::RestoreHistory)
+}
+
+/// ⌫ on the card takes the copy the strip marks (history position `cursor`) out of history.
+/// Not while the search field is open (it edits the search), and only while the strip shows.
+pub fn delete_key(searching: bool, strip_shown: bool, cursor: usize) -> Option<CommandId> {
+    (!searching && strip_shown).then_some(CommandId::RemoveHistory(cursor))
+}
+
 /// The `⋯` row of a [`CommandId::KeepHistory`] choice.
 pub fn keep_history_title(minutes: u32) -> String {
     if minutes == 0 {

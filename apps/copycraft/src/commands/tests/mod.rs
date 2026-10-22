@@ -31,6 +31,7 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         history_nav: None,
         strip: Vec::new(),
         strip_cursor: 0,
+        can_restore_history: false,
         theme: Theme::System,
         settings: crate::settings::Settings::default(),
         view: CardView::Original,

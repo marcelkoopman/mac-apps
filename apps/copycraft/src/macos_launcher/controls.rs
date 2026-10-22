@@ -534,14 +534,24 @@ pub(crate) fn header_symbol(
     button
 }
 
-/// ⌘Z or ⇧⌘Z while the table has a version to go to ([`commands::undo_key`]). Typed search
-/// text keeps the keys.
+/// ⌘Z right after a copy was removed from history puts it back ([`commands::restore_key`]);
+/// else ⌘Z or ⇧⌘Z while the table has a version to go to ([`commands::undo_key`]). Typed
+/// search text keeps the keys.
 pub(crate) fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     if SEARCHING.with(Cell::get) && !current_query().is_empty() {
         return None;
     }
     let flags = event.modifierFlags();
     let chars = event.charactersIgnoringModifiers()?.to_string();
+    if let Some(id) = commands::restore_key(
+        &chars,
+        flags.contains(NSEventModifierFlags::Command),
+        flags.contains(NSEventModifierFlags::Shift),
+        flags.intersects(NSEventModifierFlags::Control | NSEventModifierFlags::Option),
+        strip_can_restore(),
+    ) {
+        return Some(id);
+    }
     VERSION_BAR.with(|slot| {
         commands::undo_key(
             &chars,

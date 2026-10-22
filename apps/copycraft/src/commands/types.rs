@@ -78,6 +78,8 @@ pub struct LaunchData {
     pub strip: Vec<Thumb>,
     /// The history position on screen (0 is the newest): the card the strip marks.
     pub strip_cursor: usize,
+    /// A copy was just removed from history: ⌘Z puts it back ([`CommandId::RestoreHistory`]).
+    pub can_restore_history: bool,
     pub theme: Theme,
     /// Settings with a check mark in the `⋯` menu.
     pub settings: crate::settings::Settings,
@@ -391,6 +393,11 @@ pub enum CommandId {
     Appearance(Theme),
     /// Show history copy `n` on the card (the strip's cards). Only shows it; nothing is copied.
     HistoryView(usize),
+    /// The ✕ on strip card `n`, or ⌫ on the card shown: take that copy out of history (the
+    /// clipboard keeps what it holds). [`CommandId::RestoreHistory`] puts it back.
+    RemoveHistory(usize),
+    /// ⌘Z after [`CommandId::RemoveHistory`]: put the copy back where it was.
+    RestoreHistory,
     /// ⌘Y: show or hide the history strip.
     ToggleStrip,
     /// Turn the PDF's pages in the Beeld view by this many (−1: back).

@@ -374,10 +374,16 @@ impl App {
 
     pub(crate) fn current_launch_data(&mut self) -> LaunchData {
         self.sync_diff_picks();
+        if !self.history.is_empty() {
+            self.history_emptied = false;
+        }
         let mut data = if self.opened.is_some() {
             self.launch_from_opened()
         } else if let Some(at) = self.browsed_index() {
             self.history_cursor = at;
+            self.launch_from_history()
+        } else if self.history_emptied {
+            // The last copy was removed from history: the paste hint, not the clipboard.
             self.launch_from_history()
         } else {
             let view = ClipboardView::from_os();

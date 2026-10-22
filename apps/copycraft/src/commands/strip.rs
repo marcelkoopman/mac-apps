@@ -99,6 +99,22 @@ pub fn thumb_x(slot: usize) -> f64 {
     slot as f64 * (THUMB_W + THUMB_GAP)
 }
 
+/// The card (slot, in the order drawn) at `x` in a strip of `count` cards; `None` in a gap or
+/// past the end.
+pub fn thumb_at(x: f64, count: usize) -> Option<usize> {
+    if x < 0.0 {
+        return None;
+    }
+    let slot = (x / (THUMB_W + THUMB_GAP)) as usize;
+    (slot < count && x - thumb_x(slot) <= THUMB_W).then_some(slot)
+}
+
+/// A card's ✕ shows on the marked card (history position `cursor`) and on the one under the
+/// pointer.
+pub fn remove_shown(index: usize, cursor: usize, hovered: Option<usize>) -> bool {
+    index == cursor || hovered == Some(index)
+}
+
 /// The scroll offset that brings card `slot` into a strip `visible` wide holding `count`
 /// cards, with `current` the offset now: unchanged when it already shows fully, else the least
 /// move, kept within the content.
@@ -218,5 +234,27 @@ mod tests {
         assert_eq!(last, strip_content_width(count) - visible);
         assert_eq!(scroll_to_thumb(0, 2, 800.0, 30.0), 0.0);
         assert_eq!(strip_content_width(0), 0.0);
+    }
+
+    #[test]
+    fn the_pointer_finds_the_card_under_it() {
+        assert_eq!(thumb_at(0.0, 3), Some(0));
+        assert_eq!(thumb_at(THUMB_W, 3), Some(0));
+        // In the gap between two cards: none.
+        assert_eq!(thumb_at(THUMB_W + THUMB_GAP / 2.0, 3), None);
+        assert_eq!(thumb_at(thumb_x(1) + 1.0, 3), Some(1));
+        assert_eq!(thumb_at(thumb_x(2) + 1.0, 3), Some(2));
+        // Past the last card, or left of the first.
+        assert_eq!(thumb_at(thumb_x(3) + 1.0, 3), None);
+        assert_eq!(thumb_at(-1.0, 3), None);
+        assert_eq!(thumb_at(1.0, 0), None);
+    }
+
+    #[test]
+    fn the_remove_cross_shows_on_the_marked_and_the_hovered_card() {
+        assert!(remove_shown(1, 1, None));
+        assert!(remove_shown(2, 1, Some(2)));
+        assert!(!remove_shown(0, 1, Some(2)));
+        assert!(!remove_shown(0, 1, None));
     }
 }

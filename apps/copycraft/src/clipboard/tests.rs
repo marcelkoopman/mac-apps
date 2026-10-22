@@ -583,13 +583,131 @@ fn removing_an_entry_reports_its_index_and_the_cursor_settles() {
     history.record("mid".into());
     history.record("new".into());
     let mid = history.id_at(1).expect("mid");
-    assert_eq!(history.remove_id(mid), Some(1));
+    assert_eq!(history.take_id(mid), Some(1));
     assert_eq!(history.get(0), Some("new"));
     assert_eq!(history.get(1), Some("old"));
     assert_eq!(super::cursor_after_remove(0, 2, 2), 1);
     assert_eq!(super::cursor_after_remove(2, 2, 2), 1);
     assert_eq!(super::cursor_after_remove(1, 0, 2), 0);
     assert_eq!(super::cursor_after_remove(0, 0, 0), 0);
+}
+
+#[test]
+fn removing_the_shown_entry_shows_the_next_one() {
+    // Three copies, the middle one shown and removed: the older one takes its place.
+    assert_eq!(super::cursor_after_remove(1, 1, 2), 1);
+    // The oldest removed: the one before it.
+    assert_eq!(super::cursor_after_remove(2, 2, 2), 1);
+    // The newest removed: the next one, now the newest.
+    assert_eq!(super::cursor_after_remove(0, 0, 2), 0);
+    // Another entry removed: the shown one stays shown.
+    assert_eq!(super::cursor_after_remove(2, 1, 2), 1);
+    assert_eq!(super::cursor_after_remove(0, 2, 2), 1);
+    // The last one removed: nothing left, the card shows the paste hint.
+    assert_eq!(super::cursor_after_remove(0, 0, 0), 0);
+}
+
+#[test]
+fn a_taken_entry_comes_back_at_its_place() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    history.record("three".into());
+    let two = history.id_at(1).expect("two");
+    assert!(!history.can_restore());
+    assert_eq!(history.take_id(two), Some(1));
+    assert_eq!(history.len(), 2);
+    assert_eq!(history.get(0), Some("three"));
+    assert_eq!(history.get(1), Some("one"));
+    assert!(history.can_restore());
+    assert_eq!(history.restore_removed(), Some(1));
+    assert_eq!(history.get(0), Some("three"));
+    assert_eq!(history.get(1), Some("two"));
+    assert_eq!(history.get(2), Some("one"));
+    assert_eq!(history.id_at(1), Some(two));
+    // Once only.
+    assert!(!history.can_restore());
+    assert_eq!(history.restore_removed(), None);
+    assert_eq!(history.len(), 3);
+}
+
+#[test]
+fn only_the_last_taken_entry_comes_back() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    history.record("three".into());
+    let one = history.id_at(2).expect("one");
+    let three = history.id_at(0).expect("three");
+    history.take_id(one);
+    history.take_id(three);
+    assert_eq!(history.restore_removed(), Some(0));
+    assert_eq!(history.get(0), Some("three"));
+    assert_eq!(history.get(1), Some("two"));
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn a_taken_entry_is_dropped_by_a_new_copy_or_a_wipe() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    let one = history.id_at(1).expect("one");
+    history.take_id(one);
+    history.record("new".into());
+    assert!(!history.can_restore());
+    let two = history.id_at(1).expect("two");
+    history.take_id(two);
+    history.clear();
+    assert!(!history.can_restore());
+    history.record("again".into());
+    let again = history.id_at(0).expect("again");
+    history.take_id(again);
+    history.clear_unpinned();
+    assert!(!history.can_restore());
+    history.record("last".into());
+    let last = history.id_at(0).expect("last");
+    history.take_id(last);
+    history.forget_removed();
+    assert_eq!(history.restore_removed(), None);
+    assert!(history.is_empty());
+}
+
+#[test]
+fn a_taken_entry_already_back_is_not_added_twice() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    let one = history.id_at(1).expect("one");
+    history.take_id(one);
+    // Re-copied at the front: recording drops the kept entry anyway; a duplicate is refused.
+    history.record("one".into());
+    assert_eq!(history.restore_removed(), None);
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn the_last_entry_taken_leaves_history_empty_and_comes_back() {
+    let mut history = ClipboardHistory::default();
+    history.record("only".into());
+    let only = history.id_at(0).expect("only");
+    assert_eq!(history.take_id(only), Some(0));
+    assert!(history.is_empty());
+    assert_eq!(history.restore_removed(), Some(0));
+    assert_eq!(history.get(0), Some("only"));
+}
+
+#[test]
+fn a_pinned_entry_comes_back_pinned() {
+    let mut history = ClipboardHistory::default();
+    history.record("one".into());
+    history.record("two".into());
+    let one = history.id_at(1).expect("one");
+    assert!(history.pin(one));
+    history.take_id(one);
+    assert_eq!(history.pin_count(), 0);
+    assert_eq!(history.restore_removed(), Some(1));
+    assert!(history.is_pinned(1));
 }
 
 #[test]

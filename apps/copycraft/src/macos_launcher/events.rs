@@ -511,6 +511,15 @@ pub(crate) fn on_key(event: &NSEvent) {
             on_arrow(key, command, commands::ArrowFocus::Card);
         }
         Some(Key::Return) => activate_selected(),
+        // ⌫ takes the copy the strip marks out of history; the clipboard keeps it.
+        Some(Key::Delete) => {
+            let (strip_shown, cursor) = strip_delete_target();
+            if let Some(id) = commands::delete_key(SEARCHING.with(Cell::get), strip_shown, cursor) {
+                launcher::emit(UserEvent::Run(id));
+            } else {
+                begin_search_from_key(event);
+            }
+        }
         Some(Key::Escape) => {
             // Esc empties the in-item field. A second Esc closes the popup.
             if !item_query().is_empty() {

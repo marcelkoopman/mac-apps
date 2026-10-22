@@ -427,15 +427,15 @@ pub fn one_line(text: &str) -> String {
     menu_mark(text).to_string()
 }
 
-/// Where the cursor sits after the entry at `removed` is gone.
+/// Where the cursor sits after the entry at `removed` is gone. The entry shown stays shown; when
+/// it was the one removed, the next (older) one takes its place, or the one before it when it
+/// was the oldest.
 pub fn cursor_after_remove(removed: usize, cursor: usize, len_after: usize) -> usize {
     if len_after == 0 {
         return 0;
     }
     let next = if removed < cursor {
         cursor.saturating_sub(1)
-    } else if removed == cursor {
-        if removed == 0 { 0 } else { removed - 1 }
     } else {
         cursor
     };
