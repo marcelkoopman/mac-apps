@@ -147,4 +147,30 @@ mod tests {
         assert_eq!(body.matches("<true/>").count(), 2);
         assert!(!body.contains("<false/>") && !body.contains("<array>"));
     }
+
+    /// The Mac App Store build (scripts/build_store_pkg.sh) adds only the two identifier keys
+    /// the provisioning profile must match, with the TEAMID placeholder the script fills in.
+    #[test]
+    fn store_entitlements_add_only_the_identifiers() {
+        let plist = include_str!("../assets/entitlements.store.plist");
+        let body = &plist[plist.find("<plist").expect("plist element")..];
+        let keys: Vec<&str> = body
+            .split("<key>")
+            .skip(1)
+            .filter_map(|rest| rest.split_once("</key>").map(|(key, _)| key.trim()))
+            .collect();
+        assert_eq!(
+            keys,
+            [
+                "com.apple.security.app-sandbox",
+                "com.apple.security.files.user-selected.read-write",
+                "com.apple.application-identifier",
+                "com.apple.developer.team-identifier",
+            ]
+        );
+        assert_eq!(body.matches("<true/>").count(), 2);
+        assert!(body.contains("<string>TEAMID.nl.marcelkoopman.copycraft</string>"));
+        assert!(body.contains("<string>TEAMID</string>"));
+        assert!(!body.contains("<false/>") && !body.contains("<array>"));
+    }
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Copycraft entitlements for the Mac App Store build (scripts/build_store_pkg.sh), not used by
+  the GitHub releases or CI. The same two sandbox keys as entitlements.plist (see the reasons
+  there; no network, no hardened-runtime exceptions, no apple-events), plus the two identifier
+  keys the provisioning profile must match.
+  TEAMID is a placeholder: scripts/build_store_pkg.sh replaces it with APPLE_TEAM_ID in a
+  temporary copy before signing, and refuses to sign while a placeholder is left.
+  Pinned by a test in src/main.rs.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.application-identifier</key>
+	<string>TEAMID.nl.marcelkoopman.copycraft</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>TEAMID</string>
+</dict>
+</plist>

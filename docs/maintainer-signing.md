@@ -55,3 +55,20 @@ APPLE_API_KEY_P8="$(cat AuthKey_XXXX.p8)" APPLE_API_KEY_ID=XXXX APPLE_API_ISSUER
 ```
 
 Pas na de eerste release-tag mét secrets is dit echt getest: CI op `main` draait de release-workflows niet.
+
+## Mac App Store-pakket (voorbereid, nog nooit gedraaid)
+
+Los van de Developer ID-route hierboven en niet in CI: `scripts/build_store_pkg.sh` maakt lokaal een ondertekende `.pkg` van Copycraft voor upload met Transporter.
+
+1. Maak in het developer-portaal een App ID `nl.marcelkoopman.copycraft`, een *Apple Distribution*- en een *Mac Installer Distribution*-certificaat (met private key in de login-keychain) en een *Mac App Store*-provisioning profile voor die App ID.
+2. Zet de omgeving en draai het script:
+
+   ```bash
+   export APPLE_TEAM_ID=ABCDE12345
+   export STORE_APP_IDENTITY="Apple Distribution: Naam (ABCDE12345)"
+   export STORE_INSTALLER_IDENTITY="3rd Party Mac Developer Installer: Naam (ABCDE12345)"
+   export STORE_PROVISION_PROFILE=~/Downloads/Copycraft_MAS.provisionprofile
+   scripts/build_store_pkg.sh            # → target/store/Copycraft.pkg
+   ```
+
+Het script stopt met een duidelijke melding als een identiteit niet in de keychain staat (`security find-identity`), het profiel ontbreekt of voor een ander team of een andere app is. Het vult `TEAMID` in `apps/copycraft/assets/entitlements.store.plist` in een tijdelijke kopie in; het bestand in de repo houdt de placeholder.
