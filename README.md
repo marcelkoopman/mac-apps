@@ -93,7 +93,7 @@ CI and the release workflows are pinned: runner image `macos-26` (`ubuntu-24.04`
 
 ## Support
 
-This is a private repository. Open contributions and public GitHub issues are not accepted.
+The repository is public so the code can be read, but open contributions and public GitHub issues are not accepted.
 
 - **Support:** email **mac-apps-support@proton.me** (see also [`apps/copycraft/SUPPORT.md`](apps/copycraft/SUPPORT.md)).
 - **Security:** see [`SECURITY.md`](SECURITY.md) for supported versions, scanning and how to report a vulnerability.

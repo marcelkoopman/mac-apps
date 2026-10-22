@@ -198,7 +198,7 @@ cd apps/copycraft && cargo bundle --release
 
 ## Support
 
-This is a private repository. For support, email **mac-apps-support@proton.me**. See the [root README](../../README.md#support). Releases are made only by the maintainer.
+For support, email **mac-apps-support@proton.me**. See the [root README](../../README.md#support). Releases are made only by the maintainer.
 
 ## App Store readiness
 
