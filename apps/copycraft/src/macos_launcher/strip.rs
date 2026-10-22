@@ -334,7 +334,7 @@ fn thumb_card(
             thumb.lines.clone()
         };
         let text = format!("{}\n{body}", thumb.mark);
-        let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY);
+        let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
         let attributed = AttrText::new(&text, &font, &NSColor::labelColor());
         let mark_end = thumb.mark.len();
         attributed.color(&(0..mark_end), &crate::appearance::caption_color());

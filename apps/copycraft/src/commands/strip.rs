@@ -6,21 +6,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use zeroize::Zeroize;
 
 /// One card of the strip: [`THUMB_W`] × [`THUMB_H`] points.
-pub const THUMB_W: f64 = 184.0;
-pub const THUMB_H: f64 = 104.0;
+pub const THUMB_W: f64 = 138.0;
+pub const THUMB_H: f64 = 78.0;
 /// Room above and below a card inside the strip row.
 pub const THUMB_MARGIN: f64 = 2.0;
 /// Height of the strip row: a card and the room around it.
 pub const STRIP_H: f64 = THUMB_H + 2.0 * THUMB_MARGIN;
-pub const THUMB_GAP: f64 = 8.0;
+pub const THUMB_GAP: f64 = 7.0;
 /// Space between a card's edge and its text or picture.
-pub const THUMB_PAD: f64 = 8.0;
+pub const THUMB_PAD: f64 = 6.0;
 /// The ✕ in a card's top-right corner: its size and its distance to the card's edges.
-pub const THUMB_REMOVE_SIZE: f64 = 20.0;
-pub const THUMB_REMOVE_INSET: f64 = 6.0;
+pub const THUMB_REMOVE_SIZE: f64 = 18.0;
+pub const THUMB_REMOVE_INSET: f64 = 5.0;
 /// Text on a card: at most this many lines, each at most [`THUMB_LINE_CHARS`] characters.
-pub const THUMB_LINES: usize = 4;
-pub const THUMB_LINE_CHARS: usize = 22;
+pub const THUMB_LINES: usize = 3;
+pub const THUMB_LINE_CHARS: usize = 20;
 /// A picture is drawn small only when its bytes are at most this many; a larger one shows its
 /// type mark instead (no heavy decode for a thumbnail).
 pub const THUMB_PICTURE_MAX_BYTES: usize = 3_000_000;
@@ -34,7 +34,7 @@ pub struct Thumb {
     pub index: usize,
     /// The type mark (`{}`, `md`, `img`), with the pin in front of a pinned copy.
     pub mark: String,
-    /// One or two short lines of the text. Empty for a picture.
+    /// The first few short lines of the text ([`THUMB_LINES`]). Empty for a picture.
     pub lines: String,
     /// A small picture's bytes (shared, not copied), when the copy is a picture that is light
     /// enough ([`THUMB_PICTURE_MAX_BYTES`]).
@@ -186,9 +186,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_card_holds_four_short_lines() {
+    fn a_card_holds_three_short_lines() {
         assert_eq!(thumb_lines("een\n\n  twee  \ndrie"), "een\ntwee\ndrie");
-        assert_eq!(thumb_lines("1\n2\n3\n4\n5\n6"), "1\n2\n3\n4");
+        assert_eq!(thumb_lines("1\n2\n3\n4\n5\n6"), "1\n2\n3");
         assert_eq!(thumb_lines(""), "");
         assert_eq!(thumb_lines("  \n \n"), "");
         let long = thumb_lines("abcdefghijklmnopqrstuvwxyz");
@@ -270,8 +270,9 @@ mod tests {
     }
 
     #[test]
-    fn cards_are_twice_the_old_size_and_the_strip_holds_them() {
-        assert_eq!((THUMB_W, THUMB_H), (2.0 * 92.0, 2.0 * 52.0));
+    fn cards_are_one_and_a_half_times_the_old_size_and_the_strip_holds_them() {
+        assert_eq!((THUMB_W, THUMB_H), (1.5 * 92.0, 1.5 * 52.0));
+        assert_eq!(STRIP_H, 82.0);
         assert_eq!(STRIP_H, THUMB_H + 2.0 * THUMB_MARGIN);
         // Cards that show whole in the strip of a compact, normal and wide card (inner width:
         // card width minus twice the 16 pt margin).
@@ -281,8 +282,8 @@ mod tests {
                 .count()
         };
         assert_eq!(fitting(440.0 - 32.0), 2);
-        assert_eq!(fitting(640.0 - 32.0), 3);
-        assert_eq!(fitting(800.0 - 32.0), 4);
+        assert_eq!(fitting(640.0 - 32.0), 4);
+        assert_eq!(fitting(800.0 - 32.0), 5);
     }
 
     #[test]
