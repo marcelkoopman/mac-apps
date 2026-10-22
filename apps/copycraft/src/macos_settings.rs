@@ -778,14 +778,25 @@ fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
-    let blur = checkbox(mtm, crate::locale::t("blur_masked"), y);
+    // Indented under the privacy filter: the blur only styles its mask.
+    let blur = indented_checkbox(mtm, crate::locale::t("blur_masked"), y);
     blur.setState(state_of(settings::load().blur));
     // The blur only styles the privacy filter's mask.
     blur.setEnabled(settings::privacy_filter());
     wire(&blur, sel!(blurToggled:));
     body.addSubview(&blur);
     BLUR_BOX.with(|slot| *slot.borrow_mut() = Some(blur));
-    place_explanation(mtm, body, crate::locale::t("blur_note"), &mut top);
+    gap(&mut top, NOTE_GAP);
+    let note = place_note(
+        mtm,
+        body,
+        crate::locale::t("blur_note"),
+        take(&mut top, NOTE_H),
+    );
+    note.setFrame(NSRect::new(
+        NSPoint::new(MARGIN + INDENT, note.frame().origin.y),
+        NSSize::new(WIDTH - MARGIN * 2.0 - INDENT, NOTE_H),
+    ));
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
