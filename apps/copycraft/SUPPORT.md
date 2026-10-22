@@ -11,7 +11,7 @@ Heb je een vraag of een bug gevonden? Mail naar mac-apps-support@proton.me. Bugs
 ### Veelgestelde vragen
 
 1. **Hoe open ik CopyCraft?** Met de sneltoets (standaard ⌃⌘C) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
-2. **Waarom is mijn tekst vaag?** Dat is het privacyfilter. Klik op de tekst om hem te tonen. Wil je het uit, zet dan "Gebruik privacyfilter" uit in Instellingen.
+2. **Waarom is mijn tekst verborgen of vaag?** Dat is het privacyfilter. Het staat standaard uit; alleen als je "Gebruik privacyfilter" aanzet in Instellingen › Privacy blijft gekopieerde inhoud verborgen tot je erop klikt. Klik op de tekst om hem te tonen. Wil je het weer uit, zet dan "Gebruik privacyfilter" uit. Verborgen inhoud krijgt standaard een effen vlak; zet "Gemaskeerde inhoud vervagen" aan voor vervaging. Gevoelige tekst zoals een token komt nooit in de geschiedenis, ook met het filter uit.
 3. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of CopyCraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Privacy en beveiliging, Plakken vanuit andere apps.
 4. **Gaat mijn data het internet op?** Nee. CopyCraft werkt volledig offline en heeft geen netwerktoegang.
 5. **Hoe wis ik wat ik gekopieerd heb?** Gebruik Wis of Geschiedenis wissen in de kaart of in het menu.
@@ -30,7 +30,7 @@ Question or found a bug? Email mac-apps-support@proton.me. I fix bugs as best I 
 ### FAQ
 
 1. **How do I open CopyCraft?** With the hotkey (default ⌃⌘C) or from the menu bar icon. Change the hotkey in Settings.
-2. **Why is my text hidden or blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings. Hidden content shows as a plain cover by default; tick "Blur masked content" in Settings › Privacy to see a blur instead.
+2. **Why is my text hidden or blurred?** That is the privacy filter. It is off by default; only when you tick "Use privacy filter" in Settings › Privacy does copied content stay hidden until you click it. Click the text to reveal it. To turn it off again, untick "Use privacy filter". Hidden content shows as a plain cover by default; tick "Blur masked content" to see a blur instead. Sensitive text such as a token is never kept in history, also with the filter off.
 3. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether CopyCraft may read the clipboard from other apps. Choose Allow, or set it in Privacy & Security, Paste from Other Apps.
 4. **Does my data leave my Mac?** No. CopyCraft works fully offline and has no network access.
 5. **How do I clear what I copied?** Use Wipe or Clear history on the card or in the menu.

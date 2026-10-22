@@ -42,7 +42,9 @@ pub struct Settings {
     /// keeps it until it is cleared, the screen locks, the Mac sleeps or the user switches.
     pub history_minutes: u32,
     /// The privacy filter: copied content stays masked (blurred or blank) until it is clicked.
-    /// Off shows content directly, unmasked. On by default.
+    /// Off (the default) shows content directly, unmasked; only a value the user stored with the
+    /// checkbox turns it on. It is visual only: whether a copy is kept in history
+    /// ([`crate::sensitivity::admission`]) does not depend on it.
     pub privacy_filter: bool,
     /// Gaussian blur over a masked well. Off (the default) masks with the opaque shade in the
     /// card's theme. Only a value the user stored with the checkbox turns it on.
@@ -128,7 +130,7 @@ impl Default for Settings {
         Self {
             clear_sensitive: true,
             history_minutes: 15,
-            privacy_filter: true,
+            privacy_filter: false,
             blur: false,
             date_month_first: false,
             hotkey: None,
@@ -895,7 +897,7 @@ mod tests {
         let settings = Settings::default();
         assert!(settings.clear_sensitive);
         assert_eq!(settings.history_minutes, 15);
-        assert!(settings.privacy_filter);
+        assert!(!settings.privacy_filter);
         assert!(!settings.blur);
         assert!(!settings.date_month_first);
         assert!(settings.hotkey.is_none());
@@ -946,22 +948,48 @@ mod tests {
         assert!(!super::load().blur);
         // Turning blur on leaves the privacy filter alone.
         super::set_blur(true);
-        assert!(super::privacy_filter());
+        assert!(!super::privacy_filter());
         super::set_blur(false);
     }
 
     #[test]
-    fn privacy_filter_is_on_until_stored_off_and_round_trips() {
-        assert!(super::privacy_filter());
-        assert!(super::load().privacy_filter);
-        super::set_privacy_filter(false);
+    fn privacy_filter_is_off_until_stored_on_and_a_stored_choice_is_kept() {
+        // Nothing stored (a new install, or anyone who never touched the box): off.
+        assert_eq!(super::load_bool(super::PRIVACY_FILTER_KEY), None);
         assert!(!super::privacy_filter());
         assert!(!super::load().privacy_filter);
-        // The other settings are untouched.
-        assert!(!super::load().blur);
         super::set_privacy_filter(true);
+        assert_eq!(super::load_bool(super::PRIVACY_FILTER_KEY), Some(true));
         assert!(super::privacy_filter());
         assert!(super::load().privacy_filter);
+        // The other settings are untouched.
+        assert!(!super::load().blur);
+        super::set_privacy_filter(false);
+        assert_eq!(super::load_bool(super::PRIVACY_FILTER_KEY), Some(false));
+        assert!(!super::privacy_filter());
+        assert!(!super::load().privacy_filter);
+    }
+
+    /// The privacy filter only masks what is shown. With it off (the default) a token is still
+    /// refused by history, and with it on nothing more is let in.
+    #[test]
+    fn history_admission_does_not_depend_on_the_privacy_filter() {
+        use crate::sensitivity::{Admission, admission, labeling};
+        let token = format!("ghp_{}", "1234567890abcdefghijklmnopqrstuvwxyzAB");
+        for on in [false, true] {
+            super::set_privacy_filter(on);
+            assert_eq!(
+                admission(&labeling(&token)),
+                Admission::Refuse,
+                "filter {on}"
+            );
+            assert_eq!(
+                admission(&labeling("plain shopping list")),
+                Admission::Keep,
+                "filter {on}"
+            );
+        }
+        super::set_privacy_filter(false);
     }
 
     #[test]

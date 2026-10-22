@@ -19,6 +19,10 @@ Each small card in the history strip now has a ✕ (on the card shown and the on
 
 Blur is now off by default. Masked content is hidden under a plain cover in your card theme's colours. To get the blur back, tick **Blur masked content** in Settings › Privacy. If you turned the blur on or off yourself before, that choice is kept.
 
+### The privacy filter is now off by default
+
+The privacy filter is now off by default, so copied content shows on the card straight away, without a click to reveal it. To hide it again until you click, tick **Use privacy filter** in Settings › Privacy. If you turned the filter on or off yourself before, that choice is kept. Sensitive copies such as tokens, keys and passwords in links are still kept out of history, whatever this setting says.
+
 ### Upgrading from Copycraft 0.1.87 or earlier
 
 CopyCraft now has the bundle ID `nl.marcelkoopman.copycraft` (it was `com.github.marcelkoopman.mac-apps.copycraft`), so macOS treats it as a new app:
@@ -42,6 +46,10 @@ Elk kaartje in de geschiedenisstrook heeft nu een ✕ (op het getoonde kaartje e
 ### Vervagen staat nu standaard uit
 
 Vervagen staat nu standaard uit. Gemaskeerde inhoud zit onder een effen afdekking in de kleuren van je kaartthema. Wil je het vervagen terug, vink dan **Gemaskeerde inhoud vervagen** aan in Instellingen › Privacy. Heb je het vervagen eerder zelf aan- of uitgezet, dan blijft die keuze bewaard.
+
+### Het privacyfilter staat nu standaard uit
+
+Het privacyfilter staat nu standaard uit, dus gekopieerde inhoud staat meteen op de kaart, zonder klik om hem te tonen. Wil je hem weer verborgen houden tot je klikt, vink dan **Gebruik privacyfilter** aan in Instellingen › Privacy. Heb je het filter eerder zelf aan- of uitgezet, dan blijft die keuze bewaard. Gevoelige kopieën zoals tokens, sleutels en wachtwoorden in links komen nog steeds niet in de geschiedenis, wat deze instelling ook zegt.
 
 ### Bijwerken vanaf Copycraft 0.1.87 of eerder
 
