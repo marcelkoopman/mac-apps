@@ -5,14 +5,22 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use zeroize::Zeroize;
 
+/// One card of the strip: [`THUMB_W`] × [`THUMB_H`] points.
+pub const THUMB_W: f64 = 184.0;
+pub const THUMB_H: f64 = 104.0;
+/// Room above and below a card inside the strip row.
+pub const THUMB_MARGIN: f64 = 2.0;
 /// Height of the strip row: a card and the room around it.
-pub const STRIP_H: f64 = 56.0;
-/// One small card.
-pub const THUMB_W: f64 = 92.0;
-pub const THUMB_GAP: f64 = 6.0;
+pub const STRIP_H: f64 = THUMB_H + 2.0 * THUMB_MARGIN;
+pub const THUMB_GAP: f64 = 8.0;
+/// Space between a card's edge and its text or picture.
+pub const THUMB_PAD: f64 = 8.0;
+/// The ✕ in a card's top-right corner: its size and its distance to the card's edges.
+pub const THUMB_REMOVE_SIZE: f64 = 20.0;
+pub const THUMB_REMOVE_INSET: f64 = 6.0;
 /// Text on a card: at most this many lines, each at most [`THUMB_LINE_CHARS`] characters.
-pub const THUMB_LINES: usize = 2;
-pub const THUMB_LINE_CHARS: usize = 18;
+pub const THUMB_LINES: usize = 4;
+pub const THUMB_LINE_CHARS: usize = 22;
 /// A picture is drawn small only when its bytes are at most this many; a larger one shows its
 /// type mark instead (no heavy decode for a thumbnail).
 pub const THUMB_PICTURE_MAX_BYTES: usize = 3_000_000;
@@ -109,6 +117,16 @@ pub fn thumb_at(x: f64, count: usize) -> Option<usize> {
     (slot < count && x - thumb_x(slot) <= THUMB_W).then_some(slot)
 }
 
+/// The ✕'s frame inside a card, `(x, y, side)` from the card's bottom-left corner (AppKit
+/// counts y from the bottom): the top-right corner.
+pub fn remove_frame() -> (f64, f64, f64) {
+    (
+        THUMB_W - THUMB_REMOVE_SIZE - THUMB_REMOVE_INSET,
+        THUMB_H - THUMB_REMOVE_SIZE - THUMB_REMOVE_INSET,
+        THUMB_REMOVE_SIZE,
+    )
+}
+
 /// A card's ✕ shows on the marked card (history position `cursor`) and on the one under the
 /// pointer.
 pub fn remove_shown(index: usize, cursor: usize, hovered: Option<usize>) -> bool {
@@ -168,8 +186,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_card_holds_two_short_lines() {
-        assert_eq!(thumb_lines("een\n\n  twee  \ndrie"), "een\ntwee");
+    fn a_card_holds_four_short_lines() {
+        assert_eq!(thumb_lines("een\n\n  twee  \ndrie"), "een\ntwee\ndrie");
+        assert_eq!(thumb_lines("1\n2\n3\n4\n5\n6"), "1\n2\n3\n4");
         assert_eq!(thumb_lines(""), "");
         assert_eq!(thumb_lines("  \n \n"), "");
         let long = thumb_lines("abcdefghijklmnopqrstuvwxyz");
@@ -248,6 +267,34 @@ mod tests {
         assert_eq!(thumb_at(thumb_x(3) + 1.0, 3), None);
         assert_eq!(thumb_at(-1.0, 3), None);
         assert_eq!(thumb_at(1.0, 0), None);
+    }
+
+    #[test]
+    fn cards_are_twice_the_old_size_and_the_strip_holds_them() {
+        assert_eq!((THUMB_W, THUMB_H), (2.0 * 92.0, 2.0 * 52.0));
+        assert_eq!(STRIP_H, THUMB_H + 2.0 * THUMB_MARGIN);
+        // Cards that show whole in the strip of a compact, normal and wide card (inner width:
+        // card width minus twice the 16 pt margin).
+        let fitting = |inner: f64| {
+            (1..=MAX_THUMBS)
+                .take_while(|n| strip_content_width(*n) <= inner)
+                .count()
+        };
+        assert_eq!(fitting(440.0 - 32.0), 2);
+        assert_eq!(fitting(640.0 - 32.0), 3);
+        assert_eq!(fitting(800.0 - 32.0), 4);
+    }
+
+    #[test]
+    fn the_remove_cross_sits_in_the_top_right_corner_inside_the_card() {
+        let (x, y, side) = remove_frame();
+        assert_eq!(x + side + THUMB_REMOVE_INSET, THUMB_W);
+        assert_eq!(y + side + THUMB_REMOVE_INSET, THUMB_H);
+        assert!(x > THUMB_W / 2.0 && y > THUMB_H / 2.0);
+        // The pointer over the ✕ finds its card, in every slot.
+        for slot in 0..3 {
+            assert_eq!(thumb_at(thumb_x(slot) + x + side / 2.0, 3), Some(slot));
+        }
     }
 
     #[test]

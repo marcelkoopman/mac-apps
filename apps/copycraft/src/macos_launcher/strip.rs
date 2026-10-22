@@ -37,9 +37,6 @@ thread_local! {
     static CAN_RESTORE: Cell<bool> = const { Cell::new(false) };
 }
 
-const REMOVE_SIZE: f64 = 16.0;
-const REMOVE_INSET: f64 = 3.0;
-
 const IMAGE_KEEP: usize = 24;
 
 /// Take the strip's cards from the card being shown. The previous ones' text is wiped.
@@ -238,8 +235,8 @@ pub(crate) fn place_strip(
                 masked_of(thumb),
             );
             card.setFrame(NSRect::new(
-                NSPoint::new(commands::thumb_x(slot), 2.0),
-                NSSize::new(commands::THUMB_W, placed.strip_h - 4.0),
+                NSPoint::new(commands::thumb_x(slot), commands::THUMB_MARGIN),
+                NSSize::new(commands::THUMB_W, commands::THUMB_H),
             ));
             document.addSubview(&card);
         }
@@ -300,11 +297,15 @@ fn thumb_card(
         card.setBorderWidth(2.0);
         card.setBorderColor(&NSColor::controlAccentColor());
     }
+    // Inset by the card's padding, so text and picture keep clear of the rounded edge.
     let button = NSButton::initWithFrame(
         NSButton::alloc(mtm),
         NSRect::new(
-            NSPoint::new(0.0, 0.0),
-            NSSize::new(commands::THUMB_W, commands::STRIP_H - 4.0),
+            NSPoint::new(commands::THUMB_PAD, commands::THUMB_PAD),
+            NSSize::new(
+                commands::THUMB_W - 2.0 * commands::THUMB_PAD,
+                commands::THUMB_H - 2.0 * commands::THUMB_PAD,
+            ),
         ),
     );
     button.setBordered(false);
@@ -333,7 +334,7 @@ fn thumb_card(
             thumb.lines.clone()
         };
         let text = format!("{}\n{body}", thumb.mark);
-        let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+        let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY);
         let attributed = AttrText::new(&text, &font, &NSColor::labelColor());
         let mark_end = thumb.mark.len();
         attributed.color(&(0..mark_end), &crate::appearance::caption_color());
@@ -348,21 +349,17 @@ fn thumb_card(
 /// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]).
 fn remove_button(mtm: MainThreadMarker, index: usize) -> Retained<NSButton> {
     let label = crate::locale::t("history_remove_item");
+    let (x, y, side) = commands::remove_frame();
     let button = NSButton::initWithFrame(
         NSButton::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(
-                commands::THUMB_W - REMOVE_SIZE - REMOVE_INSET,
-                commands::STRIP_H - 4.0 - REMOVE_SIZE - REMOVE_INSET,
-            ),
-            NSSize::new(REMOVE_SIZE, REMOVE_SIZE),
-        ),
+        NSRect::new(NSPoint::new(x, y), NSSize::new(side, side)),
     );
     button.setBordered(false);
     button.setTag(index as isize);
     if let Some(image) = mac_ui::icon::system_symbol("xmark.circle.fill", label) {
         button.setImage(Some(&image));
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::ImageOnly);
+        button.setImageScaling(mac_ui::objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
         button.setContentTintColor(Some(&crate::appearance::caption_color()));
     } else {
         button.setTitle(&NSString::from_str("✕"));
