@@ -58,6 +58,8 @@ pub enum TextOp {
     },
     /// Agent instructions: their shell commands, one per line ([`crate::agent::commands`]).
     AgentCommands,
+    /// Tracking parameters out of every URL ([`url_clean`]).
+    CleanUrls,
 }
 
 impl TextOp {
@@ -83,6 +85,7 @@ impl TextOp {
                 });
                 commands.join("\n")
             }
+            TextOp::CleanUrls => url_clean::clean(text).text,
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -94,6 +97,7 @@ impl TextOp {
             TextOp::Tail(n) => crate::locale::tf("text_tail_label", &[n]),
             TextOp::Reverse => crate::locale::t("text_reverse_label").to_string(),
             TextOp::AgentCommands => crate::locale::t("agent_commands").to_string(),
+            TextOp::CleanUrls => crate::locale::t("url_clean_label").to_string(),
             TextOp::Column(_, n) => crate::locale::tf("text_column_label", &[n]),
             TextOp::Filter {
                 pattern, invert, ..
@@ -275,6 +279,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
 
 pub mod filter;
 pub mod pager;
+pub mod url_clean;
 
 #[cfg(test)]
 mod tests;

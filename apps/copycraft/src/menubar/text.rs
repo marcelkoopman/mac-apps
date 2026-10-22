@@ -93,9 +93,13 @@ impl App {
             view.text().map(str::to_string)
         };
         let text = Zeroizing::new(text?);
-        if !commands::offers_text_menu(&text) {
-            return None;
-        }
+        // A link card has no Lines…, but Clean URL works on it (its chip), and the versions it
+        // makes go back and forth like any other step's (the cleaned link has nothing left
+        // to clean, so it is let in as one of those versions).
+        let link = crate::page_preview::page_url(&text).is_some()
+            || crate::youtube::video_id(&text).is_some();
+        let offered = commands::offers_text_menu(&text)
+            || (link && crate::text_ops::url_clean::has_tracking(&text));
         // A copy that is not in history (not recorded) still gets Lines…; only ⌘Z back to it
         // has nothing to put back.
         let id = self
@@ -103,7 +107,14 @@ impl App {
             .text_index(&text, self.history_cursor)
             .and_then(|index| self.history.id_at(index))
             .unwrap_or(NOT_IN_HISTORY);
-        Some((id, text))
+        let stepped = || {
+            link && id != NOT_IN_HISTORY
+                && self
+                    .text_steps
+                    .as_ref()
+                    .is_some_and(|steps| steps.ids.contains(&id))
+        };
+        (offered || stepped()).then_some((id, text))
     }
 
     /// The text the AI chip works on: the card's text, or the recognized text of a scanned PDF
@@ -188,6 +199,7 @@ impl App {
             note,
             code,
             agent,
+            tracking: crate::text_ops::url_clean::has_tracking(&text),
         });
     }
 
@@ -434,6 +446,7 @@ impl App {
                 .unwrap_or(0);
             let ask = mac_ui::dialog::Form {
                 title: crate::locale::t("text_column_title"),
+                ok: "",
                 message: crate::locale::t("text_column_message"),
                 options: &titles,
                 selected,
@@ -488,6 +501,7 @@ impl App {
             ];
             let ask = mac_ui::dialog::Form {
                 title: crate::locale::t("filter_title"),
+                ok: "",
                 message: crate::locale::t("filter_message"),
                 options: &[],
                 selected: 0,
@@ -526,6 +540,93 @@ impl App {
                 invert,
             });
         }
+    }
+
+    /// Clean URL…: how many tracking parameters go and the first cleaned URLs, worked out in
+    /// the background; Apply to clipboard takes the step (a new version, ⌘Z goes back).
+    pub(crate) fn text_clean_url_prompt(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let Some((_, text)) = self.text_entry() else {
+                return;
+            };
+            let ask = preview_only_form(
+                crate::locale::t("url_clean_title"),
+                crate::locale::t("url_clean_message"),
+            );
+            let text = std::sync::Arc::new(text);
+            let answer = mac_ui::dialog::form(
+                mtm,
+                &ask,
+                std::sync::Arc::new(move |_, _, _| clean_url_preview(&text)),
+            );
+            launcher::order_front();
+            if answer.is_some() {
+                self.run_text(TextOp::CleanUrls);
+            }
+        }
+    }
+}
+
+/// A [`mac_ui::dialog::Form`] with only a preview and Apply to clipboard (Clean URL…).
+#[cfg(target_os = "macos")]
+fn preview_only_form<'a>(title: &'a str, message: &'a str) -> mac_ui::dialog::Form<'a> {
+    mac_ui::dialog::Form {
+        title,
+        message,
+        ok: crate::locale::t("text_apply"),
+        options: &[],
+        selected: 0,
+        option_label: "",
+        field_label: "",
+        field_default: "",
+        field_width: 0.0,
+        checks: &[],
+        preview_label: crate::locale::t("text_preview"),
+    }
+}
+
+/// Lines of a preview shown at most, and characters of each.
+#[cfg(target_os = "macos")]
+const PREVIEW_LINES: usize = 6;
+#[cfg(target_os = "macos")]
+const PREVIEW_CHARS: usize = 160;
+
+/// `line` cut to [`PREVIEW_CHARS`] characters with `…`.
+#[cfg(target_os = "macos")]
+fn preview_line(line: &str) -> String {
+    let mut chars = line.chars();
+    let mut out: String = chars.by_ref().take(PREVIEW_CHARS).collect();
+    if chars.next().is_some() {
+        out.push('…');
+    }
+    out
+}
+
+/// The preview under Clean URL…: how many parameters go, then the first cleaned URLs.
+#[cfg(target_os = "macos")]
+fn clean_url_preview(text: &str) -> mac_ui::dialog::Preview {
+    let cleaned = text_ops::url_clean::clean(text);
+    if cleaned.removed == 0 {
+        return mac_ui::dialog::Preview {
+            text: crate::locale::t("url_clean_none").to_string(),
+            ..Default::default()
+        };
+    }
+    let mut lines = vec![crate::locale::tf("url_clean_removed", &[&cleaned.removed])];
+    lines.extend(
+        cleaned
+            .changed
+            .iter()
+            .take(PREVIEW_LINES)
+            .map(|url| preview_line(url)),
+    );
+    mac_ui::dialog::Preview {
+        text: lines.join("\n"),
+        ..Default::default()
     }
 }
 

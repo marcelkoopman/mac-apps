@@ -221,6 +221,8 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 
 ## Manual checks (Mac only, no data)
 
+- [ ] Clean URL on a link: copy `https://x.nl/p?utm_source=x&id=5#top`. The link card has a *URL opschonen…* / *Clean URL…* chip. The dialog says *Parameters to remove: 1* and shows `https://x.nl/p?id=5#top`. *Apply to clipboard* copies that (paste in TextEdit to check), the version capsule shows *v2/2*, and ⌘Z shows the original link again. Copy `https://x.nl/p?id=5#top` itself: no chip.
+- [ ] Clean URL in text: copy a few lines of prose with two links, one with `?fbclid=1&page=2` and one without a query. *Lines… › Clean URL…* shows *Parameters to remove: 1*; after *Apply to clipboard* only `fbclid=1&` is gone and everything else, line endings included, is unchanged. Prose without tracking parameters has no *Clean URL…* in *Lines…*.
 - [ ] Copy a password from a password manager (it marks the copy concealed): the card shows
       "Hidden content", no text, no chips, and nothing is added to history.
 - [ ] With history on, a long log with a token stays out of history: in Terminal run

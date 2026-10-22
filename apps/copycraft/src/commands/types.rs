@@ -174,6 +174,8 @@ pub struct TextShown {
     pub code: bool,
     /// Agent instructions: Lines… offers Commands, Outline and Check.
     pub agent: bool,
+    /// A URL in the text holds a tracking parameter: Lines… offers Clean URL….
+    pub tracking: bool,
 }
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -441,6 +443,9 @@ pub enum CommandId {
     TextColumn,
     /// Lines… › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
+    /// Lines… › Clean URL… (and the chip on a link card): a preview of the URLs without their
+    /// tracking parameters, then Apply to clipboard as a new version.
+    TextCleanUrl,
     /// The "AI" chip left of Lines… on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The

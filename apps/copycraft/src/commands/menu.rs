@@ -119,6 +119,9 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "grep filter regex regular expression match lines text",
         ),
     ];
+    if edit.tracking {
+        commands.push(clean_url_command());
+    }
     if edit.agent {
         commands.push(command(
             CommandId::AgentCommands,
@@ -167,6 +170,16 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
         .into_iter()
         .map(|command| (command, false))
         .collect()
+}
+
+/// Clean URL…: in Lines… and as a chip on a link card, when a URL holds a tracking parameter.
+pub(crate) fn clean_url_command() -> Command {
+    command(
+        CommandId::TextCleanUrl,
+        crate::locale::t("text_clean_url"),
+        crate::locale::t("detail_url_clean"),
+        "clean url link tracking utm fbclid gclid parameters query strip",
+    )
 }
 
 /// The command a pick in a popped menu runs: the item at `tag`, but only when its title is

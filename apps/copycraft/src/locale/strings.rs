@@ -1490,6 +1490,31 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Filter zonder: {0}",
         "Filter without: {0}",
     ),
+    // Lines… › Clean URL… (text_ops::url_clean)
+    ("text_clean_url", "URL opschonen…", "Clean URL…"),
+    ("url_clean_title", "URL opschonen", "Clean URL"),
+    (
+        "url_clean_message",
+        "Haalt trackingparameters (utm_…, fbclid, gclid, si, …) uit elke link. De rest van de link blijft zoals hij is; er wordt niets geopend of opgehaald. ⌘Z zet de tekst terug.",
+        "Removes tracking parameters (utm_…, fbclid, gclid, si, …) from every link. The rest of each link stays as it is; nothing is opened or fetched. ⌘Z puts the text back.",
+    ),
+    (
+        "detail_url_clean",
+        "Trackingparameters uit links halen",
+        "Remove tracking parameters from links",
+    ),
+    (
+        "url_clean_removed",
+        "Te verwijderen parameters: {0}",
+        "Parameters to remove: {0}",
+    ),
+    (
+        "url_clean_none",
+        "Geen trackingparameters gevonden",
+        "No tracking parameters found",
+    ),
+    ("url_clean_label", "URL opgeschoond", "URL cleaned"),
+    ("text_apply", "Toepassen op klembord", "Apply to clipboard"),
     (
         "pager_status",
         "--Meer-- pagina {0} van {1} ({2}%)",

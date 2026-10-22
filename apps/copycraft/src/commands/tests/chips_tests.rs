@@ -431,6 +431,7 @@ fn text_menu_chip_comes_first_on_a_code_card() {
             note: None,
             code: true,
             agent: false,
+            tracking: false,
         });
         let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
         let at = ids.iter().position(|id| *id == CommandId::TextMenu);
@@ -482,4 +483,33 @@ fn text_cards_have_no_raw_chip_and_title_formatted_only_when_changed() {
             "{src}"
         );
     }
+}
+
+#[test]
+fn clean_url_shows_only_when_a_link_holds_tracking_parameters() {
+    use crate::commands::{Command, text_menu_items, text_shown};
+    let has = |commands: &[Command]| commands.iter().any(|c| c.id == CommandId::TextCleanUrl);
+    // A link card: a chip, as a link has no Lines….
+    let tracked = data(
+        SubjectKind::Text,
+        Some("https://x.nl/p?utm_source=x&id=5#top"),
+    );
+    assert!(has(&chips(&tracked)));
+    let clean = data(SubjectKind::Text, Some("https://x.nl/p?id=5#top"));
+    assert!(!has(&chips(&clean)));
+    // Prose with a link: in Lines…, not as a chip.
+    let prose = data(
+        SubjectKind::Text,
+        Some("Lees dit: https://x.nl/p?fbclid=1 en reageer.\n"),
+    );
+    assert!(!has(&chips(&prose)));
+    let edit = text_shown(&prose).expect("Lines…");
+    assert!(edit.tracking);
+    let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
+    assert!(has(&menu));
+    let plain = data(SubjectKind::Text, Some("Lees dit: https://x.nl/p?id=1.\n"));
+    let edit = text_shown(&plain).expect("Lines…");
+    assert!(!edit.tracking);
+    let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
+    assert!(!has(&menu));
 }

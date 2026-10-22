@@ -193,12 +193,14 @@ pub fn choose(
 }
 
 /// What [`form`] asks: an optional pop-up of `options` (none when empty, else starting at
-/// `selected`), a text field pre-filled with `field_default`, checkboxes, each with a label,
-/// and a live preview under them.
+/// `selected`), a text field pre-filled with `field_default` (none when `field_label` is
+/// empty), checkboxes, each with a label, and a live preview under them. The default button is
+/// titled `ok` (OK when empty), the second one is Cancel.
 #[cfg(feature = "widgets")]
 pub struct Form<'a> {
     pub title: &'a str,
     pub message: &'a str,
+    pub ok: &'a str,
     pub options: &'a [&'a str],
     pub selected: usize,
     pub option_label: &'a str,
@@ -216,7 +218,7 @@ pub struct Form<'a> {
 pub struct FormAnswer {
     /// The picked option (0 without a pop-up).
     pub option: usize,
-    /// The field's text, untrimmed.
+    /// The field's text, untrimmed (empty without a field).
     pub text: String,
     pub checks: Vec<bool>,
 }
@@ -246,8 +248,10 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
     const ROW: f64 = 26.0;
     const LABEL_W: f64 = 120.0;
     const PREVIEW_H: f64 = 130.0;
-    let alert = new_alert(mtm, ask.title, ask.message, &[ok(), cancel()]);
-    let rows = usize::from(!ask.options.is_empty()) + 1 + ask.checks.len();
+    let ok_title = if ask.ok.is_empty() { ok() } else { ask.ok };
+    let alert = new_alert(mtm, ask.title, ask.message, &[ok_title, cancel()]);
+    let has_field = !ask.field_label.is_empty();
+    let rows = usize::from(!ask.options.is_empty()) + usize::from(has_field) + ask.checks.len();
     let height = rows as f64 * (ROW + 4.0) + 8.0 + PREVIEW_H;
     let view = NSView::initWithFrame(NSView::alloc(mtm), accessory_frame(height));
     let label = |text: &str, y: f64| {
@@ -287,20 +291,25 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
         Some(popup)
     };
 
-    label(ask.field_label, y);
-    let field = NSTextField::initWithFrame(
-        NSTextField::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(LABEL_W, y + 1.0),
-            NSSize::new(ask.field_width.min(ACCESSORY_WIDTH - LABEL_W), 24.0),
-        ),
-    );
-    field.setStringValue(&NSString::from_str(ask.field_default));
-    field.setAccessibilityLabel(Some(&NSString::from_str(ask.field_label)));
-    // Every keystroke sends the action, so the preview follows the typing.
-    field.setContinuous(true);
-    view.addSubview(&field);
-    y -= ROW + 4.0;
+    let field = if has_field {
+        label(ask.field_label, y);
+        let field = NSTextField::initWithFrame(
+            NSTextField::alloc(mtm),
+            NSRect::new(
+                NSPoint::new(LABEL_W, y + 1.0),
+                NSSize::new(ask.field_width.min(ACCESSORY_WIDTH - LABEL_W), 24.0),
+            ),
+        );
+        field.setStringValue(&NSString::from_str(ask.field_default));
+        field.setAccessibilityLabel(Some(&NSString::from_str(ask.field_label)));
+        // Every keystroke sends the action, so the preview follows the typing.
+        field.setContinuous(true);
+        view.addSubview(&field);
+        y -= ROW + 4.0;
+        Some(field)
+    } else {
+        None
+    };
 
     let mut boxes = Vec::new();
     for title in ask.checks {
@@ -341,7 +350,11 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
                 .iter()
                 .map(|check| check.state() == objc2_app_kit::NSControlStateValueOn)
                 .collect();
-            (option, field.stringValue().to_string(), checks)
+            let text = field
+                .as_ref()
+                .map(|field| field.stringValue().to_string())
+                .unwrap_or_default();
+            (option, text, checks)
         }
     };
     let watcher = preview::Watcher::new(mtm, {
@@ -355,14 +368,18 @@ pub fn form(mtm: MainThreadMarker, ask: &Form<'_>, preview: PreviewFn) -> Option
     if let Some(popup) = &popup {
         crate::actions::connect(popup, &watcher, objc2::sel!(refresh:));
     }
-    crate::actions::connect(&field, &watcher, objc2::sel!(refresh:));
+    if let Some(field) = &field {
+        crate::actions::connect(field, &watcher, objc2::sel!(refresh:));
+    }
     for check in &boxes {
         crate::actions::connect(check, &watcher, objc2::sel!(refresh:));
     }
 
     alert.setAccessoryView(Some(&view));
     alert.layout();
-    alert.window().setInitialFirstResponder(Some(&field));
+    if let Some(field) = &field {
+        alert.window().setInitialFirstResponder(Some(field));
+    }
     let answer = button_index(run(mtm, &alert));
     // The controls hold the watcher weakly; it lives until here. A preview still on its way
     // finds no label and is dropped.

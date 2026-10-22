@@ -277,6 +277,7 @@ fn lines_menu_offers_the_agent_steps_only_for_agent_instructions() {
         note: None,
         code: false,
         agent: false,
+        tracking: false,
     };
     let ids = |edit: &TextShown| -> Vec<CommandId> {
         text_menu_items(edit)

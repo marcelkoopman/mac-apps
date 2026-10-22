@@ -638,6 +638,7 @@ mod tests {
                 note: None,
                 code: false,
                 agent: false,
+                tracking: false,
             };
             assert!(
                 text_menu_items(&edit)

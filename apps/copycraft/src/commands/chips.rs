@@ -139,6 +139,7 @@ pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
             note: None,
             code: crate::complexity::Lang::of(kind).is_some(),
             agent: kind == crate::format::FormatKind::Agent,
+            tracking: crate::text_ops::url_clean::has_tracking(text),
         }
     }))
 }
@@ -287,6 +288,10 @@ pub(crate) fn link_chips(text: &str) -> Vec<Command> {
         && let Some(found) = decode::detect(text)
     {
         commands.push(decoder_command(found));
+    }
+    // Tracking parameters to remove: Clean URL… (a preview, then Apply to clipboard).
+    if crate::text_ops::url_clean::has_tracking(text) {
+        commands.push(clean_url_command());
     }
     commands
 }
