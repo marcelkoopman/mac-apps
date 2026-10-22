@@ -258,16 +258,29 @@ pub(crate) fn card_returns_after_window(
 }
 
 /// When unpinned history is due to be forgotten: `minutes` after the last copy. `None` with
-/// no time limit (0) or when only pins remain.
+/// no time limit (0) or when nothing would be forgotten (see [`history_forgettable`]).
 pub(crate) fn history_due(
     last_copy: Option<Instant>,
     minutes: u32,
-    has_unpinned: bool,
+    forgettable: bool,
 ) -> Option<Instant> {
-    if minutes == 0 || !has_unpinned {
+    if minutes == 0 || !forgettable {
         return None;
     }
     Some(last_copy? + Duration::from_secs(u64::from(minutes) * 60))
+}
+
+/// The history time limit has something to forget: an unpinned entry, or the copy kept for ⌘Z
+/// after a removal (also when only pins remain, or nothing at all).
+pub(crate) fn history_forgettable(history: &ClipboardHistory) -> bool {
+    history.has_unpinned() || history.can_restore()
+}
+
+/// Lock, sleep or user switch, history's half: the copy kept for ⌘Z goes at once, also when
+/// history is empty now. True when entries remain to be wiped ([`App::forget_entries`]).
+pub(crate) fn end_session_history(history: &mut ClipboardHistory) -> bool {
+    history.forget_removed();
+    !history.is_empty()
 }
 
 /// The next poll: sooner while the card is open and follows the clipboard.

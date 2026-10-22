@@ -235,13 +235,15 @@ impl App {
         let due = history_due(
             self.last_copy,
             self.history_minutes,
-            self.history.has_unpinned(),
+            history_forgettable(&self.history),
         )?;
         if now < due {
             return Some(due);
         }
         self.last_copy = None;
         self.clear_history();
+        // clear_history drops it too; explicit, since only it may have set the timer.
+        self.history.forget_removed();
         crate::diag::log(crate::diag::LogEvent::HistoryForgottenIdle {
             minutes: self.history_minutes,
         });
@@ -260,7 +262,7 @@ impl App {
         // Closed and wiped whatever history holds (a chosen file's window too), pins included.
         self.close_table_window();
         self.clear_diff();
-        if !self.history.is_empty() {
+        if end_session_history(&mut self.history) {
             self.forget_entries(true);
             crate::diag::log(crate::diag::LogEvent::HistoryForgottenLock);
         } else if launcher::is_open() {

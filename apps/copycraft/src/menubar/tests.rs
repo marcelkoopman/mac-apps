@@ -1,6 +1,7 @@
 use super::{
-    ClipSig, ICON_CLICK_GAP, card_returns_after_window, forget_opened_file, history_due,
-    icon_click_is_new, icon_tip, status_labels, status_rows, tray_label, version_label,
+    ClipSig, ICON_CLICK_GAP, card_returns_after_window, end_session_history, forget_opened_file,
+    history_due, history_forgettable, icon_click_is_new, icon_tip, status_labels, status_rows,
+    tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -47,6 +48,56 @@ fn history_is_forgotten_minutes_after_the_last_copy() {
     assert_eq!(history_due(Some(copied), 0, true), None);
     assert_eq!(history_due(Some(copied), 5, false), None);
     assert_eq!(history_due(None, 5, true), None);
+}
+
+#[test]
+fn a_lock_forgets_the_copy_kept_for_undo_also_with_history_empty() {
+    // One copy, removed with ⋯ › Remove from history: history is empty, ⌘Z could bring it back.
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("only".into());
+    let only = history.id_at(0).expect("only");
+    history.take_id(only);
+    assert!(history.is_empty() && history.can_restore());
+    // The screen locks: nothing left to wipe, and ⌘Z restores nothing afterwards.
+    assert!(!end_session_history(&mut history));
+    assert!(!history.can_restore());
+    assert_eq!(history.restore_removed(), None);
+    assert!(history.is_empty());
+    // With entries left, they are wiped too ([`App::forget_entries`]), and the kept copy is gone.
+    history.record("one".into());
+    history.record("two".into());
+    let two = history.id_at(0).expect("two");
+    history.take_id(two);
+    assert!(end_session_history(&mut history));
+    assert!(!history.can_restore());
+}
+
+#[test]
+fn the_time_limit_clears_a_removed_copy_next_to_pins_only() {
+    let copied = std::time::Instant::now();
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("pinned".into());
+    history.record("gone".into());
+    let pinned = history.id_at(1).expect("pinned");
+    assert!(history.pin(pinned));
+    let gone = history.id_at(0).expect("gone");
+    history.take_id(gone);
+    // Only a pin and the copy kept for ⌘Z: the timer still runs.
+    assert!(!history.has_unpinned());
+    assert!(history_forgettable(&history));
+    assert!(history_due(Some(copied), 5, history_forgettable(&history)).is_some());
+    // When it fires (App::clear_history keeps pins), the kept copy goes and the pin stays.
+    history.clear_unpinned();
+    assert!(!history.can_restore());
+    assert_eq!(history.restore_removed(), None);
+    assert_eq!(history.len(), 1);
+    assert!(history.is_pinned(0));
+    // Then nothing is left to forget: no timer.
+    assert!(!history_forgettable(&history));
+    assert_eq!(
+        history_due(Some(copied), 5, history_forgettable(&history)),
+        None
+    );
 }
 
 #[test]
