@@ -79,7 +79,7 @@ impl TableOp {
         }
     }
 
-    /// The submenu of a step on a column: "Sort ascending", "Sort descending".
+    /// The submenu of a step on a column: "Sort Ascending", "Sort Descending".
     pub fn group(&self) -> Option<&'static str> {
         match self {
             Self::Sort {
@@ -294,7 +294,7 @@ impl TableVersions {
     }
 
     /// The entry is shown with a version of `width` columns: the first time, lock to the grid
-    /// (Table always shows the grid; column picking is Choose columns… only).
+    /// (Table always shows the grid; column picking is Choose Columns… only).
     pub fn shown_with(&mut self, width: usize) {
         if self.overview.is_none() && width > 0 {
             self.overview = Some(false);
@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(wide.overview_choice(), None);
         wide.shown_with(0);
         assert_eq!(wide.overview_choice(), None);
-        // Wide and narrow both lock to the grid (no Show columns chip).
+        // Wide and narrow both lock to the grid (no Show Columns chip).
         wide.shown_with(20);
         assert_eq!(wide.overview_choice(), Some(false));
         wide.shown_with(6);

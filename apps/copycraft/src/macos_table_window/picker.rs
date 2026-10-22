@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Modal Choose columns… for the table window: All / None, checkboxes, Apply / Cancel.
+/// Modal Choose Columns… for the table window: All / None, checkboxes, Apply / Cancel.
 /// Uses the same [`ColumnPicker`] model as the card; Apply emits one select step. The table
 /// stays revealed (the alert steals key; we do not re-blur on Apply or Cancel).
 pub(super) fn run_column_picker() {
@@ -118,7 +118,7 @@ pub(super) fn run_column_picker() {
         }
         // Nothing kept or nothing changed: still keep the grid revealed.
     }
-    // Alert stole key; always leave the table window revealed after Choose columns….
+    // Alert stole key; always leave the table window revealed after Choose Columns….
     reveal();
 }
 

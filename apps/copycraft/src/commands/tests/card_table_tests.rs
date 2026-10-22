@@ -30,7 +30,7 @@ fn a_table_below_a_definition_line_opens_as_a_table_with_a_header_note() {
     assert!(!grid.excerpt.contains("Sunbox"), "{}", grid.excerpt);
     assert!(grid.meta.contains("Header on line 2"), "{}", grid.meta);
     assert!(grid.preview_note.is_none());
-    // No Show columns / Show table chip — only Original and Table ▾.
+    // No Show Columns / Show table chip — only Original and Table ▾.
     assert!(ids(&crate::commands::chips(&input)).contains(&CommandId::TableOpenWindow));
     let copied = transformed_text(src, CardView::Dataframe).expect("copy");
     assert!(copied.contains("Sunbox 7"), "{copied}");

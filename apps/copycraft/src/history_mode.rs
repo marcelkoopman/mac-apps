@@ -5,7 +5,7 @@
 //!
 //! Off (the default on a new install): no polling, not even of the change count, and no read
 //! when the card opens. ⌘V reads the pasteboard once, because the user asked for it. Pause,
-//! Ignore next copy and the ignored apps only do something while history is on
+//! Ignore Next Copy and the ignored apps only do something while history is on
 //! ([`capture_controls_active`]).
 
 use zeroize::Zeroizing;
@@ -41,7 +41,7 @@ pub fn keep_history_default(
     stored.unwrap_or(welcome_seen || other_settings)
 }
 
-/// Pause, Ignore next copy and the ignored apps decide which copies are read while watching;
+/// Pause, Ignore Next Copy and the ignored apps decide which copies are read while watching;
 /// without watching there is nothing for them to hold back, so they are greyed out.
 pub fn capture_controls_active(keep_history: bool) -> bool {
     keep_history

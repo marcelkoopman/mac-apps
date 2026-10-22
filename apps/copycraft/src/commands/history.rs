@@ -258,7 +258,7 @@ pub(crate) fn diff_swap_command() -> Command {
     )
 }
 
-/// "Toevoegen aan diff", "Vergelijk met A", or "Verwijder uit diff" for entry `entry`.
+/// "Voeg toe aan diff", "Vergelijk met A", or "Verwijder uit diff" for entry `entry`.
 pub(crate) fn diff_action(id: CommandId, picks: &[u64], entry: u64, is_text: bool) -> Command {
     let menu = crate::diff::menu_for(picks, entry, is_text);
     let (title, detail) = match menu.kind {

@@ -1,7 +1,7 @@
 // The preview of an Apple Intelligence action ("Text ▾ › Apple Intelligence"), drawn over the well
 // on the card like the column picker: a sparkles icon and the action's name, the result in a
 // scrolling, selectable text, a notice line (text cut at 20,000 characters, or why it failed),
-// and Cancel (Esc) / "Apply to clipboard" (Return). While the model works a spinner shows and
+// and Cancel (Esc) / "Apply to Clipboard" (Return). While the model works a spinner shows and
 // Apply is off. Part of `macos_launcher` (included there); the logic is `menubar::ai` and the
 // model is `mac_ai`.
 //

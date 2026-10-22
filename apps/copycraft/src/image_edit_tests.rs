@@ -130,11 +130,11 @@ fn steps_have_menu_titles_groups_and_labels() {
             "Longest side 2048",
             "Longest side 1024",
             "Longest side 512",
-            "Rotate 90° left",
-            "Rotate 90° right",
-            "Flip horizontal",
-            "Flip vertical",
-            "Remove metadata",
+            "Rotate 90° Left",
+            "Rotate 90° Right",
+            "Flip Horizontal",
+            "Flip Vertical",
+            "Remove Metadata",
             "Grayscale",
         ]
     );

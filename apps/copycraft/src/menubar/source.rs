@@ -176,7 +176,7 @@ impl App {
     }
 
     /// "Keep clipboard history" changed. Off: what was read from the pasteboard is wiped from
-    /// the reader's cache, Pause and Ignore next copy are reset (they are greyed out), and the
+    /// the reader's cache, Pause and Ignore Next Copy are reset (they are greyed out), and the
     /// poller looks again from scratch when history is turned on.
     pub(crate) fn clipboard_history_changed(&mut self) {
         let on = crate::settings::clipboard_history();

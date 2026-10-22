@@ -1,5 +1,5 @@
 #![cfg(target_os = "macos")]
-// The table window ("Open table" on the card): the table of one entry in its own resizable
+// The table window ("Open Table" on the card): the table of one entry in its own resizable
 // window. A toolbar with Table ▾, Copy, Save and the version capsule (↶ v2/3 ↷), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
 // tables) and the meta line. A parsed grid is drawn as aligned columns with a fixed header
@@ -8,9 +8,9 @@
 // the app as `UserEvent::TableWindow`.
 //
 // Opens with the grid and sidebar revealed (Open table from the card). Blurs again when
-// the window stops being key (another window or app). Choose columns… and our save and open
+// the window stops being key (another window or app). Choose Columns… and our save and open
 // panels steal key; a grid that was sharp stays sharp. The app closes the window and wipes
-// it on Wipe, Clear history, screen lock, sleep and when its entry is gone. Without a blur
+// it on Wipe, Clear History, screen lock, sleep and when its entry is gone. Without a blur
 // filter they stay blank under an opaque cover when masked. No extra entitlements.
 
 use std::cell::{Cell, RefCell};
@@ -73,11 +73,11 @@ thread_local! {
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The blur filter, built once; `None` inside when Core Image cannot build it.
     static BLUR: RefCell<Option<Option<Retained<AnyObject>>>> = const { RefCell::new(None) };
-    /// Choose columns… modal is up: do not blur on resign-key (the alert takes key).
+    /// Choose Columns… modal is up: do not blur on resign-key (the alert takes key).
     static COLUMN_PICKER_OPEN: Cell<bool> = const { Cell::new(false) };
     /// Our save or open panel is up. It takes key; a revealed grid stays sharp.
     static OWN_PANEL: Cell<bool> = const { Cell::new(false) };
-    /// Checkboxes of the open Choose columns… alert (All / None toggle these).
+    /// Checkboxes of the open Choose Columns… alert (All / None toggle these).
     static PICKER_CHECKS: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -199,7 +199,7 @@ define_class!(
             }
         }
 
-        /// After the Table menu closes: show Choose columns… (modal).
+        /// After the Table menu closes: show Choose Columns… (modal).
         #[unsafe(method(tableWindowOpenColumnPicker:))]
         fn open_column_picker_clicked(&self, _sender: Option<&AnyObject>) {
             run_column_picker();
@@ -379,7 +379,7 @@ pub fn apply_capture() {
     }
 }
 
-/// Close the window and wipe what it shows (Wipe, Clear history, lock, sleep, its entry
+/// Close the window and wipe what it shows (Wipe, Clear History, lock, sleep, its entry
 /// gone). Nothing when it is not open.
 pub fn close() {
     if MainThreadMarker::new().is_none() {
@@ -472,7 +472,7 @@ fn reveal() {
 
 /// The window is no longer key: blurred again; the next click reveals it.
 fn mask_again() {
-    // Choose columns… and our save and open panels are modals: they steal key. Keep the
+    // Choose Columns… and our save and open panels are modals: they steal key. Keep the
     // table revealed under them.
     if COLUMN_PICKER_OPEN.with(Cell::get) || OWN_PANEL.with(Cell::get) {
         return;
@@ -539,7 +539,7 @@ pub fn keeping_revealed<T>(body: impl FnOnce() -> T) -> T {
     result
 }
 
-/// Schedule Choose columns… after the Table menu finishes tracking (so the alert is not
+/// Schedule Choose Columns… after the Table menu finishes tracking (so the alert is not
 /// hidden behind it).
 pub fn open_column_picker() {
     let delegate = DELEGATE.with(|slot| slot.borrow().clone());

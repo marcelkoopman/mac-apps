@@ -390,7 +390,7 @@ impl App {
         self.refresh_popup();
     }
 
-    /// First lines… (`last` false) or Last lines…: ask for N (10 to start), then take the step.
+    /// First Lines… (`last` false) or Last lines…: ask for N (10 to start), then take the step.
     pub(crate) fn text_lines_prompt(&mut self, last: bool) {
         #[cfg(target_os = "macos")]
         {
@@ -545,7 +545,7 @@ impl App {
     }
 
     /// Clean URL…: how many tracking parameters go and the first cleaned URLs, worked out in
-    /// the background; Apply to clipboard takes the step (a new version, ⌘Z goes back).
+    /// the background; Apply to Clipboard takes the step (a new version, ⌘Z goes back).
     pub(crate) fn text_clean_url_prompt(&mut self) {
         #[cfg(target_os = "macos")]
         {
@@ -572,7 +572,7 @@ impl App {
         }
     }
     /// Format JSON…: Format or Compress and Sort keys, with the result (or where the JSON
-    /// breaks) worked out in the background; Apply to clipboard takes the step.
+    /// breaks) worked out in the background; Apply to Clipboard takes the step.
     pub(crate) fn text_json_prompt(&mut self) {
         #[cfg(target_os = "macos")]
         {
@@ -619,7 +619,7 @@ impl App {
         }
     }
     /// Case style › a style: the style pop-up (that one picked) and how many lines change with
-    /// the first of them, worked out in the background; Apply to clipboard takes the step.
+    /// the first of them, worked out in the background; Apply to Clipboard takes the step.
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     pub(crate) fn text_case_prompt(&mut self, style: CaseStyle) {
         #[cfg(target_os = "macos")]
@@ -660,7 +660,7 @@ impl App {
     }
 }
 
-/// A [`mac_ui::dialog::Form`] with only a preview and Apply to clipboard (Clean URL…).
+/// A [`mac_ui::dialog::Form`] with only a preview and Apply to Clipboard (Clean URL…).
 #[cfg(target_os = "macos")]
 fn preview_only_form<'a>(title: &'a str, message: &'a str) -> mac_ui::dialog::Form<'a> {
     mac_ui::dialog::Form {

@@ -53,7 +53,7 @@ CopyCraft is a clipboard helper for the macOS menu bar. It is built to keep sens
 
 **Logs.** CopyCraft writes only events to the macOS log (what happened, counts, sizes, types and errors), never clipboard or history text, file names, paths or AI input and output.
 
-**Email and links.** Feedback through "Suggest a feature…" or "Report a problem…" opens a draft in your own mail app; you send it yourself, CopyCraft sends nothing. Links (such as this page) are opened in your default browser; the browser loads the page, not CopyCraft. This page is hosted on GitHub Pages; GitHub's privacy policy applies to it.
+**Email and links.** Feedback through "Suggest a Feature…" or "Report a Problem…" opens a draft in your own mail app; you send it yourself, CopyCraft sends nothing. Links (such as this page) are opened in your default browser; the browser loads the page, not CopyCraft. This page is hosted on GitHub Pages; GitHub's privacy policy applies to it.
 
 **Children.** CopyCraft collects no data from anyone, including children.
 

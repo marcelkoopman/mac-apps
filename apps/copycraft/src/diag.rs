@@ -6,7 +6,7 @@
 //! can never reach the log.
 //!
 //! Lines go to Apple's unified log (subsystem: the bundle id, see [`SUBSYSTEM`]) and to a
-//! ring buffer in memory for *Export diagnostics…* (`OSLogStore` is not in the bindings this
+//! ring buffer in memory for *Export Diagnostics…* (`OSLogStore` is not in the bindings this
 //! app uses, so the export reads the buffer: the same events, last 24 hours, this run only).
 
 use std::collections::HashMap;
@@ -220,7 +220,7 @@ pub enum LogEvent {
         functions: usize,
         ms: u64,
     },
-    /// Export diagnostics… wrote this many log lines.
+    /// Export Diagnostics… wrote this many log lines.
     DiagnosticsExported {
         lines: usize,
     },

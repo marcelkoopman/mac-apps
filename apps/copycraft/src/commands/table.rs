@@ -570,7 +570,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     view
 }
 
-/// The table window's Table ▾ menu: the steps, Choose columns…, and the sorts (Open table is
+/// The table window's Table ▾ menu: the steps, Choose Columns…, and the sorts (Open table is
 /// the card chip only).
 pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
     table_menu_items(Some(table))

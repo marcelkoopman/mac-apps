@@ -460,13 +460,13 @@ pub enum CommandId {
     /// Text ▾ › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
     /// Text ▾ › Clean URL… (and the chip on a link card): a preview of the URLs without their
-    /// tracking parameters, then Apply to clipboard as a new version.
+    /// tracking parameters, then Apply to Clipboard as a new version.
     TextCleanUrl,
     /// Text ▾ › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
     /// clipboard as a new version.
     TextJson,
     /// Text ▾ › Case style › a style: the dialog with that style picked, a preview, then
-    /// Apply to clipboard as a new version.
+    /// Apply to Clipboard as a new version.
     TextCase(crate::text_ops::case_style::CaseStyle),
     /// The "AI" chip left of Text ▾ on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,

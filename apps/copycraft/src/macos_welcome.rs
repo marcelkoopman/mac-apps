@@ -1,5 +1,5 @@
 //! The first-run welcome window: the hotkey, paste-first (⌘V or a drop), the offline promise, what
-//! stays out of history, "Keep clipboard history" (off on a new install), Open at Login, and buttons for Settings and "Get started". Shown once (see
+//! stays out of history, "Keep clipboard history" (off on a new install), Open at Login, and buttons for Settings and "Get Started". Shown once (see
 //! [`crate::settings::should_show_welcome`]) and again from the status menu.
 
 use std::cell::{Cell, RefCell};
@@ -55,7 +55,7 @@ define_class!(
     struct WelcomeWindow;
 
     impl WelcomeWindow {
-        /// Escape closes the window, like "Get started" (Return is its key equivalent).
+        /// Escape closes the window, like "Get Started" (Return is its key equivalent).
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
             if event.keyCode() == ESCAPE_KEY_CODE {
@@ -310,7 +310,7 @@ fn build(mtm: MainThreadMarker) {
     let start = push_button(mtm, crate::locale::t("welcome_start"), sel!(welcomeStart:));
     // Return triggers it and draws it as the default button.
     start.setKeyEquivalent(&NSString::from_str("\r"));
-    // Settings on the left, "Get started" on the right, across the full content width.
+    // Settings on the left, "Get Started" on the right, across the full content width.
     let settings_view: &NSView = &settings;
     let start_view: &NSView = &start;
     let buttons =
@@ -369,7 +369,7 @@ fn build(mtm: MainThreadMarker) {
     window.setContentView(Some(&stack));
     window.center();
 
-    // Tab moves through both checkboxes and both buttons; focus starts on "Get started".
+    // Tab moves through both checkboxes and both buttons; focus starts on "Get Started".
     window.setAutorecalculatesKeyViewLoop(true);
     window.setInitialFirstResponder(Some(&start));
 

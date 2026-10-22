@@ -506,9 +506,9 @@ mod tests {
             assert_eq!(
                 tf_in(lang, "notify_ai_done", &[&t_in(lang, "ai_summarize")]),
                 if lang == Lang::Nl {
-                    "Samenvatten is klaar"
+                    "AI-actie klaar: Vat samen"
                 } else {
-                    "Summarize is ready"
+                    "AI action done: Summarize"
                 }
             );
             for key in [

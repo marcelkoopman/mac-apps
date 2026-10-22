@@ -377,7 +377,7 @@ impl App {
         self.spawn_save(job)
     }
 
-    /// Export diagnostics…: versions, settings and the last 24 h of copycraft's own log lines
+    /// Export Diagnostics…: versions, settings and the last 24 h of copycraft's own log lines
     /// (the in-memory ring; never content) through the save panel.
     pub(crate) fn export_diagnostics(&mut self) {
         #[cfg(target_os = "macos")]

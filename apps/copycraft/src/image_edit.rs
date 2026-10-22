@@ -7,7 +7,7 @@
 //! platform's ([`Codec`]); the pixel steps are here, on straight RGBA.
 //!
 //! Every picture made here is zeroized: the pixel buffers when a step is done with them, the
-//! versions with their entry (Wipe, Clear history, lock, retention) or when they are forgotten.
+//! versions with their entry (Wipe, Clear History, lock, retention) or when they are forgotten.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

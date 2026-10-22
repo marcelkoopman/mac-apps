@@ -224,7 +224,7 @@ pub(crate) fn keep_preview(path: PathBuf) {
     }
 }
 
-/// Forget every picture handed to Preview (Wipe, lock, sleep, quit, Clear history). A write
+/// Forget every picture handed to Preview (Wipe, lock, sleep, quit, Clear History). A write
 /// that is still running sees [`preview_is_current`] fail and shreds its file too.
 pub(crate) fn discard_previews() {
     PREVIEW_GENERATION.fetch_add(1, Ordering::AcqRel);

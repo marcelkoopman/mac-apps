@@ -127,7 +127,7 @@ impl App {
         }
     }
 
-    /// Take history entry `index` out: the ✕ on its strip card, ⌫, or ⋯ › Remove from history.
+    /// Take history entry `index` out: the ✕ on its strip card, ⌫, or ⋯ › Remove from History.
     /// Only history changes; the clipboard keeps what it holds. The card shows the copy that
     /// took its place, or the paste hint when history is empty now. ⌘Z puts it back
     /// ([`Self::restore_removed`]).

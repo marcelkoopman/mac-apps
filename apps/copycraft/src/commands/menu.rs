@@ -22,7 +22,7 @@ pub fn open_table_title() -> &'static str {
 }
 /// English title kept for tests that pin the default language.
 #[cfg_attr(not(test), allow(dead_code))]
-pub const OPEN_TABLE_TITLE: &str = "Open table";
+pub const OPEN_TABLE_TITLE: &str = "Open Table";
 
 /// The steps a table can take, for the "Table ▾" menu and the search.
 pub fn table_steps() -> Vec<Command> {
@@ -260,7 +260,7 @@ pub(crate) fn clean_url_command() -> Command {
 
 /// The command a pick in a popped menu runs: the item at `tag`, but only when its title is
 /// the one the menu showed. A list replaced while the menu was open (a refresh, another menu)
-/// must not run a neighbour's step, e.g. Flip horizontal for Rotate left: then the title
+/// must not run a neighbour's step, e.g. Flip Horizontal for Rotate left: then the title
 /// decides, and `None` when no item has it.
 pub fn popped_pick(popped: &[Command], tag: isize, title: &str) -> Option<Command> {
     let at = usize::try_from(tag).ok();
@@ -362,9 +362,9 @@ pub fn table_menu_items(table: Option<&TableShown>) -> Vec<(Command, bool)> {
         .collect()
 }
 
-/// The table steps menu (window Table ▾ and command search): Remove duplicate rows, Remove
-/// empty rows and columns, then, once the table is read, Choose columns… (more than one
-/// column), Sort ascending › and Sort descending ›. Open table is the card chip. Undo and
+/// The table steps menu (window Table ▾ and command search): Remove Duplicate Rows, Remove
+/// empty rows and columns, then, once the table is read, Choose Columns… (more than one
+/// column), Sort Ascending › and Sort Descending ›. Open table is the card chip. Undo and
 /// redo are ⌘Z and ⇧⌘Z and the version capsule.
 pub fn table_menu(table: Option<&TableShown>) -> Vec<Command> {
     let mut commands = table_steps();

@@ -81,7 +81,7 @@ impl App {
         Some((text, home))
     }
 
-    /// "Open table": the table on the card in the table window (revealed, no blur); the card
+    /// "Open Table": the table on the card in the table window (revealed, no blur); the card
     /// may close. The window then stays with that entry.
     pub(crate) fn open_table_window(&mut self) {
         let Some((text, home)) = self.table_source() else {
@@ -117,7 +117,7 @@ impl App {
         launcher::bring_table_window_forward();
     }
 
-    /// Close the table window (Wipe, Clear history, lock, its entry gone): its table may forget
+    /// Close the table window (Wipe, Clear History, lock, its entry gone): its table may forget
     /// its frames again, and the window wipes what it showed.
     pub(crate) fn close_table_window(&mut self) {
         let had = self.table_window.is_some();
@@ -456,7 +456,7 @@ impl App {
             self.opened.is_some(),
         );
         let dataframe_view = data.view == CardView::Dataframe;
-        // The chips are remembered per text, so this is cheap: a table has "Open table".
+        // The chips are remembered per text, so this is cheap: a table has "Open Table".
         if !commands::chips(data)
             .iter()
             .any(|chip| chip.id == CommandId::TableOpenWindow)

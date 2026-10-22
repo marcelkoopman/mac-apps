@@ -2,7 +2,7 @@
 // tables a column overview. Display only: Copy, Save and the conversions keep the real names.
 
 /// Whether the Dataframe view shows the column overview. Always off: Table shows the grid;
-/// column picking is *Choose columns…* only. `choice` / `width` kept for call-site compatibility.
+/// column picking is *Choose Columns…* only. `choice` / `width` kept for call-site compatibility.
 pub fn shows_overview(_choice: Option<bool>, _width: usize) -> bool {
     false
 }

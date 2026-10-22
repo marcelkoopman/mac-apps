@@ -181,7 +181,7 @@ fn after_steps(text: &str, ops: &str) -> polars::prelude::DataFrame {
         .clone()
 }
 
-/// What "Open in window" shows for the version after `ops` of `text` (the original for none).
+/// What "Open in Window" shows for the version after `ops` of `text` (the original for none).
 fn window_view_after(text: &str, ops: &str) -> crate::commands::TableWindowView {
     let versions = versions_after(text, ops);
     let shown = crate::commands::TableShown {
@@ -198,7 +198,7 @@ fn window_view_after(text: &str, ops: &str) -> crate::commands::TableWindowView 
     crate::commands::table_window_view(&shown, text)
 }
 
-/// What "Open in window" shows for the original version of `text`.
+/// What "Open in Window" shows for the original version of `text`.
 fn window_view(text: &str) -> crate::commands::TableWindowView {
     window_view_after(text, "")
 }
@@ -308,7 +308,7 @@ fn check(text: &str, check: &str) -> Result<(), String> {
                 .collect::<Vec<_>>()
                 .join("\n")
         }
-        // "Open in window": its grid, its meta line, its column sidebar.
+        // "Open in Window": its grid, its meta line, its column sidebar.
         "window" => window_view(text).grid.clone(),
         "windowmeta" => window_view(text).meta.clone(),
         "windowcolumns" => {

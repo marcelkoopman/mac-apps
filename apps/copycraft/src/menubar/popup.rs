@@ -101,7 +101,7 @@ impl App {
         #[cfg(target_os = "macos")]
         {
             // performClick: sends the button action. That must not toggle the card as well.
-            // "Ignore copies from the frontmost app" uses the app that is in front now.
+            // "Ignore Copies from the Frontmost App" uses the app that is in front now.
             crate::capture::observe_front(crate::macos_pasteboard::front_bundle().as_deref());
             crate::macos_status_click::set_menu_action(true);
             self.tray.show_menu();

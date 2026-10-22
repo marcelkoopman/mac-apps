@@ -21,11 +21,11 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
             "Longest side 1024",
             "Longest side 512",
             "Custom…",
-            "Rotate 90° left",
-            "Rotate 90° right",
-            "Flip horizontal",
-            "Flip vertical",
-            "Remove metadata",
+            "Rotate 90° Left",
+            "Rotate 90° Right",
+            "Flip Horizontal",
+            "Flip Vertical",
+            "Remove Metadata",
             "Grayscale",
         ]
     );
@@ -52,8 +52,8 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
     assert_eq!(
         tail,
         [
-            ("Undo image step", "Resized to 1024×768"),
-            ("Redo image step", "Grayscale")
+            ("Undo Image Step", "Resized to 1024×768"),
+            ("Redo Image Step", "Grayscale")
         ]
     );
     // The steps are found by search too.
@@ -79,7 +79,7 @@ fn overflow_empties_only_the_pasteboard() {
         .iter()
         .find(|cmd| cmd.id == CommandId::ClearClipboard)
         .unwrap();
-    assert_eq!(item.title, "Empty clipboard");
+    assert_eq!(item.title, "Empty Clipboard");
     assert_eq!(item.detail, "Clipboard only");
     assert!(menu.iter().all(|cmd| cmd.id != CommandId::Clear));
     assert!(keeps_card_open(&CommandId::Clear));
@@ -139,7 +139,7 @@ fn choose_file_leads_the_menu_and_a_file_can_return_to_the_clipboard() {
     let clipboard = data(SubjectKind::Text, Some("hello"));
     let menu = overflow(&clipboard);
     assert_eq!(menu[0].id, CommandId::ChooseFile);
-    assert_eq!(menu[0].title, "Choose file…");
+    assert_eq!(menu[0].title, "Choose File…");
     assert!(menu.iter().all(|cmd| cmd.id != CommandId::UseClipboard));
     assert!(keeps_card_open(&CommandId::ChooseFile));
     assert!(keeps_card_open(&CommandId::UseClipboard));

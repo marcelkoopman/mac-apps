@@ -352,7 +352,7 @@ mod tests {
             t_in(Lang::Nl, "history_remove_item"),
             "Verwijder uit geschiedenis"
         );
-        assert_eq!(t_in(Lang::En, "history_remove_item"), "Remove from history");
+        assert_eq!(t_in(Lang::En, "history_remove_item"), "Remove from History");
         assert_eq!(t_in(Lang::Nl, "wipe"), "Alles wissen");
         assert_eq!(t_in(Lang::En, "wipe"), "Clear All");
         assert_eq!(t_in(Lang::Nl, "clear_confirm_title"), "Alles wissen?");
@@ -450,7 +450,7 @@ mod tests {
             forbidden_terms("Empty pasteboard", EN_FORBIDDEN, &[]),
             ["pasteboard"]
         );
-        assert!(forbidden_terms("Show image", EN_FORBIDDEN, &[]).is_empty());
+        assert!(forbidden_terms("Show Image", EN_FORBIDDEN, &[]).is_empty());
     }
 
     /// Every visible string follows the glossary at the head of `strings.rs`: Geschiedenis,
@@ -471,6 +471,213 @@ mod tests {
         }
         assert_eq!(t_in(Lang::Nl, "strip_group"), "Geschiedenis");
         assert_eq!(t_in(Lang::En, "image_cannot_read"), "Can't read this image");
+    }
+
+    /// Menu items, buttons and chips: Dutch in the imperative (like macOS in Dutch), English
+    /// in Title Case. Checkboxes, headers, labels and notes are not in this list.
+    const COMMAND_KEYS: &[&str] = &[
+        "agent_check",
+        "agent_commands",
+        "agent_outline",
+        "ai_apply",
+        "ai_doc_comment",
+        "ai_explain_code",
+        "ai_explain_structure",
+        "ai_find_conflicts",
+        "ai_formal",
+        "ai_proofread",
+        "ai_rewrite",
+        "ai_shorter",
+        "ai_summarize",
+        "ai_summarize_rules",
+        "ai_translate",
+        "cancel",
+        "case_menu",
+        "change_hotkey",
+        "chip_choose_file",
+        "choose_columns_title",
+        "clear_confirm_action",
+        "clear_history",
+        "clear_pins",
+        "copy",
+        "diff_add",
+        "diff_compare",
+        "diff_remove",
+        "empty_pasteboard",
+        "export_diagnostics",
+        "feedback_copy",
+        "feedback_feature_menu",
+        "feedback_make_mail",
+        "feedback_problem_menu",
+        "hide_line_numbers",
+        "history_remove_item",
+        "ignore_front_app",
+        "ignore_next",
+        "ignored_apps_add",
+        "image_flip_horizontal",
+        "image_flip_vertical",
+        "image_remove_metadata",
+        "image_resize",
+        "image_rotate_left",
+        "image_rotate_right",
+        "keep_history_forever",
+        "keep_history_menu",
+        "keep_history_minutes",
+        "keep_until_cleared",
+        "menu_choose_file",
+        "notify_ask_no",
+        "open_in_window",
+        "open_table",
+        "pause_recording",
+        "picker_apply",
+        "picker_keep_all",
+        "picker_keep_all_tip",
+        "picker_keep_none",
+        "pin",
+        "redo_image_step",
+        "redo_table_step",
+        "redo_text_step",
+        "remove_history",
+        "reveal_hidden",
+        "save",
+        "settings",
+        "show_code",
+        "show_columns",
+        "show_image",
+        "show_line_numbers",
+        "show_table",
+        "show_text",
+        "sort_ascending",
+        "sort_descending",
+        "strip_hide",
+        "strip_show",
+        "symbols_restore",
+        "table_keep_columns",
+        "table_remove_duplicates",
+        "table_remove_empty",
+        "text_apply",
+        "text_clean_url",
+        "text_head",
+        "text_json",
+        "text_reverse",
+        "text_tail",
+        "undo_image_step",
+        "undo_table_step",
+        "undo_text_step",
+        "unpin",
+        "welcome_menu",
+        "welcome_start",
+        "window_size_menu",
+        "wipe",
+    ];
+
+    /// English words that stay lowercase inside a Title Case command.
+    const TITLE_SMALL_WORDS: &[&str] = &[
+        "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "from", "with",
+    ];
+
+    /// The words of `text` that break Title Case: a small word in the middle stays lowercase,
+    /// every other word starts with a capital (digits, symbols and placeholders are skipped).
+    fn not_title_case(text: &str) -> Vec<String> {
+        let words: Vec<&str> = text.split(' ').filter(|word| !word.is_empty()).collect();
+        words
+            .iter()
+            .enumerate()
+            .filter(|(at, word)| {
+                let Some(first) = word.chars().next() else {
+                    return false;
+                };
+                // The diff sides A and B are names, not the article.
+                if !first.is_alphabetic() || matches!(**word, "A" | "B") {
+                    return false;
+                }
+                let small = *at > 0 && TITLE_SMALL_WORDS.contains(&word.to_lowercase().as_str());
+                small == first.is_uppercase()
+            })
+            .map(|(_, word)| word.to_string())
+            .collect()
+    }
+
+    /// Dutch infinitives a command must not end on: the imperative goes first ("Wis
+    /// geschiedenis", not "Geschiedenis wissen").
+    const NL_INFINITIVES: &[&str] = &[
+        "wissen",
+        "legen",
+        "verwijderen",
+        "toevoegen",
+        "sorteren",
+        "draaien",
+        "spiegelen",
+        "opmaken",
+        "opschonen",
+        "omkeren",
+        "verbergen",
+        "tonen",
+        "pauzeren",
+        "negeren",
+        "vastzetten",
+        "losmaken",
+        "herstellen",
+        "behouden",
+        "exporteren",
+        "bewaren",
+        "toepassen",
+        "samenvatten",
+        "herschrijven",
+        "uitleggen",
+        "vertalen",
+        "wijzigen",
+        "maken",
+        "kopiëren",
+    ];
+    /// Commands Marcel named as they are: Alles wissen, the feedback pair and the AGENTS.md
+    /// check.
+    const NL_NAMED: &[&str] = &[
+        "wipe",
+        "clear_confirm_action",
+        "feedback_feature_menu",
+        "feedback_problem_menu",
+        "agent_check",
+    ];
+
+    #[test]
+    fn not_title_case_spots_lowercase_words() {
+        assert!(not_title_case("Remove from History").is_empty());
+        assert!(not_title_case("Keep History {0} Min After the Last Copy").is_empty());
+        assert!(not_title_case("Rotate 90° Left").is_empty());
+        assert_eq!(not_title_case("Clear history"), ["history"]);
+        assert_eq!(not_title_case("Remove From History"), ["From"]);
+        assert!(not_title_case("Compare with A").is_empty());
+    }
+
+    #[test]
+    fn commands_are_imperative_in_dutch_and_title_case_in_english() {
+        for key in COMMAND_KEYS {
+            let en = t_in(Lang::En, key);
+            assert_ne!(en, "?", "{key}");
+            let wrong = not_title_case(en);
+            assert!(
+                wrong.is_empty(),
+                "{key}: {en:?} is not Title Case at {wrong:?}"
+            );
+            if NL_NAMED.contains(key) {
+                continue;
+            }
+            let nl = t_in(Lang::Nl, key).trim_end_matches('…').to_lowercase();
+            let words: Vec<&str> = nl.split(' ').collect();
+            // "… tot wissen" (until cleared) is no command form.
+            let ends_on_infinitive = match words.as_slice() {
+                [.., before, last] => NL_INFINITIVES.contains(last) && *before != "tot",
+                [last] => NL_INFINITIVES.contains(last),
+                [] => false,
+            };
+            assert!(
+                !ends_on_infinitive,
+                "{key}: {nl:?} ends on an infinitive; put the imperative first"
+            );
+        }
+        assert_eq!(t_in(Lang::Nl, "clear_history"), "Wis geschiedenis");
+        assert_eq!(t_in(Lang::Nl, "text_reverse"), "Keer regels om");
     }
 
     #[test]

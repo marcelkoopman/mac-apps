@@ -1,4 +1,4 @@
-// The column picker ("Choose columns…" from Table ▾), drawn over the well on the card: a filter
+// The column picker ("Choose Columns…" from Table ▾), drawn over the well on the card: a filter
 // field, a scrolling list of checkboxes (one per column), All / None, "Keeping 8 of 20", and
 // Apply (Return) / Cancel (Esc). Part of `macos_launcher` (included there); the logic is
 // `crate::column_picker`. Column names and types only, never cell values. It closes with
@@ -243,7 +243,7 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     }
 }
 
-/// "Choose columns…": open the picker over the well, every column checked, the filter field
+/// "Choose Columns…": open the picker over the well, every column checked, the filter field
 /// focused. A beep without a table frame.
 fn open_picker() {
     let Some(mtm) = MainThreadMarker::new() else {

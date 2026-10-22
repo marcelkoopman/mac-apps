@@ -244,11 +244,11 @@ fn image_scan_adds_the_actions_from_the_old_preview() {
         qr: Some("https://example.com".into()),
     });
     // After OCR one toggle, named after where it goes; no Original chip.
-    assert_eq!(titles(&chips(&input)), vec!["Info", "Show text", "QR"]);
+    assert_eq!(titles(&chips(&input)), vec!["Info", "Show Text", "QR"]);
     let mut on_text = input.clone();
     on_text.view = CardView::Ocr;
     let toggle = chips(&on_text);
-    assert_eq!(titles(&toggle), vec!["Info", "Show image", "QR"]);
+    assert_eq!(titles(&toggle), vec!["Info", "Show Image", "QR"]);
     assert_eq!(toggle[1].id, CommandId::Original);
     assert_eq!(chips(&input)[1].id, CommandId::Ocr);
     let mut no_ocr = input.clone();
@@ -429,7 +429,7 @@ fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
     assert!(!card.shows_image);
     assert_eq!(card.highlight, Some(crate::format::FormatKind::Svg));
     assert!(card.meta.starts_with("48 × 24 · "), "{}", card.meta);
-    assert!(!chips(&input).iter().any(|c| c.title == "Show code"));
+    assert!(!chips(&input).iter().any(|c| c.title == "Show Code"));
     // Drawn: the picture, with Show code.
     input.picture = crate::clipboard::SecretBytes::new(svg.as_bytes().to_vec());
     let card = crate::commands::work_card(&input);
@@ -441,8 +441,8 @@ fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
     let toggle = shown
         .iter()
         .find(|cmd| cmd.id == CommandId::Format)
-        .expect("Show code");
-    assert_eq!(toggle.title.as_str(), "Show code");
+        .expect("Show Code");
+    assert_eq!(toggle.title.as_str(), "Show Code");
     // On the code: Show image goes back.
     input.view = CardView::Format;
     let card = crate::commands::work_card(&input);
@@ -452,8 +452,8 @@ fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
     let toggle = shown
         .iter()
         .find(|cmd| cmd.id == CommandId::Original)
-        .expect("Show image");
-    assert_eq!(toggle.title.as_str(), "Show image");
+        .expect("Show Image");
+    assert_eq!(toggle.title.as_str(), "Show Image");
 }
 
 #[test]

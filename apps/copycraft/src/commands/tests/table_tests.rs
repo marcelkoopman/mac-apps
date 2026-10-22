@@ -86,7 +86,7 @@ fn the_table_window_shows_the_version_with_its_meta_columns_versions_and_menu() 
     assert_eq!(names, ["name", "iban"]);
     assert_eq!(view.version_title(), "v2/2");
     assert!(view.can_undo() && !view.can_redo());
-    // Open table is the card chip only; Choose columns… is in the window menu; undo/redo
+    // Open table is the card chip only; Choose Columns… is in the window menu; undo/redo
     // stay on ⌘Z and the version capsule.
     let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
     for not_in_menu in [

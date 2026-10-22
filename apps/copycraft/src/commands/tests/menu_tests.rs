@@ -16,16 +16,16 @@ fn the_table_menu_has_five_items_and_sorts_by_each_column_in_submenus() {
     assert_eq!(
         top,
         [
-            "Remove duplicate rows",
-            "Remove empty rows and columns",
-            "Choose columns…",
-            "Sort ascending ›",
-            "Sort descending ›",
+            "Remove Duplicate Rows",
+            "Remove Empty Rows and Columns",
+            "Choose Columns…",
+            "Sort Ascending ›",
+            "Sort Descending ›",
         ]
     );
     let sort_up: Vec<&str> = menu
         .iter()
-        .filter(|c| menu_group(&c.id) == Some("Sort ascending"))
+        .filter(|c| menu_group(&c.id) == Some("Sort Ascending"))
         .map(|c| c.title.as_str())
         .collect();
     assert_eq!(sort_up, ["name", "n"]);
@@ -57,8 +57,8 @@ fn choose_columns_lists_the_version_shown_and_applies_as_one_step() {
     let choose = items
         .iter()
         .find(|c| c.id == CommandId::TableChooseColumns)
-        .expect("Choose columns…");
-    assert_eq!(choose.title, "Choose columns…");
+        .expect("Choose Columns…");
+    assert_eq!(choose.title, "Choose Columns…");
     assert_eq!(menu_group(&choose.id), None);
     assert!(keeps_card_open(&CommandId::TableChooseColumns));
     let columns = picker_columns(&table).expect("columns");
@@ -132,10 +132,10 @@ fn image_menu_items_run_the_step_they_are_titled() {
         .position(|c| c.id == CommandId::ImageStep(ImageOp::RotateLeft))
         .unwrap();
     // A pick runs the item with the title shown, even when the list moved meanwhile.
-    let picked = popped_pick(&items, left as isize, "Rotate 90° left").unwrap();
+    let picked = popped_pick(&items, left as isize, "Rotate 90° Left").unwrap();
     assert_eq!(picked.id, CommandId::ImageStep(ImageOp::RotateLeft));
-    let moved = popped_pick(&items, left as isize + 2, "Rotate 90° left").unwrap();
+    let moved = popped_pick(&items, left as isize + 2, "Rotate 90° Left").unwrap();
     assert_eq!(moved.id, CommandId::ImageStep(ImageOp::RotateLeft));
     assert!(popped_pick(&items, left as isize, "Nothing like it").is_none());
-    assert!(popped_pick(&items, -1, "Rotate 90° left").is_some());
+    assert!(popped_pick(&items, -1, "Rotate 90° Left").is_some());
 }

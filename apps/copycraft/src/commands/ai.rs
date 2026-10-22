@@ -613,9 +613,9 @@ mod tests {
     #[test]
     fn apply_is_dutch_in_dutch() {
         crate::locale::set_test_language(Language::Nl);
-        assert_eq!(crate::locale::t("ai_apply"), "Toepassen op klembord");
+        assert_eq!(crate::locale::t("ai_apply"), "Pas toe op klembord");
         crate::locale::set_test_language(Language::En);
-        assert_eq!(crate::locale::t("ai_apply"), "Apply to clipboard");
+        assert_eq!(crate::locale::t("ai_apply"), "Apply to Clipboard");
     }
 
     #[test]

@@ -32,7 +32,7 @@ impl App {
                 self.removal_skip_change = None;
                 self.skip_record = None;
             }
-            // The frontmost app only matters for a new copy (and for "Add frontmost app",
+            // The frontmost app only matters for a new copy (and for "Add Frontmost App",
             // which the status menu refreshes itself): not asked on a quiet tick.
             if self.polled_change != Some(change) {
                 crate::capture::observe_front(crate::macos_pasteboard::front_bundle().as_deref());
@@ -223,7 +223,7 @@ pub(crate) fn image_facts(view: &ClipboardView) -> Option<commands::ImageFacts> 
     }
 }
 
-/// Overwrite and delete pictures handed to Preview (Wipe, lock, sleep, quit, Clear history).
+/// Overwrite and delete pictures handed to Preview (Wipe, lock, sleep, quit, Clear History).
 pub(crate) fn discard_preview_files() {
     #[cfg(target_os = "macos")]
     crate::macos_open::discard_previews();

@@ -52,7 +52,7 @@ fn history_is_forgotten_minutes_after_the_last_copy() {
 
 #[test]
 fn a_lock_forgets_the_copy_kept_for_undo_also_with_history_empty() {
-    // One copy, removed with ⋯ › Remove from history: history is empty, ⌘Z could bring it back.
+    // One copy, removed with ⋯ › Remove from History: history is empty, ⌘Z could bring it back.
     let mut history = crate::clipboard::ClipboardHistory::default();
     history.record("only".into());
     let only = history.id_at(0).expect("only");

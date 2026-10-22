@@ -149,7 +149,7 @@ pub fn close_table_window() {
     crate::macos_table_window::close();
 }
 
-/// Choose columns… in the table window (Table ▾).
+/// Choose Columns… in the table window (Table ▾).
 pub fn open_table_window_column_picker() {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::open_column_picker();

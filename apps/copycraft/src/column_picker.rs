@@ -1,4 +1,4 @@
-//! The column picker ("Choose columns…" in Table ▾): which columns of the version shown to
+//! The column picker ("Choose Columns…" in Table ▾): which columns of the version shown to
 //! keep, as one step. Column names and types only, never cell values. Plain logic, tested on
 //! Linux; `macos_launcher` draws it.
 
