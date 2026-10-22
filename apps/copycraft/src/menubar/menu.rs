@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// "Allow screenshots" (testing): the card and the table window can be captured until it is
+/// "Allow Screenshots" (testing): the card and the table window can be captured until it is
 /// switched off or CopyCraft restarts.
 pub(crate) const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
 pub(crate) const PAUSE_ID: &str = "pause-recording";

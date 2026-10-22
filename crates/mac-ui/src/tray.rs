@@ -3,8 +3,8 @@
 
 use std::time::{Duration, Instant};
 
+use tray_icon::menu::MenuItem;
 use tray_icon::menu::accelerator::{Accelerator, Code, Modifiers};
-use tray_icon::menu::{IconMenuItem, MenuItem, NativeIcon};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 /// Menu id of [`quit_item`]. Match it in the app's `MenuEvent` loop.
@@ -125,15 +125,10 @@ pub fn settings_item(id: &str, label: &str) -> MenuItem {
     MenuItem::with_id(id, label, true, Some(command_key(Code::Comma)))
 }
 
-/// Enabled quit row with id [`QUIT_ID`], the native stop icon and ⌘Q.
-pub fn quit_item(label: &str) -> IconMenuItem {
-    IconMenuItem::with_id_and_native_icon(
-        QUIT_ID,
-        label,
-        true,
-        Some(NativeIcon::StopProgress),
-        Some(command_key(Code::KeyQ)),
-    )
+/// Enabled quit row with id [`QUIT_ID`] and ⌘Q. No icon: a menu row has one only when it
+/// helps tell rows apart (Human Interface Guidelines, Menus).
+pub fn quit_item(label: &str) -> MenuItem {
+    MenuItem::with_id(QUIT_ID, label, true, Some(command_key(Code::KeyQ)))
 }
 
 /// The icons a menu bar item switches between: `normal` and `flash` are templates (drawn in the

@@ -19,7 +19,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     // bottom right) over the views that are actually shown.
     window.setAutorecalculatesKeyViewLoop(true);
     // Out of screenshots, screen recordings and screen sharing where macOS honours it, unless
-    // "Allow screenshots" is on ([`sharing_type`]). Apple calls NSWindowSharingNone a legacy
+    // "Allow Screenshots" is on ([`sharing_type`]). Apple calls NSWindowSharingNone a legacy
     // constant not meant to hide content from capture, and ScreenCaptureKit (macOS 15.4+) is
     // reported to capture such windows anyway: the blur and the wipe stay the protection.
     window.setSharingType(sharing_type());

@@ -34,7 +34,7 @@ Question or found a bug? Email mac-apps-support@proton.me. I fix bugs as best I 
 3. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether CopyCraft may read the clipboard from other apps. Choose Allow, or set it in Privacy & Security, Paste from Other Apps.
 4. **Does my data leave my Mac?** No. CopyCraft works fully offline and has no network access.
 5. **How do I clear what I copied?** Use Wipe or Clear History on the card or in the menu.
-6. **How do I take a screenshot of the card?** CopyCraft blocks that by default. Choose "Allow screenshots" in the menu to allow it for this session.
+6. **How do I take a screenshot of the card?** CopyCraft blocks that by default. Choose "Allow Screenshots" in the menu to allow it for this session.
 7. **An app should be ignored.** Add it under Ignored apps in Settings.
 8. **How do I start CopyCraft at login?** Turn on "Open at Login" in Settings.
 

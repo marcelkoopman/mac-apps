@@ -181,7 +181,7 @@ fn only_a_real_new_copy_blinks() {
     assert!(!seen.is_new_copy(&history_only, false));
 }
 
-/// "Allow screenshots" is off at every start; on, the card and the table window are
+/// "Allow Screenshots" is off at every start; on, the card and the table window are
 /// captured read-only, off again they are left out.
 #[test]
 fn allow_screenshots_starts_off_and_picks_the_sharing() {

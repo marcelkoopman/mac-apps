@@ -371,7 +371,7 @@ fn label_step(button: &GlassButton, name: &str, keys: &str) {
         .setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
 }
 
-/// Give the window (when made) the sharing type "Allow screenshots" asks for.
+/// Give the window (when made) the sharing type "Allow Screenshots" asks for.
 pub fn apply_capture() {
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window {

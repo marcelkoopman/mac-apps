@@ -14,7 +14,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Tray / overflow
     ("settings", "Instellingen…", "Settings…"),
     ("about", "Over CopyCraft", "About CopyCraft"),
-    ("welcome_menu", "Welkomstscherm…", "Welcome Screen…"),
+    ("welcome_menu", "Welkomstscherm", "Welcome Screen"),
     // Welcome window
     (
         "welcome_title",
@@ -72,7 +72,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     (
         "allow_screenshots",
         "Schermafbeeldingen toestaan",
-        "Allow screenshots",
+        "Allow Screenshots",
     ),
     ("empty_pasteboard", "Leeg klembord", "Empty Clipboard"),
     ("clear_history", "Wis geschiedenis", "Clear History"),

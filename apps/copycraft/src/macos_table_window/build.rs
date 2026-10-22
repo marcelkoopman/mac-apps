@@ -43,7 +43,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     // Like the card: out of screenshots, recordings and screen sharing where macOS honours it
     // (not ScreenCaptureKit on macOS 15.4+, by reports; see `macos_launcher::ensure_window`),
-    // unless "Allow screenshots" is on.
+    // unless "Allow Screenshots" is on.
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
     let delegate = TableWindowDelegate::new(mtm);

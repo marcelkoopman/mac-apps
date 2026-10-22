@@ -18,7 +18,7 @@ there is no in-app purchase.
 **First launch.** A welcome window appears once. It explains the hotkey and paste-first use, and
 has a "Keep clipboard history" checkbox (off), an "Open at Login" checkbox (off) and a "Get
 started" button. The welcome window can be shown again from the
-menu bar menu ("Welcome Screen…").
+menu bar menu ("Welcome Screen").
 
 **Global shortcut.** Press Control-Command-C (⌃⌘C) in any app to open the CopyCraft card for the
 current clipboard; the menu bar icon opens it too. The shortcut can be changed in Settings (a
@@ -60,7 +60,7 @@ Deny*, the card shows "Clipboard access denied in Privacy & Security" and nothin
 
 **Screenshots.** By default the CopyCraft windows are excluded from screenshots and screen
 recordings (window sharing type "none"), because the card shows copied, possibly sensitive data.
-To capture the card, turn on **"Allow screenshots"** in the menu bar menu (Dutch UI:
+To capture the card, turn on **"Allow Screenshots"** in the menu bar menu (Dutch UI:
 "Schermafbeeldingen toestaan"). It applies to the card and the table window immediately and to
 other CopyCraft windows opened after that. It is off again at every launch and is never stored.
 

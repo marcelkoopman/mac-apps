@@ -422,7 +422,7 @@ pub fn wipe_shown() {
     crate::macos_launcher::wipe_shown();
 }
 
-/// "Allow screenshots" in the menu bar menu (for testing): off at every start, never stored.
+/// "Allow Screenshots" in the menu bar menu (for testing): off at every start, never stored.
 /// The card and the table window read it when they are made, and follow it when it changes.
 static ALLOW_SCREENSHOTS: AtomicBool = AtomicBool::new(false);
 
@@ -431,7 +431,7 @@ static ALLOW_SCREENSHOTS: AtomicBool = AtomicBool::new(false);
 pub enum Capture {
     /// Left out (NSWindowSharingNone), the default.
     Excluded,
-    /// Captured like other windows (NSWindowSharingReadOnly), while "Allow screenshots" is on.
+    /// Captured like other windows (NSWindowSharingReadOnly), while "Allow Screenshots" is on.
     ReadOnly,
 }
 
@@ -451,7 +451,7 @@ pub fn allows_screenshots() -> bool {
     ALLOW_SCREENSHOTS.load(Ordering::Relaxed)
 }
 
-/// Turn "Allow screenshots" on or off; the open windows follow at once.
+/// Turn "Allow Screenshots" on or off; the open windows follow at once.
 pub fn set_allow_screenshots(on: bool) {
     ALLOW_SCREENSHOTS.store(on, Ordering::Relaxed);
     #[cfg(target_os = "macos")]
