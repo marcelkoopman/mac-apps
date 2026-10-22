@@ -558,6 +558,19 @@ mod menus;
 mod paint;
 mod picker;
 
+/// The card theme changed: repaint the grid in the new colours (text, header, stripes).
+pub(crate) fn apply_card_theme() {
+    VIEWS.with(|slot| {
+        if let Some(views) = slot.borrow().as_ref() {
+            apply_table_chrome(views);
+            let (text, header, _) = crate::appearance::table_grid_colours();
+            views.grid.setTextColor(Some(&text));
+            views.header.setTextColor(Some(&header));
+            views.grid.setNeedsDisplay(true);
+        }
+    });
+}
+
 /// Reduce Transparency or Increase Contrast changed: restyle the toolbar, well and captions.
 pub(crate) fn restyle() {
     VIEWS.with(|slot| {

@@ -569,6 +569,12 @@ define_class!(
             crate::macos_symbols::toggle(mtm, button);
         }
 
+        /// The empty card's link: Settings › Privacy.
+        #[unsafe(method(privacySettingsClicked:))]
+        fn privacy_settings_clicked(&self, _sender: Option<&NSButton>) {
+            launcher::show_privacy_settings();
+        }
+
         #[unsafe(method(closeClicked:))]
         fn close_clicked(&self, _sender: Option<&NSButton>) {
             hide();

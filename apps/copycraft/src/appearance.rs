@@ -164,6 +164,37 @@ pub fn card_caption_color(
     }
 }
 
+/// The table window grid's text, header and plate (header strip, frozen column, unstriped
+/// body) colours: the card theme's text, accent and background, or the system colours.
+#[cfg(target_os = "macos")]
+pub fn table_grid_colours() -> (
+    mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor>,
+    mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor>,
+    mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor>,
+) {
+    use mac_ui::objc2_app_kit::NSColor;
+    match card_palette() {
+        Some(p) => (srgb(p.text), srgb(p.accent), srgb(p.background)),
+        None => (
+            NSColor::labelColor(),
+            NSColor::controlAccentColor(),
+            NSColor::controlBackgroundColor(),
+        ),
+    }
+}
+
+/// Link colour inside the card's well: the theme's link host colour, or the system link colour
+/// without a fixed theme.
+#[cfg(target_os = "macos")]
+pub fn card_link_color(
+    palette: Option<crate::card_theme::Palette>,
+) -> mac_ui::objc2::rc::Retained<mac_ui::objc2_app_kit::NSColor> {
+    match palette {
+        Some(p) => srgb(p.link),
+        None => mac_ui::objc2_app_kit::NSColor::linkColor(),
+    }
+}
+
 /// The AppKit appearance a fixed card theme puts on the card window (light or dark controls,
 /// glass and system selection around its well). `None` for System: the window inherits the
 /// app's appearance, so it follows macOS live.

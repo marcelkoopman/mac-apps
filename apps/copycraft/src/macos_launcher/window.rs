@@ -417,6 +417,7 @@ pub(crate) fn apply_card_theme() {
     if window_is_visible() {
         layout(false);
     }
+    crate::macos_table_window::apply_card_theme();
 }
 
 pub(crate) fn layout(fresh_place: bool) {

@@ -2,6 +2,11 @@
 
 use super::*;
 
+thread_local! {
+    /// The empty card's link to Settings › Privacy, under its line. Made the first time.
+    static EMPTY_SETTINGS: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+}
+
 pub(crate) struct RevealCover {
     pub(crate) root: Retained<NSView>,
     /// Opaque stand-in when the gaussian blur cannot be installed.
@@ -396,6 +401,56 @@ pub(crate) fn show_empty_line(text: &str, well: NSRect) {
         ));
         label.setHidden(false);
     });
+    if commands::offers_privacy_settings(text) {
+        show_empty_settings(well, mac_ui::metrics::FONT_BODY + 6.0);
+    } else {
+        hide_empty_settings();
+    }
+}
+
+/// The link under the empty line: *Open Privacy Settings…*, in the theme's link colour.
+fn show_empty_settings(well: NSRect, line_h: f64) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    EMPTY_SETTINGS.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            let button = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
+            button.setBordered(false);
+            button.setFocusRingType(NSFocusRingType::Default);
+            wire_button(&button, sel!(privacySettingsClicked:));
+            if let Some(window) = WINDOW.with(|slot| slot.borrow().clone())
+                && let Some(content) = window.contentView()
+            {
+                content.addSubview(&button);
+            }
+            *slot = Some(button);
+        }
+        let button = slot.as_ref().expect("just made");
+        let title = crate::locale::t("empty_privacy_settings");
+        let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+        let color = crate::appearance::card_link_color(crate::appearance::card_palette());
+        button.setAttributedTitle(&AttrText::new(title, &font, &color).into_attributed());
+        button.setAccessibilityLabel(Some(&NSString::from_str(title)));
+        let width = (well.size.width - WELL_INSET * 2.0).max(0.0);
+        button.setFrame(NSRect::new(
+            NSPoint::new(
+                well.origin.x + WELL_INSET,
+                well.origin.y + (well.size.height - line_h) / 2.0 - line_h,
+            ),
+            NSSize::new(width, line_h),
+        ));
+        button.setHidden(false);
+    });
+}
+
+fn hide_empty_settings() {
+    EMPTY_SETTINGS.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setHidden(true);
+        }
+    });
 }
 
 pub(crate) fn hide_empty_line() {
@@ -405,6 +460,7 @@ pub(crate) fn hide_empty_line() {
             label.setStringValue(&NSString::from_str(""));
         }
     });
+    hide_empty_settings();
 }
 
 pub(crate) fn finish_preview() {

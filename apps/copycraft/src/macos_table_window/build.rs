@@ -397,7 +397,16 @@ pub(super) fn apply_table_chrome(views: &Views) {
         mac_ui::glass::set_opaque_fill(mtm, &strip, 0.0, mac_ui::motion::reduce_transparency());
     }
     crate::appearance::apply_well(&views.well, false, true);
-    let plate = NSColor::controlBackgroundColor();
+    // A fixed card theme paints the grid: its background on the plates and the well, its
+    // light or dark appearance on the window so separators and controls match.
+    mac_ui::objc2_app_kit::NSAppearanceCustomization::setAppearance(
+        &**views.window as &mac_ui::objc2_app_kit::NSWindow,
+        crate::appearance::card_window_appearance().as_deref(),
+    );
+    let plate = crate::appearance::table_grid_colours().2;
+    if crate::appearance::card_palette().is_some() {
+        views.well.setFillColor(&plate);
+    }
     views.header_back.setFillColor(&plate);
     views.frozen.setBackgroundColor(&plate);
     views.header.setBackgroundColor(&plate);

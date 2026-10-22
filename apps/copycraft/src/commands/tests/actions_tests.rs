@@ -360,8 +360,16 @@ fn empty_clipboard_has_no_chips_and_keeps_quit_in_the_menu() {
     watching.settings.clipboard_history = true;
     assert_eq!(
         work_card(&watching).placeholder,
-        crate::locale::tf("empty_history", &[&crate::hotkey::DEFAULT_LABEL]),
+        crate::locale::t("empty_history"),
     );
+    // Both empty cards link to Settings › Privacy; other placeholders do not.
+    assert!(crate::commands::offers_privacy_settings(&card.placeholder));
+    assert!(crate::commands::offers_privacy_settings(
+        &work_card(&watching).placeholder
+    ));
+    assert!(!crate::commands::offers_privacy_settings(crate::locale::t(
+        "private_copy_note"
+    )));
     assert_eq!(
         content_actions(&input),
         ContentActions {

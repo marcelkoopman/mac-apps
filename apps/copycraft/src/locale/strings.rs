@@ -406,8 +406,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "empty_history",
-        "Kopieer iets om te beginnen, open met {0}",
-        "Copy something to get started, open with {0}",
+        "Plak (⌘V) of sleep iets hierheen",
+        "Paste (⌘V) or drop something here",
+    ),
+    (
+        "empty_privacy_settings",
+        "Open privacy-instellingen…",
+        "Open Privacy Settings…",
     ),
     (
         "paste_here_hint",

@@ -3,6 +3,12 @@
 use super::*;
 
 /// History row. The type mark and size stand in for the copied text.
+/// The empty card (history on or off) offers a link to Settings › Privacy under its line.
+pub fn offers_privacy_settings(placeholder: &str) -> bool {
+    placeholder == crate::locale::t("empty_history")
+        || placeholder == crate::locale::t("paste_here_hint")
+}
+
 pub fn history_label(mark: &str, byte_len: usize) -> String {
     format!("{mark}  {}", format_bytes(byte_len))
 }
@@ -462,7 +468,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             excerpt: String::new(),
             // History off (paste-first): the card says how to get something onto it.
             placeholder: if data.settings.clipboard_history {
-                crate::locale::tf("empty_history", &[&crate::settings::hotkey_label()])
+                crate::locale::t("empty_history").to_string()
             } else {
                 crate::locale::t("paste_here_hint").to_string()
             },

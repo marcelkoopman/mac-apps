@@ -85,12 +85,23 @@ fn place_header_lines(views: &Views, xs: &[f64]) {
 }
 
 fn draw_stripes(view: &NSTextView, dirty: NSRect) {
+    let palette = crate::appearance::card_palette();
     if !TABLE_STRIPES.with(Cell::get) {
-        NSColor::controlBackgroundColor().setFill();
+        crate::appearance::table_grid_colours().2.setFill();
         NSBezierPath::fillRect(dirty);
         return;
     }
     let line_h = ROW_LINE_H.with(Cell::get);
+    // A fixed card theme stripes in its background and a step toward its text (tested).
+    if let Some(p) = palette
+        && line_h > 0.0
+    {
+        crate::appearance::srgb(p.background).setFill();
+        NSBezierPath::fillRect(dirty);
+        crate::appearance::srgb(p.table_stripe()).setFill();
+        fill_odd_rows(view, dirty, line_h);
+        return;
+    }
     let colors = NSColor::alternatingContentBackgroundColors();
     if colors.count() == 0 || line_h <= 0.0 {
         NSColor::controlBackgroundColor().setFill();
@@ -105,6 +116,11 @@ fn draw_stripes(view: &NSTextView, dirty: NSRect) {
     }
     let odd = colors.objectAtIndex(1);
     odd.setFill();
+    fill_odd_rows(view, dirty, line_h);
+}
+
+/// Fill the odd rows inside `dirty` with the colour set.
+fn fill_odd_rows(view: &NSTextView, dirty: NSRect, line_h: f64) {
     let bounds = view.bounds();
     let inset = view.textContainerInset().height;
     let flipped = view.isFlipped();
@@ -258,14 +274,16 @@ fn paint_aligned_table(views: &Views, sheet: &crate::dataframe::GridSheet, previ
         set_line_padding(&views.grid, NSSize::new(BODY_INSET_X, 4.0), 0.0);
         set_line_padding(&views.header, NSSize::new(BODY_INSET_X, pad_y), 0.0);
         let style = table_paragraph(&layout.stops, line_h);
-        set_styled_text(&views.grid, &layout.body, &body_font, &style, &NSColor::labelColor());
-        // Column names take the app accent (the icon blue under Multicolour), like CSV headers.
+        // Body in the card theme's text colour; column names take its accent (the app
+        // accent, the icon blue under Multicolour, with System), like CSV headers.
+        let (text_colour, header_colour, _) = crate::appearance::table_grid_colours();
+        set_styled_text(&views.grid, &layout.body, &body_font, &style, &text_colour);
         set_styled_text(
             &views.header,
             &layout.header,
             &header_font,
             &style,
-            &NSColor::controlAccentColor(),
+            &header_colour,
         );
         widgets::fit_text_view(&views.grid, None);
         size_header(views, layout.content_width());

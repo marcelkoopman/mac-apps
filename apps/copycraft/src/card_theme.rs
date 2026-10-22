@@ -31,6 +31,55 @@ impl Rgb {
     }
 }
 
+impl Rgb {
+    /// This colour moved `amount` (0 to 1) of the way toward `other`, per channel.
+    pub fn mix(self, other: Rgb, amount: f64) -> Rgb {
+        let channel = |from: u8, to: u8| {
+            let value = f64::from(from) + (f64::from(to) - f64::from(from)) * amount;
+            value.round().clamp(0.0, 255.0) as u8
+        };
+        Rgb(
+            channel(self.0, other.0),
+            channel(self.1, other.1),
+            channel(self.2, other.2),
+        )
+    }
+}
+
+/// The colours of a history strip tile in a fixed theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileColours {
+    pub background: Rgb,
+    pub text: Rgb,
+    /// The type mark above the lines.
+    pub mark: Rgb,
+}
+
+impl Palette {
+    /// A history strip tile: the theme's background with its text and secondary text; the
+    /// tile of the copy on screen on the selection colour, its mark in the text colour.
+    pub fn strip_tile(&self, current: bool) -> TileColours {
+        if current {
+            TileColours {
+                background: self.selection,
+                text: self.text,
+                mark: self.text,
+            }
+        } else {
+            TileColours {
+                background: self.background,
+                text: self.text,
+                mark: self.secondary,
+            }
+        }
+    }
+
+    /// The odd rows of the table window's grid: the background moved 6 % toward the text.
+    pub fn table_stripe(&self) -> Rgb {
+        self.background.mix(self.text, 0.06)
+    }
+}
+
 /// WCAG contrast ratio of two colours (1 to 21).
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn contrast(a: Rgb, b: Rgb) -> f64 {
@@ -676,6 +725,47 @@ mod tests {
                 assert!(ratio >= min, "{theme:?}: {name} {ratio:.2} < {min}");
             }
         }
+    }
+
+    #[test]
+    fn strip_tiles_and_the_table_grid_keep_aa_and_high_contrast_aaa() {
+        for (theme, p) in fixed() {
+            let min = theme.min_contrast();
+            assert!(min >= 4.5);
+            for current in [false, true] {
+                let tile = p.strip_tile(current);
+                for (name, fg) in [("tile text", tile.text), ("tile mark", tile.mark)] {
+                    let ratio = contrast(fg, tile.background);
+                    assert!(
+                        ratio >= min,
+                        "{theme:?}: {name} (current {current}) {ratio:.2} < {min}"
+                    );
+                }
+            }
+            for (name, fg, bg) in [
+                ("grid text on the even rows", p.text, p.background),
+                ("grid text on the odd rows", p.text, p.table_stripe()),
+                ("grid header", p.accent, p.background),
+            ] {
+                let ratio = contrast(fg, bg);
+                assert!(ratio >= min, "{theme:?}: {name} {ratio:.2} < {min}");
+            }
+            assert_ne!(p.table_stripe(), p.background, "{theme:?}: stripes show");
+        }
+        let hc = CardTheme::HighContrast.palette().expect("palette");
+        assert!(contrast(hc.text, hc.strip_tile(true).background) >= 7.0);
+    }
+
+    #[test]
+    fn mixing_moves_each_channel_toward_the_other_colour() {
+        assert_eq!(
+            Rgb(0, 100, 200).mix(Rgb(100, 100, 0), 0.5),
+            Rgb(50, 100, 100)
+        );
+        assert_eq!(
+            Rgb(10, 20, 30).mix(Rgb(255, 255, 255), 0.0),
+            Rgb(10, 20, 30)
+        );
     }
 
     #[test]

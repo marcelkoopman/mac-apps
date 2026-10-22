@@ -374,6 +374,7 @@ fn signature_of(
             .hash(&mut hasher);
     }
     (cursor, width.to_bits(), filter, current_masked).hash(&mut hasher);
+    crate::settings::card_theme().hash(&mut hasher);
     crate::locale::t("strip_current").hash(&mut hasher);
     crate::locale::t("strip_compare_hint").hash(&mut hasher);
     hasher.finish() | 1
@@ -386,10 +387,13 @@ fn thumb_card(
     current: bool,
     masked: bool,
 ) -> Retained<NSBox> {
-    let fill = if current {
-        NSColor::controlAccentColor().colorWithAlphaComponent(0.18)
-    } else {
-        NSColor::labelColor().colorWithAlphaComponent(0.07)
+    // A fixed card theme paints the tile in its own colours (tested for contrast); System
+    // keeps the translucent system tint.
+    let themed = crate::appearance::card_palette().map(|palette| palette.strip_tile(current));
+    let fill = match themed {
+        Some(tile) => crate::appearance::srgb(tile.background),
+        None if current => NSColor::controlAccentColor().colorWithAlphaComponent(0.18),
+        None => NSColor::labelColor().colorWithAlphaComponent(0.07),
     };
     let card = filled_box(mtm, RADIUS, &fill);
     if thumb.side.is_some() {
@@ -467,10 +471,21 @@ fn thumb_card(
         };
         let text = format!("{mark}\n{body}");
         let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
-        let attributed = AttrText::new(&text, &font, &NSColor::labelColor());
+        let (text_colour, mark_colour) = match themed {
+            Some(tile) => (
+                crate::appearance::srgb(tile.text),
+                crate::appearance::srgb(tile.mark),
+            ),
+            None => (NSColor::labelColor(), crate::appearance::caption_color()),
+        };
+        let attributed = AttrText::new(&text, &font, &text_colour);
         let mark_end = mark.len();
-        attributed.color(&(0..mark_end), &crate::appearance::caption_color());
-        if let Some(side) = thumb.side {
+        attributed.color(&(0..mark_end), &mark_colour);
+        // The side is orange on the system tint; a theme keeps the orange frame and paints
+        // the side in the mark's tested colour.
+        if let Some(side) = thumb.side
+            && themed.is_none()
+        {
             attributed.color(&(0..side.len()), &NSColor::systemOrangeColor());
         }
         button.setAttributedTitle(&attributed.into_attributed());

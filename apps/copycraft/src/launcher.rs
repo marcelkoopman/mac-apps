@@ -171,6 +171,12 @@ pub fn show_settings() {
     crate::macos_settings::show();
 }
 
+/// Open the Settings window on its Privacy tab.
+pub fn show_privacy_settings() {
+    #[cfg(target_os = "macos")]
+    crate::macos_settings::show_privacy();
+}
+
 /// Close the Settings window.
 pub fn close_settings() {
     #[cfg(target_os = "macos")]

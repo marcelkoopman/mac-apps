@@ -596,6 +596,16 @@ pub fn show() {
     build(mtm);
 }
 
+/// Open the Settings window on the Privacy tab (the empty card's link).
+pub fn show_privacy() {
+    if WINDOW.with(|slot| slot.borrow().is_some()) {
+        select_tab(Tab::Privacy.index());
+    } else {
+        SELECTED_TAB.set(Tab::Privacy.index());
+    }
+    show();
+}
+
 fn build(mtm: MainThreadMarker) {
     let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
