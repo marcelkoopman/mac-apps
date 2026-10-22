@@ -1,5 +1,8 @@
-//! Settings window: hotkey, date order, language, Keep clipboard history, privacy filter, blur,
-//! Open at Login, the symbol list and ignored apps.
+//! Settings window, in five tabs (a segmented control above one pane per tab):
+//! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history, privacy
+//! filter, blur, ignored apps), Display (pages, announce, ask before clearing, symbols),
+//! Notifications (four switches) and Feedback (mail, privacy policy, support). ⌘1…⌘5 pick a tab;
+//! the last tab is remembered for the session only.
 
 use std::cell::{Cell, RefCell};
 
@@ -9,8 +12,9 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSFont, NSPopUpButton, NSTextField,
-    NSView, NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSPopUpButton, NSSegmentDistribution,
+    NSSegmentSwitchTracking, NSSegmentedControl, NSTextField, NSView, NSWindow, NSWindowDelegate,
+    NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
@@ -23,7 +27,7 @@ use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 use crate::settings;
 
-const WIDTH: f64 = 420.0;
+const WIDTH: f64 = 480.0;
 const MARGIN: f64 = mac_ui::metrics::MARGIN;
 const BUTTON_H: f64 = mac_ui::metrics::BUTTON_H;
 const NOTE_GAP: f64 = 2.0;
@@ -33,43 +37,85 @@ const SETTING_H: f64 = BUTTON_H + NOTE_GAP + NOTE_H;
 /// A labelled setting with a field and a button under the explanation.
 const FIELD_BLOCK_H: f64 =
     SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
-const HEAD_H: f64 = 22.0;
 const SECTION_GAP: f64 = mac_ui::metrics::SECTION_GAP;
 /// Width of the name on a row that also holds a value (hotkey, language, date order).
 const LABEL_W: f64 = 136.0;
-/// Algemeen: heading, four settings, three gaps.
-const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
-/// Privacy: heading, three settings ("Keep clipboard history", the privacy filter, blur), the
-/// ignored-apps block, three gaps.
-const PRIVACY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Weergave: heading, the pages, announce and ask-before-clearing settings, three gaps and the
-/// symbols block.
-const DISPLAY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// Meldingen: heading, the four switches in two rows of two, one gap and a note.
-const NOTIFY_H: f64 = HEAD_H + 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
-/// Feedback: heading, one row with the two mail buttons, a gap and one row with the privacy
-/// policy and support links.
-const FEEDBACK_H: f64 = HEAD_H + BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
-const HEIGHT: f64 = MARGIN
-    + GENERAL_H
-    + SECTION_GAP
-    + PRIVACY_H
-    + SECTION_GAP
-    + NOTIFY_H
-    + SECTION_GAP
-    + DISPLAY_H
-    + SECTION_GAP
-    + FEEDBACK_H
-    + MARGIN;
+/// The tab bar: one segmented control across the top of the window.
+const TAB_BAR_H: f64 = BUTTON_H;
+/// Algemeen: four settings, three gaps.
+const GENERAL_H: f64 = 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
+/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the ignored-apps
+/// block, three gaps.
+const PRIVACY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Weergave: the pages, announce and ask-before-clearing settings, three gaps and the symbols
+/// block.
+const DISPLAY_H: f64 = 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Meldingen: the four switches in two rows of two, one gap and a note.
+const NOTIFY_H: f64 = 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
+/// Feedback: one row with the two mail buttons, a gap and one row with the privacy policy and
+/// support links.
+const FEEDBACK_H: f64 = BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
+/// Every tab gets the height of the tallest one, so the window keeps one size.
+const PANE_H: f64 = max(
+    max(max(GENERAL_H, PRIVACY_H), max(DISPLAY_H, NOTIFY_H)),
+    FEEDBACK_H,
+);
+const HEIGHT: f64 = MARGIN + TAB_BAR_H + SECTION_GAP + PANE_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
+
+const fn max(a: f64, b: f64) -> f64 {
+    if a > b { a } else { b }
+}
 
 const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
-const _: () = assert!(GENERAL_H == 230.0);
-const _: () = assert!(PRIVACY_H == 302.0);
-const _: () = assert!(DISPLAY_H == 302.0);
-const _: () = assert!(NOTIFY_H == 104.0);
-const _: () = assert!(HEIGHT == 1018.0 + SECTION_GAP + FEEDBACK_H);
+const _: () = assert!(GENERAL_H == 208.0);
+const _: () = assert!(PRIVACY_H == 280.0);
+const _: () = assert!(DISPLAY_H == 280.0);
+const _: () = assert!(NOTIFY_H == 82.0);
+const _: () = assert!(FEEDBACK_H == 64.0);
+const _: () = assert!(PANE_H == 280.0);
+/// Fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
+const _: () = assert!(HEIGHT == 356.0);
+
+/// The tabs of the window, in the order of the segments.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Tab {
+    General,
+    Privacy,
+    Display,
+    Notifications,
+    Feedback,
+}
+
+impl Tab {
+    const ALL: [Tab; 5] = [
+        Tab::General,
+        Tab::Privacy,
+        Tab::Display,
+        Tab::Notifications,
+        Tab::Feedback,
+    ];
+
+    fn index(self) -> usize {
+        Tab::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
+    }
+
+    fn at(index: usize) -> Option<Tab> {
+        Tab::ALL.get(index).copied()
+    }
+
+    /// The segment title (literal keys, for the locale scan test).
+    fn title(self) -> &'static str {
+        match self {
+            Tab::General => crate::locale::t("group_general"),
+            Tab::Privacy => crate::locale::t("group_privacy"),
+            Tab::Display => crate::locale::t("group_display"),
+            Tab::Notifications => crate::locale::t("group_notifications"),
+            Tab::Feedback => crate::locale::t("group_feedback"),
+        }
+    }
+}
 
 /// The notification switches in the order of their checkboxes (row by row), with the title key.
 /// The checkbox's tag is the index.
@@ -104,6 +150,11 @@ thread_local! {
     static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static IGNORED_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static IGNORED_ADD: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    static TABS: RefCell<Option<Retained<NSSegmentedControl>>> = const { RefCell::new(None) };
+    /// One view per [`Tab`], in [`Tab::ALL`] order; only the selected one is visible.
+    static PANES: RefCell<Vec<Retained<NSView>>> = const { RefCell::new(Vec::new()) };
+    /// Index of the last selected tab; kept after closing, for this session only.
+    static SELECTED_TAB: Cell<usize> = const { Cell::new(0) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
@@ -129,9 +180,14 @@ define_class!(
 
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
+            // ⌘1…⌘5 pick a tab, unless the hotkey field is listening.
+            let tab = if RECORDING.get() { None } else { tab_for_chord(event) };
             let open = mac_ui::keys::is_command_chord(event, "o");
             let save = mac_ui::keys::is_command_chord(event, "s");
-            if open || save {
+            if let Some(tab) = tab {
+                select_tab(tab.index());
+                true
+            } else if open || save {
                 if RECORDING.get() {
                     // The hotkey field is listening: ⌘O and ⌘S are chords, not Open or Save.
                     handle_record_key(event);
@@ -192,6 +248,16 @@ define_class!(
                     window.makeKeyAndOrderFront(None);
                 }
             });
+        }
+
+        #[unsafe(method(tabChanged:))]
+        fn tab_changed(&self, sender: Option<&NSSegmentedControl>) {
+            let Some(control) = sender else {
+                return;
+            };
+            if let Ok(index) = usize::try_from(control.selectedSegment()) {
+                select_tab(index);
+            }
         }
 
         #[unsafe(method(dateOrderChanged:))]
@@ -364,6 +430,8 @@ impl SettingsDelegate {
 }
 
 fn clear_controls() {
+    TABS.with(|s| *s.borrow_mut() = None);
+    PANES.with(|s| s.borrow_mut().clear());
     HOTKEY_LABEL.with(|s| *s.borrow_mut() = None);
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
@@ -474,18 +542,56 @@ fn build(mtm: MainThreadMarker) {
     window.setContentView(Some(&content));
     let body = panel::rounded_glass(mtm, &content, RADIUS).content;
 
-    let mut top = HEIGHT - MARGIN;
+    let tabs = NSSegmentedControl::new(mtm);
+    tabs.setSegmentCount(Tab::ALL.len() as isize);
+    for (index, tab) in Tab::ALL.iter().enumerate() {
+        tabs.setLabel_forSegment(&NSString::from_str(tab.title()), index as isize);
+    }
+    tabs.setTrackingMode(NSSegmentSwitchTracking::SelectOne);
+    tabs.setSegmentDistribution(NSSegmentDistribution::FillEqually);
+    tabs.setFrame(NSRect::new(
+        NSPoint::new(MARGIN, HEIGHT - MARGIN - TAB_BAR_H),
+        NSSize::new(WIDTH - MARGIN * 2.0, TAB_BAR_H),
+    ));
+    DELEGATE.with(|slot| {
+        if let Some(delegate) = slot.borrow().as_ref() {
+            mac_ui::actions::connect(&tabs, delegate, sel!(tabChanged:));
+        }
+    });
+    body.addSubview(&tabs);
+
+    let pane_frame = NSRect::new(NSPoint::new(0.0, MARGIN), NSSize::new(WIDTH, PANE_H));
+    let mut panes = Vec::with_capacity(Tab::ALL.len());
+    for tab in Tab::ALL {
+        let pane = NSView::initWithFrame(NSView::alloc(mtm), pane_frame);
+        let left = match tab {
+            Tab::General => build_general(mtm, &pane),
+            Tab::Privacy => build_privacy(mtm, &pane),
+            Tab::Display => build_display(mtm, &pane),
+            Tab::Notifications => build_notifications(mtm, &pane),
+            Tab::Feedback => build_feedback(mtm, &pane),
+        };
+        // Each tab fits the shared pane height; the tallest fills it.
+        debug_assert!(left > -0.5, "{tab:?} is taller than the pane");
+        body.addSubview(&pane);
+        panes.push(pane);
+    }
+    PANES.with(|slot| *slot.borrow_mut() = panes);
+    TABS.with(|slot| *slot.borrow_mut() = Some(tabs));
+    show_pane(Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General));
+
+    WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
+    raise_above_card(&window);
+    panel::bring_to_front(&window);
+}
+
+/// Algemeen: hotkey, language, date order and Open at Login. Returns the unused height.
+fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = PANE_H;
     let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
 
-    place_heading(
-        mtm,
-        &body,
-        crate::locale::t("group_general"),
-        take(&mut top, HEAD_H),
-    );
-
     let y = take(&mut top, BUTTON_H);
-    place_name(mtm, &body, crate::locale::t("hotkey"), y);
+    place_name(mtm, body, crate::locale::t("hotkey"), y);
     let value = widgets::label(
         mtm,
         mac_ui::metrics::FONT_BODY,
@@ -512,11 +618,11 @@ fn build(mtm: MainThreadMarker) {
     ));
     wire(change.button(), sel!(changeHotkey:));
     body.addSubview(change.view());
-    place_explanation(mtm, &body, crate::locale::t("hotkey_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("hotkey_note"), &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
-    place_name(mtm, &body, crate::locale::t("language"), y);
+    place_name(mtm, body, crate::locale::t("language"), y);
     let language = popup(mtm, y);
     language.removeAllItems();
     language.addItemWithTitle(&NSString::from_str(crate::locale::t("language_system")));
@@ -525,11 +631,11 @@ fn build(mtm: MainThreadMarker) {
     language.selectItemAtIndex(language_index(settings::language()));
     wire(language.as_ref(), sel!(languageChanged:));
     body.addSubview(&language);
-    place_explanation(mtm, &body, crate::locale::t("language_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("language_note"), &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
-    place_name(mtm, &body, crate::locale::t("date_order"), y);
+    place_name(mtm, body, crate::locale::t("date_order"), y);
     let date_order = popup(mtm, y);
     date_order.removeAllItems();
     date_order.addItemWithTitle(&NSString::from_str(crate::locale::t("date_order_dmy")));
@@ -538,7 +644,7 @@ fn build(mtm: MainThreadMarker) {
     wire(date_order.as_ref(), sel!(dateOrderChanged:));
     body.addSubview(&date_order);
     DATE_POPUP.with(|slot| *slot.borrow_mut() = Some(date_order));
-    place_explanation(mtm, &body, crate::locale::t("date_order_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("date_order_note"), &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
@@ -549,21 +655,19 @@ fn build(mtm: MainThreadMarker) {
     gap(&mut top, NOTE_GAP);
     let note = place_note(
         mtm,
-        &body,
+        body,
         crate::locale::t("login_note"),
         take(&mut top, NOTE_H),
     );
     LOGIN_NOTE.with(|slot| *slot.borrow_mut() = Some(note));
     refresh_login_row();
+    top
+}
 
-    gap(&mut top, SECTION_GAP);
-    place_heading(
-        mtm,
-        &body,
-        crate::locale::t("group_privacy"),
-        take(&mut top, HEAD_H),
-    );
-
+/// Privacy: Keep clipboard history, the privacy filter, blur and the ignored apps (greyed out
+/// while history is off). Returns the unused height.
+fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = PANE_H;
     let y = take(&mut top, BUTTON_H);
     let history = checkbox(mtm, crate::locale::t("clipboard_history"), y);
     history.setState(state_of(settings::clipboard_history()));
@@ -572,7 +676,7 @@ fn build(mtm: MainThreadMarker) {
     HISTORY_BOX.with(|slot| *slot.borrow_mut() = Some(history));
     place_explanation(
         mtm,
-        &body,
+        body,
         crate::locale::t("clipboard_history_note"),
         &mut top,
     );
@@ -584,7 +688,7 @@ fn build(mtm: MainThreadMarker) {
     wire(&privacy, sel!(privacyFilterToggled:));
     body.addSubview(&privacy);
     PRIVACY_BOX.with(|slot| *slot.borrow_mut() = Some(privacy));
-    place_explanation(mtm, &body, crate::locale::t("privacy_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("privacy_note"), &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
@@ -595,17 +699,17 @@ fn build(mtm: MainThreadMarker) {
     wire(&blur, sel!(blurToggled:));
     body.addSubview(&blur);
     BLUR_BOX.with(|slot| *slot.borrow_mut() = Some(blur));
-    place_explanation(mtm, &body, crate::locale::t("blur_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("blur_note"), &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
-        &body,
+        body,
         crate::locale::t("ignored_apps"),
         take(&mut top, BUTTON_H),
         WIDTH - MARGIN * 2.0,
     );
-    place_explanation(mtm, &body, crate::locale::t("ignored_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("ignored_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let ignored = text_field(mtm, take(&mut top, BUTTON_H));
     ignored.setStringValue(&NSString::from_str(&settings::ignored_apps_text()));
@@ -629,14 +733,12 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(add.view());
     IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
     refresh_history_controls();
+    top
+}
 
-    gap(&mut top, SECTION_GAP);
-    place_heading(
-        mtm,
-        &body,
-        crate::locale::t("group_notifications"),
-        take(&mut top, HEAD_H),
-    );
+/// Meldingen: the four notification switches. Returns the unused height.
+fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = PANE_H;
     let switches = settings::notify_switches();
     let column = (WIDTH - MARGIN * 2.0) / 2.0;
     for (row_index, pair) in NOTIFY_SWITCHES.chunks(2).enumerate() {
@@ -657,26 +759,20 @@ fn build(mtm: MainThreadMarker) {
             gap(&mut top, mac_ui::metrics::SPACE_S);
         }
     }
-    place_explanation(mtm, &body, crate::locale::t("notify_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("notify_note"), &mut top);
+    top
+}
 
-    gap(&mut top, SECTION_GAP);
-    place_heading(
-        mtm,
-        &body,
-        crate::locale::t("group_display"),
-        take(&mut top, HEAD_H),
-    );
+/// Weergave: long text in pages, Announce confirmations, Ask before clearing and the symbols.
+/// Returns the unused height.
+fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = PANE_H;
     let y = take(&mut top, BUTTON_H);
     let pages = checkbox(mtm, crate::locale::t("page_long_text"), y);
     pages.setState(state_of(settings::load().page_long_text));
     wire(&pages, sel!(pageLongTextToggled:));
     body.addSubview(&pages);
-    place_explanation(
-        mtm,
-        &body,
-        crate::locale::t("page_long_text_note"),
-        &mut top,
-    );
+    place_explanation(mtm, body, crate::locale::t("page_long_text_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);
     let announce = checkbox(mtm, crate::locale::t("announce_confirmations"), y);
@@ -685,7 +781,7 @@ fn build(mtm: MainThreadMarker) {
     body.addSubview(&announce);
     place_explanation(
         mtm,
-        &body,
+        body,
         crate::locale::t("announce_confirmations_note"),
         &mut top,
     );
@@ -695,16 +791,16 @@ fn build(mtm: MainThreadMarker) {
     ask.setState(state_of(settings::confirm_clear()));
     wire(&ask, sel!(confirmClearToggled:));
     body.addSubview(&ask);
-    place_explanation(mtm, &body, crate::locale::t("confirm_clear_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("confirm_clear_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
-        &body,
+        body,
         crate::locale::t("symbols"),
         take(&mut top, BUTTON_H),
         WIDTH - MARGIN * 2.0,
     );
-    place_explanation(mtm, &body, crate::locale::t("symbols_note"), &mut top);
+    place_explanation(mtm, body, crate::locale::t("symbols_note"), &mut top);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let field = text_field(mtm, take(&mut top, BUTTON_H));
     field.setStringValue(&NSString::from_str(&settings::symbol_catalog_text()));
@@ -728,14 +824,13 @@ fn build(mtm: MainThreadMarker) {
     place_pill(&restore, take(&mut top, BUTTON_H), 240.0);
     wire(restore.button(), sel!(restoreSymbols:));
     body.addSubview(restore.view());
+    top
+}
 
-    gap(&mut top, SECTION_GAP);
-    place_heading(
-        mtm,
-        &body,
-        crate::locale::t("group_feedback"),
-        take(&mut top, HEAD_H),
-    );
+/// Feedback: Suggest a feature, Report a problem, the privacy policy and support. Returns the
+/// unused height.
+fn build_feedback(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = PANE_H;
     let mail_row = take(&mut top, BUTTON_H);
     gap(&mut top, mac_ui::metrics::SPACE_S);
     // The privacy policy and support page open in the default browser (NSWorkspace).
@@ -789,11 +884,51 @@ fn build(mtm: MainThreadMarker) {
             body.addSubview(pill.view());
         }
     }
-    debug_assert!((top - MARGIN).abs() < 0.5);
+    top
+}
 
-    WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
-    raise_above_card(&window);
-    panel::bring_to_front(&window);
+/// The tab a ⌘1…⌘5 chord picks, if `event` is one.
+fn tab_for_chord(event: &NSEvent) -> Option<Tab> {
+    Tab::ALL
+        .into_iter()
+        .enumerate()
+        .find(|(at, _)| mac_ui::keys::is_command_chord(event, &(at + 1).to_string()))
+        .map(|(_, tab)| tab)
+}
+
+/// Show the pane of tab `index` (out of range: General) and hide the others. A field being
+/// edited is saved first, and a hotkey being recorded is cancelled, so nothing keeps listening
+/// on a hidden tab.
+fn select_tab(index: usize) {
+    let tab = Tab::at(index).unwrap_or(Tab::General);
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref() {
+            // Ends editing, which saves through controlTextDidEndEditing:.
+            window.makeFirstResponder(None);
+        }
+    });
+    save_symbols_field();
+    save_ignored_field();
+    if RECORDING.get() {
+        RECORDING.set(false);
+        set_hotkey_text(&settings::hotkey_label());
+    }
+    show_pane(tab);
+}
+
+/// Select `tab`'s segment and show only its pane (no saving: also used while building).
+fn show_pane(tab: Tab) {
+    SELECTED_TAB.set(tab.index());
+    TABS.with(|slot| {
+        if let Some(control) = slot.borrow().as_ref() {
+            control.setSelectedSegment(tab.index() as isize);
+        }
+    });
+    PANES.with(|slot| {
+        for (at, pane) in slot.borrow().iter().enumerate() {
+            pane.setHidden(at != tab.index());
+        }
+    });
 }
 
 /// Reduce Transparency changed: cover or uncover the glass of the open window.
@@ -821,21 +956,6 @@ fn take(top: &mut f64, height: f64) -> f64 {
 
 fn gap(top: &mut f64, height: f64) {
     *top -= height;
-}
-
-fn place_heading(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
-    let field = widgets::label(mtm, mac_ui::metrics::FONT_TITLE, &NSColor::labelColor());
-    let semibold = mac_ui::fonts::semibold_weight();
-    field.setFont(Some(&NSFont::systemFontOfSize_weight(
-        mac_ui::metrics::FONT_TITLE,
-        semibold,
-    )));
-    field.setStringValue(&NSString::from_str(title));
-    field.setFrame(NSRect::new(
-        NSPoint::new(MARGIN, y),
-        NSSize::new(WIDTH - MARGIN * 2.0, HEAD_H),
-    ));
-    parent.addSubview(&field);
 }
 
 fn place_name(mtm: MainThreadMarker, parent: &NSView, title: &str, y: f64) {
