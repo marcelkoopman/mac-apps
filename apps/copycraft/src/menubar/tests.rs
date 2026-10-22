@@ -333,7 +333,7 @@ fn lines_works_on_the_text_the_card_was_built_from() {
             .map(String::as_str),
         Some(text)
     );
-    // A card still waiting for its copy has no text for Lines… yet; the next build sets it.
+    // A card still waiting for its copy has no text for Text ▾ yet; the next build sets it.
     let pending = crate::commands::tests::data(SubjectKind::Pending, None);
     assert!(super::text::card_text_of(&pending).is_none());
 }

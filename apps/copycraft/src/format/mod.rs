@@ -14,7 +14,7 @@ pub enum FormatKind {
     /// An SVG document (root `<svg>`, or a `.svg` file): shown as a picture, its code is XML.
     Svg,
     Markdown,
-    /// Agent instructions (AGENTS.md, CLAUDE.md, .cursorrules, …): Markdown with Lines… ›
+    /// Agent instructions (AGENTS.md, CLAUDE.md, .cursorrules, …): Markdown with Text ▾ ›
     /// Commands, Outline and Check.
     Agent,
     /// TOML (`Cargo.toml`, `pyproject.toml`): highlighted, not reformatted.

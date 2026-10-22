@@ -667,7 +667,20 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
     menu.setAutoenablesItems(false);
     // Items of one group ([`commands::menu_group`]) go into a submenu under its name.
     let mut group: Option<(&str, Retained<NSMenu>)> = None;
+    // The Text ▾ menu has section headers like the ⋯ menu.
+    let ids: Vec<CommandId> = items.iter().map(|(cmd, _)| cmd.id.clone()).collect();
+    let sections = commands::text_sections(&ids);
+    let mut section: Option<commands::TextSection> = None;
     for (index, (cmd, checked)) in items.iter().enumerate() {
+        if let Some(this) = sections
+            .as_ref()
+            .and_then(|sections| sections.get(index).copied().flatten())
+            && section != Some(this)
+        {
+            add_section_header(mtm, &menu, this.title(), section.is_some());
+            section = Some(this);
+            group = None;
+        }
         let target = match commands::menu_group(&cmd.id) {
             None => {
                 group = None;

@@ -41,77 +41,77 @@ Columns (fixed; the test parses this table between the markers):
 <!-- manifest:start -->
 | File | Scenario | Notion | Title | Labels | Chips | Checks |
 |------|----------|--------|-------|--------|-------|--------|
-| `detect/json_valid.json` | Detection: valid JSON | json | Valid JSON | — | Lines…, Schema | kind=Json |
-| `detect/json_invalid.json` | Broken JSON: missing comma | json | JSON · Invalid | — | Lines… | kind=Json; meta~Line 5, column 3: expected `,` or `}`; errorline=5 |
-| `detect/json_invalid_trailing_comma.json` | Broken JSON: trailing comma | json | JSON · Invalid | — | Lines… | kind=Json; meta~Line 5, column 1: trailing comma; errorline=5 |
-| `detect/json_invalid_missing_brace.json` | Broken JSON: missing `}` | json | JSON · Invalid | — | Lines… | kind=Json; meta~Line 6, column 4: missing } or ]; errorline=6 |
-| `detect/json_invalid_single_quotes.json` | Broken JSON: single quotes | json | JSON · Invalid | — | Lines… | kind=Json; meta~Line 1, column 2: key must be a string in double quotes; errorline=1 |
-| `detect/yaml_flow_unquoted.yaml` | Stays YAML: `{a: 1}` without quotes | yaml | YAML | — | Lines…, To JSON | kind=Yaml; json={"a":1,"b":["x","y"]} |
-| `detect/yaml_quoted_values.yaml` | Stays YAML: a normal document with quoted values | yaml | YAML | — | Lines…, To JSON | kind=Yaml; json={"title":"Copycraft demo","tags":["clipboard","offline"],"settings":{"theme":"system","history":20}} |
-| `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Lines…, To JSON | kind=Yaml; convert=Json |
-| `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Lines…, Schema | kind=Xml |
-| `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | Lines… | kind=Xml |
-| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>`, opens formatted (void `<meta>`/`<br>` do not indent) | html | HTML | — | Lines… | kind=Html; pretty=detect/html_page.pretty.html |
-| `detect/html_page.pretty.html` | Format: the expected pretty form of `html_page.html` (formats to itself) | html | HTML | — | Lines… | kind=Html; pretty=detect/html_page.pretty.html |
-| `detect/html_one_line.html` | Format: a whole HTML page on one line (void elements, style, pre, textarea, script, inline text in `<p>`) | html | HTML | — | Lines… | kind=Html; pretty=detect/html_one_line.pretty.html |
-| `detect/html_one_line.pretty.html` | Format: the expected pretty form of `html_one_line.html` (formats to itself) | html | HTML | — | Lines… | kind=Html; pretty=detect/html_one_line.pretty.html |
-| `detect/markdown.md` | Detection: Markdown | markdown | Markdown | — | Lines… | kind=Markdown |
-| `detect/rust_balanced.rs` | Detection: Rust, balanced | rust | Rust | — | Lines… | kind=Rust |
-| `detect/rust_unbalanced.rs` | Detection: Rust, extra `)` | rust | Rust · unbalanced ) | — | Lines… | kind=Rust |
-| `detect/java_missing_brace.java` | Detection: Java, class never closed | java | Java · missing } | — | Lines… | kind=Java |
-| `detect/python_strong.py` | Detection: Python with strong hints | python | Python | — | Lines… | kind=Python |
-| `detect/python_expected_indent.py` | Detection: Python, block without body | python | Python · expected indent | — | Lines… | kind=Python |
-| `detect/python_mixed_tabs.py` | Detection: Python, tab and spaces | python | Python · mixed tabs and spaces | — | Lines… | kind=Python |
-| `detect/python_one_liner.txt` | Detection: one Python-like line stays plain text | plain text | Content | — | Lines… | kind=Plain |
+| `detect/json_valid.json` | Detection: valid JSON | json | Valid JSON | — | Text ▾, Schema | kind=Json |
+| `detect/json_invalid.json` | Broken JSON: missing comma | json | JSON · Invalid | — | Text ▾ | kind=Json; meta~Line 5, column 3: expected `,` or `}`; errorline=5 |
+| `detect/json_invalid_trailing_comma.json` | Broken JSON: trailing comma | json | JSON · Invalid | — | Text ▾ | kind=Json; meta~Line 5, column 1: trailing comma; errorline=5 |
+| `detect/json_invalid_missing_brace.json` | Broken JSON: missing `}` | json | JSON · Invalid | — | Text ▾ | kind=Json; meta~Line 6, column 4: missing } or ]; errorline=6 |
+| `detect/json_invalid_single_quotes.json` | Broken JSON: single quotes | json | JSON · Invalid | — | Text ▾ | kind=Json; meta~Line 1, column 2: key must be a string in double quotes; errorline=1 |
+| `detect/yaml_flow_unquoted.yaml` | Stays YAML: `{a: 1}` without quotes | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; json={"a":1,"b":["x","y"]} |
+| `detect/yaml_quoted_values.yaml` | Stays YAML: a normal document with quoted values | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; json={"title":"Copycraft demo","tags":["clipboard","offline"],"settings":{"theme":"system","history":20}} |
+| `detect/yaml.yaml` | Detection: YAML | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json |
+| `detect/xml_valid.xml` | Detection: valid XML | xml | Valid XML | — | Text ▾, Schema | kind=Xml |
+| `detect/xml_invalid.xml` | Detection: invalid XML (mismatched tag) | xml | Invalid XML | — | Text ▾ | kind=Xml |
+| `detect/html_page.html` | Detection: HTML with `<!DOCTYPE html>`, opens formatted (void `<meta>`/`<br>` do not indent) | html | HTML | — | Text ▾ | kind=Html; pretty=detect/html_page.pretty.html |
+| `detect/html_page.pretty.html` | Format: the expected pretty form of `html_page.html` (formats to itself) | html | HTML | — | Text ▾ | kind=Html; pretty=detect/html_page.pretty.html |
+| `detect/html_one_line.html` | Format: a whole HTML page on one line (void elements, style, pre, textarea, script, inline text in `<p>`) | html | HTML | — | Text ▾ | kind=Html; pretty=detect/html_one_line.pretty.html |
+| `detect/html_one_line.pretty.html` | Format: the expected pretty form of `html_one_line.html` (formats to itself) | html | HTML | — | Text ▾ | kind=Html; pretty=detect/html_one_line.pretty.html |
+| `detect/markdown.md` | Detection: Markdown | markdown | Markdown | — | Text ▾ | kind=Markdown |
+| `detect/rust_balanced.rs` | Detection: Rust, balanced | rust | Rust | — | Text ▾ | kind=Rust |
+| `detect/rust_unbalanced.rs` | Detection: Rust, extra `)` | rust | Rust · unbalanced ) | — | Text ▾ | kind=Rust |
+| `detect/java_missing_brace.java` | Detection: Java, class never closed | java | Java · missing } | — | Text ▾ | kind=Java |
+| `detect/python_strong.py` | Detection: Python with strong hints | python | Python | — | Text ▾ | kind=Python |
+| `detect/python_expected_indent.py` | Detection: Python, block without body | python | Python · expected indent | — | Text ▾ | kind=Python |
+| `detect/python_mixed_tabs.py` | Detection: Python, tab and spaces | python | Python · mixed tabs and spaces | — | Text ▾ | kind=Python |
+| `detect/python_one_liner.txt` | Detection: one Python-like line stays plain text | plain text | Content | — | Text ▾ | kind=Plain |
 | `detect/link.txt` | Link | plain text | Link | — | Visit | kind=Url; link=https://example.com/docs/getting-started; visit=https://example.com/docs/getting-started |
 | `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Visit | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
 | `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it; the URL view leaves it out) | plain text | Link | credential | Visit, URL | kind=Url; visit=https://example.com/private/report?id=7; decode~id = 7; decodetitle=URL; decodemeta~credential |
-| `detect/plain_text.txt` | Plain text | plain text | Content | — | Lines… | kind=Text |
-| `convert/yaml_to_json_simple.yaml` | To JSON: simple YAML | yaml | YAML | — | Lines…, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","features":["format","decode"]} |
-| `convert/yaml_to_json_nested.yaml` | To JSON: nested YAML | yaml | YAML | — | Lines…, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","version":3,"features":["format","convert","decode"],"owner":{"team":"demo","active":true}} |
-| `convert/yaml_to_json_anchors.yaml` | To JSON: anchors, aliases, `<<` merge, non-string keys, a date | yaml | YAML | — | Lines…, To JSON | kind=Yaml; convert=Json; json={"defaults":{"host":"db.example.com","port":5432,"timeout":30},"development":{"host":"db.example.com","port":5432,"timeout":30,"database":"demo_dev"},"test":{"host":"db.example.com","port":5433,"timeout":30,"database":"demo_test"},"mirror":{"host":"db.example.com","port":5432,"timeout":30},"1":"numeric key","true":"boolean key","released":"2026-01-02"} |
-| `convert/yaml_to_json_multi_document.yaml` | To JSON: two documents (`---`) become an array | yaml | YAML | — | Lines…, To JSON | kind=Yaml; convert=Json; json=[{"kind":"Service","metadata":{"app":"copycraft-demo"}},{"kind":"Deployment","spec":{"replicas":2}}] |
-| `convert/yaml_invalid.yaml` | To JSON: invalid YAML gets no chip | yaml | Content | — | Lines… | kind=Text |
-| `convert/key_value.txt` | Convert `key: value` → JSON | plain text | Content | — | Lines…, Convert | kind=Text; convert=Json; convert~"project": "Copycraft" |
-| `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Lines…, JWT | decode~"name": "John Doe"; decode~"alg": "HS256"; decodetitle=JWT; decodemeta~credential |
-| `convert/base64.txt` | Decode Base64 | plain text | Content | — | Lines…, Base64 | decode~Hello from Copycraft! This is synthetic test data. |
-| `convert/data_uri.txt` | Decode a `data:` URI | plain text | Content | — | Lines…, Base64 | decode~Copycraft data URI demo |
-| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Lines…, URL | decode~https://example.com/search?q=copy craft&lang=en; decode~q = copy craft |
-| `decode/jwt_expired.txt` | JWT chip: test token (dummy secret), `exp` in the past | plain text | Content | credential | Lines…, JWT | decode~Signature not verified; decode~Expires (exp): expired (; decode~"name": "Copycraft Test"; decodetitle=JWT; decodemeta~credential |
-| `decode/jwt_valid_until_2099.txt` | JWT chip: `exp` in 2099, still valid | plain text | Content | credential | Lines…, JWT | decode~Expires (exp): valid for; decode~Issued (iat):; decodemeta~credential |
-| `decode/jwt_not_before_future.txt` | JWT chip: `nbf` in 2098, not valid yet | plain text | Content | credential | Lines…, JWT | decode~Not before (nbf): not valid yet (in |
-| `decode/jwt_invalid_no_alg.txt` | No JWT chip: header without `alg` (still labelled by the secret detector) | plain text | Content | credential | Lines… | kind=Plain |
-| `decode/jwt_invalid_not_json.txt` | No JWT chip: three dotted parts that are not base64 JSON | plain text | Content | — | Lines… | kind=Plain |
-| `decode/base64_text.txt` | Base64 chip: UTF-8 text (padded, standard alphabet) | plain text | Content | — | Lines…, Base64 | decode~Second line: café ✓; decodetitle=Base64 |
-| `decode/base64url_json_no_padding.txt` | Base64 chip: Base64URL JSON without padding, shown pretty | plain text | Content | — | Lines…, Base64 | decode~"roles": [ |
-| `decode/base64_png.txt` | Base64 chip: a 3×2 PNG (type, pixels, bytes) | plain text | Content | — | Lines…, Base64 | decode~PNG image; decode~3 × 2 pixels |
-| `decode/base64_png_image.txt` | Base64 chip: a valid 4×4 PNG (fake, harmless) the card draws, not just describes | plain text | Content | — | Lines…, Base64 | decode~PNG image; decode~4 × 4 pixels; decodetitle=Base64 |
-| `decode/base64_gif.txt` | Base64 chip: a 5×4 GIF | plain text | Content | — | Lines…, Base64 | decode~GIF image; decode~5 × 4 pixels |
-| `decode/base64_jpeg_data_uri.txt` | Base64 chip: an 8×6 JPEG as a `data:` URI | plain text | Content | — | Lines…, Base64 | decode~JPEG image; decode~8 × 6 pixels |
-| `decode/base64_webp.txt` | Base64 chip: a 7×9 WebP | plain text | Content | — | Lines…, Base64 | decode~WebP image; decode~7 × 9 pixels |
-| `decode/base64_heic_header.txt` | Base64 chip: a synthetic HEIC header (`ftyp heic`, `ispe` 4032×3024) | plain text | Content | — | Lines…, Base64 | decode~HEIC image; decode~4032 × 3024 pixels |
-| `decode/base64_negative_binary.txt` | No chip: Base64 of random bytes | plain text | Content | — | Lines… | kind=Plain |
-| `decode/base64_negative_words.txt` | No chip: ordinary words (each line is checked on its own in `decode/base64.rs`) | plain text | Content | — | Lines… | kind=Text |
-| `decode/uuid_v4_braces.txt` | UUID chip: a GUID in braces, version 4, RFC variant (the braces make it read as a YAML flow mapping, so it also gets To JSON) | plain text | YAML | — | Lines…, To JSON, UUID | decode~Version 4 (random); decode~Variant: RFC 9562 (RFC 4122); decodetitle=UUID |
-| `decode/uuid_v1.txt` | UUID chip: version 1 with its 100 ns timestamp (2026-10-06 08:00:00.123 UTC) | plain text | Content | — | Lines…, UUID | decode~Version 1 (time and node); decode~06/10/2026 08:00:00.123  UTC |
-| `decode/uuid_v7_urn.txt` | UUID chip: `urn:uuid:` version 7 with its Unix-millisecond timestamp | plain text | Content | — | Lines…, UUID | decode~Version 7 (Unix time); decode~06/10/2026 08:00:00.123  UTC |
-| `decode/uuid_negative.txt` | No UUID: 32 hex without dashes, wrong groups, a `g`, inside a sentence, an open brace (each line checked in `decode/uuid.rs`) | plain text | Content | — | Lines… | kind=Text |
-| `decode/hash_md5.txt` | Hash chip: 32 hex, probably MD5 (or a UUID without dashes) | plain text | Content | — | Lines…, Hash | decode~Probably MD5; decode~Or a UUID without dashes; decodetitle=Hash |
-| `decode/hash_sha1.txt` | Hash chip: 40 hex, probably SHA-1 | plain text | Content | — | Lines…, Hash | decode~Probably SHA-1 |
-| `decode/hash_sha224.txt` | Hash chip: 56 hex, probably SHA-224 | plain text | Content | — | Lines…, Hash | decode~Probably SHA-224 |
-| `decode/hash_sha256.txt` | Hash chip: 64 hex (upper case), probably SHA-256 | plain text | Content | — | Lines…, Hash | decode~Probably SHA-256 |
-| `decode/hash_sha384.txt` | Hash chip: 96 hex, probably SHA-384 | plain text | Content | — | Lines…, Hash | decode~Probably SHA-384 |
-| `decode/hash_sha512.txt` | Hash chip: 128 hex, probably SHA-512 | plain text | Content | — | Lines…, Hash | decode~Probably SHA-512; decode~A hash cannot be reversed. |
-| `decode/hash_negative.txt` | No hash: 31 and 33 hex, a `g`, digits only, letters only (each line checked in `decode/hash.rs`) | plain text | Content | — | Lines… | kind=Text |
-| `decode/unix_seconds.txt` | Unix time chip: 10 digits (seconds) in local time, UTC, relative, ISO 8601 | plain text | Content | — | Lines…, Unix time | decode~14/11/2023 22:13:20  UTC; decode~ago; decode~ISO 8601: 2023-11-14T22:13:20Z; decodetitle=Unix time |
-| `decode/unix_milliseconds.txt` | Unix time chip: 13 digits (milliseconds) | plain text | Content | — | Lines…, Unix time | decode~06/10/2026 08:00:00.123  UTC; decode~Unix time in milliseconds |
-| `decode/unix_negative_numbers.txt` | No chip: a phone-like `06…` number, out of range (2282), 9, 11 and 16 digits, grouped digits (each line checked in `decode/unix_time.rs`) | plain text | Content | PII | Lines… | kind=Text |
+| `detect/plain_text.txt` | Plain text | plain text | Content | — | Text ▾ | kind=Text |
+| `convert/yaml_to_json_simple.yaml` | To JSON: simple YAML | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","features":["format","decode"]} |
+| `convert/yaml_to_json_nested.yaml` | To JSON: nested YAML | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","version":3,"features":["format","convert","decode"],"owner":{"team":"demo","active":true}} |
+| `convert/yaml_to_json_anchors.yaml` | To JSON: anchors, aliases, `<<` merge, non-string keys, a date | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json={"defaults":{"host":"db.example.com","port":5432,"timeout":30},"development":{"host":"db.example.com","port":5432,"timeout":30,"database":"demo_dev"},"test":{"host":"db.example.com","port":5433,"timeout":30,"database":"demo_test"},"mirror":{"host":"db.example.com","port":5432,"timeout":30},"1":"numeric key","true":"boolean key","released":"2026-01-02"} |
+| `convert/yaml_to_json_multi_document.yaml` | To JSON: two documents (`---`) become an array | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json=[{"kind":"Service","metadata":{"app":"copycraft-demo"}},{"kind":"Deployment","spec":{"replicas":2}}] |
+| `convert/yaml_invalid.yaml` | To JSON: invalid YAML gets no chip | yaml | Content | — | Text ▾ | kind=Text |
+| `convert/key_value.txt` | Convert `key: value` → JSON | plain text | Content | — | Text ▾, Convert | kind=Text; convert=Json; convert~"project": "Copycraft" |
+| `convert/jwt.txt` | Decode the jwt.io example JWT | plain text | Content | credential | Text ▾, JWT | decode~"name": "John Doe"; decode~"alg": "HS256"; decodetitle=JWT; decodemeta~credential |
+| `convert/base64.txt` | Decode Base64 | plain text | Content | — | Text ▾, Base64 | decode~Hello from Copycraft! This is synthetic test data. |
+| `convert/data_uri.txt` | Decode a `data:` URI | plain text | Content | — | Text ▾, Base64 | decode~Copycraft data URI demo |
+| `convert/percent.txt` | Decode percent-encoding | plain text | Content | — | Text ▾, URL | decode~https://example.com/search?q=copy craft&lang=en; decode~q = copy craft |
+| `decode/jwt_expired.txt` | JWT chip: test token (dummy secret), `exp` in the past | plain text | Content | credential | Text ▾, JWT | decode~Signature not verified; decode~Expires (exp): expired (; decode~"name": "Copycraft Test"; decodetitle=JWT; decodemeta~credential |
+| `decode/jwt_valid_until_2099.txt` | JWT chip: `exp` in 2099, still valid | plain text | Content | credential | Text ▾, JWT | decode~Expires (exp): valid for; decode~Issued (iat):; decodemeta~credential |
+| `decode/jwt_not_before_future.txt` | JWT chip: `nbf` in 2098, not valid yet | plain text | Content | credential | Text ▾, JWT | decode~Not before (nbf): not valid yet (in |
+| `decode/jwt_invalid_no_alg.txt` | No JWT chip: header without `alg` (still labelled by the secret detector) | plain text | Content | credential | Text ▾ | kind=Plain |
+| `decode/jwt_invalid_not_json.txt` | No JWT chip: three dotted parts that are not base64 JSON | plain text | Content | — | Text ▾ | kind=Plain |
+| `decode/base64_text.txt` | Base64 chip: UTF-8 text (padded, standard alphabet) | plain text | Content | — | Text ▾, Base64 | decode~Second line: café ✓; decodetitle=Base64 |
+| `decode/base64url_json_no_padding.txt` | Base64 chip: Base64URL JSON without padding, shown pretty | plain text | Content | — | Text ▾, Base64 | decode~"roles": [ |
+| `decode/base64_png.txt` | Base64 chip: a 3×2 PNG (type, pixels, bytes) | plain text | Content | — | Text ▾, Base64 | decode~PNG image; decode~3 × 2 pixels |
+| `decode/base64_png_image.txt` | Base64 chip: a valid 4×4 PNG (fake, harmless) the card draws, not just describes | plain text | Content | — | Text ▾, Base64 | decode~PNG image; decode~4 × 4 pixels; decodetitle=Base64 |
+| `decode/base64_gif.txt` | Base64 chip: a 5×4 GIF | plain text | Content | — | Text ▾, Base64 | decode~GIF image; decode~5 × 4 pixels |
+| `decode/base64_jpeg_data_uri.txt` | Base64 chip: an 8×6 JPEG as a `data:` URI | plain text | Content | — | Text ▾, Base64 | decode~JPEG image; decode~8 × 6 pixels |
+| `decode/base64_webp.txt` | Base64 chip: a 7×9 WebP | plain text | Content | — | Text ▾, Base64 | decode~WebP image; decode~7 × 9 pixels |
+| `decode/base64_heic_header.txt` | Base64 chip: a synthetic HEIC header (`ftyp heic`, `ispe` 4032×3024) | plain text | Content | — | Text ▾, Base64 | decode~HEIC image; decode~4032 × 3024 pixels |
+| `decode/base64_negative_binary.txt` | No chip: Base64 of random bytes | plain text | Content | — | Text ▾ | kind=Plain |
+| `decode/base64_negative_words.txt` | No chip: ordinary words (each line is checked on its own in `decode/base64.rs`) | plain text | Content | — | Text ▾ | kind=Text |
+| `decode/uuid_v4_braces.txt` | UUID chip: a GUID in braces, version 4, RFC variant (the braces make it read as a YAML flow mapping, so it also gets To JSON) | plain text | YAML | — | Text ▾, To JSON, UUID | decode~Version 4 (random); decode~Variant: RFC 9562 (RFC 4122); decodetitle=UUID |
+| `decode/uuid_v1.txt` | UUID chip: version 1 with its 100 ns timestamp (2026-10-06 08:00:00.123 UTC) | plain text | Content | — | Text ▾, UUID | decode~Version 1 (time and node); decode~06/10/2026 08:00:00.123  UTC |
+| `decode/uuid_v7_urn.txt` | UUID chip: `urn:uuid:` version 7 with its Unix-millisecond timestamp | plain text | Content | — | Text ▾, UUID | decode~Version 7 (Unix time); decode~06/10/2026 08:00:00.123  UTC |
+| `decode/uuid_negative.txt` | No UUID: 32 hex without dashes, wrong groups, a `g`, inside a sentence, an open brace (each line checked in `decode/uuid.rs`) | plain text | Content | — | Text ▾ | kind=Text |
+| `decode/hash_md5.txt` | Hash chip: 32 hex, probably MD5 (or a UUID without dashes) | plain text | Content | — | Text ▾, Hash | decode~Probably MD5; decode~Or a UUID without dashes; decodetitle=Hash |
+| `decode/hash_sha1.txt` | Hash chip: 40 hex, probably SHA-1 | plain text | Content | — | Text ▾, Hash | decode~Probably SHA-1 |
+| `decode/hash_sha224.txt` | Hash chip: 56 hex, probably SHA-224 | plain text | Content | — | Text ▾, Hash | decode~Probably SHA-224 |
+| `decode/hash_sha256.txt` | Hash chip: 64 hex (upper case), probably SHA-256 | plain text | Content | — | Text ▾, Hash | decode~Probably SHA-256 |
+| `decode/hash_sha384.txt` | Hash chip: 96 hex, probably SHA-384 | plain text | Content | — | Text ▾, Hash | decode~Probably SHA-384 |
+| `decode/hash_sha512.txt` | Hash chip: 128 hex, probably SHA-512 | plain text | Content | — | Text ▾, Hash | decode~Probably SHA-512; decode~A hash cannot be reversed. |
+| `decode/hash_negative.txt` | No hash: 31 and 33 hex, a `g`, digits only, letters only (each line checked in `decode/hash.rs`) | plain text | Content | — | Text ▾ | kind=Text |
+| `decode/unix_seconds.txt` | Unix time chip: 10 digits (seconds) in local time, UTC, relative, ISO 8601 | plain text | Content | — | Text ▾, Unix time | decode~14/11/2023 22:13:20  UTC; decode~ago; decode~ISO 8601: 2023-11-14T22:13:20Z; decodetitle=Unix time |
+| `decode/unix_milliseconds.txt` | Unix time chip: 13 digits (milliseconds) | plain text | Content | — | Text ▾, Unix time | decode~06/10/2026 08:00:00.123  UTC; decode~Unix time in milliseconds |
+| `decode/unix_negative_numbers.txt` | No chip: a phone-like `06…` number, out of range (2282), 9, 11 and 16 digits, grouped digits (each line checked in `decode/unix_time.rs`) | plain text | Content | PII | Text ▾ | kind=Text |
 | `decode/url_query.txt` | URL chip on a link: scheme, host, path and each query parameter decoded (`%xx`, `+`) | plain text | Link | — | Visit, URL | decode~Path: /zoek/fietsen & zo; decode~q = rode fiets; decode~city = Den Haag; decode~Fragment: top; decodetitle=URL |
-| `decode/url_encoded_whole.txt` | URL chip: a URL encoded as a whole, decoded and split | plain text | Content | — | Lines…, URL | decode~q = copy craft |
-| `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | Lines… | kind=Text |
-| `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Lines…, Schema | schema~"type": "record"; schema~"name": "order_id" |
-| `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Lines…, Schema | schema~<xs:element name="order"> |
-| `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Lines…, Sample | sample~<customer>sample</customer> |
+| `decode/url_encoded_whole.txt` | URL chip: a URL encoded as a whole, decoded and split | plain text | Content | — | Text ▾, URL | decode~q = copy craft |
+| `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | Text ▾ | kind=Text |
+| `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Text ▾, Schema | schema~"type": "record"; schema~"name": "order_id" |
+| `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Text ▾, Schema | schema~<xs:element name="order"> |
+| `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Text ▾, Sample | sample~<customer>sample</customer> |
 | `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Open table | meta~Header on line 3; read=4x4; notes=Header on line 3 |
 | `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Open table | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
 | `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Open table | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
@@ -129,33 +129,33 @@ Columns (fixed; the test parses this table between the markers):
 | `tables/window_payees_iban.csv` | Table: Open table on a sensitive table (IBANs): the window opens revealed and names the labels | plain text | CSV | financial | Open table | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
 | `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Open table | read=6x5; dtypes=str,str,i64,f64,date |
 | `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Open table | kind=Tsv; read=3x4; dataframe~Desk lamp |
-| `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | Lines… | kind=Text |
-| `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | Lines… | kind=Plain |
-| `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | Lines… | kind=Plain |
-| `sensitivity/credential_stripe_key.txt` | Credential: Stripe-style example key | plain text | Content | credential | Lines… | kind=Plain |
-| `sensitivity/pii_email.txt` | PII: `example.com` email | plain text | Content | PII | Lines… | kind=Plain |
-| `sensitivity/pii_phone.txt` | PII: fake 06 number | plain text | Content | PII | Lines… | kind=Plain |
-| `sensitivity/pii_bsn.txt` | PII: test BSN 111222333 | plain text | Content | PII | Lines… | kind=Plain |
+| `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | Text ▾ | kind=Text |
+| `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | Text ▾ | kind=Plain |
+| `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | Text ▾ | kind=Plain |
+| `sensitivity/credential_stripe_key.txt` | Credential: Stripe-style example key | plain text | Content | credential | Text ▾ | kind=Plain |
+| `sensitivity/pii_email.txt` | PII: `example.com` email | plain text | Content | PII | Text ▾ | kind=Plain |
+| `sensitivity/pii_phone.txt` | PII: fake 06 number | plain text | Content | PII | Text ▾ | kind=Plain |
+| `sensitivity/pii_bsn.txt` | PII: test BSN 111222333 | plain text | Content | PII | Text ▾ | kind=Plain |
 | `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Open table | kind=Csv |
-| `sensitivity/financial_iban.txt` | Financial: test IBAN | plain text | Content | financial | Lines… | kind=Plain |
-| `sensitivity/financial_card.txt` | Financial: test card 4111 1111 1111 1111 | plain text | Content | financial | Lines… | kind=Plain |
+| `sensitivity/financial_iban.txt` | Financial: test IBAN | plain text | Content | financial | Text ▾ | kind=Plain |
+| `sensitivity/financial_card.txt` | Financial: test card 4111 1111 1111 1111 | plain text | Content | financial | Text ▾ | kind=Plain |
 | `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Open table | kind=Csv |
-| `sensitivity/leak_url_credentials.txt` | Leakguard: credentials in a URL | plain text | Content | credential | Lines… | kind=Plain |
-| `sensitivity/leak_ip_address.txt` | Leakguard: IPs from 192.0.2.0/24 | plain text | Content | PII | Lines… | kind=Plain |
-| `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | Lines… | kind=Plain |
-| `sensitivity/leak_ssn.txt` | Leakguard: US SSN 078-05-1120 | plain text | Content | PII | Lines… | kind=Plain |
-| `sensitivity/none_amount.txt` | No label: amount 10.06 | plain text | Content | — | Lines… | kind=Plain |
-| `locks/cargo_project.lock` | No label: the Cargo project's Cargo.lock (hex checksums, versions, registry URLs) | toml | TOML | — | Lines… | kind=Toml |
-| `sensitivity/none_invalid_iban.txt` | No label: IBAN failing mod-97 | plain text | Content | — | Lines… | kind=Plain |
-| `sensitivity/none_card_fails_luhn.txt` | No label: card number failing Luhn | plain text | Content | — | Lines… | kind=Plain |
+| `sensitivity/leak_url_credentials.txt` | Leakguard: credentials in a URL | plain text | Content | credential | Text ▾ | kind=Plain |
+| `sensitivity/leak_ip_address.txt` | Leakguard: IPs from 192.0.2.0/24 | plain text | Content | PII | Text ▾ | kind=Plain |
+| `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | Text ▾ | kind=Plain |
+| `sensitivity/leak_ssn.txt` | Leakguard: US SSN 078-05-1120 | plain text | Content | PII | Text ▾ | kind=Plain |
+| `sensitivity/none_amount.txt` | No label: amount 10.06 | plain text | Content | — | Text ▾ | kind=Plain |
+| `locks/cargo_project.lock` | No label: the Cargo project's Cargo.lock (hex checksums, versions, registry URLs) | toml | TOML | — | Text ▾ | kind=Toml |
+| `sensitivity/none_invalid_iban.txt` | No label: IBAN failing mod-97 | plain text | Content | — | Text ▾ | kind=Plain |
+| `sensitivity/none_card_fails_luhn.txt` | No label: card number failing Luhn | plain text | Content | — | Text ▾ | kind=Plain |
 | `edge/empty.txt` | Edge: empty input | plain text | Clipboard | — | — | placeholder~Paste here (⌘V) |
-| `edge/unicode_emoji.txt` | Edge: Unicode and emoji | plain text | Content | — | Lines… | kind=Text |
-| `edge/long_line.txt` | Edge: one very long line (5,399 characters) | plain text | Content | — | Lines… | kind=Plain; meta~5.4 KB |
-| `diff/a.txt` | Two history copies, left side | plain text | Content | — | Lines… | kind=Text |
-| `diff/b.txt` | Two history copies, right side (bravo removed, delta and echo added) | plain text | Content | — | Lines… | kind=Text |
-| `diff/a.json` | JSON whose only difference from b.json is key order | json | Valid JSON | — | Lines…, Schema | kind=Json |
-| `diff/b.json` | Same object as a.json, keys sorted a then b | json | Valid JSON | — | Lines…, Schema | kind=Json |
-| `diff/c.json` | Same shape as a.json with a real value change | json | Valid JSON | — | Lines…, Schema | kind=Json |
+| `edge/unicode_emoji.txt` | Edge: Unicode and emoji | plain text | Content | — | Text ▾ | kind=Text |
+| `edge/long_line.txt` | Edge: one very long line (5,399 characters) | plain text | Content | — | Text ▾ | kind=Plain; meta~5.4 KB |
+| `diff/a.txt` | Two history copies, left side | plain text | Content | — | Text ▾ | kind=Text |
+| `diff/b.txt` | Two history copies, right side (bravo removed, delta and echo added) | plain text | Content | — | Text ▾ | kind=Text |
+| `diff/a.json` | JSON whose only difference from b.json is key order | json | Valid JSON | — | Text ▾, Schema | kind=Json |
+| `diff/b.json` | Same object as a.json, keys sorted a then b | json | Valid JSON | — | Text ▾, Schema | kind=Json |
+| `diff/c.json` | Same shape as a.json with a real value change | json | Valid JSON | — | Text ▾, Schema | kind=Json |
 | `images/qr_code.png` | Image: QR code ("Copycraft QR test 2026") | — | Image | — | Info, QR, Image ▾ | mac-only; size=264x264 |
 | `images/ocr_text.png` | Image: text for OCR | — | Image | — | Info, Text, Image ▾ | mac-only; size=520x200 |
 | `images/exif_rotated_gps.jpg` | Image: EXIF rotation and fake GPS, for Remove metadata | — | Image | — | Info, Image ▾ | mac-only; size=320x240; exif-orientation=6; exif-gps |
@@ -233,10 +233,11 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 - [ ] ⌫ on the card removes the copy on screen and the card shows the next one; ⌘Z puts it back. Type to search and press ⌫: it only edits the search. Remove copies until one is left, then *⋯ › Remove from history*: the card shows the empty-card hint, not the clipboard.
 - [ ] The top right shows a trash icon left of ⋯ and ✕, with a wider gap before ⋯ than between ⋯ and ✕. Hovering it shows *Alles wissen: geschiedenis, pins en klembord* / *Clear All: history, pins and clipboard*; VoiceOver reads *Alles wissen* / *Clear All*. A click asks *Alles wissen?* / *Clear All?* first (with *Ask before clearing* on); *Cancel* keeps everything.
 - [ ] Clean URL on a link: copy `https://x.nl/p?utm_source=x&id=5#top`. The link card has a *URL opschonen…* / *Clean URL…* chip. The dialog says *Parameters to remove: 1* and shows `https://x.nl/p?id=5#top`. *Apply to clipboard* copies that (paste in TextEdit to check), the version capsule shows *v2/2*, and ⌘Z shows the original link again. Copy `https://x.nl/p?id=5#top` itself: no chip.
-- [ ] Clean URL in text: copy a few lines of prose with two links, one with `?fbclid=1&page=2` and one without a query. *Lines… › Clean URL…* shows *Parameters to remove: 1*; after *Apply to clipboard* only `fbclid=1&` is gone and everything else, line endings included, is unchanged. Prose without tracking parameters has no *Clean URL…* in *Lines…*.
-- [ ] Format JSON: paste `{"b":1,"a":[1,2]}`. *Lines… › Format JSON…* opens on *Format*; tick *Sort keys*: the preview starts `{`, `  "a": [`. *Apply to clipboard*: the clipboard holds the indented JSON with `a` first and the capsule says *JSON formatted, sorted*. Open it again, pick *Compress*: the clipboard is `{"a":[1,2],"b":1}`. ⌘Z twice is back at the copy.
+- [ ] Text ▾ sections: paste `{"a": 1}`. The chip reads *Text ▾* (*Tekst ▾* in Dutch). On macOS 14 and later the menu has the headers *Lines*, *Convert* (case style, Format JSON) and *Analysis* (only on code or AGENTS.md), each over its own items; on macOS 13 separators stand in their place. After one step, *Undo* sits under a separator without a header. *Table ▾* and *Image ▾* have no headers.
+- [ ] Clean URL in text: copy a few lines of prose with two links, one with `?fbclid=1&page=2` and one without a query. *Text ▾ › Clean URL…* shows *Parameters to remove: 1*; after *Apply to clipboard* only `fbclid=1&` is gone and everything else, line endings included, is unchanged. Prose without tracking parameters has no *Clean URL…* in *Text ▾*.
+- [ ] Format JSON: paste `{"b":1,"a":[1,2]}`. *Text ▾ › Format JSON…* opens on *Format*; tick *Sort keys*: the preview starts `{`, `  "a": [`. *Apply to clipboard*: the clipboard holds the indented JSON with `a` first and the capsule says *JSON formatted, sorted*. Open it again, pick *Compress*: the clipboard is `{"a":[1,2],"b":1}`. ⌘Z twice is back at the copy.
 - [ ] Format JSON on broken JSON: paste `{"a": 1,}` (a *JSON · Invalid* card). The preview says *Line 1, column 9: trailing comma* in red, and *Apply to clipboard* leaves the clipboard as it was with that note on the card. Paste `{"a":1,"a":2}`: the preview says a key appears twice.
-- [ ] Case style: paste `HTTPServer` and `user_id` on two lines. *Lines… › Case style ›* is a submenu with seven styles; pick *camelCase*. The dialog has *camelCase* picked, says *Lines that change: 2* and shows `httpServer`, `userId`. *Apply to clipboard*: the clipboard holds `httpServer` and `userId` on two lines; switch the pop-up to *snake_case* first and it is `http_server`, `user_id`. ⌘Z goes back. An empty line between them stays.
+- [ ] Case style: paste `HTTPServer` and `user_id` on two lines. *Text ▾ › Case style ›* is a submenu with seven styles; pick *camelCase*. The dialog has *camelCase* picked, says *Lines that change: 2* and shows `httpServer`, `userId`. *Apply to clipboard*: the clipboard holds `httpServer` and `userId` on two lines; switch the pop-up to *snake_case* first and it is `http_server`, `user_id`. ⌘Z goes back. An empty line between them stays.
 - [ ] Copy a password from a password manager (it marks the copy concealed): the card shows
       "Hidden content", no text, no chips, and nothing is added to history.
 - [ ] With history on, a long log with a token stays out of history: in Terminal run

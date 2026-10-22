@@ -1,5 +1,5 @@
-//! Lines… › Complexity: score the code on the card off the main thread, pop the per-function
-//! list under Lines…, and scroll the card to a picked function.
+//! Text ▾ › Complexity: score the code on the card off the main thread, pop the per-function
+//! list under Text ▾, and scroll the card to a picked function.
 
 use super::*;
 use crate::complexity::{Band, Lang};
@@ -48,7 +48,7 @@ pub fn show_complexity() {
     }
 }
 
-/// Lines… › Outline (`check` false) or Check on agent instructions: worked out off the main
+/// Text ▾ › Outline (`check` false) or Check on agent instructions: worked out off the main
 /// thread from the text the card shows, then popped like Complexity.
 pub fn show_agent_lists(check: bool) {
     let painted = PAINTED.with(|slot| {
@@ -101,7 +101,7 @@ pub fn show_agent_lists(check: bool) {
     }
 }
 
-/// The view the Lines… chip is, else the search field.
+/// The view the Text ▾ chip is, else the search field.
 fn lines_anchor() -> Option<Retained<NSView>> {
     let index = SHOWN.with(|slot| {
         slot.borrow()

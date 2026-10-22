@@ -1,4 +1,4 @@
-//! Clean URL (Lines… › Clean URL…, and the chip on a link card): tracking parameters out of every
+//! Clean URL (Text ▾ › Clean URL…, and the chip on a link card): tracking parameters out of every
 //! `http(s)://` URL in a text.
 //!
 //! Pure string work: nothing is fetched, no redirect is followed and no short link is expanded.

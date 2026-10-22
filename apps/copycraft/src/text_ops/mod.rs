@@ -1,11 +1,11 @@
-//! Unix-style line tools for the Lines… menu: first and last lines (head, tail),
+//! Unix-style line tools for the Text ▾ menu: first and last lines (head, tail),
 //! reverse (tac) and one column (awk '{print $N}').
 //!
 //! Platform-independent and allocation-light: head and tail slice the text, so line endings
 //! (LF or CRLF) come back exactly as copied. The other steps keep the text's own line ending
 //! and its final newline, if it had one.
 
-/// What a Lines… job on its thread found, for the main thread.
+/// What a Text ▾ job on its thread found, for the main thread.
 #[derive(Clone)]
 pub enum TextResult {
     /// The step's text; `None` when it would leave nothing or change nothing.

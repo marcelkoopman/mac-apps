@@ -1,4 +1,4 @@
-//! Case style… in Lines…: every line written as camelCase, PascalCase, snake_case,
+//! Case style… in Text ▾: every line written as camelCase, PascalCase, snake_case,
 //! kebab-case, CONSTANT_CASE, UPPERCASE or lowercase.
 //!
 //! Each line is one name. Its words are split at `_`, `-`, whitespace and any other

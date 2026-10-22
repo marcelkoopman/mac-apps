@@ -1,4 +1,4 @@
-//! Cognitive complexity per function for code cards (Lines… › Complexity): an approximation
+//! Cognitive complexity per function for code cards (Text ▾ › Complexity): an approximation
 //! of SonarSource's metric in one lexical pass, no parser.
 //!
 //! One generic core per block style ([`brace`] for Rust and Java, [`python`] for indentation)

@@ -65,7 +65,7 @@ To capture the card, turn on **"Allow screenshots"** in the menu bar menu (Dutch
 other CopyCraft windows opened after that. It is off again at every launch and is never stored.
 
 **Apple Intelligence.** The AI features require Apple Intelligence. The AI actions (for example Summarize and Rewrite, under the card's *AI*
-chip and *Lines…* › Apple Intelligence) use Apple's on-device Foundation Models framework. They
+chip and *Text ▾* › Apple Intelligence) use Apple's on-device Foundation Models framework. They
 need a Mac with Apple silicon, macOS 26 and Apple Intelligence turned on in System Settings.
 Without that, the actions are shown dimmed with the reason (for example "Turn on Apple
 Intelligence in System Settings"); the rest of the app works normally. No text is sent off the

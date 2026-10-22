@@ -97,7 +97,7 @@ pub enum UserEvent {
         generation: u64,
         outcome: Box<crate::diff::Outcome>,
     },
-    /// A Lines… job finished for history entry `entry`. A mismatched `generation` is dropped
+    /// A Text ▾ job finished for history entry `entry`. A mismatched `generation` is dropped
     /// (a newer job, Wipe).
     /// A background job ([`crate::menubar::WorkDone`]): card, table window, Copy, opened file.
     WorkDone(crate::menubar::WorkDone),
@@ -177,13 +177,13 @@ pub fn close_settings() {
     crate::macos_settings::close();
 }
 
-/// Lines… › Complexity: score the code on the card in the background, then pop the list.
+/// Text ▾ › Complexity: score the code on the card in the background, then pop the list.
 pub fn show_complexity() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::show_complexity();
 }
 
-/// Lines… › Apple Intelligence: open the preview over the card, working. `notice` says that the
+/// Text ▾ › Apple Intelligence: open the preview over the card, working. `notice` says that the
 /// text was cut.
 pub fn ai_preview_working(title: &str, notice: Option<&str>) {
     #[cfg(target_os = "macos")]
@@ -228,13 +228,13 @@ pub fn ai_preview_close() {
     crate::macos_launcher::close_ai_preview();
 }
 
-/// Lines… › Outline on agent instructions: the headings, each going to its line.
+/// Text ▾ › Outline on agent instructions: the headings, each going to its line.
 pub fn show_agent_outline() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::show_agent_lists(false);
 }
 
-/// Lines… › Check on agent instructions: the warnings, worked out in the background.
+/// Text ▾ › Check on agent instructions: the warnings, worked out in the background.
 pub fn show_agent_check() {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::show_agent_lists(true);

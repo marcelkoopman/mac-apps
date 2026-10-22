@@ -1,4 +1,4 @@
-//! Format JSON… in Lines…: the copied JSON laid out with a 2-space indent (Format) or on one
+//! Format JSON… in Text ▾: the copied JSON laid out with a 2-space indent (Format) or on one
 //! line (Compress), with the keys of every object sorted when asked.
 //!
 //! It reuses the JSON the app already reads (`serde_json`, keys in their copied order) and the

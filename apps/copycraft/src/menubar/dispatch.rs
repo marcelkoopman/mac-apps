@@ -126,7 +126,7 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
-            // On a text Lines… worked on, undo, redo and the version capsule are the text's.
+            // On a text Text ▾ worked on, undo, redo and the version capsule are the text's.
             CommandId::TableUndo if self.text_versions_shown() => {
                 self.text_goto(|cursor| cursor.checked_sub(1));
             }

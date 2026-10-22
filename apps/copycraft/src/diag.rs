@@ -187,15 +187,15 @@ pub enum LogEvent {
         spinner: bool,
     },
     SaveFailed(ErrorKind),
-    /// Lines… › Commands found this many commands.
+    /// Text ▾ › Commands found this many commands.
     AgentCommands {
         count: usize,
     },
-    /// Lines… › Outline listed this many headings.
+    /// Text ▾ › Outline listed this many headings.
     AgentOutline {
         headings: usize,
     },
-    /// Lines… › Check found this many warnings, this many of them possible secrets.
+    /// Text ▾ › Check found this many warnings, this many of them possible secrets.
     AgentChecked {
         warnings: usize,
         secrets: usize,
@@ -205,7 +205,7 @@ pub enum LogEvent {
         image: bool,
         bytes: usize,
     },
-    /// Lines… › Complexity refused a text this large (bytes).
+    /// Text ▾ › Complexity refused a text this large (bytes).
     ComplexityTooLarge {
         lang: crate::complexity::Lang,
         bytes: usize,
@@ -215,7 +215,7 @@ pub enum LogEvent {
         lang: crate::complexity::Lang,
         bytes: usize,
     },
-    /// Lines… › Complexity scored this many functions.
+    /// Text ▾ › Complexity scored this many functions.
     ComplexityScored {
         functions: usize,
         ms: u64,

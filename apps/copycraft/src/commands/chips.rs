@@ -31,7 +31,7 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
             {
                 chips.push(question);
             }
-            // Lines… on every text and code card, also formatted, and on an opened or dropped
+            // Text ▾ on every text and code card, also formatted, and on an opened or dropped
             // file. It does not wait for versions to be attached: a Rust card has no other chip,
             // so gating it on `text_edit` left the row empty. Tables and links have their own chips.
             if data.subject_text.as_deref().is_some_and(offers_text_menu) {
@@ -96,7 +96,7 @@ pub(crate) fn copied_text_chips(text: &str) -> Vec<Command> {
     })
 }
 
-/// Whether the Lines… menu belongs on a copied text: prose and every code card (Rust, Python,
+/// Whether the Text ▾ menu belongs on a copied text: prose and every code card (Rust, Python,
 /// JSON, XML, Markdown, HTML…), also when code happens to parse as a table (commas in a
 /// function call); not a real table (CSV, TSV, or plain text that reads as one) and not a link.
 /// Remembered per text like the chips.
@@ -120,7 +120,7 @@ pub fn offers_text_menu(text: &str) -> bool {
 static TEXT_MENU: crate::memo::Memo<bool> =
     crate::memo::Memo::with_min_len(crate::clipboard::MAX_HISTORY + 4, 0);
 
-/// The Lines… menu for `data`: the versions already attached, or a fresh one when the text
+/// The Text ▾ menu for `data`: the versions already attached, or a fresh one when the text
 /// offers the menu and nothing has attached versions yet. `None` for a table, a link or a
 /// picture, so the chip and the menu stay the same thing.
 pub fn text_shown(data: &LaunchData) -> Option<TextShown> {

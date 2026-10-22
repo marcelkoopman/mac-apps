@@ -110,7 +110,7 @@ pub(crate) struct App {
     pub(crate) opened_table: TableVersions,
     /// The text the card shows (the text Open table and the card's table steps work on).
     pub(crate) card_text: Option<Zeroizing<String>>,
-    /// The history entry (id) a Lines… version step shows instead of the clipboard: going
+    /// The history entry (id) a Text ▾ version step shows instead of the clipboard: going
     /// between versions only shows them; Copy puts one on the clipboard.
     pub(crate) browsing: Option<u64>,
     /// The card's last history entry was removed ([`App::remove_from_history`]): the card shows
@@ -133,13 +133,13 @@ pub(crate) struct App {
     /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
     /// shown on that picture's card until the next step.
     pub(crate) image_note: Option<(usize, String)>,
-    /// The versions Lines… made of the text on the card ([`TextSteps`]).
+    /// The versions Text ▾ made of the text on the card ([`TextSteps`]).
     pub(crate) text_steps: Option<TextSteps>,
-    /// Lines… versions of the opened file.
+    /// Text ▾ versions of the opened file.
     pub(crate) opened_steps: Option<super::text::OpenedSteps>,
-    /// Why the last Lines… step did nothing, and for which history entry.
+    /// Why the last Text ▾ step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
-    /// Bumped for every Lines… job; a result with another number is stale and dropped.
+    /// Bumped for every Text ▾ job; a result with another number is stale and dropped.
     pub(crate) text_generation: u64,
     /// The Apple Intelligence run whose preview is open ([`AiRun`]); nothing is kept after it.
     pub(crate) ai: Option<AiRun>,

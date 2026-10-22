@@ -458,11 +458,22 @@ fn add_section_start(
     section: commands::MenuSection,
     after_other: bool,
 ) {
+    add_section_header(mtm, menu, section.title(), after_other);
+}
+
+/// A section header titled `title` (macOS 14+) or, before that or without a title, a
+/// separator when `after_other`.
+pub(crate) fn add_section_header(
+    mtm: MainThreadMarker,
+    menu: &NSMenu,
+    title: Option<&str>,
+    after_other: bool,
+) {
     use mac_ui::objc2::ClassType;
     let headers = NSMenuItem::class()
         .metaclass()
         .responds_to(sel!(sectionHeaderWithTitle:));
-    match section.title() {
+    match title {
         Some(title) if headers => {
             if after_other {
                 menu.addItem(&NSMenuItem::separatorItem(mtm));

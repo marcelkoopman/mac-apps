@@ -173,7 +173,7 @@ fn encoded_text_offers_decode() {
 fn code_is_formatted_without_original_or_format() {
     let src = "fn main() {\nlet message = \"this identifier is definitely longer than forty eight characters\";\n}\n";
     let input = data(SubjectKind::Text, Some(src));
-    // Always the formatted view: no Raw and no Format chip. Lines… is the action.
+    // Always the formatted view: no Raw and no Format chip. Text ▾ is the action.
     assert_eq!(ids(&chips(&input)), vec![CommandId::TextMenu]);
     assert_eq!(chips(&input)[0].title, crate::locale::t("text_menu"));
     assert_eq!(
@@ -490,7 +490,7 @@ fn text_cards_have_no_raw_chip_and_title_formatted_only_when_changed() {
 fn clean_url_shows_only_when_a_link_holds_tracking_parameters() {
     use crate::commands::{Command, text_menu_items, text_shown};
     let has = |commands: &[Command]| commands.iter().any(|c| c.id == CommandId::TextCleanUrl);
-    // A link card: a chip, as a link has no Lines….
+    // A link card: a chip, as a link has no Text ▾.
     let tracked = data(
         SubjectKind::Text,
         Some("https://x.nl/p?utm_source=x&id=5#top"),
@@ -498,18 +498,18 @@ fn clean_url_shows_only_when_a_link_holds_tracking_parameters() {
     assert!(has(&chips(&tracked)));
     let clean = data(SubjectKind::Text, Some("https://x.nl/p?id=5#top"));
     assert!(!has(&chips(&clean)));
-    // Prose with a link: in Lines…, not as a chip.
+    // Prose with a link: in Text ▾, not as a chip.
     let prose = data(
         SubjectKind::Text,
         Some("Lees dit: https://x.nl/p?fbclid=1 en reageer.\n"),
     );
     assert!(!has(&chips(&prose)));
-    let edit = text_shown(&prose).expect("Lines…");
+    let edit = text_shown(&prose).expect("Text ▾");
     assert!(edit.tracking);
     let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
     assert!(has(&menu));
     let plain = data(SubjectKind::Text, Some("Lees dit: https://x.nl/p?id=1.\n"));
-    let edit = text_shown(&plain).expect("Lines…");
+    let edit = text_shown(&plain).expect("Text ▾");
     assert!(!edit.tracking);
     let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
     assert!(!has(&menu));
@@ -539,7 +539,7 @@ fn case_style_is_a_submenu_of_lines() {
     use crate::commands::{Command, menu_group, text_menu_items, text_shown};
     use crate::text_ops::case_style::CaseStyle;
     let card = data(SubjectKind::Text, Some("HTTPServer\nuser_id\n"));
-    let menu = text_menu_items(&text_shown(&card).expect("Lines…"));
+    let menu = text_menu_items(&text_shown(&card).expect("Text ▾"));
     let cases: Vec<(usize, &Command)> = menu
         .iter()
         .enumerate()
@@ -569,4 +569,33 @@ fn case_style_is_a_submenu_of_lines() {
         step.apply("HTTPServer\n\nuser_id\n").as_deref(),
         Some("httpServer\n\nuserId\n")
     );
+}
+
+#[test]
+fn the_text_menu_is_split_into_lines_convert_and_analysis() {
+    use crate::commands::{TextSection, text_menu_items, text_sections, text_shown};
+    let card = data(SubjectKind::Text, Some("{\"a\": 1}\n"));
+    let menu = text_menu_items(&text_shown(&card).expect("Text ▾"));
+    let ids: Vec<CommandId> = menu.iter().map(|(cmd, _)| cmd.id.clone()).collect();
+    let sections = text_sections(&ids).expect("the Text ▾ menu has sections");
+    assert_eq!(sections.len(), ids.len());
+    // Every item has a section, and each section is one run: Lines first, then Convert.
+    assert!(sections.iter().all(Option::is_some));
+    let mut runs: Vec<TextSection> = Vec::new();
+    for section in sections.into_iter().flatten() {
+        if runs.last() != Some(&section) {
+            assert!(!runs.contains(&section), "{section:?} comes back");
+            runs.push(section);
+        }
+    }
+    assert_eq!(runs[0], TextSection::Lines);
+    assert!(runs.contains(&TextSection::Convert));
+    assert_eq!(
+        TextSection::Lines.title(),
+        Some(crate::locale::t("text_section_lines"))
+    );
+    assert_eq!(TextSection::Versions.title(), None);
+    // The table menu keeps no headers.
+    assert!(text_sections(&[CommandId::TableUndo]).is_none());
+    assert!(text_sections(&[]).is_none());
 }

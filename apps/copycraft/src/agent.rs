@@ -1,5 +1,5 @@
 //! Agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules, .cursor/rules/*.mdc,
-//! copilot-instructions.md, GEMINI.md): recognising them, and the Lines… steps Commands,
+//! copilot-instructions.md, GEMINI.md): recognising them, and the Text ▾ steps Commands,
 //! Outline and Check. Only counts are logged, never the text.
 
 use std::path::Path;

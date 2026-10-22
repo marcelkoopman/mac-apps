@@ -1,14 +1,14 @@
-//! Lines… actions: first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
+//! Text ▾ actions: first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
 //! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
 
 use super::*;
 use crate::text_ops::case_style::CaseStyle;
 use crate::text_ops::{self, Separator, TextOp};
 
-/// The entry id Lines… uses for a shown copy that is not in history.
+/// The entry id Text ▾ uses for a shown copy that is not in history.
 const NOT_IN_HISTORY: u64 = u64::MAX;
 
-/// The versions Lines… made: the history entries they are, oldest first, and which is shown.
+/// The versions Text ▾ made: the history entries they are, oldest first, and which is shown.
 /// Only ids and labels: the texts stay in history (and go when it forgets them).
 pub(crate) struct TextSteps {
     pub(crate) ids: Vec<u64>,
@@ -16,10 +16,10 @@ pub(crate) struct TextSteps {
     pub(crate) cursor: usize,
 }
 
-/// The id Lines… uses for an opened file: its versions live with the file, not in history.
+/// The id Text ▾ uses for an opened file: its versions live with the file, not in history.
 const OPENED_FILE: u64 = u64::MAX - 1;
 
-/// Versions of an opened file made by Lines… steps: the file's own text first. ⌘Z, ⇧⌘Z and
+/// Versions of an opened file made by Text ▾ steps: the file's own text first. ⌘Z, ⇧⌘Z and
 /// the version capsule move between them; the clipboard is left alone.
 pub(crate) struct OpenedSteps {
     pub(crate) texts: Vec<Zeroizing<String>>,
@@ -57,7 +57,7 @@ impl OpenedSteps {
     }
 }
 
-/// The text a card for `data` shows, for Lines…: its text subject.
+/// The text a card for `data` shows, for Text ▾: its text subject.
 pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
     data.subject_text
         .as_deref()
@@ -66,11 +66,11 @@ pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
 }
 
 impl App {
-    /// The history entry on the card and its text, when Lines… may work on it: a text card that
+    /// The history entry on the card and its text, when Text ▾ may work on it: a text card that
     /// follows history and is not a table (tables have their own steps).
     pub(crate) fn text_entry(&self) -> Option<(u64, Zeroizing<String>)> {
         if let Some(opened) = &self.opened {
-            // An opened text or code file has Lines… like a copy; its steps are versions of
+            // An opened text or code file has Text ▾ like a copy; its steps are versions of
             // the file card ([`OpenedSteps`]), not clipboard copies.
             return opened
                 .text
@@ -80,9 +80,9 @@ impl App {
         }
         // The copied source the card shows, also when it shows it formatted: the text the
         // card was built from. Reading the pasteboard again could see another state (a read
-        // still pending, a newer change) than the card, and leave Lines… off the card until
+        // still pending, a newer change) than the card, and leave Text ▾ off the card until
         // it was built again. While recording is paused or the app is ignored (Held) the card
-        // shows the history entry: so does Lines….
+        // shows the history entry: so does Text ▾.
         let view = ClipboardView::from_os();
         let text = if let Some(text) = &self.card_text {
             Some(text.to_string())
@@ -94,14 +94,14 @@ impl App {
             view.text().map(str::to_string)
         };
         let text = Zeroizing::new(text?);
-        // A link card has no Lines…, but Clean URL works on it (its chip), and the versions it
+        // A link card has no Text ▾, but Clean URL works on it (its chip), and the versions it
         // makes go back and forth like any other step's (the cleaned link has nothing left
         // to clean, so it is let in as one of those versions).
         let link = crate::page_preview::page_url(&text).is_some()
             || crate::youtube::video_id(&text).is_some();
         let offered = commands::offers_text_menu(&text)
             || (link && crate::text_ops::url_clean::has_tracking(&text));
-        // A copy that is not in history (not recorded) still gets Lines…; only ⌘Z back to it
+        // A copy that is not in history (not recorded) still gets Text ▾; only ⌘Z back to it
         // has nothing to put back.
         let id = self
             .history
@@ -160,9 +160,9 @@ impl App {
             .is_some_and(|(id, _)| self.text_steps_of(id).is_some_and(|s| s.ids.len() > 1))
     }
 
-    /// Lines… for the card: its versions and a note for the meta line.
+    /// Text ▾ for the card: its versions and a note for the meta line.
     pub(crate) fn attach_text(&mut self, data: &mut LaunchData) {
-        // Lines… works on the text this card is built from, whichever path built it.
+        // Text ▾ works on the text this card is built from, whichever path built it.
         self.card_text = card_text_of(data);
         if data.subject_kind != SubjectKind::Text {
             return;
@@ -229,7 +229,7 @@ impl App {
         }
     }
 
-    /// A Lines… result is back on the main thread. Dropped when stale: a newer job started,
+    /// A Text ▾ result is back on the main thread. Dropped when stale: a newer job started,
     /// history was wiped, or the card shows another entry by now.
     pub(crate) fn finish_text(
         &mut self,

@@ -1,4 +1,4 @@
-//! The AI chip (left of Lines…): the local AI actions on a text or code card ([`mac_ai`]). Menu
+//! The AI chip (left of Text ▾): the local AI actions on a text or code card ([`mac_ai`]). Menu
 //! items, titles and the reasons they are off. The actions run on a click only.
 
 use mac_ai::{Action, Unavailable};
@@ -286,7 +286,7 @@ pub fn ai_menu_items_with(
     items
 }
 
-/// The "AI" chip left of Lines…: dimmed, with the reason as its tooltip, when the model is not
+/// The "AI" chip left of Text ▾: dimmed, with the reason as its tooltip, when the model is not
 /// available.
 pub fn ai_button(availability: mac_ai::Availability) -> Command {
     let (enabled, detail) = match availability {
@@ -318,7 +318,7 @@ pub fn pdf_scan_ai_button(scan: Option<&ImageScan>) -> Command {
     button
 }
 
-/// The chips the card shows: [`chips`], with the AI chip directly left of Lines… when an action
+/// The chips the card shows: [`chips`], with the AI chip directly left of Text ▾ when an action
 /// fits the text.
 pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = chips(data);
@@ -629,9 +629,9 @@ mod tests {
             let lines = ids
                 .iter()
                 .position(|id| *id == CommandId::TextMenu)
-                .expect("Lines…");
+                .expect("Text ▾");
             assert_eq!(ids[lines - 1], CommandId::AiMenu);
-            // Lines… no longer holds the actions; search still finds them.
+            // Text ▾ no longer holds the actions; search still finds them.
             let edit = TextShown {
                 labels: vec!["Original".into()],
                 version: 0,

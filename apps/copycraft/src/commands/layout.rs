@@ -356,7 +356,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
 }
 
 /// Split the card's chips into the ones shown (at most [`mac_ui::style::MAX_CARD_CHIPS`]) and the ones
-/// that move under `…`. Original and the menus (AI, Lines…, Image ▾, Table ▾) always stay visible,
+/// that move under `…`. Original and the menus (AI, Text ▾, Image ▾, Table ▾) always stay visible,
 /// in their order; the rest fill the room left, in order.
 pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
     let keeps = |cmd: &Command| {

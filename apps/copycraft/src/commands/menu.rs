@@ -78,12 +78,66 @@ pub(crate) fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command
 pub fn image_menu_title() -> &'static str {
     crate::locale::t("image_menu")
 }
-/// The "Lines…" chip.
+/// The "Text ▾" chip.
 pub fn text_menu_title() -> &'static str {
     crate::locale::t("text_menu")
 }
 
-/// The "Lines…" menu: first and last lines, reverse, column and filter, then undo and redo
+/// A section of the Text ▾ menu: a header on macOS 14+, a separator before that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextSection {
+    /// First and last lines, reverse, column, filter.
+    Lines,
+    /// Case style, Clean URL, Format JSON.
+    Convert,
+    /// Complexity and the AGENTS.md steps.
+    Analyse,
+    /// Undo and redo: after a separator, without a header.
+    Versions,
+}
+
+impl TextSection {
+    /// The header title, NL/EN; `None` for undo and redo.
+    pub fn title(self) -> Option<&'static str> {
+        match self {
+            TextSection::Lines => Some(crate::locale::t("text_section_lines")),
+            TextSection::Convert => Some(crate::locale::t("text_section_convert")),
+            TextSection::Analyse => Some(crate::locale::t("text_section_analyse")),
+            TextSection::Versions => None,
+        }
+    }
+}
+
+/// The Text ▾ section of `id`; `None` for a command that is not in that menu.
+pub fn text_section(id: &CommandId) -> Option<TextSection> {
+    match id {
+        CommandId::TextHead
+        | CommandId::TextTail
+        | CommandId::TextReverse
+        | CommandId::TextColumn
+        | CommandId::TextFilter => Some(TextSection::Lines),
+        CommandId::TextCase(_) | CommandId::TextCleanUrl | CommandId::TextJson => {
+            Some(TextSection::Convert)
+        }
+        CommandId::AgentCommands
+        | CommandId::AgentOutline
+        | CommandId::AgentCheck
+        | CommandId::TextComplexity => Some(TextSection::Analyse),
+        CommandId::TableUndo | CommandId::TableRedo => Some(TextSection::Versions),
+        _ => None,
+    }
+}
+
+/// The sections `items` fall into, one per item, when they are the Text ▾ menu (it starts
+/// with a line step); `None` for the table and image menus, which keep no headers.
+pub fn text_sections(items: &[CommandId]) -> Option<Vec<Option<TextSection>>> {
+    let first = items.first()?;
+    (text_section(first) == Some(TextSection::Lines))
+        .then(|| items.iter().map(text_section).collect())
+}
+
+/// The "Text ▾" menu, in [`TextSection`]s: first and last lines, reverse, column and filter;
+/// case, Clean URL and Format JSON; Complexity and the AGENTS.md steps; then undo and redo
 /// when there is a version to go to. No check marks. Line count and size stay on the meta
 /// line under the preview, so the menu does not count again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -92,31 +146,31 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
         command(
             CommandId::TextHead,
             crate::locale::t("text_head"),
-            crate::locale::t("text_menu"),
+            crate::locale::t("text_section_lines"),
             "head first lines top text",
         ),
         command(
             CommandId::TextTail,
             crate::locale::t("text_tail"),
-            crate::locale::t("text_menu"),
+            crate::locale::t("text_section_lines"),
             "tail last lines bottom text",
         ),
         command(
             CommandId::TextReverse,
             crate::locale::t("text_reverse"),
-            crate::locale::t("text_menu"),
+            crate::locale::t("text_section_lines"),
             "tac reverse lines order text",
         ),
         command(
             CommandId::TextColumn,
             crate::locale::t("text_column"),
-            crate::locale::t("text_menu"),
+            crate::locale::t("text_section_lines"),
             "awk column field cut separator text",
         ),
         command(
             CommandId::TextFilter,
             crate::locale::t("text_filter"),
-            crate::locale::t("text_menu"),
+            crate::locale::t("text_section_lines"),
             "grep filter regex regular expression match lines text",
         ),
     ];
@@ -194,7 +248,7 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
         .collect()
 }
 
-/// Clean URL…: in Lines… and as a chip on a link card, when a URL holds a tracking parameter.
+/// Clean URL…: in Text ▾ and as a chip on a link card, when a URL holds a tracking parameter.
 pub(crate) fn clean_url_command() -> Command {
     command(
         CommandId::TextCleanUrl,

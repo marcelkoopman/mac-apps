@@ -1,9 +1,9 @@
-//! Apple Intelligence on the text of the card (Lines… › Apple Intelligence, [`mac_ai`]).
+//! Apple Intelligence on the text of the card (Text ▾ › Apple Intelligence, [`mac_ai`]).
 //!
 //! One click runs one action, on a background thread, on the text the card shows (cut to
 //! [`mac_ai::MAX_CHARS`]). The result is a preview over the card, not yet anywhere else: nothing
 //! reaches the clipboard or history until "Apply to clipboard", which makes it a new text
-//! version like a Lines… step (⌘Z goes back). Cancel, Esc, the card closing, Wipe and a new
+//! version like a Text ▾ step (⌘Z goes back). Cancel, Esc, the card closing, Wipe and a new
 //! copy stop the run and drop the result. Text and result are never logged: a failure logs
 //! only its kind ([`crate::diag::LogEvent::AiFailed`]).
 

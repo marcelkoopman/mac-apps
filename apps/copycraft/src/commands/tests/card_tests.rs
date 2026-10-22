@@ -27,7 +27,7 @@ fn broken_json_stays_json_says_where_and_marks_the_line() {
     assert_eq!(
         ids(&chips(&input)),
         vec![CommandId::TextMenu],
-        "Lines… only: no Schema, no To JSON"
+        "Text ▾ only: no Schema, no To JSON"
     );
     // Labels stay at the end of the meta line.
     let mail = "{\"mail\": \"jan.devries@example.nl\",}";

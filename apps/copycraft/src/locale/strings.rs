@@ -1157,9 +1157,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "tabs en spaties door elkaar",
         "mixed tabs and spaces",
     ),
-    // Lines… menu (text_ops)
-    ("text_menu", "Regels…", "Lines…"),
-    // Lines… › Apple Intelligence (local AI, crate mac-ai)
+    // Text ▾ menu (text_ops)
+    ("text_menu", "Tekst ▾", "Text ▾"),
+    ("text_section_lines", "Regels", "Lines"),
+    ("text_section_convert", "Omzetten", "Convert"),
+    ("text_section_analyse", "Analyse", "Analysis"),
+    // Text ▾ › Apple Intelligence (local AI, crate mac-ai)
     ("ai_group", "Apple Intelligence", "Apple Intelligence"),
     ("ai_button", "AI", "AI"),
     ("ai_summarize", "Samenvatten", "Summarize"),
@@ -1463,8 +1466,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "detail_text_steps",
-        "Eerste of laatste regels, omkeren, kolom, filter",
-        "First or last lines, reverse, column, filter",
+        "Regels, omzetten en analyse",
+        "Lines, conversion and analysis",
     ),
     ("text_head", "Eerste regels…", "First lines…"),
     ("text_tail", "Laatste regels…", "Last lines…"),
@@ -1545,7 +1548,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Filter zonder: {0}",
         "Filter without: {0}",
     ),
-    // Lines… › Clean URL… (text_ops::url_clean)
+    // Text ▾ › Clean URL… (text_ops::url_clean)
     ("text_clean_url", "URL opschonen…", "Clean URL…"),
     ("url_clean_title", "URL opschonen", "Clean URL"),
     (
@@ -1570,7 +1573,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("url_clean_label", "URL opgeschoond", "URL cleaned"),
     ("text_apply", "Toepassen op klembord", "Apply to clipboard"),
-    // Lines… › Case style (text_ops::case_style)
+    // Text ▾ › Case style (text_ops::case_style)
     ("case_menu", "Hoofdletterstijl", "Case style"),
     (
         "case_message",
@@ -1596,7 +1599,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("case_constant", "CONSTANT_CASE", "CONSTANT_CASE"),
     ("case_upper", "HOOFDLETTERS", "UPPERCASE"),
     ("case_lower", "kleine letters", "lowercase"),
-    // Lines… › Format JSON… (text_ops::json_style)
+    // Text ▾ › Format JSON… (text_ops::json_style)
     ("text_json", "JSON opmaken…", "Format JSON…"),
     ("json_style_title", "JSON opmaken", "Format JSON"),
     (

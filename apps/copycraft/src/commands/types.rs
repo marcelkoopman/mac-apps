@@ -115,7 +115,7 @@ pub struct LaunchData {
     /// The versions of a picture entry ([`crate::image_edit`]), for every picture that can
     /// have them. Absent: no Image ▾.
     pub image_edit: Option<ImageShown>,
-    /// The versions Lines… made of the text on the card ([`crate::text_ops`]). Absent until
+    /// The versions Text ▾ made of the text on the card ([`crate::text_ops`]). Absent until
     /// a step attaches them; the chip still shows on text and code, including a chosen file.
     pub text_edit: Option<TextShown>,
     /// History entry on screen, when the card follows history. Absent for a chosen file.
@@ -165,7 +165,7 @@ impl ImageShown {
     }
 }
 
-/// The versions Lines… made of a text, for the card. Each version is a history entry.
+/// The versions Text ▾ made of a text, for the card. Each version is a history entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextShown {
     /// "Original", then each step's label.
@@ -174,13 +174,13 @@ pub struct TextShown {
     pub version: usize,
     /// Why the last step did nothing, for the meta line.
     pub note: Option<String>,
-    /// Code in a language with functions: Lines… offers Complexity.
+    /// Code in a language with functions: Text ▾ offers Complexity.
     pub code: bool,
-    /// Agent instructions: Lines… offers Commands, Outline and Check.
+    /// Agent instructions: Text ▾ offers Commands, Outline and Check.
     pub agent: bool,
-    /// A URL in the text holds a tracking parameter: Lines… offers Clean URL….
+    /// A URL in the text holds a tracking parameter: Text ▾ offers Clean URL….
     pub tracking: bool,
-    /// A JSON card (also JSON with a mistake): Lines… offers Format JSON….
+    /// A JSON card (also JSON with a mistake): Text ▾ offers Format JSON….
     pub json: bool,
 }
 
@@ -435,15 +435,15 @@ pub enum CommandId {
     ImageStep(crate::image_edit::ImageOp),
     /// Resize › Custom…: asks for a width or a height.
     ImageResizeCustom,
-    /// The "Lines…" chip on a text or code card: the card pops [`text_menu_items`].
+    /// The "Text ▾" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
-    /// Lines… › Complexity: cognitive complexity per function, in a menu.
+    /// Text ▾ › Complexity: cognitive complexity per function, in a menu.
     TextComplexity,
-    /// Lines… › Commands on agent instructions: their shell commands as a new version.
+    /// Text ▾ › Commands on agent instructions: their shell commands as a new version.
     AgentCommands,
-    /// Lines… › Outline: the headings, each going to its line.
+    /// Text ▾ › Outline: the headings, each going to its line.
     AgentOutline,
-    /// Lines… › Check: warnings about the instructions, each going to its line.
+    /// Text ▾ › Check: warnings about the instructions, each going to its line.
     AgentCheck,
     /// A row of the Complexity, Outline or Check menu: scroll the card to this (1-based) line.
     GotoLine(usize),
@@ -457,18 +457,18 @@ pub enum CommandId {
     TextReverse,
     /// Ask for a separator and a column, then keep that column as a new version.
     TextColumn,
-    /// Lines… › Filter (regex)…: keep the lines a pattern matches, like grep.
+    /// Text ▾ › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
-    /// Lines… › Clean URL… (and the chip on a link card): a preview of the URLs without their
+    /// Text ▾ › Clean URL… (and the chip on a link card): a preview of the URLs without their
     /// tracking parameters, then Apply to clipboard as a new version.
     TextCleanUrl,
-    /// Lines… › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
+    /// Text ▾ › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
     /// clipboard as a new version.
     TextJson,
-    /// Lines… › Case style › a style: the dialog with that style picked, a preview, then
+    /// Text ▾ › Case style › a style: the dialog with that style picked, a preview, then
     /// Apply to clipboard as a new version.
     TextCase(crate::text_ops::case_style::CaseStyle),
-    /// The "AI" chip left of Lines… on text and code cards: the card pops [`ai_menu_items`].
+    /// The "AI" chip left of Text ▾ on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The
     /// result is a preview ([`CommandId::AiApply`] puts it on the clipboard).
