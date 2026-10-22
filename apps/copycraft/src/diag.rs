@@ -16,8 +16,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 pub use mac_ui::log::{Category, Level};
 
-/// Console filter: `subsystem:com.github.marcelkoopman.mac-apps.copycraft`.
-pub const SUBSYSTEM: &str = "com.github.marcelkoopman.mac-apps.copycraft";
+/// Console filter: `subsystem:nl.marcelkoopman.copycraft`.
+pub const SUBSYSTEM: &str = "nl.marcelkoopman.copycraft";
 
 /// What went wrong, as a kind and never as the error's text (that can hold a path).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

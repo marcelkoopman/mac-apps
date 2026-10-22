@@ -47,7 +47,7 @@ logs clipboard or history text, file contents, file names or paths, decoder inpu
 regex patterns or table data.
 
 **View the log in Console.** Open Console.app, select your Mac, click Start streaming and
-search for `subsystem:com.github.marcelkoopman.mac-apps.copycraft`. The categories are
+search for `subsystem:nl.marcelkoopman.copycraft`. The categories are
 `clipboard`, `table`, `decode`, `settings`, `window`, `login` and `worker`. Include Info and
 Debug messages (Action > Include Info Messages / Include Debug Messages) to see everything.
 

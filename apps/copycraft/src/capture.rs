@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 /// Bundle id of this app. An ignore list that names it is dropped, and it is never
 /// remembered as the last foreign app.
-pub const OWN_BUNDLE: &str = "com.github.marcelkoopman.mac-apps.copycraft";
+pub const OWN_BUNDLE: &str = "nl.marcelkoopman.copycraft";
 
 /// Why a foreign change was not read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

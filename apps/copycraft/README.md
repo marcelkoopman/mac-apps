@@ -152,7 +152,7 @@ logs clipboard or history text, file contents, file names or paths, decoder inpu
 regex patterns or table data.
 
 **View the log in Console.** Open Console.app, select your Mac, click Start streaming and
-search for `subsystem:com.github.marcelkoopman.mac-apps.copycraft`. The categories are
+search for `subsystem:nl.marcelkoopman.copycraft`. The categories are
 `clipboard`, `table`, `decode`, `settings`, `window`, `login` and `worker`. Include Info and
 Debug messages (Action > Include Info Messages / Include Debug Messages) to see everything.
 
@@ -204,7 +204,7 @@ For support, email **mac-apps-support@proton.me**. See the [root README](../../R
 
 Preparation only: Copycraft is not submitted to the Mac App Store, and none of this was run through App Store review. What is in the repo:
 
-- **Bundle identifier**: `com.github.marcelkoopman.mac-apps.copycraft` (`identifier` in `[package.metadata.bundle]`, and `OWN_BUNDLE` in `src/capture.rs`, which must match). It replaced the earlier id without the `mac-apps.` segment before the first Store submission. A new bundle id means a new sandbox container (`~/Library/Containers/<id>/`) and a new defaults domain, so a copy that was installed under the old id starts from the defaults once (language, privacy filter, hotkey, date order, ignored apps) and macOS asks again for *Paste from Other Apps* and for Open at Login. There is no migration code; nothing was released under the old id to migrate. `scripts/check_copycraft_offline.sh` fails when the old id is still in the repo.
+- **Bundle identifier**: `nl.marcelkoopman.copycraft` (`identifier` in `[package.metadata.bundle]`, `OWN_BUNDLE` in `src/capture.rs` and the log subsystem `diag::SUBSYSTEM`, which must all match; the pasteboard type `nl.marcelkoopman.copycraft.self` already used that prefix). It replaced `com.github.marcelkoopman.mac-apps.copycraft` (used by the GitHub releases up to v0.1.87) before the first Store submission. A new bundle id means a new sandbox container (`~/Library/Containers/<id>/`) and a new defaults domain, so a copy that was installed under the old id starts from the defaults once (language, privacy filter, hotkey, date order, ignored apps, history timer, the welcome screen shows again), macOS asks again for *Paste from Other Apps*, and Open at Login has to be turned on again (the old login item points at the old id; remove it in System Settings › General › Login Items). There is no migration code: a sandboxed app cannot read another id's container. The old container can be deleted by hand. `scripts/check_copycraft_offline.sh` fails when an old id is back in the code.
 - **Privacy manifest**: `apps/copycraft/PrivacyInfo.xcprivacy`, shipped as `Contents/Resources/PrivacyInfo.xcprivacy` through `resources` in `[package.metadata.bundle]`. It declares no tracking, no tracking domains and no collected data (Copycraft is offline). Required-reason APIs, from reading the sources and the dependencies:
   - `UserDefaults` **CA92.1**: the app's own settings and appearance, in its own defaults domain (`src/settings.rs`, `mac_ui::theme`).
   - `FileTimestamp` **C617.1**: `std::fs::metadata` (stat) on its own files in the app container (preview files in the temporary directory). **3B52.1**: stat on files you picked with the open panel, dropped on the card or copied from Finder (`src/open_file.rs`, `src/macos_pasteboard.rs`).

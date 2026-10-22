@@ -26,5 +26,6 @@ expect 'CFBundleLocalizations:0' en
 expect 'CFBundleLocalizations:1' nl
 expect NSHumanReadableCopyright '© 2026 Marcel Koopman'
 expect LSApplicationCategoryType public.app-category.utilities
+expect CFBundleIdentifier nl.marcelkoopman.copycraft
 plutil -lint "$PLIST" >/dev/null || die "plutil -lint failed"
 echo "finish_info_plist: $PLIST ok"
