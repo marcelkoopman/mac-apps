@@ -326,6 +326,7 @@ fn lines_menu_offers_complexity_only_on_code() {
         code: false,
         agent: false,
         tracking: false,
+        json: false,
     };
     let has = |edit: &TextShown| {
         text_menu_items(edit)

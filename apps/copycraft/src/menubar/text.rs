@@ -200,6 +200,7 @@ impl App {
             code,
             agent,
             tracking: crate::text_ops::url_clean::has_tracking(&text),
+            json: kind == crate::format::FormatKind::Json,
         });
     }
 
@@ -569,6 +570,53 @@ impl App {
             }
         }
     }
+    /// Format JSON…: Format or Compress and Sort keys, with the result (or where the JSON
+    /// breaks) worked out in the background; Apply to clipboard takes the step.
+    pub(crate) fn text_json_prompt(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let Some((id, text)) = self.text_entry() else {
+                return;
+            };
+            let layouts = [
+                crate::locale::t("json_format"),
+                crate::locale::t("json_compress"),
+            ];
+            let checks = [crate::locale::t("json_sort_keys")];
+            let mut ask = preview_only_form(
+                crate::locale::t("json_style_title"),
+                crate::locale::t("json_style_message"),
+            );
+            ask.options = &layouts;
+            ask.option_label = crate::locale::t("json_style_layout");
+            // JSON on several lines most likely wants Compress, one line Format.
+            ask.selected = usize::from(text.trim().contains('\n'));
+            ask.checks = &checks;
+            let text = std::sync::Arc::new(text);
+            let shown = std::sync::Arc::clone(&text);
+            let answer = mac_ui::dialog::form(
+                mtm,
+                &ask,
+                std::sync::Arc::new(move |option, _, checks| {
+                    json_preview(&shown, json_style_of(option, checks))
+                }),
+            );
+            launcher::order_front();
+            let Some(answer) = answer else {
+                return;
+            };
+            let style = json_style_of(answer.option, &answer.checks);
+            if let Err(err) = text_ops::json_style::restyle(&text, style) {
+                self.text_note = Some((id, err.note()));
+                self.refresh_popup();
+                return;
+            }
+            self.run_text(TextOp::Json(style));
+        }
+    }
 }
 
 /// A [`mac_ui::dialog::Form`] with only a preview and Apply to clipboard (Clean URL…).
@@ -627,6 +675,45 @@ fn clean_url_preview(text: &str) -> mac_ui::dialog::Preview {
     mac_ui::dialog::Preview {
         text: lines.join("\n"),
         ..Default::default()
+    }
+}
+
+/// The Format JSON… answer: the layout pop-up (Format, Compress) and Sort keys.
+#[cfg(target_os = "macos")]
+fn json_style_of(option: usize, checks: &[bool]) -> text_ops::json_style::JsonStyle {
+    text_ops::json_style::JsonStyle {
+        compress: option == 1,
+        sort: checks.first().copied().unwrap_or(false),
+    }
+}
+
+/// The preview under Format JSON…: the first lines of the result, or where the JSON breaks.
+#[cfg(target_os = "macos")]
+fn json_preview(text: &str, style: text_ops::json_style::JsonStyle) -> mac_ui::dialog::Preview {
+    match text_ops::json_style::restyle(text, style) {
+        Err(err) => mac_ui::dialog::Preview {
+            text: err.note(),
+            marks: Vec::new(),
+            error: true,
+        },
+        Ok(out) if out == text => mac_ui::dialog::Preview {
+            text: crate::locale::t("json_style_same").to_string(),
+            ..Default::default()
+        },
+        Ok(out) => {
+            let mut lines: Vec<String> = out
+                .lines()
+                .take(PREVIEW_LINES + 2)
+                .map(preview_line)
+                .collect();
+            if out.lines().nth(PREVIEW_LINES + 2).is_some() {
+                lines.push("…".to_string());
+            }
+            mac_ui::dialog::Preview {
+                text: lines.join("\n"),
+                ..Default::default()
+            }
+        }
     }
 }
 

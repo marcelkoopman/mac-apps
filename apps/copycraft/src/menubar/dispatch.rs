@@ -117,6 +117,7 @@ impl App {
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
             CommandId::TextCleanUrl => self.text_clean_url_prompt(),
+            CommandId::TextJson => self.text_json_prompt(),
             CommandId::Ai(action) => self.ai_start(action, None),
             // The dimmed "and N more" line does nothing; the whole text is `AI_FN_WHOLE`.
             CommandId::AiFn(_, commands::AI_FN_MORE) => {}

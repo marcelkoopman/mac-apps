@@ -176,6 +176,8 @@ pub struct TextShown {
     pub agent: bool,
     /// A URL in the text holds a tracking parameter: Lines… offers Clean URL….
     pub tracking: bool,
+    /// A JSON card (also JSON with a mistake): Lines… offers Format JSON….
+    pub json: bool,
 }
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -446,6 +448,9 @@ pub enum CommandId {
     /// Lines… › Clean URL… (and the chip on a link card): a preview of the URLs without their
     /// tracking parameters, then Apply to clipboard as a new version.
     TextCleanUrl,
+    /// Lines… › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
+    /// clipboard as a new version.
+    TextJson,
     /// The "AI" chip left of Lines… on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The

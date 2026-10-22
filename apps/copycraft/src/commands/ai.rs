@@ -639,6 +639,7 @@ mod tests {
                 code: false,
                 agent: false,
                 tracking: false,
+                json: false,
             };
             assert!(
                 text_menu_items(&edit)

@@ -432,6 +432,7 @@ fn text_menu_chip_comes_first_on_a_code_card() {
             code: true,
             agent: false,
             tracking: false,
+            json: false,
         });
         let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
         let at = ids.iter().position(|id| *id == CommandId::TextMenu);
@@ -512,4 +513,23 @@ fn clean_url_shows_only_when_a_link_holds_tracking_parameters() {
     assert!(!edit.tracking);
     let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
     assert!(!has(&menu));
+}
+
+#[test]
+fn format_json_is_in_lines_on_a_json_card_only() {
+    use crate::commands::{text_menu_items, text_shown};
+    let has = |text: &str| {
+        let card = data(SubjectKind::Text, Some(text));
+        text_shown(&card).is_some_and(|edit| {
+            text_menu_items(&edit)
+                .iter()
+                .any(|(c, _)| c.id == CommandId::TextJson)
+        })
+    };
+    assert!(has(r#"{"b":1,"a":[1,2]}"#));
+    assert!(has("[\n  1,\n  2\n]\n"));
+    // JSON with a mistake: the dialog says where.
+    assert!(has("{\n  \"a\": 1,\n}\n"));
+    assert!(!has("plain words\non two lines\n"));
+    assert!(!has("fn main() { let x = 1; }\n"));
 }

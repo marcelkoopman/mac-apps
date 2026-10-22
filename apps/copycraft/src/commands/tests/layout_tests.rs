@@ -256,6 +256,7 @@ fn chips_and_menu_steps_have_sf_symbols() {
         CommandId::TextFilter,
         CommandId::TextReverse,
         CommandId::TextCleanUrl,
+        CommandId::TextJson,
     ] {
         let name = crate::commands::symbol_for(&id).expect("a symbol");
         assert!(

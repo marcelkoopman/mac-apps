@@ -140,6 +140,7 @@ pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
             code: crate::complexity::Lang::of(kind).is_some(),
             agent: kind == crate::format::FormatKind::Agent,
             tracking: crate::text_ops::url_clean::has_tracking(text),
+            json: kind == crate::format::FormatKind::Json,
         }
     }))
 }

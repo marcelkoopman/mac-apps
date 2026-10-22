@@ -122,6 +122,14 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
     if edit.tracking {
         commands.push(clean_url_command());
     }
+    if edit.json {
+        commands.push(command(
+            CommandId::TextJson,
+            crate::locale::t("text_json"),
+            crate::locale::t("detail_json_style"),
+            "json format pretty print compress minify one line sort keys indent",
+        ));
+    }
     if edit.agent {
         commands.push(command(
             CommandId::AgentCommands,

@@ -223,6 +223,8 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 
 - [ ] Clean URL on a link: copy `https://x.nl/p?utm_source=x&id=5#top`. The link card has a *URL opschonen…* / *Clean URL…* chip. The dialog says *Parameters to remove: 1* and shows `https://x.nl/p?id=5#top`. *Apply to clipboard* copies that (paste in TextEdit to check), the version capsule shows *v2/2*, and ⌘Z shows the original link again. Copy `https://x.nl/p?id=5#top` itself: no chip.
 - [ ] Clean URL in text: copy a few lines of prose with two links, one with `?fbclid=1&page=2` and one without a query. *Lines… › Clean URL…* shows *Parameters to remove: 1*; after *Apply to clipboard* only `fbclid=1&` is gone and everything else, line endings included, is unchanged. Prose without tracking parameters has no *Clean URL…* in *Lines…*.
+- [ ] Format JSON: paste `{"b":1,"a":[1,2]}`. *Lines… › Format JSON…* opens on *Format*; tick *Sort keys*: the preview starts `{`, `  "a": [`. *Apply to clipboard*: the clipboard holds the indented JSON with `a` first and the capsule says *JSON formatted, sorted*. Open it again, pick *Compress*: the clipboard is `{"a":[1,2],"b":1}`. ⌘Z twice is back at the copy.
+- [ ] Format JSON on broken JSON: paste `{"a": 1,}` (a *JSON · Invalid* card). The preview says *Line 1, column 9: trailing comma* in red, and *Apply to clipboard* leaves the clipboard as it was with that note on the card. Paste `{"a":1,"a":2}`: the preview says a key appears twice.
 - [ ] Copy a password from a password manager (it marks the copy concealed): the card shows
       "Hidden content", no text, no chips, and nothing is added to history.
 - [ ] With history on, a long log with a token stays out of history: in Terminal run

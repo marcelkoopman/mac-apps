@@ -1515,6 +1515,54 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("url_clean_label", "URL opgeschoond", "URL cleaned"),
     ("text_apply", "Toepassen op klembord", "Apply to clipboard"),
+    // Lines… › Format JSON… (text_ops::json_style)
+    ("text_json", "JSON opmaken…", "Format JSON…"),
+    ("json_style_title", "JSON opmaken", "Format JSON"),
+    (
+        "json_style_message",
+        "Opmaken zet de JSON met 2 spaties inspringing neer, Comprimeren op één regel. Waarden blijven gelijk; ⌘Z zet de tekst terug.",
+        "Format lays the JSON out with a 2-space indent, Compress puts it on one line. Values stay the same; ⌘Z puts the text back.",
+    ),
+    (
+        "detail_json_style",
+        "JSON opmaken of comprimeren, sleutels sorteren",
+        "Format or compress JSON, sort keys",
+    ),
+    ("json_style_layout", "Vorm", "Layout"),
+    ("json_format", "Opmaken", "Format"),
+    ("json_compress", "Comprimeren", "Compress"),
+    ("json_sort_keys", "Sleutels sorteren", "Sort keys"),
+    (
+        "json_style_same",
+        "De JSON staat al zo; er verandert niets.",
+        "The JSON is already laid out this way; nothing changes.",
+    ),
+    (
+        "json_duplicate_keys",
+        "Een sleutel staat twee keer in hetzelfde object; opmaken zou er één weggooien.",
+        "A key appears twice in one object; formatting would drop one of them.",
+    ),
+    (
+        "json_numbers_lossy",
+        "Een getal is te groot of te precies om ongewijzigd terug te schrijven.",
+        "A number is too large or too precise to be written back unchanged.",
+    ),
+    ("json_label_format", "JSON opgemaakt", "JSON formatted"),
+    (
+        "json_label_format_sorted",
+        "JSON opgemaakt, gesorteerd",
+        "JSON formatted, sorted",
+    ),
+    (
+        "json_label_compress",
+        "JSON gecomprimeerd",
+        "JSON compressed",
+    ),
+    (
+        "json_label_compress_sorted",
+        "JSON gecomprimeerd, gesorteerd",
+        "JSON compressed, sorted",
+    ),
     (
         "pager_status",
         "--Meer-- pagina {0} van {1} ({2}%)",

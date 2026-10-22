@@ -400,7 +400,8 @@ fn canonical_json(text: &str) -> Option<Zeroizing<String>> {
     Some(Zeroizing::new(pretty))
 }
 
-fn sort_json(value: serde_json::Value) -> serde_json::Value {
+/// `value` with the keys of every object, nested ones too, in byte order (arrays keep theirs).
+pub(crate) fn sort_json(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Array(items) => {
             serde_json::Value::Array(items.into_iter().map(sort_json).collect())
