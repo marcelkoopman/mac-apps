@@ -1,5 +1,5 @@
-//! The first-run welcome window: the hotkey, the in-memory history, the offline promise, what
-//! stays out of history, Open at Login, and buttons for Settings and "Get started". Shown once (see
+//! The first-run welcome window: the hotkey, paste-first (⌘V or a drop), the offline promise, what
+//! stays out of history, "Keep clipboard history" (off on a new install), Open at Login, and buttons for Settings and "Get started". Shown once (see
 //! [`crate::settings::should_show_welcome`]) and again from the status menu.
 
 use std::cell::{Cell, RefCell};
@@ -43,6 +43,7 @@ thread_local! {
     static WINDOW: RefCell<Option<Retained<WelcomeWindow>>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<WelcomeDelegate>>> = const { RefCell::new(None) };
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    static HISTORY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
 }
@@ -98,6 +99,7 @@ define_class!(
                 restore_level(&window);
             }
             LOGIN_BOX.with(|slot| *slot.borrow_mut() = None);
+            HISTORY_BOX.with(|slot| *slot.borrow_mut() = None);
         }
     }
 
@@ -110,6 +112,16 @@ define_class!(
         #[unsafe(method(welcomeSettings:))]
         fn open_settings(&self, _sender: Option<&NSButton>) {
             launcher::emit(UserEvent::Run(CommandId::Settings));
+        }
+
+        /// "Keep clipboard history": the same setting as in Settings › Privacy.
+        #[unsafe(method(welcomeHistoryToggled:))]
+        fn history_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            crate::settings::set_clipboard_history(button.state() == NSControlStateValueOn);
+            launcher::emit(UserEvent::ClipboardHistoryChanged);
         }
 
         #[unsafe(method(welcomeLoginToggled:))]
@@ -274,6 +286,20 @@ fn build(mtm: MainThreadMarker) {
         .map(|point| text_line(mtm, &format!("•  {point}"), &body_font))
         .collect();
 
+    let history = mac_ui::actions::checkbox(mtm, crate::locale::t("clipboard_history"));
+    history.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t(
+        "clipboard_history",
+    ))));
+    wire(&history, sel!(welcomeHistoryToggled:));
+    HISTORY_BOX.with(|slot| *slot.borrow_mut() = Some(history.clone()));
+    refresh_history_box();
+    let history_note = text_line(
+        mtm,
+        crate::locale::t("welcome_history_choice"),
+        &NSFont::systemFontOfSize(NSFont::smallSystemFontSize()),
+    );
+    history_note.setTextColor(Some(&NSColor::secondaryLabelColor()));
+
     let login = mac_ui::actions::checkbox(mtm, crate::locale::t("open_at_login"));
     login.setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("open_at_login"))));
     wire(&login, sel!(welcomeLoginToggled:));
@@ -298,6 +324,8 @@ fn build(mtm: MainThreadMarker) {
 
     let icon_view: &NSView = &icon;
     let heading_view: &NSView = &heading;
+    let history_view: &NSView = &history;
+    let history_note_view: &NSView = &history_note;
     let login_view: &NSView = &login;
     let buttons_view: &NSView = &buttons;
     let mut views: Vec<&NSView> = vec![icon_view, heading_view];
@@ -305,6 +333,8 @@ fn build(mtm: MainThreadMarker) {
         let view: &NSView = view;
         views.push(view);
     }
+    views.push(history_view);
+    views.push(history_note_view);
     views.push(login_view);
     views.push(buttons_view);
     let stack = NSStackView::stackViewWithViews(&NSArray::from_slice(&views), mtm);
@@ -322,6 +352,8 @@ fn build(mtm: MainThreadMarker) {
     if let Some(last) = point_views.last() {
         stack.setCustomSpacing_afterView(18.0, last);
     }
+    stack.setCustomSpacing_afterView(4.0, &history);
+    stack.setCustomSpacing_afterView(14.0, &history_note);
     stack.setCustomSpacing_afterView(20.0, &login);
 
     // The content decides the height; the width stays WIDTH.
@@ -337,13 +369,27 @@ fn build(mtm: MainThreadMarker) {
     window.setContentView(Some(&stack));
     window.center();
 
-    // Tab moves through the checkbox and both buttons; focus starts on "Get started".
+    // Tab moves through both checkboxes and both buttons; focus starts on "Get started".
     window.setAutorecalculatesKeyViewLoop(true);
     window.setInitialFirstResponder(Some(&start));
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);
     panel::bring_to_front(&window);
+}
+
+/// The history checkbox follows the setting (also when Settings changes it).
+pub fn refresh_history_box() {
+    let on = crate::settings::clipboard_history();
+    HISTORY_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(if on {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        }
+    });
 }
 
 /// The checkbox follows the login item: on when registered (or awaiting approval), disabled

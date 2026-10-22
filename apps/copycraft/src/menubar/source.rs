@@ -104,6 +104,52 @@ impl App {
         launcher::order_front();
     }
 
+    /// ⌘V in the card: what the clipboard held goes in like a drop. Text passes
+    /// [`crate::sensitivity::admission`] before it is kept in history (in memory only, as a
+    /// drop); the card and all its tools work on it. Also with history off: the user asked.
+    pub(crate) fn show_pasted(&mut self, pasted: crate::history_mode::Pasted) {
+        use crate::history_mode::Pasted;
+        let opened = match pasted {
+            Pasted::Text(text) => crate::open_file::from_text(pasted_text(), text),
+            Pasted::Image(bytes) => crate::open_file::from_image_data(pasted_image(), bytes),
+            Pasted::Hidden => crate::open_file::noted(
+                clipboard::hidden_content().to_string(),
+                crate::locale::t("private_copy_note"),
+            ),
+            Pasted::Nothing => crate::open_file::noted(
+                pasted_text().to_string(),
+                crate::locale::t("paste_nothing"),
+            ),
+        };
+        self.show_dropped(opened);
+    }
+
+    /// "Keep clipboard history" changed. Off: what was read from the pasteboard is wiped from
+    /// the reader's cache, Pause and Ignore next copy are reset (they are greyed out), and the
+    /// poller looks again from scratch when history is turned on.
+    pub(crate) fn clipboard_history_changed(&mut self) {
+        let on = crate::settings::clipboard_history();
+        self.polled_change = None;
+        self.poll_again = false;
+        self.paste_explaining = false;
+        if !on {
+            crate::capture::set_paused(false);
+            crate::capture::set_ignore_next(false);
+            #[cfg(target_os = "macos")]
+            crate::macos_pasteboard::zeroize_caches();
+            self.sync_tooltip(&ClipboardView::Empty);
+        }
+        self.refresh_status_menu();
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_settings::refresh_history_controls();
+            crate::macos_welcome::refresh_history_box();
+        }
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
     /// The format and size of a dropped picture, which the image card shows. One the system
     /// cannot read gets a note instead, and stays out of history.
     pub(crate) fn look_at_dropped_image(

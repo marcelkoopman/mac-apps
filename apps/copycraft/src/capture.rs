@@ -157,6 +157,11 @@ pub fn observe_front(bundle: Option<&str>) {
 /// one, as Copycraft's own card is in front while it is used) is on the ignore list. The gate
 /// of [`crate::clipboard::ClipboardHistory`].
 pub fn history_held() -> bool {
+    // Pause and the ignored apps belong to watching the clipboard: with history off they hold
+    // nothing back, so a paste or a drop always goes in.
+    if !crate::history_mode::capture_controls_active(crate::settings::clipboard_history()) {
+        return false;
+    }
     let (paused, front) = {
         let slot = session();
         (slot.paused, slot.last_foreign.clone())

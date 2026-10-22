@@ -10,6 +10,14 @@ pub(crate) fn dropped_text() -> &'static str {
 pub(crate) fn dropped_image() -> &'static str {
     crate::locale::t("dropped_image")
 }
+/// Card title for text pasted into it with ⌘V.
+pub(crate) fn pasted_text() -> &'static str {
+    crate::locale::t("pasted_text")
+}
+/// Card name for a picture pasted into it with ⌘V.
+pub(crate) fn pasted_image() -> &'static str {
+    crate::locale::t("pasted_image")
+}
 
 pub(crate) struct App {
     pub(crate) tray: TrayIcon,

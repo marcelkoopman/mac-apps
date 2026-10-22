@@ -353,11 +353,15 @@ fn empty_clipboard_has_no_chips_and_keeps_quit_in_the_menu() {
     let input = data(SubjectKind::Empty, None);
     assert!(chips(&input).is_empty());
     let card = work_card(&input);
+    // History off (the default of a new install): the card asks for a paste.
+    assert_eq!(card.placeholder, crate::locale::t("paste_here_hint"));
+    assert!(card.excerpt.is_empty());
+    let mut watching = data(SubjectKind::Empty, None);
+    watching.settings.clipboard_history = true;
     assert_eq!(
-        card.placeholder,
+        work_card(&watching).placeholder,
         crate::locale::tf("empty_history", &[&crate::hotkey::DEFAULT_LABEL]),
     );
-    assert!(card.excerpt.is_empty());
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -450,4 +454,29 @@ fn an_svg_is_a_picture_with_a_code_toggle_and_its_size() {
         .find(|cmd| cmd.id == CommandId::Original)
         .expect("Show image");
     assert_eq!(toggle.title.as_str(), "Show image");
+}
+
+#[test]
+fn pause_ignore_next_and_ignore_app_are_greyed_out_without_history() {
+    let ids = [
+        CommandId::Pause,
+        CommandId::IgnoreNext,
+        CommandId::IgnoreFrontApp,
+    ];
+    let mut input = data(SubjectKind::Text, Some("hello"));
+    input.can_ignore_app = true;
+    input.settings.clipboard_history = false;
+    let off = crate::commands::capture_commands(&input);
+    assert_eq!(
+        off.iter().map(|cmd| cmd.id.clone()).collect::<Vec<_>>(),
+        ids
+    );
+    assert!(off.iter().all(|cmd| !cmd.enabled));
+    input.settings.clipboard_history = true;
+    let on = crate::commands::capture_commands(&input);
+    assert!(on.iter().all(|cmd| cmd.enabled));
+    // Ignore-frontmost still needs a foreign app.
+    input.can_ignore_app = false;
+    let none = crate::commands::capture_commands(&input);
+    assert!(none[0].enabled && none[1].enabled && !none[2].enabled);
 }

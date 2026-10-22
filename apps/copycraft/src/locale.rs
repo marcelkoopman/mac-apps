@@ -234,6 +234,41 @@ mod tests {
     }
 
     #[test]
+    fn paste_first_keys_are_in_both_languages() {
+        for key in [
+            "clipboard_history",
+            "clipboard_history_note",
+            "welcome_history_choice",
+            "paste_here_hint",
+            "paste_nothing",
+            "pasted_text",
+            "pasted_image",
+        ] {
+            let (_, nl, en) = STRINGS
+                .iter()
+                .find(|(k, _, _)| *k == key)
+                .unwrap_or_else(|| panic!("{key} is missing"));
+            assert!(!nl.is_empty() && !en.is_empty() && nl != en, "{key}");
+        }
+        assert_eq!(
+            t_in(Lang::En, "clipboard_history"),
+            "Keep clipboard history"
+        );
+        assert_eq!(
+            t_in(Lang::Nl, "clipboard_history"),
+            "Klembordgeschiedenis bijhouden"
+        );
+        assert_eq!(
+            t_in(Lang::En, "paste_here_hint"),
+            "Paste here (⌘V) or turn on history in Settings"
+        );
+        assert_eq!(
+            t_in(Lang::Nl, "paste_here_hint"),
+            "Plak hier (⌘V) of zet geschiedenis aan in Instellingen"
+        );
+    }
+
+    #[test]
     fn welcome_keys_are_in_both_languages() {
         for key in [
             "welcome_menu",

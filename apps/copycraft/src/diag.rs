@@ -569,6 +569,7 @@ pub fn export_text(macos: &str, now: SystemTime) -> String {
     out.push_str(&format!("subsystem: {SUBSYSTEM}\n\n"));
     out.push_str("settings:\n");
     for (name, value) in [
+        ("clipboard_history", settings.clipboard_history.to_string()),
         ("privacy_filter", settings.privacy_filter.to_string()),
         ("blur", settings.blur.to_string()),
         ("clear_sensitive", settings.clear_sensitive.to_string()),

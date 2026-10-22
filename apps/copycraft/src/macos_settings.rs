@@ -1,5 +1,5 @@
-//! Settings window: hotkey, date order, language, privacy filter, blur, Open at Login, the
-//! symbol list and ignored apps.
+//! Settings window: hotkey, date order, language, Keep clipboard history, privacy filter, blur,
+//! Open at Login, the symbol list and ignored apps.
 
 use std::cell::{Cell, RefCell};
 
@@ -39,8 +39,9 @@ const SECTION_GAP: f64 = mac_ui::metrics::SECTION_GAP;
 const LABEL_W: f64 = 136.0;
 /// Algemeen: heading, four settings, three gaps.
 const GENERAL_H: f64 = HEAD_H + 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
-/// Privacy: heading, two settings, the ignored-apps block, two gaps.
-const PRIVACY_H: f64 = HEAD_H + 2.0 * SETTING_H + 2.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
+/// Privacy: heading, three settings ("Keep clipboard history", the privacy filter, blur), the
+/// ignored-apps block, three gaps.
+const PRIVACY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
 /// Weergave: heading, the pages, announce and ask-before-clearing settings, three gaps and the
 /// symbols block.
 const DISPLAY_H: f64 = HEAD_H + 3.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
@@ -65,10 +66,10 @@ const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(GENERAL_H == 230.0);
-const _: () = assert!(PRIVACY_H == 248.0);
+const _: () = assert!(PRIVACY_H == 302.0);
 const _: () = assert!(DISPLAY_H == 302.0);
 const _: () = assert!(NOTIFY_H == 104.0);
-const _: () = assert!(HEIGHT == 964.0 + SECTION_GAP + FEEDBACK_H);
+const _: () = assert!(HEIGHT == 1018.0 + SECTION_GAP + FEEDBACK_H);
 
 /// The notification switches in the order of their checkboxes (row by row), with the title key.
 /// The checkbox's tag is the index.
@@ -96,6 +97,7 @@ thread_local! {
     static HOTKEY_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static DATE_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
     static PRIVACY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    static HISTORY_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static BLUR_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static LOGIN_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -217,6 +219,17 @@ define_class!(
             settings::set_language(choice);
             crate::locale::apply();
             launcher::emit(UserEvent::LanguageChanged);
+        }
+
+        /// "Keep clipboard history": watch the clipboard, or only take what is pasted or dropped.
+        #[unsafe(method(clipboardHistoryToggled:))]
+        fn clipboard_history_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            settings::set_clipboard_history(button.state() == NSControlStateValueOn);
+            refresh_history_controls();
+            launcher::emit(UserEvent::ClipboardHistoryChanged);
         }
 
         #[unsafe(method(privacyFilterToggled:))]
@@ -355,6 +368,7 @@ fn clear_controls() {
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
     BLUR_BOX.with(|s| *s.borrow_mut() = None);
     PRIVACY_BOX.with(|s| *s.borrow_mut() = None);
+    HISTORY_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_BOX.with(|s| *s.borrow_mut() = None);
     LOGIN_NOTE.with(|s| *s.borrow_mut() = None);
     SYMBOLS_FIELD.with(|s| *s.borrow_mut() = None);
@@ -551,6 +565,20 @@ fn build(mtm: MainThreadMarker) {
     );
 
     let y = take(&mut top, BUTTON_H);
+    let history = checkbox(mtm, crate::locale::t("clipboard_history"), y);
+    history.setState(state_of(settings::clipboard_history()));
+    wire(&history, sel!(clipboardHistoryToggled:));
+    body.addSubview(&history);
+    HISTORY_BOX.with(|slot| *slot.borrow_mut() = Some(history));
+    place_explanation(
+        mtm,
+        &body,
+        crate::locale::t("clipboard_history_note"),
+        &mut top,
+    );
+
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
     let privacy = checkbox(mtm, crate::locale::t("privacy_filter"), y);
     privacy.setState(state_of(settings::privacy_filter()));
     wire(&privacy, sel!(privacyFilterToggled:));
@@ -600,7 +628,7 @@ fn build(mtm: MainThreadMarker) {
     let add_button = add.button().retain();
     body.addSubview(add.view());
     IGNORED_ADD.with(|slot| *slot.borrow_mut() = Some(add_button));
-    refresh_ignore_button();
+    refresh_history_controls();
 
     gap(&mut top, SECTION_GAP);
     place_heading(
@@ -921,6 +949,7 @@ fn refresh_all() {
     refresh_login_row();
     show_symbol_catalog();
     refresh_ignored_field();
+    refresh_history_controls();
 }
 
 fn save_symbols_field() {
@@ -967,8 +996,27 @@ fn show_ignored_apps() {
     });
 }
 
+/// The history checkbox follows the setting; the ignored apps only apply while history is on,
+/// so their field and button are greyed out otherwise.
+pub fn refresh_history_controls() {
+    let on = settings::clipboard_history();
+    HISTORY_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(state_of(on));
+        }
+    });
+    let active = crate::history_mode::capture_controls_active(on);
+    IGNORED_FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            field.setEnabled(active);
+        }
+    });
+    refresh_ignore_button();
+}
+
 fn refresh_ignore_button() {
-    let enabled = crate::capture::last_foreign().is_some();
+    let enabled = crate::history_mode::capture_controls_active(settings::clipboard_history())
+        && crate::capture::last_foreign().is_some();
     IGNORED_ADD.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             button.setEnabled(enabled);

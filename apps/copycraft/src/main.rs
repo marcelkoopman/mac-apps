@@ -17,6 +17,7 @@ mod diff;
 mod docx;
 mod format;
 mod highlight;
+mod history_mode;
 mod hotkey;
 mod icon;
 mod image_edit;

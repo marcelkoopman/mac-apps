@@ -19,8 +19,23 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "welcome_history",
-        "Copycraft houdt een geschiedenis bij van wat je kopieert, alleen in het geheugen; die verlaat je Mac nooit.",
-        "Copycraft keeps a history of what you copy, only in memory; it never leaves your Mac.",
+        "Standaard leest Copycraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
+        "By default Copycraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
+    ),
+    (
+        "welcome_history_choice",
+        "Zet je dit aan, dan leest Copycraft elke kopie en bewaart die alleen in het geheugen; anders alleen wat je in de kaart plakt of neerzet.",
+        "When on, Copycraft reads every copy and keeps it in memory only; otherwise only what you paste or drop on the card.",
+    ),
+    (
+        "clipboard_history",
+        "Klembordgeschiedenis bijhouden",
+        "Keep clipboard history",
+    ),
+    (
+        "clipboard_history_note",
+        "Leest elke kopie in het geheugen; anders alleen wat je plakt.",
+        "Reads every copy into memory; otherwise only what you paste.",
     ),
     (
         "welcome_local",
@@ -346,6 +361,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Copy something to get started, open with {0}",
     ),
     (
+        "paste_here_hint",
+        "Plak hier (⌘V) of zet geschiedenis aan in Instellingen",
+        "Paste here (⌘V) or turn on history in Settings",
+    ),
+    (
+        "paste_nothing",
+        "Geen tekst of afbeelding op het klembord om te plakken",
+        "No text or picture on the clipboard to paste",
+    ),
+    (
         "no_text_on_clipboard",
         "Geen tekst op het klembord",
         "No text on the clipboard",
@@ -367,6 +392,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Opened and dropped files
     ("dropped_text", "Neergezette tekst", "Dropped text"),
     ("dropped_image", "Neergezette afbeelding", "Dropped image"),
+    ("pasted_text", "Geplakte tekst", "Pasted text"),
+    ("pasted_image", "Geplakte afbeelding", "Pasted image"),
     (
         "file_not_text",
         "Dit bestand is geen tekst",

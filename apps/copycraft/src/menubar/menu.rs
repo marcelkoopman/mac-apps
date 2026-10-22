@@ -44,17 +44,19 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
+    // Greyed out while "Keep clipboard history" is off (nothing is read on its own then).
+    let active = crate::history_mode::capture_controls_active(crate::settings::clipboard_history());
     let _ = menu.append(&CheckMenuItem::with_id(
         PAUSE_ID,
         crate::locale::t("pause_recording"),
-        true,
+        active,
         crate::capture::paused(),
         None,
     ));
     let _ = menu.append(&CheckMenuItem::with_id(
         IGNORE_NEXT_ID,
         crate::locale::t("ignore_next"),
-        true,
+        active,
         crate::capture::ignore_next(),
         None,
     ));

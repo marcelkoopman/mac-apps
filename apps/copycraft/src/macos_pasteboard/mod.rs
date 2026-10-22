@@ -80,6 +80,11 @@ pub(crate) struct DecodedPreview {
 }
 
 pub(crate) fn current_view() -> ClipboardView {
+    // History off (paste-first): nothing is looked at, not even the change count. The card shows
+    // what was pasted or dropped (history), as while recording is paused.
+    if !background_read_allowed() {
+        return ClipboardView::Held;
+    }
     let pasteboard = NSPasteboard::generalPasteboard();
     let change_count = pasteboard.changeCount();
     // The change count, the types and the access setting read no content (no privacy alert).
@@ -165,6 +170,17 @@ pub(crate) fn current_view() -> ClipboardView {
     view
 }
 
+/// Whether Copycraft may read the pasteboard on its own now: the poll, or the card opening
+/// ([`crate::history_mode::read_allowed`]). ⌘V does not ask: [`read_for_paste`] always reads.
+pub(crate) fn background_read_allowed() -> bool {
+    let trigger = if CARD_SHOWN.load(Ordering::Relaxed) {
+        crate::history_mode::ReadTrigger::CardOpen
+    } else {
+        crate::history_mode::ReadTrigger::Poll
+    };
+    crate::history_mode::read_allowed(crate::settings::clipboard_history(), trigger)
+}
+
 /// Tell the pasteboard reader whether the card is shown (or about to be): with Default or Ask
 /// a copy is read only then.
 pub(crate) fn set_card_shown(shown: bool) {
@@ -223,6 +239,10 @@ fn grab_image(
 /// pass (Default or Ask; `None` inside when there was none), `None` to read the pasteboard as
 /// before (Always Allow, macOS before 15.4).
 fn shared_image() -> Option<Option<ImageGrab>> {
+    // History off: no picture of the pasteboard's (and no read for one).
+    if !background_read_allowed() {
+        return Some(None);
+    }
     let change_count = change_count();
     let guard = CACHE.lock().ok()?;
     let cached = guard
@@ -298,6 +318,9 @@ fn foreign_skipped(change: isize) -> bool {
 
 /// Refuse a pasteboard picture read for a suppressed foreign change, or for a concealed copy.
 fn foreign_blocked() -> bool {
+    if !background_read_allowed() {
+        return true;
+    }
     let marks = current_marks();
     if marks.own {
         return false;
@@ -315,8 +338,10 @@ mod write;
 #[allow(unused_imports)]
 pub use write::*;
 mod detect;
+mod paste;
 #[allow(unused_imports)]
 pub use detect::*;
+pub(crate) use paste::read_for_paste;
 mod read;
 #[allow(unused_imports)]
 pub use read::*;

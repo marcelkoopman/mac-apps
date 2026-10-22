@@ -447,7 +447,12 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             title: crate::locale::t("title_clipboard").to_string(),
             meta: String::new(),
             excerpt: String::new(),
-            placeholder: crate::locale::tf("empty_history", &[&crate::settings::hotkey_label()]),
+            // History off (paste-first): the card says how to get something onto it.
+            placeholder: if data.settings.clipboard_history {
+                crate::locale::tf("empty_history", &[&crate::settings::hotkey_label()])
+            } else {
+                crate::locale::t("paste_here_hint").to_string()
+            },
             shows_image: false,
             highlight: None,
             selectable: false,

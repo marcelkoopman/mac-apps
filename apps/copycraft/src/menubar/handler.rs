@@ -34,6 +34,8 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DroppedText(text) => {
                 self.show_dropped(crate::open_file::from_text(dropped_text(), text));
             }
+            UserEvent::Pasted(pasted) => self.show_pasted(pasted),
+            UserEvent::ClipboardHistoryChanged => self.clipboard_history_changed(),
             UserEvent::DecodedPicture { key, picture } => self.finish_decoded_picture(key, picture),
             UserEvent::DroppedImageScanned { image, scan } => {
                 self.finish_dropped_scan(&image, scan);

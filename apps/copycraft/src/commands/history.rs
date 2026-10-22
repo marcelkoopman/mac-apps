@@ -195,27 +195,31 @@ pub(crate) fn entry_commands(data: &LaunchData) -> Vec<Command> {
     ]
 }
 
-/// Pause, ignore-next and ignore-frontmost. Quit stays out of search.
+/// Pause, ignore-next and ignore-frontmost. Quit stays out of search. Greyed out while
+/// "Keep clipboard history" is off: then no copy is read on its own, so there is nothing to hold.
 pub(crate) fn capture_commands(data: &LaunchData) -> Vec<Command> {
+    let active = crate::history_mode::capture_controls_active(data.settings.clipboard_history);
     vec![
-        command(
+        command_enabled(
             CommandId::Pause,
             crate::locale::t("pause_recording"),
             crate::locale::t("detail_pause"),
             "pause recording history",
+            active,
         ),
-        command(
+        command_enabled(
             CommandId::IgnoreNext,
             crate::locale::t("ignore_next"),
             crate::locale::t("detail_ignore_next"),
             "ignore next copy",
+            active,
         ),
         command_enabled(
             CommandId::IgnoreFrontApp,
             crate::locale::t("ignore_front_app"),
             crate::locale::t("detail_ignore_app"),
             "ignore app frontmost",
-            data.can_ignore_app,
+            active && data.can_ignore_app,
         ),
     ]
 }

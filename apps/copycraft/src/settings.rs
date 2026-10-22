@@ -73,6 +73,10 @@ pub struct Settings {
     pub notify_errors: bool,
     /// Notification "Possibly sensitive text copied" (no content). On by default.
     pub notify_secret: bool,
+    /// "Keep clipboard history": Copycraft reads every copy (polling, and on opening the card).
+    /// Off: paste-first, only what is pasted (⌘V) or dropped. Off for a new install, on for an
+    /// existing one ([`crate::history_mode::keep_history_default`]).
+    pub clipboard_history: bool,
 }
 
 /// How wide the card is: a choice in the `⋯` menu.
@@ -136,6 +140,7 @@ impl Default for Settings {
             notify_ocr: true,
             notify_errors: true,
             notify_secret: true,
+            clipboard_history: false,
         }
     }
 }
@@ -162,12 +167,39 @@ const NOTIFY_PERMISSION_KEY: &str = "CopycraftNotifyPermission";
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
 /// Stored (true) once the welcome window closed; missing on first launch.
 const WELCOME_KEY: &str = "hasSeenWelcome";
+/// "Keep clipboard history" ([`Settings::clipboard_history`]). Stored at the first launch of a
+/// build that has it ([`settle_clipboard_history`]), so an existing install stays on.
+const CLIPBOARD_HISTORY_KEY: &str = "CopycraftClipboardHistory";
 /// Newest symbol first, at most [`crate::symbols::MAX_RECENT`], separated by spaces.
 const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 /// The symbol list, space-separated. Missing, empty or invalid means the standard list.
 const SYMBOLS_KEY: &str = "CopycraftSymbols";
 /// Bundle ids whose copies are never read. One id per line. Not clipboard data.
 const IGNORED_APPS_KEY: &str = "CopycraftIgnoredApps";
+
+/// Keys an install that ran before stores: any of them means it is not a new install.
+const EARLIER_KEYS: &[&str] = &[
+    CLEAR_SENSITIVE_KEY,
+    HISTORY_MINUTES_KEY,
+    PRIVACY_FILTER_KEY,
+    BLUR_KEY,
+    DATE_MONTH_FIRST_KEY,
+    HOTKEY_KEY,
+    LANGUAGE_KEY,
+    PAGE_LONG_TEXT_KEY,
+    ANNOUNCE_KEY,
+    WINDOW_SIZE_KEY,
+    CONFIRM_CLEAR_KEY,
+    NOTIFY_AI_KEY,
+    NOTIFY_OCR_KEY,
+    NOTIFY_ERRORS_KEY,
+    NOTIFY_SECRET_KEY,
+    NOTIFY_PERMISSION_KEY,
+    PASTE_ALERT_EXPLAINED_KEY,
+    SYMBOL_RECENT_KEY,
+    SYMBOLS_KEY,
+    IGNORED_APPS_KEY,
+];
 
 /// How many bundle ids the ignore list keeps.
 pub const IGNORED_APP_MAX: usize = 50;
@@ -219,7 +251,42 @@ pub fn load() -> Settings {
     if let Some(value) = load_bool(NOTIFY_SECRET_KEY) {
         settings.notify_secret = value;
     }
+    settings.clipboard_history = clipboard_history();
     settings
+}
+
+/// Whether Copycraft keeps clipboard history (watches the clipboard). Not stored yet: decided by
+/// [`crate::history_mode::keep_history_default`] from what the settings store holds.
+pub fn clipboard_history() -> bool {
+    let stored = load_bool(CLIPBOARD_HISTORY_KEY);
+    if stored.is_some() {
+        // Asked on every pasteboard look: the stored value alone, no scan of the other keys.
+        return crate::history_mode::keep_history_default(stored, false, false);
+    }
+    crate::history_mode::keep_history_default(
+        None,
+        load_bool(WELCOME_KEY).is_some(),
+        EARLIER_KEYS.iter().any(|key| has_value(key)),
+    )
+}
+
+/// Store the decision of [`clipboard_history`] once, at launch, before anything else is stored
+/// (the welcome window marks itself seen when it closes): a new install stays off after that,
+/// an existing one stays on.
+pub fn settle_clipboard_history() {
+    if load_bool(CLIPBOARD_HISTORY_KEY).is_none() {
+        store_bool(CLIPBOARD_HISTORY_KEY, clipboard_history());
+    }
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_clipboard_history(on: bool) {
+    store_bool(CLIPBOARD_HISTORY_KEY, on);
+}
+
+/// Any value is stored under `key` (a bool, number or string).
+fn has_value(key: &str) -> bool {
+    load_bool(key).is_some() || load_int(key).is_some() || load_string(key).is_some()
 }
 
 /// The notification switches, from the stored values (a missing one is on).
@@ -412,6 +479,7 @@ pub fn welcome_due() -> bool {
 /// The welcome window closed: do not open it on its own again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn mark_welcome_seen() {
+    settle_clipboard_history();
     store_bool(WELCOME_KEY, true);
 }
 
@@ -726,6 +794,51 @@ mod tests {
         })
         .join()
         .expect("test thread");
+    }
+
+    #[test]
+    fn clipboard_history_is_off_on_a_new_install() {
+        std::thread::spawn(|| {
+            assert!(!super::clipboard_history());
+            assert!(!super::load().clipboard_history);
+            super::settle_clipboard_history();
+            assert_eq!(super::load_bool(super::CLIPBOARD_HISTORY_KEY), Some(false));
+            // Closing the welcome window later does not turn it on.
+            super::mark_welcome_seen();
+            assert!(!super::clipboard_history());
+            super::set_clipboard_history(true);
+            assert!(super::load().clipboard_history);
+        })
+        .join()
+        .expect("test thread");
+    }
+
+    #[test]
+    fn clipboard_history_stays_on_for_an_existing_install() {
+        // The welcome window was closed before this build.
+        std::thread::spawn(|| {
+            super::store_bool(super::WELCOME_KEY, true);
+            assert!(super::clipboard_history());
+            super::settle_clipboard_history();
+            assert_eq!(super::load_bool(super::CLIPBOARD_HISTORY_KEY), Some(true));
+        })
+        .join()
+        .expect("test thread");
+        // Any earlier setting, of any type.
+        for store in [
+            (|| super::store_bool(super::PRIVACY_FILTER_KEY, false)) as fn(),
+            || super::store_int(super::HISTORY_MINUTES_KEY, 5),
+            || super::store_string(super::LANGUAGE_KEY, "nl"),
+        ] {
+            std::thread::spawn(move || {
+                store();
+                assert!(super::clipboard_history());
+                super::set_clipboard_history(false);
+                assert!(!super::clipboard_history());
+            })
+            .join()
+            .expect("test thread");
+        }
     }
 
     #[test]

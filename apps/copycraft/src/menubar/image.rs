@@ -3,11 +3,15 @@
 use super::*;
 
 impl App {
-    /// The pasteboard's current change is not read: paused, ignore-next, or an ignored app.
-    /// Copycraft's own write is never suppressed.
+    /// The pasteboard's current change is not read: history is off, paused, ignore-next, or an
+    /// ignored app. Copycraft's own write is never suppressed while history is on.
     pub(crate) fn pasteboard_suppressed(&self) -> bool {
         #[cfg(target_os = "macos")]
         {
+            // History off: the card never shows the pasteboard, only what was pasted or dropped.
+            if !crate::macos_pasteboard::background_read_allowed() {
+                return true;
+            }
             if crate::macos_pasteboard::current_marks().own {
                 return false;
             }

@@ -183,6 +183,11 @@ impl App {
                 }
             }
             CommandId::DiffSwap => self.swap_diff(),
+            // Greyed out while history is off; a stray call (search, a stale menu) does nothing.
+            CommandId::Pause | CommandId::IgnoreNext | CommandId::IgnoreFrontApp
+                if !crate::history_mode::capture_controls_active(
+                    crate::settings::clipboard_history(),
+                ) => {}
             CommandId::Pause => {
                 crate::capture::set_paused(!crate::capture::paused());
                 self.refresh_status_menu();

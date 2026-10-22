@@ -9,6 +9,16 @@ impl App {
         // empty or textless reading is looked at again.
         #[cfg(target_os = "macos")]
         {
+            // History off (paste-first): no polling at all, not even the change count. Only ⌘V
+            // and drops bring content in.
+            if !crate::history_mode::read_allowed(
+                crate::settings::clipboard_history(),
+                crate::history_mode::ReadTrigger::Poll,
+            ) {
+                self.poll_again = false;
+                self.paste_explaining = false;
+                return false;
+            }
             // With Default or Ask a copy is read only while the card is shown.
             let open = launcher::is_open();
             if !open {
@@ -156,6 +166,8 @@ impl App {
 
 pub(crate) fn icon_tip(view: &ClipboardView) -> String {
     match view {
+        // History off (paste-first): Held means "not watching", nothing was ignored.
+        ClipboardView::Held if !crate::settings::clipboard_history() => "Copycraft".to_string(),
         ClipboardView::Held => {
             if crate::capture::paused() {
                 crate::locale::t("tip_paused").to_string()

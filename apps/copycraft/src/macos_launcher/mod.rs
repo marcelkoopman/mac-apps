@@ -413,6 +413,11 @@ define_class!(
                 // ⌘Y shows or hides the history strip.
                 launcher::emit(UserEvent::Run(CommandId::ToggleStrip));
                 true
+            } else if mac_ui::keys::is_command_chord(event, "v") {
+                // ⌘V pastes the clipboard into the card, also with history off (paste-first). The
+                // pasteboard is read here, while the key event is being handled: the user asked.
+                launcher::emit(UserEvent::Pasted(crate::macos_pasteboard::read_for_paste()));
+                true
             } else if mac_ui::keys::is_command_chord(event, "s") {
                 // ⌘S saves what the card shows, also while a search field has the caret.
                 launcher::emit(UserEvent::Run(CommandId::Save));
