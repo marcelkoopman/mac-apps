@@ -209,22 +209,18 @@ define_class!(
 
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
-            // ⌘1…⌘5 pick a tab, unless the hotkey field is listening.
-            let tab = if RECORDING.get() { None } else { tab_for_chord(event) };
-            let open = mac_ui::keys::is_command_chord(event, "o");
-            let save = mac_ui::keys::is_command_chord(event, "s");
-            if let Some(tab) = tab {
-                select_tab(tab.index());
+            // The hotkey field is listening: every ⌘ chord is a hotkey to record, not a tab or
+            // a menu key (⌘W, ⌘Z, ⌘V, …).
+            // ⌘1…⌘5 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
+            let recording = RECORDING.get()
+                && event
+                    .modifierFlags()
+                    .contains(NSEventModifierFlags::Command);
+            if recording {
+                handle_record_key(event);
                 true
-            } else if open || save {
-                if RECORDING.get() {
-                    // The hotkey field is listening: ⌘O and ⌘S are chords, not Open or Save.
-                    handle_record_key(event);
-                } else if open {
-                    launcher::emit(UserEvent::Run(CommandId::ChooseFile));
-                } else {
-                    launcher::emit(UserEvent::Run(CommandId::Save));
-                }
+            } else if let Some(tab) = tab_for_chord(event) {
+                select_tab(tab.index());
                 true
             } else {
                 // SAFETY: forwards the event to the superclass implementation of the same selector,
