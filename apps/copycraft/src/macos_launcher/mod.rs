@@ -18,9 +18,9 @@ use mac_ui::objc2_app_kit::{
     NSApplicationDidResignActiveNotification, NSAttributedStringNSStringDrawing, NSBeep, NSBox,
     NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSEvent,
     NSEventModifierFlags, NSEventPhase, NSFloatingWindowLevel, NSFocusRingType, NSFont, NSImage,
-    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSScrollView,
-    NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView, NSView,
-    NSWindow, NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
+    NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMutableParagraphStyle, NSPasteboard,
+    NSScrollView, NSSearchField, NSTextAlignment, NSTextField, NSTextFieldBezelStyle, NSTextView,
+    NSView, NSWindow, NSWindowLevel, NSWindowOrderingMode, NSWindowSharingType,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSEdgeInsets, NSMouseInRect, NSMutableAttributedString, NSNotification,
@@ -393,6 +393,11 @@ define_class!(
             if let Some(handled) = picker_key(event) {
                 // The column picker: ⌘A, Return and Esc are its own while it is open.
                 handled
+            } else if picker_open() && mac_ui::keys::is_command_chord(event, "v") {
+                // ⌘V in the column filter pastes into it; the card's paste waits until the
+                // picker is closed.
+                let _ = paste_into_field(self);
+                true
             } else if picker_open() {
                 // The card's chords (history, versions, find) wait until it is closed.
                 // SAFETY: forwards the event to the superclass implementation of the same selector,
@@ -414,9 +419,12 @@ define_class!(
                 launcher::emit(UserEvent::Run(CommandId::ToggleStrip));
                 true
             } else if mac_ui::keys::is_command_chord(event, "v") {
-                // ⌘V pastes the clipboard into the card, also with history off (paste-first). The
+                // ⌘V in a search, find or filter field pastes into that field. Elsewhere it
+                // pastes the clipboard into the card, also with history off (paste-first). The
                 // pasteboard is read here, while the key event is being handled: the user asked.
-                launcher::emit(UserEvent::Pasted(crate::macos_pasteboard::read_for_paste()));
+                if !paste_into_field(self) {
+                    launcher::emit(UserEvent::Pasted(crate::macos_pasteboard::read_for_paste()));
+                }
                 true
             } else if mac_ui::keys::is_command_chord(event, "s") {
                 // ⌘S saves what the card shows, also while a search field has the caret.

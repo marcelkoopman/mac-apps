@@ -321,3 +321,15 @@ fn open_table_closes_the_card_only_after_reading_its_entry() {
     assert!(!closes_card_itself(&CommandId::Save));
     assert!(!closes_card_itself(&CommandId::TableMenu));
 }
+
+#[test]
+fn command_v_pastes_into_the_field_being_typed_in() {
+    use crate::commands::{PasteTarget, paste_target};
+    // A search, find or filter field with the caret: the field pastes.
+    assert_eq!(paste_target(true, false), PasteTarget::Field);
+    // The hidden search field (no search open) only waits for typing: the card pastes.
+    assert_eq!(paste_target(true, true), PasteTarget::Card);
+    // A button, the reveal cover or the read-only text in the well: the card pastes.
+    assert_eq!(paste_target(false, false), PasteTarget::Card);
+    assert_eq!(paste_target(false, true), PasteTarget::Card);
+}

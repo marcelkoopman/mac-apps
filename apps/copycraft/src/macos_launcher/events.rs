@@ -678,6 +678,38 @@ pub(crate) fn focus_card() {
     }
 }
 
+/// ⌘V with the caret in a field (search, find, column filter): paste the clipboard's text
+/// there. Returns `false` when ⌘V is the card's ([`commands::paste_target`]).
+///
+/// The card has no Edit menu, and a text view does not answer ⌘V itself (the Paste menu item
+/// does that in other apps), so handing the key to `super` would only beep. The field editor
+/// reads the pasteboard the way its own `paste:` does: at the caret, replacing the selection,
+/// as one undoable edit that tells the field its text changed.
+pub(crate) fn paste_into_field(window: &NSWindow) -> bool {
+    let Some(editor) = window
+        .firstResponder()
+        .and_then(|responder| responder.downcast::<NSTextView>().ok())
+    else {
+        return false;
+    };
+    let hidden_search = !SEARCHING.with(Cell::get)
+        && FIELD.with(|slot| {
+            slot.borrow().as_ref().is_some_and(|field| {
+                field.currentEditor().is_some_and(|current| {
+                    std::ptr::eq(
+                        Retained::as_ptr(&current).cast::<AnyObject>(),
+                        Retained::as_ptr(&editor).cast::<AnyObject>(),
+                    )
+                })
+            })
+        });
+    if commands::paste_target(editor.isEditable(), hidden_search) != commands::PasteTarget::Field {
+        return false;
+    }
+    let _ = editor.readSelectionFromPasteboard(&NSPasteboard::generalPasteboard());
+    true
+}
+
 pub(crate) fn focus_field() {
     let field = FIELD.with(|slot| slot.borrow().clone());
     let window = WINDOW.with(|slot| slot.borrow().clone());

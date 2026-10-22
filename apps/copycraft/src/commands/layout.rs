@@ -67,6 +67,28 @@ pub enum ArrowFocus {
     TextWithContent,
 }
 
+/// Where ⌘V goes ([`paste_target`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteTarget {
+    /// The clipboard goes onto the card, like a drop (paste-first).
+    Card,
+    /// The field being typed in (the search field, the find field, the column filter) pastes
+    /// the clipboard's text at its caret.
+    Field,
+}
+
+/// Where ⌘V goes on the card. `editing_text`: the keyboard focus is in editable text (a field's
+/// field editor). `hidden_search`: that is the card's search field while no search is open;
+/// it only has the focus to catch the first typed letter, so ⌘V is still the card's. The
+/// read-only text in the well is not editable: ⌘V there goes onto the card too.
+pub fn paste_target(editing_text: bool, hidden_search: bool) -> PasteTarget {
+    if editing_text && !hidden_search {
+        PasteTarget::Field
+    } else {
+        PasteTarget::Card
+    }
+}
+
 /// What an arrow key does on the card ([`arrow_action`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowAction {
