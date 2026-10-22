@@ -21,7 +21,7 @@ Blur is now off by default. Masked content is hidden under a plain cover in your
 
 ### The privacy filter is now off by default
 
-The privacy filter is now off by default, so copied content shows on the card straight away, without a click to reveal it. To hide it again until you click, tick **Use privacy filter** in Settings › Privacy. If you turned the filter on or off yourself before, that choice is kept. Sensitive copies such as tokens, keys and passwords in links are still kept out of history, whatever this setting says.
+The privacy filter is now off by default, so copied content shows on the card straight away, without a click to reveal it. To hide it again until you click, tick **Use privacy filter** in Settings › Privacy. If you turned the filter on or off yourself before, that choice is kept. Sensitive copies such as tokens, keys and passwords in links are still kept out of history, whatever this setting says. The **Possibly sensitive text copied** notification also no longer depends on the privacy filter: it follows its own **Sensitive copy** switch in Settings › Notifications, which is on by default.
 
 ### Upgrading from Copycraft 0.1.87 or earlier
 
@@ -49,7 +49,7 @@ Vervagen staat nu standaard uit. Gemaskeerde inhoud zit onder een effen afdekkin
 
 ### Het privacyfilter staat nu standaard uit
 
-Het privacyfilter staat nu standaard uit, dus gekopieerde inhoud staat meteen op de kaart, zonder klik om hem te tonen. Wil je hem weer verborgen houden tot je klikt, vink dan **Gebruik privacyfilter** aan in Instellingen › Privacy. Heb je het filter eerder zelf aan- of uitgezet, dan blijft die keuze bewaard. Gevoelige kopieën zoals tokens, sleutels en wachtwoorden in links komen nog steeds niet in de geschiedenis, wat deze instelling ook zegt.
+Het privacyfilter staat nu standaard uit, dus gekopieerde inhoud staat meteen op de kaart, zonder klik om hem te tonen. Wil je hem weer verborgen houden tot je klikt, vink dan **Gebruik privacyfilter** aan in Instellingen › Privacy. Heb je het filter eerder zelf aan- of uitgezet, dan blijft die keuze bewaard. Gevoelige kopieën zoals tokens, sleutels en wachtwoorden in links komen nog steeds niet in de geschiedenis, wat deze instelling ook zegt. Ook de melding **Mogelijk gevoelige tekst gekopieerd** hangt niet meer af van het privacyfilter: die volgt zijn eigen schakelaar **Gevoelige kopie** in Instellingen › Meldingen, die standaard aan staat.
 
 ### Bijwerken vanaf Copycraft 0.1.87 of eerder
 

@@ -34,6 +34,30 @@ pub(crate) struct Notices {
     pub(crate) pdf_scan_started: Option<Instant>,
 }
 
+impl Notices {
+    /// Whether a copy (pasteboard change `change`) is a credential not told about yet. A long
+    /// copy whose labels are still being checked is remembered and looked at again later.
+    fn secret_to_tell(&mut self, text: &str, change: isize) -> bool {
+        match crate::sensitivity::labeling(text) {
+            crate::sensitivity::Labeling::Known(found) => {
+                self.secret_pending = None;
+                let tell = found
+                    .labels
+                    .contains(&crate::sensitivity::Label::Credential)
+                    && self.secret_told != Some(change);
+                if tell {
+                    self.secret_told = Some(change);
+                }
+                tell
+            }
+            crate::sensitivity::Labeling::Checking => {
+                self.secret_pending = Some(change);
+                false
+            }
+        }
+    }
+}
+
 impl App {
     /// `kind` happened. `card_hidden` is read here; `failed` and `took` come from the caller.
     pub(crate) fn notify(
@@ -155,25 +179,13 @@ impl App {
     }
 
     /// A copy from another app that may hold a secret: a notification, without the content.
-    /// Follows the privacy filter: with it off nothing is said. A copy another app marked
-    /// concealed is never read, so it does not get here.
+    /// It does not follow the privacy filter (that only masks what is shown): whether it is
+    /// posted is up to its own switch and the other notification settings in
+    /// [`notifications::decide`]. A copy another app marked concealed is never read, so it does
+    /// not get here.
     pub(crate) fn note_secret_copy(&mut self, text: &str, change: isize) {
-        if !crate::settings::privacy_filter() {
-            return;
-        }
-        match crate::sensitivity::labeling(text) {
-            crate::sensitivity::Labeling::Known(found) => {
-                self.notices.secret_pending = None;
-                if found
-                    .labels
-                    .contains(&crate::sensitivity::Label::Credential)
-                    && self.notices.secret_told != Some(change)
-                {
-                    self.notices.secret_told = Some(change);
-                    self.notify(Kind::SecretCopied, false, Duration::ZERO, None);
-                }
-            }
-            crate::sensitivity::Labeling::Checking => self.notices.secret_pending = Some(change),
+        if self.notices.secret_to_tell(text, change) {
+            self.notify(Kind::SecretCopied, false, Duration::ZERO, None);
         }
     }
 
@@ -200,5 +212,22 @@ mod tests {
         let notices = Notices::default();
         assert!(notices.posted.is_empty());
         assert!(notices.waiting.is_none());
+    }
+
+    #[test]
+    fn a_secret_copy_is_told_whatever_the_privacy_filter_says() {
+        let token = format!("ghp_{}", "1234567890abcdefghijklmnopqrstuvwxyzAB");
+        for (filter, change) in [(false, 1), (true, 2)] {
+            crate::settings::set_privacy_filter(filter);
+            let mut notices = Notices::default();
+            assert!(notices.secret_to_tell(&token, change), "filter {filter}");
+            // Once per pasteboard change.
+            assert!(!notices.secret_to_tell(&token, change), "filter {filter}");
+            assert!(
+                !notices.secret_to_tell("plain shopping list", change + 10),
+                "filter {filter}"
+            );
+        }
+        crate::settings::set_privacy_filter(false);
     }
 }
