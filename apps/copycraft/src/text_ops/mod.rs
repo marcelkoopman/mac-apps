@@ -62,6 +62,8 @@ pub enum TextOp {
     CleanUrls,
     /// The JSON laid out again ([`json_style`]).
     Json(json_style::JsonStyle),
+    /// Every line in a case style ([`case_style`]).
+    Case(case_style::CaseStyle),
 }
 
 impl TextOp {
@@ -89,6 +91,7 @@ impl TextOp {
             }
             TextOp::CleanUrls => url_clean::clean(text).text,
             TextOp::Json(style) => json_style::restyle(text, *style).ok()?,
+            TextOp::Case(style) => case_style::convert(text, *style),
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -101,6 +104,7 @@ impl TextOp {
             TextOp::Reverse => crate::locale::t("text_reverse_label").to_string(),
             TextOp::AgentCommands => crate::locale::t("agent_commands").to_string(),
             TextOp::CleanUrls => crate::locale::t("url_clean_label").to_string(),
+            TextOp::Case(style) => crate::locale::tf("case_label", &[&style.title()]),
             TextOp::Json(style) => match (style.compress, style.sort) {
                 (false, false) => crate::locale::t("json_label_format"),
                 (false, true) => crate::locale::t("json_label_format_sorted"),
@@ -287,6 +291,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
     typed.trim().parse::<usize>().ok().filter(|&n| n > 0)
 }
 
+pub mod case_style;
 pub mod filter;
 pub mod json_style;
 pub mod pager;

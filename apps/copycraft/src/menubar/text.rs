@@ -2,6 +2,7 @@
 //! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
 
 use super::*;
+use crate::text_ops::case_style::CaseStyle;
 use crate::text_ops::{self, Separator, TextOp};
 
 /// The entry id Lines… uses for a shown copy that is not in history.
@@ -617,6 +618,46 @@ impl App {
             self.run_text(TextOp::Json(style));
         }
     }
+    /// Case style › a style: the style pop-up (that one picked) and how many lines change with
+    /// the first of them, worked out in the background; Apply to clipboard takes the step.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+    pub(crate) fn text_case_prompt(&mut self, style: CaseStyle) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            let Some((_, text)) = self.text_entry() else {
+                return;
+            };
+            let titles: Vec<&str> = CaseStyle::ALL.iter().map(|style| style.title()).collect();
+            let mut ask = preview_only_form(
+                crate::locale::t("case_menu"),
+                crate::locale::t("case_message"),
+            );
+            ask.options = &titles;
+            ask.option_label = crate::locale::t("case_style_label");
+            ask.selected = CaseStyle::ALL
+                .iter()
+                .position(|each| *each == style)
+                .unwrap_or(0);
+            let text = std::sync::Arc::new(text);
+            let answer = mac_ui::dialog::form(
+                mtm,
+                &ask,
+                std::sync::Arc::new(move |option, _, _| {
+                    case_preview(&text, CaseStyle::ALL.get(option).copied().unwrap_or(style))
+                }),
+            );
+            launcher::order_front();
+            let Some(answer) = answer else {
+                return;
+            };
+            if let Some(style) = CaseStyle::ALL.get(answer.option) {
+                self.run_text(TextOp::Case(*style));
+            }
+        }
+    }
 }
 
 /// A [`mac_ui::dialog::Form`] with only a preview and Apply to clipboard (Clean URL…).
@@ -714,6 +755,24 @@ fn json_preview(text: &str, style: text_ops::json_style::JsonStyle) -> mac_ui::d
                 ..Default::default()
             }
         }
+    }
+}
+
+/// The preview under Case style: how many lines change, then the first of them converted.
+#[cfg(target_os = "macos")]
+fn case_preview(text: &str, style: CaseStyle) -> mac_ui::dialog::Preview {
+    let changed = text_ops::case_style::changed_lines(text, style);
+    let mut lines = vec![crate::locale::tf("case_changed", &[&changed])];
+    lines.extend(
+        text.lines()
+            .map(|line| text_ops::case_style::convert_line(line, style))
+            .filter(|line| !line.trim().is_empty())
+            .take(PREVIEW_LINES)
+            .map(|line| preview_line(&line)),
+    );
+    mac_ui::dialog::Preview {
+        text: lines.join("\n"),
+        ..Default::default()
     }
 }
 

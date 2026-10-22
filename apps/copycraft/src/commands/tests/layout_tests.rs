@@ -257,6 +257,7 @@ fn chips_and_menu_steps_have_sf_symbols() {
         CommandId::TextReverse,
         CommandId::TextCleanUrl,
         CommandId::TextJson,
+        CommandId::TextCase(crate::text_ops::case_style::CaseStyle::Snake),
     ] {
         let name = crate::commands::symbol_for(&id).expect("a symbol");
         assert!(

@@ -451,6 +451,9 @@ pub enum CommandId {
     /// Lines… › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
     /// clipboard as a new version.
     TextJson,
+    /// Lines… › Case style › a style: the dialog with that style picked, a preview, then
+    /// Apply to clipboard as a new version.
+    TextCase(crate::text_ops::case_style::CaseStyle),
     /// The "AI" chip left of Lines… on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The

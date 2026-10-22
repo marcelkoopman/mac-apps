@@ -195,6 +195,12 @@ mod tests {
     fn dutch_differs_from_english_unless_listed() {
         // Words and names that are the same in both languages.
         const SAME: &[&str] = &[
+            // Case style names are written in the style itself.
+            "case_camel",
+            "case_pascal",
+            "case_snake",
+            "case_kebab",
+            "case_constant",
             "agent_tokens",
             "window_compact",
             "label_pii",

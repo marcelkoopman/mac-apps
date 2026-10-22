@@ -333,6 +333,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextFilter
             | CommandId::TextCleanUrl
             | CommandId::TextJson
+            | CommandId::TextCase(_)
             | CommandId::AiMenu
             | CommandId::Ai(_)
             | CommandId::AiFn(..)
@@ -440,6 +441,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextFilter => "line.3.horizontal.decrease",
         CommandId::TextCleanUrl => "link",
         CommandId::TextJson => "curlybraces",
+        CommandId::TextCase(_) => "textformat",
         CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiFn(..) => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",

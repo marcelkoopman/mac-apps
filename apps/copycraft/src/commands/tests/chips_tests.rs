@@ -533,3 +533,40 @@ fn format_json_is_in_lines_on_a_json_card_only() {
     assert!(!has("plain words\non two lines\n"));
     assert!(!has("fn main() { let x = 1; }\n"));
 }
+
+#[test]
+fn case_style_is_a_submenu_of_lines() {
+    use crate::commands::{Command, menu_group, text_menu_items, text_shown};
+    use crate::text_ops::case_style::CaseStyle;
+    let card = data(SubjectKind::Text, Some("HTTPServer\nuser_id\n"));
+    let menu = text_menu_items(&text_shown(&card).expect("Lines…"));
+    let cases: Vec<(usize, &Command)> = menu
+        .iter()
+        .enumerate()
+        .filter(|(_, (c, _))| matches!(c.id, CommandId::TextCase(_)))
+        .map(|(at, (c, _))| (at, c))
+        .collect();
+    assert_eq!(cases.len(), CaseStyle::ALL.len());
+    // Side by side, so they make one submenu.
+    assert!(cases.windows(2).all(|pair| pair[1].0 == pair[0].0 + 1));
+    for (_, command) in &cases {
+        assert_eq!(menu_group(&command.id), Some(crate::locale::t("case_menu")));
+    }
+    let titles: Vec<&str> = cases.iter().map(|(_, c)| c.title.as_str()).collect();
+    assert_eq!(
+        titles[..5],
+        [
+            "camelCase",
+            "PascalCase",
+            "snake_case",
+            "kebab-case",
+            "CONSTANT_CASE"
+        ]
+    );
+    // The step itself: every line, the empty one kept.
+    let step = crate::text_ops::TextOp::Case(CaseStyle::Camel);
+    assert_eq!(
+        step.apply("HTTPServer\n\nuser_id\n").as_deref(),
+        Some("httpServer\n\nuserId\n")
+    );
+}

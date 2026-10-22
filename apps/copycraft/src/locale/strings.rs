@@ -1515,6 +1515,32 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("url_clean_label", "URL opgeschoond", "URL cleaned"),
     ("text_apply", "Toepassen op klembord", "Apply to clipboard"),
+    // Lines… › Case style (text_ops::case_style)
+    ("case_menu", "Hoofdletterstijl", "Case style"),
+    (
+        "case_message",
+        "Zet elke regel in de gekozen stijl. Woorden worden gesplitst bij _, -, spaties, hoofdletters (HTTPServer → http_server) en na cijfers; lege regels blijven staan. ⌘Z zet de tekst terug.",
+        "Writes every line in the chosen style. Words split at _, -, spaces, capitals (HTTPServer → http_server) and after digits; empty lines stay. ⌘Z puts the text back.",
+    ),
+    (
+        "detail_case",
+        "Elke regel in een andere hoofdletterstijl",
+        "Every line in another case style",
+    ),
+    ("case_style_label", "Stijl", "Style"),
+    (
+        "case_changed",
+        "Regels die veranderen: {0}",
+        "Lines that change: {0}",
+    ),
+    ("case_label", "Hoofdletterstijl: {0}", "Case style: {0}"),
+    ("case_camel", "camelCase", "camelCase"),
+    ("case_pascal", "PascalCase", "PascalCase"),
+    ("case_snake", "snake_case", "snake_case"),
+    ("case_kebab", "kebab-case", "kebab-case"),
+    ("case_constant", "CONSTANT_CASE", "CONSTANT_CASE"),
+    ("case_upper", "HOOFDLETTERS", "UPPERCASE"),
+    ("case_lower", "kleine letters", "lowercase"),
     // Lines… › Format JSON… (text_ops::json_style)
     ("text_json", "JSON opmaken…", "Format JSON…"),
     ("json_style_title", "JSON opmaken", "Format JSON"),

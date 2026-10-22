@@ -50,6 +50,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::Ai(action) => ai_submenu(*action),
         // The functions of one code action sit in a submenu named after it.
         CommandId::AiFn(action, _) => Some(ai_title(*action)),
+        CommandId::TextCase(_) => Some(crate::locale::t("case_menu")),
         _ => None,
     }
 }
@@ -119,6 +120,19 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "grep filter regex regular expression match lines text",
         ),
     ];
+    // Case style › camelCase, …: a submenu ([`menu_group`]).
+    commands.extend(
+        crate::text_ops::case_style::CaseStyle::ALL
+            .iter()
+            .map(|style| {
+                command(
+                    CommandId::TextCase(*style),
+                    style.title(),
+                    crate::locale::t("detail_case"),
+                    "case style camel pascal snake kebab constant upper lower identifier rename",
+                )
+            }),
+    );
     if edit.tracking {
         commands.push(clean_url_command());
     }
