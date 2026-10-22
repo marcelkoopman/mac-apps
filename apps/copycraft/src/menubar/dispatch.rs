@@ -94,6 +94,7 @@ impl App {
             CommandId::ClearHistory => self.clear_history(),
             CommandId::Clear => self.clear_secrets(),
             CommandId::ChooseFile => self.choose_file(),
+            CommandId::Generate(generator) => self.generate(generator),
             CommandId::UseClipboard => {
                 self.leave_opened();
                 self.reset_view();

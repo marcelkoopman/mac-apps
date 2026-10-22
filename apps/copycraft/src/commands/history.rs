@@ -454,7 +454,9 @@ impl MenuSection {
 /// Which section of the `⋯` menu `id` belongs to.
 pub fn menu_section(id: &CommandId) -> MenuSection {
     match id {
-        CommandId::ChooseFile | CommandId::UseClipboard => MenuSection::File,
+        CommandId::ChooseFile | CommandId::Generate(_) | CommandId::UseClipboard => {
+            MenuSection::File
+        }
         CommandId::ClearClipboard
         | CommandId::DiffShown
         | CommandId::DiffSwap
@@ -493,6 +495,7 @@ pub fn menu_submenu(id: &CommandId) -> Option<&'static str> {
         | CommandId::ClearHistory
         | CommandId::ClearPins => Some(crate::locale::t("history")),
         CommandId::KeepHistory(_) => Some(crate::locale::t("keep_history_menu")),
+        CommandId::Generate(_) => Some(crate::locale::t("new_menu")),
         CommandId::Appearance(_) => Some(crate::locale::t("appearance")),
         CommandId::WindowSize(_) => Some(crate::locale::t("window_size_menu")),
         _ => None,

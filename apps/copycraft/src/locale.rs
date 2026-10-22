@@ -195,6 +195,9 @@ mod tests {
     fn dutch_differs_from_english_unless_listed() {
         // Words and names that are the same in both languages.
         const SAME: &[&str] = &[
+            // UUID versions are names.
+            "generate_uuid_v4",
+            "generate_uuid_v7",
             // "hex" in a message, the same word in Dutch.
             "encoding_hex_name",
             // Case style names are written in the style itself.

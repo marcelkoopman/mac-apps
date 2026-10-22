@@ -17,6 +17,7 @@ mod diag;
 mod diff;
 mod docx;
 mod format;
+mod generate;
 mod highlight;
 mod history_mode;
 mod hotkey;

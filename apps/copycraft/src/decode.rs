@@ -4,7 +4,7 @@
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
 mod base64;
-mod clock;
+pub(crate) mod clock;
 mod hash;
 mod jwt;
 mod unix_time;

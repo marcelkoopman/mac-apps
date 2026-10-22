@@ -155,6 +155,25 @@ impl App {
         }
     }
 
+    /// ⋯ › New: the value goes on the clipboard and onto a new card, like text pasted into the
+    /// card (so also with history off). It is the clipboard's copy too, so the card follows
+    /// it. The value is never logged.
+    pub(crate) fn generate(&mut self, generator: crate::generate::Generator) {
+        let value = Zeroizing::new(generator.make());
+        if let Err(e) = self.write_own(&value) {
+            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+            return;
+        }
+        let newest = self.history.id_at(0);
+        self.show_dropped(crate::open_file::from_text(generator.title(), value));
+        // Recorded: the new entry at index 0 is also what the clipboard holds now.
+        if self.history.id_at(0) != newest {
+            self.clipboard_cursor = Some(0);
+        }
+    }
+
     /// ⌘V in the card: what the clipboard held goes in like a drop. Text passes
     /// [`crate::sensitivity::admission`] before it is kept in history (in memory only, as a
     /// drop); the card and all its tools work on it. Also with history off: the user asked.

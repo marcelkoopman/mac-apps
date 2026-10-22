@@ -156,6 +156,28 @@ fn choose_file_leads_the_menu_and_a_file_can_return_to_the_clipboard() {
     );
 }
 
+/// ⋯ › New: the five generators in a submenu of the File section, after Choose File and
+/// Clipboard; each keeps the card open (it shows the new value).
+#[test]
+fn new_lists_the_generators_after_the_file_items() {
+    use crate::commands::{MenuSection, menu_section, menu_submenu};
+    use crate::generate::Generator;
+    let menu = overflow(&data(SubjectKind::Text, Some("hello")));
+    let generated: Vec<CommandId> = menu
+        .iter()
+        .map(|cmd| cmd.id.clone())
+        .filter(|id| matches!(id, CommandId::Generate(_)))
+        .collect();
+    assert_eq!(generated, Generator::ALL.map(CommandId::Generate).to_vec());
+    assert_eq!(menu[1].id, CommandId::Generate(Generator::UuidV4));
+    for generator in Generator::ALL {
+        let id = CommandId::Generate(generator);
+        assert_eq!(menu_section(&id), MenuSection::File);
+        assert_eq!(menu_submenu(&id), Some("New"));
+        assert!(keeps_card_open(&id));
+    }
+}
+
 #[test]
 fn query_finds_appearance_and_history_but_not_quit() {
     let mut input = data(SubjectKind::Text, Some("hello world"));

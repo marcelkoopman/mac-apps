@@ -462,6 +462,26 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("menu_window", "Venster", "Window"),
     ("menu_close", "Sluit venster", "Close Window"),
     ("menu_minimize", "Minimaliseer", "Minimize"),
+    // ⋯ › New (src/generate.rs)
+    ("new_menu", "Nieuw", "New"),
+    ("generate_uuid_v4", "UUID v4", "UUID v4"),
+    ("generate_uuid_v7", "UUID v7", "UUID v7"),
+    (
+        "generate_unix_seconds",
+        "Unix-tijd (seconden)",
+        "Unix Time (Seconds)",
+    ),
+    (
+        "generate_unix_millis",
+        "Unix-tijd (milliseconden)",
+        "Unix Time (Milliseconds)",
+    ),
+    ("generate_iso_now", "ISO 8601 nu", "ISO 8601 Now"),
+    (
+        "detail_generate",
+        "Nieuwe kaart, ook op het klembord",
+        "New card, also on the clipboard",
+    ),
     ("pasted_image", "Geplakte afbeelding", "Pasted image"),
     (
         "file_not_text",

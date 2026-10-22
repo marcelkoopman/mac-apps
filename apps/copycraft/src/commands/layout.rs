@@ -302,6 +302,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Welcome
             | CommandId::Clear
             | CommandId::ChooseFile
+            | CommandId::Generate(_)
             | CommandId::UseClipboard
             | CommandId::ShowAll
             | CommandId::Original

@@ -265,6 +265,15 @@ pub(crate) fn source_commands(data: &LaunchData) -> Vec<Command> {
             "clipboard pasteboard",
         ));
     }
+    // New › UUID, Unix time, ISO 8601: after Clipboard, a submenu ([`menu_submenu`]).
+    commands.extend(crate::generate::Generator::ALL.iter().map(|generator| {
+        command(
+            CommandId::Generate(*generator),
+            generator.title(),
+            crate::locale::t("detail_generate"),
+            "new generate uuid guid v4 v7 unix time epoch timestamp seconds milliseconds iso 8601 now date",
+        )
+    }));
     commands
 }
 

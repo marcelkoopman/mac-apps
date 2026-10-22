@@ -42,7 +42,7 @@ impl Env {
 
 /// The local time zone's offset from UTC at `unix` seconds.
 #[cfg(target_os = "macos")]
-fn local_offset(unix: i64) -> i64 {
+pub(crate) fn local_offset(unix: i64) -> i64 {
     use mac_ui::objc2_foundation::{NSDate, NSTimeZone};
     let date = NSDate::dateWithTimeIntervalSince1970(unix as f64);
     NSTimeZone::localTimeZone().secondsFromGMTForDate(&date) as i64
@@ -50,7 +50,7 @@ fn local_offset(unix: i64) -> i64 {
 
 /// Off macOS (the Linux tests) local time is UTC.
 #[cfg(not(target_os = "macos"))]
-fn local_offset(_unix: i64) -> i64 {
+pub(crate) fn local_offset(_unix: i64) -> i64 {
     0
 }
 
