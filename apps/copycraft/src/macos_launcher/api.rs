@@ -384,6 +384,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     });
     HISTORY_NAV.with(|slot| slot.replace(data.history_nav));
     store_strip(&data.strip, data.strip_cursor, data.can_restore_history);
+    store_strip_hint(data.strip_hint);
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));

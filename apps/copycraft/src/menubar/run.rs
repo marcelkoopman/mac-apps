@@ -114,6 +114,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         poll_again: false,
         paste_explaining: false,
         paste_explained: crate::settings::paste_alert_explained(),
+        strip_compare_used: crate::settings::strip_compare_used(),
+        strip_hint_row: !crate::settings::strip_compare_used(),
         image_on_pasteboard: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,

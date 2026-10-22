@@ -308,6 +308,10 @@ impl App {
         {
             return;
         }
+        if !self.strip_compare_used {
+            self.strip_compare_used = true;
+            crate::settings::set_strip_compare_used();
+        }
         self.invalidate_diff();
         self.card_view = CardView::Diff;
         if !self.kick_diff() {

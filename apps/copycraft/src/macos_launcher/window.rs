@@ -466,7 +466,7 @@ pub(crate) fn layout(fresh_place: bool) {
     // not grow the card (and blurring it again does not shrink it).
     let find_shown = !well_is_masked();
     let strip_items = STRIP_ITEMS.with(|slot| slot.borrow().clone());
-    let placed = place_sections(
+    let placed = place_sections_with_hint(
         &meta,
         searching,
         &frames,
@@ -474,6 +474,7 @@ pub(crate) fn layout(fresh_place: bool) {
         version_bar.is_some(),
         true,
         !strip_items.is_empty(),
+        strip_hint().has_row(),
     );
     place_window(mtm, placed.height, fresh_place);
     apply_window_chrome();

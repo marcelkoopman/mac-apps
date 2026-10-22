@@ -322,7 +322,19 @@ mod tests {
             tf_in(Lang::En, "strip_compare_side", &[&"B"]),
             "compared, side B"
         );
-        for key in ["strip_compare_hint", "strip_compare_side"] {
+        assert_eq!(
+            t_in(Lang::Nl, "strip_compare_tip"),
+            "⌘-klik op een tegel om te vergelijken"
+        );
+        assert_eq!(
+            t_in(Lang::En, "strip_compare_tip"),
+            "⌘-click a tile to compare"
+        );
+        for key in [
+            "strip_compare_hint",
+            "strip_compare_side",
+            "strip_compare_tip",
+        ] {
             assert_ne!(t_in(Lang::Nl, key), t_in(Lang::En, key), "{key}");
         }
     }

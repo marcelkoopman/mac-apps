@@ -147,6 +147,39 @@ pub fn thumb_mark(thumb: &Thumb) -> String {
     }
 }
 
+/// Height of the one-line hint under the strip (⌘-click a card to compare).
+pub const STRIP_HINT_H: f64 = 16.0;
+
+/// The hint row under the strip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StripHint {
+    /// No row: no strip, or compare was used before this card opened.
+    #[default]
+    None,
+    /// The row with the hint.
+    Shown,
+    /// Compare was just used: the row stays empty until the card closes, so the card keeps
+    /// its height.
+    Blank,
+}
+
+impl StripHint {
+    /// The card keeps a row for it.
+    pub fn has_row(self) -> bool {
+        self != Self::None
+    }
+}
+
+/// The hint under the strip: while the strip shows, until ⌘- or ⇧-click compare was used once.
+/// `row_this_card`: compare had not been used when the card opened; `used`: it has been now.
+pub fn strip_hint(strip_shown: bool, row_this_card: bool, used: bool) -> StripHint {
+    match (strip_shown && row_this_card, used) {
+        (false, _) => StripHint::None,
+        (true, false) => StripHint::Shown,
+        (true, true) => StripHint::Blank,
+    }
+}
+
 /// Some card of the strip is one side of a diff.
 pub fn strip_comparing(items: &[Thumb]) -> bool {
     items.iter().any(|thumb| thumb.side.is_some())
@@ -230,6 +263,20 @@ pub fn thumb_spoken(position: usize, total: usize, current: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_compare_hint_shows_with_the_strip_until_compare_was_used() {
+        use super::{StripHint, strip_hint};
+        assert_eq!(strip_hint(true, true, false), StripHint::Shown);
+        // Used in this card: the row stays, empty, so the card does not shrink under the pointer.
+        assert_eq!(strip_hint(true, true, true), StripHint::Blank);
+        assert!(StripHint::Blank.has_row());
+        // Used before this card opened: no row at all.
+        assert_eq!(strip_hint(true, false, true), StripHint::None);
+        // No strip, no hint.
+        assert_eq!(strip_hint(false, true, false), StripHint::None);
+        assert!(!StripHint::None.has_row());
+    }
+
     use super::*;
 
     #[test]

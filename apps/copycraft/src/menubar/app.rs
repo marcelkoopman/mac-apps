@@ -90,6 +90,10 @@ pub(crate) struct App {
     pub(crate) paste_explaining: bool,
     /// That explanation was shown once (stored in the user defaults).
     pub(crate) paste_explained: bool,
+    /// Two history strip cards were compared once (stored in the user defaults).
+    pub(crate) strip_compare_used: bool,
+    /// Compare had not been used when this card opened: it keeps the hint row under the strip.
+    pub(crate) strip_hint_row: bool,
     /// The history picture the pasteboard holds at that change count (a copy recorded, or an
     /// entry put back), so its scan can be kept with the entry and found there again.
     pub(crate) image_on_pasteboard: Option<(isize, SecretBytes)>,

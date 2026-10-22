@@ -344,6 +344,7 @@ impl App {
         if self.browsing.take().is_some() {
             self.history_cursor = 0;
         }
+        self.strip_hint_row = !self.strip_compare_used;
         if self.opened.is_none() {
             let view = ClipboardView::from_os();
             self.record_current(&view);

@@ -27,6 +27,9 @@ pub struct Sections {
     /// Bottom of the history strip row (the card's last row); its height is 0 without a strip.
     pub strip_y: f64,
     pub strip_h: f64,
+    /// Bottom of the one-line hint under the strip; its height is 0 without one.
+    pub hint_y: f64,
+    pub hint_h: f64,
 }
 
 /// Height of the meta row. One line is [`META_H`]. A newline in the text does not add a row:
@@ -38,6 +41,7 @@ pub fn meta_block_height(meta: &str) -> f64 {
 /// Rows from the top: header, in-item find (`item_find`), the well, the meta line (when `meta`
 /// is not empty), the search field (`searching`) and the chips. `show_capsule` (the history or
 /// the table's version capsule) keeps a chip row even without chips.
+#[cfg(test)]
 pub fn place_sections(
     meta: &str,
     searching: bool,
@@ -46,6 +50,30 @@ pub fn place_sections(
     show_capsule: bool,
     item_find: bool,
     strip: bool,
+) -> Sections {
+    place_sections_with_hint(
+        meta,
+        searching,
+        frames,
+        show_empty,
+        show_capsule,
+        item_find,
+        strip,
+        false,
+    )
+}
+
+/// [`place_sections`] with the hint row under the strip (`hint`, only with a strip).
+#[allow(clippy::too_many_arguments)]
+pub fn place_sections_with_hint(
+    meta: &str,
+    searching: bool,
+    frames: &[ChipFrame],
+    show_empty: bool,
+    show_capsule: bool,
+    item_find: bool,
+    strip: bool,
+    hint: bool,
 ) -> Sections {
     let meta_h = meta_block_height(meta);
     let search_h = if searching { SEARCH_H } else { 0.0 };
@@ -60,6 +88,11 @@ pub fn place_sections(
         chips_h = chips_h.max(commands::CHIP_PITCH);
     }
     let strip_h = if strip { commands::STRIP_H } else { 0.0 };
+    let hint_h = if strip && hint {
+        commands::STRIP_HINT_H
+    } else {
+        0.0
+    };
     let below_preview = meta_h > 0.0 || search_h > 0.0 || chips_h > 0.0 || strip_h > 0.0;
     let gap_after_preview = if below_preview { GAP } else { 0.0 };
     let gap_after_meta = if meta_h > 0.0 && (search_h > 0.0 || chips_h > 0.0 || strip_h > 0.0) {
@@ -91,6 +124,7 @@ pub fn place_sections(
         + chips_h
         + gap_after_chips
         + strip_h
+        + hint_h
         + PAD;
     let mut cursor = height - PAD;
     cursor -= HEADER_H;
@@ -107,6 +141,8 @@ pub fn place_sections(
     let chips_y = cursor;
     cursor -= gap_after_chips + strip_h;
     let strip_y = cursor;
+    cursor -= hint_h;
+    let hint_y = cursor;
     Sections {
         height,
         header_y,
@@ -118,12 +154,14 @@ pub fn place_sections(
         chips_h,
         strip_y,
         strip_h,
+        hint_y,
+        hint_h,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{GAP, META_H, PAD, place_sections};
+    use super::{GAP, META_H, PAD, place_sections, place_sections_with_hint};
     use crate::commands::{
         CHIP_GAP, CHIP_PITCH, ChipFrame, VERSION_SPAN, layout_chips, trailing_reserve,
         version_capsule_x,
@@ -192,6 +230,29 @@ mod tests {
             .fold(0.0, f64::max);
         assert!(end + CHIP_GAP <= version_capsule_x(inner));
         assert!(frames.iter().any(|frame| frame.row == 1));
+    }
+
+    #[test]
+    fn the_compare_hint_is_one_line_under_the_strip() {
+        let plain =
+            place_sections_with_hint("m", false, &one_row(), false, false, false, true, false);
+        let hint =
+            place_sections_with_hint("m", false, &one_row(), false, false, false, true, true);
+        assert_eq!(hint.hint_h, crate::commands::STRIP_HINT_H);
+        assert_eq!(hint.hint_y, PAD);
+        assert_eq!(hint.strip_y, PAD + crate::commands::STRIP_HINT_H);
+        assert_eq!(hint.strip_h, plain.strip_h);
+        assert_eq!(hint.height - plain.height, crate::commands::STRIP_HINT_H);
+        // The rows above keep their distance to the top.
+        assert_eq!(hint.height - hint.chips_y, plain.height - plain.chips_y);
+        // No strip, no hint row.
+        let bare =
+            place_sections_with_hint("m", false, &one_row(), false, false, false, false, true);
+        assert_eq!(bare.hint_h, 0.0);
+        assert_eq!(
+            bare.height,
+            place_sections("m", false, &one_row(), false, false, false, false).height
+        );
     }
 
     #[test]

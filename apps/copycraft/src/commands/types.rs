@@ -80,6 +80,8 @@ pub struct LaunchData {
     pub strip_cursor: usize,
     /// A copy was just removed from history: ⌘Z puts it back ([`CommandId::RestoreHistory`]).
     pub can_restore_history: bool,
+    /// The hint under the strip (⌘-click a card to compare), until compare was used once.
+    pub strip_hint: StripHint,
     pub theme: Theme,
     /// Settings with a check mark in the `⋯` menu.
     pub settings: crate::settings::Settings,

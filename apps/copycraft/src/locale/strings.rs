@@ -527,6 +527,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "⌘-click to compare with the copy on screen",
     ),
     (
+        "strip_compare_tip",
+        "⌘-klik op een tegel om te vergelijken",
+        "⌘-click a tile to compare",
+    ),
+    (
         "strip_compare_side",
         "vergelijking, kant {0}",
         "compared, side {0}",

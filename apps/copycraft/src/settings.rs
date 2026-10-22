@@ -165,6 +165,8 @@ const NOTIFY_SECRET_KEY: &str = "CopycraftNotifySecret";
 const NOTIFY_PERMISSION_KEY: &str = "CopycraftNotifyPermission";
 /// The card has explained the pasteboard privacy alert once (Default or Ask).
 const PASTE_ALERT_EXPLAINED_KEY: &str = "CopycraftPasteAlertExplained";
+/// ⌘- or ⇧-click compared two history strip cards once: the hint under the strip is gone.
+const STRIP_COMPARE_USED_KEY: &str = "CopycraftStripCompareUsed";
 /// Stored (true) once the welcome window closed; missing on first launch.
 const WELCOME_KEY: &str = "hasSeenWelcome";
 /// "Keep clipboard history" ([`Settings::clipboard_history`]). Stored at the first launch of a
@@ -198,6 +200,7 @@ const EARLIER_KEYS: &[&str] = &[
     NOTIFY_SECRET_KEY,
     NOTIFY_PERMISSION_KEY,
     PASTE_ALERT_EXPLAINED_KEY,
+    STRIP_COMPARE_USED_KEY,
     SYMBOL_RECENT_KEY,
     SYMBOLS_KEY,
     IGNORED_APPS_KEY,
@@ -504,6 +507,16 @@ pub fn paste_alert_explained() -> bool {
 
 pub fn set_paste_alert_explained() {
     store_bool(PASTE_ALERT_EXPLAINED_KEY, true);
+}
+
+/// Whether two history strip cards were compared once (⌘- or ⇧-click). Until then the strip
+/// shows a hint.
+pub fn strip_compare_used() -> bool {
+    load_bool(STRIP_COMPARE_USED_KEY).unwrap_or(false)
+}
+
+pub fn set_strip_compare_used() {
+    store_bool(STRIP_COMPARE_USED_KEY, true);
 }
 
 /// Recently copied symbols, newest first. Missing or blank means none yet.

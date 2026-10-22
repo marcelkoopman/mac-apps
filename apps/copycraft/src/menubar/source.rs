@@ -511,6 +511,11 @@ impl App {
             strip: self.strip_thumbs(),
             strip_cursor: self.history_cursor,
             can_restore_history: self.history.can_restore(),
+            strip_hint: commands::strip_hint(
+                commands::strip_shown(self.history.len(), commands::strip_turned_off()),
+                self.strip_hint_row,
+                self.strip_compare_used,
+            ),
             theme: appearance::load(),
             settings: crate::settings::load(),
             view: self.card_view,

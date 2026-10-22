@@ -42,7 +42,7 @@ use crate::launcher::{self, UserEvent};
 /// The diff well is two columns, so the card grows while that view is showing.
 pub(crate) const DIFF_WIDTH: f64 = 820.0;
 use crate::card_layout::{
-    HEADER_H, ITEM_FIND_H, PAD, PREVIEW_H, SEARCH_H, meta_block_height, place_sections,
+    HEADER_H, ITEM_FIND_H, PAD, PREVIEW_H, SEARCH_H, meta_block_height, place_sections_with_hint,
 };
 pub(crate) const WELL_ACTION: f64 = mac_ui::metrics::BUTTON_H;
 pub(crate) const WELL_INSET: f64 = mac_ui::metrics::SPACE_S;

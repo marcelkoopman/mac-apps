@@ -35,6 +35,10 @@ thread_local! {
     static STRIP_HOVER: Cell<Option<usize>> = const { Cell::new(None) };
     /// A copy was just removed from history: ⌘Z puts it back.
     static CAN_RESTORE: Cell<bool> = const { Cell::new(false) };
+    /// The hint row under the strip ([`LaunchData::strip_hint`]).
+    static STRIP_HINT: Cell<commands::StripHint> = const { Cell::new(commands::StripHint::None) };
+    /// Its one-line label, made the first time it shows.
+    static STRIP_HINT_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
 }
 
 const IMAGE_KEEP: usize = 24;
@@ -50,6 +54,52 @@ pub(crate) fn store_strip(items: &[commands::Thumb], cursor: usize, can_restore:
         *slot = items.to_vec();
     });
     STRIP_CURSOR.set(cursor);
+}
+
+/// Take the hint under the strip from the card being shown.
+pub(crate) fn store_strip_hint(hint: commands::StripHint) {
+    STRIP_HINT.set(hint);
+}
+
+/// The hint row under the strip, for the layout.
+pub(crate) fn strip_hint() -> commands::StripHint {
+    STRIP_HINT.get()
+}
+
+/// Show the hint in its row (`placed.hint_h` 0: hidden). Small secondary text, centred.
+fn place_strip_hint(mtm: MainThreadMarker, placed: &crate::card_layout::Sections) {
+    let hint = STRIP_HINT.get();
+    STRIP_HINT_LABEL.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if placed.hint_h <= 0.0 || hint != commands::StripHint::Shown {
+            if let Some(label) = slot.as_ref() {
+                label.setHidden(true);
+            }
+            return;
+        }
+        if slot.is_none() {
+            let label = mac_ui::widgets::label(
+                mtm,
+                mac_ui::metrics::FONT_CAPTION,
+                &NSColor::secondaryLabelColor(),
+            );
+            label.setAlignment(mac_ui::objc2_app_kit::NSTextAlignment::Center);
+            if let Some(window) = WINDOW.with(|slot| slot.borrow().clone())
+                && let Some(content) = window.contentView()
+            {
+                content.addSubview(&label);
+            }
+            *slot = Some(label);
+        }
+        let label = slot.as_ref().expect("just made");
+        label.setTextColor(Some(&crate::appearance::caption_color()));
+        label.setStringValue(&NSString::from_str(crate::locale::t("strip_compare_tip")));
+        label.setFrame(NSRect::new(
+            NSPoint::new(PAD, placed.hint_y),
+            NSSize::new(card_width() - PAD * 2.0, placed.hint_h),
+        ));
+        label.setHidden(false);
+    });
 }
 
 /// Two cards of the strip are being compared (Esc ends it first).
@@ -71,6 +121,12 @@ pub(crate) fn clear_strip() {
     REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
     THUMB_IMAGES.with(|slot| slot.borrow_mut().clear());
     STRIP_SIGNATURE.set(0);
+    STRIP_HINT.set(commands::StripHint::None);
+    STRIP_HINT_LABEL.with(|slot| {
+        if let Some(label) = slot.borrow().as_ref() {
+            label.setHidden(true);
+        }
+    });
     STRIP_VIEWS.with(|slot| {
         if let Some(views) = slot.borrow().as_ref() {
             for card in views.document.subviews().iter() {
@@ -191,6 +247,7 @@ pub(crate) fn place_strip(
     placed: &crate::card_layout::Sections,
     items: &[commands::Thumb],
 ) {
+    place_strip_hint(mtm, placed);
     if items.is_empty() {
         STRIP_VIEWS.with(|slot| {
             if let Some(views) = slot.borrow().as_ref() {
