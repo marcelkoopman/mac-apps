@@ -10,6 +10,14 @@ ignore = [
     # quick-xml >= 0.41 (polars on object_store >= 0.14.1, or polars gone).
     "RUSTSEC-2026-0194",
     "RUSTSEC-2026-0195",
+    # RUSTSEC-2025-0141: bincode 2 is unmaintained. Only in Cargo.lock, never compiled for any
+    # target or feature set (`cargo tree -i bincode --target all -e all --all-features` prints
+    # nothing): copycraft's polars csv/json/parquet/temporal features carry weak
+    # `polars-lazy?/...` features, and Cargo still locks weak optional deps (rust-lang/cargo#10801),
+    # so polars-lazy and polars-utils' optional `serde` deps (bincode) land in the lockfile. Drop
+    # when Cargo.lock no longer has bincode (polars without bincode, or Cargo no longer locking
+    # inactive weak deps).
+    "RUSTSEC-2025-0141",
 ]
 
 [yanked]
