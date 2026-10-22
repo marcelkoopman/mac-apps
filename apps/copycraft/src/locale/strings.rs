@@ -233,8 +233,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "privacy_note",
-        "Verbergt gevoelige kopieën tot je ze toont.",
-        "Hides sensitive copies until you reveal them.",
+        "Verbergt gekopieerde inhoud tot je klikt.",
+        "Hides copied content until you click.",
     ),
     (
         "blur_masked",
