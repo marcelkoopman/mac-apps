@@ -1,7 +1,7 @@
 use super::{
     ClipSig, ICON_CLICK_GAP, card_returns_after_window, end_session_history, forget_opened_file,
-    history_due, history_forgettable, icon_click_is_new, icon_tip, removal_skip_ends,
-    status_labels, status_rows, tray_label, version_label,
+    history_due, history_forgettable, history_submenu_enabled, icon_click_is_new, icon_tip,
+    removal_skip_ends, status_labels, status_rows, tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -206,12 +206,8 @@ fn status_menu_lists_hotkey_then_version_then_quit() {
 
 #[test]
 fn status_menu_lists_history_between_the_hotkey_and_version() {
-    let entries = vec![
-        (1, "older note".to_string()),
-        (0, "just copied".to_string()),
-    ];
     assert_eq!(
-        status_rows(&entries),
+        status_rows(),
         vec![
             crate::settings::hotkey_label(),
             crate::locale::t("pause_recording").to_string(),
@@ -225,6 +221,15 @@ fn status_menu_lists_history_between_the_hotkey_and_version() {
             crate::locale::t("detail_quit").to_string(),
         ]
     );
+}
+
+/// *History ▸* is always in the menu; it opens only with entries and history on.
+#[test]
+fn the_history_submenu_is_greyed_out_when_empty_or_off() {
+    assert!(history_submenu_enabled(2, true));
+    assert!(!history_submenu_enabled(0, true));
+    assert!(!history_submenu_enabled(2, false));
+    assert!(!history_submenu_enabled(0, false));
 }
 
 #[test]

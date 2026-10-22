@@ -21,23 +21,25 @@ pub(crate) fn status_labels() -> [String; 3] {
 }
 
 #[cfg(test)]
-pub(crate) fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
+pub(crate) fn status_rows() -> Vec<String> {
     let [hotkey, version, quit] = status_labels();
-    let mut rows = vec![
+    vec![
         hotkey,
         crate::locale::t("pause_recording").to_string(),
         crate::locale::t("ignore_next").to_string(),
-    ];
-    if !entries.is_empty() {
-        rows.push(crate::locale::t("history").to_string());
-    }
-    rows.push(crate::locale::t("allow_screenshots").to_string());
-    rows.push(crate::locale::t("welcome_menu").to_string());
-    rows.push(crate::locale::t("settings").to_string());
-    rows.push(crate::locale::t("about").to_string());
-    rows.push(version);
-    rows.push(quit);
-    rows
+        crate::locale::t("history").to_string(),
+        crate::locale::t("allow_screenshots").to_string(),
+        crate::locale::t("welcome_menu").to_string(),
+        crate::locale::t("settings").to_string(),
+        crate::locale::t("about").to_string(),
+        version,
+        quit,
+    ]
+}
+
+/// *History ▸* can be opened when there is something in it and *Keep clipboard history* is on.
+pub(crate) fn history_submenu_enabled(entries: usize, history_on: bool) -> bool {
+    entries > 0 && history_on
 }
 
 /// The status menu, in groups with a separator between them (as the HIG asks): the hotkey
@@ -64,8 +66,13 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
         crate::capture::ignore_next(),
         None,
     ));
-    if !entries.is_empty() {
-        let history = Submenu::new(crate::locale::t("history"), true);
+    // Always there, so the menu keeps its shape; greyed out with nothing to pick.
+    let history_on = crate::settings::clipboard_history();
+    let history = Submenu::new(
+        crate::locale::t("history"),
+        history_submenu_enabled(entries.len(), history_on),
+    );
+    if history_on {
         for (index, title) in entries {
             let _ = history.append(&MenuItem::with_id(
                 format!("hist-{index}"),
@@ -74,8 +81,8 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
                 None,
             ));
         }
-        let _ = menu.append(&history);
     }
+    let _ = menu.append(&history);
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
