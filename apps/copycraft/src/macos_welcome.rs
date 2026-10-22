@@ -282,6 +282,7 @@ fn build(mtm: MainThreadMarker) {
         crate::locale::t("welcome_history").to_string(),
         crate::locale::t("welcome_local").to_string(),
         crate::locale::t("welcome_sensitive").to_string(),
+        crate::locale::tf("welcome_way_back", &[&crate::settings::hotkey_label()]),
     ];
     let point_views: Vec<Retained<NSTextField>> = points
         .iter()

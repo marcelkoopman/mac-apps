@@ -88,6 +88,8 @@ mod macos_pdf;
 #[cfg(target_os = "macos")]
 mod macos_preview_image;
 #[cfg(target_os = "macos")]
+mod macos_reopen;
+#[cfg(target_os = "macos")]
 mod macos_save;
 #[cfg(target_os = "macos")]
 mod macos_session;

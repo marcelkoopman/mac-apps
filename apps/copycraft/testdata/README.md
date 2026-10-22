@@ -260,6 +260,10 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] Hidden Edit menu: in Settings › AI's prompt fields and the card's search field, ⌘X ⌘C ⌘V
       ⌘A and ⌘Z/⇧⌘Z work on the text; on the card without a field, ⌘Z still steps back
       through the card's versions. ⌘H hides CopyCraft and ⌘Q quits it (winit's app menu).
+- [ ] Way back: hide the menu bar icon (System Settings › Menu Bar, or ⌘-drag it off), then
+      double-click CopyCraft in Finder (or open it from Launchpad): the card opens in the middle
+      of the screen. The welcome screen's last line says *Menu bar icon hidden? Open CopyCraft
+      again from the Finder or with ⌃⌘C.* (Dutch: *Is het menubalkpictogram verborgen? …*).
 - [ ] Window menu: ⌘W closes and ⌘M minimises Settings, the welcome screen and About (each
       now has an active yellow button); ⌘, on the card opens Settings.
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,

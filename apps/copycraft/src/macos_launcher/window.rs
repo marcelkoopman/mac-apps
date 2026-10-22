@@ -1,7 +1,7 @@
 //! Building the card window, labelling its controls and laying it out.
 
 use super::*;
-use mac_ui::objc2_app_kit::NSAppearanceCustomization;
+use mac_ui::objc2_app_kit::{NSAppearanceCustomization, NSScreen};
 
 pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     if WINDOW.with(|slot| slot.borrow().is_some()) {
@@ -634,6 +634,7 @@ pub(crate) fn place_window(mtm: MainThreadMarker, height: f64, fresh: bool) {
         // copy), its height clamped to the screen; near the cursor only before the icon is known.
         let frame = match ICON_FRAME.get() {
             Some(icon) => panel::under_icon(mtm, icon, size, &UNDER_ICON),
+            None if fresh && CENTRED.get() => centred_on_main_screen(mtm, size),
             None if fresh => panel::near_cursor(mtm, size, &NEAR_CURSOR),
             None => panel::keep_top_left(window.frame(), size),
         };
@@ -656,4 +657,40 @@ pub(crate) fn place_well(y: f64) {
     });
     place_spinner(frame);
     place_picker(y);
+}
+
+/// Frame of `size` in the middle of the main screen's visible area (reopen), its height
+/// clamped to that area.
+fn centred_on_main_screen(mtm: MainThreadMarker, size: NSSize) -> NSRect {
+    let Some(visible) = NSScreen::mainScreen(mtm).map(|screen| screen.visibleFrame()) else {
+        return panel::near_cursor(mtm, size, &NEAR_CURSOR);
+    };
+    centred_in(visible, size)
+}
+
+/// `size` centred in `visible`, no taller than `visible`.
+pub(crate) fn centred_in(visible: NSRect, size: NSSize) -> NSRect {
+    let size = NSSize::new(size.width, size.height.min(visible.size.height));
+    NSRect::new(
+        NSPoint::new(
+            visible.origin.x + (visible.size.width - size.width) / 2.0,
+            visible.origin.y + (visible.size.height - size.height) / 2.0,
+        ),
+        size,
+    )
+}
+
+#[cfg(test)]
+mod centred_tests {
+    use super::{NSPoint, NSRect, NSSize, centred_in};
+
+    #[test]
+    fn a_reopened_card_sits_in_the_middle_and_fits_the_screen() {
+        let visible = NSRect::new(NSPoint::new(0.0, 40.0), NSSize::new(1000.0, 800.0));
+        let frame = centred_in(visible, NSSize::new(400.0, 300.0));
+        assert_eq!(frame.origin, NSPoint::new(300.0, 290.0));
+        let tall = centred_in(visible, NSSize::new(400.0, 2000.0));
+        assert_eq!(tall.size.height, 800.0);
+        assert_eq!(tall.origin.y, 40.0);
+    }
 }

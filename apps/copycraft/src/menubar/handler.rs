@@ -7,7 +7,10 @@ impl ApplicationHandler<UserEvent> for App {
     /// to it.
     fn resumed(&mut self, _: &ActiveEventLoop) {
         #[cfg(target_os = "macos")]
-        crate::macos_main_menu::install();
+        {
+            crate::macos_main_menu::install();
+            crate::macos_reopen::install();
+        }
     }
 
     fn window_event(
@@ -23,6 +26,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Run(id) => self.run_command(event_loop, id),
             UserEvent::ToggleUnderIcon => self.toggle_popup_under_icon(),
             UserEvent::ShowStatusMenu => self.show_status_menu(),
+            UserEvent::Reopen => self.reopen_card(),
             UserEvent::ShowWelcome => launcher::show_welcome(),
             UserEvent::AiChecked(availability) => self.ai_startup_checked(availability),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),

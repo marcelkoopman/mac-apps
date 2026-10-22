@@ -14,6 +14,9 @@ pub enum UserEvent {
     ShowStatusMenu,
     /// First launch: show the welcome window once the event loop runs.
     ShowWelcome,
+    /// CopyCraft was opened again (Finder, Launchpad, Spotlight) while it runs: open the card
+    /// in the middle of the screen, the way back when the menu bar icon is hidden.
+    Reopen,
     /// The startup check of Apple Intelligence is done (off the main thread).
     AiChecked(mac_ai::Availability),
     ImageScanned {
@@ -220,6 +223,21 @@ pub fn restore_card(tray: &mac_ui::tray_icon::TrayIcon) {
     crate::macos_launcher::restore_under_icon(tray);
     #[cfg(not(target_os = "macos"))]
     let _ = tray;
+}
+
+/// Open the card in the middle of the main screen with `card` built from `data` (reopen,
+/// when the menu bar icon may be hidden).
+pub fn open_centred(data: LaunchData, card: crate::commands::WorkCard) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::open_centred(data, card);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (data, card);
+}
+
+/// Bring the card of an AI run or preview back in the middle of the main screen.
+pub fn restore_centred() {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::restore_centred();
 }
 
 /// Hide the card but keep the AI run and its preview, for the icon to bring back.

@@ -199,7 +199,26 @@ pub fn open_under_icon(
     // Measured again on every show: the card is placed from the icon, never from an old frame.
     // Kept afterwards, so a card that grows or shrinks stays anchored under the icon too.
     ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
+    CENTRED.set(false);
     reveal_with_card(data, card);
+}
+
+/// Open the card in the middle of the main screen with `card` built from `data`.
+pub fn open_centred(data: LaunchData, card: commands::WorkCard) {
+    ICON_FRAME.set(None);
+    CENTRED.set(true);
+    reveal_with_card(data, card);
+}
+
+/// Bring the card of an AI run or preview back, in the middle of the main screen.
+pub fn restore_centred() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    ICON_FRAME.set(None);
+    CENTRED.set(true);
+    prepare(mtm, true);
+    show_stored(true);
 }
 
 /// Open the card with `card` already built (off the main thread) from `data`.
@@ -226,6 +245,7 @@ pub fn restore_under_icon(tray: &mac_ui::tray_icon::TrayIcon) {
         return;
     };
     ICON_FRAME.set(panel::tray_icon_frame(mtm, tray));
+    CENTRED.set(false);
     prepare(mtm, true);
     show_stored(true);
 }

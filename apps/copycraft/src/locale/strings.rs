@@ -56,6 +56,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Wachtwoorden uit een wachtwoordbeheerder en herkende tokens en sleutels blijven buiten de geschiedenis.",
         "Passwords from password managers and recognised tokens and keys stay out of history.",
     ),
+    (
+        "welcome_way_back",
+        "Is het menubalkpictogram verborgen? Open CopyCraft dan opnieuw vanuit de Finder of met {0}.",
+        "Menu bar icon hidden? Open CopyCraft again from the Finder or with {0}.",
+    ),
     ("welcome_start", "Aan de slag", "Get Started"),
     (
         "welcome_login_failed",

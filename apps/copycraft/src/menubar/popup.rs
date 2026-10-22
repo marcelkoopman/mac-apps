@@ -97,6 +97,29 @@ impl App {
         self.sync_ai_tray();
     }
 
+    /// CopyCraft was opened again while it runs (Finder, Launchpad, Spotlight): the card opens
+    /// in the middle of the screen, so it can be reached with the menu bar icon hidden. An open
+    /// card stays where it is; an AI run's card comes back as it was.
+    pub(crate) fn reopen_card(&mut self) {
+        if launcher::is_open() {
+            return;
+        }
+        if self.ai.is_some() {
+            launcher::restore_centred();
+            self.sync_ai_tray();
+            return;
+        }
+        if !self.file_stays() {
+            self.reset_view();
+            self.leave_opened();
+            self.full_card = None;
+        }
+        let data = self.launch_for_popup();
+        let card = self.history_card(&data);
+        launcher::open_centred(data, card);
+        self.sync_ai_tray();
+    }
+
     pub(crate) fn show_status_menu(&mut self) {
         #[cfg(target_os = "macos")]
         {

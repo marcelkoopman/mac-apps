@@ -12,7 +12,10 @@
 # copycraft blocks 106: +6 for the PDF card (macos_pdf.rs: PDFDocument init, page count/lock and page text
 # reads (2), page reference, and macos_image_io::with_bitmap's CGBitmapContextCreate + ownership). The PDFKit
 # calls are `unsafe` in objc2-pdf-kit; they run on the main thread only.
-copycraft blocks 106
+# copycraft blocks 107: +1 macos_reopen::install (the reopen Apple event handler: NSObject `init` of the
+# handler and setEventHandler:andSelector:forEventClass:andEventID:, which objc2-foundation only offers
+# behind objc2-core-services, a crate not in the tree; approved by Marcel as HIG point 7).
+copycraft blocks 107
 copycraft fn 5
 copycraft impl 7
 mac-ui blocks 82

@@ -149,6 +149,8 @@ thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.
     static ICON_FRAME: Cell<Option<NSRect>> = const { Cell::new(None) };
+    /// Set while CopyCraft was reopened: the card opens in the middle of the main screen.
+    static CENTRED: Cell<bool> = const { Cell::new(false) };
     static SEARCHING: Cell<bool> = const { Cell::new(false) };
     static SELECTION: Cell<usize> = const { Cell::new(0) };
     static THEME: Cell<Theme> = const { Cell::new(Theme::System) };

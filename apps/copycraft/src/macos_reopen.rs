@@ -1,0 +1,70 @@
+//! The way back to CopyCraft when its menu bar icon is hidden (macOS lets you hide a menu bar
+//! extra, and a crowded menu bar hides it behind the notch): opening CopyCraft again from
+//! Finder, Launchpad or Spotlight while it runs opens the card in the middle of the screen.
+//!
+//! LaunchServices sends a running app the reopen Apple event (`kAEReopenApplication`) for that.
+//! AppKit's own handler only asks the app delegate (`applicationShouldHandleReopen:…`), which
+//! is winit's and does not answer it, so CopyCraft handles the event itself.
+
+use std::cell::RefCell;
+
+use mac_ui::objc2::rc::Retained;
+use mac_ui::objc2::runtime::AnyObject;
+use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use mac_ui::objc2_foundation::{NSAppleEventManager, NSObject};
+
+use crate::launcher::{self, UserEvent};
+
+/// `kCoreEventClass`, `'aevt'`.
+const CORE_EVENT_CLASS: u32 = u32::from_be_bytes(*b"aevt");
+/// `kAEReopenApplication`, `'rapp'`.
+const REOPEN_APPLICATION: u32 = u32::from_be_bytes(*b"rapp");
+
+thread_local! {
+    /// The event manager does not retain its handler.
+    static HANDLER: RefCell<Option<Retained<ReopenHandler>>> = const { RefCell::new(None) };
+}
+
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements. The handler only receives the reopen
+    // event.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "CopycraftReopenHandler"]
+    struct ReopenHandler;
+
+    impl ReopenHandler {
+        #[unsafe(method(handleReopen:withReplyEvent:))]
+        fn handle_reopen(&self, _event: Option<&AnyObject>, _reply: Option<&AnyObject>) {
+            launcher::emit(UserEvent::Reopen);
+        }
+    }
+);
+
+/// Handle the reopen event from now on. Runs once, after launch; a second call does nothing.
+pub fn install() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    if HANDLER.with(|slot| slot.borrow().is_some()) {
+        return;
+    }
+    let manager = NSAppleEventManager::sharedAppleEventManager();
+    // SAFETY: NSObject's initialiser on a fresh instance; then
+    // `setEventHandler:andSelector:forEventClass:andEventID:` with a handler that implements
+    // the selector (two object arguments, no result) and is kept alive in HANDLER for the
+    // process, and two four-character codes (`AEEventClass` and `AEEventID` are `u32`).
+    let handler: Retained<ReopenHandler> = unsafe {
+        let handler: Retained<ReopenHandler> = msg_send![ReopenHandler::alloc(mtm), init];
+        let object: &AnyObject = handler.as_ref();
+        let _: () = msg_send![
+            &manager,
+            setEventHandler: object,
+            andSelector: sel!(handleReopen:withReplyEvent:),
+            forEventClass: CORE_EVENT_CLASS,
+            andEventID: REOPEN_APPLICATION
+        ];
+        handler
+    };
+    HANDLER.with(|slot| *slot.borrow_mut() = Some(handler));
+}
