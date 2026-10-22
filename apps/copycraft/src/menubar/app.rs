@@ -36,6 +36,10 @@ pub(crate) struct App {
     pub(crate) reinstall_click: Cell<bool>,
     pub(crate) skip_image_change: Option<isize>,
     pub(crate) skip_record: Option<Zeroizing<String>>,
+    /// The pasteboard change at which removing the newest entry set `skip_record`: on the next
+    /// change the skip ends, so copying that same text again records it ([`removal_skip_ends`]).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) removal_skip_change: Option<isize>,
     /// Result the card is showing. A new clipboard copy returns this to original.
     pub(crate) card_view: CardView,
     /// File on the card. Absent means the card follows the clipboard.

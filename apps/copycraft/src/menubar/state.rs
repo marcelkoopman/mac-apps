@@ -26,6 +26,12 @@ impl App {
             }
             crate::macos_pasteboard::set_card_shown(open);
             let change = crate::macos_pasteboard::change_count();
+            // The newest entry was removed while the clipboard held it: a new copy, even of the
+            // same text, is recorded again.
+            if removal_skip_ends(self.removal_skip_change, change) {
+                self.removal_skip_change = None;
+                self.skip_record = None;
+            }
             // The frontmost app only matters for a new copy (and for "Add frontmost app",
             // which the status menu refreshes itself): not asked on a quiet tick.
             if self.polled_change != Some(change) {
@@ -274,6 +280,12 @@ pub(crate) fn history_due(
 /// after a removal (also when only pins remain, or nothing at all).
 pub(crate) fn history_forgettable(history: &ClipboardHistory) -> bool {
     history.has_unpinned() || history.can_restore()
+}
+
+/// The skip set by removing the newest entry ends at the first pasteboard change after it.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn removal_skip_ends(set_at: Option<isize>, change: isize) -> bool {
+    set_at.is_some_and(|at| at != change)
 }
 
 /// What [`App::record_current`] did with a copied text.

@@ -143,6 +143,10 @@ impl App {
         if index == 0 {
             if let Some(text) = self.history.get(0) {
                 self.skip_record = Some(Zeroizing::new(text.to_string()));
+                #[cfg(target_os = "macos")]
+                {
+                    self.removal_skip_change = Some(crate::macos_pasteboard::change_count());
+                }
             } else {
                 #[cfg(target_os = "macos")]
                 {
@@ -186,6 +190,7 @@ impl App {
         {
             self.skip_record = None;
         }
+        self.removal_skip_change = None;
         self.history_emptied = false;
         if let Some(cursor) = self.clipboard_cursor
             && cursor >= index

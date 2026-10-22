@@ -1,7 +1,7 @@
 use super::{
     ClipSig, ICON_CLICK_GAP, card_returns_after_window, end_session_history, forget_opened_file,
-    history_due, history_forgettable, icon_click_is_new, icon_tip, status_labels, status_rows,
-    tray_label, version_label,
+    history_due, history_forgettable, icon_click_is_new, icon_tip, removal_skip_ends,
+    status_labels, status_rows, tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -70,6 +70,16 @@ fn a_lock_forgets_the_copy_kept_for_undo_also_with_history_empty() {
     history.take_id(two);
     assert!(end_session_history(&mut history));
     assert!(!history.can_restore());
+}
+
+#[test]
+fn a_removed_newest_copy_is_recorded_again_after_a_new_copy() {
+    // Removed at change 7: the poll still sees 7 and does not record it again.
+    assert!(!removal_skip_ends(Some(7), 7));
+    // The same text copied again is change 8: the skip ends and the copy is recorded.
+    assert!(removal_skip_ends(Some(7), 8));
+    // No removal: nothing to end (another skip, e.g. after Wipe, stays as it was).
+    assert!(!removal_skip_ends(None, 8));
 }
 
 #[test]
