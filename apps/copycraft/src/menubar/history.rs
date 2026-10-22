@@ -49,6 +49,8 @@ impl App {
             }
         }
         self.pin_refused = false;
+        // A drop still waiting for its check stays out, like what was cleared.
+        self.dropped_text_wait = None;
         if full {
             self.clear_diff();
             self.current_image = None;
@@ -225,6 +227,7 @@ impl App {
         self.forget_decoded_picture();
         self.close_table_window();
         self.opened = None;
+        self.dropped_text_wait = None;
         self.opened_table = crate::settings::preferred_table();
         self.card_text = None;
         self.opened_steps = None;
@@ -428,6 +431,8 @@ impl App {
     /// "Checking…"), and conceal copycraft's own write that was waiting for them.
     pub(crate) fn labels_checked(&mut self) {
         self.secret_labels_checked();
+        // A long dropped or pasted text waited for its labels too.
+        self.dropped_text_checked();
         // A long copy from another app waits for its labels before it goes into history
         // ([`crate::sensitivity::Admission::Wait`]): record it now, unless it holds a credential.
         let view = ClipboardView::from_os();

@@ -40,6 +40,10 @@ pub(crate) struct App {
     pub(crate) card_view: CardView,
     /// File on the card. Absent means the card follows the clipboard.
     pub(crate) opened: Option<crate::open_file::OpenedFile>,
+    /// A dropped, pasted or chosen long text whose labels were still being checked: recorded
+    /// by [`App::labels_checked`] once they are in, if it holds no credential and is still on
+    /// the card ([`crate::sensitivity::Record::AfterCheck`]).
+    pub(crate) dropped_text_wait: Option<Zeroizing<String>>,
     pub(crate) image_scan: Option<commands::ImageScan>,
     /// Pasteboard change the stored scan belongs to.
     pub(crate) image_scan_change: Option<isize>,

@@ -58,6 +58,7 @@ impl App {
     /// left as it is.
     pub(crate) fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
         let opened = self.look_at_dropped_image(opened);
+        self.dropped_text_wait = None;
         let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
         let clipboard_at = if let Some(image) = opened.image.as_ref() {
             Some(
@@ -65,27 +66,24 @@ impl App {
                     .record_image_tracking(image.bytes.clone(), base),
             )
         } else if let Some(text) = opened.text.as_deref() {
-            // A file that holds a token, key or URL password is shown, not kept in history.
-            if crate::sensitivity::admission(&crate::sensitivity::labeling(text))
-                == crate::sensitivity::Admission::Refuse
-            {
-                None
-            } else {
-                self.history.record_tracking(text.to_string(), base)
+            // A file that holds a token, key or URL password is shown, not kept in history. A
+            // long one is checked in the background first: `labels_checked` decides then.
+            use crate::sensitivity::Record;
+            match crate::sensitivity::record_when(crate::sensitivity::admission(
+                &crate::sensitivity::labeling(text),
+            )) {
+                Record::Now => self.history.record_tracking(text.to_string(), base),
+                Record::AfterCheck => {
+                    self.dropped_text_wait = Some(Zeroizing::new(text.to_string()));
+                    None
+                }
+                Record::Never => None,
             }
         } else {
             None
         };
         if let Some(clipboard_at) = clipboard_at {
-            self.last_copy = Some(Instant::now());
-            // The clipboard is not recorded again (back to the front) until it changes. A
-            // copied picture is recorded once per pasteboard change anyway.
-            if let Some(current) = ClipboardView::from_os().text() {
-                self.skip_record = Some(Zeroizing::new(current.to_string()));
-            }
-            self.clipboard_cursor = Some(clipboard_at);
-            self.history_cursor = 0;
-            self.refresh_status_menu();
+            self.dropped_recorded(clipboard_at);
         }
         // A document's picture (Quick Look) has its text already; recognizing the picture would
         // only replace it.
@@ -102,6 +100,51 @@ impl App {
         }
         self.show_source(opened);
         launcher::order_front();
+    }
+
+    /// The drop on the card is in history now, at index 0; the clipboard's own entry is at
+    /// `clipboard_at`.
+    pub(crate) fn dropped_recorded(&mut self, clipboard_at: usize) {
+        self.last_copy = Some(Instant::now());
+        // The clipboard is not recorded again (back to the front) until it changes. A
+        // copied picture is recorded once per pasteboard change anyway.
+        if let Some(current) = ClipboardView::from_os().text() {
+            self.skip_record = Some(Zeroizing::new(current.to_string()));
+        }
+        self.clipboard_cursor = Some(clipboard_at);
+        self.history_cursor = 0;
+        self.refresh_status_menu();
+    }
+
+    /// The checker has labels: the long dropped text that waited for them goes into history
+    /// now, unless it holds a credential or the card moved on (then it is not recorded).
+    pub(crate) fn dropped_text_checked(&mut self) {
+        let Some(text) = self.dropped_text_wait.take() else {
+            return;
+        };
+        let shown = self
+            .opened
+            .as_ref()
+            .and_then(|file| file.text.as_deref())
+            .is_some_and(|shown| shown.as_str() == text.as_str());
+        if !shown {
+            return;
+        }
+        use crate::sensitivity::Record;
+        match crate::sensitivity::record_when(crate::sensitivity::admission(
+            &crate::sensitivity::labeling(&text),
+        )) {
+            Record::Now => {
+                let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+                if let Some(clipboard_at) = self.history.record_tracking(text.to_string(), base) {
+                    self.dropped_recorded(clipboard_at);
+                }
+            }
+            Record::AfterCheck => self.dropped_text_wait = Some(text),
+            Record::Never => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                crate::diag::Skip::Credential,
+            )),
+        }
     }
 
     /// ⌘V in the card: what the clipboard held goes in like a drop. Text passes
@@ -258,6 +301,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
+        self.dropped_text_wait = None;
         self.opened_superseded = false;
         self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();

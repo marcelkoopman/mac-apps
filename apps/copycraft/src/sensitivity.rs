@@ -70,6 +70,28 @@ pub fn admission(labeling: &Labeling) -> Admission {
     }
 }
 
+/// When a drop, a ⌘V paste or a chosen file goes into history ([`record_when`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Record {
+    Now,
+    /// A long text whose labels are still being checked: decided again with the labels, once
+    /// the background checker has them ([`on_checked`]). Not in history meanwhile.
+    AfterCheck,
+    /// It holds a credential: shown on the card, never in history.
+    Never,
+}
+
+/// The [`Record`] for a copy's [`Admission`]. Only [`Admission::Keep`] goes in now; a long text
+/// still being checked ([`Admission::Wait`]) waits for its labels, like a long copy from
+/// another app does. Pure.
+pub fn record_when(admission: Admission) -> Record {
+    match admission {
+        Admission::Keep => Record::Now,
+        Admission::Wait => Record::AfterCheck,
+        Admission::Refuse => Record::Never,
+    }
+}
+
 /// The labels for the card: a short copy is checked now, a longer one is remembered or handed
 /// to the background checker ([`Labeling::Checking`]).
 pub fn labeling(text: &str) -> Labeling {
@@ -588,6 +610,41 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         let marks = warning_marks("1.2 MB  ·  PII · financial  ·  Checking…");
         assert_eq!(marks.len(), 2);
         assert!(warning_marks("1.2 MB  ·  Checking…").is_empty());
+    }
+
+    #[test]
+    fn a_long_dropped_text_with_a_token_never_enters_history() {
+        use super::{Admission, Found, Labeling, Record, SYNC_LIMIT, admission, record_when};
+        // A log over 32 KiB that holds a GitHub token (built in parts: no token in the source).
+        let token = concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5");
+        assert_eq!(token.len(), 4 + 36);
+        let log = format!(
+            "{}\nexport GITHUB_TOKEN={token}\n",
+            "INFO request served in 12 ms\n".repeat(SYNC_LIMIT / 20)
+        );
+        assert!(log.len() > SYNC_LIMIT);
+        // At the drop (or ⌘V) its labels are not known yet: it waits, it is not recorded.
+        assert_eq!(
+            record_when(admission(&Labeling::Checking)),
+            Record::AfterCheck
+        );
+        // Once the checker has the labels it is never recorded.
+        assert_eq!(
+            record_when(admission(&Labeling::Known(super::found(&log)))),
+            Record::Never
+        );
+        // The same log without the token goes in once it is checked.
+        let clean = log.replace(token, "(none)");
+        assert_eq!(
+            record_when(admission(&Labeling::Known(super::found(&clean)))),
+            Record::Now
+        );
+        assert_eq!(record_when(Admission::Keep), Record::Now);
+        assert_eq!(record_when(Admission::Refuse), Record::Never);
+        assert_eq!(
+            admission(&Labeling::Known(Found { labels: vec![] })),
+            Admission::Keep
+        );
     }
 
     #[test]
