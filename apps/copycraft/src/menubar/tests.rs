@@ -199,7 +199,7 @@ fn status_menu_lists_hotkey_then_version_then_quit() {
         [
             crate::settings::hotkey_label(),
             version_label(),
-            "Quit".to_string(),
+            "Quit CopyCraft".to_string(),
         ]
     );
 }
@@ -218,11 +218,11 @@ fn status_menu_lists_history_between_the_hotkey_and_version() {
             crate::locale::t("ignore_next").to_string(),
             crate::locale::t("history").to_string(),
             crate::locale::t("allow_screenshots").to_string(),
-            crate::locale::t("settings").to_string(),
             crate::locale::t("welcome_menu").to_string(),
+            crate::locale::t("settings").to_string(),
             crate::locale::t("about").to_string(),
             version_label(),
-            crate::locale::t("quit").to_string(),
+            crate::locale::t("detail_quit").to_string(),
         ]
     );
 }

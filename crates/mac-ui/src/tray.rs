@@ -3,6 +3,7 @@
 
 use std::time::{Duration, Instant};
 
+use tray_icon::menu::accelerator::{Accelerator, Code, Modifiers};
 use tray_icon::menu::{IconMenuItem, MenuItem, NativeIcon};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
@@ -113,14 +114,25 @@ pub fn set_accessibility_label(tray: &TrayIcon, label: &str) {
     let _ = (tray, label);
 }
 
-/// Enabled quit row with id [`QUIT_ID`] and the native stop icon.
+/// `⌘` plus `key`, shown at the right of a menu row (for example ⌘, on *Settings…*, ⌘Q on
+/// *Quit*). It works while the menu is open.
+pub fn command_key(key: Code) -> Accelerator {
+    Accelerator::new(Modifiers::META, key)
+}
+
+/// Enabled *Settings…* row with id `id` and ⌘, at its right.
+pub fn settings_item(id: &str, label: &str) -> MenuItem {
+    MenuItem::with_id(id, label, true, Some(command_key(Code::Comma)))
+}
+
+/// Enabled quit row with id [`QUIT_ID`], the native stop icon and ⌘Q.
 pub fn quit_item(label: &str) -> IconMenuItem {
     IconMenuItem::with_id_and_native_icon(
         QUIT_ID,
         label,
         true,
         Some(NativeIcon::StopProgress),
-        None,
+        Some(command_key(Code::KeyQ)),
     )
 }
 

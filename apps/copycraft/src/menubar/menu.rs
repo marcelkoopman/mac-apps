@@ -16,7 +16,7 @@ pub(crate) fn status_labels() -> [String; 3] {
     [
         crate::settings::hotkey_label(),
         version_label(),
-        crate::locale::t("quit").to_string(),
+        crate::locale::t("detail_quit").to_string(),
     ]
 }
 
@@ -32,18 +32,22 @@ pub(crate) fn status_rows(entries: &[(usize, String)]) -> Vec<String> {
         rows.push(crate::locale::t("history").to_string());
     }
     rows.push(crate::locale::t("allow_screenshots").to_string());
-    rows.push(crate::locale::t("settings").to_string());
     rows.push(crate::locale::t("welcome_menu").to_string());
+    rows.push(crate::locale::t("settings").to_string());
     rows.push(crate::locale::t("about").to_string());
     rows.push(version);
     rows.push(quit);
     rows
 }
 
+/// The status menu, in groups with a separator between them (as the HIG asks): the hotkey
+/// hint; recording (*Pause*, *Ignore Next Copy*, *History*); *Allow Screenshots*; the
+/// windows (*Welcome Screen*, *Settings…* ⌘,); *About* and the version; *Quit CopyCraft* ⌘Q.
 pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
+    let _ = menu.append(&PredefinedMenuItem::separator());
     // Greyed out while "Keep clipboard history" is off (nothing is read on its own then).
     let active = crate::history_mode::capture_controls_active(crate::settings::clipboard_history());
     let _ = menu.append(&CheckMenuItem::with_id(
@@ -72,6 +76,7 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
         }
         let _ = menu.append(&history);
     }
+    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
         crate::locale::t("allow_screenshots"),
@@ -79,26 +84,26 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
         launcher::allows_screenshots(),
         None,
     ));
-    let _ = menu.append(&MenuItem::with_id(
-        SETTINGS_ID,
-        crate::locale::t("settings"),
-        true,
-        None,
-    ));
+    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&MenuItem::with_id(
         WELCOME_ID,
         crate::locale::t("welcome_menu"),
         true,
         None,
     ));
+    let _ = menu.append(&tray::settings_item(
+        SETTINGS_ID,
+        crate::locale::t("settings"),
+    ));
+    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&MenuItem::with_id(
         ABOUT_ID,
         crate::locale::t("about"),
         true,
         None,
     ));
-    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::info_item(&version));
+    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::quit_item(&quit));
     menu
 }
