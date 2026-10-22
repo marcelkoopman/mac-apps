@@ -139,7 +139,8 @@ pub(super) fn run(id: CommandId) {
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Run(id)));
 }
 
-/// ⌘O opens a file, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions, ⌘W closes.
+/// ⌘O opens a file, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions. ⌘W and ⌘M are
+/// the hidden Window menu's (src/macos_main_menu.rs).
 pub(super) fn window_key(event: &NSEvent) -> bool {
     if mac_ui::keys::is_command_chord(event, "o") {
         launcher::emit(UserEvent::Run(CommandId::ChooseFile));
@@ -147,13 +148,6 @@ pub(super) fn window_key(event: &NSEvent) -> bool {
     }
     if mac_ui::keys::is_command_chord(event, "s") {
         run(CommandId::Save);
-        return true;
-    }
-    if mac_ui::keys::is_command_chord(event, "w") {
-        let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
-        if let Some(window) = window {
-            window.performClose(None);
-        }
         return true;
     }
     let flags = event.modifierFlags();

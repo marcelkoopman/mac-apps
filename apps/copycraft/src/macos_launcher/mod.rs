@@ -414,6 +414,10 @@ define_class!(
                 // ⌘O opens a file, also while a search field has the caret.
                 launcher::emit(UserEvent::Run(CommandId::ChooseFile));
                 true
+            } else if mac_ui::keys::is_command_chord(event, ",") {
+                // ⌘, opens Settings, as in every Mac app.
+                launcher::emit(UserEvent::Run(CommandId::Settings));
+                true
             } else if mac_ui::keys::is_command_chord(event, "y") {
                 // ⌘Y shows or hides the history strip.
                 launcher::emit(UserEvent::Run(CommandId::ToggleStrip));

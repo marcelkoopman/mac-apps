@@ -217,7 +217,9 @@ fn text_line(mtm: MainThreadMarker, text: &str, font: &NSFont) -> Retained<NSTex
 }
 
 fn build(mtm: MainThreadMarker) {
-    let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
+    // Miniaturizable: ⌘M (the hidden Window menu, src/macos_main_menu.rs) minimises it.
+    let style =
+        NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, 320.0));
     // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
     // plain value arguments.

@@ -260,6 +260,8 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] Hidden Edit menu: in Settings › AI's prompt fields and the card's search field, ⌘X ⌘C ⌘V
       ⌘A and ⌘Z/⇧⌘Z work on the text; on the card without a field, ⌘Z still steps back
       through the card's versions. ⌘H hides CopyCraft and ⌘Q quits it (winit's app menu).
+- [ ] Window menu: ⌘W closes and ⌘M minimises Settings, the welcome screen and About (each
+      now has an active yellow button); ⌘, on the card opens Settings.
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,
       unlock, and check that history is empty.
 - [ ] `edge/empty.txt`: copying an empty Notion code block copies nothing, so the card keeps
@@ -277,7 +279,7 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] `tables/wide_six_columns.csv` › Open Table: the window opens with the table
       visible (card may close); ⌘Tab away and back blurs it; a click reveals it again.
 - [ ] In the window: Remove Duplicate Rows, then ↶/↷ and ⌘Z/⇧⌘Z and the version menu; the
-      card follows. Resize, scroll sideways (Product stays visible), ⌘W closes.
+      card follows. Resize, scroll sideways (Product stays visible), ⌘M minimises, ⌘W closes.
 - [ ] Reopen the window, then Wipe, lock (⌃⌘Q), sleep and Clear History: each closes it.
       Copying new items until its entry leaves history also closes it.
 - [ ] `tables/window_payees_iban.csv` in the window: the meta line shows financial in red.

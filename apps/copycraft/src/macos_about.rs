@@ -144,7 +144,9 @@ pub fn show() {
 }
 
 fn build(mtm: MainThreadMarker) {
-    let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
+    // Miniaturizable: ⌘M (the hidden Window menu, src/macos_main_menu.rs) minimises it.
+    let style =
+        NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable;
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
     // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
     // plain value arguments.
