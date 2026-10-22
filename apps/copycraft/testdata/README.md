@@ -223,6 +223,18 @@ The copy on screen has *Toevoegen aan diff* / *Add to diff* in the `⋯` menu, a
 
 - [ ] Copy a password from a password manager (it marks the copy concealed): the card shows
       "Hidden content", no text, no chips, and nothing is added to history.
+- [ ] With history on, a long log with a token stays out of history: in Terminal run
+      `{ for i in $(seq 2000); do echo "INFO request served in 12 ms"; done; echo "gh""p_aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5"; } > /tmp/long.log`
+      (over 32 KB), then copy its contents, drop the file on the card and paste it with ⌘V:
+      the card shows *credential*, and History has no entry for it.
+- [ ] With history on, a screenshot of a token stays out of history: copy a screenshot
+      (⌃⇧⌘4) of that `ghp_` line in Terminal; the card shows the picture, and after a few
+      seconds History still has no entry for it. Dropping or pasting
+      the same screenshot: also not in history.
+- [ ] With history on, an ordinary screenshot (no token) is in History a few seconds after
+      copying, dropping or pasting it, also `images/ocr_text.png`.
+- [ ] ⌘V in the search field (type `/` on the card) and in the column picker's filter pastes
+      the clipboard text into the field; ⌘V with search closed still pastes onto the card.
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,
       unlock, and check that history is empty.
 - [ ] `edge/empty.txt`: copying an empty Notion code block copies nothing, so the card keeps
