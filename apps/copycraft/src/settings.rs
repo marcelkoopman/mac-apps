@@ -44,7 +44,8 @@ pub struct Settings {
     /// The privacy filter: copied content stays masked (blurred or blank) until it is clicked.
     /// Off shows content directly, unmasked. On by default.
     pub privacy_filter: bool,
-    /// Gaussian blur over a masked well. Off falls back to the opaque shade. On by default.
+    /// Gaussian blur over a masked well. Off (the default) masks with the opaque shade in the
+    /// card's theme. Only a value the user stored with the checkbox turns it on.
     pub blur: bool,
     /// Prefer `mm/dd/yyyy` when a date column fits both orders. Off (dd/mm) by default.
     pub date_month_first: bool,
@@ -128,7 +129,7 @@ impl Default for Settings {
             clear_sensitive: true,
             history_minutes: 15,
             privacy_filter: true,
-            blur: true,
+            blur: false,
             date_month_first: false,
             hotkey: None,
             language: Language::System,
@@ -895,7 +896,7 @@ mod tests {
         assert!(settings.clear_sensitive);
         assert_eq!(settings.history_minutes, 15);
         assert!(settings.privacy_filter);
-        assert!(settings.blur);
+        assert!(!settings.blur);
         assert!(!settings.date_month_first);
         assert!(settings.hotkey.is_none());
         assert_eq!(settings.language, super::Language::System);
@@ -931,6 +932,24 @@ mod tests {
         assert!(super::Language::parse("fr").is_none());
     }
 
+    /// Blur is off for a new install and for anyone who never ticked it; a stored choice wins,
+    /// on or off (the memory store is per thread, like a fresh defaults domain).
+    #[test]
+    fn blur_is_off_until_stored_on_and_a_stored_choice_is_kept() {
+        assert_eq!(super::load_bool(super::BLUR_KEY), None);
+        assert!(!super::load().blur);
+        super::set_blur(true);
+        assert_eq!(super::load_bool(super::BLUR_KEY), Some(true));
+        assert!(super::load().blur);
+        super::set_blur(false);
+        assert_eq!(super::load_bool(super::BLUR_KEY), Some(false));
+        assert!(!super::load().blur);
+        // Turning blur on leaves the privacy filter alone.
+        super::set_blur(true);
+        assert!(super::privacy_filter());
+        super::set_blur(false);
+    }
+
     #[test]
     fn privacy_filter_is_on_until_stored_off_and_round_trips() {
         assert!(super::privacy_filter());
@@ -939,7 +958,7 @@ mod tests {
         assert!(!super::privacy_filter());
         assert!(!super::load().privacy_filter);
         // The other settings are untouched.
-        assert!(super::load().blur);
+        assert!(!super::load().blur);
         super::set_privacy_filter(true);
         assert!(super::privacy_filter());
         assert!(super::load().privacy_filter);

@@ -138,6 +138,16 @@ pub fn apply_card_well(well: &mac_ui::objc2_app_kit::NSBox) {
     }
 }
 
+/// The opaque cover over a masked well without blur (the default): the system text background,
+/// or the card theme's background, so a masked card keeps its theme.
+#[cfg(target_os = "macos")]
+pub fn apply_card_shade(shade: &mac_ui::objc2_app_kit::NSBox) {
+    apply_well(shade, true, false);
+    if let Some(palette) = card_palette() {
+        shade.setFillColor(&srgb(palette.background));
+    }
+}
+
 /// Caption colour inside the card's well: the theme's secondary text (its text under Increase
 /// Contrast), or [`caption_color`] without a fixed theme.
 #[cfg(target_os = "macos")]

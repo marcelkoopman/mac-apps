@@ -30,7 +30,7 @@ Question or found a bug? Email mac-apps-support@proton.me. I fix bugs as best I 
 ### FAQ
 
 1. **How do I open CopyCraft?** With the hotkey (default ⌃⌘C) or from the menu bar icon. Change the hotkey in Settings.
-2. **Why is my text blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings.
+2. **Why is my text hidden or blurred?** That is the privacy filter. Click the text to reveal it. To turn it off, untick "Use privacy filter" in Settings. Hidden content shows as a plain cover by default; tick "Blur masked content" in Settings › Privacy to see a blur instead.
 3. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether CopyCraft may read the clipboard from other apps. Choose Allow, or set it in Privacy & Security, Paste from Other Apps.
 4. **Does my data leave my Mac?** No. CopyCraft works fully offline and has no network access.
 5. **How do I clear what I copied?** Use Wipe or Clear history on the card or in the menu.

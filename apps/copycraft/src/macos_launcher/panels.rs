@@ -14,7 +14,7 @@ pub(crate) fn reveal_cover(mtm: MainThreadMarker) -> RevealCover {
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, PREVIEW_H));
     let root = NSView::initWithFrame(NSView::alloc(mtm), frame);
     let shade = filled_box(mtm, WELL_RADIUS, &NSColor::textBackgroundColor());
-    crate::appearance::apply_well(&shade, true, false);
+    crate::appearance::apply_card_shade(&shade);
     shade.setFrame(frame);
     shade.setHidden(true);
     let hit = NSButton::initWithFrame(NSButton::alloc(mtm), frame);
@@ -59,6 +59,10 @@ pub(crate) fn show_mask_shade(shown: bool) {
         let Some(cover) = borrowed.as_ref() else {
             return;
         };
+        if shown {
+            // The theme may have changed since the cover was made.
+            crate::appearance::apply_card_shade(&cover.shade);
+        }
         cover.shade.setHidden(!shown);
     });
 }

@@ -430,7 +430,12 @@ fn wipe_content(views: &Views) {
     PAINTED.set(false);
 }
 
+/// The blur for a masked table, or `None` (a blank, shaded table) when the blur setting is off
+/// (the default) or Core Image cannot build it.
 fn blur_filter() -> Option<Retained<AnyObject>> {
+    if !crate::settings::load().blur {
+        return None;
+    }
     BLUR.with(|slot| {
         slot.borrow_mut()
             .get_or_insert_with(|| mac_ui::blur::gaussian(BLUR_RADIUS))

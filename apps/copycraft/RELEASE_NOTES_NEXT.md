@@ -15,6 +15,10 @@ The app is now named **CopyCraft** (capital C in Craft) in the menu bar, About, 
 
 Each small card in the history strip now has a ✕ (on the card shown and the one under the pointer). It removes only that copy from CopyCraft's history; the clipboard keeps what it holds. ⌫ removes the copy on screen, and ⌘Z puts it back. The top button is now called **Clear all** and still asks first.
 
+### Blur is now off by default
+
+Blur is now off by default. Masked content is hidden under a plain cover in your card theme's colours. To get the blur back, tick **Blur masked content** in Settings › Privacy. If you turned the blur on or off yourself before, that choice is kept.
+
 ### Upgrading from Copycraft 0.1.87 or earlier
 
 CopyCraft now has the bundle ID `nl.marcelkoopman.copycraft` (it was `com.github.marcelkoopman.mac-apps.copycraft`), so macOS treats it as a new app:
@@ -34,6 +38,10 @@ De app heet nu **CopyCraft** (met een hoofdletter C in Craft) in de menubalk, Ov
 ### Eén kopie uit de geschiedenis halen
 
 Elk kaartje in de geschiedenisstrook heeft nu een ✕ (op het getoonde kaartje en het kaartje onder de aanwijzer). Die haalt alleen die kopie uit de geschiedenis van CopyCraft; het klembord houdt wat erop staat. ⌫ haalt de getoonde kopie weg en ⌘Z zet hem terug. De knop bovenaan heet nu **Alles wissen** en vraagt nog steeds eerst om bevestiging.
+
+### Vervagen staat nu standaard uit
+
+Vervagen staat nu standaard uit. Gemaskeerde inhoud zit onder een effen afdekking in de kleuren van je kaartthema. Wil je het vervagen terug, vink dan **Gemaskeerde inhoud vervagen** aan in Instellingen › Privacy. Heb je het vervagen eerder zelf aan- of uitgezet, dan blijft die keuze bewaard.
 
 ### Bijwerken vanaf Copycraft 0.1.87 of eerder
 
