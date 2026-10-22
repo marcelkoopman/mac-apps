@@ -3,3 +3,10 @@
 # Keep in step with minimum_system_version in apps/*/Cargo.toml (CI checks `otool -l`).
 [env]
 MACOSX_DEPLOYMENT_TARGET = { value = "26.0", force = true }
+
+# CopyCraft's polars table display, as `main` sets it (`dataframe::DISPLAY_ENV`): every row and
+# column and no width limit. Without it, `cargo test` renders tables at the terminal's width
+# (or 100 characters without a terminal), so long cells wrap differently per machine.
+POLARS_FMT_MAX_ROWS = { value = "-1", force = true }
+POLARS_FMT_MAX_COLS = { value = "-1", force = true }
+POLARS_TABLE_WIDTH = { value = "-1", force = true }

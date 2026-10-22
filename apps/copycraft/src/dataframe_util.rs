@@ -395,6 +395,32 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
         }
     }
 
+    /// Tests render tables as the app does: `.cargo/config.toml` sets [`super::DISPLAY_ENV`]
+    /// for `cargo test`, so a grid does not depend on the terminal width.
+    #[test]
+    fn tests_run_with_the_display_env() {
+        for (name, value) in super::DISPLAY_ENV {
+            assert_eq!(
+                std::env::var(name).ok().as_deref(),
+                Some(value),
+                "{name}: run the tests with cargo (see .cargo/config.toml)"
+            );
+        }
+    }
+
+    /// With no width limit a wide table keeps a long cell on one line: the card scrolls
+    /// sideways instead.
+    #[test]
+    fn a_wide_table_does_not_wrap_its_cells() {
+        let grid = try_format(include_str!("../testdata/tables/wide_six_columns.csv"))
+            .expect("table");
+        assert!(grid.contains("Lumen Works Trading Company"));
+        let widths: Vec<usize> = grid.lines().map(|line| line.chars().count()).collect();
+        assert!(widths[0] > 100, "{}", widths[0]);
+        // Header, separator and one line per row (the header has names, --- and dtypes).
+        assert_eq!(grid.lines().count(), 1 + 3 + 1 + 4 + 1);
+    }
+
     /// A synthetic look-alike of an energy export: a BOM, a "Definition:" line with semicolons
     /// above the header, dd/mm/yyyy dates, unit-suffixed columns, six all-0.00 columns and a
     /// product prefix shared by a group of columns. No real data.
