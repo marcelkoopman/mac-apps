@@ -6,13 +6,18 @@ use super::*;
 
 /// Whether a separator goes before `id` in a submenu whose item before it is `previous`
 /// (`None`: `id` is the first). History ▸: Clear History and Clear Pins sit apart from the
-/// copies.
+/// copies. Encoding ▸: the four decodes apart from the four encodes.
 pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
     let Some(previous) = previous else {
         return false;
     };
     let clear = |id: &CommandId| matches!(id, CommandId::ClearHistory | CommandId::ClearPins);
-    clear(id) && !clear(previous)
+    match (previous, id) {
+        (CommandId::TextEncode(before), CommandId::TextEncode(codec)) => {
+            before.encodes() && !codec.encodes()
+        }
+        _ => clear(id) && !clear(previous),
+    }
 }
 
 /// Whether `id` is an ⌥ alternate of the item before it (`previous`): it takes that row's

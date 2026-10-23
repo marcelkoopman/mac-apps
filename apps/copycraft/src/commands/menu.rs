@@ -51,9 +51,8 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         // The functions of one code action sit in a submenu named after it.
         CommandId::AiFn(action, _) => Some(ai_title(*action)),
         CommandId::TextCase(_) => Some(crate::locale::t("case_menu")),
-        CommandId::TextEncode(_) | CommandId::TextHash(_) => {
-            Some(crate::locale::t("encoding_menu"))
-        }
+        CommandId::TextEncode(_) => Some(crate::locale::t("encoding_menu")),
+        CommandId::TextHash(_) => Some(crate::locale::t("hash_menu")),
         _ => None,
     }
 }
@@ -192,8 +191,12 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
                 )
             }),
     );
-    // Encoding › Base64, URL, hex: a submenu too.
-    commands.extend(crate::text_ops::encoding::Codec::ALL.iter().map(|codec| {
+    // Encoding › the four encodes, then the four decodes (a separator between them,
+    // [`separator_before`]): a submenu too.
+    let (encodes, decodes): (Vec<_>, Vec<_>) = crate::text_ops::encoding::Codec::ALL
+        .into_iter()
+        .partition(|codec| codec.encodes());
+    commands.extend(encodes.iter().chain(&decodes).map(|codec| {
         command(
             CommandId::TextEncode(*codec),
             codec.title(),
@@ -201,7 +204,7 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "encode decode base64 base64url url percent escape hex bytes",
         )
     }));
-    // Then SHA-256, SHA-1 and MD5 in the same submenu.
+    // Then SHA-256, SHA-1 and MD5 in a Hash submenu of their own, also under Convert.
     commands.extend(crate::text_ops::hash::HashKind::ALL.iter().map(|kind| {
         command(
             CommandId::TextHash(*kind),

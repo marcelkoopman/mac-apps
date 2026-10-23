@@ -585,6 +585,17 @@ fn encoding_is_a_submenu_of_convert() {
         .collect();
     assert_eq!(at.len(), Codec::ALL.len());
     assert!(at.windows(2).all(|pair| pair[1] == pair[0] + 1));
+    // The four encodes, a separator, the four decodes.
+    let codecs: Vec<&CommandId> = at.iter().map(|index| &menu[*index].0.id).collect();
+    let lines: Vec<usize> = (1..codecs.len())
+        .filter(|at| crate::commands::separator_before(Some(codecs[at - 1]), codecs[*at]))
+        .collect();
+    assert_eq!(lines, [4]);
+    assert!(
+        codecs[..4]
+            .iter()
+            .all(|id| matches!(id, CommandId::TextEncode(codec) if codec.encodes()))
+    );
     for index in at {
         let id = &menu[index].0.id;
         assert_eq!(menu_group(id), Some(crate::locale::t("encoding_menu")));
@@ -606,7 +617,7 @@ fn encoding_is_a_submenu_of_convert() {
 }
 
 #[test]
-fn hashes_follow_the_codecs_in_the_encoding_submenu() {
+fn hashes_follow_the_codecs_in_a_hash_submenu_of_their_own() {
     use crate::commands::{TextSection, menu_group, text_menu_items, text_section, text_shown};
     use crate::text_ops::hash::HashKind;
     let card = data(SubjectKind::Text, Some("abc"));
@@ -623,7 +634,8 @@ fn hashes_follow_the_codecs_in_the_encoding_submenu() {
     let expected: Vec<CommandId> = HashKind::ALL.into_iter().map(CommandId::TextHash).collect();
     assert_eq!(hashes, expected);
     for id in &hashes {
-        assert_eq!(menu_group(id), Some(crate::locale::t("encoding_menu")));
+        assert_eq!(menu_group(id), Some(crate::locale::t("hash_menu")));
+        assert_ne!(menu_group(id), Some(crate::locale::t("encoding_menu")));
         assert_eq!(text_section(id), Some(TextSection::Convert));
     }
     let step = crate::text_ops::TextOp::Hash(HashKind::Md5);

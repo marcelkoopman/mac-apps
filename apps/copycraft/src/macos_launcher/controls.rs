@@ -646,7 +646,8 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
     menu.setAutoenablesItems(false);
     // Items of one group ([`commands::menu_group`]) go into a submenu under its name.
-    let mut group: Option<(&str, Retained<NSMenu>)> = None;
+    // With the item last put in it, for the separators inside a submenu.
+    let mut group: Option<(&str, Retained<NSMenu>, usize)> = None;
     // The Text ▾ menu has section headers like the ⋯ menu.
     let ids: Vec<CommandId> = items.iter().map(|(cmd, _)| cmd.id.clone()).collect();
     let sections = commands::text_sections(&ids);
@@ -661,13 +662,17 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
             section = Some(this);
             group = None;
         }
+        let mut previous: Option<usize> = None;
         let target = match commands::menu_group(&cmd.id) {
             None => {
                 group = None;
                 menu.clone()
             }
-            Some(name) => match &group {
-                Some((shown, submenu)) if *shown == name => submenu.clone(),
+            Some(name) => match &mut group {
+                Some((shown, submenu, last)) if *shown == name => {
+                    previous = Some(std::mem::replace(last, index));
+                    submenu.clone()
+                }
                 _ => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
                     let submenu =
@@ -675,11 +680,17 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                     submenu.setAutoenablesItems(false);
                     parent.setSubmenu(Some(&submenu));
                     menu.addItem(&parent);
-                    group = Some((name, submenu.clone()));
+                    group = Some((name, submenu.clone(), index));
                     submenu
                 }
             },
         };
+        let previous_id = previous
+            .and_then(|at| items.get(at))
+            .map(|(cmd, _)| &cmd.id);
+        if commands::separator_before(previous_id, &cmd.id) {
+            target.addItem(&NSMenuItem::separatorItem(mtm));
+        }
         let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(poppedClicked:));
         item.setTag(index as isize);
         if let Some(image) = commands::symbol_for(&cmd.id)

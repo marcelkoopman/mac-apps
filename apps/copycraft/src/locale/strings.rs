@@ -1246,6 +1246,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("text_section_convert", "Omzetten", "Convert"),
     // Text ▾ › Convert › Encoding (src/text_ops/encoding.rs)
     ("encoding_menu", "Codering", "Encoding"),
+    // Text ▾ › Convert › Hash ›: SHA-256, SHA-1, MD5 ("hash" is Dutch too).
+    ("hash_menu", "Hash", "Hash"),
     ("encode_base64", "Codeer als Base64", "Encode as Base64"),
     ("decode_base64", "Decodeer Base64", "Decode Base64"),
     (
