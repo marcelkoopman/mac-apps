@@ -21,7 +21,8 @@ pub(super) fn run_column_picker() {
     }
     let mut picker = ColumnPicker::new(columns);
     let row_h = 22.0;
-    let btn_h = 24.0;
+    // Dialog buttons at the regular size (28 pt), like the alert's own.
+    let btn_h = mac_ui::metrics::BUTTON_H;
     let width = 320.0;
     let pad = 4.0;
     let visible_rows = 12.0_f64.min(picker.columns().len() as f64).max(3.0);
@@ -33,10 +34,10 @@ pub(super) fn run_column_picker() {
         NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, accessory_h)),
     );
 
-    let all = GlassButton::pill(mtm, crate::locale::t("picker_all"), ButtonSize::Small);
+    let all = GlassButton::pill(mtm, crate::locale::t("picker_all"), ButtonSize::Regular);
     all.set_accessibility_label(crate::locale::t("picker_keep_all"));
     wire(all.button(), sel!(tableWindowPickerAll:));
-    let none = GlassButton::pill(mtm, crate::locale::t("picker_none"), ButtonSize::Small);
+    let none = GlassButton::pill(mtm, crate::locale::t("picker_none"), ButtonSize::Regular);
     none.set_accessibility_label(crate::locale::t("picker_keep_none"));
     wire(none.button(), sel!(tableWindowPickerNone:));
     let mut x = pad;

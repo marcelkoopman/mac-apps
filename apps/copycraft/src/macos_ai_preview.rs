@@ -11,7 +11,8 @@
 
 /// Inner margin of the preview.
 const AI_PAD: f64 = 10.0;
-const AI_BUTTON_H: f64 = 24.0;
+/// Dialog buttons at the regular size (28 pt), like an alert's.
+const AI_BUTTON_H: f64 = mac_ui::metrics::BUTTON_H;
 const AI_TITLE_H: f64 = 18.0;
 const AI_NOTE_H: f64 = 16.0;
 
@@ -86,7 +87,7 @@ fn ai_views(mtm: MainThreadMarker) -> AiViews {
     root.addSubview(&note);
 
     let button = |title: &str, spoken: &str, action: Sel| {
-        let button = GlassButton::pill(mtm, title, ButtonSize::Small);
+        let button = GlassButton::pill(mtm, title, ButtonSize::Regular);
         button.set_accessibility_label(spoken);
         wire_button(button.button(), action);
         root.addSubview(button.view());
