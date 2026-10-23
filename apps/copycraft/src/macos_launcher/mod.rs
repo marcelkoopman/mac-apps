@@ -358,7 +358,6 @@ define_class!(
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, _event: &NSEvent) {
             update_well_dock_hover();
-            update_strip_hover();
         }
 
         /// A pinch over a PDF page zooms it.
@@ -472,6 +471,29 @@ define_class!(
     struct LauncherDelegate;
 
     impl LauncherDelegate {
+        /// The history strip's tracking area: the pointer came in, moved or left
+        /// ([`strip::strip_pointer_moved`]).
+        #[unsafe(method(mouseEntered:))]
+        fn mouse_entered(&self, event: &NSEvent) {
+            strip::strip_pointer_moved(event);
+        }
+
+        #[unsafe(method(mouseMoved:))]
+        fn mouse_moved(&self, event: &NSEvent) {
+            strip::strip_pointer_moved(event);
+        }
+
+        #[unsafe(method(mouseExited:))]
+        fn mouse_exited(&self, _event: &NSEvent) {
+            strip::strip_pointer_left();
+        }
+
+        /// The history strip scrolled: the card under a still pointer may have changed.
+        #[unsafe(method(stripScrolled:))]
+        fn strip_scrolled(&self, _note: &NSNotification) {
+            strip::strip_scrolled();
+        }
+
         /// The card stays open when another app becomes active (it is the drop target while
         /// you drag from there), but revealed content is masked again.
         #[unsafe(method(applicationDidResignActive:))]

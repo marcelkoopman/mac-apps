@@ -25,7 +25,12 @@
 # NSToolbarFlexibleSpaceItemIdentifier, and setTarget:/setAction: on the toolbar items (objc2-app-kit marks
 # both `unsafe`; the target is the process-lived delegate); `unsafe impl NSObjectProtocol` and
 # `unsafe impl NSToolbarDelegate` for TableWindowDelegate (the toolbar needs a typed delegate).
-copycraft blocks 111
+# copycraft blocks 113: +2 for the history strip's hover (collections HIG point 6, approved by Marcel
+# 2026-10-23; macos_launcher/strip.rs watch_pointer): NSTrackingArea's init (objc2-app-kit marks it `unsafe`;
+# the owner is the process-lived launcher delegate, so no subclass), and the clip view's
+# NSViewBoundsDidChangeNotification observer (addObserver:selector:name:object: and the extern static), so a
+# scroll under a still pointer moves the ✕ too. They replace mouseLocationOutsideOfEventStream on mouseMoved.
+copycraft blocks 113
 copycraft fn 5
 copycraft impl 9
 mac-ui blocks 83

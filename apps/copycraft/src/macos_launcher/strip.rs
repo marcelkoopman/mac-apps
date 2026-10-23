@@ -15,6 +15,10 @@
 //! its type and how long ago it was copied, never its content.
 
 use super::*;
+use mac_ui::objc2::AnyThread;
+use mac_ui::objc2_app_kit::{
+    NSTrackingArea, NSTrackingAreaOptions, NSViewBoundsDidChangeNotification,
+};
 
 const RADIUS: f64 = 8.0;
 
@@ -208,16 +212,46 @@ pub(crate) fn note_strip_restore() {
     PENDING_FOCUS.set(Some(StripFocus::Restored));
 }
 
-/// The pointer moved over the card: show the ✕ of the small card under it.
-pub(crate) fn update_strip_hover() {
-    let hovered = STRIP_VIEWS.with(|slot| {
+/// The strip's tracking area saw the pointer come in or move ([`watch_pointer`]): show the ✕
+/// of the small card under it.
+pub(crate) fn strip_pointer_moved(event: &NSEvent) {
+    set_strip_hover(hovered_at(event.locationInWindow()));
+}
+
+/// The pointer left the strip (also out of the window): no card is hovered.
+pub(crate) fn strip_pointer_left() {
+    set_strip_hover(None);
+}
+
+/// The strip scrolled under a pointer that did not move: the card under it may be another.
+pub(crate) fn strip_scrolled() {
+    let point = WINDOW.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|window| window.mouseLocationOutsideOfEventStream())
+    });
+    set_strip_hover(point.and_then(hovered_at));
+}
+
+fn set_strip_hover(hovered: Option<usize>) {
+    if hovered != STRIP_HOVER.get() {
+        STRIP_HOVER.set(hovered);
+        show_remove_buttons();
+        if let Some(index) = hovered {
+            refresh_tooltip(index);
+        }
+    }
+}
+
+/// The history position of the small card at `point` (window coordinates), if the strip shows
+/// and the point is in its visible part.
+fn hovered_at(point: NSPoint) -> Option<usize> {
+    STRIP_VIEWS.with(|slot| {
         let slot = slot.borrow();
         let views = slot.as_ref()?;
         if views.scroll.isHidden() {
             return None;
         }
-        let window = WINDOW.with(|slot| slot.borrow().clone())?;
-        let point = window.mouseLocationOutsideOfEventStream();
         let clip = views.scroll.contentView();
         let in_clip = clip.convertPoint_fromView(point, None);
         let bounds = clip.bounds();
@@ -232,13 +266,49 @@ pub(crate) fn update_strip_hover() {
         let count = STRIP_ITEMS.with(|items| items.borrow().len());
         let slot = commands::thumb_at(local.x, local.y, count)?;
         STRIP_ITEMS.with(|items| items.borrow().get(slot).map(|thumb| thumb.index))
-    });
-    if hovered != STRIP_HOVER.get() {
-        STRIP_HOVER.set(hovered);
-        show_remove_buttons();
-        if let Some(index) = hovered {
-            refresh_tooltip(index);
-        }
+    })
+}
+
+/// One tracking area on the strip's document view, always active and following its visible
+/// part, sends the pointer's entering, moving and leaving to the launcher delegate
+/// (`mouseEntered:` / `mouseMoved:` / `mouseExited:`); the clip view's bounds changes
+/// (`stripScrolled:`) cover scrolling under a still pointer. So the ✕ follows the pointer
+/// and goes when it leaves the strip or the window.
+fn watch_pointer(scroll: &NSScrollView, document: &NSView) {
+    let Some(delegate) = DELEGATE.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    let owner: &AnyObject = &delegate;
+    let options = NSTrackingAreaOptions::MouseEnteredAndExited
+        | NSTrackingAreaOptions::MouseMoved
+        | NSTrackingAreaOptions::ActiveAlways
+        | NSTrackingAreaOptions::InVisibleRect;
+    // SAFETY: the owner is the launcher delegate, which DELEGATE keeps for the life of the
+    // process (a tracking area does not retain its owner) and which answers mouseEntered:,
+    // mouseMoved: and mouseExited:. No user info. The rect is ignored with InVisibleRect.
+    let area = unsafe {
+        NSTrackingArea::initWithRect_options_owner_userInfo(
+            NSTrackingArea::alloc(),
+            NSRect::ZERO,
+            options,
+            Some(owner),
+            None,
+        )
+    };
+    document.addTrackingArea(&area);
+    let clip = scroll.contentView();
+    clip.setPostsBoundsChangedNotifications(true);
+    let object: &AnyObject = &clip;
+    // SAFETY: stripScrolled: is a LauncherDelegate method taking the notification; DELEGATE
+    // keeps the observer alive and the clip view lives as long as the strip (STRIP_VIEWS).
+    // NSViewBoundsDidChangeNotification is an immutable AppKit constant.
+    unsafe {
+        NSNotificationCenter::defaultCenter().addObserver_selector_name_object(
+            owner,
+            sel!(stripScrolled:),
+            Some(NSViewBoundsDidChangeNotification),
+            Some(object),
+        );
     }
 }
 
@@ -311,6 +381,7 @@ fn views(mtm: MainThreadMarker) -> (Retained<NSScrollView>, Retained<NSView>) {
             document
                 .setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("strip_group"))));
             scroll.setDocumentView(Some(&document));
+            watch_pointer(&scroll, &document);
             if let Some(window) = WINDOW.with(|slot| slot.borrow().clone())
                 && let Some(content) = window.contentView()
             {
