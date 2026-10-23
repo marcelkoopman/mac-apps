@@ -106,6 +106,7 @@ impl App {
             text,
             opened: home == TableHome::Opened,
             keeps_file: self.opened.is_some(),
+            source_name: self.opened.as_ref().map(|file| file.name.clone()),
             error: None,
             shown: None,
             checking: false,
@@ -253,11 +254,12 @@ impl App {
     }
 
     /// The table window's view for `key` is built; dropped when the window moved on.
-    fn table_view_built(&mut self, key: u64, view: commands::TableWindowView) {
+    fn table_view_built(&mut self, key: u64, mut view: commands::TableWindowView) {
         let Some(window) = self.table_window.as_mut().filter(|w| w.shown == Some(key)) else {
             return;
         };
         window.checking = view.checking;
+        view.source_name = window.source_name.clone();
         launcher::show_table_window(view);
     }
 

@@ -168,11 +168,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("theme_light", "Licht", "Light"),
     ("theme_dark", "Donker", "Dark"),
     // Settings window
-    (
-        "settings_title",
-        "CopyCraft-instellingen",
-        "CopyCraft Settings",
-    ),
     ("hotkey", "Sneltoets", "Hotkey"),
     (
         "hotkey_note",
@@ -1924,11 +1919,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Houd de aangevinkte kolommen over als één stap. Pas toe vereist er minstens één.",
         "Keep the checked columns as one step. Apply needs at least one.",
     ),
-    (
-        "table_window_title",
-        "CopyCraft · Tabel",
-        "CopyCraft · Table",
-    ),
+    ("table_window_title", "Tabel", "Table"),
     ("table_steps_a11y", "Tabelstappen", "Table steps"),
     ("copy_table_a11y", "Kopieer de tabel", "Copy the table"),
     (

@@ -181,3 +181,17 @@ fn trailing_blank_lines_do_not_make_a_preview() {
         + "\n\n";
     assert!(excerpt_for(&body, false).1.is_none());
 }
+
+#[test]
+fn table_window_title_is_the_file_name_or_table() {
+    use crate::commands::table_window_title;
+    assert_eq!(table_window_title(None), "Table");
+    assert_eq!(table_window_title(Some("  ")), "Table");
+    assert_eq!(table_window_title(Some("sales.csv")), "sales.csv");
+    let mut view = table_window_view(&deduped("a,b\n1,2"), "a,b\n1,2");
+    assert_eq!(view.window_title(), "Table");
+    view.source_name = Some("sales.csv".to_string());
+    assert_eq!(view.window_title(), "sales.csv");
+    view.wipe();
+    assert_eq!(view.source_name, None);
+}

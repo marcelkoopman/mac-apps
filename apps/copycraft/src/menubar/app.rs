@@ -207,6 +207,8 @@ pub(crate) struct TableWindow {
     /// is open (the card closes for Open table), and the card shows it again when the window
     /// closes. Its table may live in history (a chosen file is recorded there too).
     pub(crate) keeps_file: bool,
+    /// The chosen file's name while `keeps_file`, for the window title. Never logged.
+    pub(crate) source_name: Option<String>,
     /// Why the window's last step failed, for its meta line.
     pub(crate) error: Option<String>,
     /// What the window was last given ([`TableWindow::key`]); the view is built again only

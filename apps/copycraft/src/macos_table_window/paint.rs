@@ -32,6 +32,9 @@ pub(super) fn paint() {
 
 pub(super) fn paint_chrome(views: &Views, view: &TableWindowView) {
     views
+        .window
+        .setTitle(&NSString::from_str(&view.window_title()));
+    views
         .table_button
         .button()
         .setEnabled(!view.menu.is_empty());

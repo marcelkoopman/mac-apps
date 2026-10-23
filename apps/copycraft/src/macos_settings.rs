@@ -619,7 +619,9 @@ fn build(mtm: MainThreadMarker) {
         ]
     };
     mac_ui::panel::keep_when_closed(&window);
-    window.setTitle(&NSString::from_str(crate::locale::t("settings_title")));
+    // The open tab's name, as in System Settings; `show_pane` keeps it in step.
+    let tab = Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General);
+    window.setTitle(&NSString::from_str(tab.title()));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
@@ -1224,9 +1226,15 @@ fn select_tab(index: usize) {
     show_pane(tab);
 }
 
-/// Select `tab`'s segment and show only its pane (no saving: also used while building).
+/// Select `tab`'s segment, name the window after it and show only its pane (no saving: also
+/// used while building).
 fn show_pane(tab: Tab) {
     SELECTED_TAB.set(tab.index());
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref() {
+            window.setTitle(&NSString::from_str(tab.title()));
+        }
+    });
     TABS.with(|slot| {
         if let Some(control) = slot.borrow().as_ref() {
             control.setSelectedSegment(tab.index() as isize);

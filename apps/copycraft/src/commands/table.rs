@@ -452,6 +452,8 @@ pub struct TableWindowView {
     pub checking: bool,
     /// The window's Table ▾ menu ([`table_window_menu`]), with its check marks.
     pub menu: Vec<(Command, bool)>,
+    /// Name of the chosen file the table comes from, for the window title; `None` for a copy.
+    pub source_name: Option<String>,
 }
 
 impl TableWindowView {
@@ -461,6 +463,11 @@ impl TableWindowView {
 
     pub fn can_redo(&self) -> bool {
         self.versions.current + 1 < self.versions.labels.len()
+    }
+
+    /// The window title: the chosen file's name, else "Table" (no app name, as the HIG asks).
+    pub fn window_title(&self) -> String {
+        table_window_title(self.source_name.as_deref())
     }
 
     /// "v2/3".
@@ -488,6 +495,18 @@ impl TableWindowView {
             command.wipe();
         }
         self.menu.clear();
+        if let Some(name) = self.source_name.as_mut() {
+            name.zeroize();
+        }
+        self.source_name = None;
+    }
+}
+
+/// Title of the table window: `name` (a chosen file) when there is one, else "Table".
+pub fn table_window_title(name: Option<&str>) -> String {
+    match name.map(str::trim) {
+        Some(name) if !name.is_empty() => name.to_string(),
+        _ => crate::locale::t("table_window_title").to_string(),
     }
 }
 

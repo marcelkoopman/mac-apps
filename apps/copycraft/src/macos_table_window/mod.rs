@@ -290,9 +290,15 @@ pub fn relabel() {
             return;
         };
         let t = crate::locale::t;
-        views
-            .window
-            .setTitle(&NSString::from_str(t("table_window_title")));
+        let title = SHOWN.with(|shown| {
+            crate::commands::table_window_title(
+                shown
+                    .borrow()
+                    .as_ref()
+                    .and_then(|view| view.source_name.as_deref()),
+            )
+        });
+        views.window.setTitle(&NSString::from_str(&title));
         views.table_button.set_title(t("table_menu"));
         views
             .table_button
