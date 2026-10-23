@@ -483,6 +483,16 @@ impl ClipboardHistory {
         Some(index)
     }
 
+    /// Drop one entry for good (zeroized; not kept for ⌘Z): a copy that turned out not to
+    /// belong in history. Whether it was there.
+    pub fn discard_id(&mut self, id: u64) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        self.entries.remove(index);
+        true
+    }
+
     /// An entry taken out by [`take_id`](Self::take_id) can be put back.
     pub fn can_restore(&self) -> bool {
         self.removed.is_some()

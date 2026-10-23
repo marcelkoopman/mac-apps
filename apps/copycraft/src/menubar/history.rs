@@ -215,7 +215,7 @@ impl App {
         self.after_history_edit();
     }
 
-    fn after_history_edit(&mut self) {
+    pub(super) fn after_history_edit(&mut self) {
         self.sync_diff_picks();
         self.refresh_table_window();
         self.refresh_status_menu();

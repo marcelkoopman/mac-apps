@@ -113,6 +113,46 @@ pub fn picture_concealed(recognised: Option<&str>) -> bool {
     recognised.is_some_and(|text| !scan_labels(text).is_empty())
 }
 
+/// How an Image ▾ step's copy goes on the clipboard and into history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PictureVerdict {
+    /// Marked Concealed (and cleared after a minute with that setting on).
+    pub concealed: bool,
+    /// Kept in history.
+    pub admitted: bool,
+}
+
+/// The [`PictureVerdict`] for a picture whose recognised text is `recognised`
+/// ([`picture_concealed`], [`picture_admission`]). An Image ▾ step's copy is made at once on
+/// the text of the picture it was taken on (a step does not add text), and checked again when
+/// its own recognition is in ([`picture_recheck`]). Pure.
+pub fn picture_verdict(recognised: Option<&str>) -> PictureVerdict {
+    PictureVerdict {
+        concealed: picture_concealed(recognised),
+        admitted: picture_admission(recognised) == Admission::Keep,
+    }
+}
+
+/// What an Image ▾ step's own recognition changes about its copy, made with `before`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Recheck {
+    /// Mark the clipboard's copy Concealed now (if the clipboard still holds it).
+    pub conceal: bool,
+    /// Take the copy out of history again (it shows a token, key or URL password; a turned
+    /// picture can be read where the original could not).
+    pub retract: bool,
+}
+
+/// [`Recheck`] for a step's copy made with `before`, now that its own text is `recognised`.
+/// Only ever stricter: a copy concealed or kept out on the original's text stays so. Pure.
+pub fn picture_recheck(before: PictureVerdict, recognised: Option<&str>) -> Recheck {
+    let now = picture_verdict(recognised);
+    Recheck {
+        conceal: now.concealed && !before.concealed,
+        retract: before.admitted && !now.admitted,
+    }
+}
+
 /// The labels for the card: a short copy is checked now, a longer one is remembered or handed
 /// to the background checker ([`Labeling::Checking`]).
 pub fn labeling(text: &str) -> Labeling {
@@ -718,6 +758,59 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         assert!(picture_concealed(Some("Contact: jan@example.com")));
         assert!(!picture_concealed(Some("Quarterly report\nRevenue up 4%")));
         assert!(!picture_concealed(None));
+    }
+
+    #[test]
+    fn a_step_copy_goes_in_at_once_and_its_own_text_can_only_tighten_it() {
+        use super::{PictureVerdict, Recheck, picture_recheck, picture_verdict};
+        let token = concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5");
+        let secret = format!("$ gh auth token\n{token}");
+        let plain = PictureVerdict {
+            concealed: false,
+            admitted: true,
+        };
+        // Made at once on the original's text.
+        assert_eq!(picture_verdict(None), plain);
+        assert_eq!(picture_verdict(Some("Quarterly report")), plain);
+        assert_eq!(
+            picture_verdict(Some(&secret)),
+            PictureVerdict {
+                concealed: true,
+                admitted: false
+            }
+        );
+        assert_eq!(
+            picture_verdict(Some("Contact: jan@example.com")),
+            PictureVerdict {
+                concealed: true,
+                admitted: true
+            }
+        );
+        // The turned picture shows a token the original did not: concealed and taken out.
+        assert_eq!(
+            picture_recheck(plain, Some(&secret)),
+            Recheck {
+                conceal: true,
+                retract: true
+            }
+        );
+        // PII: concealed, still kept.
+        assert_eq!(
+            picture_recheck(plain, Some("Contact: jan@example.com")),
+            Recheck {
+                conceal: true,
+                retract: false
+            }
+        );
+        // Nothing found, or the same as before: nothing changes.
+        assert_eq!(picture_recheck(plain, None), Recheck::default());
+        assert_eq!(
+            picture_recheck(plain, Some("Revenue up 4%")),
+            Recheck::default()
+        );
+        // Never looser: a copy kept out on the original's token is not put back.
+        let strict = picture_verdict(Some(&secret));
+        assert_eq!(picture_recheck(strict, None), Recheck::default());
     }
 
     #[test]

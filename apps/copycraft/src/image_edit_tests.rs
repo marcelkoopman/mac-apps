@@ -215,7 +215,6 @@ fn a_step_makes_a_new_picture_and_leaves_the_original() {
     let done = run(job).unwrap();
     assert_eq!(done.label, "Rotated 90° right");
     assert_eq!(size_of(&done), (20, 40));
-    assert!(done.scan.is_none(), "scanned on the job's thread");
     assert!(!done.picture.same_allocation(&original));
     assert_eq!(
         original.with(<[u8]>::to_vec),
@@ -305,6 +304,44 @@ fn save_offers_the_source_format_first() {
     let (files, picked) = image_files(None, true);
     assert_eq!((files.len(), files[picked]), (4, ImageFile::Png));
     assert_eq!(JPEG_MEDIUM.extension(), "jpg");
+}
+
+#[test]
+fn a_quarter_turn_of_a_square_picture_changes_its_pixels_both_ways() {
+    // Square: the size stays, so only the pixels can show the turn (Marcel saw no change).
+    let n = 4;
+    let source = original(n, n);
+    let pixel = |done: &JobDone, x: usize, y: usize| -> Vec<u8> {
+        let image = done.picture.with(|bytes| PngCodec.decode(bytes)).unwrap();
+        image.pixels[(y * image.width + x) * 4..][..4].to_vec()
+    };
+    // gradient: (x, y, x + y, 255).
+    let at = |x: usize, y: usize| vec![x as u8, y as u8, (x + y) as u8, 255];
+    let right = run(Job::new(ImageOp::RotateRight, &source)).unwrap();
+    let left = run(Job::new(ImageOp::RotateLeft, &source)).unwrap();
+    assert_ne!(
+        right.picture.with(<[u8]>::to_vec),
+        source.with(<[u8]>::to_vec)
+    );
+    assert_ne!(
+        left.picture.with(<[u8]>::to_vec),
+        right.picture.with(<[u8]>::to_vec)
+    );
+    for y in 0..n {
+        for x in 0..n {
+            // Clockwise: the new (x, y) is the old (y, n-1-x).
+            assert_eq!(pixel(&right, x, y), at(y, n - 1 - x), "right at {x},{y}");
+            // Counter-clockwise: the new (x, y) is the old (n-1-y, x).
+            assert_eq!(pixel(&left, x, y), at(n - 1 - y, x), "left at {x},{y}");
+        }
+    }
+    // Right then left is the original again.
+    let back = run(Job::new(ImageOp::RotateLeft, &right.picture)).unwrap();
+    for y in 0..n {
+        for x in 0..n {
+            assert_eq!(pixel(&back, x, y), at(x, y));
+        }
+    }
 }
 
 #[test]

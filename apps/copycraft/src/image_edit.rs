@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use zeroize::Zeroizing;
 
 use crate::clipboard::SecretBytes;
-use crate::commands::ImageScan;
 
 /// How Resize sizes a picture. It never makes one larger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -442,24 +441,20 @@ pub struct Job {
     op: ImageOp,
 }
 
-/// A finished [`Job`]: the new picture as PNG, what the step did, and what a scan found in the
-/// picture (info, text, barcodes; filled in on the job's thread before it is copied). A copy
-/// shares the picture's bytes.
+/// A finished [`Job`]: the new picture as PNG and what the step did. It is copied at once; its
+/// scan (info, text, barcodes) runs afterwards, off the main thread. A copy shares the
+/// picture's bytes.
 #[derive(Clone)]
 pub struct JobDone {
     /// "Converted to grayscale", for the card of the copy it makes.
     pub label: String,
     pub picture: SecretBytes,
-    pub scan: Option<ImageScan>,
 }
 
 impl JobDone {
-    /// Overwrite the picture and its scan: a result that is not copied after all.
+    /// Overwrite the picture: a result that is not copied after all.
     pub fn wipe(&mut self) {
         self.picture.zeroize();
-        if let Some(scan) = self.scan.as_mut() {
-            scan.wipe();
-        }
     }
 }
 
@@ -504,7 +499,6 @@ impl Job {
         Ok(JobDone {
             label: self.op.label(image.width, image.height),
             picture,
-            scan: None,
         })
     }
 }

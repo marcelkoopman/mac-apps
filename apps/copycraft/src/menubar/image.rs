@@ -139,9 +139,9 @@ impl App {
         self.refresh_popup();
     }
 
-    /// Start `job` on a thread, cancelling the one running. The new picture is scanned (info,
-    /// text, barcodes) on that thread before it comes back: its recognised text decides, as
-    /// for any copied picture, whether it is concealed and whether history keeps it.
+    /// Start `job` on a thread, cancelling the one running. Only the step itself runs there:
+    /// the new picture is copied as soon as it is back, and scanned afterwards
+    /// ([`Self::image_stepped`]).
     pub(crate) fn run_image_job(&mut self, job: crate::image_edit::Job) {
         self.cancel_image_job();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -152,15 +152,7 @@ impl App {
             .name("copycraft-image".into())
             .spawn(move || {
                 #[cfg(target_os = "macos")]
-                let result =
-                    job.run(&flag, &crate::macos_image_edit::ImageIoCodec)
-                        .map(|mut done| {
-                            if !flag.load(Ordering::Relaxed) {
-                                let bytes = Zeroizing::new(done.picture.with(<[u8]>::to_vec));
-                                done.scan = crate::macos_pasteboard::scan_image_bytes(&bytes);
-                            }
-                            done
-                        });
+                let result = job.run(&flag, &crate::macos_image_edit::ImageIoCodec);
                 #[cfg(not(target_os = "macos"))]
                 let result: Result<crate::image_edit::JobDone, _> = {
                     drop((job, &flag));
@@ -228,43 +220,49 @@ impl App {
         }
     }
 
-    /// Copy a step's result (`done`) like a Text ▾ step's: on the clipboard as copycraft's own
-    /// copy, concealed when its recognised text is sensitive, and into history as a new entry,
-    /// which the card then shows. It makes the copy after `source`'s entry for ⌘Z. History
-    /// held, or a token or key in the picture: on the clipboard only, with a note.
+    /// Copy a step's result (`done`) like a Text ▾ step's: at once, on the clipboard as
+    /// copycraft's own copy and into history as a new entry, which the card then shows. It
+    /// makes the copy after `source`'s entry for ⌘Z. A step adds no text, so the copy is
+    /// concealed or kept out of history on what is known of `source`'s text; the copy's own
+    /// recognition then runs on a thread and can only tighten that
+    /// ([`Self::image_step_scanned`]). History held, or a token or key in the picture: on the
+    /// clipboard only, with a note.
     fn image_stepped(&mut self, source: &SecretBytes, mut done: crate::image_edit::JobDone) {
         #[cfg(target_os = "macos")]
         {
             let id = self.image_id(source);
-            let recognised = done.scan.as_ref().and_then(|scan| scan.ocr.as_deref());
-            let concealed = crate::sensitivity::picture_concealed(recognised);
-            let admitted = crate::sensitivity::picture_admission(recognised)
-                == crate::sensitivity::Admission::Keep;
+            let known = self.known_image_scan(source);
+            let verdict = crate::sensitivity::picture_verdict(
+                known.as_ref().and_then(|scan| scan.ocr.as_deref()),
+            );
+            if let Some(mut known) = known {
+                known.wipe();
+            }
             let png = Zeroizing::new(done.picture.with(<[u8]>::to_vec));
-            if let Err(e) = self.write_own_image(&png, concealed) {
+            if let Err(e) = self.write_own_image(&png, verdict.concealed) {
                 done.wipe();
                 crate::diag::log(crate::diag::LogEvent::CopyFailed(
                     crate::diag::ErrorKind::of(&e),
                 ));
                 return;
             }
-            drop(png);
             let change = crate::macos_pasteboard::change_count();
             self.last_copy = Some(Instant::now());
             // The new copy is the clipboard's: the card follows it again.
             self.browsing = None;
             let held = self.history.held();
-            let recorded = if admitted {
+            let recorded = if verdict.admitted {
                 self.history.record_secret_image(done.picture.clone())
             } else {
                 None
             };
+            self.scan_step_copy(change, png, verdict, recorded.clone());
             let Some(recorded) = recorded else {
                 // Not kept: the pasteboard has its own copy of the picture.
                 done.wipe();
                 let note = if held {
                     crate::locale::t("text_not_kept")
-                } else if admitted {
+                } else if verdict.admitted {
                     crate::locale::t("image_not_kept_large")
                 } else {
                     crate::locale::t("text_not_kept_secret")
@@ -275,11 +273,6 @@ impl App {
             // A dropped or chosen picture: the card leaves it for the new copy.
             if self.opened.is_some() {
                 self.leave_opened();
-            }
-            if let Some(scan) = done.scan.as_ref() {
-                self.history.remember_image_scan(&recorded, scan);
-                self.image_scan = Some(scan.clone());
-                self.image_scan_change = Some(change);
             }
             self.recorded_image_change = Some(change);
             self.image_on_pasteboard = Some((change, recorded.clone()));
@@ -303,6 +296,151 @@ impl App {
             let _ = source;
             done.wipe();
         }
+    }
+
+    /// What a scan already found in `source` (the dropped picture's, its entry's, or the
+    /// clipboard's), without scanning it again.
+    #[cfg(target_os = "macos")]
+    fn known_image_scan(&self, source: &SecretBytes) -> Option<commands::ImageScan> {
+        if let Some(image) = self.opened.as_ref().and_then(|file| file.image.as_ref())
+            && image.bytes.same_allocation(source)
+        {
+            return image.scan.clone();
+        }
+        if let Some(scan) = self.history.image_scan(source) {
+            return Some(scan);
+        }
+        let change = crate::macos_pasteboard::change_count();
+        self.image_on_pasteboard
+            .as_ref()
+            .filter(|(at, bytes)| *at == change && bytes.same_allocation(source))
+            .and(self.image_scan_change)
+            .filter(|at| *at == change)
+            .and(self.image_scan.clone())
+    }
+
+    /// Scan a step's copy (`png`, on the clipboard as `change`, made with `verdict`; in history
+    /// as `recorded`) on a thread, as the card would; [`Self::image_step_scanned`] takes it.
+    #[cfg(target_os = "macos")]
+    fn scan_step_copy(
+        &mut self,
+        change: isize,
+        png: Zeroizing<Vec<u8>>,
+        verdict: crate::sensitivity::PictureVerdict,
+        recorded: Option<SecretBytes>,
+    ) {
+        // The card's own scan of this change waits for this one.
+        self.image_scan_for = Some(change);
+        let started = self.run_detached(
+            "copycraft-image-step-scan",
+            move || crate::macos_pasteboard::scan_image_bytes_within(png),
+            move |app: &mut App, scan| app.image_step_scanned(change, verdict, recorded, scan),
+        );
+        if !started && self.image_scan_for == Some(change) {
+            self.image_scan_for = None;
+        }
+    }
+
+    /// A step's copy is scanned. The scan is kept with its entry (and the card's, while the
+    /// clipboard still holds the copy). Its text can only tighten what the copy went in with
+    /// ([`crate::sensitivity::picture_recheck`]): sensitive text conceals the clipboard's copy
+    /// (when it is still there); a token or key takes the entry out of history again, as a
+    /// text with one never goes in.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn image_step_scanned(
+        &mut self,
+        change: isize,
+        verdict: crate::sensitivity::PictureVerdict,
+        recorded: Option<SecretBytes>,
+        mut scan: Option<commands::ImageScan>,
+    ) {
+        if self.image_scan_for == Some(change) {
+            self.image_scan_for = None;
+        }
+        let recheck = crate::sensitivity::picture_recheck(
+            verdict,
+            scan.as_ref().and_then(|scan| scan.ocr.as_deref()),
+        );
+        let on_clipboard = crate::macos_pasteboard::change_count() == change;
+        if recheck.conceal && on_clipboard {
+            crate::macos_pasteboard::add_concealed();
+            self.clear_sensitive_later(change);
+        }
+        // Still in history (not wiped, trimmed or deleted meanwhile).
+        let kept = recorded.filter(|bytes| self.history.holds_image(bytes));
+        if recheck.retract {
+            if let Some(bytes) = kept {
+                self.retract_step_copy(change, &bytes);
+            }
+            if let Some(mut scan) = scan.take() {
+                scan.wipe();
+            }
+        } else if let Some(found) = scan.take() {
+            if let Some(bytes) = kept.as_ref() {
+                self.history.remember_image_scan(bytes, &found);
+            }
+            if on_clipboard {
+                if let Some(mut old) = self.image_scan.replace(found) {
+                    old.wipe();
+                }
+                self.image_scan_change = Some(change);
+            } else {
+                let mut found = found;
+                found.wipe();
+            }
+        }
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+    }
+
+    /// Take a step's copy (`bytes`, clipboard change `change`) out of history again: it shows a
+    /// token or key. Gone for good (zeroized, not kept for ⌘Z); the clipboard keeps its
+    /// concealed copy, which history skips.
+    #[cfg(target_os = "macos")]
+    fn retract_step_copy(&mut self, change: isize, bytes: &SecretBytes) {
+        let Some(id) = self.history.image_id(bytes) else {
+            return;
+        };
+        let shown = self
+            .current_image
+            .as_ref()
+            .is_some_and(|current| current.same_allocation(bytes));
+        if shown {
+            self.current_image = None;
+        }
+        if self
+            .image_on_pasteboard
+            .as_ref()
+            .is_some_and(|(_, on)| on.same_allocation(bytes))
+        {
+            self.image_on_pasteboard = None;
+        }
+        if self.recorded_image_change == Some(change) {
+            self.recorded_image_change = None;
+        }
+        self.skip_image_change = Some(change);
+        // The card stays on the entry it was on; the copy's own place goes to the next one.
+        let at = |history: &clipboard::ClipboardHistory, index: usize| {
+            history.id_at(index).filter(|kept| *kept != id)
+        };
+        let cursor = at(&self.history, self.history_cursor);
+        let clipboard_at = self
+            .clipboard_cursor
+            .and_then(|index| at(&self.history, index));
+        if self.browsing == Some(id) {
+            self.browsing = None;
+        }
+        self.history.discard_id(id);
+        self.history_cursor = cursor
+            .and_then(|kept| self.history.index_of(kept))
+            .unwrap_or(0);
+        self.clipboard_cursor = clipboard_at.and_then(|kept| self.history.index_of(kept));
+        self.history_emptied = self.history.is_empty();
+        crate::diag::log(crate::diag::LogEvent::CopySkipped(
+            crate::diag::Skip::Credential,
+        ));
+        self.after_history_edit();
     }
 
     /// Image ▾ for the picture card: whether a step runs on it, its note, and where ⌘Z goes.

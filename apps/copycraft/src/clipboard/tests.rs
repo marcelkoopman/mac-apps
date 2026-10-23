@@ -648,6 +648,23 @@ fn only_the_last_taken_entry_comes_back() {
 }
 
 #[test]
+fn a_discarded_picture_is_gone_for_good_and_the_text_before_it_stays() {
+    let mut history = ClipboardHistory::default();
+    history.record("before".into());
+    let picture = history
+        .record_secret_image(SecretBytes::new(vec![9, 8, 7]).expect("bytes"))
+        .expect("kept");
+    let id = history.image_id(&picture).expect("id");
+    assert!(history.discard_id(id));
+    assert!(!history.holds_image(&picture));
+    assert!(!history.discard_id(id));
+    // Not kept for ⌘Z, and the text copied before it is still there.
+    assert!(!history.can_restore());
+    assert_eq!(history.len(), 1);
+    assert_eq!(history.get(0), Some("before"));
+}
+
+#[test]
 fn a_taken_entry_is_dropped_by_a_new_copy_or_a_wipe() {
     let mut history = ClipboardHistory::default();
     history.record("one".into());
