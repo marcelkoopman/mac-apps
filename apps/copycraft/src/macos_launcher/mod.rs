@@ -611,6 +611,12 @@ define_class!(
             launcher::show_privacy_settings();
         }
 
+        /// The denied card's link: System Settings › Privacy & Security (Paste from Other Apps).
+        #[unsafe(method(systemPrivacyClicked:))]
+        fn system_privacy_clicked(&self, _sender: Option<&NSButton>) {
+            crate::system_settings::open(crate::system_settings::Pane::PastePrivacy);
+        }
+
         #[unsafe(method(closeClicked:))]
         fn close_clicked(&self, _sender: Option<&NSButton>) {
             hide();

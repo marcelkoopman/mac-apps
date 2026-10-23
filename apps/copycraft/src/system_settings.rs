@@ -7,17 +7,23 @@
 pub enum Pane {
     /// Notifications (CopyCraft is in its list once it asked).
     Notifications,
+    /// Privacy & Security › Paste from Other Apps (macOS 15.4+, where *Deny* is undone). An
+    /// anchor macOS does not know opens Privacy & Security itself.
+    PastePrivacy,
 }
 
 impl Pane {
     #[cfg(test)]
-    pub const ALL: [Self; 1] = [Self::Notifications];
+    pub const ALL: [Self; 2] = [Self::Notifications, Self::PastePrivacy];
 
     /// The pane's fixed URL.
     pub fn url(self) -> &'static str {
         match self {
             Self::Notifications => {
                 "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+            }
+            Self::PastePrivacy => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Pasteboard"
             }
         }
     }

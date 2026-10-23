@@ -447,6 +447,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Paste from Other Apps is set to Deny for CopyCraft.",
     ),
     (
+        "paste_denied_open",
+        "Open Privacy en beveiliging…",
+        "Open Privacy & Security…",
+    ),
+    (
         "drop_hint",
         "Sleep hier een tekstbestand of afbeelding heen om het te openen",
         "Drop a text file or image here to open it",

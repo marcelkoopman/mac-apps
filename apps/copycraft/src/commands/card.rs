@@ -9,6 +9,12 @@ pub fn offers_privacy_settings(placeholder: &str) -> bool {
         || placeholder == crate::locale::t("paste_here_hint")
 }
 
+/// The card that says clipboard access is denied offers a link to System Settings › Privacy &
+/// Security under its lines, where *Paste from Other Apps* can be changed.
+pub fn offers_system_privacy(placeholder: &str) -> bool {
+    placeholder.starts_with(crate::paste_access::denied_note())
+}
+
 pub fn history_label(mark: &str, byte_len: usize) -> String {
     format!("{mark}  {}", format_bytes(byte_len))
 }

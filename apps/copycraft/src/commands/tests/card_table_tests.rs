@@ -376,6 +376,20 @@ fn always_deny_says_so_instead_of_nothing_copied() {
     assert!(card.excerpt.is_empty() && card.meta.is_empty());
     assert!(chips(&input).is_empty());
     assert!(!content_actions(&input).copy);
+    // It links to System Settings › Privacy & Security; other cards do not.
+    assert!(crate::commands::offers_system_privacy(&card.placeholder));
+    assert!(!crate::commands::offers_privacy_settings(&card.placeholder));
+    for kind in [
+        SubjectKind::Empty,
+        SubjectKind::Hidden,
+        SubjectKind::PasteAsk,
+    ] {
+        let other = work_card(&data(kind, None));
+        assert!(
+            !crate::commands::offers_system_privacy(&other.placeholder),
+            "{kind:?}"
+        );
+    }
 }
 
 #[test]

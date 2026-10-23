@@ -89,6 +89,7 @@ mod tests {
             "javascript:alert(1)",
             "x-apple-systempreferences:com.apple.preference",
             "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Pasteboard",
             "smb://server/share",
             "https://",
             "",

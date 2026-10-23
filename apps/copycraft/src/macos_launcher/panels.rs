@@ -5,6 +5,9 @@ use super::*;
 thread_local! {
     /// The empty card's link to Settings › Privacy, under its line. Made the first time.
     static EMPTY_SETTINGS: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    /// The denied card's link to System Settings › Privacy & Security, at the bottom of the
+    /// well. Made the first time.
+    static SYSTEM_PRIVACY: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
 }
 
 pub(crate) struct RevealCover {
@@ -377,6 +380,9 @@ pub(crate) fn apply_preview(y: f64) {
     } else {
         hide_empty_line();
         paint_preview_text(&body, payload);
+        if !payload && commands::offers_system_privacy(&body) {
+            show_system_privacy(text_frame, mac_ui::metrics::FONT_BODY + 6.0);
+        }
     }
     finish_preview();
 }
@@ -410,16 +416,56 @@ pub(crate) fn show_empty_line(text: &str, well: NSRect) {
 
 /// The link under the empty line: *Open Privacy Settings…*, in the theme's link colour.
 fn show_empty_settings(well: NSRect, line_h: f64) {
+    let width = (well.size.width - WELL_INSET * 2.0).max(0.0);
+    let frame = NSRect::new(
+        NSPoint::new(
+            well.origin.x + WELL_INSET,
+            well.origin.y + (well.size.height - line_h) / 2.0 - line_h,
+        ),
+        NSSize::new(width, line_h),
+    );
+    show_well_link(
+        &EMPTY_SETTINGS,
+        sel!(privacySettingsClicked:),
+        crate::locale::t("empty_privacy_settings"),
+        frame,
+    );
+}
+
+/// The link at the bottom of the denied card: *Open Privacy & Security…*, the macOS pane
+/// where *Paste from Other Apps* can be set to Allow.
+fn show_system_privacy(well: NSRect, line_h: f64) {
+    let width = (well.size.width - WELL_INSET * 2.0).max(0.0);
+    let frame = NSRect::new(
+        NSPoint::new(well.origin.x + WELL_INSET, well.origin.y + WELL_INSET),
+        NSSize::new(width, line_h),
+    );
+    show_well_link(
+        &SYSTEM_PRIVACY,
+        sel!(systemPrivacyClicked:),
+        crate::locale::t("paste_denied_open"),
+        frame,
+    );
+}
+
+/// A borderless link button in the well (made the first time, in `slot`), in the theme's
+/// link colour, at `frame`.
+fn show_well_link(
+    slot: &'static std::thread::LocalKey<RefCell<Option<Retained<NSButton>>>>,
+    action: mac_ui::objc2::runtime::Sel,
+    title: &str,
+    frame: NSRect,
+) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    EMPTY_SETTINGS.with(|slot| {
+    slot.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.is_none() {
             let button = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
             button.setBordered(false);
             button.setFocusRingType(NSFocusRingType::Default);
-            wire_button(&button, sel!(privacySettingsClicked:));
+            wire_button(&button, action);
             if let Some(window) = WINDOW.with(|slot| slot.borrow().clone())
                 && let Some(content) = window.contentView()
             {
@@ -428,29 +474,23 @@ fn show_empty_settings(well: NSRect, line_h: f64) {
             *slot = Some(button);
         }
         let button = slot.as_ref().expect("just made");
-        let title = crate::locale::t("empty_privacy_settings");
         let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
         let color = crate::appearance::card_link_color(crate::appearance::card_palette());
         button.setAttributedTitle(&AttrText::new(title, &font, &color).into_attributed());
         button.setAccessibilityLabel(Some(&NSString::from_str(title)));
-        let width = (well.size.width - WELL_INSET * 2.0).max(0.0);
-        button.setFrame(NSRect::new(
-            NSPoint::new(
-                well.origin.x + WELL_INSET,
-                well.origin.y + (well.size.height - line_h) / 2.0 - line_h,
-            ),
-            NSSize::new(width, line_h),
-        ));
+        button.setFrame(frame);
         button.setHidden(false);
     });
 }
 
 fn hide_empty_settings() {
-    EMPTY_SETTINGS.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            button.setHidden(true);
-        }
-    });
+    for slot in [&EMPTY_SETTINGS, &SYSTEM_PRIVACY] {
+        slot.with(|slot| {
+            if let Some(button) = slot.borrow().as_ref() {
+                button.setHidden(true);
+            }
+        });
+    }
 }
 
 pub(crate) fn hide_empty_line() {
