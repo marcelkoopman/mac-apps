@@ -3,7 +3,7 @@
 //! notification switches), Privacy (Keep clipboard history with retention, sensitive-copy
 //! clearing and ask before clearing under it, privacy filter, blur, ignored apps) and Display
 //! (card theme, pages, announce, symbols). The feedback mail, privacy policy and support are in
-//! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab; the last tab is remembered for the session only.
+//! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab; the last tab is stored and opened again.
 
 use std::cell::{Cell, RefCell};
 
@@ -88,8 +88,8 @@ thread_local! {
     static TABS: RefCell<Option<Retained<NSSegmentedControl>>> = const { RefCell::new(None) };
     /// One view per [`Tab`], in [`Tab::ALL`] order; only the selected one is visible.
     static PANES: RefCell<Vec<Retained<NSView>>> = const { RefCell::new(Vec::new()) };
-    /// Index of the last selected tab; kept after closing, for this session only.
-    static SELECTED_TAB: Cell<usize> = const { Cell::new(0) };
+    /// A tab the next build opens on instead of the stored last one ([`show_privacy`]).
+    static OPEN_ON: Cell<Option<Tab>> = const { Cell::new(None) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
@@ -499,7 +499,7 @@ pub fn show_privacy() {
     if WINDOW.with(|slot| slot.borrow().is_some()) {
         select_tab(Tab::Privacy.index());
     } else {
-        SELECTED_TAB.set(Tab::Privacy.index());
+        OPEN_ON.set(Some(Tab::Privacy));
     }
     show();
 }
@@ -509,7 +509,9 @@ fn build(mtm: MainThreadMarker) {
     let style =
         NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable;
     // The window opens at the height of the tab it shows; `show_pane` follows the tab.
-    let shown = Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General);
+    let shown = OPEN_ON
+        .take()
+        .unwrap_or_else(|| Tab::from_stored(settings::settings_tab()));
     let height = shown.window_height();
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, height));
     // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
@@ -585,7 +587,7 @@ fn build(mtm: MainThreadMarker) {
     }
     PANES.with(|slot| *slot.borrow_mut() = panes);
     TABS.with(|slot| *slot.borrow_mut() = Some(tabs));
-    show_pane(Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General));
+    show_pane(shown);
 
     WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
     raise_above_card(&window);
@@ -1086,7 +1088,8 @@ fn select_tab(index: usize) {
 /// Select `tab`'s segment, name the window after it, show only its pane and give the window
 /// its height (no saving: also used while building).
 fn show_pane(tab: Tab) {
-    SELECTED_TAB.set(tab.index());
+    // Stored, so Settings opens on this tab again, also after quitting CopyCraft.
+    settings::set_settings_tab(tab.index());
     WINDOW.with(|slot| {
         if let Some(window) = slot.borrow().as_ref() {
             window.setTitle(&NSString::from_str(tab.title()));

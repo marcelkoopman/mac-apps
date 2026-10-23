@@ -181,6 +181,8 @@ const SYMBOL_RECENT_KEY: &str = "CopycraftSymbolRecent";
 const SYMBOLS_KEY: &str = "CopycraftSymbols";
 /// Bundle ids whose copies are never read. One id per line. Not clipboard data.
 const IGNORED_APPS_KEY: &str = "CopycraftIgnoredApps";
+/// The Settings tab last shown, as its index (Algemeen 0, Privacy 1, Weergave 2). Not content.
+const SETTINGS_TAB_KEY: &str = "CopycraftSettingsTab";
 /// The card theme (Settings › Display), as [`crate::card_theme::CardTheme::as_str`].
 const CARD_THEME_KEY: &str = "CopycraftCardTheme";
 
@@ -352,6 +354,18 @@ pub fn set_clear_sensitive(on: bool) {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn set_window_size(size: WindowSize) {
     store_int(WINDOW_SIZE_KEY, size.id());
+}
+
+/// The stored index of the Settings tab last shown, unchecked: see
+/// [`crate::settings_tabs::Tab::from_stored`].
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn settings_tab() -> Option<i64> {
+    load_int(SETTINGS_TAB_KEY)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_settings_tab(index: usize) {
+    store_int(SETTINGS_TAB_KEY, index as i64);
 }
 
 pub fn set_history_minutes(minutes: u32) {
@@ -816,6 +830,13 @@ mod tests {
         }
         assert_eq!(super::WindowSize::from_id(7), None);
         assert_eq!(super::WindowSize::from_id(-1), None);
+    }
+
+    #[test]
+    fn the_settings_tab_round_trips() {
+        assert_eq!(super::settings_tab(), None);
+        super::set_settings_tab(2);
+        assert_eq!(super::settings_tab(), Some(2));
     }
 
     use super::Settings;

@@ -67,6 +67,15 @@ impl Tab {
         Tab::ALL.get(index).copied()
     }
 
+    /// The tab to open on from the stored index: General when nothing is stored, and for
+    /// anything out of range (3 and 4 were the old Meldingen and Feedback tabs).
+    pub fn from_stored(stored: Option<i64>) -> Tab {
+        stored
+            .and_then(|index| usize::try_from(index).ok())
+            .and_then(Tab::at)
+            .unwrap_or(Tab::General)
+    }
+
     /// The segment title, also the window title (literal keys, for the locale scan test).
     pub fn title(self) -> &'static str {
         match self {
@@ -123,5 +132,16 @@ mod tests {
             assert_eq!(Tab::at(at), Some(tab));
         }
         assert_eq!(Tab::at(Tab::ALL.len()), None);
+    }
+
+    #[test]
+    fn the_stored_tab_is_clamped_to_the_three_tabs() {
+        assert_eq!(Tab::from_stored(None), Tab::General);
+        assert_eq!(Tab::from_stored(Some(0)), Tab::General);
+        assert_eq!(Tab::from_stored(Some(1)), Tab::Privacy);
+        assert_eq!(Tab::from_stored(Some(2)), Tab::Display);
+        for old in [3, 4, 99, -1, i64::MAX, i64::MIN] {
+            assert_eq!(Tab::from_stored(Some(old)), Tab::General);
+        }
     }
 }
