@@ -495,6 +495,8 @@ pub enum CommandId {
     AiMinimize,
     /// A disabled line in the Apple Intelligence menu saying why the actions are off.
     AiUnavailable,
+    /// A disabled last line in the Apple Intelligence menu: the actions run on this Mac.
+    AiOnDevice,
     /// Read dates that fit both orders as `mm/dd/yyyy` (`true`) or `dd/mm/yyyy`.
     TableDateOrder(bool),
     /// Open the column picker on the card ([`crate::column_picker`]); Apply takes one step.

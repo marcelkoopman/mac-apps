@@ -768,7 +768,11 @@ pub(crate) fn pop_table_menu() {
 /// reason as tooltip when the model is not available.
 pub(crate) fn pop_ai_menu() {
     let fns = AI_FNS.with(|slot| slot.borrow().clone());
-    let menu = commands::ai_menu_items_with(mac_ai::availability(), AI_ACTIONS.get(), fns.as_ref());
+    let availability = mac_ai::availability();
+    let mut menu = commands::ai_menu_items_with(availability, AI_ACTIONS.get(), fns.as_ref());
+    if availability.is_ok() {
+        menu.push(commands::ai_on_device_note());
+    }
     let items: Vec<(Command, bool)> = menu.into_iter().map(|cmd| (cmd, false)).collect();
     let index = SHOWN.with(|slot| {
         slot.borrow()

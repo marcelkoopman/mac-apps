@@ -1345,6 +1345,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Text ▾ › Apple Intelligence (local AI, crate mac-ai)
     ("ai_group", "Apple Intelligence", "Apple Intelligence"),
     ("ai_button", "AI", "AI"),
+    (
+        "ai_on_device",
+        "Draait op je Mac met Apple Intelligence; er gaat geen tekst naar een server.",
+        "Runs on your Mac with Apple Intelligence; no text is sent to a server.",
+    ),
     ("ai_summarize", "Vat samen", "Summarize"),
     ("ai_rewrite", "Herschrijf", "Rewrite"),
     ("ai_shorter", "Maak korter", "Make Shorter"),

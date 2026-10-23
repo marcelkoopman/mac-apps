@@ -350,6 +350,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::AiCancel
             | CommandId::AiMinimize
             | CommandId::AiUnavailable
+            | CommandId::AiOnDevice
             | CommandId::TextComplexity
             | CommandId::AgentCommands
             | CommandId::AgentOutline

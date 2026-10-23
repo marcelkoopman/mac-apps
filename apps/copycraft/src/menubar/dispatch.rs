@@ -178,7 +178,7 @@ impl App {
             CommandId::AiApply => self.ai_apply(),
             CommandId::AiCancel => self.ai_stop(),
             CommandId::AiMinimize => self.ai_minimize(),
-            CommandId::AiUnavailable => {}
+            CommandId::AiUnavailable | CommandId::AiOnDevice => {}
             // On a picture card, ⌘Z and ⇧⌘Z go between the copies Image ▾ steps made (there is
             // no version capsule), as on a text Text ▾ stepped.
             CommandId::TableUndo if self.shows_image() => {

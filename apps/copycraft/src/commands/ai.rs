@@ -286,6 +286,18 @@ pub fn ai_menu_items_with(
     items
 }
 
+/// The Apple Intelligence menu's disabled last line when the actions are on: they run on this
+/// Mac and send no text to a server. Not offered in command search.
+pub fn ai_on_device_note() -> Command {
+    command_enabled(
+        CommandId::AiOnDevice,
+        crate::locale::t("ai_on_device"),
+        ai_group(),
+        "ai apple intelligence on device private",
+        false,
+    )
+}
+
 /// The "AI" chip left of Text ▾: dimmed, with the reason as its tooltip, when the model is not
 /// available.
 pub fn ai_button(availability: mac_ai::Availability) -> Command {
@@ -502,6 +514,16 @@ mod tests {
         );
         assert_eq!(chip(SubjectKind::Image, ""), (false, vec![]));
         assert_eq!(chip(SubjectKind::Empty, ""), (false, vec![]));
+    }
+
+    #[test]
+    fn the_on_device_note_is_a_dimmed_line_that_does_nothing() {
+        let note = ai_on_device_note();
+        assert_eq!(note.id, CommandId::AiOnDevice);
+        assert!(!note.enabled);
+        assert!(note.title.contains("Apple Intelligence"));
+        assert_eq!(menu_group(&note.id), None);
+        assert!(keeps_card_open(&note.id));
     }
 
     #[test]
