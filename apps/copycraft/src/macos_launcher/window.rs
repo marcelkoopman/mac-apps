@@ -156,7 +156,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     let save_button = well_action(
         mtm,
         "square.and.arrow.down",
-        crate::locale::t("save"),
+        crate::locale::t("save_card"),
         "↓",
         sel!(saveClicked:),
     );
@@ -271,7 +271,7 @@ pub fn relabel() {
     });
     SAVE_BUTTON.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            label_symbol(button, t("save"));
+            label_symbol(button, t("save_card"));
         }
     });
     PREVIEW_BUTTON.with(|slot| {

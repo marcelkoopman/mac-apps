@@ -573,7 +573,7 @@ mod tests {
         "redo_text_step",
         "remove_history",
         "reveal_hidden",
-        "save",
+        "save_card",
         "settings",
         "show_code",
         "show_columns",

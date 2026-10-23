@@ -304,7 +304,9 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("copy_cell", "Kopieer cel", "Copy Cell"),
     ("copy_row", "Kopieer rij", "Copy Row"),
     ("copy_column", "Kopieer kolom", "Copy Column"),
-    ("save", "Bewaar", "Save"),
+    // The card's save button opens a save panel, hence the ellipsis; the table window has its
+    // own strings (save_table_a11y, save_table_tip), so it does not change with it.
+    ("save_card", "Bewaar…", "Save…"),
     ("original", "Origineel", "Original"),
     ("show_image", "Toon afbeelding", "Show Image"),
     (
