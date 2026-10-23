@@ -15,7 +15,8 @@ pub const THUMB_MARGIN: f64 = 2.0;
 /// Height of the strip row: a card and the room around it.
 pub const STRIP_H: f64 = THUMB_H + 2.0 * THUMB_MARGIN;
 pub const THUMB_GAP: f64 = 7.0;
-/// Space between a card's edge and its text or picture.
+/// Space between a card's edge and its text or picture: inside the card's one button, which
+/// covers the whole card, so a click and the pointer's hover use the same area.
 pub const THUMB_PAD: f64 = 6.0;
 /// The ✕ in a card's top-right corner: its size and its distance to the card's edges.
 /// At least 20 pt, so it is easy to hit.
@@ -203,10 +204,11 @@ pub fn thumb_x(slot: usize) -> f64 {
     slot as f64 * (THUMB_W + THUMB_GAP)
 }
 
-/// The card (slot, in the order drawn) at `x` in a strip of `count` cards; `None` in a gap or
-/// past the end.
-pub fn thumb_at(x: f64, count: usize) -> Option<usize> {
-    if x < 0.0 {
+/// The card (slot, in the order drawn) at `(x, y)` in a strip of `count` cards, `y` from the
+/// strip's bottom; `None` in a gap, above or below the cards, or past the end. The same area
+/// as the card's button, the whole [`THUMB_W`] × [`THUMB_H`] card.
+pub fn thumb_at(x: f64, y: f64, count: usize) -> Option<usize> {
+    if x < 0.0 || y < THUMB_MARGIN || y > THUMB_MARGIN + THUMB_H {
         return None;
     }
     let slot = (x / (THUMB_W + THUMB_GAP)) as usize;
@@ -445,16 +447,22 @@ mod tests {
 
     #[test]
     fn the_pointer_finds_the_card_under_it() {
-        assert_eq!(thumb_at(0.0, 3), Some(0));
-        assert_eq!(thumb_at(THUMB_W, 3), Some(0));
+        const MID: f64 = STRIP_H / 2.0;
+        assert_eq!(thumb_at(0.0, MID, 3), Some(0));
+        assert_eq!(thumb_at(THUMB_W, MID, 3), Some(0));
         // In the gap between two cards: none.
-        assert_eq!(thumb_at(THUMB_W + THUMB_GAP / 2.0, 3), None);
-        assert_eq!(thumb_at(thumb_x(1) + 1.0, 3), Some(1));
-        assert_eq!(thumb_at(thumb_x(2) + 1.0, 3), Some(2));
+        assert_eq!(thumb_at(THUMB_W + THUMB_GAP / 2.0, MID, 3), None);
+        assert_eq!(thumb_at(thumb_x(1) + 1.0, MID, 3), Some(1));
+        assert_eq!(thumb_at(thumb_x(2) + 1.0, MID, 3), Some(2));
         // Past the last card, or left of the first.
-        assert_eq!(thumb_at(thumb_x(3) + 1.0, 3), None);
-        assert_eq!(thumb_at(-1.0, 3), None);
-        assert_eq!(thumb_at(1.0, 0), None);
+        assert_eq!(thumb_at(thumb_x(3) + 1.0, MID, 3), None);
+        assert_eq!(thumb_at(-1.0, MID, 3), None);
+        assert_eq!(thumb_at(1.0, MID, 0), None);
+        // The whole card counts, corners included (the button covers it); the margin does not.
+        assert_eq!(thumb_at(0.5, THUMB_MARGIN + 0.5, 3), Some(0));
+        assert_eq!(thumb_at(0.5, THUMB_MARGIN + THUMB_H - 0.5, 3), Some(0));
+        assert_eq!(thumb_at(1.0, THUMB_MARGIN / 2.0, 3), None);
+        assert_eq!(thumb_at(1.0, STRIP_H, 3), None);
     }
 
     #[test]
@@ -482,7 +490,14 @@ mod tests {
         assert!(x > THUMB_W / 2.0 && y > THUMB_H / 2.0);
         // The pointer over the ✕ finds its card, in every slot.
         for slot in 0..3 {
-            assert_eq!(thumb_at(thumb_x(slot) + x + side / 2.0, 3), Some(slot));
+            assert_eq!(
+                thumb_at(
+                    thumb_x(slot) + x + side / 2.0,
+                    THUMB_MARGIN + y + side / 2.0,
+                    3
+                ),
+                Some(slot)
+            );
         }
     }
 

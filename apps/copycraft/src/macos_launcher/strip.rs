@@ -189,7 +189,7 @@ pub(crate) fn update_strip_hover() {
         }
         let local = views.document.convertPoint_fromView(point, None);
         let count = STRIP_ITEMS.with(|items| items.borrow().len());
-        let slot = commands::thumb_at(local.x, count)?;
+        let slot = commands::thumb_at(local.x, local.y, count)?;
         STRIP_ITEMS.with(|items| items.borrow().get(slot).map(|thumb| thumb.index))
     });
     if hovered != STRIP_HOVER.get() {
@@ -409,18 +409,18 @@ fn thumb_card(
         card.setBorderColor(&NSColor::controlAccentColor());
     }
     let mark = commands::thumb_mark(thumb);
-    // Inset by the card's padding, so text and picture keep clear of the rounded edge.
+    // The button covers the whole card, so a click lands wherever the pointer shows the ✕
+    // ([`commands::thumb_at`]); the padding is in the content: the text is indented, the
+    // picture sits in a smaller frame behind the button.
     let button = NSButton::initWithFrame(
         NSButton::alloc(mtm),
         NSRect::new(
-            NSPoint::new(commands::THUMB_PAD, commands::THUMB_PAD),
-            NSSize::new(
-                commands::THUMB_W - 2.0 * commands::THUMB_PAD,
-                commands::THUMB_H - 2.0 * commands::THUMB_PAD,
-            ),
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(commands::THUMB_W, commands::THUMB_H),
         ),
     );
     button.setBordered(false);
+    button.setTitle(&NSString::from_str(""));
     button.setFocusRingType(NSFocusRingType::Default);
     button.setAlignment(NSTextAlignment::Left);
     button.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
@@ -466,9 +466,20 @@ fn thumb_card(
         .then(|| thumb.picture.as_ref().and_then(thumb_image))
         .flatten();
     if let Some(image) = picture {
-        button.setImage(Some(&image));
-        button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::ImageOnly);
-        button.setImageScaling(mac_ui::objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
+        // Inset by the card's padding, so the picture keeps clear of the rounded edge; the
+        // button on top takes the clicks and speaks for the card.
+        let view = mac_ui::widgets::image_view(mtm);
+        view.setImage(Some(&image));
+        view.setFrame(NSRect::new(
+            NSPoint::new(commands::THUMB_PAD, commands::THUMB_PAD),
+            NSSize::new(
+                commands::THUMB_W - 2.0 * commands::THUMB_PAD,
+                commands::THUMB_H - 2.0 * commands::THUMB_PAD,
+            ),
+        ));
+        view.setAccessibilityElement(false);
+        card.addSubview(&view);
+        button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     } else {
         // The type mark first, small; then the lines (dots while masked).
         let body = if masked {
@@ -495,7 +506,19 @@ fn thumb_card(
         {
             attributed.color(&(0..side.len()), &NSColor::systemOrangeColor());
         }
-        button.setAttributedTitle(&attributed.into_attributed());
+        // The card's padding as an indent on both sides, so the text keeps clear of the edge.
+        let style = NSMutableParagraphStyle::new();
+        style.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
+        style.setFirstLineHeadIndent(commands::THUMB_PAD);
+        style.setHeadIndent(commands::THUMB_PAD);
+        style.setTailIndent(-commands::THUMB_PAD);
+        let built = attributed.into_attributed();
+        let range = NSRange {
+            location: 0,
+            length: built.length(),
+        };
+        mac_ui::text::set_paragraph_style(&built, &style, range);
+        button.setAttributedTitle(&built);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     }
     card.addSubview(&button);

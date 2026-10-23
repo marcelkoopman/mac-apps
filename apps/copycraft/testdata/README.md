@@ -399,3 +399,9 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] Save button: VoiceOver on the card's save button (the down arrow in the well) reads *Bewaar…* / *Save…*; its tooltip still says *Bewaar JSON (⌘S)* and so on. The table window's toolbar *Save* still reads *Bewaar de tabel* / *Save the table*.
 - [ ] Support icon: *Over CopyCraft* / *About CopyCraft* and Settings › *Feedback* show *Ondersteuning* / *Support* with the Safari compass, not a question mark; clicking it still opens the support page in the browser.
 - [ ] Column picker labels: on a CSV card *Tabel* › *Kies kolommen…* shows *Selecteer alles* / *Select All* and *Selecteer niets* / *Select None*, uncut, on a Normal and a Wide card at the regular size; on a Compact card (`⋯` › *Venstergrootte* › *Compact*) the two are small, the whole row fits and nothing overlaps *Annuleer* / *Pas toe*. The table window's *Kies kolommen…* sheet shows the same two, uncut. ⌘A still selects all.
+
+## History strip (Mac only, no data)
+
+Copy four or five short texts and a small picture, then open the card so the strip shows.
+
+- [ ] Click area: click a strip card on its very corner and on its padding next to the text or picture: it shows that copy, the same as a click in the middle. The ✕ appears over exactly the area that clicks (not in the 2 pt above or below the cards); the text and picture still keep their distance from the rounded edge.
