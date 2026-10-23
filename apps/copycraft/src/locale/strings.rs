@@ -36,8 +36,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "welcome_history_choice",
-        "Zet je dit aan, dan leest CopyCraft elke kopie en bewaart die alleen in het geheugen; anders alleen wat je in de kaart plakt of neerzet.",
-        "When on, CopyCraft reads every copy and keeps it in memory only; otherwise only what you paste or drop on the card.",
+        "Zet je dit aan, dan leest CopyCraft elke kopie, alleen in het geheugen; weg bij stoppen of vergrendelen, en na de bewaartermijn (5, 15 of 60 min) als je die kiest. macOS vraagt één keer of CopyCraft andere apps mag lezen. Anders alleen wat je in de kaart plakt of neerzet.",
+        "When on, CopyCraft reads every copy, in memory only; gone when you quit or lock, and after the retention time (5, 15 or 60 min) if you pick one. macOS asks once whether CopyCraft may read other apps. Otherwise only what you paste or drop on the card.",
     ),
     (
         "clipboard_history",
@@ -46,8 +46,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "clipboard_history_note",
-        "Leest elke kopie in het geheugen; anders alleen wat je plakt.",
-        "Reads every copy into memory; otherwise only what you paste.",
+        "Leest elke kopie, alleen in het geheugen; weg bij stoppen of vergrendelen. macOS vraagt één keer of CopyCraft andere apps mag lezen.",
+        "Reads every copy, in memory only; gone when you quit or lock. macOS asks once whether CopyCraft may read other apps.",
     ),
     (
         "welcome_local",

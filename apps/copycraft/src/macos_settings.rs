@@ -746,12 +746,18 @@ fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
     wire(&history, sel!(clipboardHistoryToggled:));
     body.addSubview(&history);
     HISTORY_BOX.with(|slot| *slot.borrow_mut() = Some(history));
-    place_explanation(
+    // Two lines: what history reads and keeps, and that macOS asks once.
+    gap(&mut top, NOTE_GAP);
+    let note = place_note(
         mtm,
         body,
         crate::locale::t("clipboard_history_note"),
-        &mut top,
+        take(&mut top, NOTE_H * 2.0),
     );
+    note.setUsesSingleLineMode(false);
+    note.setLineBreakMode(mac_ui::objc2_app_kit::NSLineBreakMode::ByWordWrapping);
+    note.setMaximumNumberOfLines(2);
+    note.setFrameSize(NSSize::new(WIDTH - MARGIN * 2.0, NOTE_H * 2.0));
     place_history_settings(mtm, body, &mut top);
 
     gap(&mut top, mac_ui::metrics::SPACE_S);

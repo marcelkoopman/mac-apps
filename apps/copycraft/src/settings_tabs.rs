@@ -24,9 +24,9 @@ pub const GENERAL_H: f64 = 4.0 * SETTING_H + 4.0 * SPACE_S + NOTIFY_H;
 /// The settings under "Keep clipboard history": retention, sensitive copies and ask before
 /// clearing, one row each without a note (the note is the tooltip), after a gap.
 pub const HISTORY_SUB_H: f64 = SPACE_S + 3.0 * BUTTON_H + 2.0 * SPACE_XS;
-/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the rows under
-/// history, the ignored-apps block, three gaps.
-pub const PRIVACY_H: f64 = 3.0 * SETTING_H + HISTORY_SUB_H + 3.0 * SPACE_S + FIELD_BLOCK_H;
+/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the second
+/// line of the history note, the rows under history, the ignored-apps block, three gaps.
+pub const PRIVACY_H: f64 = 3.0 * SETTING_H + NOTE_H + HISTORY_SUB_H + 3.0 * SPACE_S + FIELD_BLOCK_H;
 /// The symbols on Weergave: the labelled setting, then the field with Restore on the same row.
 pub const FIELD_ROW_BLOCK_H: f64 = SETTING_H + SPACE_S + BUTTON_H;
 /// Weergave: the card theme row (popup and preview, no note), the pages setting, two gaps and
@@ -43,11 +43,11 @@ const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
 const _: () = assert!(GENERAL_H == 380.0);
 const _: () = assert!(HISTORY_SUB_H == 100.0);
-const _: () = assert!(PRIVACY_H == 380.0);
+const _: () = assert!(PRIVACY_H == 396.0);
 const _: () = assert!(DISPLAY_H == 172.0);
 const _: () = assert!(NOTIFY_H == 164.0);
-/// The tallest tabs (Algemeen and Privacy) fit a 13" MacBook Air (about 560 pt for a window) with room to spare.
-const _: () = assert!(window_height(PRIVACY_H) == 456.0);
+/// The tallest tabs (Privacy, then Algemeen) fit a 13" MacBook Air (about 560 pt for a window) with room to spare.
+const _: () = assert!(window_height(PRIVACY_H) == 472.0);
 const _: () = assert!(window_height(GENERAL_H) == 456.0);
 
 /// The tabs of the window, in the order of the segments.
@@ -166,8 +166,9 @@ mod tests {
     #[test]
     fn every_tab_has_its_own_height_and_the_tallest_fits() {
         let heights: Vec<f64> = Tab::ALL.iter().map(|tab| tab.window_height()).collect();
-        assert_eq!(heights, [456.0, 456.0, 248.0]);
-        assert!(heights.iter().all(|h| *h <= 456.0));
+        assert_eq!(heights, [456.0, 472.0, 248.0]);
+        // Under about 560 pt, the room a 13" MacBook Air has for a window.
+        assert!(heights.iter().all(|h| *h <= 472.0));
     }
 
     #[test]
