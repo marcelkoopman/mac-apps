@@ -252,22 +252,21 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "complexity cognitive sonar functions methods score code",
         ));
     }
-    if edit.can_undo() {
-        commands.push(command(
-            CommandId::TableUndo,
-            crate::locale::t("undo_text_step"),
-            &edit.labels[edit.version],
-            "undo text version back",
-        ));
-    }
-    if edit.can_redo() {
-        commands.push(command(
-            CommandId::TableRedo,
-            crate::locale::t("redo_text_step"),
-            &edit.labels[edit.version + 1],
-            "redo text version forward",
-        ));
-    }
+    // Always there, dimmed when there is no version to go to (the HIG: dim, do not hide).
+    commands.push(command_enabled(
+        CommandId::TableUndo,
+        crate::locale::t("undo_text_step"),
+        version_label(&edit.labels, edit.can_undo().then_some(edit.version)),
+        "undo text version back",
+        edit.can_undo(),
+    ));
+    commands.push(command_enabled(
+        CommandId::TableRedo,
+        crate::locale::t("redo_text_step"),
+        version_label(&edit.labels, edit.can_redo().then_some(edit.version + 1)),
+        "redo text version forward",
+        edit.can_redo(),
+    ));
     commands
         .into_iter()
         .map(|command| (command, false))
@@ -301,8 +300,13 @@ pub fn custom_resize_title() -> &'static str {
     crate::locale::t("custom_resize")
 }
 
-/// The "Image ▾" menu: Resize (a submenu), the other steps, then undo and redo when there is
-/// a version to go to. No check marks.
+/// The label of version `at` for an undo or redo row's detail; empty when it is dimmed.
+fn version_label(labels: &[String], at: Option<usize>) -> &str {
+    at.and_then(|at| labels.get(at)).map_or("", String::as_str)
+}
+
+/// The "Image ▾" menu: Resize (a submenu), the other steps, then undo and redo (dimmed when
+/// there is no version to go to). No check marks.
 pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
     use crate::image_edit::ImageOp;
     let step = |op: &ImageOp| {
@@ -324,22 +328,21 @@ pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
         "resize custom width height size image",
     ));
     commands.extend(others.iter().map(step));
-    if edit.can_undo() {
-        commands.push(command(
-            CommandId::TableUndo,
-            crate::locale::t("undo_image_step"),
-            &edit.labels[edit.version],
-            "undo image version back",
-        ));
-    }
-    if edit.can_redo() {
-        commands.push(command(
-            CommandId::TableRedo,
-            crate::locale::t("redo_image_step"),
-            &edit.labels[edit.version + 1],
-            "redo image version forward",
-        ));
-    }
+    // Always there, dimmed when there is no version to go to (the HIG: dim, do not hide).
+    commands.push(command_enabled(
+        CommandId::TableUndo,
+        crate::locale::t("undo_image_step"),
+        version_label(&edit.labels, edit.can_undo().then_some(edit.version)),
+        "undo image version back",
+        edit.can_undo(),
+    ));
+    commands.push(command_enabled(
+        CommandId::TableRedo,
+        crate::locale::t("redo_image_step"),
+        version_label(&edit.labels, edit.can_redo().then_some(edit.version + 1)),
+        "redo image version forward",
+        edit.can_redo(),
+    ));
     commands
         .into_iter()
         .map(|command| (command, false))

@@ -198,12 +198,17 @@ pub(super) fn paint(view: &TableWindowView) {
         items.save.setEnabled(ready);
         items.undo.setEnabled(view.can_undo());
         items.redo.setEnabled(view.can_redo());
-        items.table.setEnabled(!view.menu.is_empty());
+        // Never off: an empty menu shows its steps dimmed (`table_window_menu_shown`).
+        items.table.setEnabled(true);
         items
             .versions
             .setTitle(&NSString::from_str(&view.version_title()));
         let mut popped = Vec::new();
-        let table_menu = menus::build_menu(mtm, view.menu.clone(), &mut popped);
+        let table_menu = menus::build_menu(
+            mtm,
+            commands::table_window_menu_shown(&view.menu),
+            &mut popped,
+        );
         items.table.setMenu(&table_menu);
         if view.versions.labels.is_empty() {
             items.versions.setEnabled(false);

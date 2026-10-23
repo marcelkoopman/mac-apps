@@ -157,6 +157,12 @@ pub fn forget_chips() {
 }
 
 /// Chips, earlier copies, and appearance. Quit stays out.
+/// Search finds undo and redo only when there is a version to go to; the menus show them
+/// dimmed instead.
+fn offered_in_search(command: &Command) -> bool {
+    command.enabled || !matches!(command.id, CommandId::TableUndo | CommandId::TableRedo)
+}
+
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     let mut commands = chips(data);
     let offers_table = commands.iter().any(|c| c.id == CommandId::TableOpenWindow);
@@ -168,7 +174,8 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         commands.extend(
             image_menu_items(edit)
                 .into_iter()
-                .map(|(command, _)| command),
+                .map(|(command, _)| command)
+                .filter(offered_in_search),
         );
     }
     if let Some(edit) = text_shown(data)
@@ -178,7 +185,8 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
             text_menu_items(&edit)
                 .into_iter()
                 .map(|(command, _)| command)
-                .filter(|command| command.id != CommandId::AiUnavailable),
+                .filter(|command| command.id != CommandId::AiUnavailable)
+                .filter(offered_in_search),
         );
     }
     if commands.iter().any(|c| c.id == CommandId::TextMenu) {

@@ -285,3 +285,17 @@ fn a_right_click_on_the_table_grid_finds_its_cell() {
         ]
     );
 }
+
+#[test]
+fn an_empty_table_menu_shows_its_steps_dimmed() {
+    use crate::commands::{Command, table_steps, table_window_menu_shown};
+    let shown = table_window_menu_shown(&[]);
+    let mut want = titles(&table_steps());
+    want.push("Choose Columns…".to_string());
+    let got: Vec<String> = shown.iter().map(|(cmd, _)| cmd.title.clone()).collect();
+    assert_eq!(got, want);
+    assert!(shown.iter().all(|(cmd, checked)| !cmd.enabled && !checked));
+    // A menu with items is shown as is.
+    let menu: Vec<(Command, bool)> = table_steps().into_iter().map(|c| (c, false)).collect();
+    assert_eq!(table_window_menu_shown(&menu), menu);
+}

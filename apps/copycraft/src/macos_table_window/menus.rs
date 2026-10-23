@@ -39,6 +39,7 @@ pub(super) fn build_menu(
             sel!(tableWindowPoppedClicked:),
         );
         item.setTag(popped.len() as isize);
+        item.setEnabled(cmd.enabled);
         if checked {
             item.setState(NSControlStateValueOn);
         }

@@ -702,7 +702,9 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
         // A dimmed item says why in its tooltip (Apple Intelligence off).
         if !cmd.enabled {
             item.setEnabled(false);
-            item.setToolTip(Some(&NSString::from_str(&cmd.detail)));
+            if !cmd.detail.is_empty() {
+                item.setToolTip(Some(&NSString::from_str(&cmd.detail)));
+            }
         }
         if *checked {
             item.setState(NSControlStateValueOn);

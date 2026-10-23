@@ -27,11 +27,26 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
             "Flip Vertical",
             "Remove Metadata",
             "Grayscale",
+            "Undo Image Step",
+            "Redo Image Step",
         ]
+    );
+    // Dim, do not hide: with one version undo and redo stay, off and without a detail, and
+    // search does not offer them.
+    assert!(
+        menu[12..]
+            .iter()
+            .all(|(cmd, _)| !cmd.enabled && cmd.detail.is_empty())
+    );
+    assert!(
+        !search_pool(&plain)
+            .iter()
+            .any(|cmd| matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
     );
     let grouped: Vec<Option<&str>> = menu.iter().map(|(cmd, _)| menu_group(&cmd.id)).collect();
     assert_eq!(grouped[..6], [Some("Resize"); 6]);
     assert!(grouped[6..].iter().all(Option::is_none));
+    assert!(menu[..12].iter().all(|(cmd, _)| cmd.enabled));
     assert_eq!(
         menu[3].0.id,
         CommandId::ImageStep(ImageOp::Resize(Resize::Longest(1024)))
@@ -56,6 +71,7 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
             ("Redo Image Step", "Grayscale")
         ]
     );
+    assert!(menu[12..].iter().all(|(cmd, _)| cmd.enabled));
     // The steps are found by search too.
     assert!(
         search_pool(&edited)

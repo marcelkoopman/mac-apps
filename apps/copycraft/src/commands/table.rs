@@ -598,6 +598,29 @@ pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
         .collect()
 }
 
+/// What Table ▾ shows for `menu`: the menu itself, or, while it is empty (no table yet, or
+/// the window wiped), its steps and Choose Columns… dimmed, so the toolbar item opens a menu
+/// that says what is coming instead of beeping. The sorts need the columns and wait.
+pub fn table_window_menu_shown(menu: &[(Command, bool)]) -> Vec<(Command, bool)> {
+    if !menu.is_empty() {
+        return menu.to_vec();
+    }
+    let mut steps = super::table_steps();
+    steps.push(command(
+        CommandId::TableChooseColumns,
+        super::choose_columns_title(),
+        crate::locale::t("choose_columns_detail"),
+        "",
+    ));
+    steps
+        .into_iter()
+        .map(|mut command| {
+            command.enabled = false;
+            (command, false)
+        })
+        .collect()
+}
+
 /// The columns of the version shown, for the column picker: real and shown names (a long
 /// shared prefix shortened, as on the card) and friendly types. No cell values.
 pub fn picker_columns(table: &TableShown) -> Option<Vec<crate::column_picker::PickerColumn>> {
