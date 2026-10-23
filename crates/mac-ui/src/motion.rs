@@ -40,8 +40,9 @@ fn is_current(generation: u64) -> bool {
     WINDOW_GENERATION.with(Cell::get) == generation
 }
 
-/// Run `changes` in an animation group of `secs`, then `done`.
-pub(crate) fn animate(secs: f64, changes: impl Fn() + 'static, done: Option<Box<dyn Fn()>>) {
+/// Run `changes` in an animation group of `secs`, then `done`. Callers check
+/// [`reduce_motion`] themselves and skip motion (fades may stay) when it is on.
+pub fn animate(secs: f64, changes: impl Fn() + 'static, done: Option<Box<dyn Fn()>>) {
     let changes: RcBlock<dyn Fn(NonNull<NSAnimationContext>)> =
         RcBlock::new(move |_context: NonNull<NSAnimationContext>| {
             NSAnimationContext::currentContext().setDuration(secs);

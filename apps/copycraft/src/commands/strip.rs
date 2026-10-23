@@ -36,6 +36,9 @@ pub const MAX_THUMBS: usize = 30;
 pub struct Thumb {
     /// Position in history (0 is the newest), what a click shows.
     pub index: usize,
+    /// The history entry's id: the strip keeps a card's views by it, so a removal moves the
+    /// other cards instead of building them again.
+    pub id: Option<u64>,
     /// The type mark (`{}`, `md`, `img`), with the pin in front of a pinned copy.
     pub mark: String,
     /// The first few short lines of the text ([`THUMB_LINES`]). Empty for a picture.
@@ -213,6 +216,13 @@ pub fn thumb_at(x: f64, y: f64, count: usize) -> Option<usize> {
     }
     let slot = (x / (THUMB_W + THUMB_GAP)) as usize;
     (slot < count && x - thumb_x(slot) <= THUMB_W).then_some(slot)
+}
+
+/// The card (slot) that gets the focus after the card in `slot` was removed, with `count`
+/// cards left: the one that took its place (its right neighbour), else the last one (its left
+/// neighbour); `None` when none are left.
+pub fn focus_after_remove(slot: usize, count: usize) -> Option<usize> {
+    count.checked_sub(1).map(|last| slot.min(last))
 }
 
 /// The ✕'s frame inside a card, `(x, y, side)` from the card's bottom-left corner (AppKit
@@ -504,6 +514,7 @@ mod tests {
     fn thumb(index: usize, side: Option<&'static str>) -> Thumb {
         Thumb {
             index,
+            id: Some(index as u64),
             mark: "{}".to_string(),
             lines: String::new(),
             picture: None,
@@ -539,6 +550,16 @@ mod tests {
             thumb_kind_name(crate::format::FormatKind::Plain),
             crate::locale::t("strip_kind_text")
         );
+    }
+
+    #[test]
+    fn after_a_removal_the_right_neighbour_gets_the_focus_else_the_left() {
+        // Card 1 of 4 removed: 3 left, the old card 2 now sits in slot 1.
+        assert_eq!(focus_after_remove(1, 3), Some(1));
+        // The last card removed: its left neighbour.
+        assert_eq!(focus_after_remove(3, 3), Some(2));
+        assert_eq!(focus_after_remove(0, 1), Some(0));
+        assert_eq!(focus_after_remove(0, 0), None);
     }
 
     #[test]

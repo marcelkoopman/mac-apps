@@ -441,6 +441,9 @@ define_class!(
                 true
             } else if let Some(id) = undo_chord(event) {
                 // ⌘Z / ⇧⌘Z step through the table's versions (typed search text keeps them).
+                if id == CommandId::RestoreHistory {
+                    strip::note_strip_restore();
+                }
                 launcher::emit(UserEvent::Run(id));
                 true
             } else if zoom::zoom_chord(event) {
@@ -633,6 +636,9 @@ define_class!(
         #[unsafe(method(thumbMenuClicked:))]
         fn thumb_menu_clicked(&self, sender: Option<&NSMenuItem>) {
             if let Some(id) = sender.and_then(|item| strip::thumb_menu_command(item.tag())) {
+                if let CommandId::RemoveHistory(index) = id {
+                    strip::note_strip_remove(index);
+                }
                 launcher::emit(UserEvent::Run(id));
             }
         }
@@ -642,6 +648,7 @@ define_class!(
         #[unsafe(method(thumbRemoveClicked:))]
         fn thumb_remove_clicked(&self, sender: Option<&NSButton>) {
             if let Some(sender) = sender {
+                strip::note_strip_remove(sender.tag() as usize);
                 launcher::emit(UserEvent::Run(CommandId::RemoveHistory(sender.tag() as usize)));
             }
         }

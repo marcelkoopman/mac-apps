@@ -578,6 +578,9 @@ pub(crate) fn on_key(event: &NSEvent) {
         Some(Key::Delete) => {
             let (strip_shown, cursor) = strip_delete_target();
             if let Some(id) = commands::delete_key(SEARCHING.with(Cell::get), strip_shown, cursor) {
+                if let CommandId::RemoveHistory(index) = id {
+                    note_strip_remove(index);
+                }
                 launcher::emit(UserEvent::Run(id));
             } else {
                 begin_search_from_key(event);

@@ -1,8 +1,12 @@
 //! The history strip along the bottom of the card: a row of small cards (type mark and a few
 //! short lines, or a small picture), horizontally scrollable, the copy on screen marked. A click
 //! shows that copy ([`CommandId::HistoryView`]); nothing is copied. Masked copies (privacy
-//! filter) show their type mark only. Views are rebuilt only when what they show changes; the
-//! few decoded pictures are kept in memory only, and nothing is logged.
+//! filter) show their type mark only. Each card's views are kept per history entry: when
+//! history changes the cards slide to their new places, a new one fades in and a removed one
+//! fades out (no motion with Reduce Motion); a card is built again only when what it shows
+//! changes. After ⌫ or ✕ the focus goes to the neighbouring card (right, else left), after
+//! ⌘Z to the card that came back. The few decoded pictures are kept in memory only, and
+//! nothing is logged.
 //!
 //! Each small card has a ✕ in its top-right corner, shown on the marked card and the one under
 //! the pointer: it takes that copy out of history ([`CommandId::RemoveHistory`]), and ⌘Z puts
@@ -14,13 +18,31 @@ use super::*;
 
 const RADIUS: f64 = 8.0;
 
-/// A small card's button, its type name and when it was copied, by history position.
-type ThumbButton = (
-    usize,
-    Retained<NSButton>,
-    &'static str,
-    Option<std::time::Instant>,
-);
+/// One small card on screen, kept per history entry: a change in history moves it (or fades
+/// it in or out) instead of building the whole row again.
+struct Tile {
+    /// The history entry it shows ([`tile_key`]).
+    key: u64,
+    /// What it draws ([`look_of`]); a new look builds it again in its place.
+    look: u64,
+    card: Retained<NSBox>,
+    button: Retained<NSButton>,
+    remove: Retained<NSButton>,
+    /// History position, type name and copy time, for the tags, the ✕ and the tooltip.
+    index: usize,
+    kind: &'static str,
+    copied: Option<std::time::Instant>,
+}
+
+/// Where the keyboard focus goes once the strip shows a removal or a ⌘Z.
+#[derive(Debug, Clone, Copy)]
+enum StripFocus {
+    /// After ⌫ or ✕: the card that takes the removed one's place (its right neighbour), else
+    /// the one left of it ([`commands::focus_after_remove`]).
+    Removed { key: u64, slot: usize },
+    /// After ⌘Z: the card that came back.
+    Restored,
+}
 
 /// What the strip draws, kept for the layout passes.
 pub(crate) struct StripViews {
@@ -39,12 +61,10 @@ thread_local! {
     static STRIP_SIGNATURE: Cell<u64> = const { Cell::new(0) };
     /// Small pictures already decoded, by the allocation of their bytes (a few, memory only).
     static THUMB_IMAGES: RefCell<Vec<(usize, Retained<NSImage>)>> = const { RefCell::new(Vec::new()) };
-    /// The ✕ of each small card, by history position.
-    static REMOVE_BUTTONS: RefCell<Vec<(usize, Retained<NSButton>)>> = const { RefCell::new(Vec::new()) };
-    /// Each small card's button, its type name and when it was copied, by history position,
-    /// so the tooltip's age is fresh when the pointer comes over it.
-    static THUMB_BUTTONS: RefCell<Vec<ThumbButton>> =
-        const { RefCell::new(Vec::new()) };
+    /// The small cards on screen, in the order drawn.
+    static TILES: RefCell<Vec<Tile>> = const { RefCell::new(Vec::new()) };
+    /// Focus to move once the strip shows a removal or a restore.
+    static PENDING_FOCUS: Cell<Option<StripFocus>> = const { Cell::new(None) };
     /// The history position of the small card under the pointer.
     static STRIP_HOVER: Cell<Option<usize>> = const { Cell::new(None) };
     /// A copy was just removed from history: ⌘Z puts it back.
@@ -132,8 +152,8 @@ pub(crate) fn clear_strip() {
     });
     CAN_RESTORE.set(false);
     STRIP_HOVER.set(None);
-    REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
-    THUMB_BUTTONS.with(|slot| slot.borrow_mut().clear());
+    TILES.with(|slot| slot.borrow_mut().clear());
+    PENDING_FOCUS.set(None);
     THUMB_IMAGES.with(|slot| slot.borrow_mut().clear());
     STRIP_SIGNATURE.set(0);
     STRIP_HINT.set(commands::StripHint::None);
@@ -165,6 +185,27 @@ pub(crate) fn strip_delete_target() -> (bool, usize) {
                 .is_some_and(|views| !views.scroll.isHidden())
         });
     (shown, STRIP_CURSOR.get())
+}
+
+/// ⌫, the ✕, a card's menu or VoiceOver is taking history position `index` out: once the
+/// strip shows it gone, the focus goes to its right neighbour (else the left one).
+pub(crate) fn note_strip_remove(index: usize) {
+    let found = STRIP_ITEMS.with(|items| {
+        items
+            .borrow()
+            .iter()
+            .enumerate()
+            .find(|(_, thumb)| thumb.index == index)
+            .map(|(slot, thumb)| (slot, tile_key(thumb)))
+    });
+    if let Some((slot, key)) = found {
+        PENDING_FOCUS.set(Some(StripFocus::Removed { key, slot }));
+    }
+}
+
+/// ⌘Z is putting the removed copy back: once its card shows, it gets the focus.
+pub(crate) fn note_strip_restore() {
+    PENDING_FOCUS.set(Some(StripFocus::Restored));
 }
 
 /// The pointer moved over the card: show the ✕ of the small card under it.
@@ -203,10 +244,10 @@ pub(crate) fn update_strip_hover() {
 
 /// Set the tooltip of the small card at history position `index`: type and age.
 fn refresh_tooltip(index: usize) {
-    THUMB_BUTTONS.with(|slot| {
-        for (at, button, kind, copied) in slot.borrow().iter() {
-            if *at == index {
-                set_tooltip(button, kind, *copied);
+    TILES.with(|slot| {
+        for tile in slot.borrow().iter() {
+            if tile.index == index {
+                set_tooltip(&tile.button, tile.kind, tile.copied);
             }
         }
     });
@@ -221,9 +262,10 @@ fn set_tooltip(button: &NSButton, kind: &str, copied: Option<std::time::Instant>
 fn show_remove_buttons() {
     let cursor = STRIP_CURSOR.get();
     let hovered = STRIP_HOVER.get();
-    REMOVE_BUTTONS.with(|slot| {
-        for (index, button) in slot.borrow().iter() {
-            button.setHidden(!commands::remove_shown(*index, cursor, hovered));
+    TILES.with(|slot| {
+        for tile in slot.borrow().iter() {
+            tile.remove
+                .setHidden(!commands::remove_shown(tile.index, cursor, hovered));
         }
     });
 }
@@ -311,11 +353,6 @@ pub(crate) fn place_strip(
     let rebuilt = STRIP_SIGNATURE.get() != signature;
     if rebuilt {
         STRIP_SIGNATURE.set(signature);
-        for old in document.subviews().iter() {
-            old.removeFromSuperview();
-        }
-        REMOVE_BUTTONS.with(|slot| slot.borrow_mut().clear());
-        THUMB_BUTTONS.with(|slot| slot.borrow_mut().clear());
         document.setFrame(NSRect::new(
             NSPoint::new(0.0, 0.0),
             NSSize::new(
@@ -323,21 +360,7 @@ pub(crate) fn place_strip(
                 placed.strip_h,
             ),
         ));
-        for (slot, thumb) in items.iter().enumerate() {
-            let card = thumb_card(
-                mtm,
-                thumb,
-                items.len(),
-                thumb.index == cursor,
-                masked_of(thumb),
-            );
-            card.setFrame(NSRect::new(
-                NSPoint::new(commands::thumb_x(slot), commands::THUMB_MARGIN),
-                NSSize::new(commands::THUMB_W, commands::THUMB_H),
-            ));
-            document.addSubview(&card);
-        }
-        show_remove_buttons();
+        update_tiles(mtm, &document, items, cursor, &masked_of);
     }
     // The marked card scrolls into view (only the strip moves, never the card).
     if let Some(slot) = items.iter().position(|thumb| thumb.index == cursor) {
@@ -348,6 +371,161 @@ pub(crate) fn place_strip(
             clip.scrollToPoint(NSPoint::new(target, 0.0));
             scroll.reflectScrolledClipView(&clip);
         }
+    }
+}
+
+/// The key a card is kept by: its history entry's id (a position only if it has none).
+fn tile_key(thumb: &commands::Thumb) -> u64 {
+    thumb.id.unwrap_or(u64::MAX - thumb.index as u64)
+}
+
+/// What one card draws (not where, nor its position in history): the mark, the lines, the
+/// picture, marked, compared, masked and the theme. Hashed in memory, never stored.
+fn look_of(thumb: &commands::Thumb, current: bool, masked: bool) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    thumb.mark.hash(&mut hasher);
+    thumb.side.hash(&mut hasher);
+    thumb.lines.hash(&mut hasher);
+    thumb
+        .picture
+        .as_ref()
+        .map(SecretBytes::allocation_id)
+        .hash(&mut hasher);
+    (current, masked).hash(&mut hasher);
+    crate::settings::card_theme().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Match the cards on screen to `items` by history entry: a kept card slides to its new place,
+/// a new one fades in, a gone one fades out (all at once, [`mac_ui::metrics::MOTION_SECS`];
+/// instant with Reduce Motion or on the first build). A card whose look changed is built again
+/// where it stood. Then the focus moves as [`PENDING_FOCUS`] asks.
+fn update_tiles(
+    mtm: MainThreadMarker,
+    document: &NSView,
+    items: &[commands::Thumb],
+    cursor: usize,
+    masked_of: &dyn Fn(&commands::Thumb) -> bool,
+) {
+    let window = WINDOW.with(|slot| slot.borrow().clone());
+    let focused = window.as_ref().and_then(|window| window.firstResponder());
+    let has_focus = |button: &NSButton| {
+        focused.as_ref().is_some_and(|responder| {
+            std::ptr::eq(
+                Retained::as_ptr(responder).cast::<AnyObject>(),
+                (button as *const NSButton).cast::<AnyObject>(),
+            )
+        })
+    };
+    let mut old = TILES.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
+    let animate = !old.is_empty() && !mac_ui::motion::reduce_motion();
+    let mut moves: Vec<(Retained<NSBox>, NSRect)> = Vec::new();
+    let mut fade_in: Vec<Retained<NSBox>> = Vec::new();
+    let mut tiles = Vec::with_capacity(items.len());
+    let mut inserted: Option<usize> = None;
+    let mut refocus: Option<Retained<NSButton>> = None;
+    let mut place = |card: &Retained<NSBox>, target: NSRect| {
+        if card.frame() == target {
+            return;
+        }
+        if animate {
+            moves.push((card.clone(), target));
+        } else {
+            card.setFrame(target);
+        }
+    };
+    for (slot, thumb) in items.iter().enumerate() {
+        let current = thumb.index == cursor;
+        let masked = masked_of(thumb);
+        let key = tile_key(thumb);
+        let look = look_of(thumb, current, masked);
+        let target = NSRect::new(
+            NSPoint::new(commands::thumb_x(slot), commands::THUMB_MARGIN),
+            NSSize::new(commands::THUMB_W, commands::THUMB_H),
+        );
+        let previous = old
+            .iter()
+            .position(|tile| tile.key == key)
+            .map(|at| old.remove(at));
+        let mut tile = match previous {
+            Some(kept) if kept.look == look => {
+                place(&kept.card, target);
+                kept
+            }
+            Some(stale) => {
+                let fresh = build_tile(mtm, thumb, key, look, current, masked);
+                fresh.card.setFrame(stale.card.frame());
+                place(&fresh.card, target);
+                document.addSubview(&fresh.card);
+                if has_focus(&stale.button) {
+                    refocus = Some(fresh.button.clone());
+                }
+                stale.card.removeFromSuperview();
+                fresh
+            }
+            None => {
+                let fresh = build_tile(mtm, thumb, key, look, current, masked);
+                fresh.card.setFrame(target);
+                if animate {
+                    fresh.card.setAlphaValue(0.0);
+                    fade_in.push(fresh.card.clone());
+                }
+                inserted.get_or_insert(slot);
+                document.addSubview(&fresh.card);
+                fresh
+            }
+        };
+        bind_tile(mtm, &mut tile, thumb, current);
+        tiles.push(tile);
+    }
+    // Entries no longer in history fade out where they stood.
+    let fade_out: Vec<Retained<NSBox>> = old.into_iter().map(|tile| tile.card).collect();
+    if animate {
+        let gone = fade_out.clone();
+        mac_ui::motion::animate(
+            mac_ui::metrics::MOTION_SECS,
+            move || {
+                for (card, target) in &moves {
+                    card.animator().setFrame(*target);
+                }
+                for card in &fade_in {
+                    card.animator().setAlphaValue(1.0);
+                }
+                for card in &fade_out {
+                    card.animator().setAlphaValue(0.0);
+                }
+            },
+            Some(Box::new(move || {
+                for card in &gone {
+                    card.removeFromSuperview();
+                }
+            })),
+        );
+    } else {
+        for card in &fade_out {
+            card.removeFromSuperview();
+        }
+    }
+    let focus_slot = match PENDING_FOCUS.get() {
+        Some(StripFocus::Removed { key, slot }) if !tiles.iter().any(|tile| tile.key == key) => {
+            PENDING_FOCUS.set(None);
+            commands::focus_after_remove(slot, tiles.len())
+        }
+        Some(StripFocus::Restored) if inserted.is_some() => {
+            PENDING_FOCUS.set(None);
+            inserted
+        }
+        _ => None,
+    };
+    let focus = focus_slot
+        .and_then(|slot| tiles.get(slot))
+        .map(|tile| tile.button.clone())
+        .or(refocus);
+    TILES.with(|slot| *slot.borrow_mut() = tiles);
+    show_remove_buttons();
+    if let (Some(button), Some(window)) = (focus, window) {
+        window.makeFirstResponder(Some(&button));
     }
 }
 
@@ -384,13 +562,16 @@ fn signature_of(
     hasher.finish() | 1
 }
 
-fn thumb_card(
+/// Build a small card: its fill, frame, text or picture, button and ✕. What depends on its
+/// position in history is set by [`bind_tile`].
+fn build_tile(
     mtm: MainThreadMarker,
     thumb: &commands::Thumb,
-    total: usize,
+    key: u64,
+    look: u64,
     current: bool,
     masked: bool,
-) -> Retained<NSBox> {
+) -> Tile {
     // A fixed card theme paints the tile in its own colours (tested for contrast); System
     // keeps the translucent system tint.
     let themed = crate::appearance::card_palette().map(|palette| palette.strip_tile(current));
@@ -424,44 +605,7 @@ fn thumb_card(
     button.setFocusRingType(NSFocusRingType::Default);
     button.setAlignment(NSTextAlignment::Left);
     button.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
-    button.setTag(thumb.index as isize);
-    let mut spoken = format!(
-        "{}, {}",
-        commands::thumb_spoken(thumb.index + 1, total, current),
-        thumb.mark
-    );
-    if let Some(side) = thumb.side {
-        spoken = format!(
-            "{spoken}, {}",
-            crate::locale::tf("strip_compare_side", &[&side])
-        );
-    }
-    button.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
-    button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
-        "strip_compare_hint",
-    ))));
-    // Type and age only: the ⌘-click hint is in VoiceOver's help and the one-time hint row.
-    set_tooltip(&button, thumb.kind, thumb.copied);
-    let index = thumb.index;
-    let mut actions: Vec<(String, Box<dyn Fn() + 'static>)> = vec![(
-        crate::locale::t("history_remove_item").to_string(),
-        Box::new(move || launcher::emit(UserEvent::Run(CommandId::RemoveHistory(index)))),
-    )];
-    if !current {
-        actions.push((
-            crate::locale::t("strip_action_compare").to_string(),
-            Box::new(move || launcher::emit(UserEvent::Run(CommandId::StripCompare(index)))),
-        ));
-    }
-    mac_ui::a11y::set_custom_actions(&button, actions);
-    THUMB_BUTTONS.with(|slot| {
-        slot.borrow_mut()
-            .push((index, button.clone(), thumb.kind, thumb.copied));
-    });
     wire_button(&button, sel!(thumbClicked:));
-    // Right-click or ⌃-click: Pin, the diff action, Remove from History (AppKit shows a
-    // view's menu for both; no subclass).
-    mac_ui::widgets::set_context_menu(&button, &thumb_context_menu(mtm, thumb));
     let picture = (!masked)
         .then(|| thumb.picture.as_ref().and_then(thumb_image))
         .flatten();
@@ -522,8 +666,66 @@ fn thumb_card(
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     }
     card.addSubview(&button);
-    card.addSubview(&remove_button(mtm, thumb.index));
-    card
+    let remove = remove_button(mtm);
+    card.addSubview(&remove);
+    Tile {
+        key,
+        look,
+        card,
+        button,
+        remove,
+        index: thumb.index,
+        kind: thumb.kind,
+        copied: thumb.copied,
+    }
+}
+
+/// Set what depends on the card's place in history (it shifts when a copy is removed or
+/// added): the tags, what VoiceOver reads and its actions, the tooltip and the right-click
+/// menu, which acts on that card's copy.
+fn bind_tile(mtm: MainThreadMarker, tile: &mut Tile, thumb: &commands::Thumb, current: bool) {
+    let total = STRIP_ITEMS.with(|items| items.borrow().len());
+    tile.index = thumb.index;
+    tile.kind = thumb.kind;
+    tile.copied = thumb.copied;
+    let button = &tile.button;
+    button.setTag(thumb.index as isize);
+    tile.remove.setTag(thumb.index as isize);
+    let mut spoken = format!(
+        "{}, {}",
+        commands::thumb_spoken(thumb.index + 1, total, current),
+        thumb.mark
+    );
+    if let Some(side) = thumb.side {
+        spoken = format!(
+            "{spoken}, {}",
+            crate::locale::tf("strip_compare_side", &[&side])
+        );
+    }
+    button.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
+    button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
+        "strip_compare_hint",
+    ))));
+    // Type and age only: the ⌘-click hint is in VoiceOver's help and the one-time hint row.
+    set_tooltip(button, thumb.kind, thumb.copied);
+    let index = thumb.index;
+    let mut actions: Vec<(String, Box<dyn Fn() + 'static>)> = vec![(
+        crate::locale::t("history_remove_item").to_string(),
+        Box::new(move || {
+            note_strip_remove(index);
+            launcher::emit(UserEvent::Run(CommandId::RemoveHistory(index)));
+        }),
+    )];
+    if !current {
+        actions.push((
+            crate::locale::t("strip_action_compare").to_string(),
+            Box::new(move || launcher::emit(UserEvent::Run(CommandId::StripCompare(index)))),
+        ));
+    }
+    mac_ui::a11y::set_custom_actions(button, actions);
+    // Right-click or ⌃-click: Pin, the diff action, Remove from History (AppKit shows a
+    // view's menu for both; no subclass).
+    mac_ui::widgets::set_context_menu(button, &thumb_context_menu(mtm, thumb));
 }
 
 /// The right-click menu of a small card ([`commands::thumb_menu`]); a row's tag says which
@@ -565,8 +767,9 @@ pub(crate) fn thumb_menu_command(tag: isize) -> Option<CommandId> {
     })
 }
 
-/// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]).
-fn remove_button(mtm: MainThreadMarker, index: usize) -> Retained<NSButton> {
+/// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]; its tag
+/// is set by [`bind_tile`]).
+fn remove_button(mtm: MainThreadMarker) -> Retained<NSButton> {
     let label = crate::locale::t("history_remove_item");
     let (x, y, side) = commands::remove_frame();
     let button = NSButton::initWithFrame(
@@ -574,7 +777,6 @@ fn remove_button(mtm: MainThreadMarker, index: usize) -> Retained<NSButton> {
         NSRect::new(NSPoint::new(x, y), NSSize::new(side, side)),
     );
     button.setBordered(false);
-    button.setTag(index as isize);
     if let Some(image) = mac_ui::icon::system_symbol("xmark.circle.fill", label) {
         button.setImage(Some(&image));
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::ImageOnly);
@@ -586,7 +788,6 @@ fn remove_button(mtm: MainThreadMarker, index: usize) -> Retained<NSButton> {
     button.setToolTip(Some(&NSString::from_str(label)));
     button.setAccessibilityLabel(Some(&NSString::from_str(label)));
     button.setHidden(true);
-    REMOVE_BUTTONS.with(|slot| slot.borrow_mut().push((index, button.clone())));
     wire_button(&button, sel!(thumbRemoveClicked:));
     button
 }

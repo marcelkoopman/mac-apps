@@ -482,6 +482,7 @@ impl App {
                 });
                 commands::Thumb {
                     index,
+                    id: self.history.id_at(index),
                     mark: format!("{pin}{}", self.history.mark(index).unwrap_or("")),
                     lines: self
                         .history
