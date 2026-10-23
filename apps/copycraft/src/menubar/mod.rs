@@ -25,7 +25,7 @@ use crate::clipboard::{self, ClipboardHistory, ClipboardView, SecretBytes};
 use crate::commands::{self, CardView, CommandId, Hist, LaunchData, SubjectKind};
 use crate::format;
 use crate::icon;
-use crate::image_edit::{ImageOp, ImageVersions};
+use crate::image_edit::ImageOp;
 use crate::launcher::{self, UserEvent};
 use crate::table::{TableOp, TableVersions};
 

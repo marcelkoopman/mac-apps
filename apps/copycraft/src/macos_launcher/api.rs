@@ -408,11 +408,18 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
+    IMAGE_STEPS.with(|slot| {
+        slot.replace(
+            data.image_edit
+                .clone()
+                .filter(|_| data.subject_kind == commands::SubjectKind::Image),
+        )
+    });
     // A picture's card has Image ▾ in the table menu's place.
     let text_menu = commands::text_shown(&data);
     let items = match (data.image_edit.as_ref(), text_menu.as_ref()) {
-        (Some(edit), _) if data.subject_kind == commands::SubjectKind::Image => {
-            commands::image_menu_items(edit)
+        (Some(_), _) if data.subject_kind == commands::SubjectKind::Image => {
+            commands::image_menu_items()
         }
         // The same cards that show the Text ▾ chip (`offers_text_menu`), with a fresh menu
         // when no version has been attached yet.

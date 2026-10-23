@@ -57,11 +57,6 @@ pub enum UserEvent {
     TableDone(Box<TableDone>),
     /// An Image ▾ job ([`crate::image_edit::Job`]) is done, or failed.
     ImageDone(Box<ImageDone>),
-    /// The scan of the picture version `picture` (an Image ▾ step's) is done.
-    VersionScanned {
-        picture: crate::clipboard::SecretBytes,
-        scan: Option<crate::commands::ImageScan>,
-    },
     /// Page `index` of the PDF `source` is drawn (`None`: it could not be).
     PdfPageRendered {
         source: crate::clipboard::SecretBytes,
@@ -318,7 +313,7 @@ impl std::fmt::Debug for TableDone {
     }
 }
 
-/// What an Image ▾ job left: the generation it ran for and its version, or why it stopped.
+/// What an Image ▾ job left: the generation it ran for and its new picture, or why it stopped.
 #[derive(Clone)]
 pub struct ImageDone {
     pub generation: u64,

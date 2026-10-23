@@ -3,7 +3,8 @@
 use super::*;
 
 /// The version capsule in the chip row, left of the history capsule: shown in the Dataframe
-/// view while the table has more than one version.
+/// view while the table has more than one version, and on a text Text ▾ stepped. A picture has
+/// none: an Image ▾ step makes a new copy.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VersionBar {
     /// "Original", then each step's label.
@@ -15,11 +16,7 @@ pub struct VersionBar {
 impl VersionBar {
     pub fn of(data: &LaunchData) -> Option<Self> {
         if data.subject_kind == SubjectKind::Image {
-            let edit = data.image_edit.as_ref()?;
-            return (data.view == CardView::Original && edit.labels.len() > 1).then(|| Self {
-                labels: edit.labels.clone(),
-                current: edit.version.min(edit.labels.len() - 1),
-            });
+            return None;
         }
         if let Some(edit) = &data.text_edit
             && data.subject_kind == SubjectKind::Text
@@ -96,14 +93,52 @@ pub fn undo_key(
     other_modifier: bool,
     bar: Option<&VersionBar>,
 ) -> Option<CommandId> {
+    let bar = bar?;
+    step_key(
+        chars,
+        command,
+        shift,
+        other_modifier,
+        bar.can_undo(),
+        bar.can_redo(),
+    )
+}
+
+/// ⌘Z and ⇧⌘Z on a picture card after an Image ▾ step: the copy it was taken on, and back
+/// (`edit`'s [`ImageShown::can_undo`] and `can_redo`), without a capsule. As [`undo_key`].
+pub fn image_undo_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    edit: Option<&ImageShown>,
+) -> Option<CommandId> {
+    let edit = edit?;
+    step_key(
+        chars,
+        command,
+        shift,
+        other_modifier,
+        edit.can_undo,
+        edit.can_redo,
+    )
+}
+
+fn step_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    can_undo: bool,
+    can_redo: bool,
+) -> Option<CommandId> {
     if !command || other_modifier || !chars.eq_ignore_ascii_case("z") {
         return None;
     }
-    let bar = bar?;
     if shift {
-        bar.can_redo().then_some(CommandId::TableRedo)
+        can_redo.then_some(CommandId::TableRedo)
     } else {
-        bar.can_undo().then_some(CommandId::TableUndo)
+        can_undo.then_some(CommandId::TableUndo)
     }
 }
 

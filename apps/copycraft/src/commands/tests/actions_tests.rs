@@ -405,8 +405,9 @@ fn image_menu_is_off_on_the_recognized_text() {
     });
     input.image_edit = Some(crate::commands::ImageShown {
         entry: 1,
-        labels: vec!["Original".into()],
-        version: 0,
+        label: None,
+        can_undo: false,
+        can_redo: false,
         working: false,
         note: None,
     });

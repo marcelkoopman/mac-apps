@@ -203,8 +203,6 @@ impl App {
     }
 
     fn pdf_page_changed(&mut self) {
-        // Edits of the picture belonged to the page they were made on.
-        self.opened_image = ImageVersions::default();
         // The zoom stays; the new page is drawn at it.
         self.pdf_apply_zoom();
         if launcher::is_open() {

@@ -107,19 +107,9 @@ fn choose_columns_lists_the_version_shown_and_applies_as_one_step() {
 
 #[test]
 fn image_menu_items_run_the_step_they_are_titled() {
-    use crate::commands::{Command, ImageShown, image_menu_items, popped_pick};
+    use crate::commands::{Command, image_menu_items, popped_pick};
     use crate::image_edit::ImageOp;
-    let edit = ImageShown {
-        entry: 1,
-        labels: vec!["Original".into()],
-        version: 0,
-        working: false,
-        note: None,
-    };
-    let items: Vec<Command> = image_menu_items(&edit)
-        .into_iter()
-        .map(|(c, _)| c)
-        .collect();
+    let items: Vec<Command> = image_menu_items().into_iter().map(|(c, _)| c).collect();
     for op in ImageOp::MENU {
         let item = items
             .iter()
@@ -199,24 +189,20 @@ fn menu_rows_show_the_chords_the_card_runs() {
     assert_eq!(menu_key(&CommandId::TableRedo), Some(("z", true)));
     assert_eq!(menu_key(&CommandId::Copy), None);
     assert_eq!(menu_key(&CommandId::History(0)), None);
-    // ⌘Z / ⇧⌘Z on Text ▾ and Image ▾ are the card's own undo and redo of that version.
-    let edited = edited_picture(1, &["Original", "Resized", "Grayscale"]);
-    let bar = VersionBar::of(&edited);
+    // ⌘Z / ⇧⌘Z after an Image ▾ step go between its copies, without a capsule or menu rows.
+    let edited = edited_picture(Some("Resized"), true, true);
+    assert_eq!(VersionBar::of(&edited), None);
+    let edit = edited.image_edit.as_ref();
     assert_eq!(
-        undo_key("z", true, false, false, bar.as_ref()),
+        image_undo_key("z", true, false, false, edit),
         Some(CommandId::TableUndo)
     );
     assert_eq!(
-        undo_key("z", true, true, false, bar.as_ref()),
+        image_undo_key("z", true, true, false, edit),
         Some(CommandId::TableRedo)
     );
-    let menu = crate::commands::image_menu_items(edited.image_edit.as_ref().unwrap());
-    let keyed: Vec<&CommandId> = menu
-        .iter()
-        .map(|(cmd, _)| &cmd.id)
-        .filter(|id| menu_key(id).is_some())
-        .collect();
-    assert_eq!(keyed, [&CommandId::TableUndo, &CommandId::TableRedo]);
+    let menu = crate::commands::image_menu_items();
+    assert!(menu.iter().all(|(cmd, _)| menu_key(&cmd.id).is_none()));
 }
 
 #[test]

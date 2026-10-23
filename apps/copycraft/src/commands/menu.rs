@@ -315,9 +315,9 @@ fn version_label(labels: &[String], at: Option<usize>) -> &str {
     at.and_then(|at| labels.get(at)).map_or("", String::as_str)
 }
 
-/// The "Image ▾" menu: Resize (a submenu), the other steps, then undo and redo (dimmed when
-/// there is no version to go to). No check marks.
-pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
+/// The "Image ▾" menu: Resize (a submenu), then the other steps. Each makes a new copy; ⌘Z
+/// shows the copy the step was taken on. No check marks.
+pub fn image_menu_items() -> Vec<(Command, bool)> {
     use crate::image_edit::ImageOp;
     let step = |op: &ImageOp| {
         let detail = op.group().unwrap_or(crate::locale::t("title_image"));
@@ -338,21 +338,6 @@ pub fn image_menu_items(edit: &ImageShown) -> Vec<(Command, bool)> {
         "resize custom width height size image",
     ));
     commands.extend(others.iter().map(step));
-    // Always there, dimmed when there is no version to go to (the HIG: dim, do not hide).
-    commands.push(command_enabled(
-        CommandId::TableUndo,
-        crate::locale::t("undo_image_step"),
-        version_label(&edit.labels, edit.can_undo().then_some(edit.version)),
-        "undo image version back",
-        edit.can_undo(),
-    ));
-    commands.push(command_enabled(
-        CommandId::TableRedo,
-        crate::locale::t("redo_image_step"),
-        version_label(&edit.labels, edit.can_redo().then_some(edit.version + 1)),
-        "redo image version forward",
-        edit.can_redo(),
-    ));
     commands
         .into_iter()
         .map(|command| (command, false))

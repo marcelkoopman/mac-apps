@@ -139,30 +139,22 @@ pub struct DiffShown {
     pub phase: crate::diff::Phase,
 }
 
-/// The versions of a picture for the card. When a step's version is shown, [`LaunchData`]'s
-/// `image`, `picture` and `image_scan` are that version's.
+/// Image ▾ on the picture card. A step's result is a new copy (a history entry of its own),
+/// like a Text ▾ step's; there are no versions to page through on the card.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageShown {
-    /// The entry: the original picture's allocation, so every version is the same item.
+    /// The picture's allocation: the copy on the card.
     pub entry: u64,
-    /// "Original", then each step's label.
-    pub labels: Vec<String>,
-    /// The version shown: 0 is the original.
-    pub version: usize,
-    /// A step or another version is being worked out.
+    /// What the step that made this copy did ("Grayscale"), while it is the newest step's.
+    pub label: Option<String>,
+    /// ⌘Z shows the copy the step was taken on, ⇧⌘Z the step's copy again (as after a Text ▾
+    /// step; only shown, the clipboard is left alone).
+    pub can_undo: bool,
+    pub can_redo: bool,
+    /// A step is being worked out.
     pub working: bool,
-    /// Why the last step did nothing or failed, for the meta line.
+    /// Why the last step did nothing, failed or was not kept, for the meta line.
     pub note: Option<String>,
-}
-
-impl ImageShown {
-    pub fn can_undo(&self) -> bool {
-        self.version > 0
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.version + 1 < self.labels.len()
-    }
 }
 
 /// The versions Text ▾ made of a text, for the card. Each version is a history entry.

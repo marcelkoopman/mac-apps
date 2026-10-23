@@ -1,16 +1,16 @@
 use super::*;
 
 #[test]
-fn a_picture_with_versions_has_image_menu_and_version_bar() {
+fn a_picture_has_image_menu_and_no_version_bar() {
     use crate::image_edit::{ImageOp, Resize};
-    let plain = edited_picture(0, &["Original"]);
+    let plain = edited_picture(None, false, false);
     assert_eq!(titles(&chips(&plain)), vec!["Info", "Image ▾"]);
-    assert_eq!(VersionBar::of(&plain), None, "one version: no capsule");
+    assert_eq!(VersionBar::of(&plain), None);
     assert!(keeps_card_open(&CommandId::ImageMenu));
     assert!(keeps_card_open(&CommandId::ImageResizeCustom));
     assert!(keeps_card_open(&CommandId::ImageStep(ImageOp::Grayscale)));
 
-    let menu = crate::commands::image_menu_items(plain.image_edit.as_ref().unwrap());
+    let menu = crate::commands::image_menu_items();
     let menu_titles: Vec<&str> = menu.iter().map(|(cmd, _)| cmd.title.as_str()).collect();
     assert_eq!(
         menu_titles,
@@ -27,17 +27,9 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
             "Flip Vertical",
             "Remove Metadata",
             "Grayscale",
-            "Undo Image Step",
-            "Redo Image Step",
         ]
     );
-    // Dim, do not hide: with one version undo and redo stay, off and without a detail, and
-    // search does not offer them.
-    assert!(
-        menu[12..]
-            .iter()
-            .all(|(cmd, _)| !cmd.enabled && cmd.detail.is_empty())
-    );
+    // Each step makes a new copy: no undo or redo rows, and search offers none.
     assert!(
         !search_pool(&plain)
             .iter()
@@ -52,38 +44,31 @@ fn a_picture_with_versions_has_image_menu_and_version_bar() {
         CommandId::ImageStep(ImageOp::Resize(Resize::Longest(1024)))
     );
 
-    let edited = edited_picture(1, &["Original", "Resized to 1024×768", "Grayscale"]);
-    let bar = VersionBar::of(&edited).expect("capsule");
-    assert_eq!(bar.title(), "v2/3");
+    // A step's copy: still no capsule ("1 of 2"), but ⌘Z and ⇧⌘Z go between the copies.
+    let edited = edited_picture(Some("Grayscale"), true, false);
+    assert_eq!(VersionBar::of(&edited), None);
     assert_eq!(
-        undo_key("z", true, false, false, Some(&bar)),
+        image_undo_key("z", true, false, false, edited.image_edit.as_ref()),
         Some(CommandId::TableUndo)
     );
-    let menu = crate::commands::image_menu_items(edited.image_edit.as_ref().unwrap());
-    let tail: Vec<(&str, &str)> = menu[12..]
-        .iter()
-        .map(|(cmd, _)| (cmd.title.as_str(), cmd.detail.as_str()))
-        .collect();
     assert_eq!(
-        tail,
-        [
-            ("Undo Image Step", "Resized to 1024×768"),
-            ("Redo Image Step", "Grayscale")
-        ]
+        image_undo_key("Z", true, true, false, edited.image_edit.as_ref()),
+        None,
+        "nothing to redo"
     );
-    assert!(menu[12..].iter().all(|(cmd, _)| cmd.enabled));
+    assert_eq!(
+        image_undo_key("z", false, false, false, edited.image_edit.as_ref()),
+        None
+    );
+    assert_eq!(image_undo_key("z", true, false, false, None), None);
     // The steps are found by search too.
     assert!(
         search_pool(&edited)
             .iter()
             .any(|cmd| cmd.id == CommandId::ImageStep(ImageOp::FlipVertical))
     );
-    // Only in the picture view.
-    let mut info = edited.clone();
-    info.view = CardView::Info;
-    assert_eq!(VersionBar::of(&info), None);
-    // A picture without versions (the clipboard's, not in history) has no Image ▾.
-    let mut bare = edited_picture(0, &["Original"]);
+    // A picture without Image ▾ (the clipboard's, not in history).
+    let mut bare = edited_picture(None, false, false);
     bare.image_edit = None;
     assert_eq!(titles(&chips(&bare)), vec!["Info"]);
 }

@@ -75,9 +75,6 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::HotkeyChanged => self.rebind_hotkey(),
             UserEvent::LanguageChanged => self.language_changed(),
             UserEvent::ImageDone(done) => self.finish_image_job(*done),
-            UserEvent::VersionScanned { picture, scan } => {
-                self.finish_version_scan(&picture, scan);
-            }
             UserEvent::DiffReady {
                 generation,
                 outcome,

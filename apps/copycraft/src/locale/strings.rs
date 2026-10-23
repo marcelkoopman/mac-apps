@@ -686,16 +686,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Undo Table Step",
     ),
     ("redo_table_step", "Herhaal tabelstap", "Redo Table Step"),
-    (
-        "undo_image_step",
-        "Maak afbeeldingsstap ongedaan",
-        "Undo Image Step",
-    ),
-    (
-        "redo_image_step",
-        "Herhaal afbeeldingsstap",
-        "Redo Image Step",
-    ),
     ("choose_columns_title", "Kies kolommen…", "Choose Columns…"),
     (
         "choose_columns_detail",
@@ -1891,6 +1881,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "text_not_kept_secret",
         "Gekopieerd, niet in de geschiedenis (bevat een token of sleutel)",
         "Copied, not in history (holds a token or key)",
+    ),
+    (
+        "image_not_kept_large",
+        "Gekopieerd, niet in de geschiedenis (te groot)",
+        "Copied, not in history (too large)",
     ),
     (
         "work_failed",

@@ -107,6 +107,12 @@ pub fn picture_admission(recognised: Option<&str>) -> Admission {
     }
 }
 
+/// A picture whose recognised text has any label (credential, PII, financial) goes on the
+/// clipboard concealed, as such a text does (`App::write_own`). No text: plain.
+pub fn picture_concealed(recognised: Option<&str>) -> bool {
+    recognised.is_some_and(|text| !scan_labels(text).is_empty())
+}
+
 /// The labels for the card: a short copy is checked now, a longer one is remembered or handed
 /// to the background checker ([`Labeling::Checking`]).
 pub fn labeling(text: &str) -> Labeling {
@@ -702,6 +708,16 @@ Mohammed El Amin\t1978-02-05\tStationstraat 120, Rotterdam\t06-11223344\t4200";
         );
         // No text found, recognition failed, timed out or unavailable: kept as before.
         assert_eq!(picture_admission(None), Admission::Keep);
+    }
+
+    #[test]
+    fn an_image_step_copy_is_concealed_like_such_a_text() {
+        use super::picture_concealed;
+        let token = concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5");
+        assert!(picture_concealed(Some(&format!("token {token}"))));
+        assert!(picture_concealed(Some("Contact: jan@example.com")));
+        assert!(!picture_concealed(Some("Quarterly report\nRevenue up 4%")));
+        assert!(!picture_concealed(None));
     }
 
     #[test]

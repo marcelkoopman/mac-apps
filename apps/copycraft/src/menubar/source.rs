@@ -368,7 +368,6 @@ impl App {
         self.opened_superseded = false;
         self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
-        self.opened_image = ImageVersions::default();
         if let Some(cursor) = self.clipboard_cursor.take() {
             self.history_cursor = cursor;
         }
@@ -389,7 +388,6 @@ impl App {
         self.opened_superseded = false;
         self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
-        self.opened_image = ImageVersions::default();
         self.reset_view();
         self.refresh_popup();
     }

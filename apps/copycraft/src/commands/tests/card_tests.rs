@@ -449,10 +449,10 @@ fn unbalanced_code_says_so_in_the_title() {
 }
 
 #[test]
-fn a_picture_version_shows_its_label_and_stays_the_same_entry() {
-    let original = edited_picture(0, &["Original", "Resized to 512×384"]);
+fn a_step_copy_shows_its_label_and_is_another_entry() {
+    let original = edited_picture(None, false, false);
     assert_eq!(work_card(&original).meta, "PNG  1024×768  0.18 MB");
-    let mut resized = edited_picture(1, &["Original", "Resized to 512×384"]);
+    let mut resized = edited_picture(Some("Resized to 512×384"), true, false);
     resized.image = Some(ImageFacts {
         format: "PNG".into(),
         width: 512,
@@ -464,8 +464,10 @@ fn a_picture_version_shows_its_label_and_stays_the_same_entry() {
         work_card(&resized).meta,
         "PNG  512×384  0.05 MB  ·  Resized to 512×384"
     );
-    // Every version is the same entry: the reveal stays.
-    assert_eq!(content_key(&original), content_key(&resized));
+    // One copy keeps its key while a step runs on it; the step's copy is another one.
+    let mut running = original.clone();
+    running.image_edit.as_mut().unwrap().working = true;
+    assert_eq!(content_key(&original), content_key(&running));
     let mut other = resized.clone();
     other.image_edit.as_mut().unwrap().entry = 8;
     assert_ne!(content_key(&other), content_key(&resized));

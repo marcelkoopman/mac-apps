@@ -7,7 +7,6 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::commands::{CardView, ImageScan, WorkCard};
 use crate::format;
-use crate::image_edit::ImageVersions;
 use crate::table::TableVersions;
 
 pub const MAX_HISTORY: usize = 20;
@@ -291,9 +290,6 @@ struct HistoryEntry {
     /// A table's versions (the steps taken on the card), once the card worked on it. Its
     /// frames are derived data like the cards; its steps stay with the entry.
     table: Option<TableVersions>,
-    /// A picture's versions (the Image ▾ steps), once the card worked on it. Like a table's,
-    /// its pictures are derived data; its steps stay with the entry.
-    images: Option<ImageVersions>,
     /// Skips the unpinned cap and the minute timer. Still dropped by Wipe, lock, sleep,
     /// user switch and quit.
     pinned: bool,
@@ -311,7 +307,6 @@ impl HistoryEntry {
             cards: Vec::new(),
             scan: None,
             table: None,
-            images: None,
             pinned: false,
             copied: std::time::Instant::now(),
         }
@@ -325,7 +320,6 @@ impl HistoryEntry {
             cards: Vec::new(),
             scan: None,
             table: None,
-            images: None,
             pinned: false,
             copied: std::time::Instant::now(),
         }
@@ -342,9 +336,6 @@ impl HistoryEntry {
         self.scan = None;
         if let Some(table) = self.table.as_mut() {
             table.forget_frames();
-        }
-        if let Some(images) = self.images.as_mut() {
-            images.forget_pictures();
         }
     }
 }

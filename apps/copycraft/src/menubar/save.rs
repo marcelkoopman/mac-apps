@@ -13,19 +13,10 @@ impl App {
             return Ok(());
         }
         let from_file = self.opened.is_some();
-        let version = self.shown_image_version();
-        if let Some(version) = version.as_ref()
-            && self.card_view == CardView::Original
-        {
-            return self.copy_image_version(version);
-        }
         if let Some(image) = self.opened.as_ref().and_then(|file| file.image.as_ref()) {
             // The dropped picture stays on the card; only the view's text is copied.
-            let scan = match &version {
-                Some(version) => version.scan.as_ref(),
-                None => image.scan.as_ref(),
-            };
-            if let Some(text) = commands::image_view_text(scan, self.card_view).map(Zeroizing::new)
+            if let Some(text) =
+                commands::image_view_text(image.scan.as_ref(), self.card_view).map(Zeroizing::new)
             {
                 self.write_own(text.as_str())?;
                 self.record_own_copy(text.as_str());
@@ -217,11 +208,7 @@ impl App {
     }
 
     pub(crate) fn copy_image_view(&mut self) -> anyhow::Result<()> {
-        let version = self.shown_image_version();
-        let scan = match &version {
-            Some(version) => version.scan.as_ref(),
-            None => self.image_scan.as_ref(),
-        };
+        let scan = self.image_scan.as_ref();
         let Some(text) = commands::image_view_text(scan, self.card_view).map(Zeroizing::new) else {
             return Ok(());
         };
@@ -229,42 +216,6 @@ impl App {
         self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());
         self.refresh_popup();
-        Ok(())
-    }
-
-    /// Copy the picture version shown: its PNG goes on the pasteboard (as `public.png`) and
-    /// into history as a new copy, with the version's scan.
-    pub(crate) fn copy_image_version(
-        &mut self,
-        version: &crate::image_edit::VersionPicture,
-    ) -> anyhow::Result<()> {
-        #[cfg(target_os = "macos")]
-        {
-            let png = Zeroizing::new(version.picture.with(<[u8]>::to_vec));
-            crate::macos_pasteboard::write_history_image(&png)
-                .map_err(anyhow::Error::msg)
-                .context("image")?;
-            self.sensitive_clear = None;
-            self.conceal_when_checked = None;
-            let change = crate::macos_pasteboard::change_count();
-            // A copy of its own: the version's bytes go when it is no longer kept.
-            let recorded = self.history.record_image(png.to_vec());
-            if let (Some(bytes), Some(scan)) = (recorded.as_ref(), version.scan.as_ref()) {
-                self.history.remember_image_scan(bytes, scan);
-                self.image_scan = Some(scan.clone());
-                self.image_scan_change = Some(change);
-            }
-            self.recorded_image_change = Some(change);
-            self.image_on_pasteboard = recorded.clone().map(|bytes| (change, bytes));
-            self.current_image = recorded;
-            self.last_copy = Some(Instant::now());
-            self.history_cursor = 0;
-            self.clipboard_cursor = None;
-            self.refresh_status_menu();
-            self.refresh_popup();
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = version;
         Ok(())
     }
 
@@ -299,8 +250,8 @@ impl App {
         }
     }
 
-    /// The picture the Preview button opens: the version shown, else the original, else the
-    /// pasteboard. `None` for text views and for a version that is not worked out yet.
+    /// The picture the Preview button opens: the one on the card, else the pasteboard's. `None`
+    /// for text views.
     #[cfg(target_os = "macos")]
     pub(crate) fn preview_bytes(&mut self) -> Option<crate::macos_open::PreviewBytes> {
         use crate::macos_open::PreviewBytes;
@@ -312,13 +263,6 @@ impl App {
             return None;
         }
         if let Some(source) = self.image_source() {
-            let stepped = self
-                .image_versions(&source)
-                .is_some_and(|versions| versions.cursor() > 0);
-            if stepped {
-                let picture = self.image_versions(&source)?.shown()?.picture.clone();
-                return Some(PreviewBytes::Shared(picture));
-            }
             return Some(PreviewBytes::Shared(source));
         }
         if let Some(bytes) = crate::macos_pasteboard::current_image_bytes() {
@@ -366,7 +310,6 @@ impl App {
         let version = (self.card_view == CardView::Dataframe)
             .then(|| self.shown_table_version())
             .flatten();
-        let image_version = self.shown_image_version();
         let job = match version {
             Some(frame) => {
                 let source = self
@@ -379,9 +322,6 @@ impl App {
                 }
                 Some(job)
             }
-            None if image_version.is_some() => image_version
-                .as_ref()
-                .map(|version| self.image_version_save_job(version)),
             None if self.opened.is_some() => self.opened_save_job(),
             None => self.clipboard_save_job(),
         };
@@ -545,37 +485,6 @@ impl App {
             Ok(()) => save_feedback(&save_toast(&Ok(()))),
             Err(message) => log_save_failure(&message),
         }
-    }
-
-    /// Save job for the picture version shown (an Image ▾ step's): the shown scan text, else
-    /// the picture as PNG, JPEG or HEIC (the Format popup, the source's format first). Named
-    /// after the dropped or chosen file.
-    #[cfg(target_os = "macos")]
-    pub(crate) fn image_version_save_job(
-        &self,
-        version: &crate::image_edit::VersionPicture,
-    ) -> crate::macos_save::SaveJob {
-        use crate::macos_save::{SaveContent, SaveJob};
-        let name = self
-            .opened
-            .as_ref()
-            .map_or("clipboard", |opened| opened.name.as_str());
-        if let Some(text) = commands::image_view_text(version.scan.as_ref(), self.card_view) {
-            return SaveJob {
-                filename: crate::open_file::save_name(name, "txt"),
-                extension: "txt",
-                content: SaveContent::Bytes(Zeroizing::new(text.into_bytes())),
-            };
-        }
-        let source = self
-            .image_source()
-            .map(|bytes| bytes.with(crate::macos_pasteboard::image_kind));
-        SaveJob::image(
-            name,
-            Zeroizing::new(version.picture.with(<[u8]>::to_vec)),
-            true,
-            crate::image_edit::image_files(source, false),
-        )
     }
 
     /// Save job for the chosen file's text, or a dropped picture, named after the file.

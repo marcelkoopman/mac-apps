@@ -364,3 +364,24 @@ fn steps_on_an_opened_file_are_versions_of_the_file() {
     assert_eq!(steps.go(|c| Some(c + 1)), None);
     assert_eq!(steps.go(|_| Some(0)), Some("fn a() {}\nfn b() {}\n"));
 }
+
+#[test]
+fn copy_steps_go_on_from_the_shown_copy_and_start_over_elsewhere() {
+    use super::text::CopySteps;
+    let steps = CopySteps::stepped(None, 1, 2, "Grayscale".into());
+    assert_eq!(steps.ids, [1, 2]);
+    assert_eq!(steps.cursor, 1);
+    assert_eq!(steps.labels[1], "Grayscale");
+    // The next step on the shown copy goes on.
+    let mut steps = CopySteps::stepped(Some(steps), 2, 3, "Flip Vertical".into());
+    assert_eq!(steps.ids, [1, 2, 3]);
+    // ⌘Z back to the first copy, then a step from there drops the later ones.
+    steps.cursor = 0;
+    assert!(CopySteps::showing(Some(&steps), 1).is_some());
+    assert!(CopySteps::showing(Some(&steps), 3).is_none());
+    let steps = CopySteps::stepped(Some(steps), 1, 4, "Rotate 90° Left".into());
+    assert_eq!(steps.ids, [1, 4]);
+    // A step on another copy starts new steps.
+    let steps = CopySteps::stepped(Some(steps), 9, 10, "Grayscale".into());
+    assert_eq!(steps.ids, [9, 10]);
+}

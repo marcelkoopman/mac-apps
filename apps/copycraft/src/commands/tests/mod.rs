@@ -11,7 +11,7 @@ use super::{
 };
 use super::{OPEN_TABLE_TITLE, table_window_view};
 use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};
-use super::{TableShown, VersionBar, menu_group, table_menu, undo_key};
+use super::{TableShown, VersionBar, image_undo_key, menu_group, table_menu, undo_key};
 use crate::appearance::Theme;
 use mac_ui::keys::Key;
 use zeroize::Zeroizing;
@@ -68,7 +68,9 @@ fn housekeeping(id: &CommandId) -> bool {
     matches!(id, CommandId::Quit | CommandId::ClearHistory)
 }
 
-fn edited_picture(version: usize, labels: &[&str]) -> LaunchData {
+/// A picture card with Image ▾: `label` names the step that made this copy, `undo` and `redo`
+/// whether ⌘Z and ⇧⌘Z have a copy to go to.
+fn edited_picture(label: Option<&str>, undo: bool, redo: bool) -> LaunchData {
     let mut input = data(SubjectKind::Image, None);
     input.image = Some(ImageFacts {
         format: "PNG".into(),
@@ -78,8 +80,9 @@ fn edited_picture(version: usize, labels: &[&str]) -> LaunchData {
     });
     input.image_edit = Some(super::ImageShown {
         entry: 7,
-        labels: labels.iter().map(|label| label.to_string()).collect(),
-        version,
+        label: label.map(str::to_string),
+        can_undo: undo,
+        can_redo: redo,
         working: false,
         note: None,
     });

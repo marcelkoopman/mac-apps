@@ -98,6 +98,12 @@ pub(crate) fn write_text(text: &str, concealed: bool) -> Result<(), String> {
 /// for apps that only paste PNG, a PNG copy; TIFF when that conversion fails. Never a file:
 /// a picture in a temporary file outlived the history entry and the app.
 pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
+    write_image(bytes, false)
+}
+
+/// [`write_history_image`]; `concealed` adds nspasteboard.org's Concealed type (a picture
+/// whose recognised text is sensitive), so other clipboard managers leave it out.
+pub(crate) fn write_image(bytes: &[u8], concealed: bool) -> Result<(), String> {
     let pasteboard = NSPasteboard::generalPasteboard();
     let ok = autoreleasepool(|_| {
         let data = NSData::with_bytes(bytes);
@@ -117,7 +123,7 @@ pub(crate) fn write_history_image(bytes: &[u8]) -> Result<(), String> {
                 }
             }
         }
-        ok && mark_own(&pasteboard, false)
+        ok && mark_own(&pasteboard, concealed)
     });
     invalidate_caches();
     if ok {

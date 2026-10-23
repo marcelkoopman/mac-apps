@@ -269,6 +269,9 @@ thread_local! {
     static FILE_PANEL: Cell<bool> = const { Cell::new(false) };
     /// The table's version capsule ([`commands::VersionBar`]); `None` hides it.
     static VERSION_BAR: RefCell<Option<commands::VersionBar>> = const { RefCell::new(None) };
+    /// Image ▾ on the picture card, for ⌘Z and ⇧⌘Z ([`commands::image_undo_key`]): a picture
+    /// has no version capsule.
+    static IMAGE_STEPS: RefCell<Option<commands::ImageShown>> = const { RefCell::new(None) };
     /// The version capsule's views.
     static VERSION_ROW: RefCell<Option<VersionRow>> = const { RefCell::new(None) };
     /// The "Table ▾" menu's commands ([`commands::table_menu`]).

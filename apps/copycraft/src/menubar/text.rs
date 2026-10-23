@@ -5,15 +5,49 @@ use super::*;
 use crate::text_ops::case_style::CaseStyle;
 use crate::text_ops::{self, Separator, TextOp};
 
-/// The entry id Text ▾ uses for a shown copy that is not in history.
-const NOT_IN_HISTORY: u64 = u64::MAX;
+/// The entry id Text ▾ and Image ▾ use for a shown copy that is not in history.
+pub(crate) const NOT_IN_HISTORY: u64 = u64::MAX;
 
-/// The versions Text ▾ made: the history entries they are, oldest first, and which is shown.
-/// Only ids and labels: the texts stay in history (and go when it forgets them).
-pub(crate) struct TextSteps {
+/// The copies Text ▾ (or Image ▾) steps made: the history entries they are, oldest first (the
+/// copy the first step was taken on, then one per step), and which is shown. Only ids and
+/// labels: the copies stay in history (and go when it forgets them).
+pub(crate) struct CopySteps {
     pub(crate) ids: Vec<u64>,
     pub(crate) labels: Vec<String>,
     pub(crate) cursor: usize,
+}
+
+impl CopySteps {
+    /// A step on entry `id` made entry `new_id`, labelled `label`: `steps` go on from `id` when
+    /// they show it (the copies after it are dropped), else new steps start at `id`.
+    pub(crate) fn stepped(steps: Option<Self>, id: u64, new_id: u64, label: String) -> Self {
+        let mut steps = match steps {
+            Some(steps) if steps.ids.get(steps.cursor) == Some(&id) => steps,
+            _ => Self {
+                ids: vec![id],
+                labels: vec![crate::locale::t("original").to_string()],
+                cursor: 0,
+            },
+        };
+        steps.ids.truncate(steps.cursor + 1);
+        steps.labels.truncate(steps.cursor + 1);
+        steps.ids.push(new_id);
+        steps.labels.push(label);
+        steps.cursor += 1;
+        steps
+    }
+
+    /// `steps` when the copy they show is entry `id`.
+    pub(crate) fn showing(steps: Option<&Self>, id: u64) -> Option<&Self> {
+        steps.filter(|steps| steps.ids.get(steps.cursor) == Some(&id))
+    }
+}
+
+/// Which [`CopySteps`] [`App::browse_step`] moves in.
+#[derive(Clone, Copy)]
+pub(crate) enum StepsOf {
+    Text,
+    Image,
 }
 
 /// The id Text ▾ uses for an opened file: its versions live with the file, not in history.
@@ -141,10 +175,43 @@ impl App {
     }
 
     /// The steps whose shown version is entry `id`.
-    fn text_steps_of(&self, id: u64) -> Option<&TextSteps> {
-        self.text_steps
-            .as_ref()
+    fn text_steps_of(&self, id: u64) -> Option<&CopySteps> {
+        CopySteps::showing(self.text_steps.as_ref(), id)
+    }
+
+    /// Undo, redo (and for text the version capsule) after a step: show the copy `to` picks
+    /// from the one `which` steps show, entry `id`. The card browses history to it; the
+    /// clipboard is left alone (no Copied toast), Copy puts it there. `false` when there is no
+    /// such copy (also when history let it go: it keeps a limited number of copies).
+    pub(crate) fn browse_step(
+        &mut self,
+        which: StepsOf,
+        id: u64,
+        to: impl FnOnce(usize) -> Option<usize>,
+    ) -> bool {
+        let slot = match which {
+            StepsOf::Text => &mut self.text_steps,
+            StepsOf::Image => &mut self.image_steps,
+        };
+        let Some(steps) = slot
+            .as_mut()
             .filter(|steps| steps.ids.get(steps.cursor) == Some(&id))
+        else {
+            return false;
+        };
+        let Some(index) = to(steps.cursor).filter(|&index| index < steps.ids.len()) else {
+            return false;
+        };
+        if index == steps.cursor {
+            return false;
+        }
+        let Some(at) = self.history.index_of(steps.ids[index]) else {
+            return false;
+        };
+        steps.cursor = index;
+        self.browsing = Some(steps.ids[index]);
+        self.history_cursor = at;
+        true
     }
 
     /// Undo, redo and the version capsule go to the text's versions.
@@ -306,20 +373,12 @@ impl App {
         let Some(new_id) = self.history.id_at(0) else {
             return;
         };
-        let mut steps = match self.text_steps.take() {
-            Some(steps) if steps.ids.get(steps.cursor) == Some(&id) => steps,
-            _ => TextSteps {
-                ids: vec![id],
-                labels: vec![crate::locale::t("original").to_string()],
-                cursor: 0,
-            },
-        };
-        steps.ids.truncate(steps.cursor + 1);
-        steps.labels.truncate(steps.cursor + 1);
-        steps.ids.push(new_id);
-        steps.labels.push(label);
-        steps.cursor += 1;
-        self.text_steps = Some(steps);
+        self.text_steps = Some(CopySteps::stepped(
+            self.text_steps.take(),
+            id,
+            new_id,
+            label,
+        ));
         self.text_note = None;
         self.reset_view();
         self.refresh_popup();
@@ -394,23 +453,8 @@ impl App {
         let Some((id, _)) = self.text_entry() else {
             return;
         };
-        let Some(steps) = self.text_steps_of(id) else {
+        if !self.browse_step(StepsOf::Text, id, to) {
             return;
-        };
-        let Some(index) = to(steps.cursor).filter(|&index| index < steps.ids.len()) else {
-            return;
-        };
-        if index == steps.cursor {
-            return;
-        }
-        // History may have let that version go (it keeps a limited number of copies).
-        let Some(at) = self.history.index_of(steps.ids[index]) else {
-            return;
-        };
-        self.browsing = Some(steps.ids[index]);
-        self.history_cursor = at;
-        if let Some(steps) = self.text_steps.as_mut() {
-            steps.cursor = index;
         }
         self.text_note = None;
         self.refresh_popup();

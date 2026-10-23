@@ -325,11 +325,10 @@ fn submenus_carry_the_icon_on_their_own_row() {
         submenu_symbol(&CommandId::History(0))
     );
     assert_eq!(submenu_symbol(&CommandId::Copy), None);
-    // Image ▾ has no icons at all, undo and redo included; Text ▾ keeps them.
+    // Image ▾ has no icons at all; Text ▾ keeps them.
     assert!(!menu_shows_icons(&[
         CommandId::ImageStep(ImageOp::Grayscale),
-        CommandId::TableUndo,
-        CommandId::TableRedo
+        CommandId::ImageStep(ImageOp::RotateLeft)
     ]));
     assert!(menu_shows_icons(&[
         CommandId::TextReverse,

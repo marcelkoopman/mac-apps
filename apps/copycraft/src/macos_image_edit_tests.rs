@@ -6,7 +6,7 @@ use objc2_image_io::CGImageSource;
 
 use super::*;
 use crate::clipboard::SecretBytes;
-use crate::image_edit::{ImageOp, ImageVersions, Resize};
+use crate::image_edit::{ImageOp, Resize};
 
 /// ImageIO without the scan (text recognition is not what these tests are about).
 struct NoScan;
@@ -269,33 +269,33 @@ fn versions_carry_no_metadata_and_stay_upright() {
 }
 
 #[test]
-fn steps_replay_through_imageio() {
+fn steps_go_through_imageio() {
     let original = SecretBytes::new(with_orientation(&jpeg(40, 20, &halves(40, 20)), 6)).unwrap();
-    let mut versions = ImageVersions::default();
     let run = |job: crate::image_edit::Job| job.run(&AtomicBool::new(false), &NoScan).unwrap();
-    // Upright it is 20 × 40, red on top.
+    // Upright it is 20 × 40, red on top. Each step is taken on the copy the one before made.
+    let mut picture = original;
+    let mut labels = Vec::new();
     for op in [
         ImageOp::RotateRight,
         ImageOp::Resize(Resize::Percent(50)),
         ImageOp::FlipHorizontal,
         ImageOp::Grayscale,
     ] {
-        let job = versions.push(op, &original).unwrap();
-        assert!(versions.finish(run(job)));
+        let done = run(crate::image_edit::Job::new(op, &picture));
+        labels.push(done.label);
+        picture = done.picture;
     }
     assert_eq!(
-        versions.labels(),
+        labels,
         [
-            "Original",
             "Rotated 90° right",
             "Resized to 20×10",
             "Flipped horizontally",
             "Grayscale"
         ]
     );
-    let shown = versions.shown().unwrap();
-    assert_eq!((shown.facts.width, shown.facts.height), (20, 10));
-    let image = shown.picture.with(decode).unwrap();
+    let image = picture.with(decode).unwrap();
+    assert_eq!((image.width, image.height), (20, 10));
     // Red went right with the turn and left again with the flip; gray now.
     let left = pixel(&image, 2, 5);
     let right = pixel(&image, 17, 5);

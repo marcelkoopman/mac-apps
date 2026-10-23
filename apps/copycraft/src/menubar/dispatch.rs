@@ -179,15 +179,13 @@ impl App {
             CommandId::AiCancel => self.ai_stop(),
             CommandId::AiMinimize => self.ai_minimize(),
             CommandId::AiUnavailable => {}
-            // On a picture card, undo, redo and the version capsule are the picture's.
+            // On a picture card, ⌘Z and ⇧⌘Z go between the copies Image ▾ steps made (there is
+            // no version capsule), as on a text Text ▾ stepped.
             CommandId::TableUndo if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
             }
             CommandId::TableRedo if self.shows_image() => {
                 self.image_goto(|cursor| Some(cursor + 1))
-            }
-            CommandId::TableVersion(index) if self.shows_image() => {
-                self.image_goto(|_| Some(index))
             }
             CommandId::TableUndo => {
                 self.table_goto(TableTarget::Card, |cursor| cursor.checked_sub(1));

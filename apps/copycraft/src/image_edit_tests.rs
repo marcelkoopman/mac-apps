@@ -51,9 +51,10 @@ fn run(job: Job) -> Result<JobDone, ImageError> {
     job.run(&AtomicBool::new(false), &PngCodec)
 }
 
-fn shown_size(versions: &ImageVersions) -> (usize, usize) {
-    let facts = &versions.shown().unwrap().facts;
-    (facts.width, facts.height)
+/// The size of a step's result.
+fn size_of(done: &JobDone) -> (usize, usize) {
+    let image = done.picture.with(|bytes| PngCodec.decode(bytes)).unwrap();
+    (image.width, image.height)
 }
 
 #[test]
@@ -206,124 +207,62 @@ fn grayscale_keeps_alpha_and_resize_shrinks() {
 }
 
 #[test]
-fn versions_replay_steps_on_the_original() {
+fn a_step_makes_a_new_picture_and_leaves_the_original() {
     let original = original(40, 20);
-    let mut versions = ImageVersions::default();
-    assert_eq!(versions.labels(), ["Original"]);
-    let job = versions.push(ImageOp::RotateRight, &original).unwrap();
-    assert!(versions.finish(run(job).unwrap()));
-    let job = versions
-        .push(ImageOp::Resize(Resize::Percent(50)), &original)
-        .unwrap();
-    assert!(versions.finish(run(job).unwrap()));
+    let before = original.with(<[u8]>::to_vec);
+    let job = Job::new(ImageOp::RotateRight, &original);
+    assert_eq!(job.source(), original.allocation_id());
+    let done = run(job).unwrap();
+    assert_eq!(done.label, "Rotated 90° right");
+    assert_eq!(size_of(&done), (20, 40));
+    assert!(done.scan.is_none(), "scanned on the job's thread");
+    assert!(!done.picture.same_allocation(&original));
     assert_eq!(
-        versions.labels(),
-        ["Original", "Rotated 90° right", "Resized to 10×20"]
+        original.with(<[u8]>::to_vec),
+        before,
+        "the original is untouched"
     );
-    assert_eq!(versions.cursor(), 2);
-    assert_eq!(shown_size(&versions), (10, 20));
-    assert_eq!(versions.shown().unwrap().facts.format, "PNG");
-
-    // Undo to a kept version and to the original is at once.
-    assert!(versions.goto(1, &original).is_none());
-    assert_eq!(shown_size(&versions), (20, 40));
-    assert!(versions.goto(0, &original).is_none());
-    assert!(versions.shown().is_none());
-
-    // Without the pictures, a version is worked out again.
-    versions.forget_pictures();
-    let job = versions.goto(2, &original).expect("replayed");
-    assert_eq!(versions.cursor(), 0, "shown when done");
-    assert!(versions.finish(run(job).unwrap()));
-    assert_eq!(shown_size(&versions), (10, 20));
-    assert_eq!(versions.labels().len(), 3);
+    // A step on that result is a step on the new picture.
+    let done = run(Job::new(
+        ImageOp::Resize(Resize::Percent(50)),
+        &done.picture,
+    ))
+    .unwrap();
+    assert_eq!(done.label, "Resized to 10×20");
+    assert_eq!(size_of(&done), (10, 20));
 }
 
 #[test]
-fn a_step_after_undo_drops_the_later_versions() {
+fn a_step_that_changes_nothing_makes_no_copy() {
     let original = original(40, 20);
-    let mut versions = ImageVersions::default();
-    for op in [ImageOp::FlipHorizontal, ImageOp::Grayscale] {
-        let job = versions.push(op, &original).unwrap();
-        assert!(versions.finish(run(job).unwrap()));
-    }
-    assert!(versions.goto(1, &original).is_none());
-    let job = versions.push(ImageOp::RotateLeft, &original).unwrap();
-    assert!(versions.finish(run(job).unwrap()));
+    let job = Job::new(ImageOp::Resize(Resize::Longest(2048)), &original);
     assert_eq!(
-        versions.labels(),
-        ["Original", "Flipped horizontally", "Rotated 90° left"]
+        run(job).err().map(|e| e.to_string()),
+        Some("Already that size or smaller".to_string())
     );
-    assert_eq!(versions.cursor(), 2);
-    assert_eq!(shown_size(&versions), (20, 40));
 }
 
 #[test]
-fn a_step_that_changes_nothing_makes_no_version() {
+fn every_job_is_newer_and_a_cancelled_one_is_dropped() {
     let original = original(40, 20);
-    let mut versions = ImageVersions::default();
-    let job = versions
-        .push(ImageOp::Resize(Resize::Longest(2048)), &original)
-        .unwrap();
-    assert_eq!(
-        run(job).err(),
-        Some(ImageError::Unchanged("Already that size or smaller"))
-    );
-    assert_eq!(versions.labels(), ["Original"]);
-}
-
-#[test]
-fn stale_and_cancelled_jobs_are_dropped() {
-    let original = original(40, 20);
-    let mut versions = ImageVersions::default();
-    let old = versions.push(ImageOp::Grayscale, &original).unwrap();
-    let new = versions.push(ImageOp::FlipVertical, &original).unwrap();
-    assert!(!versions.awaits(old.generation));
-    assert!(versions.awaits(new.generation));
-    assert!(!versions.finish(run(old).unwrap()));
-    assert_eq!(versions.labels(), ["Original"]);
-    assert!(versions.finish(run(new).unwrap()));
-    assert_eq!(versions.labels(), ["Original", "Flipped vertically"]);
-
-    let job = versions.push(ImageOp::Grayscale, &original).unwrap();
+    let old = Job::new(ImageOp::Grayscale, &original);
+    let new = Job::new(ImageOp::FlipVertical, &original);
+    assert!(new.generation > old.generation);
     let cancel = AtomicBool::new(true);
-    assert_eq!(
-        job.run(&cancel, &PngCodec).err(),
-        Some(ImageError::Cancelled)
-    );
-
-    // Forgetting the pictures makes a pending job stale.
-    let job = versions.push(ImageOp::Grayscale, &original).unwrap();
-    versions.forget_pictures();
-    assert!(!versions.finish(run(job).unwrap()));
-}
-
-#[test]
-fn versions_are_capped_and_few_pictures_are_kept() {
-    let original = original(8, 4);
-    let mut versions = ImageVersions::default();
-    for _ in 1..MAX_VERSIONS {
-        let job = versions.push(ImageOp::FlipVertical, &original).unwrap();
-        assert!(versions.finish(run(job).unwrap()));
-    }
-    assert_eq!(versions.len(), MAX_VERSIONS);
     assert!(matches!(
-        versions.push(ImageOp::Grayscale, &original),
-        Err(ImageError::Full)
+        new.run(&cancel, &PngCodec),
+        Err(ImageError::Cancelled)
     ));
-    assert_eq!(versions.kept.len(), 3);
-    // An old version is worked out again; a copy keeps only the steps.
-    assert!(versions.goto(2, &original).is_some());
-    let copy = versions.clone();
-    assert_eq!(copy.labels(), versions.labels());
-    assert!(copy.kept.is_empty());
+    let mut done = run(old).unwrap();
+    let picture = done.picture.clone();
+    done.wipe();
+    assert!(picture.with(|bytes| bytes.iter().all(|&b| b == 0)), "wiped");
 }
 
 #[test]
 fn an_unreadable_picture_fails_the_job() {
     let original = SecretBytes::new(b"not a picture".to_vec()).unwrap();
-    let mut versions = ImageVersions::default();
-    let job = versions.push(ImageOp::Grayscale, &original).unwrap();
+    let job = Job::new(ImageOp::Grayscale, &original);
     assert!(matches!(run(job), Err(ImageError::Failed(_))));
 }
 
@@ -369,42 +308,16 @@ fn save_offers_the_source_format_first() {
 }
 
 #[test]
-fn a_scan_is_kept_with_its_version() {
-    let original = original(40, 20);
-    let mut versions = ImageVersions::default();
-    let job = versions.push(ImageOp::Grayscale, &original).unwrap();
-    let done = run(job).unwrap();
-    let picture = done.picture();
-    assert!(versions.finish(done));
-    assert!(versions.shown().unwrap().scan.is_none());
-    let scan = ImageScan {
-        info: "Image".to_string(),
-        data_url: None,
-        ocr: Some("text".to_string()),
-        qr: None,
-    };
-    assert!(versions.remember_scan(&picture, &scan));
-    assert_eq!(versions.shown().unwrap().scan.as_ref(), Some(&scan));
-    assert!(!versions.remember_scan(&original, &scan));
-    versions.forget_pictures();
-    assert!(!versions.remember_scan(&picture, &scan));
-}
-
-#[test]
-fn rotate_left_from_a_later_version_rotates_and_is_labelled_so() {
-    // Marcel's case: steps taken, then Rotate left: exactly that step on the version shown.
-    let original = original(40, 20);
-    let mut versions = ImageVersions::default();
+fn rotate_left_after_other_steps_rotates_and_is_labelled_so() {
+    // Marcel's case: steps taken, then Rotate left: exactly that step on the copy shown.
+    let mut picture = original(40, 20);
     for op in [ImageOp::Grayscale, ImageOp::FlipHorizontal] {
-        let job = versions.push(op, &original).unwrap();
-        assert!(versions.finish(run(job).unwrap()));
+        picture = run(Job::new(op, &picture)).unwrap().picture;
     }
-    let job = versions.push(ImageOp::RotateLeft, &original).unwrap();
-    assert!(versions.finish(run(job).unwrap()));
-    assert_eq!(versions.cursor(), 3);
-    assert_eq!(versions.labels()[3], "Rotated 90° left");
+    let done = run(Job::new(ImageOp::RotateLeft, &picture)).unwrap();
+    assert_eq!(done.label, "Rotated 90° left");
     // Turned a quarter, not mirrored: width and height swap.
-    assert_eq!(shown_size(&versions), (20, 40));
+    assert_eq!(size_of(&done), (20, 40));
 }
 
 #[test]

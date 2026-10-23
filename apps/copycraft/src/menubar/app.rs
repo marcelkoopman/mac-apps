@@ -125,16 +125,15 @@ pub(crate) struct App {
     pub(crate) table_error: Option<String>,
     /// The entry the table window shows, while it is open.
     pub(crate) table_window: Option<TableWindow>,
-    /// Picture versions for a file on the card whose bytes are not in history. A drop, Kies
-    /// bestand and a copied picture are recorded, and then use that history entry's versions.
-    pub(crate) opened_image: ImageVersions,
     /// The Image ▾ job on its thread. One at a time: a new one cancels it.
     pub(crate) image_job: Option<ImageRun>,
-    /// Why the last Image ▾ step did nothing or failed, and on which picture (its allocation),
-    /// shown on that picture's card until the next step.
+    /// Why the last Image ▾ step did nothing, failed or was not kept, and on which picture (its
+    /// allocation), shown on that picture's card until the next step.
     pub(crate) image_note: Option<(usize, String)>,
-    /// The versions Text ▾ made of the text on the card ([`TextSteps`]).
-    pub(crate) text_steps: Option<TextSteps>,
+    /// The copies Image ▾ steps made ([`CopySteps`]), for ⌘Z and ⇧⌘Z on the picture card.
+    pub(crate) image_steps: Option<CopySteps>,
+    /// The copies Text ▾ steps made of the text on the card ([`CopySteps`]).
+    pub(crate) text_steps: Option<CopySteps>,
     /// Text ▾ versions of the opened file.
     pub(crate) opened_steps: Option<super::text::OpenedSteps>,
     /// Why the last Text ▾ step did nothing, and for which history entry.
@@ -178,6 +177,9 @@ pub(crate) struct ImageRun {
     pub(crate) started: Background,
     pub(crate) generation: u64,
     pub(crate) cancel: Arc<AtomicBool>,
+    /// The picture the step is taken on (its allocation): the result is dropped when the
+    /// card shows another one by then.
+    pub(crate) source: usize,
 }
 
 /// A table job running on its thread ([`crate::table::Job`]).

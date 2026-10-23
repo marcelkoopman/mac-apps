@@ -171,7 +171,8 @@ pub fn content_key(data: &LaunchData) -> u64 {
     data.subject_text.hash(&mut hasher);
     data.source_name.hash(&mut hasher);
     if let Some(edit) = &data.image_edit {
-        // Each version of a picture is the same entry, which stays revealed.
+        // The picture's own copy (its allocation): a step running on it, or its note, keeps
+        // it revealed. A step's result is another copy.
         edit.entry.hash(&mut hasher);
     } else {
         if let Some(image) = &data.image {
@@ -550,9 +551,7 @@ pub(crate) fn image_card(data: &LaunchData) -> WorkCard {
         if !facts.is_empty() {
             parts.push(&facts);
         }
-        if edit.version > 0
-            && let Some(label) = edit.labels.get(edit.version)
-        {
+        if let Some(label) = &edit.label {
             parts.push(label);
         }
         if edit.working {

@@ -170,9 +170,9 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         commands.extend(table_menu(data.table.as_ref()));
         commands.extend(data.table.as_ref().map(table_undo_redo).unwrap_or_default());
     }
-    if let Some(edit) = &data.image_edit {
+    if data.image_edit.is_some() {
         commands.extend(
-            image_menu_items(edit)
+            image_menu_items()
                 .into_iter()
                 .map(|(command, _)| command)
                 .filter(offered_in_search),

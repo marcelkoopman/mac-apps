@@ -526,15 +526,16 @@ pub(crate) fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     ) {
         return Some(id);
     }
-    VERSION_BAR.with(|slot| {
-        commands::undo_key(
-            &chars,
-            flags.contains(NSEventModifierFlags::Command),
-            flags.contains(NSEventModifierFlags::Shift),
-            flags.intersects(NSEventModifierFlags::Control | NSEventModifierFlags::Option),
-            slot.borrow().as_ref(),
-        )
-    })
+    let command = flags.contains(NSEventModifierFlags::Command);
+    let shift = flags.contains(NSEventModifierFlags::Shift);
+    let other = flags.intersects(NSEventModifierFlags::Control | NSEventModifierFlags::Option);
+    VERSION_BAR
+        .with(|slot| commands::undo_key(&chars, command, shift, other, slot.borrow().as_ref()))
+        .or_else(|| {
+            IMAGE_STEPS.with(|slot| {
+                commands::image_undo_key(&chars, command, shift, other, slot.borrow().as_ref())
+            })
+        })
 }
 
 /// The table's version row at the right end of the chip row: undo `↶`, the

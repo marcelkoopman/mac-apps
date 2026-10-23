@@ -1,25 +1,17 @@
-//! Image ▾: steps on a picture entry, kept as versions like a table's ([`crate::table`]).
-//!
-//! A version is the original picture with the steps up to it replayed: the steps stay with the
-//! history entry, the pictures they make are derived data. The version shown, and a few shown
-//! before it, are kept as PNG ([`ImageVersions`]); the others are worked out again from the
-//! original when needed. Decoding (with the EXIF orientation applied) and encoding are the
+//! Image ▾: steps on the picture on the card. A step's result is a new copy, like a Text ▾
+//! step's: it goes on the clipboard and into history (`App::image_stepped`); the picture it was
+//! taken on stays as it was. Decoding (with the EXIF orientation applied) and encoding are the
 //! platform's ([`Codec`]); the pixel steps are here, on straight RGBA.
 //!
-//! Every picture made here is zeroized: the pixel buffers when a step is done with them, the
-//! versions with their entry (Wipe, Clear History, lock, retention) or when they are forgotten.
+//! Every picture made here is zeroized: the pixel buffers when a step is done with them, a
+//! result that is not copied when it is dropped, a copied one with its history entry.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use zeroize::Zeroizing;
 
 use crate::clipboard::SecretBytes;
-use crate::commands::{ImageFacts, ImageScan};
-
-/// The original and at most this many versions in all, as for a table.
-pub const MAX_VERSIONS: usize = 20;
-/// Versions kept as pictures: the one shown and the ones shown just before it.
-const KEPT_PICTURES: usize = 3;
+use crate::commands::ImageScan;
 
 /// How Resize sizes a picture. It never makes one larger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -424,20 +416,17 @@ pub trait Codec {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageError {
-    /// [`MAX_VERSIONS`] already.
-    Full,
     /// A newer job took over.
     Cancelled,
     /// The picture could not be read or written (message for the card).
     Failed(String),
-    /// The step would change nothing, so it makes no version (a note, not an error).
+    /// The step would change nothing, so it makes no copy (a note, not an error).
     Unchanged(&'static str),
 }
 
 impl std::fmt::Display for ImageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Full => write!(f, "{}", crate::locale::tf("max_versions", &[&MAX_VERSIONS])),
             Self::Cancelled => write!(f, "{}", crate::locale::t("cancelled")),
             Self::Failed(message) => write!(f, "{message}"),
             Self::Unchanged(note) => write!(f, "{note}"),
@@ -445,17 +434,28 @@ impl std::fmt::Display for ImageError {
     }
 }
 
-/// A version worked out: its picture as PNG, its size, and what a scan found in it (info,
-/// text, barcodes: worked out after the picture, [`ImageVersions::remember_scan`]).
+/// One Image ▾ step on the picture on the card. Send it to a thread and [`run`](Self::run) it.
+pub struct Job {
+    pub generation: u64,
+    /// The picture the step is taken on (shares its entry's bytes: zeroized with it).
+    original: SecretBytes,
+    op: ImageOp,
+}
+
+/// A finished [`Job`]: the new picture as PNG, what the step did, and what a scan found in the
+/// picture (info, text, barcodes; filled in on the job's thread before it is copied). A copy
+/// shares the picture's bytes.
 #[derive(Clone)]
-pub struct VersionPicture {
+pub struct JobDone {
+    /// "Converted to grayscale", for the card of the copy it makes.
+    pub label: String,
     pub picture: SecretBytes,
-    pub facts: ImageFacts,
     pub scan: Option<ImageScan>,
 }
 
-impl VersionPicture {
-    fn wipe(&mut self) {
+impl JobDone {
+    /// Overwrite the picture and its scan: a result that is not copied after all.
+    pub fn wipe(&mut self) {
         self.picture.zeroize();
         if let Some(scan) = self.scan.as_mut() {
             scan.wipe();
@@ -463,278 +463,49 @@ impl VersionPicture {
     }
 }
 
-/// Work for one version: replay `ops` on the original. Send it to a thread and
-/// [`run`](Self::run) it.
-pub struct Job {
-    pub generation: u64,
-    /// The original picture (shares the entry's bytes: zeroized with it).
-    original: SecretBytes,
-    ops: Vec<ImageOp>,
-    /// The version shown when done.
-    target: usize,
-    /// A new step (`target` is then the version it makes).
-    new_step: Option<ImageOp>,
-}
-
-/// A finished [`Job`], for [`ImageVersions::finish`]. A copy shares the picture's bytes.
-#[derive(Clone)]
-pub struct JobDone {
-    generation: u64,
-    target: usize,
-    new_step: Option<(ImageOp, String)>,
-    version: VersionPicture,
-}
-
-impl JobDone {
-    pub fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    /// The version's picture (PNG), to scan.
-    pub fn picture(&self) -> SecretBytes {
-        self.version.picture.clone()
-    }
-}
-
 impl Job {
-    /// Decode the original, replay the steps (`cancel` is checked before each) and encode the
-    /// version as PNG.
+    pub fn new(op: ImageOp, original: &SecretBytes) -> Self {
+        Self {
+            generation: next_generation(),
+            original: original.clone(),
+            op,
+        }
+    }
+
+    /// The allocation of the picture the step is taken on ([`SecretBytes::allocation_id`]).
+    pub fn source(&self) -> usize {
+        self.original.allocation_id()
+    }
+
+    /// Decode the picture, take the step and encode the result as PNG. `cancel` is checked
+    /// before and after the step.
     pub fn run(self, cancel: &AtomicBool, codec: &dyn Codec) -> Result<JobDone, ImageError> {
         let unreadable = || ImageError::Failed(crate::locale::t("image_cannot_read").to_string());
         let bytes = Zeroizing::new(self.original.with(<[u8]>::to_vec));
-        let mut image = codec.decode(&bytes).ok_or_else(unreadable)?;
+        let image = codec.decode(&bytes).ok_or_else(unreadable)?;
         drop(bytes);
-        let steps = self.ops.iter().map(|op| (op, false));
-        for (op, new) in steps.chain(self.new_step.iter().map(|op| (op, true))) {
-            if cancel.load(Ordering::Relaxed) {
-                return Err(ImageError::Cancelled);
-            }
-            image = match op.apply(image) {
-                Ok(next) => next,
-                // A new step that changes nothing makes no version.
-                Err(_) if new => return Err(ImageError::Unchanged(op.unchanged_note())),
-                // Replayed, a step does what it did when it was taken.
-                Err(same) => same,
-            };
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ImageError::Cancelled);
         }
+        // A step that changes nothing makes no copy.
+        let image = self
+            .op
+            .apply(image)
+            .map_err(|_| ImageError::Unchanged(self.op.unchanged_note()))?;
         if cancel.load(Ordering::Relaxed) {
             return Err(ImageError::Cancelled);
         }
         let png = codec.encode_png(&image).ok_or_else(|| {
             ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
         })?;
-        let facts = ImageFacts {
-            format: "PNG".to_string(),
-            width: image.width,
-            height: image.height,
-            byte_len: png.len(),
-        };
         let picture = SecretBytes::new(png).ok_or_else(|| {
             ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
         })?;
         Ok(JobDone {
-            generation: self.generation,
-            target: self.target,
-            new_step: self
-                .new_step
-                .map(|op| (op, op.label(image.width, image.height))),
-            version: VersionPicture {
-                picture,
-                facts,
-                scan: None,
-            },
+            label: self.op.label(image.width, image.height),
+            picture,
+            scan: None,
         })
-    }
-}
-
-/// The versions of one picture entry (see the module docs).
-#[derive(Default)]
-pub struct ImageVersions {
-    /// Each step and its version's label ("Resized to 1024×768").
-    steps: Vec<(ImageOp, String)>,
-    /// The version shown: 0 is the original, `n` the one after `steps[n - 1]`.
-    cursor: usize,
-    generation: u64,
-    /// Versions worked out, by index, the one shown last: at most [`KEPT_PICTURES`].
-    kept: Vec<(usize, VersionPicture)>,
-}
-
-impl Clone for ImageVersions {
-    /// A copy keeps the steps; the pictures are worked out again when needed.
-    fn clone(&self) -> Self {
-        Self {
-            steps: self.steps.clone(),
-            cursor: self.cursor,
-            generation: self.generation,
-            kept: Vec::new(),
-        }
-    }
-}
-
-impl Drop for ImageVersions {
-    fn drop(&mut self) {
-        self.forget_pictures();
-    }
-}
-
-impl ImageVersions {
-    /// Versions there are: the original and one per step.
-    pub fn len(&self) -> usize {
-        self.steps.len() + 1
-    }
-
-    pub fn cursor(&self) -> usize {
-        self.cursor
-    }
-
-    /// "Original", then each step's label.
-    pub fn labels(&self) -> Vec<String> {
-        std::iter::once(crate::locale::t("original").to_string())
-            .chain(self.steps.iter().map(|(_, label)| label.clone()))
-            .collect()
-    }
-
-    /// The version shown, when it is a step's and worked out. `None` for the original.
-    pub fn shown(&self) -> Option<&VersionPicture> {
-        self.kept
-            .iter()
-            .find(|(index, _)| *index == self.cursor && self.cursor > 0)
-            .map(|(_, version)| version)
-    }
-
-    /// The job that works out the version shown, when it is a step's and not there.
-    pub fn load(&mut self, original: &SecretBytes) -> Option<Job> {
-        if self.cursor == 0 || self.shown().is_some() {
-            return None;
-        }
-        let ops = self.ops_to(self.cursor);
-        Some(self.job(original, ops, self.cursor, None))
-    }
-
-    /// The job for `op` on the version shown. Versions after it are dropped when it is done.
-    pub fn push(&mut self, op: ImageOp, original: &SecretBytes) -> Result<Job, ImageError> {
-        if self.cursor + 2 > MAX_VERSIONS {
-            return Err(ImageError::Full);
-        }
-        let ops = self.ops_to(self.cursor);
-        Ok(self.job(original, ops, self.cursor + 1, Some(op)))
-    }
-
-    /// Show version `index` (undo, redo, a pick in the version menu): at once when it is the
-    /// original or kept (`None`), else the job that works it out. `None` too when there is no
-    /// such version.
-    pub fn goto(&mut self, index: usize, original: &SecretBytes) -> Option<Job> {
-        if index >= self.len() || index == self.cursor {
-            return None;
-        }
-        if index == 0 || self.kept.iter().any(|(kept, _)| *kept == index) {
-            self.cursor = index;
-            // A job still running for another version is stale now.
-            self.generation = next_generation();
-            self.touch(index);
-            return None;
-        }
-        let ops = self.ops_to(index);
-        Some(self.job(original, ops, index, None))
-    }
-
-    /// Take a finished job: the version it made is shown. `false` (and nothing changes) when a
-    /// newer job was made since.
-    pub fn finish(&mut self, done: JobDone) -> bool {
-        if done.generation != self.generation {
-            let mut version = done.version;
-            version.wipe();
-            return false;
-        }
-        if let Some(step) = done.new_step {
-            self.steps.truncate(self.cursor);
-            self.steps.push(step);
-            // The versions after the one the step was taken from are gone.
-            let last = self.steps.len();
-            self.drop_kept(|index| index >= last);
-        }
-        self.cursor = done.target.min(self.steps.len());
-        self.drop_kept(|index| index == done.target);
-        self.kept.push((done.target, done.version));
-        while self.kept.len() > KEPT_PICTURES {
-            let (_, mut version) = self.kept.remove(0);
-            version.wipe();
-        }
-        true
-    }
-
-    /// Keep `scan` with the kept version whose picture is `picture`; `false` when there is none
-    /// (it was dropped meanwhile).
-    pub fn remember_scan(&mut self, picture: &SecretBytes, scan: &ImageScan) -> bool {
-        let Some((_, version)) = self
-            .kept
-            .iter_mut()
-            .find(|(_, version)| version.picture.same_allocation(picture))
-        else {
-            return false;
-        };
-        if let Some(old) = version.scan.as_mut() {
-            old.wipe();
-        }
-        version.scan = Some(scan.clone());
-        true
-    }
-
-    /// Drop the pictures (the steps stay). A pending job is stale from now on.
-    pub fn forget_pictures(&mut self) {
-        for (_, version) in &mut self.kept {
-            version.wipe();
-        }
-        self.kept.clear();
-        self.generation = next_generation();
-    }
-
-    /// `generation` is this picture's newest job.
-    pub fn awaits(&self, generation: u64) -> bool {
-        self.generation == generation
-    }
-
-    fn ops_to(&self, index: usize) -> Vec<ImageOp> {
-        self.steps[..index.min(self.steps.len())]
-            .iter()
-            .map(|(op, _)| *op)
-            .collect()
-    }
-
-    fn job(
-        &mut self,
-        original: &SecretBytes,
-        ops: Vec<ImageOp>,
-        target: usize,
-        new_step: Option<ImageOp>,
-    ) -> Job {
-        self.generation = next_generation();
-        Job {
-            generation: self.generation,
-            original: original.clone(),
-            ops,
-            target,
-            new_step,
-        }
-    }
-
-    /// The kept version `index` becomes the one shown last.
-    fn touch(&mut self, index: usize) {
-        if let Some(at) = self.kept.iter().position(|(kept, _)| *kept == index) {
-            let version = self.kept.remove(at);
-            self.kept.push(version);
-        }
-    }
-
-    fn drop_kept(&mut self, gone: impl Fn(usize) -> bool) {
-        self.kept.retain_mut(|(index, version)| {
-            if gone(*index) {
-                version.wipe();
-                false
-            } else {
-                true
-            }
-        });
     }
 }
 

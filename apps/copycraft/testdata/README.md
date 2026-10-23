@@ -292,7 +292,7 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] `images/ocr_text.png`: the Text chip shows "Copycraft OCR test / Invoice 2026-0042 /
       Total 59.90 EUR".
 - [ ] `images/exif_rotated_gps.jpg`: shown upright (arrow and "TOP" at the top); Image ▾ ›
-      Remove Metadata gives a version without GPS and camera data (check with Info or
+      Remove Metadata gives a new copy without GPS and camera data (check with Info or
       `exiftool` on a saved copy).
 - [ ] Large files from `generate_large.sh`: open or drop them on the card.
 - [ ] `tables/wide_six_columns.csv` › Open Table: the window opens with the table
@@ -381,13 +381,26 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 
 ## Menus (Mac only, no data)
 
-- [ ] Shortcuts on menu rows: `⋯` shows *Kies bestand…* / *Choose File…* with ⌘O, *Instellingen…* / *Settings…* with ⌘, and the strip toggle with ⌘Y. *Tekst ▾* / *Text ▾* and *Afbeelding ▾* / *Image ▾* show ⌘Z on *Ongedaan maken* / *Undo* and ⇧⌘Z on *Herhaal* / *Redo*. With `⋯` open, press ⌘Y: the menu closes and the strip toggles once (not twice: it is not back where it was). With *Tekst ▾* open after two text steps, press ⌘Z: one step back, not two. With the menus closed the same chords still work on the card.
+- [ ] Shortcuts on menu rows: `⋯` shows *Kies bestand…* / *Choose File…* with ⌘O, *Instellingen…* / *Settings…* with ⌘, and the strip toggle with ⌘Y. *Tekst ▾* / *Text ▾* shows ⌘Z on *Ongedaan maken* / *Undo* and ⇧⌘Z on *Herhaal* / *Redo*; *Afbeelding ▾* / *Image ▾* has no undo or redo rows. With `⋯` open, press ⌘Y: the menu closes and the strip toggles once (not twice: it is not back where it was). With *Tekst ▾* open after two text steps, press ⌘Z: one step back, not two. With the menus closed the same chords still work on the card.
 - [ ] Right-click on a strip card (and ⌃-click): *Zet vast* / *Pin* (*Maak los* / *Unpin* on a pinned one), *Voeg toe aan diff* / *Add to Diff* (dimmed on a picture), a line, *Verwijder uit geschiedenis* / *Remove from History*. Each acts on that card, also when another copy is on screen; pin it, and the card gets the pin mark. `⋯` › *Geschiedenis* / *History* and the ✕ still work.
 - [ ] Open any CSV in the table window, right-click a cell (and ⌃-click): *Kopieer cel* / *Copy Cell*, *Kopieer rij* / *Copy Row*, *Kopieer kolom* / *Copy Column*. Paste each in TextEdit: the cell's whole value (also when the grid clips it with "…"), the row with tabs, the column one value per line without its name. With the privacy filter on and the grid blurred, the right-click shows no copy items.
-- [ ] Dim, do not hide: copy a picture, open *Afbeelding ▾* / *Image ▾* before any step: *Ongedaan maken* / *Undo Image Step* and *Herhaal* / *Redo Image Step* are there, dimmed. After one step *Undo* is on, *Redo* dimmed. The same on *Tekst ▾* / *Text ▾* of a text copy. Command search lists undo/redo only when they can run. Open a big CSV in the table window and click *Tabel ▾* / *Table ▾* while it says *Working on the table…*: a menu with the steps dimmed opens (no beep).
-- [ ] Icons: *Tekst ▾* / *Text ▾* shows an icon on *Hoofdletterstijl ▸* / *Case ▸*, *Codering ▸* / *Encoding ▸* and *Hash ▸*, none on the rows inside. *Afbeelding ▾* / *Image ▾* has no icons, also not on *Ongedaan maken* / *Undo* and *Herhaal* / *Redo*. In `⋯`, *Nieuw ▸* / *New ▸* has a plus (not the clock of *Geschiedenis ▸*). *Info* and *Over* / *About* have different icons; *AGENTS.md controleren* / *Check AGENTS.md* (on an AGENTS.md copy) and *Kies kolommen…* / *Choose Columns…* too.
+- [ ] Dim, do not hide: copy a text, open *Tekst ▾* / *Text ▾* before any step: *Ongedaan maken* / *Undo* and *Herhaal* / *Redo* are there, dimmed. After one step *Undo* is on, *Redo* dimmed. *Afbeelding ▾* / *Image ▾* on a picture has no undo or redo rows at all (each step is a new copy). Command search lists undo/redo only when they can run. Open a big CSV in the table window and click *Tabel ▾* / *Table ▾* while it says *Working on the table…*: a menu with the steps dimmed opens (no beep).
+- [ ] Icons: *Tekst ▾* / *Text ▾* shows an icon on *Hoofdletterstijl ▸* / *Case ▸*, *Codering ▸* / *Encoding ▸* and *Hash ▸*, none on the rows inside. *Afbeelding ▾* / *Image ▾* has no icons. In `⋯`, *Nieuw ▸* / *New ▸* has a plus (not the clock of *Geschiedenis ▸*). *Info* and *Over* / *About* have different icons; *AGENTS.md controleren* / *Check AGENTS.md* (on an AGENTS.md copy) and *Kies kolommen…* / *Choose Columns…* too.
 - [ ] `⋯` › *Thema* / *Theme*: the 16 card themes in three groups with a line between them (basic, classic, colourful), a check mark on the current one. Pick *Nord*: the card repaints at once, the check mark moves, and Settings › *Weergave* / *Display* shows *Nord* in its pop-up. `⋯` › *Help*: *Welkomstscherm* / *Welcome Screen*, *Idee voorstellen…*, *Probleem melden…*, *Exporteer diagnose…*, *Controleer AI*, each opens what it did before; *Stop* / *Quit* stays at the bottom of `⋯`.
 - [ ] Verbs first: on a Rust card *Tekst ▾* / *Text ▾* shows *Meet complexiteit* / *Measure Complexity*; on an `AGENTS.md` card *Toon koppenoverzicht* / *Show Heading Outline*; *Hash ›* shows *Bereken SHA-256* / *Calculate SHA-256*, *Bereken SHA-1 (niet voor beveiliging)* / *Calculate SHA-1 (Not for Security)* and the same for MD5; with two copies in the diff `⋯` shows *Wissel A en B* / *Swap A and B*. Each does what it did before.
+
+## Image ▾ steps (Mac only, no data)
+
+Turn on *Klembordgeschiedenis bijhouden* / *Keep clipboard history*, then copy `images/ocr_text.png` (open it in Preview, ⌘A, ⌘C) and open the card.
+
+- [ ] *Afbeelding ▾* / *Image ▾* › *Grijswaarden* / *Grayscale*: the card shows the grey picture with *Grayscale* in the meta line, and the *Gekopieerd* / *Copied* toast appears. There is no *1 van 2* / *1 of 2* (no *v1/2*, *v2/2*) capsule, no ↶ / ↷ and no undo or redo row in the menu.
+- [ ] New copy: the strip has a new card at the left with the grey picture, next to the coloured one. Paste in Preview (*Nieuw van klembord* / *New from Clipboard*) or TextEdit: the grey picture.
+- [ ] ⌘Z: the card shows the coloured picture again (that older strip card is marked); no toast, and pasting still gives the grey one. ⇧⌘Z: the grey one again. After ⌘Z, *Kopieer* / *Copy* puts the coloured one on the clipboard.
+- [ ] A second step (*Spiegel verticaal* / *Flip Vertical*) on the grey copy makes a third copy; ⌘Z twice goes back to the coloured one. After ⌘Z, a step on the coloured one starts again from there (⇧⌘Z no longer goes to the flipped copy).
+- [ ] Same as text: do a *Tekst ▾* step on a text copy: also a new copy and toast; ⌘Z shows the earlier copy without changing the clipboard (text keeps its *v2/2* capsule).
+- [ ] `⋯` › *Pauzeer opname* / *Pause Recording*, then *Grayscale*: the grey picture is still put on the clipboard, the meta line says *Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)* / *Copied, not in history (recording paused or app ignored)*, no new strip card, and ⌘Z does nothing. Resume recording afterwards.
+- [ ] Sensitive: copy a screenshot that shows a fake token (`ghp_` followed by 36 letters and digits) and do *Grayscale*: the copy is made but not added to history (*… (holds a token or key)*), it is concealed (another clipboard manager does not record it) and the clipboard is emptied after 60 s.
+- [ ] Console.app (filter `copycraft`): no file names, image bytes or recognised text in the log during these steps.
 
 ## Buttons (Mac only, no data)
 

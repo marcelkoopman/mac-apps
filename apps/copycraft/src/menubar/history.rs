@@ -60,6 +60,7 @@ impl App {
             self.image_on_pasteboard = None;
             self.cancel_image_job();
             self.image_note = None;
+            self.image_steps = None;
             self.text_steps = None;
             self.ai_stop();
             self.text_generation = self.text_generation.wrapping_add(1);
@@ -312,7 +313,6 @@ impl App {
         self.browsing = None;
         self.loose_table = crate::settings::preferred_table();
         self.loose_text = None;
-        self.opened_image = ImageVersions::default();
         self.cancel_image_job();
         self.image_note = None;
         self.cancel_table_job();
@@ -500,6 +500,27 @@ impl App {
                     crate::settings::announce_confirmations(),
                 );
             }
+        }
+        Ok(())
+    }
+
+    /// Put a picture copycraft made on the clipboard (an Image ▾ step's), as [`Self::write_own`]
+    /// does text: `concealed` (its recognised text is sensitive) marks it Concealed and, with
+    /// that setting on, clears it after [`SENSITIVE_CLEAR_AFTER`]. The bytes are never logged.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn write_own_image(&mut self, png: &[u8], concealed: bool) -> anyhow::Result<()> {
+        crate::macos_pasteboard::write_image(png, concealed).map_err(anyhow::Error::msg)?;
+        self.sensitive_clear = None;
+        self.conceal_when_checked = None;
+        if concealed {
+            self.clear_sensitive_later(crate::macos_pasteboard::change_count());
+        }
+        if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+            mac_ui::toast::show(
+                mtm,
+                crate::locale::t("copied_toast"),
+                crate::settings::announce_confirmations(),
+            );
         }
         Ok(())
     }
