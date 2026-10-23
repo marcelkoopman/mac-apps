@@ -581,15 +581,13 @@ fn build_tile(
         None => NSColor::labelColor().colorWithAlphaComponent(0.07),
     };
     let card = filled_box(mtm, RADIUS, &fill);
-    if thumb.side.is_some() {
-        // One side of the diff: an orange frame, and `A ·` / `B ·` before the type mark.
-        card.setBorderWidth(2.0);
-        card.setBorderColor(&NSColor::systemOrangeColor());
-    } else if current {
+    // The accent frame is always on the card shown, also while it is compared; a side of the
+    // diff has its `A` / `B` badge instead ([`side_badge`]).
+    if current {
         card.setBorderWidth(2.0);
         card.setBorderColor(&NSColor::controlAccentColor());
     }
-    let mark = commands::thumb_mark(thumb);
+    let mark = thumb.mark.clone();
     // The button covers the whole card, so a click lands wherever the pointer shows the ✕
     // ([`commands::thumb_at`]); the padding is in the content: the text is indented, the
     // picture sits in a smaller frame behind the button.
@@ -643,27 +641,20 @@ fn build_tile(
         let attributed = AttrText::new(&text, &font, &text_colour);
         let mark_end = mark.len();
         attributed.color(&(0..mark_end), &mark_colour);
-        // The side is orange on the system tint; a theme keeps the orange frame and paints
-        // the side in the mark's tested colour.
-        if let Some(side) = thumb.side
-            && themed.is_none()
-        {
-            attributed.color(&(0..side.len()), &NSColor::systemOrangeColor());
-        }
-        // The card's padding as an indent on both sides, so the text keeps clear of the edge.
-        let style = NSMutableParagraphStyle::new();
-        style.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
-        style.setFirstLineHeadIndent(commands::THUMB_PAD);
-        style.setHeadIndent(commands::THUMB_PAD);
-        style.setTailIndent(-commands::THUMB_PAD);
+        // The card's padding as an indent on both sides, so the text keeps clear of the edge;
+        // the mark line (its own paragraph) also clears the side badge.
         let built = attributed.into_attributed();
-        let range = NSRange {
-            location: 0,
-            length: built.length(),
-        };
-        mac_ui::text::set_paragraph_style(&built, &style, range);
+        let mark_line = mac_ui::text::utf16_range(&text, &(0..(mark_end + 1).min(text.len())));
+        let rest = mac_ui::text::utf16_range(&text, &((mark_end + 1).min(text.len())..text.len()));
+        let lead = commands::mark_indent(thumb.side.is_some());
+        mac_ui::text::set_paragraph_style(&built, &tile_text_style(lead), mark_line);
+        mac_ui::text::set_paragraph_style(&built, &tile_text_style(commands::THUMB_PAD), rest);
         button.setAttributedTitle(&built);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
+    }
+    // Under the button, so a click on it still reaches the card.
+    if let Some(side) = thumb.side {
+        card.addSubview(&side_badge(mtm, side));
     }
     card.addSubview(&button);
     let remove = remove_button(mtm);
@@ -680,6 +671,36 @@ fn build_tile(
     }
 }
 
+/// A card's paragraph style: one line per paragraph, cut with `…`, indented `lead` on the
+/// left and the padding on the right.
+fn tile_text_style(lead: f64) -> Retained<NSMutableParagraphStyle> {
+    let style = NSMutableParagraphStyle::new();
+    style.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
+    style.setFirstLineHeadIndent(lead);
+    style.setHeadIndent(lead);
+    style.setTailIndent(-commands::THUMB_PAD);
+    style
+}
+
+/// The `A` / `B` badge of a side of the diff: a small filled tag in the card's top-left
+/// corner ([`commands::side_badge_frame`]). Drawing only: VoiceOver reads the side in the
+/// card's label ([`commands::thumb_mark`]).
+fn side_badge(mtm: MainThreadMarker, side: &str) -> Retained<NSBox> {
+    let (x, y, w, h) = commands::side_badge_frame();
+    let badge = filled_box(mtm, 4.0, &NSColor::systemOrangeColor());
+    badge.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(w, h)));
+    let label = mac_ui::widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &NSColor::blackColor());
+    label.setFont(Some(&NSFont::boldSystemFontOfSize(
+        mac_ui::metrics::FONT_CAPTION,
+    )));
+    label.setAlignment(NSTextAlignment::Center);
+    label.setStringValue(&NSString::from_str(side));
+    label.setFrame(NSRect::new(NSPoint::new(0.0, -1.0), NSSize::new(w, h)));
+    label.setAccessibilityElement(false);
+    badge.addSubview(&label);
+    badge
+}
+
 /// Set what depends on the card's place in history (it shifts when a copy is removed or
 /// added): the tags, what VoiceOver reads and its actions, the tooltip and the right-click
 /// menu, which acts on that card's copy.
@@ -691,17 +712,11 @@ fn bind_tile(mtm: MainThreadMarker, tile: &mut Tile, thumb: &commands::Thumb, cu
     let button = &tile.button;
     button.setTag(thumb.index as isize);
     tile.remove.setTag(thumb.index as isize);
-    let mut spoken = format!(
+    let spoken = format!(
         "{}, {}",
         commands::thumb_spoken(thumb.index + 1, total, current),
-        thumb.mark
+        commands::thumb_mark(thumb)
     );
-    if let Some(side) = thumb.side {
-        spoken = format!(
-            "{spoken}, {}",
-            crate::locale::tf("strip_compare_side", &[&side])
-        );
-    }
     button.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
     button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
         "strip_compare_hint",

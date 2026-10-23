@@ -245,11 +245,42 @@ pub fn thumb_click(index: usize, command: bool, shift: bool) -> super::CommandId
     }
 }
 
-/// The type mark of a card, with the diff side in front while it is compared (`A · {}`).
+/// The type mark VoiceOver reads for a card, with the diff side after it while it is compared
+/// (`{}, compared, side A`). On screen the side is a badge ([`side_badge_frame`]).
 pub fn thumb_mark(thumb: &Thumb) -> String {
     match thumb.side {
-        Some(side) => format!("{side} · {}", thumb.mark),
+        Some(side) => format!(
+            "{}, {}",
+            thumb.mark,
+            crate::locale::tf("strip_compare_side", &[&side])
+        ),
         None => thumb.mark.clone(),
+    }
+}
+
+/// The `A` / `B` badge of a compared card: its size and its distance to the card's edges.
+pub const THUMB_BADGE_W: f64 = 16.0;
+pub const THUMB_BADGE_H: f64 = 14.0;
+pub const THUMB_BADGE_INSET: f64 = 4.0;
+
+/// The badge's frame inside a card, `(x, y, width, height)` from the card's bottom-left
+/// corner: the top-left corner, clear of the ✕ in the top-right one.
+pub fn side_badge_frame() -> (f64, f64, f64, f64) {
+    (
+        THUMB_BADGE_INSET,
+        THUMB_H - THUMB_BADGE_H - THUMB_BADGE_INSET,
+        THUMB_BADGE_W,
+        THUMB_BADGE_H,
+    )
+}
+
+/// How far a card's first line (the type mark) is indented: the padding, and past the badge
+/// while the card is compared.
+pub fn mark_indent(compared: bool) -> f64 {
+    if compared {
+        THUMB_BADGE_INSET + THUMB_BADGE_W + 3.0
+    } else {
+        THUMB_PAD
     }
 }
 
@@ -563,6 +594,17 @@ mod tests {
     }
 
     #[test]
+    fn the_side_badge_sits_top_left_clear_of_the_cross_and_the_mark() {
+        let (x, y, w, h) = side_badge_frame();
+        let (cross_x, _, _) = remove_frame();
+        assert!(x >= 0.0 && y >= 0.0 && x + w < cross_x && y + h <= THUMB_H);
+        assert!(y > THUMB_H / 2.0, "top half");
+        // The mark line starts past the badge only while compared.
+        assert!(mark_indent(true) > x + w);
+        assert_eq!(mark_indent(false), THUMB_PAD);
+    }
+
+    #[test]
     fn the_remove_cross_is_at_least_20_points() {
         let (_, _, side) = remove_frame();
         assert!(side >= 20.0);
@@ -580,7 +622,10 @@ mod tests {
     #[test]
     fn compared_cards_carry_their_side_and_esc_ends_the_comparison_first() {
         assert_eq!(thumb_mark(&thumb(0, None)), "{}");
-        assert_eq!(thumb_mark(&thumb(0, Some("A"))), "A · {}");
+        assert_eq!(
+            thumb_mark(&thumb(0, Some("A"))),
+            format!("{{}}, {}", crate::locale::tf("strip_compare_side", &[&"A"]))
+        );
         assert!(!strip_comparing(&[thumb(0, None), thumb(1, None)]));
         assert!(strip_comparing(&[thumb(0, Some("B")), thumb(1, Some("A"))]));
         assert_eq!(escape_step(false, true, true), EscapeStep::ClearQuery);
