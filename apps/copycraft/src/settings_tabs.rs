@@ -76,6 +76,16 @@ impl Tab {
             .unwrap_or(Tab::General)
     }
 
+    /// The tab one `step` away, wrapping around at both ends.
+    pub fn step(self, step: Step) -> Tab {
+        let count = Tab::ALL.len();
+        let at = match step {
+            Step::Next => (self.index() + 1) % count,
+            Step::Previous => (self.index() + count - 1) % count,
+        };
+        Tab::ALL[at]
+    }
+
     /// The segment title, also the window title (literal keys, for the locale scan test).
     pub fn title(self) -> &'static str {
         match self {
@@ -98,6 +108,47 @@ impl Tab {
     pub fn window_height(self) -> f64 {
         window_height(self.pane_height())
     }
+}
+
+/// Which way a tab-switching key moves.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Step {
+    Next,
+    Previous,
+}
+
+/// The modifiers held with a key, as plain flags (no AppKit), for [`step_for_key`].
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct Mods {
+    pub command: bool,
+    pub control: bool,
+    pub shift: bool,
+    pub option: bool,
+}
+
+/// The tab step a key is, as in Safari and System Settings: ⌃Tab and ⌘⇧] go to the next tab,
+/// ⌃⇧Tab and ⌘⇧[ to the previous one. `key_code` is `NSEvent.keyCode`, `chars` its
+/// `charactersIgnoringModifiers` (with Shift that is `}` or `{` on most layouts, so both are
+/// accepted).
+pub fn step_for_key(key_code: u16, chars: &str, mods: Mods) -> Option<Step> {
+    if mods.option {
+        return None;
+    }
+    if key_code == mac_ui::keys::code::TAB && mods.control && !mods.command {
+        return Some(if mods.shift {
+            Step::Previous
+        } else {
+            Step::Next
+        });
+    }
+    if mods.command && mods.shift && !mods.control {
+        return match chars {
+            "]" | "}" => Some(Step::Next),
+            "[" | "{" => Some(Step::Previous),
+            _ => None,
+        };
+    }
+    None
 }
 
 /// The new bottom edge (`y` grows upwards, as on macOS) of a window frame at `y` with height
@@ -132,6 +183,57 @@ mod tests {
             assert_eq!(Tab::at(at), Some(tab));
         }
         assert_eq!(Tab::at(Tab::ALL.len()), None);
+    }
+
+    #[test]
+    fn stepping_wraps_around_both_ends() {
+        assert_eq!(Tab::General.step(Step::Next), Tab::Privacy);
+        assert_eq!(Tab::Privacy.step(Step::Next), Tab::Display);
+        assert_eq!(Tab::Display.step(Step::Next), Tab::General);
+        assert_eq!(Tab::General.step(Step::Previous), Tab::Display);
+        assert_eq!(Tab::Display.step(Step::Previous), Tab::Privacy);
+        assert_eq!(Tab::Privacy.step(Step::Previous), Tab::General);
+    }
+
+    #[test]
+    fn control_tab_and_command_shift_brackets_step() {
+        let tab = mac_ui::keys::code::TAB;
+        let control = Mods {
+            control: true,
+            ..Mods::default()
+        };
+        let control_shift = Mods {
+            shift: true,
+            ..control
+        };
+        let command_shift = Mods {
+            command: true,
+            shift: true,
+            ..Mods::default()
+        };
+        assert_eq!(step_for_key(tab, "\t", control), Some(Step::Next));
+        assert_eq!(
+            step_for_key(tab, "\u{19}", control_shift),
+            Some(Step::Previous)
+        );
+        assert_eq!(step_for_key(0x1E, "}", command_shift), Some(Step::Next));
+        assert_eq!(step_for_key(0x1E, "]", command_shift), Some(Step::Next));
+        assert_eq!(step_for_key(0x21, "{", command_shift), Some(Step::Previous));
+        assert_eq!(step_for_key(0x21, "[", command_shift), Some(Step::Previous));
+        // Plain Tab moves the focus; ⌘] without Shift, ⌘Tab, ⌥ chords and letters do nothing.
+        assert_eq!(step_for_key(tab, "\t", Mods::default()), None);
+        let command = Mods {
+            command: true,
+            ..Mods::default()
+        };
+        assert_eq!(step_for_key(0x1E, "]", command), None);
+        assert_eq!(step_for_key(tab, "\t", command), None);
+        let option = Mods {
+            option: true,
+            ..control
+        };
+        assert_eq!(step_for_key(tab, "\t", option), None);
+        assert_eq!(step_for_key(0x00, "a", command_shift), None);
     }
 
     #[test]

@@ -3,7 +3,8 @@
 //! notification switches), Privacy (Keep clipboard history with retention, sensitive-copy
 //! clearing and ask before clearing under it, privacy filter, blur, ignored apps) and Display
 //! (card theme, pages, announce, symbols). The feedback mail, privacy policy and support are in
-//! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab; the last tab is stored and opened again.
+//! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab, ⌃Tab/⌃⇧Tab and ⌘⇧]/⌘⇧[ step through them
+//! (wrapping); the last tab is stored and opened again.
 
 use std::cell::{Cell, RefCell};
 
@@ -28,7 +29,7 @@ use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 use crate::settings;
 
-use crate::settings_tabs::{NOTE_GAP, NOTE_H, TAB_BAR_H, Tab, WIDTH, keep_top};
+use crate::settings_tabs::{Mods, NOTE_GAP, NOTE_H, TAB_BAR_H, Tab, WIDTH, keep_top};
 
 const MARGIN: f64 = mac_ui::metrics::MARGIN;
 const BUTTON_H: f64 = mac_ui::metrics::BUTTON_H;
@@ -108,6 +109,11 @@ define_class!(
                 handle_record_key(event);
                 return;
             }
+            // ⌃Tab can also arrive here rather than as a key equivalent.
+            if let Some(step) = tab_step(event) {
+                select_tab(current_tab().step(step).index());
+                return;
+            }
             // SAFETY: forwards the event to the superclass implementation of the same selector,
             // with the same argument and return types.
             let _: () = unsafe { msg_send![super(self), keyDown: event] };
@@ -117,7 +123,8 @@ define_class!(
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
             // The hotkey field is listening: every ⌘ chord is a hotkey to record, not a tab or
             // a menu key (⌘W, ⌘Z, ⌘V, …).
-            // ⌘1…⌘3 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
+            // ⌘1…⌘3 pick a tab, ⌃Tab/⌘⇧] and ⌃⇧Tab/⌘⇧[ the next and previous one (wrapping).
+            // ⌘W and ⌘M are the hidden Window menu's.
             let recording = RECORDING.get()
                 && event
                     .modifierFlags()
@@ -127,6 +134,9 @@ define_class!(
                 true
             } else if let Some(tab) = tab_for_chord(event) {
                 select_tab(tab.index());
+                true
+            } else if let Some(step) = tab_step(event) {
+                select_tab(current_tab().step(step).index());
                 true
             } else {
                 // SAFETY: forwards the event to the superclass implementation of the same selector,
@@ -1063,6 +1073,36 @@ fn tab_for_chord(event: &NSEvent) -> Option<Tab> {
         .enumerate()
         .find(|(at, _)| mac_ui::keys::is_command_chord(event, &(at + 1).to_string()))
         .map(|(_, tab)| tab)
+}
+
+/// The next or previous tab `event` asks for (⌃Tab, ⌃⇧Tab, ⌘⇧], ⌘⇧[), if any.
+fn tab_step(event: &NSEvent) -> Option<crate::settings_tabs::Step> {
+    let flags = event.modifierFlags();
+    let chars = event
+        .charactersIgnoringModifiers()
+        .map(|text| text.to_string())
+        .unwrap_or_default();
+    crate::settings_tabs::step_for_key(
+        event.keyCode(),
+        &chars,
+        Mods {
+            command: flags.contains(NSEventModifierFlags::Command),
+            control: flags.contains(NSEventModifierFlags::Control),
+            shift: flags.contains(NSEventModifierFlags::Shift),
+            option: flags.contains(NSEventModifierFlags::Option),
+        },
+    )
+}
+
+/// The tab shown now (the segment selected), General before the window exists.
+fn current_tab() -> Tab {
+    TABS.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .and_then(|control| usize::try_from(control.selectedSegment()).ok())
+            .and_then(Tab::at)
+            .unwrap_or(Tab::General)
+    })
 }
 
 /// Show the pane of tab `index` (out of range: General) and hide the others. A field being
