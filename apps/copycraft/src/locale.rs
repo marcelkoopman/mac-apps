@@ -521,6 +521,7 @@ mod tests {
         "diff_add",
         "diff_compare",
         "diff_remove",
+        "diff_swap",
         "empty_pasteboard",
         "encode_base64",
         "encode_base64_url",
@@ -590,6 +591,7 @@ mod tests {
         "table_remove_empty",
         "text_apply",
         "text_clean_url",
+        "text_complexity",
         "text_head",
         "text_json",
         "text_reverse",
@@ -663,6 +665,9 @@ mod tests {
         "wijzigen",
         "maken",
         "kopiëren",
+        "meten",
+        "berekenen",
+        "wisselen",
     ];
     /// Commands Marcel named as they are: Alles wissen, the feedback pair and the AGENTS.md
     /// check.
@@ -712,6 +717,23 @@ mod tests {
         }
         assert_eq!(t_in(Lang::Nl, "clear_history"), "Wis geschiedenis");
         assert_eq!(t_in(Lang::Nl, "text_reverse"), "Keer regels om");
+        // Verbs first, not a bare noun (menu HIG plan, point 8).
+        assert_eq!(t_in(Lang::Nl, "text_complexity"), "Meet complexiteit");
+        assert_eq!(t_in(Lang::En, "text_complexity"), "Measure Complexity");
+        assert_eq!(t_in(Lang::Nl, "agent_outline"), "Toon koppenoverzicht");
+        assert_eq!(t_in(Lang::En, "agent_outline"), "Show Heading Outline");
+        assert_eq!(t_in(Lang::Nl, "hash_sha256"), "Bereken SHA-256");
+        assert_eq!(t_in(Lang::En, "hash_sha256"), "Calculate SHA-256");
+        assert_eq!(
+            t_in(Lang::Nl, "hash_md5"),
+            "Bereken MD5 (niet voor beveiliging)"
+        );
+        assert_eq!(
+            t_in(Lang::En, "hash_sha1"),
+            "Calculate SHA-1 (Not for Security)"
+        );
+        assert_eq!(t_in(Lang::Nl, "diff_swap"), "Wissel A en B");
+        assert_eq!(t_in(Lang::En, "diff_swap"), "Swap A and B");
     }
 
     #[test]

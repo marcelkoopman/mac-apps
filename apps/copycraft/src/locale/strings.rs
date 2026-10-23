@@ -7,6 +7,9 @@
 //!   "photo". Compounds of their own stay: *beeldverhouding* (aspect ratio), *voorbeeld*.
 //! - idee voorstellen / suggest a feature: never "feature" in Dutch.
 //! - tabel / table, kolommen / columns, kaart / card, regels / lines.
+//! - A command starts with its verb: *Meet complexiteit* / *Measure Complexity*, *Toon
+//!   koppenoverzicht* / *Show Heading Outline*, *Bereken SHA-256* / *Calculate SHA-256*,
+//!   *Wissel A en B* / *Swap A and B*; never a bare noun such as "Complexiteit".
 //!
 //! `locale::tests::visible_strings_follow_the_glossary` rejects the forbidden variants.
 
@@ -951,7 +954,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("diff_add", "Voeg toe aan diff", "Add to Diff"),
     ("diff_compare", "Vergelijk met A", "Compare with A"),
     ("diff_remove", "Verwijder uit diff", "Remove from Diff"),
-    ("diff_swap", "Wissel", "Swap"),
+    ("diff_swap", "Wissel A en B", "Swap A and B"),
     (
         "detail_diff",
         "Vergelijking van twee kopieën",
@@ -1291,16 +1294,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "The decoded bytes aren't text",
     ),
     // Text ▾ › Convert › Encoding › hashes (src/text_ops/hash.rs)
-    ("hash_sha256", "SHA-256-hash", "SHA-256 Hash"),
+    ("hash_sha256", "Bereken SHA-256", "Calculate SHA-256"),
     (
         "hash_sha1",
-        "SHA-1-hash (niet voor beveiliging)",
-        "SHA-1 Hash (Not for Security)",
+        "Bereken SHA-1 (niet voor beveiliging)",
+        "Calculate SHA-1 (Not for Security)",
     ),
     (
         "hash_md5",
-        "MD5-hash (niet voor beveiliging)",
-        "MD5 Hash (Not for Security)",
+        "Bereken MD5 (niet voor beveiliging)",
+        "Calculate MD5 (Not for Security)",
     ),
     (
         "detail_hash",
@@ -1528,7 +1531,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("ai_label_structure", "Structuur", "Structure"),
     ("ai_label_conflicts", "Conflicten", "Conflicts"),
     ("ai_label_translate", "Vertaald", "Translated"),
-    ("text_complexity", "Complexiteit", "Complexity"),
+    ("text_complexity", "Meet complexiteit", "Measure Complexity"),
     (
         "agent_instructions",
         "Agent-instructies",
@@ -1539,7 +1542,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Commando's uit AGENTS.md",
         "Commands from AGENTS.md",
     ),
-    ("agent_outline", "Koppenoverzicht", "Heading Outline"),
+    (
+        "agent_outline",
+        "Toon koppenoverzicht",
+        "Show Heading Outline",
+    ),
     ("agent_check", "AGENTS.md controleren", "Check AGENTS.md"),
     (
         "detail_agent_commands",
