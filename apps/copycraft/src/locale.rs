@@ -227,7 +227,6 @@ mod tests {
             "language_nl",
             "language_en",
             "group_privacy",
-            "group_feedback",
             // The same word in Dutch.
             "support_link",
             "sep_tab",

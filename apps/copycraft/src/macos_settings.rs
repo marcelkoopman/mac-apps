@@ -1,9 +1,9 @@
-//! Settings window, in five tabs (a segmented control above one pane per tab):
+//! Settings window, in four tabs (a segmented control above one pane per tab):
 //! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history with
 //! retention, sensitive-copy clearing and ask before clearing under it, privacy filter, blur,
-//! ignored apps), Display (card theme, pages, announce, symbols),
-//! Notifications (four switches) and Feedback (mail, privacy policy, support). ⌘1…⌘5 pick a tab;
-//! the last tab is remembered for the session only.
+//! ignored apps), Display (card theme, pages, announce, symbols) and
+//! Notifications (four switches). The feedback mail, privacy policy and support are in About
+//! and `⋯` › Help ▸. ⌘1…⌘4 pick a tab; the last tab is remembered for the session only.
 
 use std::cell::{Cell, RefCell};
 
@@ -65,17 +65,8 @@ const DISPLAY_H: f64 =
 const THEME_POPUP_W: f64 = 176.0;
 /// Meldingen: the four switches in two rows of two, one gap and a note.
 const NOTIFY_H: f64 = 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
-/// Feedback: four buttons stacked one per row: the two mail buttons, a wider gap, then the
-/// privacy policy and support links.
-const FEEDBACK_H: f64 =
-    4.0 * BUTTON_H + 2.0 * mac_ui::metrics::SPACE_S + mac_ui::metrics::SECTION_GAP;
-/// Width of every Feedback button: the widest title, capped at half the window.
-const FEEDBACK_BUTTON_MAX_W: f64 = WIDTH / 2.0;
 /// Every tab gets the height of the tallest one, so the window keeps one size.
-const PANE_H: f64 = max(
-    max(max(GENERAL_H, PRIVACY_H), max(DISPLAY_H, NOTIFY_H)),
-    FEEDBACK_H,
-);
+const PANE_H: f64 = max(max(GENERAL_H, PRIVACY_H), max(DISPLAY_H, NOTIFY_H));
 const HEIGHT: f64 = MARGIN + TAB_BAR_H + SECTION_GAP + PANE_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
 
@@ -91,7 +82,6 @@ const _: () = assert!(HISTORY_SUB_H == 100.0);
 const _: () = assert!(PRIVACY_H == 380.0);
 const _: () = assert!(DISPLAY_H == 226.0);
 const _: () = assert!(NOTIFY_H == 82.0);
-const _: () = assert!(FEEDBACK_H == 144.0);
 const _: () = assert!(PANE_H == 380.0);
 /// Fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
 const _: () = assert!(HEIGHT == 456.0);
@@ -103,17 +93,10 @@ enum Tab {
     Privacy,
     Display,
     Notifications,
-    Feedback,
 }
 
 impl Tab {
-    const ALL: [Tab; 5] = [
-        Tab::General,
-        Tab::Privacy,
-        Tab::Display,
-        Tab::Notifications,
-        Tab::Feedback,
-    ];
+    const ALL: [Tab; 4] = [Tab::General, Tab::Privacy, Tab::Display, Tab::Notifications];
 
     fn index(self) -> usize {
         Tab::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
@@ -130,7 +113,6 @@ impl Tab {
             Tab::Privacy => crate::locale::t("group_privacy"),
             Tab::Display => crate::locale::t("group_display"),
             Tab::Notifications => crate::locale::t("group_notifications"),
-            Tab::Feedback => crate::locale::t("group_feedback"),
         }
     }
 }
@@ -211,7 +193,7 @@ define_class!(
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
             // The hotkey field is listening: every ⌘ chord is a hotkey to record, not a tab or
             // a menu key (⌘W, ⌘Z, ⌘V, …).
-            // ⌘1…⌘5 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
+            // ⌘1…⌘4 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
             let recording = RECORDING.get()
                 && event
                     .modifierFlags()
@@ -443,26 +425,6 @@ define_class!(
             save_ignored_field();
         }
 
-        #[unsafe(method(suggestFeature:))]
-        fn suggest_feature(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::SuggestFeature));
-        }
-
-        #[unsafe(method(reportProblem:))]
-        fn report_problem(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::ReportProblem));
-        }
-
-        #[unsafe(method(openPrivacy:))]
-        fn open_privacy(&self, _sender: Option<&NSButton>) {
-            crate::macos_about::open_page(crate::url_policy::PRIVACY_URL);
-        }
-
-        #[unsafe(method(openSupport:))]
-        fn open_support(&self, _sender: Option<&NSButton>) {
-            crate::macos_about::open_page(crate::url_policy::SUPPORT_URL);
-        }
-
         #[unsafe(method(restoreSymbols:))]
         fn restore_symbols(&self, _sender: Option<&NSButton>) {
             // Your own characters are replaced: ask first, Cancel is the default (Return/Esc).
@@ -680,7 +642,6 @@ fn build(mtm: MainThreadMarker) {
             Tab::Privacy => build_privacy(mtm, &pane),
             Tab::Display => build_display(mtm, &pane),
             Tab::Notifications => build_notifications(mtm, &pane),
-            Tab::Feedback => build_feedback(mtm, &pane),
         };
         // Each tab fits the shared pane height; the tallest fills it.
         debug_assert!(left > -0.5, "{tab:?} is taller than the pane");
@@ -1149,65 +1110,7 @@ fn paint_theme_preview() {
     });
 }
 
-/// Feedback: Suggest a feature, Report a problem, the privacy policy and support. Returns the
-/// unused height.
-fn build_feedback(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    // The privacy policy and support page open in the default browser (NSWorkspace).
-    let buttons = [
-        (
-            crate::locale::t("feedback_feature_menu"),
-            "lightbulb",
-            sel!(suggestFeature:),
-        ),
-        (
-            crate::locale::t("feedback_problem_menu"),
-            "exclamationmark.bubble",
-            sel!(reportProblem:),
-        ),
-        (
-            crate::locale::t("privacy_policy"),
-            "hand.raised",
-            sel!(openPrivacy:),
-        ),
-        (
-            crate::locale::t("support_link"),
-            // A web page in the browser, so the browser's symbol (not the help mark of
-            // `⋯` › Help).
-            "safari",
-            sel!(openSupport:),
-        ),
-    ]
-    .map(|(title, symbol, action)| {
-        let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
-        pill.set_symbol(symbol);
-        pill.set_accessibility_label(title);
-        (pill, action)
-    });
-    // One width for all four: the widest title, so the column reads as one block.
-    let width = buttons
-        .iter()
-        .map(|(pill, _)| pill.width_within(FEEDBACK_BUTTON_MAX_W))
-        .fold(BUTTON_H, f64::max);
-    let mut top = PANE_H;
-    for (at, (pill, action)) in buttons.into_iter().enumerate() {
-        match at {
-            0 => {}
-            // A wider gap between the mail buttons and the links.
-            2 => gap(&mut top, mac_ui::metrics::SECTION_GAP),
-            _ => gap(&mut top, mac_ui::metrics::SPACE_S),
-        }
-        let y = take(&mut top, BUTTON_H);
-        pill.view().setFrame(NSRect::new(
-            NSPoint::new(MARGIN, y),
-            NSSize::new(width, BUTTON_H),
-        ));
-        wire(pill.button(), action);
-        body.addSubview(pill.view());
-    }
-    top
-}
-
-/// The tab a ⌘1…⌘5 chord picks, if `event` is one.
+/// The tab a ⌘1…⌘4 chord picks, if `event` is one.
 fn tab_for_chord(event: &NSEvent) -> Option<Tab> {
     Tab::ALL
         .into_iter()

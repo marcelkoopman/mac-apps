@@ -85,7 +85,7 @@ as tokens or keys (for example GitHub, AWS or Slack tokens and private keys) are
 kept in history; so are images whose recognised text (on-device Vision text recognition)
 contains one. Long texts (32 KB or more) and images are only added to history after that check. Settings are stored in the standard user defaults and never hold clipboard
 content. "Suggest a Feature…" and "Report a Problem…" only open a draft in the user's own mail
-app. The "Privacy Policy" and "Support" buttons (About window and Settings › Feedback) open those
+app. The "Privacy Policy" and "Support" buttons (About window) open those
 pages in the default browser.
 
 **Sandbox entitlements.** `com.apple.security.app-sandbox` and

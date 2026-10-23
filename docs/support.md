@@ -13,7 +13,7 @@ permalink: /support
 
 Heb je een vraag of een bug gevonden? Mail naar [mac-apps-support@proton.me](mailto:mac-apps-support@proton.me). Bugs los ik zo goed mogelijk op, maar zonder vaste reactietijd, zonder garantie en zonder terugbetaling door mij. Terugbetalingen lopen via Apple.
 
-Je kunt ook in CopyCraft "Idee voorstellen…" of "Probleem melden…" kiezen (in het ⋯-menu of in Instellingen › Feedback). Je mailapp opent dan met een concept; jij verstuurt het zelf. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen.
+Je kunt ook in CopyCraft "Idee voorstellen…" of "Probleem melden…" kiezen (in ⋯ › Help of in Over CopyCraft). Je mailapp opent dan met een concept; jij verstuurt het zelf. De mail bevat alleen je eigen tekst plus de versie van CopyCraft en macOS, nooit je klembord, geschiedenis, bestandsnamen of instellingen.
 
 ### Veelgestelde vragen
 
@@ -39,7 +39,7 @@ CopyCraft logt alleen gebeurtenissen, nooit klembord- of geschiedenistekst, best
 
 Question or found a bug? Email [mac-apps-support@proton.me](mailto:mac-apps-support@proton.me). I fix bugs as best I can, but with no fixed response time, no warranty and no refunds from me. Refunds go through Apple.
 
-You can also choose "Suggest a Feature…" or "Report a Problem…" in CopyCraft (in the ⋯ menu or in Settings › Feedback). Your mail app opens with a draft; you send it yourself. The mail holds only your own text plus the CopyCraft and macOS versions, never your clipboard, history, file names or settings.
+You can also choose "Suggest a Feature…" or "Report a Problem…" in CopyCraft (in ⋯ › Help or in About CopyCraft). Your mail app opens with a draft; you send it yourself. The mail holds only your own text plus the CopyCraft and macOS versions, never your clipboard, history, file names or settings.
 
 ### FAQ
 

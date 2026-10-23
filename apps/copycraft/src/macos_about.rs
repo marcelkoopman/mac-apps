@@ -1,5 +1,6 @@
 //! About CopyCraft: name, bundle version, offline promise, GitHub URL as plain text (not opened),
-//! and buttons that open the privacy policy and the support page in the default browser.
+//! the two feedback mail buttons (as in `⋯` › Help ▸), and buttons that open the privacy policy
+//! and the support page in the default browser.
 
 use std::cell::{Cell, RefCell};
 
@@ -19,8 +20,9 @@ use crate::commands::CommandId;
 use crate::launcher::{self, UserEvent};
 
 const WIDTH: f64 = 380.0;
-const HEIGHT: f64 = 250.0;
-/// Height of the row with the privacy and support buttons.
+/// Room for two rows of buttons: the feedback mail above, the privacy and support links below.
+const HEIGHT: f64 = 250.0 + LINK_H + mac_ui::metrics::SPACE_S;
+/// Height of a row of buttons.
 const LINK_H: f64 = mac_ui::metrics::BUTTON_H;
 const PAD: f64 = 20.0;
 const RADIUS: f64 = 16.0;
@@ -87,6 +89,16 @@ define_class!(
     }
 
     impl AboutDelegate {
+        #[unsafe(method(suggestFeature:))]
+        fn suggest_feature(&self, _sender: Option<&NSObject>) {
+            launcher::emit(UserEvent::Run(CommandId::SuggestFeature));
+        }
+
+        #[unsafe(method(reportProblem:))]
+        fn report_problem(&self, _sender: Option<&NSObject>) {
+            launcher::emit(UserEvent::Run(CommandId::ReportProblem));
+        }
+
         #[unsafe(method(openPrivacy:))]
         fn open_privacy(&self, _sender: Option<&NSObject>) {
             open_page(crate::url_policy::PRIVACY_URL);
@@ -219,32 +231,69 @@ fn build(mtm: MainThreadMarker) {
     ));
     body.addSubview(&url);
 
-    // Privacy policy and Support, side by side on the bottom row.
+    // The feedback mail (the same commands as `⋯` › Help ▸) on one row, the privacy policy and
+    // Support (web pages) side by side on the bottom row.
+    let mail_y = PAD + LINK_H + mac_ui::metrics::SPACE_S;
+    let rows = [
+        (
+            mail_y,
+            [
+                (
+                    crate::locale::t("feedback_feature_menu"),
+                    "lightbulb",
+                    sel!(suggestFeature:),
+                ),
+                (
+                    crate::locale::t("feedback_problem_menu"),
+                    "exclamationmark.bubble",
+                    sel!(reportProblem:),
+                ),
+            ],
+        ),
+        (
+            PAD,
+            [
+                (
+                    crate::locale::t("privacy_policy"),
+                    "hand.raised",
+                    sel!(openPrivacy:),
+                ),
+                (
+                    crate::locale::t("support_link"),
+                    // A web page in the browser, so the browser's symbol (not the help mark of
+                    // `⋯` › Help).
+                    "safari",
+                    sel!(openSupport:),
+                ),
+            ],
+        ),
+    ];
+    for (row_y, row) in rows {
+        place_row(mtm, &body, row_y, row);
+    }
+
+    WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
+    raise_above_card(&window);
+    panel::bring_to_front(&window);
+}
+
+/// Two pills side by side at `y`, from the left edge, each wired to its action.
+fn place_row(
+    mtm: MainThreadMarker,
+    body: &NSView,
+    y: f64,
+    row: [(&str, &str, mac_ui::objc2::runtime::Sel); 2],
+) {
     let mut x = PAD;
-    for (title, symbol, action) in [
-        (
-            crate::locale::t("privacy_policy"),
-            "hand.raised",
-            sel!(openPrivacy:),
-        ),
-        (
-            crate::locale::t("support_link"),
-            // A web page in the browser, so the browser's symbol (not the help mark of
-            // `⋯` › Help).
-            "safari",
-            sel!(openSupport:),
-        ),
-    ] {
+    for (title, symbol, action) in row {
         let pill = GlassButton::pill(mtm, title, ButtonSize::Small);
         pill.set_symbol(symbol);
         pill.set_accessibility_label(title);
         let width = pill
             .width_within((WIDTH - PAD * 2.0) / 2.0 - 4.0)
             .max(LINK_H);
-        pill.view().setFrame(NSRect::new(
-            NSPoint::new(x, PAD),
-            NSSize::new(width, LINK_H),
-        ));
+        pill.view()
+            .setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(width, LINK_H)));
         x += width + mac_ui::metrics::BUTTON_GAP;
         DELEGATE.with(|slot| {
             if let Some(delegate) = slot.borrow().as_ref() {
@@ -253,10 +302,6 @@ fn build(mtm: MainThreadMarker) {
         });
         body.addSubview(pill.view());
     }
-
-    WINDOW.with(|slot| *slot.borrow_mut() = Some(window.clone()));
-    raise_above_card(&window);
-    panel::bring_to_front(&window);
 }
 
 fn raise_above_card(window: &NSWindow) {

@@ -797,7 +797,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Maakt een concept-e-mail in je mailapp; jij verstuurt hem zelf",
         "Creates a draft in your mail app; you send it yourself",
     ),
-    ("group_feedback", "Feedback", "Feedback"),
     (
         "feedback_feature_title",
         "Idee voorstellen",
