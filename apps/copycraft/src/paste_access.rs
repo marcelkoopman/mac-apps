@@ -263,6 +263,15 @@ pub fn plan(kept: Option<&Kept>, now: &ReadKey, shown: bool) -> ReadPlan {
     }
 }
 
+/// Is the copy on the pasteboard at `change` copycraft's own write in this run? `marked`: it
+/// carries copycraft's own type; `written`: the change count right after this process's last
+/// own write. A marked copy left by an earlier run (history is memory only, so it is not in
+/// history) is taken like any other app's copy: read, scanned and recorded by the usual rules,
+/// so its card has all its chips. Pure.
+pub fn own_this_run(marked: bool, change: isize, written: Option<isize>) -> bool {
+    marked && written == Some(change)
+}
+
 /// The text type was declared but reading it gave nothing: the read failed or was denied.
 pub fn text_read_failed(text_declared: bool, text_read: bool) -> bool {
     text_declared && !text_read
@@ -488,6 +497,18 @@ mod tests {
         assert!(!detects_hint(None, ReadPlan::Read));
         assert!(!detects_hint(Some(AccessBehavior::Ask), ReadPlan::Read));
         assert!(!detects_hint(Some(AccessBehavior::Ask), ReadPlan::Reuse));
+    }
+
+    #[test]
+    fn a_marked_copy_from_an_earlier_run_is_not_our_own() {
+        // Written in this run, still on the pasteboard: our own.
+        assert!(own_this_run(true, 42, Some(42)));
+        // Marked, but this run wrote nothing yet (copied before CopyCraft started).
+        assert!(!own_this_run(true, 42, None));
+        // Marked, from another run's write at another change count.
+        assert!(!own_this_run(true, 42, Some(17)));
+        // Not marked: never own.
+        assert!(!own_this_run(false, 42, Some(42)));
     }
 
     #[test]

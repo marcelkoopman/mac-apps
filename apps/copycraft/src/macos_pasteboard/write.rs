@@ -42,7 +42,24 @@ pub(super) fn marks_of<'a>(types: impl IntoIterator<Item = &'a str>) -> PasteMar
 
 pub(super) fn read_marks(pasteboard: &NSPasteboard) -> PasteMarks {
     let names = type_names(pasteboard);
-    marks_of(names.iter().map(String::as_str))
+    marks_at(names.iter().map(String::as_str), pasteboard.changeCount())
+}
+
+/// The change count right after this process's last own write ([`mark_own`]); `isize::MIN`
+/// before the first one.
+static OWN_CHANGE: AtomicIsize = AtomicIsize::new(isize::MIN);
+
+/// [`marks_of`] for the copy at `change`: `own` only for a write of this run
+/// ([`crate::paste_access::own_this_run`]). A copy an earlier run marked is another app's.
+pub(super) fn marks_at<'a>(types: impl IntoIterator<Item = &'a str>, change: isize) -> PasteMarks {
+    let mut marks = marks_of(types);
+    let written = OWN_CHANGE.load(Ordering::Relaxed);
+    marks.own = crate::paste_access::own_this_run(
+        marks.own,
+        change,
+        (written != isize::MIN).then_some(written),
+    );
+    marks
 }
 
 /// Marks of the current pasteboard contents, read once per change count with the view.
@@ -138,6 +155,7 @@ pub(crate) fn add_concealed() {
     let pasteboard = NSPasteboard::generalPasteboard();
     if read_marks(&pasteboard).own {
         pasteboard.setData_forType(Some(&NSData::new()), &NSString::from_str(CONCEALED_TYPE));
+        OWN_CHANGE.store(pasteboard.changeCount(), Ordering::Relaxed);
         invalidate_caches();
     }
 }
@@ -145,8 +163,13 @@ pub(crate) fn add_concealed() {
 pub(super) fn mark_own(pasteboard: &NSPasteboard, concealed: bool) -> bool {
     let empty = NSData::new();
     let own = pasteboard.setData_forType(Some(&empty), &NSString::from_str(SELF_TYPE));
-    own && (!concealed
-        || pasteboard.setData_forType(Some(&empty), &NSString::from_str(CONCEALED_TYPE)))
+    let ok = own
+        && (!concealed
+            || pasteboard.setData_forType(Some(&empty), &NSString::from_str(CONCEALED_TYPE)));
+    if own {
+        OWN_CHANGE.store(pasteboard.changeCount(), Ordering::Relaxed);
+    }
+    ok
 }
 
 /// Remove pictures an older copycraft left in the temporary folder for history steps.

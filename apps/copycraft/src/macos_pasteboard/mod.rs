@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
 use base64::Engine;
 use mac_ui::objc2::rc::{Retained, autoreleasepool};
@@ -109,7 +109,7 @@ pub(crate) fn current_view() -> ClipboardView {
     if let Some(view) = cached {
         return view;
     }
-    let marks = marks_of(types.iter().map(String::as_str));
+    let marks = marks_at(types.iter().map(String::as_str), change_count);
     if !marks.own && !marks.hides() && foreign_skipped(change_count) {
         let view = ClipboardView::Held;
         if let Ok(mut guard) = CACHE.lock() {
