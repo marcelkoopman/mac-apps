@@ -240,10 +240,18 @@ impl App {
         if generation != self.text_generation {
             return;
         }
-        let Some((id, _)) = self.text_entry().filter(|(id, _)| *id == entry) else {
+        let Some((id, source)) = self.text_entry().filter(|(id, _)| *id == entry) else {
             return;
         };
         match result {
+            // A hash of a sensitive card is copied concealed and stays out of history: the hash
+            // can be checked against a guess. An opened file's versions are not history.
+            text_ops::TextResult::Step {
+                op: TextOp::Hash(_),
+                text: Some(result),
+            } if id != OPENED_FILE && !crate::sensitivity::is_plain(&source) => {
+                self.hash_kept_out(id, &result);
+            }
             text_ops::TextResult::Step { text: None, .. } => {
                 self.text_note = Some((id, crate::locale::t("text_nothing").to_string()));
                 self.refresh_popup();
@@ -314,6 +322,19 @@ impl App {
         self.text_steps = Some(steps);
         self.text_note = None;
         self.reset_view();
+        self.refresh_popup();
+    }
+
+    /// A hash of sensitive text: on the clipboard, concealed, and nowhere else. No version.
+    fn hash_kept_out(&mut self, id: u64, result: &Zeroizing<String>) {
+        if let Err(e) = self.write_own_as(result, true) {
+            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+            return;
+        }
+        self.browsing = None;
+        self.text_note = Some((id, crate::locale::t("hash_not_kept").to_string()));
         self.refresh_popup();
     }
 

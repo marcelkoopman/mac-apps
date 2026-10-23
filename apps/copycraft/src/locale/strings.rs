@@ -1274,6 +1274,34 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Gedecodeerd is dit geen tekst",
         "The decoded bytes aren't text",
     ),
+    // Text ▾ › Convert › Encoding › hashes (src/text_ops/hash.rs)
+    ("hash_sha256", "SHA-256-hash", "SHA-256 Hash"),
+    (
+        "hash_sha1",
+        "SHA-1-hash (niet voor beveiliging)",
+        "SHA-1 Hash (Not for Security)",
+    ),
+    (
+        "hash_md5",
+        "MD5-hash (niet voor beveiliging)",
+        "MD5 Hash (Not for Security)",
+    ),
+    (
+        "detail_hash",
+        "Hash van de hele tekst als hex in kleine letters; ⌘Z zet hem terug",
+        "Hash of the whole text as lowercase hex; ⌘Z undoes it",
+    ),
+    (
+        "detail_hash_weak",
+        "Hash als hex in kleine letters; niet voor beveiliging (MD5 en SHA-1 zijn gebroken)",
+        "Hash as lowercase hex; not for security (MD5 and SHA-1 are broken)",
+    ),
+    ("hash_label", "{0}-hash", "{0} hash"),
+    (
+        "hash_not_kept",
+        "Hash gekopieerd, niet in de geschiedenis (de tekst is gevoelig)",
+        "Hash copied, not in history (the text is sensitive)",
+    ),
     ("text_section_analyse", "Analyse", "Analysis"),
     // Text ▾ › Apple Intelligence (local AI, crate mac-ai)
     ("ai_group", "Apple Intelligence", "Apple Intelligence"),

@@ -120,6 +120,13 @@ pub fn labeling(text: &str) -> Labeling {
     Labeling::Checking
 }
 
+/// Is `text` known to hold nothing sensitive (no label at all)? A long copy whose labels are
+/// still being checked is not: the hash of a sensitive card stays out of history
+/// (`App::finish_text`).
+pub fn is_plain(text: &str) -> bool {
+    matches!(labeling(text), Labeling::Known(found) if found.labels.is_empty())
+}
+
 /// Run `hook` (from the checker thread) whenever the checker has labels for a copy.
 pub fn on_checked(hook: fn()) {
     checker::on_ready(hook);
@@ -563,6 +570,18 @@ mod tests {
         assert_eq!(labels("mac-apps-support@proton.me"), vec![Label::Pii]);
         let contacts = format!("{readme}\na@example.org\nb@example.org\nc@example.org\n");
         assert_eq!(labels(&contacts), vec![Label::Pii]);
+    }
+
+    #[test]
+    fn only_unlabeled_text_is_plain() {
+        assert!(super::is_plain("abc"));
+        assert!(!super::is_plain(concat!(
+            "gh",
+            "p_",
+            "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"
+        )));
+        assert!(!super::is_plain("mail me at jan.devries@email.nl please"));
+        assert!(!super::is_plain("pay to NL91ABNA0417164300"));
     }
 
     #[test]

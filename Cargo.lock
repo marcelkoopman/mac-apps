@@ -323,6 +323,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+ "zeroize",
 ]
 
 [[package]]
@@ -604,6 +605,7 @@ dependencies = [
  "leakguard",
  "mac-ai",
  "mac-ui",
+ "md-5",
  "memchr",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -614,6 +616,8 @@ dependencies = [
  "regex",
  "serde_json",
  "serde_norway",
+ "sha1",
+ "sha2",
  "similar",
  "zeroize",
 ]
@@ -810,6 +814,7 @@ dependencies = [
  "block-buffer",
  "const-oid",
  "crypto-common",
+ "zeroize",
 ]
 
 [[package]]
@@ -1908,6 +1913,16 @@ dependencies = [
  "tray-icon",
  "winit",
  "zeroize",
+]
+
+[[package]]
+name = "md-5"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
+dependencies = [
+ "cfg-if",
+ "digest",
 ]
 
 [[package]]
@@ -4097,6 +4112,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]

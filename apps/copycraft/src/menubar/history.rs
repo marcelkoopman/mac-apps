@@ -462,8 +462,15 @@ impl App {
     /// A long copy whose labels are still being checked goes on plain; [`Self::labels_checked`]
     /// conceals it once they are in, if the pasteboard still holds it.
     pub(crate) fn write_own(&mut self, text: &str) -> anyhow::Result<()> {
+        self.write_own_as(text, false)
+    }
+
+    /// [`Self::write_own`]; `conceal` marks it concealed whatever it holds (the hash of a
+    /// sensitive card).
+    pub(crate) fn write_own_as(&mut self, text: &str, conceal: bool) -> anyhow::Result<()> {
         let labeling = crate::sensitivity::labeling(text);
-        let concealed = matches!(&labeling, crate::sensitivity::Labeling::Known(found) if !found.labels.is_empty());
+        let concealed = conceal
+            || matches!(&labeling, crate::sensitivity::Labeling::Known(found) if !found.labels.is_empty());
         clipboard::write_clipboard(text, concealed).map_err(anyhow::Error::msg)?;
         self.sensitive_clear = None;
         self.conceal_when_checked = None;

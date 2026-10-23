@@ -606,6 +606,34 @@ fn encoding_is_a_submenu_of_convert() {
 }
 
 #[test]
+fn hashes_follow_the_codecs_in_the_encoding_submenu() {
+    use crate::commands::{TextSection, menu_group, text_menu_items, text_section, text_shown};
+    use crate::text_ops::hash::HashKind;
+    let card = data(SubjectKind::Text, Some("abc"));
+    let menu = text_menu_items(&text_shown(&card).expect("Text ▾"));
+    let last_codec = menu
+        .iter()
+        .rposition(|(c, _)| matches!(c.id, CommandId::TextEncode(_)))
+        .expect("codecs");
+    let hashes: Vec<CommandId> = menu[last_codec + 1..]
+        .iter()
+        .take(HashKind::ALL.len())
+        .map(|(c, _)| c.id.clone())
+        .collect();
+    let expected: Vec<CommandId> = HashKind::ALL.into_iter().map(CommandId::TextHash).collect();
+    assert_eq!(hashes, expected);
+    for id in &hashes {
+        assert_eq!(menu_group(id), Some(crate::locale::t("encoding_menu")));
+        assert_eq!(text_section(id), Some(TextSection::Convert));
+    }
+    let step = crate::text_ops::TextOp::Hash(HashKind::Md5);
+    assert_eq!(
+        step.apply("abc").as_deref(),
+        Some("900150983cd24fb0d6963f7d28e17f72")
+    );
+}
+
+#[test]
 fn the_text_menu_is_split_into_lines_convert_and_analysis() {
     use crate::commands::{TextSection, text_menu_items, text_sections, text_shown};
     let card = data(SubjectKind::Text, Some("{\"a\": 1}\n"));

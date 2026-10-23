@@ -80,6 +80,8 @@ pub enum TextOp {
     Case(case_style::CaseStyle),
     /// The whole text encoded or decoded ([`encoding`]).
     Encode(encoding::Codec),
+    /// The whole text's SHA-256, SHA-1 or MD5 as lowercase hex ([`hash`]).
+    Hash(hash::HashKind),
 }
 
 impl TextOp {
@@ -109,6 +111,7 @@ impl TextOp {
             TextOp::Json(style) => json_style::restyle(text, *style).ok()?,
             TextOp::Case(style) => case_style::convert(text, *style),
             TextOp::Encode(codec) => codec.apply(text).ok()?,
+            TextOp::Hash(kind) => kind.hex(text),
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -123,6 +126,7 @@ impl TextOp {
             TextOp::CleanUrls => crate::locale::t("url_clean_label").to_string(),
             TextOp::Case(style) => crate::locale::tf("case_label", &[&style.title()]),
             TextOp::Encode(codec) => codec.label(),
+            TextOp::Hash(kind) => kind.label(),
             TextOp::Json(style) => match (style.compress, style.sort) {
                 (false, false) => crate::locale::t("json_label_format"),
                 (false, true) => crate::locale::t("json_label_format_sorted"),
@@ -312,6 +316,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
 pub mod case_style;
 pub mod encoding;
 pub mod filter;
+pub mod hash;
 pub mod json_style;
 pub mod pager;
 pub mod url_clean;

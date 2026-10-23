@@ -340,6 +340,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextJson
             | CommandId::TextCase(_)
             | CommandId::TextEncode(_)
+            | CommandId::TextHash(_)
             | CommandId::AiMenu
             | CommandId::Ai(_)
             | CommandId::AiFn(..)
@@ -449,6 +450,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextJson => "curlybraces",
         CommandId::TextCase(_) => "textformat",
         CommandId::TextEncode(_) => "chevron.left.forwardslash.chevron.right",
+        CommandId::TextHash(_) => "number",
         CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiFn(..) => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",

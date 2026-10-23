@@ -51,7 +51,9 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         // The functions of one code action sit in a submenu named after it.
         CommandId::AiFn(action, _) => Some(ai_title(*action)),
         CommandId::TextCase(_) => Some(crate::locale::t("case_menu")),
-        CommandId::TextEncode(_) => Some(crate::locale::t("encoding_menu")),
+        CommandId::TextEncode(_) | CommandId::TextHash(_) => {
+            Some(crate::locale::t("encoding_menu"))
+        }
         _ => None,
     }
 }
@@ -119,6 +121,7 @@ pub fn text_section(id: &CommandId) -> Option<TextSection> {
         | CommandId::TextFilter => Some(TextSection::Lines),
         CommandId::TextCase(_)
         | CommandId::TextEncode(_)
+        | CommandId::TextHash(_)
         | CommandId::TextCleanUrl
         | CommandId::TextJson => Some(TextSection::Convert),
         CommandId::AgentCommands
@@ -196,6 +199,15 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             codec.title(),
             crate::locale::t("detail_encoding"),
             "encode decode base64 base64url url percent escape hex bytes",
+        )
+    }));
+    // Then SHA-256, SHA-1 and MD5 in the same submenu.
+    commands.extend(crate::text_ops::hash::HashKind::ALL.iter().map(|kind| {
+        command(
+            CommandId::TextHash(*kind),
+            kind.title(),
+            kind.detail(),
+            "hash digest checksum sha sha256 sha-256 sha1 sha-1 md5 hex",
         )
     }));
     if edit.tracking {

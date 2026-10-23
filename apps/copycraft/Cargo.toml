@@ -57,6 +57,12 @@ regex = "1.13"
 # parquet it pulls in polars-stream and with it object_store and reqwest (network crates).
 polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet", "temporal"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
+# Text ▾ › Convert › Encoding › SHA-256 / SHA-1 / MD5 (src/text_ops/hash.rs): RustCrypto, pure Rust,
+# MIT OR Apache-2.0, no network. Not the default `alloc`/`oid`; `zeroize` wipes the hasher state of
+# a sensitive card. Approved by Marcel (2026-10-23).
+md-5 = { version = "0.11", default-features = false, features = ["zeroize"] }
+sha1 = { version = "0.11", default-features = false, features = ["zeroize"] }
+sha2 = { version = "0.11", default-features = false, features = ["zeroize"] }
 # YAML (src/transform.rs): serde_norway, the maintained fork of the deprecated serde_yaml
 # (whose unsafe-libyaml is unmaintained, RUSTSEC-2024-0449); same API. Approved by Marcel (2026-10-22).
 serde_norway = "0.9.42"

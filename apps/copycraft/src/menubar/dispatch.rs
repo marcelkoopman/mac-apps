@@ -158,6 +158,7 @@ impl App {
             CommandId::TextJson => self.text_json_prompt(),
             CommandId::TextCase(style) => self.text_case_prompt(style),
             CommandId::TextEncode(codec) => self.run_text(crate::text_ops::TextOp::Encode(codec)),
+            CommandId::TextHash(kind) => self.run_text(crate::text_ops::TextOp::Hash(kind)),
             CommandId::Ai(action) => self.ai_start(action, None),
             // The dimmed "and N more" line does nothing; the whole text is `AI_FN_WHOLE`.
             CommandId::AiFn(_, commands::AI_FN_MORE) => {}

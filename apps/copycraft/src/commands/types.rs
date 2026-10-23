@@ -472,6 +472,8 @@ pub enum CommandId {
     Generate(crate::generate::Generator),
     /// Text ▾ › Convert › Encoding: Base64, URL or hex, either way.
     TextEncode(crate::text_ops::encoding::Codec),
+    /// Text ▾ › Convert › Encoding: SHA-256, SHA-1 or MD5 as lowercase hex.
+    TextHash(crate::text_ops::hash::HashKind),
     /// The "AI" chip left of Text ▾ on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The
