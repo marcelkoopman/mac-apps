@@ -397,6 +397,29 @@ pub const AI_SYMBOL: &str = "sparkles";
 /// toolbars); every name is in SF Symbols 3 (macOS 12) or older, and an unknown one leaves the
 /// plain title (`GlassButton::set_symbol`).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// SF Symbol on the parent row of the `⋯` submenu `id` goes into ([`menu_submenu`]); the rows
+/// inside have none. `None` for a row that is not in a submenu.
+pub fn submenu_symbol(id: &CommandId) -> Option<&'static str> {
+    Some(match id {
+        CommandId::History(_)
+        | CommandId::DiffToggle(_)
+        | CommandId::ClearHistory
+        | CommandId::ClearPins => "clock.arrow.circlepath",
+        CommandId::KeepHistory(_) => "timer",
+        CommandId::Generate(_) => "plus",
+        CommandId::Appearance(_) => "circle.lefthalf.filled",
+        CommandId::WindowSize(_) => "arrow.left.and.right",
+        _ => return None,
+    })
+}
+
+/// Whether a popped menu of `ids` draws icons: not Image ▾ (its steps have none, so undo and
+/// redo there have none either).
+pub fn menu_shows_icons(ids: &[CommandId]) -> bool {
+    !ids.iter()
+        .any(|id| matches!(id, CommandId::ImageStep(_) | CommandId::ImageResizeCustom))
+}
+
 pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
     Some(match id {
         CommandId::Original => "arrow.uturn.backward",
@@ -418,7 +441,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::UseClipboard => "doc.on.clipboard",
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",
-        CommandId::About => "info",
+        CommandId::About => "app",
         CommandId::SuggestFeature => "lightbulb",
         CommandId::ReportProblem => "exclamationmark.bubble",
         CommandId::ExportDiagnostics => "stethoscope",
@@ -438,7 +461,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextComplexity => "gauge.with.dots.needle.50percent",
         CommandId::AgentCommands => "terminal",
         CommandId::AgentOutline => "list.bullet.indent",
-        CommandId::AgentCheck => "checklist",
+        CommandId::AgentCheck => "checkmark.seal",
         CommandId::ImageMenu => "photo",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",

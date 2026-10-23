@@ -299,6 +299,42 @@ fn chip_symbols_are_plain_and_distinct_where_it_matters() {
         Some("chevron.left.forwardslash.chevron.right")
     );
     assert_eq!(symbol_for(&CommandId::TextMenu), Some("textformat"));
+    // One symbol, one action: Info is not About, Check AGENTS.md not Choose Columns.
+    assert_ne!(symbol_for(&CommandId::Info), symbol_for(&CommandId::About));
+    assert_ne!(
+        symbol_for(&CommandId::AgentCheck),
+        symbol_for(&CommandId::TableChooseColumns)
+    );
+}
+
+#[test]
+fn submenus_carry_the_icon_on_their_own_row() {
+    use crate::commands::{menu_shows_icons, submenu_symbol};
+    use crate::image_edit::ImageOp;
+    // New ▸ is a plus, not History's clock (the old fallback).
+    assert_eq!(
+        submenu_symbol(&CommandId::Generate(crate::generate::Generator::UuidV4)),
+        Some("plus")
+    );
+    assert_eq!(
+        submenu_symbol(&CommandId::History(0)),
+        Some("clock.arrow.circlepath")
+    );
+    assert_ne!(
+        submenu_symbol(&CommandId::Generate(crate::generate::Generator::UuidV4)),
+        submenu_symbol(&CommandId::History(0))
+    );
+    assert_eq!(submenu_symbol(&CommandId::Copy), None);
+    // Image ▾ has no icons at all, undo and redo included; Text ▾ keeps them.
+    assert!(!menu_shows_icons(&[
+        CommandId::ImageStep(ImageOp::Grayscale),
+        CommandId::TableUndo,
+        CommandId::TableRedo
+    ]));
+    assert!(menu_shows_icons(&[
+        CommandId::TextReverse,
+        CommandId::TableUndo
+    ]));
 }
 
 #[test]

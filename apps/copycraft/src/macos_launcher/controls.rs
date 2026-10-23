@@ -651,6 +651,7 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
     // The Text ▾ menu has section headers like the ⋯ menu.
     let ids: Vec<CommandId> = items.iter().map(|(cmd, _)| cmd.id.clone()).collect();
     let sections = commands::text_sections(&ids);
+    let icons = commands::menu_shows_icons(&ids);
     let mut section: Option<commands::TextSection> = None;
     for (index, (cmd, checked)) in items.iter().enumerate() {
         if let Some(this) = sections
@@ -675,6 +676,14 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
                 }
                 _ => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
+                    // The icon sits on the submenu's row (Case ▸, Encoding ▸, Hash ▸); the
+                    // rows inside have none.
+                    if icons
+                        && let Some(image) = commands::symbol_for(&cmd.id)
+                            .and_then(|symbol| mac_ui::icon::system_symbol(symbol, name))
+                    {
+                        parent.setImage(Some(&image));
+                    }
                     let submenu =
                         NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(name));
                     submenu.setAutoenablesItems(false);
@@ -694,8 +703,10 @@ pub(crate) fn pop_menu(items: Vec<(Command, bool)>, anchor: &NSView) {
         let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(poppedClicked:));
         item.setTag(index as isize);
         show_menu_key(&item, &cmd.id);
-        if let Some(image) = commands::symbol_for(&cmd.id)
-            .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
+        if icons
+            && commands::menu_group(&cmd.id).is_none()
+            && let Some(image) = commands::symbol_for(&cmd.id)
+                .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
         {
             item.setImage(Some(&image));
         }

@@ -381,7 +381,7 @@ pub(crate) fn pop_overflow() {
                 }
                 None => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
-                    if let Some(symbol) = submenu_symbol(&cmd.id)
+                    if let Some(symbol) = commands::submenu_symbol(&cmd.id)
                         && let Some(image) = mac_ui::icon::system_symbol(symbol, name)
                     {
                         parent.setImage(Some(&image));
@@ -521,16 +521,6 @@ pub(crate) fn add_section_header(
         }
         _ if after_other => menu.addItem(&NSMenuItem::separatorItem(mtm)),
         _ => {}
-    }
-}
-
-/// SF Symbol on a submenu's parent row.
-fn submenu_symbol(id: &CommandId) -> Option<&'static str> {
-    match id {
-        CommandId::KeepHistory(_) => Some("timer"),
-        CommandId::Appearance(_) => Some("circle.lefthalf.filled"),
-        CommandId::WindowSize(_) => Some("arrow.left.and.right"),
-        _ => Some("clock.arrow.circlepath"),
     }
 }
 
