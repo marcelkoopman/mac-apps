@@ -3,8 +3,9 @@
 //! [`target`] builds an `NSView` registered for file URLs, promised files, image data and/or
 //! plain text. Make it the window's content view (or another container) and build the content
 //! inside it. AppKit offers a drag to the deepest registered view under the pointer, so plain
-//! views, buttons, glass and read-only text and image views inside it leave the drag to the
-//! target. Editable text (a field being edited, an editable text view) registers itself and keeps
+//! views, buttons, glass and read-only text views inside it leave the drag to the target, and
+//! so do image views made with `widgets::image_view` (an NSImageView registers itself
+//! even when not editable; that one unregisters). Editable text (a field being edited, an editable text view) registers itself and keeps
 //! taking its own text drops; give the window [`field_editor_without_drops`] when the whole window
 //! should take them instead.
 //!
@@ -849,6 +850,21 @@ mod tests {
         };
         assert_eq!(judge(&data, TEXT_FILES), None);
         assert_eq!(judge(&data, TEXT_AND_IMAGES), Some(Offer::Image));
+    }
+
+    #[test]
+    fn image_views_leave_drops_to_the_target() {
+        // A shown picture must not take the drag (and refuse it): every NSImageView is made
+        // by `widgets::image_view`, which unregisters its drag types. Without it a drop worked
+        // once, until the dropped picture showed over the target.
+        let widgets = include_str!("widgets.rs");
+        let body = widgets
+            .split("pub fn image_view(")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("image_view");
+        assert!(body.contains("unregisterDraggedTypes()"));
+        assert_eq!(widgets.matches("NSImageView::alloc(").count(), 1);
     }
 
     #[test]

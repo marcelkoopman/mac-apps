@@ -735,6 +735,25 @@ mod tests {
     }
 
     #[test]
+    fn every_image_view_leaves_drops_to_the_card() {
+        // An NSImageView of its own would take a drag over a shown picture and refuse it: a
+        // drop then worked once. `mac_ui::widgets::image_view` unregisters its drag types.
+        for (path, text) in sources() {
+            let code = without_strings(&text);
+            for made in [
+                "NSImageView::alloc(",
+                "NSImageView::new(",
+                "imageViewWithImage",
+            ] {
+                assert!(
+                    !code.contains(made),
+                    "{path}: use mac_ui::widgets::image_view"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn events_hold_no_text() {
         let src = include_str!("diag.rs");
         let start = src.find("pub enum LogEvent {").unwrap();

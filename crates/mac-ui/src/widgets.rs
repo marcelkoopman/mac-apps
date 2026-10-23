@@ -75,10 +75,14 @@ pub fn text_button(mtm: MainThreadMarker, title: &str, size: f64) -> Retained<NS
     button
 }
 
-/// Read-only image view that scales proportionally (up or down) and centers the image.
+/// Read-only image view that scales proportionally (up or down) and centers the image. It
+/// takes no drags: NSImageView registers for image and file drags even when not editable, and
+/// AppKit offers a drag only to the deepest registered view under the pointer, so a shown
+/// picture would refuse every drop meant for a `drop::target` around it.
 pub fn image_view(mtm: MainThreadMarker) -> Retained<NSImageView> {
     let view = NSImageView::initWithFrame(NSImageView::alloc(mtm), NSRect::ZERO);
     view.setEditable(false);
+    view.unregisterDraggedTypes();
     view.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
     view.setImageAlignment(NSImageAlignment::AlignCenter);
     view
