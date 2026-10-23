@@ -131,13 +131,19 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     close
         .button()
         .setToolTip(Some(&NSString::from_str(&close_tip())));
-    let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Regular);
-    symbols.set_accessibility_label(crate::locale::t("symbols_a11y"));
+    // Special characters: a symbol button in the ⋯ ✕ group (no text in the header).
+    let symbols = header_symbol(
+        mtm,
+        "character",
+        crate::locale::t("symbols_a11y"),
+        "Ω",
+        sel!(symbolsClicked:),
+    );
     symbols
         .button()
         .setToolTip(Some(&NSString::from_str(crate::locale::t("symbols_tip"))));
-    wire_button(symbols.button(), sel!(symbolsClicked:));
     let header_group = glass::group(mtm, GLASS_MERGE);
+    header_group.content().addSubview(symbols.view());
     header_group.content().addSubview(more.view());
     header_group.content().addSubview(close.view());
     let copy_button = well_action(
@@ -183,7 +189,6 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     content.addSubview(&item_count);
     content.addSubview(clear.view());
     content.addSubview(header_group.view());
-    content.addSubview(symbols.view());
     content.addSubview(&well);
     content.addSubview(&empty_line);
     content.addSubview(&preview_clip);
@@ -243,8 +248,7 @@ pub fn relabel() {
     });
     SYMBOLS.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            button.set_title(t("symbols"));
-            button.set_accessibility_label(t("symbols_a11y"));
+            label_symbol(button, t("symbols_a11y"));
             button
                 .button()
                 .setToolTip(Some(&NSString::from_str(t("symbols_tip"))));
@@ -510,12 +514,11 @@ pub(crate) fn layout(fresh_place: bool) {
     let button_gap = mac_ui::metrics::BUTTON_GAP;
     let close_x = card_width() - PAD - button_h;
     let more_x = close_x - button_gap - button_h;
+    let symbols_x = more_x - button_gap - button_h;
     let clear_w = button_h;
-    // A wider gap keeps the destructive button apart from ⋯ and ✕.
-    let clear_x = more_x - CLEAR_GAP - clear_w;
-    let symbols_w = symbols_button_width();
-    let symbols_x = clear_x - button_gap - symbols_w;
-    let title_w = (symbols_x - PAD - button_gap).max(40.0);
+    // A wider gap keeps the destructive button apart from the group of the other three.
+    let clear_x = symbols_x - CLEAR_GAP - clear_w;
+    let title_w = (clear_x - PAD - button_gap).max(40.0);
     let button_y = placed.header_y + (HEADER_H - button_h) / 2.0;
     HEADER.with(|slot| {
         set_header(slot, PAD, placed.header_y, title_w, HEADER_H, title);
@@ -523,8 +526,8 @@ pub(crate) fn layout(fresh_place: bool) {
     HEADER_GROUP.with(|slot| {
         if let Some(group) = slot.borrow().as_ref() {
             group.view().setFrame(NSRect::new(
-                NSPoint::new(more_x, button_y),
-                NSSize::new(close_x + button_h - more_x, button_h),
+                NSPoint::new(symbols_x, button_y),
+                NSSize::new(close_x + button_h - symbols_x, button_h),
             ));
         }
     });
@@ -536,16 +539,9 @@ pub(crate) fn layout(fresh_place: bool) {
             ));
         }
     });
-    MORE.with(|slot| place_header_button(slot, 0.0, button_h));
-    CLOSE.with(|slot| place_header_button(slot, close_x - more_x, button_h));
-    SYMBOLS.with(|slot| {
-        if let Some(button) = slot.borrow().as_ref() {
-            button.view().setFrame(NSRect::new(
-                NSPoint::new(symbols_x, button_y),
-                NSSize::new(symbols_w, button_h),
-            ));
-        }
-    });
+    SYMBOLS.with(|slot| place_header_button(slot, 0.0, button_h));
+    MORE.with(|slot| place_header_button(slot, more_x - symbols_x, button_h));
+    CLOSE.with(|slot| place_header_button(slot, close_x - symbols_x, button_h));
     place_item_find(placed.find_y, find_shown);
     place_well(placed.preview_y);
     apply_preview(placed.preview_y);

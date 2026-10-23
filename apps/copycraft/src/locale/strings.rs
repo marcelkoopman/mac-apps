@@ -340,8 +340,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("symbols", "Tekens", "Symbols"),
     (
         "symbols_note",
-        "Tekens op de Tekens-knop, gescheiden door spaties.",
-        "Characters on the Symbols button, separated by spaces.",
+        "Tekens onder de knop Speciale tekens op de kaart, gescheiden door spaties.",
+        "Characters under the card's Special Characters button, separated by spaces.",
     ),
     ("symbols_a11y", "Speciale tekens", "Special characters"),
     ("symbols_tip", "Kopieer een teken", "Copy a character"),

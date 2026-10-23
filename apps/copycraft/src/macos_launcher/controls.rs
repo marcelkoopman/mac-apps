@@ -82,16 +82,7 @@ pub(crate) fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
     built
 }
 
-pub(crate) fn symbols_button_width() -> f64 {
-    SYMBOLS.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .map(|button| button.width_within(140.0).max(mac_ui::metrics::BUTTON_H))
-            .unwrap_or(mac_ui::metrics::BUTTON_H)
-    })
-}
-
-/// Space between Clear All and the ⋯ ✕ pair: wider than the usual button gap.
+/// Space between Clear All and the special characters ⋯ ✕ group: wider than the usual gap.
 pub(crate) const CLEAR_GAP: f64 = mac_ui::metrics::SPACE_L;
 
 /// Place a header button at `x` inside the header group (which is one button tall).
