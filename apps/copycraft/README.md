@@ -76,7 +76,7 @@ Manual checks on the Mac (copy the text, press ⌃⌘C; tick *Use privacy filter
 
 Manual check of the language (NL/EN): open Settings › Language and choose Nederlands, then English, without quitting. System follows the Mac (System Settings › General › Language & Region). Look at each place once in each language.
 
-1. Menu bar menu and `⋯`: *Instellingen…*, *Over CopyCraft*, *Geschiedenis*, *Pauzeer opname*, *Negeer volgende kopie*, *Weergave*, *Stop* (the menu bar says *CopyCraft stoppen*); the search field says *Zoeken*, and a query without a hit says *Geen passende opdrachten*.
+1. Menu bar menu and `⋯`: *Instellingen…*, *Over CopyCraft*, *Geschiedenis*, *Pauzeer opname*, *Negeer volgende kopie*, *Weergave* (`⋯` has *Thema ›* and *Help ›* instead), *Stop* (the menu bar says *CopyCraft stoppen*); the search field says *Zoeken*, and a query without a hit says *Geen passende opdrachten*.
 2. Card: *Wis* (tooltip *Wis gekopieerde gegevens uit het geheugen*), the character button (VoiceOver and tooltip *Speciale tekens* / *Kopieer een teken*), *Kopieer*, *Bewaar*, an empty card (*Plak (⌘V) of sleep iets hierheen* with the link *Open privacy-instellingen…* below it, which opens Settings › Privacy), a copied private item (*Verborgen inhoud*), the meta line (*3 regels*, *inloggegevens · PII · financieel*, *Controleren…*), *Toon alles* with *… van … rijen getoond*, the history capsule tooltips (*Vorige (← of ⌘←)*).
 3. Chips: *Origineel*, *Opmaak*, *Bezoek*, *Naar JSON*, *Converteer*, *Open tabel*, *Diff*, *Afbeelding ▾*. *Tabel ▾* is the table window's menu (*Verwijder dubbele rijen*, *Sorteer oplopend*, *Kies kolommen…*); *Afbeelding ▾* is *Wijzig formaat*. A broken JSON says *JSON · Ongeldig* and *Regel 4, kolom 1: …*. `⋯` › *Geschiedenis* with ⌥ held says *Voeg toe aan diff*, *Vergelijk met A* and *Verwijder uit diff*; with two chosen, `⋯` says *Wissel*.
 4. Table window (*Tabel*, or the chosen file's name): toolbar tooltips, the sidebar title (*3 kolommen*) and its rows (the shortened name, the type dimmed: *tekst*, *geheel getal*, *datum*, …), *Klik op de tabel om hem te tonen*, the version capsule (*Versie 2 van 3, …*), and *Kies kolommen…* (*Alles*, *Geen*, *Annuleer*, *Pas toe*). The card's column picker also says *Filter kolommen* and *8 van 20 behouden*.
@@ -120,7 +120,7 @@ Manual check of the language (NL/EN): open Settings › Language and choose Nede
 | ↑ ↓, Return | Move the selection (to the row above or below, else the previous or next action), run the selected action |
 | ⌘F | Find in the revealed content (case-insensitive). Return / ⇧Return jump to the next / previous match. The counter counts every match; at most 1000 around the current one are highlighted. In content over 200 KB the search runs once typing pauses (150 ms) |
 | Esc | Clear the find or search field, then close the card |
-| `⋯` | Choose file, Clipboard, Empty Clipboard, Add to diff / Compare with A / Remove from Diff for the copy on screen, Swap when two are chosen, pin or unpin and remove the entry on screen, history (each text row has the same diff action), Clear History, Clear pins, Pause Recording, Ignore Next Copy, Ignore Copies from the Frontmost App, Clear sensitive copies after 60 s (on/off), Keep History 5 / 15 / 60 Min or Until Cleared, Appearance (System / Light / Dark), Quit |
+| `⋯` | Choose file, Clipboard, Empty Clipboard, Add to diff / Compare with A / Remove from Diff for the copy on screen, Swap when two are chosen, pin or unpin and remove the entry on screen, history (each text row has the same diff action), Clear History, Clear pins, Pause Recording, Ignore Next Copy, Ignore Copies from the Frontmost App, Clear sensitive copies after 60 s (on/off), Keep History 5 / 15 / 60 Min or Until Cleared, *Theme ▸* (the card themes in their three groups with a line between them, a check mark on the current one; the app appearance System / Light / Dark is in command search), *Help ▸* (Welcome Screen, Suggest a Feature…, Report a Problem…, Export Diagnostics…, Check AI), Quit |
 
 ## Code complexity
 
@@ -168,7 +168,7 @@ search for `subsystem:nl.marcelkoopman.copycraft`. The categories are
 `clipboard`, `table`, `decode`, `settings`, `window`, `login` and `worker`. Include Info and
 Debug messages (Action > Include Info Messages / Include Debug Messages) to see everything.
 
-**Export diagnostics.** In the `⋯` menu choose *Export Diagnostics…* (*Diagnose
+**Export diagnostics.** In the `⋯ › Help ›` menu choose *Export Diagnostics…* (*Diagnose
 exporteren…*) and save the `.txt` file. It holds the app version, the macOS version, the
 settings (values only) and the log lines of the last 24 hours of the current run, kept in
 memory. Attach it to your support request.

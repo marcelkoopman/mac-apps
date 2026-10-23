@@ -393,6 +393,8 @@ pub enum CommandId {
     /// Render the whole text on the card instead of its preview.
     ShowAll,
     Appearance(Theme),
+    /// `⋯` › Theme ▸: the card theme, as in Settings › Display.
+    CardTheme(crate::card_theme::CardTheme),
     /// Show history copy `n` on the card (the strip's cards). Only shows it; nothing is copied.
     HistoryView(usize),
     /// The ✕ on strip card `n`, or ⌫ on the card shown: take that copy out of history (the

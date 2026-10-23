@@ -107,6 +107,16 @@ impl App {
                 appearance::save(theme);
                 self.refresh_popup();
             }
+            CommandId::CardTheme(theme) => {
+                crate::settings::set_card_theme(theme);
+                // As the Settings popup does; an open Settings window follows.
+                #[cfg(target_os = "macos")]
+                {
+                    crate::macos_settings::card_theme_changed();
+                    crate::macos_launcher::apply_card_theme();
+                }
+                self.refresh_popup();
+            }
             CommandId::ClearSensitive => {
                 let on = !crate::settings::load().clear_sensitive;
                 crate::settings::set_clear_sensitive(on);

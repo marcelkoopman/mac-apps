@@ -275,6 +275,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryOlder
             | CommandId::HistoryNewer
             | CommandId::Appearance(_)
+            | CommandId::CardTheme(_)
             | CommandId::PdfPage(_)
             | CommandId::PdfZoom(_)
             | CommandId::HistoryView(_)
@@ -408,7 +409,13 @@ pub fn submenu_symbol(id: &CommandId) -> Option<&'static str> {
         CommandId::KeepHistory(_) => "timer",
         CommandId::Generate(_) => "plus",
         CommandId::Appearance(_) => "circle.lefthalf.filled",
+        CommandId::CardTheme(_) => "paintpalette",
         CommandId::WindowSize(_) => "arrow.left.and.right",
+        CommandId::Welcome
+        | CommandId::SuggestFeature
+        | CommandId::ReportProblem
+        | CommandId::ExportDiagnostics
+        | CommandId::CheckAi => "questionmark.circle",
         _ => return None,
     })
 }

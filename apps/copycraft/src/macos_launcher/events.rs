@@ -428,6 +428,11 @@ pub(crate) fn pop_overflow() {
         {
             item.setImage(Some(&image));
         }
+        if let CommandId::CardTheme(item_theme) = cmd.id
+            && item_theme == crate::settings::card_theme()
+        {
+            item.setState(NSControlStateValueOn);
+        }
         if let CommandId::Appearance(item_theme) = cmd.id {
             let state = if item_theme == theme {
                 NSControlStateValueOn

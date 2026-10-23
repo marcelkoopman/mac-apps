@@ -1014,25 +1014,7 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
 
 /// The name of a card theme in the popup (literal keys, for the locale scan test).
 fn card_theme_name(theme: crate::card_theme::CardTheme) -> &'static str {
-    use crate::card_theme::CardTheme;
-    match theme {
-        CardTheme::System => crate::locale::t("card_theme_system"),
-        CardTheme::Light => crate::locale::t("card_theme_light"),
-        CardTheme::Dark => crate::locale::t("card_theme_dark"),
-        CardTheme::Night => crate::locale::t("card_theme_night"),
-        CardTheme::SolarizedLight => crate::locale::t("card_theme_solarized_light"),
-        CardTheme::SolarizedDark => crate::locale::t("card_theme_solarized_dark"),
-        CardTheme::HighContrast => crate::locale::t("card_theme_high_contrast"),
-        CardTheme::Sepia => crate::locale::t("card_theme_sepia"),
-        CardTheme::Nord => crate::locale::t("card_theme_nord"),
-        CardTheme::GruvboxDark => crate::locale::t("card_theme_gruvbox_dark"),
-        CardTheme::Dracula => crate::locale::t("card_theme_dracula"),
-        CardTheme::Monokai => crate::locale::t("card_theme_monokai"),
-        CardTheme::CatppuccinMocha => crate::locale::t("card_theme_catppuccin_mocha"),
-        CardTheme::TokyoNight => crate::locale::t("card_theme_tokyo_night"),
-        CardTheme::Ocean => crate::locale::t("card_theme_ocean"),
-        CardTheme::Forest => crate::locale::t("card_theme_forest"),
-    }
+    theme.title()
 }
 
 /// The theme names, a separator between the basic, classic and colourful groups, each item
@@ -1054,6 +1036,16 @@ fn fill_theme_popup(mtm: MainThreadMarker, popup: &NSPopUpButton) {
         }
     }
     select_card_theme(popup);
+}
+
+/// The card theme was picked elsewhere (`⋯` › Theme ▸): an open Settings window follows it.
+pub fn card_theme_changed() {
+    THEME_POPUP.with(|slot| {
+        if let Some(popup) = slot.borrow().as_ref() {
+            select_card_theme(popup);
+        }
+    });
+    paint_theme_preview();
 }
 
 /// Select the stored theme by its tag (the separators make item positions differ).

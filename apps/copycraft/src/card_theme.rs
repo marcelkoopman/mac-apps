@@ -172,6 +172,28 @@ impl CardTheme {
         CardTheme::Forest,
     ];
 
+    /// The theme's name, NL/EN (Settings › Display and `⋯` › Theme ▸).
+    pub fn title(self) -> &'static str {
+        match self {
+            CardTheme::System => crate::locale::t("card_theme_system"),
+            CardTheme::Light => crate::locale::t("card_theme_light"),
+            CardTheme::Dark => crate::locale::t("card_theme_dark"),
+            CardTheme::Night => crate::locale::t("card_theme_night"),
+            CardTheme::SolarizedLight => crate::locale::t("card_theme_solarized_light"),
+            CardTheme::SolarizedDark => crate::locale::t("card_theme_solarized_dark"),
+            CardTheme::HighContrast => crate::locale::t("card_theme_high_contrast"),
+            CardTheme::Sepia => crate::locale::t("card_theme_sepia"),
+            CardTheme::Nord => crate::locale::t("card_theme_nord"),
+            CardTheme::GruvboxDark => crate::locale::t("card_theme_gruvbox_dark"),
+            CardTheme::Dracula => crate::locale::t("card_theme_dracula"),
+            CardTheme::Monokai => crate::locale::t("card_theme_monokai"),
+            CardTheme::CatppuccinMocha => crate::locale::t("card_theme_catppuccin_mocha"),
+            CardTheme::TokyoNight => crate::locale::t("card_theme_tokyo_night"),
+            CardTheme::Ocean => crate::locale::t("card_theme_ocean"),
+            CardTheme::Forest => crate::locale::t("card_theme_forest"),
+        }
+    }
+
     /// The popup group: 0 basic, 1 classic, 2 colourful.
     pub fn group(self) -> usize {
         match self {

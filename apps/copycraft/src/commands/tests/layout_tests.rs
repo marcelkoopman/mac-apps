@@ -352,7 +352,7 @@ fn overflow_menu_sections_follow_the_requested_order() {
         CommandId::IgnoreNext,
         CommandId::IgnoreFrontApp,
         CommandId::ClearSensitive,
-        CommandId::Appearance(crate::appearance::Theme::Dark),
+        CommandId::CardTheme(crate::card_theme::CardTheme::Dark),
         CommandId::WindowSize(crate::settings::WindowSize::Wide),
         CommandId::Settings,
         CommandId::About,
@@ -372,6 +372,23 @@ fn overflow_menu_sections_follow_the_requested_order() {
     assert!(menu_submenu(&CommandId::WindowSize(crate::settings::WindowSize::Compact)).is_some());
     assert_eq!(menu_submenu(&CommandId::Pause), None);
     assert_eq!(keep_history_short(60), "60 min");
+    // Theme ▸ and Help ▸ (Settings, About and Quit stay at the top level).
+    assert_eq!(
+        menu_submenu(&CommandId::CardTheme(crate::card_theme::CardTheme::Nord)),
+        Some("Theme")
+    );
+    for id in [
+        CommandId::Welcome,
+        CommandId::SuggestFeature,
+        CommandId::ReportProblem,
+        CommandId::ExportDiagnostics,
+        CommandId::CheckAi,
+    ] {
+        assert_eq!(menu_submenu(&id), Some("Help"), "{id:?}");
+    }
+    for id in [CommandId::Settings, CommandId::About, CommandId::Quit] {
+        assert_eq!(menu_submenu(&id), None, "{id:?}");
+    }
     assert!(crate::locale::t("menu_choose_file").ends_with('…'));
 }
 

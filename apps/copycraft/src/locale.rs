@@ -202,6 +202,8 @@ mod tests {
             "encoding_hex_name",
             // "Hash" is Dutch too (Text ▾ › Hash ›).
             "hash_menu",
+            // "Help" is Dutch too (`⋯` › Help ›).
+            "help_menu",
             // "Link" is Dutch too (the pending copy's hint).
             "paste_hint_link",
             // Case style names are written in the style itself.

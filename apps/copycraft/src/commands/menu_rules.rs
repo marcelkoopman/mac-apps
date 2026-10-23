@@ -8,7 +8,7 @@ use super::*;
 /// Whether a separator goes before `id` in a submenu whose item before it is `previous`
 /// (`None`: `id` is the first). History ▸: Clear History and Clear Pins sit apart from the
 /// copies. Encoding ▸: the four decodes apart from the four encodes. A strip card's menu:
-/// Remove from History apart from Pin and the diff action.
+/// Remove from History apart from Pin and the diff action. Theme ▸: the theme groups apart.
 pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
     let Some(previous) = previous else {
         return false;
@@ -17,6 +17,10 @@ pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
     match (previous, id) {
         (CommandId::TextEncode(before), CommandId::TextEncode(codec)) => {
             before.encodes() && !codec.encodes()
+        }
+        // Theme ▸: a line between the basic, classic and colourful themes, as in Settings.
+        (CommandId::CardTheme(before), CommandId::CardTheme(theme)) => {
+            before.group() != theme.group()
         }
         // A strip card's menu: Remove from History below a line.
         (CommandId::RemoveHistory(_), _) => false,

@@ -299,3 +299,51 @@ fn an_empty_table_menu_shows_its_steps_dimmed() {
     let menu: Vec<(Command, bool)> = table_steps().into_iter().map(|c| (c, false)).collect();
     assert_eq!(table_window_menu_shown(&menu), menu);
 }
+
+#[test]
+fn the_overflow_has_a_theme_submenu_in_groups_and_a_help_submenu() {
+    use crate::card_theme::CardTheme;
+    use crate::commands::{Command, menu_submenu, separator_before};
+    let menu = overflow(&data(SubjectKind::Text, Some("hello")));
+    let themes: Vec<&Command> = menu
+        .iter()
+        .filter(|c| matches!(c.id, CommandId::CardTheme(_)))
+        .collect();
+    let want: Vec<CommandId> = CardTheme::ALL
+        .into_iter()
+        .map(CommandId::CardTheme)
+        .collect();
+    assert_eq!(
+        themes.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
+        want
+    );
+    // A line between the basic, classic and colourful themes: two in all.
+    let lines = themes
+        .windows(2)
+        .filter(|pair| separator_before(Some(&pair[0].id), &pair[1].id))
+        .count();
+    assert_eq!(lines, 2);
+    // The app appearance left `⋯` (it is in command search).
+    assert!(
+        !menu
+            .iter()
+            .any(|c| matches!(c.id, CommandId::Appearance(_)))
+    );
+    // Help ▸ in this order, Quit after it at the top level.
+    let help: Vec<CommandId> = menu
+        .iter()
+        .filter(|c| menu_submenu(&c.id) == Some("Help"))
+        .map(|c| c.id.clone())
+        .collect();
+    assert_eq!(
+        help,
+        [
+            CommandId::Welcome,
+            CommandId::SuggestFeature,
+            CommandId::ReportProblem,
+            CommandId::ExportDiagnostics,
+            CommandId::CheckAi
+        ]
+    );
+    assert_eq!(menu.last().map(|c| c.id.clone()), Some(CommandId::Quit));
+}

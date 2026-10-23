@@ -355,12 +355,14 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         crate::locale::t("strip_group"),
         "history strip thumbnails cards historie strook",
     ));
-    for theme in [Theme::System, Theme::Light, Theme::Dark] {
+    // Theme ▸: the card themes in Settings' order, a separator between their groups. The app
+    // appearance (System, Light, Dark) stays in command search.
+    for theme in crate::card_theme::CardTheme::ALL {
         commands.push(command(
-            CommandId::Appearance(theme),
-            theme_name(theme),
-            crate::locale::t("appearance"),
-            "appearance theme",
+            CommandId::CardTheme(theme),
+            theme.title(),
+            crate::locale::t("theme_menu"),
+            "theme card colours",
         ));
     }
     for size in crate::settings::WindowSize::ALL {
@@ -383,6 +385,13 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         crate::locale::t("detail_about"),
         "about version offline",
     ));
+    // Help ▸.
+    commands.push(command(
+        CommandId::Welcome,
+        crate::locale::t("welcome_menu"),
+        crate::locale::t("detail_welcome"),
+        "welcome start introduction",
+    ));
     commands.push(command(
         CommandId::SuggestFeature,
         crate::locale::t("feedback_feature_menu"),
@@ -396,22 +405,16 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
         "problem report bug issue feedback probleem melden fout mail",
     ));
     commands.push(command(
-        CommandId::CheckAi,
-        crate::locale::t("ai_check"),
-        crate::locale::t("detail_ai_check"),
-        "ai apple intelligence check controleer status health gezondheid",
-    ));
-    commands.push(command(
         CommandId::ExportDiagnostics,
         crate::locale::t("export_diagnostics"),
         crate::locale::t("detail_export_diagnostics"),
         "export diagnostics log support diagnose",
     ));
     commands.push(command(
-        CommandId::Welcome,
-        crate::locale::t("welcome_menu"),
-        crate::locale::t("detail_welcome"),
-        "welcome start introduction",
+        CommandId::CheckAi,
+        crate::locale::t("ai_check"),
+        crate::locale::t("detail_ai_check"),
+        "ai apple intelligence check controleer status health gezondheid",
     ));
     commands.push(command(
         CommandId::Quit,
@@ -472,9 +475,10 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         | CommandId::IgnoreNext
         | CommandId::IgnoreFrontApp
         | CommandId::ClearSensitive => MenuSection::Recording,
-        CommandId::Appearance(_) | CommandId::WindowSize(_) | CommandId::ToggleStrip => {
-            MenuSection::Appearance
-        }
+        CommandId::Appearance(_)
+        | CommandId::CardTheme(_)
+        | CommandId::WindowSize(_)
+        | CommandId::ToggleStrip => MenuSection::Appearance,
         CommandId::Settings
         | CommandId::About
         | CommandId::SuggestFeature
@@ -487,7 +491,8 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
     }
 }
 
-/// The submenu `id` goes into in the `⋯` menu: History, Keep history or Appearance.
+/// The submenu `id` goes into in the `⋯` menu: History, Keep history, New, Theme, Window
+/// Size or Help.
 pub fn menu_submenu(id: &CommandId) -> Option<&'static str> {
     match id {
         CommandId::History(_)
@@ -497,7 +502,13 @@ pub fn menu_submenu(id: &CommandId) -> Option<&'static str> {
         CommandId::KeepHistory(_) => Some(crate::locale::t("keep_history_menu")),
         CommandId::Generate(_) => Some(crate::locale::t("new_menu")),
         CommandId::Appearance(_) => Some(crate::locale::t("appearance")),
+        CommandId::CardTheme(_) => Some(crate::locale::t("theme_menu")),
         CommandId::WindowSize(_) => Some(crate::locale::t("window_size_menu")),
+        CommandId::Welcome
+        | CommandId::SuggestFeature
+        | CommandId::ReportProblem
+        | CommandId::ExportDiagnostics
+        | CommandId::CheckAi => Some(crate::locale::t("help_menu")),
         _ => None,
     }
 }

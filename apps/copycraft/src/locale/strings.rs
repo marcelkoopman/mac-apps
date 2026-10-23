@@ -1252,6 +1252,9 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("encoding_menu", "Codering", "Encoding"),
     // Text ▾ › Convert › Hash ›: SHA-256, SHA-1, MD5 ("hash" is Dutch too).
     ("hash_menu", "Hash", "Hash"),
+    // `⋯` submenus: the card themes, and help and feedback.
+    ("theme_menu", "Thema", "Theme"),
+    ("help_menu", "Help", "Help"),
     ("encode_base64", "Codeer als Base64", "Encode as Base64"),
     ("decode_base64", "Decodeer Base64", "Decode Base64"),
     (
