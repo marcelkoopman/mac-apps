@@ -88,6 +88,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("pin", "Zet vast", "Pin"),
     ("unpin", "Maak los", "Unpin"),
+    ("pinned", "Vastgezet", "Pinned"),
     (
         "remove_history",
         "Verwijder uit geschiedenis",

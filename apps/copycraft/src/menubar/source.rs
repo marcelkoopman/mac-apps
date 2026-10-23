@@ -469,11 +469,6 @@ impl App {
         }
         commands::strip_range(self.history.len(), self.history_cursor)
             .map(|index| {
-                let pin = if self.history.is_pinned(index) {
-                    crate::clipboard::PIN_MARK
-                } else {
-                    ""
-                };
                 let picture = self.history.image(index).filter(|bytes| {
                     let _ = bytes;
                     self.history
@@ -483,7 +478,9 @@ impl App {
                 commands::Thumb {
                     index,
                     id: self.history.id_at(index),
-                    mark: format!("{pin}{}", self.history.mark(index).unwrap_or("")),
+                    // The pin is a symbol on the card ([`commands::pin_frame`]), not a mark.
+                    mark: self.history.mark(index).unwrap_or("").to_string(),
+                    pinned: self.history.is_pinned(index),
                     lines: self
                         .history
                         .get(index)

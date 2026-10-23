@@ -42,8 +42,10 @@ pub struct Thumb {
     /// The history entry's id: the strip keeps a card's views by it, so a removal moves the
     /// other cards instead of building them again.
     pub id: Option<u64>,
-    /// The type mark (`{}`, `md`, `img`), with the pin in front of a pinned copy.
+    /// The type mark (`{}`, `md`, `img`).
     pub mark: String,
+    /// The copy is pinned: the card wears the pin ([`pin_frame`], [`PIN_SYMBOL`]).
+    pub pinned: bool,
     /// The first few short lines of the text ([`THUMB_LINES`]). Empty for a picture.
     pub lines: String,
     /// A small picture's bytes (shared, not copied), when the copy is a picture that is light
@@ -249,16 +251,53 @@ pub fn thumb_click(index: usize, command: bool) -> super::CommandId {
     }
 }
 
-/// The type mark VoiceOver reads for a card, with the diff side after it while it is compared
-/// (`{}, compared, side A`). On screen the side is a badge ([`side_badge_frame`]).
+/// The type mark VoiceOver reads for a card, with "pinned" after it for a pinned copy and the
+/// diff side while it is compared (`{}, Pinned, compared, side A`). On screen both are marks
+/// on the card ([`pin_frame`], [`side_badge_frame`]).
 pub fn thumb_mark(thumb: &Thumb) -> String {
-    match thumb.side {
-        Some(side) => format!(
-            "{}, {}",
-            thumb.mark,
+    let mut spoken = thumb.mark.clone();
+    if thumb.pinned {
+        spoken = format!("{spoken}, {}", pin_label());
+    }
+    if let Some(side) = thumb.side {
+        spoken = format!(
+            "{spoken}, {}",
             crate::locale::tf("strip_compare_side", &[&side])
-        ),
-        None => thumb.mark.clone(),
+        );
+    }
+    spoken
+}
+
+/// The pin of a pinned copy: one SF Symbol and one label, shared by the strip's cards and
+/// (icons HIG plan, point 5) the history menu's items; see `crate::macos_pin`.
+pub const PIN_SYMBOL: &str = "pin.fill";
+
+/// What the pin says: "Vastgezet" / "Pinned" (VoiceOver, the symbol's description).
+pub fn pin_label() -> &'static str {
+    crate::locale::t("pinned")
+}
+
+/// The pin on a pinned card: its round backing's side and its distance to the card's edges.
+pub const THUMB_PIN_SIZE: f64 = 16.0;
+pub const THUMB_PIN_INSET: f64 = 4.0;
+
+/// The pin's frame inside a card, `(x, y, side)` from the card's bottom-left corner: the
+/// bottom-right corner, clear of the ✕ (top right) and the side badge (top left).
+pub fn pin_frame() -> (f64, f64, f64) {
+    (
+        THUMB_W - THUMB_PIN_SIZE - THUMB_PIN_INSET,
+        THUMB_PIN_INSET,
+        THUMB_PIN_SIZE,
+    )
+}
+
+/// How far a card's text stops before the right edge: the padding, and clear of the pin on
+/// a pinned card.
+pub fn text_tail(pinned: bool) -> f64 {
+    if pinned {
+        THUMB_PIN_SIZE + THUMB_PIN_INSET + 2.0
+    } else {
+        THUMB_PAD
     }
 }
 
@@ -469,6 +508,21 @@ mod tests {
     }
 
     #[test]
+    fn the_pin_sits_bottom_right_clear_of_the_cross_the_badge_and_the_text() {
+        let (x, y, side) = pin_frame();
+        assert_eq!((x + side + THUMB_PIN_INSET, y), (THUMB_W, THUMB_PIN_INSET));
+        let (rx, ry, _) = remove_frame();
+        assert!(y + side < ry && x + side <= THUMB_W);
+        let (_, by, bw, _) = side_badge_frame();
+        assert!(y + side < by && x > bw);
+        assert!(rx <= THUMB_W);
+        // The text of a pinned card stops before the pin.
+        assert!(THUMB_W - text_tail(true) < x);
+        assert_eq!(text_tail(false), THUMB_PAD);
+        assert_eq!(PIN_SYMBOL, "pin.fill");
+    }
+
+    #[test]
     fn the_right_edge_fades_until_the_end_of_the_row() {
         let content = strip_content_width(8);
         assert!(strip_fades(0.0, 408.0, content));
@@ -563,6 +617,7 @@ mod tests {
             index,
             id: Some(index as u64),
             mark: "{}".to_string(),
+            pinned: false,
             lines: String::new(),
             picture: None,
             side,
@@ -639,6 +694,18 @@ mod tests {
         assert_eq!(
             thumb_mark(&thumb(0, Some("A"))),
             format!("{{}}, {}", crate::locale::tf("strip_compare_side", &[&"A"]))
+        );
+        let pinned = Thumb {
+            pinned: true,
+            ..thumb(0, Some("B"))
+        };
+        assert_eq!(
+            thumb_mark(&pinned),
+            format!(
+                "{{}}, {}, {}",
+                pin_label(),
+                crate::locale::tf("strip_compare_side", &[&"B"])
+            )
         );
         assert!(!strip_comparing(&[thumb(0, None), thumb(1, None)]));
         assert!(strip_comparing(&[thumb(0, Some("B")), thumb(1, Some("A"))]));

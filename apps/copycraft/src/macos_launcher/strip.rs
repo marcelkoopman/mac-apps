@@ -488,6 +488,7 @@ fn look_of(thumb: &commands::Thumb, current: bool, masked: bool) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     thumb.mark.hash(&mut hasher);
     thumb.side.hash(&mut hasher);
+    thumb.pinned.hash(&mut hasher);
     thumb.lines.hash(&mut hasher);
     thumb
         .picture
@@ -646,6 +647,7 @@ fn signature_of(
         thumb.index.hash(&mut hasher);
         thumb.mark.hash(&mut hasher);
         thumb.side.hash(&mut hasher);
+        thumb.pinned.hash(&mut hasher);
         thumb.lines.hash(&mut hasher);
         for cmd in &thumb.menu {
             cmd.title.hash(&mut hasher);
@@ -748,14 +750,26 @@ fn build_tile(
         let mark_line = mac_ui::text::utf16_range(&text, &(0..(mark_end + 1).min(text.len())));
         let rest = mac_ui::text::utf16_range(&text, &((mark_end + 1).min(text.len())..text.len()));
         let lead = commands::mark_indent(thumb.side.is_some());
-        mac_ui::text::set_paragraph_style(&built, &tile_text_style(lead), mark_line);
-        mac_ui::text::set_paragraph_style(&built, &tile_text_style(commands::THUMB_PAD), rest);
+        let tail = commands::text_tail(thumb.pinned);
+        mac_ui::text::set_paragraph_style(&built, &tile_text_style(lead, tail), mark_line);
+        mac_ui::text::set_paragraph_style(
+            &built,
+            &tile_text_style(commands::THUMB_PAD, tail),
+            rest,
+        );
         button.setAttributedTitle(&built);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     }
     // Under the button, so a click on it still reaches the card.
     if let Some(side) = thumb.side {
         card.addSubview(&side_badge(mtm, side));
+    }
+    // A pinned copy's pin, bottom right, on text and pictures alike; also under the button.
+    if thumb.pinned {
+        let (x, y, side) = commands::pin_frame();
+        let pin = crate::macos_pin::pin_badge(mtm, side);
+        pin.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(side, side)));
+        card.addSubview(&pin);
     }
     card.addSubview(&button);
     let remove = remove_button(mtm);
@@ -773,13 +787,13 @@ fn build_tile(
 }
 
 /// A card's paragraph style: one line per paragraph, cut with `…`, indented `lead` on the
-/// left and the padding on the right.
-fn tile_text_style(lead: f64) -> Retained<NSMutableParagraphStyle> {
+/// left and `tail` on the right ([`commands::text_tail`]).
+fn tile_text_style(lead: f64, tail: f64) -> Retained<NSMutableParagraphStyle> {
     let style = NSMutableParagraphStyle::new();
     style.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
     style.setFirstLineHeadIndent(lead);
     style.setHeadIndent(lead);
-    style.setTailIndent(-commands::THUMB_PAD);
+    style.setTailIndent(-tail);
     style
 }
 
