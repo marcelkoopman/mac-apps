@@ -1917,8 +1917,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Table window and column picker
     ("cancel", "Annuleer", "Cancel"),
-    ("picker_all", "Alles", "All"),
-    ("picker_none", "Geen", "None"),
+    ("picker_all", "Selecteer alles", "Select All"),
+    ("picker_none", "Selecteer niets", "Select None"),
     ("picker_apply", "Pas toe", "Apply"),
     (
         "picker_apply_a11y",

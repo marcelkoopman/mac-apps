@@ -1,5 +1,5 @@
 // The column picker ("Choose Columns…" from Table ▾), drawn over the well on the card: a filter
-// field, a scrolling list of checkboxes (one per column), All / None, "Keeping 8 of 20", and
+// field, a scrolling list of checkboxes (one per column), Select All / Select None, "Keeping 8 of 20", and
 // Apply (Return) / Cancel (Esc). Part of `macos_launcher` (included there); the logic is
 // `crate::column_picker`. Column names and types only, never cell values. It closes with
 // focus loss, Wipe, lock, retention and another entry or version.
@@ -70,7 +70,7 @@ fn show_picker_backdrop(mtm: MainThreadMarker) {
         button.setAccessibilityElement(false);
         // Nearly invisible; catches clicks outside the panel so Cancel/Esc are not the only exits.
         // Own selector: if z-order ever puts this above the panel, clicks on the panel must not
-        // dismiss (All / None / Apply stay usable).
+        // dismiss (Select All / Select None / Apply stay usable).
         button.setAlphaValue(0.01);
         wire_button(&button, sel!(pickerBackdropClicked:));
         slot.replace(Some(button.clone()));
@@ -161,41 +161,60 @@ fn picker_views(mtm: MainThreadMarker) -> PickerViews {
     root.addSubview(&field);
 
     let buttons_y = PICKER_PAD;
-    let button = |title: &str, spoken: &str, action: Sel| {
-        let button = GlassButton::pill(mtm, title, ButtonSize::Regular);
+    let button = |title: &str, spoken: &str, action: Sel, size: ButtonSize| {
+        let button = GlassButton::pill(mtm, title, size);
         button.set_accessibility_label(spoken);
         wire_button(button.button(), action);
         root.addSubview(button.view());
         button
     };
-    let all = button(
-        crate::locale::t("picker_all"),
-        crate::locale::t("picker_keep_all"),
-        sel!(pickerAllClicked:),
-    );
-    all.button()
-        .setToolTip(Some(&NSString::from_str(crate::locale::t("picker_keep_all_tip"))));
-    let none = button(
-        crate::locale::t("picker_none"),
-        crate::locale::t("picker_keep_none"),
-        sel!(pickerNoneClicked:),
-    );
+    let select_pair = |size: ButtonSize| {
+        let all = button(
+            crate::locale::t("picker_all"),
+            crate::locale::t("picker_keep_all"),
+            sel!(pickerAllClicked:),
+            size,
+        );
+        all.button()
+            .setToolTip(Some(&NSString::from_str(crate::locale::t("picker_keep_all_tip"))));
+        let none = button(
+            crate::locale::t("picker_none"),
+            crate::locale::t("picker_keep_none"),
+            sel!(pickerNoneClicked:),
+            size,
+        );
+        (all, none)
+    };
+    let (mut all, mut none) = select_pair(ButtonSize::Regular);
     let cancel = button(
         crate::locale::t("cancel"),
         crate::locale::t("cancel"),
         sel!(pickerCancelClicked:),
+        ButtonSize::Regular,
     );
     cancel.button().setKeyEquivalent(&NSString::from_str("\u{1b}"));
     let apply = button(
         crate::locale::t("picker_apply"),
         crate::locale::t("picker_apply_a11y"),
         sel!(pickerApplyClicked:),
+        ButtonSize::Regular,
     );
     apply.button().setKeyEquivalent(&NSString::from_str("\r"));
     apply.set_prominent(true);
+    // Select All / Select None at the regular size when the row fits the card (Wide, Normal);
+    // on a narrow card they drop to the small size rather than cut their titles.
+    let widths: Vec<f64> = [&all, &none, &cancel, &apply]
+        .iter()
+        .map(|item| item.width_within(f64::MAX))
+        .collect();
+    if !crate::column_picker::button_row_fits(&widths, 6.0, width - PICKER_PAD * 2.0) {
+        all.view().removeFromSuperview();
+        none.view().removeFromSuperview();
+        (all, none) = select_pair(ButtonSize::Small);
+    }
     let mut x = PICKER_PAD;
     for item in [&all, &none] {
-        let w = item.width_within(90.0);
+        let w = item.width_within(160.0);
         item.view().setFrame(NSRect::new(
             NSPoint::new(x, buttons_y),
             NSSize::new(w, PICKER_BUTTON_H),
@@ -356,7 +375,7 @@ fn mouse_in_picker() -> bool {
 
 /// Click on the full-card backdrop: dismiss only when it is outside the panel. A hit on the
 /// panel here means the backdrop was above the picker — raise the picker and keep it open so
-/// All / None / Apply work.
+/// Select All / Select None / Apply work.
 fn picker_backdrop_clicked() {
     if mouse_in_picker() {
         raise_picker();

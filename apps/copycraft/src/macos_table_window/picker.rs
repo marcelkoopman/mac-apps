@@ -42,7 +42,8 @@ pub(super) fn run_column_picker() {
     wire(none.button(), sel!(tableWindowPickerNone:));
     let mut x = pad;
     for item in [&all, &none] {
-        let w = item.width_within(90.0);
+        // Room for "Selecteer alles" / "Selecteer niets" at the regular size.
+        let w = item.width_within(150.0);
         item.view().setFrame(NSRect::new(
             NSPoint::new(x, accessory_h - pad - btn_h),
             NSSize::new(w, btn_h),

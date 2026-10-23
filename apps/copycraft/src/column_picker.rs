@@ -125,9 +125,15 @@ impl ColumnPicker {
     }
 }
 
+/// True when buttons `widths` wide, `gap` apart, fit in `room` on one row.
+pub fn button_row_fits(widths: &[f64], gap: f64, room: f64) -> bool {
+    let gaps = widths.len().saturating_sub(1) as f64 * gap;
+    widths.iter().sum::<f64>() + gaps <= room
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ColumnPicker, PickerColumn};
+    use super::{ColumnPicker, PickerColumn, button_row_fits};
     use crate::table::TableOp;
 
     fn picker(names: &[&str]) -> ColumnPicker {
@@ -210,5 +216,13 @@ mod tests {
             Some("Kept 2 of 4 columns")
         );
         assert_eq!(picker.spoken(1), "Sunbox 7 - PV1, number");
+    }
+
+    #[test]
+    fn a_button_row_fits_with_its_gaps() {
+        // Select All, Select None, Cancel, Apply at the regular size on a Compact card.
+        assert!(button_row_fits(&[110.0, 115.0, 80.0, 70.0], 6.0, 400.0));
+        assert!(!button_row_fits(&[110.0, 115.0, 80.0, 70.0], 6.0, 380.0));
+        assert!(button_row_fits(&[], 6.0, 0.0));
     }
 }
