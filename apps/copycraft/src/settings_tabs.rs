@@ -15,8 +15,11 @@ pub const SETTING_H: f64 = BUTTON_H + NOTE_GAP + NOTE_H;
 pub const FIELD_BLOCK_H: f64 = SETTING_H + SPACE_S + BUTTON_H + SPACE_S + BUTTON_H;
 /// The tab bar: one segmented control across the top of the window.
 pub const TAB_BAR_H: f64 = BUTTON_H;
-/// Algemeen: four settings, three gaps.
-pub const GENERAL_H: f64 = 4.0 * SETTING_H + 3.0 * SPACE_S;
+/// The Meldingen block under Algemeen: its heading, the four switches in two rows of two, one
+/// gap and a note.
+pub const NOTIFY_H: f64 = BUTTON_H + 2.0 * BUTTON_H + SPACE_S + NOTE_GAP + NOTE_H;
+/// Algemeen: four settings, then the Meldingen block, four gaps.
+pub const GENERAL_H: f64 = 4.0 * SETTING_H + 4.0 * SPACE_S + NOTIFY_H;
 /// The settings under "Keep clipboard history": retention, sensitive copies and ask before
 /// clearing, one row each without a note (the note is the tooltip), after a gap.
 pub const HISTORY_SUB_H: f64 = SPACE_S + 3.0 * BUTTON_H + 2.0 * SPACE_XS;
@@ -28,8 +31,6 @@ pub const FIELD_ROW_BLOCK_H: f64 = SETTING_H + SPACE_S + BUTTON_H;
 /// Weergave: the card theme row (popup and preview, no note), the pages and announce settings,
 /// three gaps and the symbols block.
 pub const DISPLAY_H: f64 = BUTTON_H + 2.0 * SETTING_H + 3.0 * SPACE_S + FIELD_ROW_BLOCK_H;
-/// Meldingen: the four switches in two rows of two, one gap and a note.
-pub const NOTIFY_H: f64 = 2.0 * BUTTON_H + SPACE_S + NOTE_GAP + NOTE_H;
 
 /// The window's content height around a pane of `pane_h`: margin, tab bar, gap, pane, margin.
 pub const fn window_height(pane_h: f64) -> f64 {
@@ -39,11 +40,11 @@ pub const fn window_height(pane_h: f64) -> f64 {
 const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
-const _: () = assert!(GENERAL_H == 208.0);
+const _: () = assert!(GENERAL_H == 326.0);
 const _: () = assert!(HISTORY_SUB_H == 100.0);
 const _: () = assert!(PRIVACY_H == 380.0);
 const _: () = assert!(DISPLAY_H == 226.0);
-const _: () = assert!(NOTIFY_H == 82.0);
+const _: () = assert!(NOTIFY_H == 110.0);
 /// The tallest tab fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
 const _: () = assert!(window_height(PRIVACY_H) == 456.0);
 
@@ -53,11 +54,10 @@ pub enum Tab {
     General,
     Privacy,
     Display,
-    Notifications,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::General, Tab::Privacy, Tab::Display, Tab::Notifications];
+    pub const ALL: [Tab; 3] = [Tab::General, Tab::Privacy, Tab::Display];
 
     pub fn index(self) -> usize {
         Tab::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
@@ -73,7 +73,6 @@ impl Tab {
             Tab::General => crate::locale::t("group_general"),
             Tab::Privacy => crate::locale::t("group_privacy"),
             Tab::Display => crate::locale::t("group_display"),
-            Tab::Notifications => crate::locale::t("group_notifications"),
         }
     }
 
@@ -83,7 +82,6 @@ impl Tab {
             Tab::General => GENERAL_H,
             Tab::Privacy => PRIVACY_H,
             Tab::Display => DISPLAY_H,
-            Tab::Notifications => NOTIFY_H,
         }
     }
 
@@ -106,7 +104,7 @@ mod tests {
     #[test]
     fn every_tab_has_its_own_height_and_the_tallest_fits() {
         let heights: Vec<f64> = Tab::ALL.iter().map(|tab| tab.window_height()).collect();
-        assert_eq!(heights, [284.0, 456.0, 302.0, 158.0]);
+        assert_eq!(heights, [402.0, 456.0, 302.0]);
         assert!(heights.iter().all(|h| *h <= 456.0));
     }
 

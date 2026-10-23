@@ -1,9 +1,9 @@
-//! Settings window, in four tabs (a segmented control above one pane per tab):
-//! General (hotkey, language, date order, Open at Login), Privacy (Keep clipboard history with
-//! retention, sensitive-copy clearing and ask before clearing under it, privacy filter, blur,
-//! ignored apps), Display (card theme, pages, announce, symbols) and
-//! Notifications (four switches). The feedback mail, privacy policy and support are in About
-//! and `⋯` › Help ▸. ⌘1…⌘4 pick a tab; the last tab is remembered for the session only.
+//! Settings window, in three tabs (a segmented control above one pane per tab):
+//! General (hotkey, language, date order, Open at Login, then the Meldingen block with the four
+//! notification switches), Privacy (Keep clipboard history with retention, sensitive-copy
+//! clearing and ask before clearing under it, privacy filter, blur, ignored apps) and Display
+//! (card theme, pages, announce, symbols). The feedback mail, privacy policy and support are in
+//! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab; the last tab is remembered for the session only.
 
 use std::cell::{Cell, RefCell};
 
@@ -117,7 +117,7 @@ define_class!(
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
             // The hotkey field is listening: every ⌘ chord is a hotkey to record, not a tab or
             // a menu key (⌘W, ⌘Z, ⌘V, …).
-            // ⌘1…⌘4 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
+            // ⌘1…⌘3 pick a tab. ⌘W and ⌘M are the hidden Window menu's.
             let recording = RECORDING.get()
                 && event
                     .modifierFlags()
@@ -577,7 +577,6 @@ fn build(mtm: MainThreadMarker) {
             Tab::General => build_general(mtm, &pane),
             Tab::Privacy => build_privacy(mtm, &pane),
             Tab::Display => build_display(mtm, &pane),
-            Tab::Notifications => build_notifications(mtm, &pane),
         };
         // Each pane is exactly as tall as its settings.
         debug_assert!(left.abs() < 0.5, "{tab:?} does not fill its pane");
@@ -593,7 +592,8 @@ fn build(mtm: MainThreadMarker) {
     panel::bring_to_front(&window);
 }
 
-/// Algemeen: hotkey, language, date order and Open at Login. Returns the unused height.
+/// Algemeen: hotkey, language, date order, Open at Login and the Meldingen block. Returns the
+/// unused height.
 fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
     let mut top = Tab::General.pane_height();
     let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
@@ -669,6 +669,8 @@ fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
     );
     LOGIN_NOTE.with(|slot| *slot.borrow_mut() = Some(note));
     refresh_login_row();
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    place_notifications(mtm, body, &mut top);
     top
 }
 
@@ -829,13 +831,20 @@ fn indented_checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSB
     button
 }
 
-/// Meldingen: the four notification switches. Returns the unused height.
-fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = Tab::Notifications.pane_height();
+/// The Meldingen block at the bottom of Algemeen: a heading, the four notification switches
+/// and their note, from `top` down.
+fn place_notifications(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
+    place_label(
+        mtm,
+        body,
+        crate::locale::t("group_notifications"),
+        take(top, BUTTON_H),
+        WIDTH - MARGIN * 2.0,
+    );
     let switches = settings::notify_switches();
     let column = (WIDTH - MARGIN * 2.0) / 2.0;
     for (row_index, pair) in NOTIFY_SWITCHES.chunks(2).enumerate() {
-        let y = take(&mut top, BUTTON_H);
+        let y = take(top, BUTTON_H);
         for (column_index, switch) in pair.iter().enumerate() {
             let at = row_index * 2 + column_index;
             let box_ = checkbox(mtm, notify_title(*switch), y);
@@ -849,11 +858,10 @@ fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
             body.addSubview(&box_);
         }
         if row_index == 0 {
-            gap(&mut top, mac_ui::metrics::SPACE_S);
+            gap(top, mac_ui::metrics::SPACE_S);
         }
     }
-    place_explanation(mtm, body, crate::locale::t("notify_note"), &mut top);
-    top
+    place_explanation(mtm, body, crate::locale::t("notify_note"), top);
 }
 
 /// Weergave: the card theme, long text in pages, Announce confirmations and the symbols.
@@ -1046,7 +1054,7 @@ fn paint_theme_preview() {
     });
 }
 
-/// The tab a ⌘1…⌘4 chord picks, if `event` is one.
+/// The tab a ⌘1…⌘3 chord picks, if `event` is one.
 fn tab_for_chord(event: &NSEvent) -> Option<Tab> {
     Tab::ALL
         .into_iter()
