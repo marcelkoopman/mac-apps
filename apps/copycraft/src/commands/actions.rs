@@ -94,6 +94,11 @@ pub fn save_tip(title: &str) -> String {
     crate::locale::tf("save_tip", &[&title])
 }
 
+/// Tooltip of a button that also has a shortcut: "Sluit (Esc)", "Bewaar JSON (⌘S)".
+pub fn keyed_tip(name: &str, keys: &str) -> String {
+    format!("{name} ({keys})")
+}
+
 pub fn preview_tip(title: &str) -> String {
     crate::locale::tf("preview_tip", &[&title])
 }

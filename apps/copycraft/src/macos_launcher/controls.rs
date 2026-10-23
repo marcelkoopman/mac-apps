@@ -231,7 +231,7 @@ pub(crate) fn place_content_actions(preview_y: f64) {
     WELL_TOP.set(preview_y + PREVIEW_H);
     WELL_BOTTOM.set(preview_y);
     let open = DOCK_HOVERED.get();
-    let save_tip = commands::save_tip(&title);
+    let save_tip = commands::keyed_tip(&commands::save_tip(&title), "⌘S");
     let copy_tip = commands::copy_tip(&title);
     let preview_tip = commands::preview_tip(&title);
     let (eye_symbol, eye_label) = commands::hide_button_look(well_is_masked());

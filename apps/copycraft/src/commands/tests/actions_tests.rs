@@ -488,3 +488,9 @@ fn pause_ignore_next_and_ignore_app_are_greyed_out_without_history() {
     let none = crate::commands::capture_commands(&input);
     assert!(none[0].enabled && none[1].enabled && !none[2].enabled);
 }
+
+#[test]
+fn keyed_tip_puts_the_shortcut_after_the_name() {
+    assert_eq!(keyed_tip("Close", "Esc"), "Close (Esc)");
+    assert_eq!(keyed_tip(&save_tip("JSON"), "⌘S"), "Save JSON (⌘S)");
+}

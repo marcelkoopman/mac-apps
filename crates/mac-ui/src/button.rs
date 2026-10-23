@@ -6,10 +6,11 @@
 //! under a transparent button).
 //!
 //! - [`GlassButton::symbol`]: SF Symbol, circle shape. The spoken name is the accessibility
-//!   label only. A glass circle paints a title, so the title stays empty while the symbol shows.
+//!   label and the tooltip. A glass circle paints a title, so the title stays empty while the
+//!   symbol shows.
 //! - [`GlassButton::pill`]: text title, capsule shape, sized with `sizeToFit`.
 //!
-//! Callers set the frame, visibility and tooltip, and wire target and action
+//! Callers set the frame, visibility and (for pills) the tooltip, and wire target and action
 //! ([`GlassButton::set_action`] or `NSControl::setTarget`/`setAction` on [`GlassButton::button`]).
 //!
 //! [`OverlayButton`]: crate::widgets::OverlayButton
@@ -112,8 +113,9 @@ pub struct GlassButton {
 impl GlassButton {
     /// Circle button showing SF Symbol `symbol` at `point_size` points (template image).
     ///
-    /// `label` names the action for VoiceOver ("Copy", "Save"). It is the accessibility label.
-    /// The title stays empty: a glass circle draws the title on top of the symbol (the K of
+    /// `label` names the action for VoiceOver ("Copy", "Save"). It is the accessibility label
+    /// and the tooltip, so an icon-only button says what it does on hover too; callers may
+    /// replace the tooltip with one that adds the shortcut. The title stays empty: a glass circle draws the title on top of the symbol (the K of
     /// Kopieer, the B of Bewaar). Without SF Symbols (before macOS 11, or an unknown name) the
     /// button shows `fallback` text in the system font at `point_size` instead. An empty
     /// `label` falls back to `fallback`, then `symbol`.
@@ -142,6 +144,7 @@ impl GlassButton {
                 .setFont(Some(&NSFont::systemFontOfSize(point_size)));
         }
         this.button.setAccessibilityLabel(Some(&title));
+        this.button.setToolTip(Some(&title));
         this.fit();
         this
     }
@@ -227,6 +230,14 @@ impl GlassButton {
     pub fn set_accessibility_label(&self, label: &str) {
         self.button
             .setAccessibilityLabel(Some(&NSString::from_str(label)));
+    }
+
+    /// New name for a [`symbol`](Self::symbol) button: the accessibility label and the tooltip,
+    /// as at construction (e.g. after a language change).
+    pub fn set_symbol_label(&self, label: &str) {
+        let label = NSString::from_str(label);
+        self.button.setAccessibilityLabel(Some(&label));
+        self.button.setToolTip(Some(&label));
     }
 
     /// Fitted size from the last `sizeToFit` (construction or [`set_title`](Self::set_title)).

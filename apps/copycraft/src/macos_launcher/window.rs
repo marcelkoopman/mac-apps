@@ -128,6 +128,9 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
         "✕",
         sel!(closeClicked:),
     );
+    close
+        .button()
+        .setToolTip(Some(&NSString::from_str(&close_tip())));
     let symbols = GlassButton::pill(mtm, crate::locale::t("symbols"), ButtonSize::Regular);
     symbols.set_accessibility_label(crate::locale::t("symbols_a11y"));
     symbols
@@ -255,6 +258,9 @@ pub fn relabel() {
     CLOSE.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             label_symbol(button, t("close"));
+            button
+                .button()
+                .setToolTip(Some(&NSString::from_str(&close_tip())));
         }
     });
     COPY_BUTTON.with(|slot| {
@@ -329,10 +335,15 @@ pub fn relabel() {
     }
 }
 
-/// VoiceOver name of a symbol button. The title stays empty so the glass circle does not
-/// draw the word on top of the symbol.
+/// VoiceOver name and tooltip of a symbol button. The title stays empty so the glass circle
+/// does not draw the word on top of the symbol.
 pub(crate) fn label_symbol(button: &GlassButton, label: &str) {
-    button.set_accessibility_label(label);
+    button.set_symbol_label(label);
+}
+
+/// Tooltip of ✕: its name and Esc, which closes the card too.
+fn close_tip() -> String {
+    commands::keyed_tip(crate::locale::t("close"), "Esc")
 }
 
 /// Undo or redo in the version capsule. The drawn title stays the arrow.
