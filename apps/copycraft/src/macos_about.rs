@@ -229,7 +229,9 @@ fn build(mtm: MainThreadMarker) {
         ),
         (
             crate::locale::t("support_link"),
-            "questionmark.circle",
+            // A web page in the browser, so the browser's symbol (not the help mark of
+            // `⋯` › Help).
+            "safari",
             sel!(openSupport:),
         ),
     ] {
