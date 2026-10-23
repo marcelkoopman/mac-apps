@@ -139,3 +139,52 @@ fn image_menu_items_run_the_step_they_are_titled() {
     assert!(popped_pick(&items, left as isize, "Nothing like it").is_none());
     assert!(popped_pick(&items, -1, "Rotate 90° Left").is_some());
 }
+
+#[test]
+fn history_submenu_puts_add_to_diff_under_option_and_the_clears_apart() {
+    use crate::commands::{alternate_title, is_alternate, menu_submenu, separator_before};
+    let mut input = data(SubjectKind::Text, Some("hello"));
+    input.history.push(history_item(0, "first", true));
+    input.history.push(history_item(1, "second", false));
+    input.can_clear_history = true;
+    let menu = overflow(&input);
+    // The rows of History ▸, in order, as pop_overflow walks them.
+    let history: Vec<&CommandId> = menu
+        .iter()
+        .map(|cmd| &cmd.id)
+        .filter(|id| menu_submenu(id) == Some(crate::locale::t("history")))
+        .collect();
+    let mut previous: Option<&CommandId> = None;
+    let mut alternates = 0;
+    let mut separators = 0;
+    for id in &history {
+        if let CommandId::DiffToggle(_) = id {
+            assert!(is_alternate(previous, id), "Add to Diff follows its copy");
+            alternates += 1;
+        } else {
+            assert!(!is_alternate(previous, id));
+        }
+        if separator_before(previous, id) {
+            assert_eq!(**id, CommandId::ClearHistory);
+            separators += 1;
+        }
+        previous = Some(id);
+    }
+    assert_eq!(alternates, 2, "one ⌥ alternate per copy");
+    assert_eq!(separators, 1, "one line above the clears");
+
+    assert!(separator_before(
+        Some(&CommandId::DiffToggle(3)),
+        &CommandId::ClearPins
+    ));
+    assert!(!separator_before(
+        Some(&CommandId::ClearHistory),
+        &CommandId::ClearPins
+    ));
+    assert!(!separator_before(None, &CommandId::ClearHistory));
+    assert!(!is_alternate(None, &CommandId::DiffToggle(3)));
+    assert_eq!(
+        alternate_title("Add to Diff", "first"),
+        "Add to Diff: first"
+    );
+}

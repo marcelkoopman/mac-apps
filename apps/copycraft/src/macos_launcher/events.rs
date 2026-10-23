@@ -349,7 +349,8 @@ pub(crate) fn pop_overflow() {
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
     menu.setAutoenablesItems(false);
     let mut section: Option<commands::MenuSection> = None;
-    let mut submenus: Vec<(&'static str, Retained<NSMenu>)> = Vec::new();
+    // Each submenu with the item last put in it, for its separators and ⌥ alternates.
+    let mut submenus: Vec<(&'static str, Retained<NSMenu>, Option<usize>)> = Vec::new();
     for (index, cmd) in items.iter().enumerate() {
         let this_section = commands::menu_section(&cmd.id);
         if section != Some(this_section) {
@@ -358,10 +359,14 @@ pub(crate) fn pop_overflow() {
             }
             section = Some(this_section);
         }
+        let mut previous: Option<usize> = None;
         let target = match commands::menu_submenu(&cmd.id) {
             None => menu.clone(),
-            Some(name) => match submenus.iter().find(|(shown, _)| *shown == name) {
-                Some((_, submenu)) => submenu.clone(),
+            Some(name) => match submenus.iter_mut().find(|(shown, _, _)| *shown == name) {
+                Some((_, submenu, last)) => {
+                    previous = last.replace(index);
+                    submenu.clone()
+                }
                 None => {
                     let parent = mac_ui::widgets::menu_item(mtm, name);
                     if let Some(symbol) = submenu_symbol(&cmd.id)
@@ -374,16 +379,34 @@ pub(crate) fn pop_overflow() {
                     submenu.setAutoenablesItems(false);
                     parent.setSubmenu(Some(&submenu));
                     menu.addItem(&parent);
-                    submenus.push((name, submenu.clone()));
+                    submenus.push((name, submenu.clone(), Some(index)));
                     submenu
                 }
             },
         };
+        let previous_cmd = previous.and_then(|at| items.get(at));
+        let previous_id = previous_cmd.map(|cmd| &cmd.id);
+        if commands::separator_before(previous_id, &cmd.id) {
+            target.addItem(&NSMenuItem::separatorItem(mtm));
+        }
+        let alternate = commands::is_alternate(previous_id, &cmd.id);
         let title = match cmd.id {
             CommandId::KeepHistory(minutes) => commands::keep_history_short(minutes),
+            _ if alternate => commands::alternate_title(
+                &cmd.title,
+                previous_cmd.map(|cmd| cmd.title.as_str()).unwrap_or(""),
+            ),
             _ => cmd.title.clone(),
         };
         let item = overflow_item(mtm, &title, index);
+        if alternate {
+            // Held ⌥ swaps the row above for this one; both have no key, so the masks differ.
+            if let Some(primary) = target.itemArray().lastObject() {
+                primary.setKeyEquivalentModifierMask(NSEventModifierFlags::empty());
+            }
+            item.setKeyEquivalentModifierMask(NSEventModifierFlags::Option);
+            item.setAlternate(true);
+        }
         item.setEnabled(cmd.enabled);
         item.setAccessibilityLabel(Some(&NSString::from_str(&cmd.title)));
         if commands::menu_submenu(&cmd.id).is_none()
