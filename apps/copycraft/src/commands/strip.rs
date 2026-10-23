@@ -268,13 +268,18 @@ pub fn thumb_mark(thumb: &Thumb) -> String {
     spoken
 }
 
-/// The pin of a pinned copy: one SF Symbol and one label, shared by the strip's cards and
-/// (icons HIG plan, point 5) the history menu's items; see `crate::macos_pin`.
+/// The pin of a pinned copy: one SF Symbol and one label, shared by the strip's cards, the
+/// history menus' items and the search chips; see `crate::macos_pin`.
 pub const PIN_SYMBOL: &str = "pin.fill";
 
 /// What the pin says: "Vastgezet" / "Pinned" (VoiceOver, the symbol's description).
 pub fn pin_label() -> &'static str {
     crate::locale::t("pinned")
+}
+
+/// VoiceOver's name for a pinned history row titled `title`: "…, Vastgezet" / "…, Pinned".
+pub fn pinned_label(title: &str) -> String {
+    format!("{title}, {}", pin_label())
 }
 
 /// The pin on a pinned card: its round backing's side and its distance to the card's edges.

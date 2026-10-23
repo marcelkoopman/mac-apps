@@ -45,7 +45,8 @@ pub(crate) fn history_submenu_enabled(entries: usize, history_on: bool) -> bool 
 /// The status menu, in groups with a separator between them (as the HIG asks): the hotkey
 /// hint; recording (*Pause*, *Ignore Next Copy*, *History*); *Allow Screenshots*; the
 /// windows (*Welcome Screen*, *Settings…* ⌘,); *About* and the version; *Quit CopyCraft* ⌘Q.
-pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
+/// `entries`: each history row's index, title and whether it is pinned (the pin image).
+pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
@@ -73,7 +74,7 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
         history_submenu_enabled(entries.len(), history_on),
     );
     if history_on {
-        for (index, title) in entries {
+        for (index, title, _) in entries {
             let _ = history.append(&MenuItem::with_id(
                 format!("hist-{index}"),
                 title,
@@ -112,5 +113,10 @@ pub(crate) fn status_menu(entries: &[(usize, String)]) -> Menu {
     let _ = menu.append(&tray::info_item(&version));
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::quit_item(&quit));
+    #[cfg(target_os = "macos")]
+    if history_on {
+        let pinned: Vec<bool> = entries.iter().map(|(_, _, pinned)| *pinned).collect();
+        crate::macos_pin::pin_status_history(&menu, &pinned);
+    }
     menu
 }

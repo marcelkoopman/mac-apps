@@ -18,8 +18,6 @@ pub const MAX_TEXT_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TOTAL_BYTES: usize = 200 * 1024 * 1024;
 /// Pins on top of the unpinned cap. A further pin does nothing.
 pub const PIN_MAX: usize = 20;
-/// Prefix on a history row. It is not copied text.
-pub const PIN_MARK: &str = "• ";
 /// Search looks at this many bytes of an entry. A match only past it is missed.
 pub const SEARCH_CAP: usize = 64 * 1024;
 

@@ -128,11 +128,17 @@ impl App {
     }
 
     pub(crate) fn refresh_status_menu(&self) {
-        let entries: Vec<(usize, String)> = self
+        let entries: Vec<(usize, String, bool)> = self
             .history
             .labels()
             .into_iter()
-            .map(|(index, _)| (index, history_title(&self.history, index)))
+            .map(|(index, _)| {
+                (
+                    index,
+                    history_title(&self.history, index),
+                    self.history.is_pinned(index),
+                )
+            })
             .collect();
         self.tray.set_menu(Some(Box::new(status_menu(&entries))));
         // A new menu may reset the status button: aim its click again (next idle).
@@ -409,14 +415,8 @@ pub(crate) fn dropped_image_save_job(
 
 pub(crate) fn history_title(history: &ClipboardHistory, index: usize) -> String {
     match (history.mark(index), history.byte_len(index)) {
-        (Some(mark), Some(len)) => {
-            let label = commands::history_label(mark, len);
-            if history.is_pinned(index) {
-                format!("{}{label}", clipboard::PIN_MARK)
-            } else {
-                label
-            }
-        }
+        // A pin is the pin image on the row ([`crate::macos_pin`]), not a mark in the title.
+        (Some(mark), Some(len)) => commands::history_label(mark, len),
         _ => String::new(),
     }
 }

@@ -292,5 +292,6 @@ pub(crate) fn command_enabled(
         detail: detail.to_string(),
         keywords: keywords.to_string(),
         enabled,
+        pinned: false,
     }
 }

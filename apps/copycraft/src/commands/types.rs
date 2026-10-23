@@ -43,7 +43,7 @@ pub struct Hist {
     pub text: bool,
     /// Capped text the search matches. Empty for a picture. Not drawn on the menu bar.
     pub search: Zeroizing<String>,
-    /// The entry is pinned. The mark on [`Self::title`] is not copied text.
+    /// The entry is pinned: its rows show the pin image, not a mark in [`Self::title`].
     pub pinned: bool,
 }
 
@@ -536,6 +536,9 @@ pub struct Command {
     pub(crate) keywords: String,
     /// `false` dims the menu item (a non-text copy cannot be added to a diff).
     pub enabled: bool,
+    /// A pinned history row: its menu item and chip show the pin ([`crate::commands::PIN_SYMBOL`]),
+    /// and VoiceOver reads [`crate::commands::pinned_label`]. The title has no mark.
+    pub pinned: bool,
 }
 
 impl Command {

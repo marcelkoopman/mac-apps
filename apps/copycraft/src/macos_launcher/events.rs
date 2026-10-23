@@ -6,6 +6,8 @@ use super::*;
 pub(crate) struct PooledChip {
     pub(crate) id: CommandId,
     pub(crate) title: String,
+    /// Drawn with the pin ([`Command::pinned`]); a pin or unpin makes a new chip.
+    pub(crate) pinned: bool,
     pub(crate) chip: Rc<GlassButton>,
 }
 
@@ -14,13 +16,18 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
     let pooled = CHIP_POOL.with(|pool| {
         pool.borrow()
             .iter()
-            .find(|pooled| pooled.id == cmd.id && pooled.title == cmd.title)
+            .find(|pooled| {
+                pooled.id == cmd.id && pooled.title == cmd.title && pooled.pinned == cmd.pinned
+            })
             .map(|pooled| Rc::clone(&pooled.chip))
     });
     let chip = pooled.unwrap_or_else(|| {
         let chip = Rc::new(GlassButton::pill(mtm, &cmd.title, ButtonSize::Regular));
         if let Some(symbol) = commands::symbol_for(&cmd.id) {
             chip.set_symbol(symbol);
+        } else if cmd.pinned {
+            chip.set_symbol(commands::PIN_SYMBOL);
+            chip.set_accessibility_label(&commands::pinned_label(&cmd.title));
         }
         wire_button(chip.button(), sel!(chipClicked:));
         // A chip can take the keyboard focus (with Full Keyboard Access), so arrow-key
@@ -30,6 +37,7 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
             pool.borrow_mut().push(PooledChip {
                 id: cmd.id.clone(),
                 title: cmd.title.clone(),
+                pinned: cmd.pinned,
                 chip: Rc::clone(&chip),
             });
         });
@@ -54,9 +62,9 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
 pub(crate) fn prune_chip_pool(offered: &[&Command]) {
     CHIP_POOL.with(|pool| {
         pool.borrow_mut().retain_mut(|pooled| {
-            let keep = offered
-                .iter()
-                .any(|cmd| cmd.id == pooled.id && cmd.title == pooled.title);
+            let keep = offered.iter().any(|cmd| {
+                cmd.id == pooled.id && cmd.title == pooled.title && cmd.pinned == pooled.pinned
+            });
             if !keep {
                 pooled.chip.view().removeFromSuperview();
                 pooled.title.zeroize();
@@ -448,6 +456,9 @@ pub(crate) fn pop_overflow() {
                 .and_then(|symbol| mac_ui::icon::system_symbol(symbol, &cmd.title))
         {
             item.setImage(Some(&image));
+        }
+        if cmd.pinned {
+            crate::macos_pin::pin_menu_item(&item);
         }
         if let CommandId::CardTheme(item_theme) = cmd.id
             && item_theme == crate::settings::card_theme()

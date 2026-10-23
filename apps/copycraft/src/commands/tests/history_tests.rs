@@ -267,13 +267,16 @@ fn search_hits_the_body_while_a_masked_title_stays_a_label() {
     assert!(!masked[0].title.contains("phrase"));
     input.settings.privacy_filter = false;
     let open = matching(&search_pool(&input), "phrase");
-    assert_eq!(open[0].title, format!("• {phrase}"));
+    // The pin is an image on the chip, not a mark in its title.
+    assert_eq!(open[0].title, phrase);
+    assert!(open[0].pinned && masked[0].pinned);
     let mut long = "a".repeat(90);
     long.push_str("unique-needle");
     input.history[0].search = Zeroizing::new(long);
     input.history[0].pinned = false;
     let hit = matching(&search_pool(&input), "unique-needle");
     assert_eq!(ids(&hit), vec![CommandId::History(1)]);
+    assert!(!hit[0].pinned);
     assert!(!hit[0].title.contains("unique-needle"));
     assert!(hit[0].title.ends_with('…'));
 }
@@ -391,6 +394,7 @@ fn swap_lives_under_more_also_with_a_full_chip_row() {
         detail: String::new(),
         keywords: String::new(),
         enabled: true,
+        pinned: false,
     };
     let row = [
         CommandId::Convert,
@@ -402,4 +406,30 @@ fn swap_lives_under_more_also_with_a_full_chip_row() {
     let (shown, more) = split_chips(row.into_iter().map(chip).collect());
     assert!(shown.iter().all(|cmd| cmd.id != CommandId::DiffSwap));
     assert!(more.iter().any(|cmd| cmd.id == CommandId::DiffSwap));
+}
+
+#[test]
+fn a_pinned_history_row_carries_the_pin_not_a_mark() {
+    let mut input = data(SubjectKind::Text, Some("hello"));
+    input.history.push(history_item(0, "¶  5 B", true));
+    input.history.push(history_item(1, "¶  9 B", true));
+    input.history[1].pinned = true;
+    let menu = overflow(&input);
+    let row = |index| {
+        menu.iter()
+            .find(|cmd| cmd.id == CommandId::History(index))
+            .expect("history row")
+    };
+    assert!(!row(0).pinned);
+    assert!(row(1).pinned);
+    assert_eq!(row(1).title, "¶  9 B", "the title has no mark");
+    assert!(
+        menu.iter()
+            .filter(|cmd| !matches!(cmd.id, CommandId::History(_)))
+            .all(|cmd| !cmd.pinned)
+    );
+    assert_eq!(crate::commands::PIN_SYMBOL, "pin.fill");
+    let label = crate::commands::pinned_label("¶  9 B");
+    assert_eq!(label, format!("¶  9 B, {}", crate::commands::pin_label()));
+    assert!(!label.contains('•'));
 }

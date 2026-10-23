@@ -202,12 +202,15 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     }
     for item in &data.history {
         let keywords = history_keywords(item);
-        commands.push(command(
-            CommandId::History(item.index),
-            &history_chip_title(item, data.settings.privacy_filter),
-            &item.mark,
-            &keywords,
-        ));
+        commands.push(Command {
+            pinned: item.pinned,
+            ..command(
+                CommandId::History(item.index),
+                &history_chip_title(item, data.settings.privacy_filter),
+                &item.mark,
+                &keywords,
+            )
+        });
     }
     commands.extend(entry_commands(data));
     commands.extend(capture_commands(data));

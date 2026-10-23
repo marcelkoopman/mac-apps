@@ -202,11 +202,7 @@ pub fn history_chip_title(item: &Hist, privacy: bool) -> String {
     if line.len() > end {
         title.push('…');
     }
-    if item.pinned {
-        format!("{}{title}", crate::clipboard::PIN_MARK)
-    } else {
-        title
-    }
+    title
 }
 
 pub(crate) fn history_keywords(item: &Hist) -> String {
@@ -340,12 +336,15 @@ pub fn overflow(data: &LaunchData) -> Vec<Command> {
             Some(mark) => format!("{mark}  {}", item.title),
             None => item.title.clone(),
         };
-        commands.push(command(
-            CommandId::History(item.index),
-            &title,
-            &item.mark,
-            "history",
-        ));
+        commands.push(Command {
+            pinned: item.pinned,
+            ..command(
+                CommandId::History(item.index),
+                &title,
+                &item.mark,
+                "history",
+            )
+        });
         commands.push(diff_action(
             CommandId::DiffToggle(item.id),
             &data.diff_picks,
