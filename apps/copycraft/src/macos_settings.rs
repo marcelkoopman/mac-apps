@@ -28,94 +28,18 @@ use crate::launcher::{self, UserEvent};
 use crate::macos_login;
 use crate::settings;
 
-const WIDTH: f64 = 480.0;
+use crate::settings_tabs::{NOTE_GAP, NOTE_H, TAB_BAR_H, Tab, WIDTH, keep_top};
+
 const MARGIN: f64 = mac_ui::metrics::MARGIN;
 const BUTTON_H: f64 = mac_ui::metrics::BUTTON_H;
-const NOTE_GAP: f64 = 2.0;
-const NOTE_H: f64 = 16.0;
-/// One control plus its one-line explanation.
-const SETTING_H: f64 = BUTTON_H + NOTE_GAP + NOTE_H;
-/// A labelled setting with a field and a button under the explanation.
-const FIELD_BLOCK_H: f64 =
-    SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H + mac_ui::metrics::SPACE_S + BUTTON_H;
 const SECTION_GAP: f64 = mac_ui::metrics::SECTION_GAP;
 /// Width of the name on a row that also holds a value (hotkey, language, date order).
 const LABEL_W: f64 = 136.0;
-/// The tab bar: one segmented control across the top of the window.
-const TAB_BAR_H: f64 = BUTTON_H;
-/// Algemeen: four settings, three gaps.
-const GENERAL_H: f64 = 4.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S;
 /// How far a setting that depends on the one above it is indented.
 const INDENT: f64 = 20.0;
-/// The settings under "Keep clipboard history": retention, sensitive copies and ask before
-/// clearing, one row each without a note (the note is the tooltip), after a gap.
-const HISTORY_SUB_H: f64 =
-    mac_ui::metrics::SPACE_S + 3.0 * BUTTON_H + 2.0 * mac_ui::style::SPACE_XS;
-/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the rows under
-/// history, the ignored-apps block, three gaps.
-const PRIVACY_H: f64 =
-    3.0 * SETTING_H + HISTORY_SUB_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_BLOCK_H;
-/// The symbols on Weergave: the labelled setting, then the field with Restore on the same row.
-const FIELD_ROW_BLOCK_H: f64 = SETTING_H + mac_ui::metrics::SPACE_S + BUTTON_H;
-/// Weergave: the card theme row (popup and preview, no note), the pages and announce settings,
-/// three gaps and the symbols block.
-const DISPLAY_H: f64 =
-    BUTTON_H + 2.0 * SETTING_H + 3.0 * mac_ui::metrics::SPACE_S + FIELD_ROW_BLOCK_H;
 /// Width of the card theme popup; the preview takes the rest of the row.
 const THEME_POPUP_W: f64 = 176.0;
-/// Meldingen: the four switches in two rows of two, one gap and a note.
-const NOTIFY_H: f64 = 2.0 * BUTTON_H + mac_ui::metrics::SPACE_S + NOTE_GAP + NOTE_H;
-/// Every tab gets the height of the tallest one, so the window keeps one size.
-const PANE_H: f64 = max(max(GENERAL_H, PRIVACY_H), max(DISPLAY_H, NOTIFY_H));
-const HEIGHT: f64 = MARGIN + TAB_BAR_H + SECTION_GAP + PANE_H + MARGIN;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
-
-const fn max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-const _: () = assert!(SETTING_H == 46.0);
-const _: () = assert!(FIELD_BLOCK_H == 118.0);
-const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
-const _: () = assert!(GENERAL_H == 208.0);
-const _: () = assert!(HISTORY_SUB_H == 100.0);
-const _: () = assert!(PRIVACY_H == 380.0);
-const _: () = assert!(DISPLAY_H == 226.0);
-const _: () = assert!(NOTIFY_H == 82.0);
-const _: () = assert!(PANE_H == 380.0);
-/// Fits a 13" MacBook Air (about 560 pt for a window) with room to spare.
-const _: () = assert!(HEIGHT == 456.0);
-
-/// The tabs of the window, in the order of the segments.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Tab {
-    General,
-    Privacy,
-    Display,
-    Notifications,
-}
-
-impl Tab {
-    const ALL: [Tab; 4] = [Tab::General, Tab::Privacy, Tab::Display, Tab::Notifications];
-
-    fn index(self) -> usize {
-        Tab::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
-    }
-
-    fn at(index: usize) -> Option<Tab> {
-        Tab::ALL.get(index).copied()
-    }
-
-    /// The segment title (literal keys, for the locale scan test).
-    fn title(self) -> &'static str {
-        match self {
-            Tab::General => crate::locale::t("group_general"),
-            Tab::Privacy => crate::locale::t("group_privacy"),
-            Tab::Display => crate::locale::t("group_display"),
-            Tab::Notifications => crate::locale::t("group_notifications"),
-        }
-    }
-}
 
 /// The notification switches in the order of their checkboxes (row by row), with the title key.
 /// The checkbox's tag is the index.
@@ -584,7 +508,10 @@ fn build(mtm: MainThreadMarker) {
     // Miniaturizable: ⌘M (the hidden Window menu, src/macos_main_menu.rs) minimises it.
     let style =
         NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable;
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, HEIGHT));
+    // The window opens at the height of the tab it shows; `show_pane` follows the tab.
+    let shown = Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General);
+    let height = shown.window_height();
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(WIDTH, height));
     // SAFETY: initWithContentRect:styleMask:backing:defer: on a freshly allocated window, with
     // plain value arguments.
     let window: Retained<SettingsWindow> = unsafe {
@@ -598,8 +525,7 @@ fn build(mtm: MainThreadMarker) {
     };
     mac_ui::panel::keep_when_closed(&window);
     // The open tab's name, as in System Settings; `show_pane` keeps it in step.
-    let tab = Tab::at(SELECTED_TAB.get()).unwrap_or(Tab::General);
-    window.setTitle(&NSString::from_str(tab.title()));
+    window.setTitle(&NSString::from_str(shown.title()));
     window.setTabbingMode(NSWindowTabbingMode::Disallowed);
     window.setSharingType(crate::macos_launcher::sharing_type());
     window.center();
@@ -622,10 +548,14 @@ fn build(mtm: MainThreadMarker) {
     }
     tabs.setTrackingMode(NSSegmentSwitchTracking::SelectOne);
     tabs.setSegmentDistribution(NSSegmentDistribution::FillEqually);
+    // The tab bar and every pane hang from the top: when the window takes another tab's
+    // height, its bottom edge moves and they stay put.
+    let below_top = mac_ui::objc2_app_kit::NSAutoresizingMaskOptions::ViewMinYMargin;
     tabs.setFrame(NSRect::new(
-        NSPoint::new(MARGIN, HEIGHT - MARGIN - TAB_BAR_H),
+        NSPoint::new(MARGIN, height - MARGIN - TAB_BAR_H),
         NSSize::new(WIDTH - MARGIN * 2.0, TAB_BAR_H),
     ));
+    tabs.setAutoresizingMask(below_top);
     DELEGATE.with(|slot| {
         if let Some(delegate) = slot.borrow().as_ref() {
             mac_ui::actions::connect(&tabs, delegate, sel!(tabChanged:));
@@ -633,18 +563,24 @@ fn build(mtm: MainThreadMarker) {
     });
     body.addSubview(&tabs);
 
-    let pane_frame = NSRect::new(NSPoint::new(0.0, MARGIN), NSSize::new(WIDTH, PANE_H));
+    let pane_top = height - MARGIN - TAB_BAR_H - SECTION_GAP;
     let mut panes = Vec::with_capacity(Tab::ALL.len());
     for tab in Tab::ALL {
+        let pane_h = tab.pane_height();
+        let pane_frame = NSRect::new(
+            NSPoint::new(0.0, pane_top - pane_h),
+            NSSize::new(WIDTH, pane_h),
+        );
         let pane = NSView::initWithFrame(NSView::alloc(mtm), pane_frame);
+        pane.setAutoresizingMask(below_top);
         let left = match tab {
             Tab::General => build_general(mtm, &pane),
             Tab::Privacy => build_privacy(mtm, &pane),
             Tab::Display => build_display(mtm, &pane),
             Tab::Notifications => build_notifications(mtm, &pane),
         };
-        // Each tab fits the shared pane height; the tallest fills it.
-        debug_assert!(left > -0.5, "{tab:?} is taller than the pane");
+        // Each pane is exactly as tall as its settings.
+        debug_assert!(left.abs() < 0.5, "{tab:?} does not fill its pane");
         body.addSubview(&pane);
         panes.push(pane);
     }
@@ -659,7 +595,7 @@ fn build(mtm: MainThreadMarker) {
 
 /// Algemeen: hotkey, language, date order and Open at Login. Returns the unused height.
 fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = PANE_H;
+    let mut top = Tab::General.pane_height();
     let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
 
     let y = take(&mut top, BUTTON_H);
@@ -739,7 +675,7 @@ fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
 /// Privacy: Keep clipboard history, the privacy filter, blur and the ignored apps (greyed out
 /// while history is off). Returns the unused height.
 fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = PANE_H;
+    let mut top = Tab::Privacy.pane_height();
     let y = take(&mut top, BUTTON_H);
     let history = checkbox(mtm, crate::locale::t("clipboard_history"), y);
     history.setState(state_of(settings::clipboard_history()));
@@ -895,7 +831,7 @@ fn indented_checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSB
 
 /// Meldingen: the four notification switches. Returns the unused height.
 fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = PANE_H;
+    let mut top = Tab::Notifications.pane_height();
     let switches = settings::notify_switches();
     let column = (WIDTH - MARGIN * 2.0) / 2.0;
     for (row_index, pair) in NOTIFY_SWITCHES.chunks(2).enumerate() {
@@ -923,7 +859,7 @@ fn build_notifications(mtm: MainThreadMarker, body: &NSView) -> f64 {
 /// Weergave: the card theme, long text in pages, Announce confirmations and the symbols.
 /// Returns the unused height.
 fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = PANE_H;
+    let mut top = Tab::Display.pane_height();
     let y = take(&mut top, BUTTON_H);
     place_card_theme(mtm, body, y);
     gap(&mut top, mac_ui::metrics::SPACE_S);
@@ -1139,8 +1075,8 @@ fn select_tab(index: usize) {
     show_pane(tab);
 }
 
-/// Select `tab`'s segment, name the window after it and show only its pane (no saving: also
-/// used while building).
+/// Select `tab`'s segment, name the window after it, show only its pane and give the window
+/// its height (no saving: also used while building).
 fn show_pane(tab: Tab) {
     SELECTED_TAB.set(tab.index());
     WINDOW.with(|slot| {
@@ -1157,6 +1093,28 @@ fn show_pane(tab: Tab) {
         for (at, pane) in slot.borrow().iter().enumerate() {
             pane.setHidden(at != tab.index());
         }
+    });
+    fit_window(tab);
+}
+
+/// Give the open window `tab`'s height, its top edge where it was (as System Settings does),
+/// animated unless Reduce Motion is on. Not while building: the window opens at that height.
+fn fit_window(tab: Tab) {
+    WINDOW.with(|slot| {
+        let Some(window) = slot.borrow().as_ref().map(|window| window.retain()) else {
+            return;
+        };
+        let old = window.frame();
+        let mut new = window.frameRectForContentRect(NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(WIDTH, tab.window_height()),
+        ));
+        if (new.size.height - old.size.height).abs() < 0.5 {
+            return;
+        }
+        new.origin.x = old.origin.x;
+        new.origin.y = keep_top(old.origin.y, old.size.height, new.size.height);
+        window.setFrame_display_animate(new, true, !mac_ui::motion::reduce_motion());
     });
 }
 

@@ -41,6 +41,7 @@ mod python;
 mod recognize;
 mod sensitivity;
 mod settings;
+mod settings_tabs;
 mod symbols;
 mod table;
 mod table_ops;
