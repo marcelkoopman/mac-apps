@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open Table" on the card): the table of one entry in its own resizable
-// window. A toolbar with Table ▾, Copy, Save and the version capsule (↶ v2/3 ↷), a sidebar
+// window. A native toolbar (`toolbar`: Table ▾, Copy, Save, the version group ↶ v2/3 ↷), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
 // tables) and the meta line. A parsed grid is drawn as aligned columns with a fixed header
 // (`macos_table_paint`); a grid that does not parse keeps the boxed text and a frozen first
@@ -26,12 +26,12 @@ use mac_ui::objc2_app_kit::{
     NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
     NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode, NSMenu, NSMenuItem,
     NSModalPanelWindowLevel, NSMutableParagraphStyle, NSScrollView, NSTextAlignment, NSTextField,
-    NSTextTab, NSTextView, NSView, NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask,
-    NSWindowTabbingMode,
+    NSTextTab, NSTextView, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView,
+    NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize,
-    NSString,
+    NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSObjectProtocol, NSPoint,
+    NSRange, NSRect, NSSize, NSString,
 };
 use mac_ui::panel;
 use mac_ui::text::AttrText;
@@ -46,24 +46,19 @@ use zeroize::Zeroize;
 /// The window's first size; it is resizable down to [`MIN_SIZE`].
 const INITIAL_SIZE: NSSize = NSSize::new(900.0, 560.0);
 const MIN_SIZE: NSSize = NSSize::new(560.0, 320.0);
-const TOOLBAR_H: f64 = 44.0;
 const META_H: f64 = 28.0;
-/// Between Table ▾ and the Copy/Save symbols: a fixed gap marks them as their own group.
-const ACTION_GROUP_GAP: f64 = mac_ui::metrics::SPACE_L;
 const SIDEBAR_W: f64 = 220.0;
 const SIDEBAR_TITLE_H: f64 = 22.0;
 const PAD: f64 = mac_ui::metrics::MARGIN;
 const WELL_RADIUS: f64 = mac_ui::metrics::WELL_RADIUS;
-const NAV_SYMBOL: f64 = mac_ui::metrics::FONT_CAPTION;
-const NAV_FONT: f64 = mac_ui::metrics::FONT_CAPTION;
 /// The card's text blur (`TEXT_BLUR_RADIUS` in `macos_launcher`): lines and their shape show,
 /// the characters do not.
 const BLUR_RADIUS: f64 = 6.0;
 
 thread_local! {
     static VIEWS: RefCell<Option<Views>> = const { RefCell::new(None) };
-    /// The toolbar's glass strip, restyled when Reduce Transparency changes.
-    static TOOLBAR: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
+    /// The toolbar's items, handed to AppKit by the delegate.
+    static TOOLBAR: RefCell<Option<toolbar::ToolbarItems>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<TableWindowDelegate>>> = const { RefCell::new(None) };
     /// What the window shows; wiped when it is replaced or the window closes.
     static SHOWN: RefCell<Option<TableWindowView>> = const { RefCell::new(None) };
@@ -71,7 +66,7 @@ thread_local! {
     static REVEALED: Cell<bool> = const { Cell::new(false) };
     /// The grid and sidebar hold the shown view's text (not blanked for a missing blur).
     static PAINTED: Cell<bool> = const { Cell::new(false) };
-    /// The commands of the menu popped last, by item tag.
+    /// The commands behind the toolbar's menus (Table ▾ and the versions), by item tag.
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The blur filter, built once; `None` inside when Core Image cannot build it.
     static BLUR: RefCell<Option<Option<Retained<AnyObject>>>> = const { RefCell::new(None) };
@@ -99,12 +94,6 @@ struct Views {
     meta: Retained<NSTextField>,
     placeholder: Retained<NSTextField>,
     hint: Retained<NSTextField>,
-    table_button: GlassButton,
-    copy_button: GlassButton,
-    save_button: GlassButton,
-    undo: GlassButton,
-    title: Retained<NSButton>,
-    redo: GlassButton,
     cover: Retained<NSButton>,
     shade: Retained<NSBox>,
 }
@@ -157,34 +146,24 @@ define_class!(
             reveal();
         }
 
-        #[unsafe(method(tableWindowMenuClicked:))]
-        fn menu_clicked(&self, _sender: Option<&NSButton>) {
-            pop_table_menu();
-        }
-
         #[unsafe(method(tableWindowUndoClicked:))]
-        fn undo_clicked(&self, _sender: Option<&NSButton>) {
+        fn undo_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::TableUndo);
         }
 
         #[unsafe(method(tableWindowRedoClicked:))]
-        fn redo_clicked(&self, _sender: Option<&NSButton>) {
+        fn redo_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::TableRedo);
         }
 
         #[unsafe(method(tableWindowCopyClicked:))]
-        fn copy_clicked(&self, _sender: Option<&NSButton>) {
+        fn copy_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Copy);
         }
 
         #[unsafe(method(tableWindowSaveClicked:))]
-        fn save_clicked(&self, _sender: Option<&NSButton>) {
+        fn save_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Save);
-        }
-
-        #[unsafe(method(tableWindowVersionsClicked:))]
-        fn versions_clicked(&self, _sender: Option<&NSButton>) {
-            pop_versions_menu();
         }
 
         #[unsafe(method(tableWindowPoppedClicked:))]
@@ -221,6 +200,34 @@ define_class!(
         #[unsafe(method(tableWindowGridScrolled:))]
         fn grid_scrolled(&self, _note: &NSNotification) {
             on_grid_scrolled();
+        }
+    }
+
+    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
+    unsafe impl NSObjectProtocol for TableWindowDelegate {}
+
+    // SAFETY: the methods below have the protocol's selectors, argument and return types; the
+    // returned items and arrays are retained (autoreleased on return by objc2).
+    // The toolbar's items, all fixed: the default set is the allowed set, nothing to customise.
+    unsafe impl NSToolbarDelegate for TableWindowDelegate {
+        #[unsafe(method_id(toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:))]
+        fn toolbar_item(
+            &self,
+            _toolbar: &NSToolbar,
+            id: &NSString,
+            _inserted: bool,
+        ) -> Option<Retained<NSToolbarItem>> {
+            toolbar::item(id)
+        }
+
+        #[unsafe(method_id(toolbarDefaultItemIdentifiers:))]
+        fn toolbar_default_items(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            toolbar::identifiers()
+        }
+
+        #[unsafe(method_id(toolbarAllowedItemIdentifiers:))]
+        fn toolbar_allowed_items(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            toolbar::identifiers()
         }
     }
 );
@@ -281,9 +288,8 @@ pub fn bring_forward() {
     }
 }
 
-/// Point the window's fixed labels at the current language and lay the toolbar out again.
-/// The Table ▾ title changes width (`Tabel` / `Table`); Copy, Save and the hint move with it.
-/// Nothing when the window has not been built. The meta line, sidebar title and hint text
+/// Point the window's fixed labels (title, toolbar, sidebar, grid, cover) at the current
+/// language; the toolbar lays itself out. Nothing when the window has not been built. The meta line, sidebar title and hint text
 /// are filled by the next paint.
 pub fn relabel() {
     VIEWS.with(|slot| {
@@ -301,43 +307,7 @@ pub fn relabel() {
             )
         });
         views.window.setTitle(&NSString::from_str(&title));
-        views.table_button.set_title(t("table_menu"));
-        views
-            .table_button
-            .set_accessibility_label(t("table_steps_a11y"));
-        set_action_labels(
-            &views.copy_button,
-            t("copy_table_a11y"),
-            t("copy_table_tip"),
-        );
-        set_action_labels(
-            &views.save_button,
-            t("save_table_a11y"),
-            t("save_table_tip"),
-        );
-
-        let width = views
-            .window
-            .contentView()
-            .map(|view| view.frame().size.width)
-            .unwrap_or(INITIAL_SIZE.width);
-        let toolbar_y = views.table_button.view().frame().origin.y;
-        let height = commands::CHIP_PILL_H;
-        let table_w = views.table_button.width_within(120.0);
-        views.table_button.view().setFrame(NSRect::new(
-            NSPoint::new(PAD, toolbar_y),
-            NSSize::new(table_w, height),
-        ));
-        let x = place_actions(table_w, toolbar_y, &views.copy_button, &views.save_button);
-        let hint = views.hint.frame();
-        let hint_w = (width - PAD - commands::VERSION_SPAN - PAD - x).max(10.0);
-        views.hint.setFrame(NSRect::new(
-            NSPoint::new(x, hint.origin.y),
-            NSSize::new(hint_w, hint.size.height),
-        ));
-
-        label_step(&views.undo, t("undo_table_step"), "⌘Z");
-        label_step(&views.redo, t("redo_table_step"), "⇧⌘Z");
+        toolbar::relabel();
         views
             .sidebar
             .setAccessibilityLabel(Some(&NSString::from_str(t("columns_title"))));
@@ -351,14 +321,6 @@ pub fn relabel() {
             .cover
             .setToolTip(Some(&NSString::from_str(t("click_to_reveal"))));
     });
-}
-
-/// Undo or redo. The drawn title stays the arrow; VoiceOver and the tooltip follow the language.
-fn label_step(button: &GlassButton, name: &str, keys: &str) {
-    button.set_accessibility_label(name);
-    button
-        .button()
-        .setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
 }
 
 /// Give the window (when made) the sharing type "Allow Screenshots" asks for.
@@ -404,10 +366,8 @@ fn forget() {
         wipe_content(views);
         widgets::wipe_text_field(&views.meta);
         widgets::wipe_text_field(&views.placeholder);
-        let empty = NSString::from_str("");
-        views.title.setAccessibilityLabel(Some(&empty));
-        views.title.setToolTip(Some(&empty));
     });
+    toolbar::wipe();
 }
 
 /// Overwrite the grid, its frozen column and the sidebar.
@@ -547,6 +507,7 @@ mod build;
 mod menus;
 mod paint;
 mod picker;
+mod toolbar;
 
 /// The card theme changed: repaint the grid in the new colours (text, header, stripes).
 pub(crate) fn apply_card_theme() {
@@ -571,6 +532,5 @@ pub(crate) fn restyle() {
 }
 
 use build::*;
-use menus::*;
 use paint::*;
 use picker::*;

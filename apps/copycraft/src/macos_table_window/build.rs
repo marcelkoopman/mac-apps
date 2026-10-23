@@ -1,4 +1,5 @@
-//! Building the table window's views: toolbar, sidebar, grid, version capsule.
+//! Building the table window's views: sidebar, grid, meta line and cover (the toolbar is
+//! `toolbar`).
 
 use super::*;
 
@@ -54,87 +55,18 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
     window.setContentView(Some(&content));
     let (width, height) = (INITIAL_SIZE.width, INITIAL_SIZE.height);
-    let body_h = height - TOOLBAR_H - META_H;
+    // The toolbar sits in the title bar, outside the content view.
+    let body_h = height - META_H;
 
-    // The toolbar strip: glass (vibrancy before macOS 26, opaque with Reduce Transparency),
-    // behind the buttons like the card's header.
-    let strip = NSView::initWithFrame(
-        NSView::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(0.0, height - TOOLBAR_H),
-            NSSize::new(width, TOOLBAR_H),
-        ),
-    );
-    strip.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewMinYMargin]));
-    panel::rounded_glass(mtm, &strip, 0.0);
-    content.addSubview(&strip);
-    TOOLBAR.with(|slot| slot.replace(Some(strip)));
-
-    // The toolbar: Table ▾, Copy, Save; version capsule at the right; hint between.
-    let toolbar_y = height - TOOLBAR_H + (TOOLBAR_H - commands::CHIP_PILL_H) / 2.0;
-    let table_button = GlassButton::pill(mtm, crate::locale::t("table_menu"), ButtonSize::Regular);
-    table_button.set_symbol("tablecells");
-    table_button.set_accessibility_label(crate::locale::t("table_steps_a11y"));
-    wire(table_button.button(), sel!(tableWindowMenuClicked:));
-    let table_w = table_button.width_within(140.0);
-    table_button.view().setFrame(NSRect::new(
-        NSPoint::new(PAD, toolbar_y),
-        NSSize::new(table_w, commands::CHIP_PILL_H),
-    ));
-    table_button
-        .view()
-        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
-    content.addSubview(table_button.view());
-
-    // Copy and Save: symbols only, as on the card, their names in the tooltip; a fixed gap
-    // after Table ▾ (the one text button) sets them apart as a group.
-    let copy_button = action_symbol(
-        mtm,
-        "doc.on.doc",
-        crate::locale::t("copy_table_a11y"),
-        crate::locale::t("copy_table_tip"),
-        "⎘",
-        sel!(tableWindowCopyClicked:),
-    );
-    content.addSubview(copy_button.view());
-    let save_button = action_symbol(
-        mtm,
-        "square.and.arrow.down",
-        crate::locale::t("save_table_a11y"),
-        crate::locale::t("save_table_tip"),
-        "↓",
-        sel!(tableWindowSaveClicked:),
-    );
-    content.addSubview(save_button.view());
-    let actions_x = place_actions(table_w, toolbar_y, &copy_button, &save_button);
-
-    let capsule = NSView::initWithFrame(
-        NSView::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(width - PAD - commands::VERSION_SPAN, toolbar_y),
-            NSSize::new(commands::VERSION_SPAN, commands::CHIP_PILL_H),
-        ),
-    );
-    capsule.setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMinXMargin]));
-    let (undo, title, redo) = version_capsule(mtm, &capsule);
-    content.addSubview(&capsule);
-
+    // Shown in the toolbar while the grid is masked ("Click the table to reveal it").
     let hint = widgets::label(
         mtm,
         mac_ui::metrics::FONT_CAPTION,
         &crate::appearance::caption_color(),
     );
     hint.setAlignment(NSTextAlignment::Center);
-    let hint_x = actions_x;
-    hint.setFrame(NSRect::new(
-        NSPoint::new(hint_x, toolbar_y + 5.0),
-        NSSize::new(
-            (width - PAD - commands::VERSION_SPAN - PAD - hint_x).max(10.0),
-            18.0,
-        ),
-    ));
-    hint.setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewWidthSizable]));
-    content.addSubview(&hint);
+    hint.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
+    toolbar::install(mtm, &window, &hint);
 
     // The meta line along the bottom.
     let meta = widgets::label(
@@ -300,129 +232,16 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
             meta,
             placeholder,
             hint,
-            table_button,
-            copy_button,
-            save_button,
-            undo,
-            title,
-            redo,
             cover,
             shade,
         }))
     });
 }
 
-/// The card's version row: ↶, the version shown (a button that pops the versions) and ↷.
-/// Separate glass buttons with the same gap as the card, not a second glass capsule.
-/// A symbol-only toolbar button: `label` for VoiceOver, `tip` as its tooltip.
-fn action_symbol(
-    mtm: MainThreadMarker,
-    symbol: &str,
-    label: &str,
-    tip: &str,
-    fallback: &str,
-    action: Sel,
-) -> GlassButton {
-    let button = GlassButton::symbol(mtm, symbol, label, fallback, mac_ui::metrics::FONT_BODY);
-    button.button().setAlignment(NSTextAlignment::Center);
-    set_action_labels(&button, label, tip);
-    wire(button.button(), action);
-    button.view().setAutoresizingMask(mask(&[
-        NSAutoresizingMaskOptions::ViewMinYMargin,
-        NSAutoresizingMaskOptions::ViewMaxXMargin,
-    ]));
-    button
-}
-
-/// VoiceOver name and tooltip of Copy or Save (both follow the language).
-pub(super) fn set_action_labels(button: &GlassButton, label: &str, tip: &str) {
-    button.set_accessibility_label(label);
-    button.button().setToolTip(Some(&NSString::from_str(tip)));
-}
-
-/// Put Copy and Save after Table ▾ (`table_w` wide): [`ACTION_GROUP_GAP`] after it, square
-/// buttons [`mac_ui::metrics::BUTTON_GAP`] apart. Returns where the hint starts.
-pub(super) fn place_actions(
-    table_w: f64,
-    toolbar_y: f64,
-    copy: &GlassButton,
-    save: &GlassButton,
-) -> f64 {
-    let side = commands::CHIP_PILL_H;
-    let mut x = PAD + table_w + ACTION_GROUP_GAP;
-    for button in [copy, save] {
-        button.view().setFrame(NSRect::new(
-            NSPoint::new(x, toolbar_y),
-            NSSize::new(side, side),
-        ));
-        x += side + mac_ui::metrics::BUTTON_GAP;
-    }
-    x - mac_ui::metrics::BUTTON_GAP + PAD
-}
-
-pub(super) fn version_capsule(
-    mtm: MainThreadMarker,
-    capsule: &NSView,
-) -> (GlassButton, Retained<NSButton>, GlassButton) {
-    let height = commands::CHIP_PILL_H;
-    let step_button = |symbol: &str, name: &str, glyph: &str, keys: &str, action: Sel| {
-        let button = GlassButton::symbol(mtm, symbol, name, glyph, NAV_SYMBOL);
-        let ns = button.button();
-        ns.setAlignment(NSTextAlignment::Center);
-        ns.setAccessibilityLabel(Some(&NSString::from_str(name)));
-        ns.setToolTip(Some(&NSString::from_str(&format!("{name} ({keys})"))));
-        wire(ns, action);
-        button
-    };
-    let undo = step_button(
-        "arrow.uturn.backward",
-        crate::locale::t("undo_table_step"),
-        "↶",
-        "⌘Z",
-        sel!(tableWindowUndoClicked:),
-    );
-    let redo = step_button(
-        "arrow.uturn.forward",
-        crate::locale::t("redo_table_step"),
-        "↷",
-        "⇧⌘Z",
-        sel!(tableWindowRedoClicked:),
-    );
-    let title = widgets::text_button(mtm, "v20/20", NAV_FONT);
-    title.setFont(Some(&NSFont::monospacedDigitSystemFontOfSize_weight(
-        NAV_FONT, 0.0,
-    )));
-    title.setContentTintColor(Some(&crate::appearance::caption_color()));
-    title.setAlignment(NSTextAlignment::Center);
-    wire(&title, sel!(tableWindowVersionsClicked:));
-    let title_h = title.fittingSize().height.ceil();
-    undo.view().setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(commands::NAV_BUTTON, height),
-    ));
-    title.setFrame(NSRect::new(
-        NSPoint::new(commands::nav_mid_x(), ((height - title_h) / 2.0).floor()),
-        NSSize::new(commands::NAV_COUNT_W, title_h),
-    ));
-    redo.view().setFrame(NSRect::new(
-        NSPoint::new(commands::nav_end_x(), 0.0),
-        NSSize::new(commands::NAV_BUTTON, height),
-    ));
-    capsule.addSubview(undo.view());
-    capsule.addSubview(&title);
-    capsule.addSubview(redo.view());
-    (undo, title, redo)
-}
-
 /// Well border and caption colours follow Reduce Transparency and Increase Contrast.
 /// The frozen column and the header strip stay an opaque plate in the grid's own colour,
 /// so scrolling cells do not show through and the plate does not become a second surface.
 pub(super) fn apply_table_chrome(views: &Views) {
-    if let Some(mtm) = MainThreadMarker::new()
-        && let Some(strip) = TOOLBAR.with(|slot| slot.borrow().clone())
-    {
-        mac_ui::glass::set_opaque_fill(mtm, &strip, 0.0, mac_ui::motion::reduce_transparency());
-    }
     crate::appearance::apply_well(&views.well, false, true);
     // A fixed card theme paints the grid: its background on the plates and the well, its
     // light or dark appearance on the window so separators and controls match.
@@ -441,5 +260,4 @@ pub(super) fn apply_table_chrome(views: &Views) {
     views.hint.setTextColor(Some(&caption));
     views.sidebar_title.setTextColor(Some(&caption));
     views.placeholder.setTextColor(Some(&caption));
-    views.title.setContentTintColor(Some(&caption));
 }

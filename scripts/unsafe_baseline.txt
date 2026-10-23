@@ -18,9 +18,14 @@
 # copycraft blocks 109: +2 macos_pasteboard::hint (the paste-kind hint under Default/Ask, approved by Marcel
 # 2026-10-23): reading AppKit's NSPasteboardDetectionPattern* constants (extern statics), and the
 # NSSet pointer detectPatternsForPatterns:completionHandler: hands its block (objc2 types it `*mut`).
-copycraft blocks 109
+# copycraft blocks 111, impl 9: +2 blocks, +2 impl for the table window's native NSToolbar (Toolbar HIG point 7,
+# asked for by Marcel 2026-10-23; macos_table_window/toolbar.rs and mod.rs): reading the extern static
+# NSToolbarFlexibleSpaceItemIdentifier, and setTarget:/setAction: on the toolbar items (objc2-app-kit marks
+# both `unsafe`; the target is the process-lived delegate); `unsafe impl NSObjectProtocol` and
+# `unsafe impl NSToolbarDelegate` for TableWindowDelegate (the toolbar needs a typed delegate).
+copycraft blocks 111
 copycraft fn 5
-copycraft impl 7
+copycraft impl 9
 mac-ui blocks 82
 mac-ui fn 4
 mac-ui impl 4

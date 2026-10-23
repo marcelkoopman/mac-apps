@@ -34,28 +34,7 @@ pub(super) fn paint_chrome(views: &Views, view: &TableWindowView) {
     views
         .window
         .setTitle(&NSString::from_str(&view.window_title()));
-    views
-        .table_button
-        .button()
-        .setEnabled(!view.menu.is_empty());
-    // Enabled once the version's grid is there (not while "Working on the table…").
-    let ready = !view.grid.is_empty();
-    views.copy_button.button().setEnabled(ready);
-    views.save_button.button().setEnabled(ready);
-    views.undo.button().setEnabled(view.can_undo());
-    views.redo.button().setEnabled(view.can_redo());
-    views
-        .title
-        .setTitle(&NSString::from_str(&view.version_title()));
-    if !view.versions.labels.is_empty() {
-        let bar = VersionBar {
-            labels: view.versions.labels.clone(),
-            current: view.versions.current.min(view.versions.labels.len() - 1),
-        };
-        let spoken = NSString::from_str(&bar.spoken());
-        views.title.setAccessibilityLabel(Some(&spoken));
-        views.title.setToolTip(Some(&spoken));
-    }
+    toolbar::paint(view);
     paint_meta(&views.meta, &view.meta);
     let columns = view.columns.len();
     views
