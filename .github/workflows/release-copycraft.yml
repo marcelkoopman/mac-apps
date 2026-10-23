@@ -112,13 +112,12 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: cargo bundle --release --target aarch64-apple-darwin
 
+      # No icon.icns here: the bundle icon is AppIcon.icns + Assets.car from the Icon Composer
+      # document (Compile app icon below). assets/icon.icns is only built into the binary.
       - name: Copy assets into app bundle
         run: |
           RES="$APP/Contents/Resources"
           mkdir -p "$RES/assets"
-          if [ -f "$APP_DIR/assets/icon.icns" ]; then
-            cp -v "$APP_DIR/assets/icon.icns" "$RES/icon.icns"
-          fi
 
           echo "=== Resources ==="
           ls -lah "$RES"
@@ -248,8 +247,9 @@ jobs:
       - name: Create professional DMG
         run: |
           VOLICON_ARGS=()
-          if [ -f "$APP/Contents/Resources/icon.icns" ]; then
-            VOLICON_ARGS=(--volicon "$APP/Contents/Resources/icon.icns")
+          # The app icon scripts/build_app_icon.sh compiled from assets/AppIcon.icon.
+          if [ -f "$APP/Contents/Resources/AppIcon.icns" ]; then
+            VOLICON_ARGS=(--volicon "$APP/Contents/Resources/AppIcon.icns")
           fi
           mkdir -p "$DMG_DIR"
           create-dmg \

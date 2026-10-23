@@ -218,5 +218,13 @@ jobs:
                 test "$(/usr/libexec/PlistBuddy -c 'Print :NSAccentColorName' "$app/Contents/Info.plist")" = AccentColor \
                   || { echo "::error::$pkg Info.plist has no NSAccentColorName = AccentColor"; exit 1; }
               fi
+              # The bundle's only .icns (copycraft has no cargo-bundle icon): every size, 16 to 1024.
+              iconutil -c iconset "$app/Contents/Resources/AppIcon.icns" -o "$RUNNER_TEMP/$pkg.iconset"
+              for size in 16 32 128 256 512; do
+                for name in "icon_${size}x${size}" "icon_${size}x${size}@2x"; do
+                  test -f "$RUNNER_TEMP/$pkg.iconset/$name.png" \
+                    || echo "::warning::$pkg AppIcon.icns has no $name"
+                done
+              done
             fi
           done

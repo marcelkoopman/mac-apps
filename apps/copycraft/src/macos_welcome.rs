@@ -32,7 +32,9 @@ const ICON_FADE: f64 = 0.25;
 /// 1024 px rep (the tile is a soft gradient, #030921 in the corners to #0E1B3F at the
 /// edges). Made with `colorWithSRGBRed`, the image's colour space, with nothing over it.
 const ICON_BACKGROUND: (f64, f64, f64) = (7.0 / 255.0, 17.0 / 255.0, 45.0 / 255.0);
-/// The app icon from `assets/icon.icns`, the same file the bundle uses.
+/// The app icon as `assets/icon.icns` (the glass design `assets/AppIcon.icon` is drawn after).
+/// The bundle no longer ships this file: its icon is compiled from `AppIcon.icon`
+/// (`scripts/build_app_icon.sh`), so the artwork is built into the binary for this window.
 const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
 /// Width of the labels and the button row: the window width minus the side margins.
 const INNER_W: f64 = WIDTH - PAD * 2.0;

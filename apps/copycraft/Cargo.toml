@@ -8,7 +8,9 @@ publish = false
 [package.metadata.bundle]
 name = "CopyCraft"
 identifier = "nl.marcelkoopman.copycraft"
-icon = ["assets/icon.icns"]
+# No `icon`: cargo-bundle only copies an .icns. The bundle icon is compiled from the Icon Composer
+# document assets/AppIcon.icon by scripts/build_app_icon.sh (Assets.car + AppIcon.icns with every
+# size, CFBundleIconName/CFBundleIconFile = AppIcon), as in the release workflow.
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
 resources = ["PrivacyInfo.xcprivacy"]
 version = "0.1.90"
