@@ -378,3 +378,7 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 - [ ] Settings › *Weergave* / *Display* › *Tekens* / *Symbols*: add, remove and reorder characters, quit CopyCraft and start it again.
       The change is still there.
 - [ ] Herstel standaard / Restore Defaults puts the standard list back.
+
+## Menus (Mac only, no data)
+
+- [ ] Shortcuts on menu rows: `⋯` shows *Kies bestand…* / *Choose File…* with ⌘O, *Instellingen…* / *Settings…* with ⌘, and the strip toggle with ⌘Y. *Tekst ▾* / *Text ▾* and *Afbeelding ▾* / *Image ▾* show ⌘Z on *Ongedaan maken* / *Undo* and ⇧⌘Z on *Herhaal* / *Redo*. With `⋯` open, press ⌘Y: the menu closes and the strip toggles once (not twice: it is not back where it was). With *Tekst ▾* open after two text steps, press ⌘Z: one step back, not two. With the menus closed the same chords still work on the card.

@@ -303,6 +303,18 @@ pub(crate) fn overflow_item(
     item
 }
 
+/// The shortcut of `id` drawn on its row ([`commands::menu_key`]); the card runs the chord.
+pub(crate) fn show_menu_key(item: &NSMenuItem, id: &CommandId) {
+    if let Some((key, shift)) = commands::menu_key(id) {
+        item.setKeyEquivalent(&NSString::from_str(key));
+        let mut mask = NSEventModifierFlags::Command;
+        if shift {
+            mask |= NSEventModifierFlags::Shift;
+        }
+        item.setKeyEquivalentModifierMask(mask);
+    }
+}
+
 pub(crate) fn activate_overflow(index: usize) {
     let cmd = OVERFLOW.with(|slot| slot.borrow().get(index).cloned());
     let Some(cmd) = cmd else {
@@ -399,6 +411,7 @@ pub(crate) fn pop_overflow() {
             _ => cmd.title.clone(),
         };
         let item = overflow_item(mtm, &title, index);
+        show_menu_key(&item, &cmd.id);
         if alternate {
             // Held ⌥ swaps the row above for this one; both have no key, so the masks differ.
             if let Some(primary) = target.itemArray().lastObject() {

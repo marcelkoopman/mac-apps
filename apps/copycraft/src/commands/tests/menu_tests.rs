@@ -188,3 +188,33 @@ fn history_submenu_puts_add_to_diff_under_option_and_the_clears_apart() {
         "Add to Diff: first"
     );
 }
+
+#[test]
+fn menu_rows_show_the_chords_the_card_runs() {
+    use crate::commands::menu_key;
+    assert_eq!(menu_key(&CommandId::ChooseFile), Some(("o", false)));
+    assert_eq!(menu_key(&CommandId::Settings), Some((",", false)));
+    assert_eq!(menu_key(&CommandId::ToggleStrip), Some(("y", false)));
+    assert_eq!(menu_key(&CommandId::TableUndo), Some(("z", false)));
+    assert_eq!(menu_key(&CommandId::TableRedo), Some(("z", true)));
+    assert_eq!(menu_key(&CommandId::Copy), None);
+    assert_eq!(menu_key(&CommandId::History(0)), None);
+    // ⌘Z / ⇧⌘Z on Text ▾ and Image ▾ are the card's own undo and redo of that version.
+    let edited = edited_picture(1, &["Original", "Resized", "Grayscale"]);
+    let bar = VersionBar::of(&edited);
+    assert_eq!(
+        undo_key("z", true, false, false, bar.as_ref()),
+        Some(CommandId::TableUndo)
+    );
+    assert_eq!(
+        undo_key("z", true, true, false, bar.as_ref()),
+        Some(CommandId::TableRedo)
+    );
+    let menu = crate::commands::image_menu_items(edited.image_edit.as_ref().unwrap());
+    let keyed: Vec<&CommandId> = menu
+        .iter()
+        .map(|(cmd, _)| &cmd.id)
+        .filter(|id| menu_key(id).is_some())
+        .collect();
+    assert_eq!(keyed, [&CommandId::TableUndo, &CommandId::TableRedo]);
+}

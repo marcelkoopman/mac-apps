@@ -1,5 +1,6 @@
 //! Pure rules for how the popped menus (⋯, Text ▾, Image ▾, Table ▾) are laid out: where a
-//! separator goes inside a submenu and which item is an ⌥ alternate of the one before it.
+//! separator goes inside a submenu, which item is an ⌥ alternate of the one before it, and
+//! which shortcut a row shows.
 //! AppKit only draws what these say, so the rules are tested on every platform.
 
 use super::*;
@@ -33,4 +34,21 @@ pub fn is_alternate(previous: Option<&CommandId>, id: &CommandId) -> bool {
 /// names that copy.
 pub fn alternate_title(action: &str, primary: &str) -> String {
     format!("{action}: {primary}")
+}
+
+/// The shortcut a menu row shows: its key and whether ⇧ is part of it (⌘ always is). Only a
+/// label: the card's own `performKeyEquivalent:` runs these chords whether a menu is open or
+/// not (⌘O Choose File, ⌘, Settings, ⌘Y the strip, ⌘Z / ⇧⌘Z [`undo_key`]). While a popped
+/// menu is open AppKit gives the chord to that menu, which runs the row once; the card does
+/// not see it, and the menu is gone once it closes, so nothing runs twice.
+pub fn menu_key(id: &CommandId) -> Option<(&'static str, bool)> {
+    match id {
+        CommandId::ChooseFile => Some(("o", false)),
+        CommandId::Settings => Some((",", false)),
+        CommandId::ToggleStrip => Some(("y", false)),
+        // Undo / Redo in Text ▾ and Image ▾ (Table ▾ has no undo rows).
+        CommandId::TableUndo => Some(("z", false)),
+        CommandId::TableRedo => Some(("z", true)),
+        _ => None,
+    }
 }
