@@ -133,13 +133,30 @@ impl App {
     pub(crate) fn copy_ai_result(&mut self, result: &Zeroizing<String>) {
         match self.write_own(result) {
             Ok(()) => {
-                self.record_own_copy(result);
+                self.last_copy = Some(Instant::now());
+                let admitted = crate::sensitivity::admission(&crate::sensitivity::labeling(result))
+                    != crate::sensitivity::Admission::Refuse;
+                if self.record_step_copy(result, admitted).1 {
+                    self.history_cursor = 0;
+                    self.clipboard_cursor = None;
+                    self.refresh_status_menu();
+                }
                 save_feedback(crate::locale::t("copied_toast"));
             }
             Err(e) => crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             )),
         }
+    }
+
+    /// Record a step's copy `result` as an Image ▾ step's: the user asked for it, so an ignored
+    /// front app does not hold it; Pause, a token or key (`admitted` false) or its size do.
+    /// Returns the verdict and whether history took it.
+    fn record_step_copy(&mut self, result: &str, admitted: bool) -> (StepKeep, bool) {
+        let keep = step_keep(crate::capture::history_paused(), admitted);
+        let recorded =
+            keep == StepKeep::Keep && self.history.record_unless(result.to_string(), false);
+        (keep, recorded)
     }
 
     /// The steps whose shown version is entry `id`.
@@ -304,8 +321,9 @@ impl App {
     /// labelled `label`, as an Image ▾ step does: the clipboard holds the result, the card
     /// shows it, ⌘Z shows entry `id` again. A copy that is not in history yet (the clipboard's
     /// at launch) goes in first, by the rules of any copy ([`keep_step_source`]). The result
-    /// goes in by those rules too ([`step_keep`] with `held`): Pause, the ignore list, a token
-    /// or key in it, or its size keep it out, with a note. On an opened file the card leaves
+    /// goes in as an Image ▾ step's ([`Self::record_step_copy`]): the user asked for it, so an
+    /// ignored front app does not hold it; Pause, a token or key in it, or its size keep it
+    /// out, with a note. On an opened file the card leaves
     /// the file for the new copy.
     pub(crate) fn text_stepped(&mut self, id: u64, label: String, result: &Zeroizing<String>) {
         let Some((entry, source)) = self.text_entry().filter(|(entry, _)| *entry == id) else {
@@ -349,9 +367,6 @@ impl App {
         }
         let admitted = crate::sensitivity::admission(&crate::sensitivity::labeling(result))
             != crate::sensitivity::Admission::Refuse;
-        // Unlike an Image ▾ step's copy, a text step's follows the ignore list too (`held` is
-        // Pause or an ignored front app), as CopyCraft's other own copies do.
-        let keep = step_keep(held, admitted);
         if let Err(e) = self.write_own(result) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
@@ -361,7 +376,7 @@ impl App {
         self.last_copy = Some(Instant::now());
         // The new copy is the clipboard's: the card follows it again.
         self.browsing = None;
-        let recorded = keep == StepKeep::Keep && self.history.record(result.to_string());
+        let (keep, recorded) = self.record_step_copy(result, admitted);
         if cfg!(debug_assertions) {
             crate::diag::log(crate::diag::LogEvent::TextStepKept {
                 source_in_history: in_history,

@@ -760,10 +760,11 @@ mod held_history {
         })
     }
 
-    /// A Text ▾ step as the app takes it: the result is recorded as an own copy.
-    fn text_step(history: &mut ClipboardHistory, source: &str) -> bool {
+    /// A Text ▾ step as the app takes it: the result is a step's own copy, held by Pause
+    /// alone (`paused`), as an Image ▾ step's.
+    fn text_step(history: &mut ClipboardHistory, source: &str, paused: bool) -> bool {
         let result = TextOp::Reverse.apply(source).expect("a result");
-        history.record(result)
+        history.record_unless(result, paused)
     }
 
     #[test]
@@ -773,7 +774,7 @@ mod held_history {
         assert!(history.record("first copy".into()));
         PAUSED.store(true, Ordering::Relaxed);
         assert!(history.held());
-        assert!(!text_step(&mut history, "a\nb\n"));
+        assert!(!text_step(&mut history, "a\nb\n", true));
         assert!(!history.record("own copy".into()));
         assert!(history.record_image(vec![1, 2, 3]).is_none());
         assert_eq!(history.record_tracking("x".into(), 0), None);
@@ -781,11 +782,23 @@ mod held_history {
     }
 
     #[test]
-    fn a_text_step_adds_nothing_with_an_ignored_app_in_front() {
+    fn a_step_copy_is_kept_with_an_ignored_app_in_front_text_and_image_alike() {
         let mut history = ClipboardHistory::with_gate(ignored_app_gate);
         assert!(history.held());
-        assert!(!text_step(&mut history, "a\nb\nc\n"));
-        assert_eq!(history.len(), 0);
+        // The ignored app's own copy stays out.
+        assert!(!history.record("from the ignored app".into()));
+        assert!(history.record_image(vec![9, 9, 9]).is_none());
+        // The user asked for the step: its copy goes in, text and picture alike.
+        assert!(text_step(&mut history, "a\nb\nc\n", false));
+        assert!(
+            history
+                .record_image_unless(
+                    crate::clipboard::SecretBytes::new(vec![1, 2, 3]).expect("bytes"),
+                    false
+                )
+                .is_some()
+        );
+        assert_eq!(history.len(), 2);
     }
 
     #[test]
@@ -794,7 +807,7 @@ mod held_history {
             crate::capture::held(false, Some("com.example.editor"), |_| false)
         }
         let mut history = ClipboardHistory::with_gate(open);
-        assert!(text_step(&mut history, "a\nb\n"));
+        assert!(text_step(&mut history, "a\nb\n", false));
         assert_eq!(history.len(), 1);
     }
 }
@@ -844,8 +857,8 @@ fn over_the_total_the_oldest_unpinned_goes_first_and_is_zeroized() {
 
 #[test]
 fn equal_bytes_compare_by_length_and_hash_then_bytes() {
-    let a = SecretBytes::new(vec![1, 2, 3]).unwrap();
-    let b = SecretBytes::new(vec![1, 2, 3]).unwrap();
+    let a = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
+    let b = SecretBytes::new(vec![1, 2, 3]).expect("bytes");
     let c = SecretBytes::new(vec![1, 2, 4]).unwrap();
     let d = SecretBytes::new(vec![1, 2]).unwrap();
     assert!(a == b && b == a);

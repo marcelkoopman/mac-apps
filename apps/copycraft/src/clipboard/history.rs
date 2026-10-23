@@ -30,8 +30,14 @@ impl ClipboardHistory {
     /// the entry keeps its cards. A pinned copy of the same text moves to the front and stays
     /// pinned. An unpinned one further down is replaced by a new entry in front.
     /// Returns whether `text` is in history now (`false`: blank, or history is held).
-    pub fn record(&mut self, mut text: String) -> bool {
-        if text.trim().is_empty() || self.held() || too_large(text.len(), MAX_TEXT_BYTES, false) {
+    pub fn record(&mut self, text: String) -> bool {
+        let held = self.held();
+        self.record_unless(text, held)
+    }
+    /// [`Self::record`] with `held` given by the caller: a step's own copy passes Pause alone,
+    /// so an ignored front app does not hold it (as [`Self::record_image_unless`]).
+    pub fn record_unless(&mut self, mut text: String, held: bool) -> bool {
+        if text.trim().is_empty() || held || too_large(text.len(), MAX_TEXT_BYTES, false) {
             text.zeroize();
             return false;
         }

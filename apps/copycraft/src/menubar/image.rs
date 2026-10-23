@@ -716,10 +716,10 @@ pub(crate) enum StepKeep {
     Secret,
 }
 
-/// [`StepKeep`] for a step's copy. For an Image ▾ step `paused` is Pause alone: the user asked
-/// for the copy, so an ignored front app does not hold it (the copy is CopyCraft's own). A
-/// Text ▾ step passes held history (Pause or an ignored app), as its other own copies follow
-/// the ignore list. Too large is decided by history itself. Pure.
+/// [`StepKeep`] for a step's copy (Image ▾ and Text ▾ alike). `paused` is Pause alone: the
+/// user asked for the copy, so an ignored front app does not hold it (the copy is CopyCraft's
+/// own); the copy it was taken on stays out then ([`keep_step_source`]). Too large is decided
+/// by history itself. Pure.
 pub(crate) fn step_keep(paused: bool, admitted: bool) -> StepKeep {
     if !admitted {
         StepKeep::Secret
@@ -812,11 +812,14 @@ mod step_tests {
     }
 
     #[test]
-    fn a_text_step_follows_the_ignore_list() {
-        // A text step passes held history (Pause or an ignored app) as `paused`.
-        let ignored_app = true;
-        assert_eq!(step_keep(ignored_app, true), StepKeep::Paused);
-        assert!(!keep_step_source(true, false, true, ignored_app, true));
+    fn text_and_image_steps_treat_an_ignored_app_alike() {
+        // Both pass Pause alone to `step_keep`: an ignored front app (`held`, not paused)
+        // keeps the copy the step was taken on out, the step's own copy in.
+        let (paused, held) = (false, true);
+        assert_eq!(step_keep(paused, true), StepKeep::Keep);
+        assert!(!keep_step_source(true, false, true, held, true));
+        // Pause keeps both out, for text and pictures.
+        assert_eq!(step_keep(true, true), StepKeep::Paused);
         // A copy still being checked for a token is not let in before the check.
         assert!(!keep_step_source(true, false, true, false, false));
     }
