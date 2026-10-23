@@ -11,7 +11,7 @@
   - FileTimestamp C617.1: std::fs::metadata (stat) on its own files in the app container
     (preview files in the temporary directory, src/macos_open.rs).
   - FileTimestamp 3B52.1: stat on files the user chose with the open panel, dropped on the
-    card or copied (src/open_file.rs, src/macos_pasteboard.rs).
+    card or copied (src/open_file.rs, src/macos_pasteboard/).
   - SystemBootTime 35F9.1: std::time::Instant (macOS: monotonic uptime clock) to measure time
     elapsed between events inside the app (menu bar, tray blink, hotkey timing).
   Not used: disk space (no statvfs, no volume capacity keys; sysinfo is in the tree through
