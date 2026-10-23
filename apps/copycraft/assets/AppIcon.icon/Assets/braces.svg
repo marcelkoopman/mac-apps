@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- CopyCraft icon layer 3 of 3, the braces: the bright mark on the board. -->
+  <g id="braces">
+    <defs>
+      <linearGradient id="braces-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5EE7F0"/>
+        <stop offset="1" stop-color="#3B82F6"/>
+      </linearGradient>
+    </defs>
+    <path fill="url(#braces-fill)" d="M458 352h-46a64 64 0 0 0-64 64v210a64 64 0 0 0 64 64h46v-56h-42a12 12 0 0 1-12-12V420a12 12 0 0 1 12-12h42z"/>
+    <path fill="url(#braces-fill)" d="M566 352h46a64 64 0 0 1 64 64v210a64 64 0 0 1-64 64h-46v-56h42a12 12 0 0 0 12-12V420a12 12 0 0 0-12-12h-42z"/>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- CopyCraft icon layer 2 of 3, the clip: a metal tab with a slot, over the top edge of the board. -->
+  <g id="clip">
+    <defs>
+      <linearGradient id="clip-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#E6EAF5"/>
+        <stop offset="1" stop-color="#9AA6C6"/>
+      </linearGradient>
+    </defs>
+    <path fill-rule="evenodd" fill="url(#clip-fill)" d="M420 158h186a34 34 0 0 1 34 34v74a34 34 0 0 1-34 34H420a34 34 0 0 1-34-34v-74a34 34 0 0 1 34-34zM442 192a18 18 0 0 0-18 18v18a18 18 0 0 0 18 18h142a18 18 0 0 0 18-18v-18a18 18 0 0 0-18-18z"/>
+  </g>
+</svg>

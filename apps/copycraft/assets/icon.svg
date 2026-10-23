@@ -1,31 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="CopyCraft">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1B2233"/>
-      <stop offset="1" stop-color="#2B3350"/>
-    </linearGradient>
-    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F7F8FC"/>
-      <stop offset="1" stop-color="#E4E7F1"/>
-    </linearGradient>
-    <linearGradient id="clip" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6EA8FF"/>
-      <stop offset="1" stop-color="#7B6CFF"/>
-    </linearGradient>
-    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5EEAD4"/>
-      <stop offset="1" stop-color="#60A5FA"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0B1020" flood-opacity="0.35"/>
-    </filter>
-  </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
-  <g filter="url(#shadow)">
-    <rect x="262" y="250" width="500" height="600" rx="72" fill="url(#paper)"/>
-    <rect x="392" y="188" width="240" height="132" rx="36" fill="url(#clip)"/>
-    <rect x="428" y="214" width="168" height="56" rx="18" fill="#E8EDFF"/>
-    <path d="M360 430c0-38 28-62 70-62h28v48h-22c-16 0-28 10-28 26v156c0 16 12 26 28 26h22v48h-28c-42 0-70-24-70-62V430z" fill="url(#mark)"/>
-    <path d="M664 430c0-38-28-62-70-62h-28v48h22c16 0 28 10 28 26v156c0 16-12 26-28 26h-22v48h28c42 0 70-24 70-62V430z" fill="url(#mark)"/>
+  <!-- Flat preview of AppIcon.icon: the icon.json background (#07112D) under the three layers
+       of AppIcon.icon/Assets, copied verbatim (a test in src/icon.rs keeps them in sync). Icon
+       Composer adds the mask, glass and shadow; the app is built from AppIcon.icon, not this. -->
+  <rect width="1024" height="1024" fill="#07112D"/>
+  <!-- CopyCraft icon layer 1 of 3, the board: a frosted plate (Icon Composer adds the glass). -->
+  <g id="board">
+    <defs>
+      <linearGradient id="board-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6F7FA8"/>
+        <stop offset="1" stop-color="#3E4C78"/>
+      </linearGradient>
+    </defs>
+    <rect x="250" y="222" width="528" height="640" rx="64" fill="url(#board-fill)"/>
+  </g>
+  <!-- CopyCraft icon layer 2 of 3, the clip: a metal tab with a slot, over the top edge of the board. -->
+  <g id="clip">
+    <defs>
+      <linearGradient id="clip-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#E6EAF5"/>
+        <stop offset="1" stop-color="#9AA6C6"/>
+      </linearGradient>
+    </defs>
+    <path fill-rule="evenodd" fill="url(#clip-fill)" d="M420 158h186a34 34 0 0 1 34 34v74a34 34 0 0 1-34 34H420a34 34 0 0 1-34-34v-74a34 34 0 0 1 34-34zM442 192a18 18 0 0 0-18 18v18a18 18 0 0 0 18 18h142a18 18 0 0 0 18-18v-18a18 18 0 0 0-18-18z"/>
+  </g>
+  <!-- CopyCraft icon layer 3 of 3, the braces: the bright mark on the board. -->
+  <g id="braces">
+    <defs>
+      <linearGradient id="braces-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5EE7F0"/>
+        <stop offset="1" stop-color="#3B82F6"/>
+      </linearGradient>
+    </defs>
+    <path fill="url(#braces-fill)" d="M458 352h-46a64 64 0 0 0-64 64v210a64 64 0 0 0 64 64h46v-56h-42a12 12 0 0 1-12-12V420a12 12 0 0 1 12-12h42z"/>
+    <path fill="url(#braces-fill)" d="M566 352h46a64 64 0 0 1 64 64v210a64 64 0 0 1-64 64h-46v-56h42a12 12 0 0 0 12-12V420a12 12 0 0 0-12-12h-42z"/>
   </g>
 </svg>

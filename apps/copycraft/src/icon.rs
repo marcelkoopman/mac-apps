@@ -111,4 +111,50 @@ mod tests {
         assert_eq!(alpha(20, 19), 0, "right brace stays cut out");
         assert_eq!(alpha(0, 0), 0, "corner");
     }
+
+    /// `assets/icon.svg` is the flat copy of the Icon Composer document: its background is the
+    /// `icon.json` fill and its shapes are the three layers, verbatim. The layers stay square
+    /// and unmasked, with no baked-in corner radius or shadow (Icon Composer adds those).
+    #[test]
+    fn app_icon_layers_and_flat_svg_stay_in_sync() {
+        const FLAT: &str = include_str!("../assets/icon.svg");
+        const JSON: &str = include_str!("../assets/AppIcon.icon/icon.json");
+        let layers = [
+            (
+                "board",
+                include_str!("../assets/AppIcon.icon/Assets/board.svg"),
+            ),
+            (
+                "clip",
+                include_str!("../assets/AppIcon.icon/Assets/clip.svg"),
+            ),
+            (
+                "braces",
+                include_str!("../assets/AppIcon.icon/Assets/braces.svg"),
+            ),
+        ];
+        let mut last = 0;
+        for (name, layer) in layers {
+            assert!(layer.contains(r#"width="1024" height="1024" viewBox="0 0 1024 1024""#));
+            assert!(
+                !layer.contains("filter") && !layer.contains("rx=\"224\""),
+                "{name}"
+            );
+            let body = layer.split_once('\n').map_or("", |(_, rest)| rest);
+            let body = &body[..body.rfind("</svg>").unwrap_or(0)];
+            assert!(
+                !body.is_empty() && FLAT.contains(body),
+                "{name} is in icon.svg"
+            );
+            // Bottom of the stack first, in icon.json as in icon.svg.
+            let at = JSON
+                .find(&format!(r#""image-name" : "{name}.svg""#))
+                .expect("layer in icon.json");
+            assert!(at > last, "{name} is stacked in order");
+            last = at;
+        }
+        assert!(JSON.contains(r#""solid" : "extended-srgb:0.02745,0.06667,0.17647,1.00000""#));
+        assert!(FLAT.contains(r##"<rect width="1024" height="1024" fill="#07112D"/>"##));
+        assert!(!FLAT.contains("filter"));
+    }
 }

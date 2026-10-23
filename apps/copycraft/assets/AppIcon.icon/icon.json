@@ -1,22 +1,53 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "solid" : "extended-srgb:0.02745,0.06667,0.17647,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "icon.svg",
-          "name" : "icon"
+          "image-name" : "board.svg",
+          "name" : "board"
         }
       ],
+      "name" : "Board",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
       "translucency" : {
         "enabled" : true,
-        "value" : 0.3
+        "value" : 0.4
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "clip.svg",
+          "name" : "clip"
+        }
+      ],
+      "name" : "Clip",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "braces.svg",
+          "name" : "braces"
+        }
+      ],
+      "name" : "Braces",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
       }
     }
   ],
