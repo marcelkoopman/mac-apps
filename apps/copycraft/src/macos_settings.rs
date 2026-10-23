@@ -465,6 +465,22 @@ define_class!(
 
         #[unsafe(method(restoreSymbols:))]
         fn restore_symbols(&self, _sender: Option<&NSButton>) {
+            // Your own characters are replaced: ask first, Cancel is the default (Return/Esc).
+            let Some(mtm) = MainThreadMarker::new() else {
+                return;
+            };
+            let t = crate::locale::t;
+            let answer = mac_ui::dialog::confirm_destructive(
+                mtm,
+                t("symbols_restore_title"),
+                t("symbols_restore_message"),
+                t("symbols_restore"),
+                t("cancel"),
+                None,
+            );
+            if !answer.confirmed {
+                return;
+            }
             settings::restore_symbol_catalog();
             show_symbol_catalog();
             crate::macos_symbols::reload();

@@ -353,6 +353,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("symbols_a11y", "Speciale tekens", "Special characters"),
     ("symbols_tip", "Kopieer een teken", "Copy a character"),
     ("symbols_restore", "Herstel standaard", "Restore Defaults"),
+    // The question before Restore Defaults replaces your own Symbols.
+    (
+        "symbols_restore_title",
+        "Standaardsymbolen herstellen?",
+        "Restore Default Symbols?",
+    ),
+    (
+        "symbols_restore_message",
+        "Je eigen tekens op de knop Symbolen worden vervangen door de standaardlijst.",
+        "Your own characters on the Symbols button are replaced by the standard list.",
+    ),
     (
         "symbols_field_a11y",
         "Lijst met speciale tekens",

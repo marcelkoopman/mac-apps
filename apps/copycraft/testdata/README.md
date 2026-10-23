@@ -392,3 +392,4 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
 ## Buttons (Mac only, no data)
 
 - [ ] *Alles wissen?* / *Clear All?* (the trash button, with *Ask before clearing* on): *Annuleer* / *Cancel* is the blue default button and *Alles wissen* / *Clear All* is red. Return closes it as Cancel (history stays); open it again, Esc closes it as Cancel too. Only a click on the red button clears. Tick *Niet meer vragen* / *Don't ask again* and press Return or Esc: the setting stays on.
+- [ ] Settings › *Weergave* / *Display* › *Herstel standaard* / *Restore Defaults*: first asks *Standaardsymbolen herstellen?* / *Restore Default Symbols?* with *Annuleer* as the default and *Herstel standaard* in red. Cancel (or Return, or Esc) keeps your own Symbols; the red button brings back the standard list.
