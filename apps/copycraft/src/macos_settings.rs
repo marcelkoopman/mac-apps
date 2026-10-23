@@ -1,8 +1,8 @@
 //! Settings window, in three tabs (a segmented control above one pane per tab):
 //! General (hotkey, language, date order, Open at Login, then the Meldingen block with the four
-//! notification switches), Privacy (Keep clipboard history with retention, sensitive-copy
+//! notification switches and Announce confirmations), Privacy (Keep clipboard history with retention, sensitive-copy
 //! clearing and ask before clearing under it, privacy filter, blur, ignored apps) and Display
-//! (card theme, pages, announce, symbols). The feedback mail, privacy policy and support are in
+//! (card theme, pages, symbols). The feedback mail, privacy policy and support are in
 //! About and `⋯` › Help ▸. ⌘1…⌘3 pick a tab, ⌃Tab/⌃⇧Tab and ⌘⇧]/⌘⇧[ step through them
 //! (wrapping); the last tab is stored and opened again.
 
@@ -807,9 +807,13 @@ fn place_history_settings(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
         crate::locale::t("clear_sensitive"),
         take(top, BUTTON_H),
     );
-    sensitive.setToolTip(Some(&NSString::from_str(crate::locale::t(
-        "detail_clear_sensitive",
-    ))));
+    // Points to the notification for such copies, which is under Algemeen › Meldingen.
+    let tip = format!(
+        "{}\n{}",
+        crate::locale::t("detail_clear_sensitive"),
+        crate::locale::t("clear_sensitive_notify_hint")
+    );
+    sensitive.setToolTip(Some(&NSString::from_str(&tip)));
     wire(&sensitive, sel!(clearSensitiveToggled:));
     body.addSubview(&sensitive);
     SENSITIVE_BOX.with(|slot| *slot.borrow_mut() = Some(sensitive));
@@ -844,7 +848,7 @@ fn indented_checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSB
 }
 
 /// The Meldingen block at the bottom of Algemeen: a heading, the four notification switches
-/// and their note, from `top` down.
+/// and their note, then Announce confirmations, from `top` down.
 fn place_notifications(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
     place_label(
         mtm,
@@ -874,9 +878,22 @@ fn place_notifications(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
         }
     }
     place_explanation(mtm, body, crate::locale::t("notify_note"), top);
+    // VoiceOver confirmations belong with the other ways CopyCraft tells you something.
+    gap(top, mac_ui::metrics::SPACE_S);
+    let y = take(top, BUTTON_H);
+    let announce = checkbox(mtm, crate::locale::t("announce_confirmations"), y);
+    announce.setState(state_of(settings::announce_confirmations()));
+    wire(&announce, sel!(announceToggled:));
+    body.addSubview(&announce);
+    place_explanation(
+        mtm,
+        body,
+        crate::locale::t("announce_confirmations_note"),
+        top,
+    );
 }
 
-/// Weergave: the card theme, long text in pages, Announce confirmations and the symbols.
+/// Weergave: the card theme, long text in pages and the symbols.
 /// Returns the unused height.
 fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     let mut top = Tab::Display.pane_height();
@@ -889,18 +906,6 @@ fn build_display(mtm: MainThreadMarker, body: &NSView) -> f64 {
     wire(&pages, sel!(pageLongTextToggled:));
     body.addSubview(&pages);
     place_explanation(mtm, body, crate::locale::t("page_long_text_note"), &mut top);
-    gap(&mut top, mac_ui::metrics::SPACE_S);
-    let y = take(&mut top, BUTTON_H);
-    let announce = checkbox(mtm, crate::locale::t("announce_confirmations"), y);
-    announce.setState(state_of(settings::announce_confirmations()));
-    wire(&announce, sel!(announceToggled:));
-    body.addSubview(&announce);
-    place_explanation(
-        mtm,
-        body,
-        crate::locale::t("announce_confirmations_note"),
-        &mut top,
-    );
     gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,

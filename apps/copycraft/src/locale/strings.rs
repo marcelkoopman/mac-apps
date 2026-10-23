@@ -115,6 +115,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("notify_switch_errors", "Fouten", "Errors"),
     ("notify_switch_secret", "Gevoelige kopie", "Sensitive copy"),
     (
+        "clear_sensitive_notify_hint",
+        "Een melding bij een gevoelige kopie: Algemeen › Meldingen › Gevoelige kopie.",
+        "A notification for a sensitive copy: General › Notifications › Sensitive copy.",
+    ),
+    (
         "notify_note",
         "Een melding bevat nooit je tekst.",
         "A notification never contains your text.",
