@@ -218,3 +218,70 @@ fn menu_rows_show_the_chords_the_card_runs() {
         .collect();
     assert_eq!(keyed, [&CommandId::TableUndo, &CommandId::TableRedo]);
 }
+
+#[test]
+fn a_strip_card_right_click_pins_diffs_and_removes_that_copy() {
+    use crate::commands::{separator_before, thumb_menu, thumb_menu_pick, thumb_menu_tag};
+    let menu = thumb_menu(2, Some(41), false, true, &[]);
+    assert_eq!(titles(&menu), ["Pin", "Add to Diff", "Remove from History"]);
+    assert_eq!(
+        ids(&menu),
+        [
+            CommandId::StripPin(2),
+            CommandId::DiffToggle(41),
+            CommandId::RemoveHistory(2)
+        ]
+    );
+    assert!(menu.iter().all(|c| c.enabled));
+    // Remove sits apart, below a line; Pin and the diff action do not.
+    assert!(!separator_before(Some(&menu[0].id), &menu[1].id));
+    assert!(separator_before(Some(&menu[1].id), &menu[2].id));
+    // A pinned card offers Unpin; a picture's diff action is dimmed; one already picked is
+    // Remove from Diff.
+    let pinned = thumb_menu(0, Some(7), true, false, &[]);
+    assert_eq!(pinned[0].title, "Unpin");
+    assert!(!pinned[1].enabled);
+    assert_eq!(
+        thumb_menu(0, Some(7), false, true, &[7])[1].title,
+        "Remove from Diff"
+    );
+    // No id: no diff action.
+    assert_eq!(thumb_menu(0, None, false, true, &[]).len(), 2);
+    // Tags say which card and row; nothing in them quotes the copy.
+    for (index, slot) in [(0, 0), (2, 1), (29, 2)] {
+        assert_eq!(
+            thumb_menu_pick(thumb_menu_tag(index, slot)),
+            Some((index, slot))
+        );
+    }
+    assert_eq!(thumb_menu_pick(-1), None);
+}
+
+#[test]
+fn a_right_click_on_the_table_grid_finds_its_cell() {
+    use crate::commands::{grid_cell_at, table_cell_menu};
+    let body = "alpha\t2\nbeta\t\ngamma\t7";
+    assert_eq!(grid_cell_at(body, 0, false), Some((0, 0)));
+    assert_eq!(grid_cell_at(body, 3, false), Some((0, 0)));
+    assert_eq!(grid_cell_at(body, 7, false), Some((0, 1)));
+    assert_eq!(grid_cell_at(body, 8, false), Some((1, 0)));
+    assert_eq!(grid_cell_at(body, body.len(), false), Some((2, 1)));
+    // A numeric first column starts each line with a tab.
+    let numeric = "\t1\tx\n\t22\ty";
+    assert_eq!(grid_cell_at(numeric, 1, true), Some((0, 0)));
+    assert_eq!(grid_cell_at(numeric, 4, true), Some((0, 1)));
+    assert_eq!(grid_cell_at(numeric, 7, true), Some((1, 0)));
+    // UTF-16 offsets (AppKit's): é is one unit, 😀 two.
+    assert_eq!(grid_cell_at("😀é\tz", 4, false), Some((0, 1)));
+    assert_eq!(grid_cell_at("", 0, false), None);
+    let menu = table_cell_menu(4, 1);
+    assert_eq!(titles(&menu), ["Copy Cell", "Copy Row", "Copy Column"]);
+    assert_eq!(
+        ids(&menu),
+        [
+            CommandId::TableCopyCell(4, 1),
+            CommandId::TableCopyRow(4),
+            CommandId::TableCopyColumn(1)
+        ]
+    );
+}

@@ -403,6 +403,9 @@ pub enum CommandId {
     /// ⌘-click (or ⇧-click) on strip card `n`: compare that copy with the one on screen in
     /// the diff view (the older of the two is A, before).
     StripCompare(usize),
+    /// Right-click on strip card `n` › Pin / Unpin: pin that copy, or unpin it when it is
+    /// pinned (any card, not only the one on screen).
+    StripPin(usize),
     /// Esc or a normal click on the strip while two cards are compared: drop the comparison.
     EndCompare,
     /// ⌘Y: show or hide the history strip.
@@ -425,6 +428,13 @@ pub enum CommandId {
     TableRedo,
     /// Show table version `n` (0 is the original), from the version capsule's menu.
     TableVersion(usize),
+    /// Right-click on a cell of the table window's grid › Copy Cell: that cell's value, by
+    /// row and column of the version shown.
+    TableCopyCell(usize, usize),
+    /// › Copy Row: that row's values, tab-separated.
+    TableCopyRow(usize),
+    /// › Copy Column: that column's values, one per line.
+    TableCopyColumn(usize),
     /// Former card chip; steps live in the table window's Table ▾.
     #[allow(dead_code)]
     TableMenu,

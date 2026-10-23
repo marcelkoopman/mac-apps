@@ -86,6 +86,45 @@ pub fn frame_copy(df: &DataFrame, source: &str) -> Option<String> {
     write_csv_with(df.clone(), source_separator(source))
 }
 
+/// A part of a table version for the grid's right-click menu ([`frame_part`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablePart {
+    /// The cell at row, column.
+    Cell(usize, usize),
+    /// A row's values.
+    Row(usize),
+    /// A column's values (without its name).
+    Column(usize),
+}
+
+/// The values of `part` as text, from the frame itself (not the drawn grid, whose cells may
+/// be clipped with "…"): a cell as is, a row tab-separated, a column one value per line.
+/// Empty cells are empty text. `None` when the row or column is not there.
+pub fn frame_part(df: &DataFrame, part: TablePart) -> Option<String> {
+    let value = |column: &Column, row: usize| -> Option<String> {
+        column
+            .get(row)
+            .ok()
+            .map(|value| cell_text(value).unwrap_or_default())
+    };
+    let columns = df.columns();
+    match part {
+        TablePart::Cell(row, col) => value(columns.get(col)?, row),
+        TablePart::Row(row) => {
+            if row >= df.height() {
+                return None;
+            }
+            let cells: Option<Vec<String>> = columns.iter().map(|c| value(c, row)).collect();
+            Some(cells?.join("\t"))
+        }
+        TablePart::Column(col) => {
+            let column = columns.get(col)?;
+            let cells: Option<Vec<String>> = (0..column.len()).map(|r| value(column, r)).collect();
+            Some(cells?.join("\n"))
+        }
+    }
+}
+
 /// The separator of the table `source` (`,` `;` or tab); a comma when it has none.
 pub fn source_separator(source: &str) -> u8 {
     delimited_separator(source.trim()).unwrap_or(b',')

@@ -11,9 +11,9 @@ use objc2::{MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSAccessibility, NSBackgroundColorAttributeName, NSBorderType, NSBox, NSBoxType, NSButton,
     NSColor, NSControl, NSEvent, NSEventModifierFlags, NSFont, NSForegroundColorAttributeName,
-    NSImageAlignment, NSImageScaling, NSImageView, NSLayoutManager, NSLineBreakMode, NSMenuItem,
-    NSScrollView, NSSearchField, NSTextContainer, NSTextField, NSTextStorage, NSTextView,
-    NSTitlePosition, NSView,
+    NSImageAlignment, NSImageScaling, NSImageView, NSLayoutManager, NSLineBreakMode, NSMenu,
+    NSMenuItem, NSScrollView, NSSearchField, NSTextContainer, NSTextField, NSTextStorage,
+    NSTextView, NSTitlePosition, NSView,
 };
 use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
@@ -101,6 +101,13 @@ pub fn filled_box(mtm: MainThreadMarker, radius: f64, color: &NSColor) -> Retain
 pub use crate::layer::round_view;
 
 /// A menu item with no action and no key equivalent: a submenu parent or a plain label.
+/// Give `view` a right-click (and ⌃-click) menu; AppKit shows it for both without a subclass.
+pub fn set_context_menu(view: &NSView, menu: &NSMenu) {
+    // SAFETY: `menu` is a valid NSMenu; the view's `menu` property is strong, so the view keeps
+    // it alive for as long as it holds it.
+    unsafe { view.setMenu(Some(menu)) };
+}
+
 pub fn menu_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
     // SAFETY: a freshly allocated item with no action selector, so AppKit never sends a message
     // on its behalf; both strings are valid NSStrings.

@@ -7,7 +7,8 @@ use super::*;
 
 /// Whether a separator goes before `id` in a submenu whose item before it is `previous`
 /// (`None`: `id` is the first). History ▸: Clear History and Clear Pins sit apart from the
-/// copies. Encoding ▸: the four decodes apart from the four encodes.
+/// copies. Encoding ▸: the four decodes apart from the four encodes. A strip card's menu:
+/// Remove from History apart from Pin and the diff action.
 pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
     let Some(previous) = previous else {
         return false;
@@ -17,6 +18,9 @@ pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
         (CommandId::TextEncode(before), CommandId::TextEncode(codec)) => {
             before.encodes() && !codec.encodes()
         }
+        // A strip card's menu: Remove from History below a line.
+        (CommandId::RemoveHistory(_), _) => false,
+        (_, CommandId::RemoveHistory(_)) => true,
         _ => clear(id) && !clear(previous),
     }
 }
@@ -51,4 +55,55 @@ pub fn menu_key(id: &CommandId) -> Option<(&'static str, bool)> {
         CommandId::TableRedo => Some(("z", true)),
         _ => None,
     }
+}
+
+/// The grid cell under UTF-16 offset `at` of the table window's drawn body (rows on lines,
+/// cells after tabs; a numeric first column starts each line with a tab): row and column.
+/// `None` past the last line.
+pub fn grid_cell_at(body: &str, at: usize, first_numeric: bool) -> Option<(usize, usize)> {
+    let (mut row, mut tabs, mut offset) = (0usize, 0usize, 0usize);
+    for ch in body.chars() {
+        if offset >= at {
+            break;
+        }
+        offset += ch.len_utf16();
+        match ch {
+            '\n' => {
+                row += 1;
+                tabs = 0;
+            }
+            '\t' => tabs += 1,
+            _ => {}
+        }
+    }
+    let lines = body.lines().count();
+    if row >= lines {
+        return None;
+    }
+    Some((row, tabs.saturating_sub(usize::from(first_numeric))))
+}
+
+/// The table window grid's right-click (⌃-click) menu on cell `row`, `col`: Copy Cell, Copy
+/// Row, Copy Column. Copy in the toolbar keeps copying the whole table.
+pub fn table_cell_menu(row: usize, col: usize) -> Vec<Command> {
+    vec![
+        command(
+            CommandId::TableCopyCell(row, col),
+            crate::locale::t("copy_cell"),
+            "",
+            "",
+        ),
+        command(
+            CommandId::TableCopyRow(row),
+            crate::locale::t("copy_row"),
+            "",
+            "",
+        ),
+        command(
+            CommandId::TableCopyColumn(col),
+            crate::locale::t("copy_column"),
+            "",
+            "",
+        ),
+    ]
 }

@@ -184,6 +184,18 @@ impl App {
                         self.save_table_window();
                         return;
                     }
+                    CommandId::TableCopyCell(row, col) => {
+                        self.copy_table_part(crate::dataframe::TablePart::Cell(row, col));
+                        return;
+                    }
+                    CommandId::TableCopyRow(row) => {
+                        self.copy_table_part(crate::dataframe::TablePart::Row(row));
+                        return;
+                    }
+                    CommandId::TableCopyColumn(col) => {
+                        self.copy_table_part(crate::dataframe::TablePart::Column(col));
+                        return;
+                    }
                     _ => {}
                 }
                 self.refresh_table_window();

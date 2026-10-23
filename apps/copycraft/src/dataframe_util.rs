@@ -115,6 +115,24 @@ pub(crate) mod tests {
     use super::try_format;
     use polars::prelude::{ParquetReader, SerReader};
 
+    /// The grid's right-click menu copies the frame's own values: a cell, a row with tabs,
+    /// a column one per line without its name; empty cells stay empty, out of range is none.
+    #[test]
+    fn a_cell_row_or_column_of_the_frame_is_copied_whole() {
+        use super::{TablePart, frame_part};
+        let df = super::parse_table("name,qty\nalpha,2\nbeta,\ngamma,7").expect("table");
+        assert_eq!(frame_part(&df, TablePart::Cell(1, 0)).as_deref(), Some("beta"));
+        assert_eq!(frame_part(&df, TablePart::Cell(1, 1)).as_deref(), Some(""));
+        assert_eq!(frame_part(&df, TablePart::Row(2)).as_deref(), Some("gamma\t7"));
+        assert_eq!(
+            frame_part(&df, TablePart::Column(0)).as_deref(),
+            Some("alpha\nbeta\ngamma")
+        );
+        assert_eq!(frame_part(&df, TablePart::Cell(3, 0)), None);
+        assert_eq!(frame_part(&df, TablePart::Row(3)), None);
+        assert_eq!(frame_part(&df, TablePart::Column(2)), None);
+    }
+
     /// A datetime in the first column (`2026-09-01 08:15,…`) used to make every row look like
     /// `key: value` (the key `2026-09-01 08`), so the CSV was no table.
     #[test]

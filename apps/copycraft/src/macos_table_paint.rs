@@ -5,6 +5,8 @@
 thread_local! {
     /// The body is a column sheet, so row stripes are drawn. Off for the boxed fallback.
     static TABLE_STRIPES: Cell<bool> = const { Cell::new(false) };
+    /// The sheet's first column is numeric: each body line starts with a tab (its right stop).
+    static FIRST_NUMERIC: Cell<bool> = const { Cell::new(false) };
     /// Line height the stripes use, the same height the paragraph style locks in.
     static ROW_LINE_H: Cell<f64> = const { Cell::new(0.0) };
     /// Column separators of the sheet, x in the grid view (inset included).
@@ -262,6 +264,7 @@ fn paint_aligned_table(views: &Views, sheet: &crate::dataframe::GridSheet, previ
     place_header_lines(views, &xs);
     COLUMN_LINES.with(|slot| slot.replace(xs));
     TABLE_STRIPES.set(true);
+    FIRST_NUMERIC.set(sheet.numeric.first().copied().unwrap_or(false));
     views.grid.setDrawsBackground(true);
     views.frozen.setHidden(true);
     place_table_header(views, true);

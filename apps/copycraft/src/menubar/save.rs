@@ -142,6 +142,20 @@ impl App {
         }
     }
 
+    /// The grid's right-click menu: one cell, row or column of the version shown in the table
+    /// window on the clipboard and in history, as Copy does for the whole table.
+    pub(crate) fn copy_table_part(&mut self, part: crate::dataframe::TablePart) {
+        let Some(frame) = self.window_table_frame() else {
+            return;
+        };
+        let body = crate::dataframe::frame_part(&frame, part).map(Zeroizing::new);
+        if let Err(e) = self.copy_grid(body) {
+            crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+        }
+    }
+
     fn copy_grid(&mut self, body: Option<Zeroizing<String>>) -> anyhow::Result<()> {
         let Some(body) = body else {
             return Ok(());

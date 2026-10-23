@@ -96,7 +96,18 @@ impl App {
     }
 
     pub(crate) fn pin_shown(&mut self, pin: bool) {
-        let Some(id) = self.history.id_at(self.history_cursor) else {
+        self.pin_at(self.history_cursor, pin);
+    }
+
+    /// Right-click on strip card `index` › Pin / Unpin: the other of what it is now.
+    pub(crate) fn toggle_pin_at(&mut self, index: usize) {
+        let pinned = self.history.is_pinned(index);
+        self.pin_at(index, !pinned);
+    }
+
+    /// Pin (or unpin) history entry `index`. A full pin list says so on the meta line.
+    fn pin_at(&mut self, index: usize, pin: bool) {
+        let Some(id) = self.history.id_at(index) else {
             return;
         };
         if self.opened.is_some() {
@@ -114,7 +125,7 @@ impl App {
             }
         } else {
             self.pin_refused = false;
-            if !self.history.unpin(id) {
+            if !self.history.unpin(id) && index == self.history_cursor {
                 self.history_cursor = 0;
             }
             self.settle_cursor();

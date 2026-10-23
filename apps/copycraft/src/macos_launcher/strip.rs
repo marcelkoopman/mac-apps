@@ -367,6 +367,10 @@ fn signature_of(
         thumb.mark.hash(&mut hasher);
         thumb.side.hash(&mut hasher);
         thumb.lines.hash(&mut hasher);
+        for cmd in &thumb.menu {
+            cmd.title.hash(&mut hasher);
+            cmd.enabled.hash(&mut hasher);
+        }
         thumb
             .picture
             .as_ref()
@@ -455,6 +459,9 @@ fn thumb_card(
             .push((index, button.clone(), thumb.kind, thumb.copied));
     });
     wire_button(&button, sel!(thumbClicked:));
+    // Right-click or ⌃-click: Pin, the diff action, Remove from History (AppKit shows a
+    // view's menu for both; no subclass).
+    mac_ui::widgets::set_context_menu(&button, &thumb_context_menu(mtm, thumb));
     let picture = (!masked)
         .then(|| thumb.picture.as_ref().and_then(thumb_image))
         .flatten();
@@ -494,6 +501,45 @@ fn thumb_card(
     card.addSubview(&button);
     card.addSubview(&remove_button(mtm, thumb.index));
     card
+}
+
+/// The right-click menu of a small card ([`commands::thumb_menu`]); a row's tag says which
+/// card and row ([`commands::thumb_menu_tag`]). Titles name actions only, never content.
+fn thumb_context_menu(mtm: MainThreadMarker, thumb: &commands::Thumb) -> Retained<NSMenu> {
+    let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(""));
+    menu.setAutoenablesItems(false);
+    let mut previous: Option<&CommandId> = None;
+    for (slot, cmd) in thumb.menu.iter().enumerate() {
+        if commands::separator_before(previous, &cmd.id) {
+            menu.addItem(&NSMenuItem::separatorItem(mtm));
+        }
+        previous = Some(&cmd.id);
+        let item = mac_ui::actions::menu_item_with_action(mtm, &cmd.title, sel!(thumbMenuClicked:));
+        item.setTag(commands::thumb_menu_tag(thumb.index, slot));
+        item.setEnabled(cmd.enabled);
+        DELEGATE.with(|cell| {
+            if let Some(delegate) = cell.borrow().as_ref() {
+                mac_ui::actions::set_menu_target(&item, delegate);
+            }
+        });
+        menu.addItem(&item);
+    }
+    menu
+}
+
+/// A row of a small card's right-click menu was picked: what it runs, by its tag. `None`
+/// when the strip changed meanwhile and that card or row is gone, or the row is dimmed.
+pub(crate) fn thumb_menu_command(tag: isize) -> Option<CommandId> {
+    let (index, slot) = commands::thumb_menu_pick(tag)?;
+    STRIP_ITEMS.with(|items| {
+        items
+            .borrow()
+            .iter()
+            .find(|thumb| thumb.index == index)
+            .and_then(|thumb| thumb.menu.get(slot))
+            .filter(|cmd| cmd.enabled)
+            .map(|cmd| cmd.id.clone())
+    })
 }
 
 /// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]).

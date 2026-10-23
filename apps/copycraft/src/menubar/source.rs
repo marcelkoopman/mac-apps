@@ -499,6 +499,15 @@ impl App {
                         .map(commands::thumb_kind_name)
                         .unwrap_or(""),
                     copied: self.history.copied_at(index),
+                    menu: commands::thumb_menu(
+                        index,
+                        self.history.id_at(index),
+                        self.history.is_pinned(index),
+                        self.history
+                            .id_at(index)
+                            .is_some_and(|id| self.history.is_text_id(id)),
+                        self.diff_sel.ids(),
+                    ),
                 }
             })
             .collect()

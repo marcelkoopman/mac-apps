@@ -628,6 +628,15 @@ define_class!(
             }
         }
 
+        /// A row of a strip card's right-click menu: Pin / Unpin, the diff action or Remove
+        /// from History for that card.
+        #[unsafe(method(thumbMenuClicked:))]
+        fn thumb_menu_clicked(&self, sender: Option<&NSMenuItem>) {
+            if let Some(id) = sender.and_then(|item| strip::thumb_menu_command(item.tag())) {
+                launcher::emit(UserEvent::Run(id));
+            }
+        }
+
         /// The ✕ on a card of the history strip: take that copy out of history (the clipboard
         /// keeps it). ⌘Z puts it back.
         #[unsafe(method(thumbRemoveClicked:))]

@@ -297,6 +297,10 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Card chips (common)
     ("copy", "Kopieer", "Copy"),
+    // The table window grid's right-click menu.
+    ("copy_cell", "Kopieer cel", "Copy Cell"),
+    ("copy_row", "Kopieer rij", "Copy Row"),
+    ("copy_column", "Kopieer kolom", "Copy Column"),
     ("save", "Bewaar", "Save"),
     ("original", "Origineel", "Original"),
     ("show_image", "Toon afbeelding", "Show Image"),

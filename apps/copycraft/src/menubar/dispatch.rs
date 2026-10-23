@@ -72,6 +72,7 @@ impl App {
                 }
             }
             CommandId::StripCompare(index) => self.compare_tiles(index),
+            CommandId::StripPin(index) => self.toggle_pin_at(index),
             CommandId::EndCompare => {
                 self.clear_diff();
                 self.refresh_popup();
@@ -191,6 +192,10 @@ impl App {
             | CommandId::TextMenu
             | CommandId::AiMenu
             | CommandId::TableChooseColumns => {}
+            // The table window's grid menu; they come in as the window's commands.
+            CommandId::TableCopyCell(..)
+            | CommandId::TableCopyRow(_)
+            | CommandId::TableCopyColumn(_) => {}
             CommandId::TableDateOrder(month_first) => {
                 self.table_reread(TableTarget::Card, |options| {
                     options.month_first = month_first;

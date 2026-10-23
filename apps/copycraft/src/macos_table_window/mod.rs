@@ -66,6 +66,8 @@ thread_local! {
     static REVEALED: Cell<bool> = const { Cell::new(false) };
     /// The grid and sidebar hold the shown view's text (not blanked for a missing blur).
     static PAINTED: Cell<bool> = const { Cell::new(false) };
+    /// The grid cell its right-click menu was opened on (row, column).
+    static MENU_CELL: Cell<Option<(usize, usize)>> = const { Cell::new(None) };
     /// The commands behind the toolbar's menus (Table ▾ and the versions), by item tag.
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The blur filter, built once; `None` inside when Core Image cannot build it.
@@ -166,6 +168,18 @@ define_class!(
             run(CommandId::Save);
         }
 
+        /// A row of the grid's right-click menu: tag 0 the cell, 1 its row, 2 its column.
+        #[unsafe(method(tableWindowCellMenuClicked:))]
+        fn cell_menu_clicked(&self, sender: Option<&NSMenuItem>) {
+            let (Some(item), Some((row, col))) = (sender, MENU_CELL.get()) else {
+                return;
+            };
+            let menu = commands::table_cell_menu(row, col);
+            if let Some(cmd) = usize::try_from(item.tag()).ok().and_then(|i| menu.get(i)) {
+                run(cmd.id.clone());
+            }
+        }
+
         #[unsafe(method(tableWindowPoppedClicked:))]
         fn popped_clicked(&self, sender: Option<&NSMenuItem>) {
             let Some(item) = sender else {
@@ -243,6 +257,13 @@ define_class!(
         #[unsafe(method(drawViewBackgroundInRect:))]
         fn draw_view_background(&self, rect: NSRect) {
             draw_table_background(self, rect);
+        }
+
+        /// Right-click or ⌃-click on a cell: Copy Cell, Copy Row, Copy Column. A masked or
+        /// boxed grid keeps the text view's own menu.
+        #[unsafe(method_id(menuForEvent:))]
+        fn menu_for_event(&self, event: &NSEvent) -> Option<Retained<NSMenu>> {
+            cell_menu(self, event).or_else(|| self.menu())
         }
     }
 );
@@ -391,6 +412,37 @@ fn blur_filter() -> Option<Retained<AnyObject>> {
             .get_or_insert_with(|| mac_ui::blur::gaussian(BLUR_RADIUS))
             .clone()
     })
+}
+
+/// The grid's cell menu for a right-click at `event` ([`commands::table_cell_menu`]); `None`
+/// when the grid is masked, not drawn as columns, or the click is below the last row.
+fn cell_menu(grid: &TableGridView, event: &NSEvent) -> Option<Retained<NSMenu>> {
+    let mtm = MainThreadMarker::new()?;
+    if masked() || !TABLE_STRIPES.with(Cell::get) {
+        return None;
+    }
+    let point = grid.convertPoint_fromView(event.locationInWindow(), None);
+    let at = grid.characterIndexForInsertionAtPoint(point);
+    let mut body = grid.string().to_string();
+    let cell = commands::grid_cell_at(&body, at, FIRST_NUMERIC.with(Cell::get));
+    body.zeroize();
+    let (row, col) = cell?;
+    MENU_CELL.set(Some((row, col)));
+    let menu = menus::empty_menu(mtm);
+    let delegate = DELEGATE.with(|slot| slot.borrow().clone());
+    for (tag, cmd) in commands::table_cell_menu(row, col).into_iter().enumerate() {
+        let item = mac_ui::actions::menu_item_with_action(
+            mtm,
+            &cmd.title,
+            sel!(tableWindowCellMenuClicked:),
+        );
+        item.setTag(tag as isize);
+        if let Some(delegate) = delegate.as_ref() {
+            mac_ui::actions::set_menu_target(&item, delegate);
+        }
+        menu.addItem(&item);
+    }
+    Some(menu)
 }
 
 /// Masked now: the privacy filter setting (read live) is on and the window is not revealed.

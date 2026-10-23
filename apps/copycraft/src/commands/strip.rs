@@ -5,6 +5,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use zeroize::Zeroize;
 
+use super::{Command, CommandId, command, diff_action};
+
 /// One card of the strip: [`THUMB_W`] × [`THUMB_H`] points.
 pub const THUMB_W: f64 = 138.0;
 pub const THUMB_H: f64 = 78.0;
@@ -46,6 +48,8 @@ pub struct Thumb {
     pub kind: &'static str,
     /// When it was copied, for the tooltip's age.
     pub copied: Option<std::time::Instant>,
+    /// Its right-click (⌃-click) menu, [`thumb_menu`]. No content in the titles.
+    pub menu: Vec<Command>,
 }
 
 impl Thumb {
@@ -54,6 +58,57 @@ impl Thumb {
         self.mark.zeroize();
     }
 }
+
+/// The right-click (⌃-click) menu of strip card `index`: Pin or Unpin, the diff action of
+/// that copy (`id`, dimmed for a picture, as in `⋯` › History), a separator, Remove from
+/// History ([`separator_before`]). `⋯` and the ✕ keep the same actions.
+pub fn thumb_menu(
+    index: usize,
+    id: Option<u64>,
+    pinned: bool,
+    is_text: bool,
+    picks: &[u64],
+) -> Vec<Command> {
+    let pin = if pinned {
+        command(
+            CommandId::StripPin(index),
+            crate::locale::t("unpin"),
+            crate::locale::t("detail_unpin"),
+            "",
+        )
+    } else {
+        command(
+            CommandId::StripPin(index),
+            crate::locale::t("pin"),
+            crate::locale::t("detail_pin"),
+            "",
+        )
+    };
+    let mut menu = vec![pin];
+    if let Some(id) = id {
+        menu.push(diff_action(CommandId::DiffToggle(id), picks, id, is_text));
+    }
+    menu.push(command(
+        CommandId::RemoveHistory(index),
+        crate::locale::t("history_remove_item"),
+        crate::locale::t("detail_remove_history"),
+        "",
+    ));
+    menu
+}
+
+/// The tag of row `slot` of strip card `index`'s menu, and back ([`thumb_menu_pick`]).
+pub fn thumb_menu_tag(index: usize, slot: usize) -> isize {
+    (index * THUMB_MENU_ROWS + slot.min(THUMB_MENU_ROWS - 1)) as isize
+}
+
+/// Strip card and menu row of a tag made by [`thumb_menu_tag`]; `None` for a negative tag.
+pub fn thumb_menu_pick(tag: isize) -> Option<(usize, usize)> {
+    let tag = usize::try_from(tag).ok()?;
+    Some((tag / THUMB_MENU_ROWS, tag % THUMB_MENU_ROWS))
+}
+
+const THUMB_MENU_ROWS: usize = 4;
 
 /// The first lines of `text` for a card: trimmed, empty lines skipped, each cut at
 /// [`THUMB_LINE_CHARS`] characters (with `…`). At most [`THUMB_LINES`] lines.
@@ -440,6 +495,7 @@ mod tests {
             side,
             kind: "JSON",
             copied: None,
+            menu: Vec::new(),
         }
     }
 
