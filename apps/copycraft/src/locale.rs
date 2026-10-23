@@ -402,8 +402,14 @@ mod tests {
 
     #[test]
     fn placeholders_are_filled() {
-        assert_eq!(tf_in(Lang::En, "item_of", &[&2, &5]), "Item 2 of 5");
-        assert_eq!(tf_in(Lang::Nl, "item_of", &[&2, &5]), "Item 2 van 5");
+        assert_eq!(
+            tf_in(Lang::En, "strip_age_minutes", &[&2]),
+            "copied 2 min ago"
+        );
+        assert_eq!(
+            tf_in(Lang::Nl, "strip_age_minutes", &[&2]),
+            "2 min geleden gekopieerd"
+        );
     }
 
     /// The words of `text` that spell the app's name in another case than `CopyCraft`. Links

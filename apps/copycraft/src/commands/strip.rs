@@ -389,16 +389,6 @@ pub fn strip_toggle_title(turned_off: bool) -> &'static str {
     }
 }
 
-/// What VoiceOver reads for a card: "Item 2 of 5", with the current one named.
-pub fn thumb_spoken(position: usize, total: usize, current: bool) -> String {
-    let item = crate::locale::tf("item_of", &[&position, &total]);
-    if current {
-        format!("{item}, {}", crate::locale::t("strip_current"))
-    } else {
-        item
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[test]

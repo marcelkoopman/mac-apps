@@ -606,9 +606,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Can't read this image",
     ),
     // History navigation
-    ("item_of", "Item {0} van {1}", "Item {0} of {1}"),
     ("strip_group", "Geschiedenis", "History"),
-    ("strip_current", "getoond", "shown"),
     (
         "strip_compare_hint",
         "⌘-klik om te vergelijken met de getoonde kopie",

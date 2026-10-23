@@ -304,6 +304,12 @@ fn views(mtm: MainThreadMarker) -> (Retained<NSScrollView>, Retained<NSView>) {
             scroll
                 .setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("strip_group"))));
             let document = NSView::initWithFrame(NSView::alloc(mtm), NSRect::ZERO);
+            // A list of the cards for VoiceOver ("AXList" is NSAccessibilityListRole's value,
+            // spelled out: reading AppKit's constant is an `unsafe` extern static).
+            document.setAccessibilityElement(true);
+            document.setAccessibilityRole(Some(&NSString::from_str("AXList")));
+            document
+                .setAccessibilityLabel(Some(&NSString::from_str(crate::locale::t("strip_group"))));
             scroll.setDocumentView(Some(&document));
             if let Some(window) = WINDOW.with(|slot| slot.borrow().clone())
                 && let Some(content) = window.contentView()
@@ -557,7 +563,6 @@ fn signature_of(
     }
     (cursor, width.to_bits(), filter, current_masked).hash(&mut hasher);
     crate::settings::card_theme().hash(&mut hasher);
-    crate::locale::t("strip_current").hash(&mut hasher);
     crate::locale::t("strip_compare_hint").hash(&mut hasher);
     hasher.finish() | 1
 }
@@ -705,19 +710,16 @@ fn side_badge(mtm: MainThreadMarker, side: &str) -> Retained<NSBox> {
 /// added): the tags, what VoiceOver reads and its actions, the tooltip and the right-click
 /// menu, which acts on that card's copy.
 fn bind_tile(mtm: MainThreadMarker, tile: &mut Tile, thumb: &commands::Thumb, current: bool) {
-    let total = STRIP_ITEMS.with(|items| items.borrow().len());
     tile.index = thumb.index;
     tile.kind = thumb.kind;
     tile.copied = thumb.copied;
     let button = &tile.button;
     button.setTag(thumb.index as isize);
     tile.remove.setTag(thumb.index as isize);
-    let spoken = format!(
-        "{}, {}",
-        commands::thumb_spoken(thumb.index + 1, total, current),
-        commands::thumb_mark(thumb)
-    );
-    button.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
+    // The strip is a list and the card shown its selected row, so VoiceOver says the position
+    // and "selected" itself: the label is only the type mark (and the diff side).
+    button.setAccessibilityLabel(Some(&NSString::from_str(&commands::thumb_mark(thumb))));
+    button.setAccessibilitySelected(current);
     button.setAccessibilityHelp(Some(&NSString::from_str(crate::locale::t(
         "strip_compare_hint",
     ))));
