@@ -86,46 +86,27 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
         .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
     content.addSubview(table_button.view());
 
-    let copy_button = GlassButton::pill(mtm, crate::locale::t("copy"), ButtonSize::Regular);
-    copy_button.set_symbol("doc.on.doc");
-    copy_button.set_accessibility_label(crate::locale::t("copy_table_a11y"));
-    copy_button
-        .button()
-        .setToolTip(Some(&NSString::from_str(crate::locale::t(
-            "copy_table_tip",
-        ))));
-    wire(copy_button.button(), sel!(tableWindowCopyClicked:));
-    let copy_w = copy_button.width_within(120.0);
-    let mut actions_x = PAD + table_w + mac_ui::metrics::BUTTON_GAP;
-    copy_button.view().setFrame(NSRect::new(
-        NSPoint::new(actions_x, toolbar_y),
-        NSSize::new(copy_w, commands::CHIP_PILL_H),
-    ));
-    copy_button
-        .view()
-        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
+    // Copy and Save: symbols only, as on the card, their names in the tooltip; a fixed gap
+    // after Table ▾ (the one text button) sets them apart as a group.
+    let copy_button = action_symbol(
+        mtm,
+        "doc.on.doc",
+        crate::locale::t("copy_table_a11y"),
+        crate::locale::t("copy_table_tip"),
+        "⎘",
+        sel!(tableWindowCopyClicked:),
+    );
     content.addSubview(copy_button.view());
-    actions_x += copy_w + mac_ui::metrics::BUTTON_GAP;
-
-    let save_button = GlassButton::pill(mtm, crate::locale::t("save"), ButtonSize::Regular);
-    save_button.set_symbol("square.and.arrow.down");
-    save_button.set_accessibility_label(crate::locale::t("save_table_a11y"));
-    save_button
-        .button()
-        .setToolTip(Some(&NSString::from_str(crate::locale::t(
-            "save_table_tip",
-        ))));
-    wire(save_button.button(), sel!(tableWindowSaveClicked:));
-    let save_w = save_button.width_within(120.0);
-    save_button.view().setFrame(NSRect::new(
-        NSPoint::new(actions_x, toolbar_y),
-        NSSize::new(save_w, commands::CHIP_PILL_H),
-    ));
-    save_button
-        .view()
-        .setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMaxXMargin]));
+    let save_button = action_symbol(
+        mtm,
+        "square.and.arrow.down",
+        crate::locale::t("save_table_a11y"),
+        crate::locale::t("save_table_tip"),
+        "↓",
+        sel!(tableWindowSaveClicked:),
+    );
     content.addSubview(save_button.view());
-    actions_x += save_w + PAD;
+    let actions_x = place_actions(table_w, toolbar_y, &copy_button, &save_button);
 
     let capsule = NSView::initWithFrame(
         NSView::alloc(mtm),
@@ -333,6 +314,52 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
 
 /// The card's version row: ↶, the version shown (a button that pops the versions) and ↷.
 /// Separate glass buttons with the same gap as the card, not a second glass capsule.
+/// A symbol-only toolbar button: `label` for VoiceOver, `tip` as its tooltip.
+fn action_symbol(
+    mtm: MainThreadMarker,
+    symbol: &str,
+    label: &str,
+    tip: &str,
+    fallback: &str,
+    action: Sel,
+) -> GlassButton {
+    let button = GlassButton::symbol(mtm, symbol, label, fallback, mac_ui::metrics::FONT_BODY);
+    button.button().setAlignment(NSTextAlignment::Center);
+    set_action_labels(&button, label, tip);
+    wire(button.button(), action);
+    button.view().setAutoresizingMask(mask(&[
+        NSAutoresizingMaskOptions::ViewMinYMargin,
+        NSAutoresizingMaskOptions::ViewMaxXMargin,
+    ]));
+    button
+}
+
+/// VoiceOver name and tooltip of Copy or Save (both follow the language).
+pub(super) fn set_action_labels(button: &GlassButton, label: &str, tip: &str) {
+    button.set_accessibility_label(label);
+    button.button().setToolTip(Some(&NSString::from_str(tip)));
+}
+
+/// Put Copy and Save after Table ▾ (`table_w` wide): [`ACTION_GROUP_GAP`] after it, square
+/// buttons [`mac_ui::metrics::BUTTON_GAP`] apart. Returns where the hint starts.
+pub(super) fn place_actions(
+    table_w: f64,
+    toolbar_y: f64,
+    copy: &GlassButton,
+    save: &GlassButton,
+) -> f64 {
+    let side = commands::CHIP_PILL_H;
+    let mut x = PAD + table_w + ACTION_GROUP_GAP;
+    for button in [copy, save] {
+        button.view().setFrame(NSRect::new(
+            NSPoint::new(x, toolbar_y),
+            NSSize::new(side, side),
+        ));
+        x += side + mac_ui::metrics::BUTTON_GAP;
+    }
+    x - mac_ui::metrics::BUTTON_GAP + PAD
+}
+
 pub(super) fn version_capsule(
     mtm: MainThreadMarker,
     capsule: &NSView,

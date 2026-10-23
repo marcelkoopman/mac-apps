@@ -48,6 +48,8 @@ const INITIAL_SIZE: NSSize = NSSize::new(900.0, 560.0);
 const MIN_SIZE: NSSize = NSSize::new(560.0, 320.0);
 const TOOLBAR_H: f64 = 44.0;
 const META_H: f64 = 28.0;
+/// Between Table ▾ and the Copy/Save symbols: a fixed gap marks them as their own group.
+const ACTION_GROUP_GAP: f64 = mac_ui::metrics::SPACE_L;
 const SIDEBAR_W: f64 = 220.0;
 const SIDEBAR_TITLE_H: f64 = 22.0;
 const PAD: f64 = mac_ui::metrics::MARGIN;
@@ -280,7 +282,7 @@ pub fn bring_forward() {
 }
 
 /// Point the window's fixed labels at the current language and lay the toolbar out again.
-/// Pill titles change width (`Kopieer` is wider than `Copy`); the hint moves with them.
+/// The Table ▾ title changes width (`Tabel` / `Table`); Copy, Save and the hint move with it.
 /// Nothing when the window has not been built. The meta line, sidebar title and hint text
 /// are filled by the next paint.
 pub fn relabel() {
@@ -303,22 +305,16 @@ pub fn relabel() {
         views
             .table_button
             .set_accessibility_label(t("table_steps_a11y"));
-        views.copy_button.set_title(t("copy"));
-        views
-            .copy_button
-            .set_accessibility_label(t("copy_table_a11y"));
-        views
-            .copy_button
-            .button()
-            .setToolTip(Some(&NSString::from_str(t("copy_table_tip"))));
-        views.save_button.set_title(t("save"));
-        views
-            .save_button
-            .set_accessibility_label(t("save_table_a11y"));
-        views
-            .save_button
-            .button()
-            .setToolTip(Some(&NSString::from_str(t("save_table_tip"))));
+        set_action_labels(
+            &views.copy_button,
+            t("copy_table_a11y"),
+            t("copy_table_tip"),
+        );
+        set_action_labels(
+            &views.save_button,
+            t("save_table_a11y"),
+            t("save_table_tip"),
+        );
 
         let width = views
             .window
@@ -332,19 +328,7 @@ pub fn relabel() {
             NSPoint::new(PAD, toolbar_y),
             NSSize::new(table_w, height),
         ));
-        let mut x = PAD + table_w + mac_ui::metrics::BUTTON_GAP;
-        let copy_w = views.copy_button.width_within(100.0);
-        views.copy_button.view().setFrame(NSRect::new(
-            NSPoint::new(x, toolbar_y),
-            NSSize::new(copy_w, height),
-        ));
-        x += copy_w + mac_ui::metrics::BUTTON_GAP;
-        let save_w = views.save_button.width_within(100.0);
-        views.save_button.view().setFrame(NSRect::new(
-            NSPoint::new(x, toolbar_y),
-            NSSize::new(save_w, height),
-        ));
-        x += save_w + PAD;
+        let x = place_actions(table_w, toolbar_y, &views.copy_button, &views.save_button);
         let hint = views.hint.frame();
         let hint_w = (width - PAD - commands::VERSION_SPAN - PAD - x).max(10.0);
         views.hint.setFrame(NSRect::new(
