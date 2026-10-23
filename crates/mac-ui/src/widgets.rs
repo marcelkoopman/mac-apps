@@ -108,6 +108,56 @@ pub fn set_context_menu(view: &NSView, menu: &NSMenu) {
     unsafe { view.setMenu(Some(menu)) };
 }
 
+/// Fade the trailing `width` points of `view` out to transparent, so content that goes on past
+/// its edge shows that it does; `width` 0 (or a view no wider than it) takes the fade off.
+/// A gradient mask on the view's layer (CAGradientLayer, opaque to clear): it works over glass
+/// and any background, and clicks still reach what is under the faded part. Call it again
+/// when the view's size changes: the mask does not follow.
+pub fn fade_trailing_edge(view: &NSView, width: f64) {
+    view.setWantsLayer(true);
+    let size = view.frame().size;
+    let fade = width > 0.0 && size.width > width;
+    let locations = objc2_foundation::NSArray::from_retained_slice(&[
+        objc2_foundation::NSNumber::new_f64(0.0),
+        objc2_foundation::NSNumber::new_f64(if fade { 1.0 - width / size.width } else { 1.0 }),
+        objc2_foundation::NSNumber::new_f64(1.0),
+    ]);
+    let opaque = NSColor::blackColor().CGColor();
+    let clear = NSColor::clearColor().CGColor();
+    // SAFETY: `layer` returns the view's CALayer or nil (checked). CAGradientLayer is a
+    // QuartzCore class AppKit links; `+layer` returns an autoreleased instance that `setMask:`
+    // retains. The CGColors live until the end of the function and the array retains them (CF
+    // types are Objective-C objects, so they go in an NSArray as `id`). The points are
+    // CGPoints, the frame a CGRect, the locations an NSArray of NSNumbers; main-thread calls.
+    unsafe {
+        let layer: *mut AnyObject = msg_send![view, layer];
+        if layer.is_null() {
+            return;
+        }
+        let gradient = objc2::runtime::AnyClass::get(c"CAGradientLayer");
+        let Some(gradient) = gradient.filter(|_| fade) else {
+            let _: () = msg_send![layer, setMask: std::ptr::null_mut::<AnyObject>()];
+            return;
+        };
+        let mask: *mut AnyObject = msg_send![gradient, layer];
+        if mask.is_null() {
+            return;
+        }
+        let opaque = Retained::as_ptr(&opaque).cast_mut().cast::<AnyObject>();
+        let clear = Retained::as_ptr(&clear).cast_mut().cast::<AnyObject>();
+        let colors: [*mut AnyObject; 3] = [opaque, opaque, clear];
+        let array_class = objc2::runtime::AnyClass::get(c"NSArray").expect("NSArray");
+        let colors: *mut AnyObject =
+            msg_send![array_class, arrayWithObjects: colors.as_ptr(), count: colors.len()];
+        let _: () = msg_send![mask, setColors: colors];
+        let _: () = msg_send![mask, setLocations: &*locations];
+        let _: () = msg_send![mask, setStartPoint: NSPoint::new(0.0, 0.5)];
+        let _: () = msg_send![mask, setEndPoint: NSPoint::new(1.0, 0.5)];
+        let _: () = msg_send![mask, setFrame: NSRect::new(NSPoint::new(0.0, 0.0), size)];
+        let _: () = msg_send![layer, setMask: mask];
+    }
+}
+
 pub fn menu_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
     // SAFETY: a freshly allocated item with no action selector, so AppKit never sends a message
     // on its behalf; both strings are valid NSStrings.

@@ -71,6 +71,8 @@ thread_local! {
     static PENDING_FOCUS: Cell<Option<StripFocus>> = const { Cell::new(None) };
     /// The history position of the small card under the pointer.
     static STRIP_HOVER: Cell<Option<usize>> = const { Cell::new(None) };
+    /// The right edge's fade as last set: (fades, the strip's width as bits).
+    static STRIP_FADE_STATE: Cell<Option<(bool, u64)>> = const { Cell::new(None) };
     /// A copy was just removed from history: ⌘Z puts it back.
     static CAN_RESTORE: Cell<bool> = const { Cell::new(false) };
     /// The hint row under the strip ([`LaunchData::strip_hint`]).
@@ -225,6 +227,11 @@ pub(crate) fn strip_pointer_left() {
 
 /// The strip scrolled under a pointer that did not move: the card under it may be another.
 pub(crate) fn strip_scrolled() {
+    STRIP_VIEWS.with(|slot| {
+        if let Some(views) = slot.borrow().as_ref() {
+            update_fade(&views.scroll, &views.document);
+        }
+    });
     let point = WINDOW.with(|slot| {
         slot.borrow()
             .as_ref()
@@ -448,6 +455,24 @@ pub(crate) fn place_strip(
             clip.scrollToPoint(NSPoint::new(target, 0.0));
             scroll.reflectScrolledClipView(&clip);
         }
+    }
+    update_fade(&scroll, &document);
+}
+
+/// The strip's right edge fades while more cards follow past it, and not at the end of the
+/// row; only set again when that or the strip's width changes.
+fn update_fade(scroll: &NSScrollView, document: &NSView) {
+    let visible = scroll.contentView().bounds();
+    let fades = commands::strip_fades(
+        visible.origin.x,
+        visible.size.width,
+        document.frame().size.width,
+    );
+    let width = scroll.frame().size.width;
+    let state = (fades, width.to_bits());
+    if STRIP_FADE_STATE.get() != Some(state) {
+        STRIP_FADE_STATE.set(Some(state));
+        mac_ui::widgets::fade_trailing_edge(scroll, if fades { commands::STRIP_FADE } else { 0.0 });
     }
 }
 

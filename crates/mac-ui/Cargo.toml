@@ -32,6 +32,9 @@ widgets = [
     "objc2-app-kit/NSColor",
     "objc2-app-kit/NSImage",
     "objc2-app-kit/NSPanel",
+    # NSColor's CGColor for `fade_trailing_edge`'s gradient mask (objc2-core-graphics is already
+    # in the tree through objc2-app-kit; no new crate).
+    "objc2-app-kit/objc2-core-graphics",
     "objc2-app-kit/NSScreen",
     "objc2-app-kit/NSWindow",
     "objc2-app-kit/NSWorkspace",

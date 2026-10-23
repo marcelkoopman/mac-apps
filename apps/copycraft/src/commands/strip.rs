@@ -15,6 +15,9 @@ pub const THUMB_MARGIN: f64 = 2.0;
 /// Height of the strip row: a card and the room around it.
 pub const STRIP_H: f64 = THUMB_H + 2.0 * THUMB_MARGIN;
 pub const THUMB_GAP: f64 = 7.0;
+/// The fade on the strip's right edge while more cards follow (collections HIG: overflow
+/// shows), in points.
+pub const STRIP_FADE: f64 = 12.0;
 /// Space between a card's edge and its text or picture: inside the card's one button, which
 /// covers the whole card, so a click and the pointer's hover use the same area.
 pub const THUMB_PAD: f64 = 6.0;
@@ -351,12 +354,18 @@ pub fn remove_shown(index: usize, cursor: usize, hovered: Option<usize>) -> bool
     index == cursor || hovered == Some(index)
 }
 
+/// Whether the strip's right edge fades ([`STRIP_FADE`]): more cards follow past it. Scrolled
+/// `offset` into content `content` wide, `visible` wide; off at the end of the row.
+pub fn strip_fades(offset: f64, visible: f64, content: f64) -> bool {
+    offset + visible < content - 0.5
+}
+
 /// The scroll offset that brings card `slot` into a strip `visible` wide holding `count`
-/// cards, with `current` the offset now: unchanged when it already shows fully, else the least
-/// move, kept within the content.
+/// cards, with `current` the offset now: unchanged when it already shows fully (clear of the
+/// right edge's fade while more follow), else the least move, kept within the content.
 pub fn scroll_to_thumb(slot: usize, count: usize, visible: f64, current: f64) -> f64 {
     let left = thumb_x(slot);
-    let right = left + THUMB_W;
+    let right = left + THUMB_W + if slot + 1 < count { STRIP_FADE } else { 0.0 };
     let max = (strip_content_width(count) - visible).max(0.0);
     let target = if left < current {
         left
@@ -460,6 +469,16 @@ mod tests {
     }
 
     #[test]
+    fn the_right_edge_fades_until_the_end_of_the_row() {
+        let content = strip_content_width(8);
+        assert!(strip_fades(0.0, 408.0, content));
+        assert!(strip_fades(content - 409.0, 408.0, content));
+        assert!(!strip_fades(content - 408.0, 408.0, content));
+        // All cards fit: no fade.
+        assert!(!strip_fades(0.0, 408.0, strip_content_width(2)));
+    }
+
+    #[test]
     fn the_strip_scrolls_just_enough_to_show_the_current_card() {
         let visible = 400.0;
         let count = 20;
@@ -467,7 +486,13 @@ mod tests {
         assert_eq!(scroll_to_thumb(1, count, visible, 0.0), 0.0);
         // Past the right edge: its right edge meets the strip's.
         let at = scroll_to_thumb(10, count, visible, 0.0);
-        assert_eq!(at, thumb_x(10) + THUMB_W - visible);
+        assert_eq!(at, thumb_x(10) + THUMB_W + STRIP_FADE - visible);
+        // A card under the fade is not in view yet.
+        let under = thumb_x(2) + THUMB_W + STRIP_FADE / 2.0 - visible;
+        assert_eq!(
+            scroll_to_thumb(2, count, visible, under),
+            thumb_x(2) + THUMB_W + STRIP_FADE - visible
+        );
         // Before the left edge: its left edge.
         assert_eq!(scroll_to_thumb(2, count, visible, 500.0), thumb_x(2));
         // Never past the content, never negative.
