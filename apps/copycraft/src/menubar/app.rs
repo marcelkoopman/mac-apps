@@ -103,6 +103,15 @@ pub(crate) struct App {
     /// The history picture the pasteboard holds at that change count (a copy recorded, or an
     /// entry put back), so its scan can be kept with the entry and found there again.
     pub(crate) image_on_pasteboard: Option<(isize, SecretBytes)>,
+    /// The clipboard's picture at that change count as read for the card, when history does not
+    /// hold that copy (not recorded yet, held, refused, too large): Image ▾ works on it at once,
+    /// without waiting for history or text recognition. Zeroized when the copy changes or on
+    /// a wipe.
+    pub(crate) card_picture: Option<(isize, SecretBytes)>,
+    /// The change count whose picture was last read for the card, so it is read once per copy.
+    pub(crate) card_picture_asked: Option<isize>,
+    /// The Image ▾ gate last logged (debug builds only), so it is logged when it changes.
+    pub(crate) image_gate_logged: Option<crate::diag::LogEvent>,
     /// When history last got a new entry (copy, drop, copycraft's own write).
     pub(crate) last_copy: Option<Instant>,
     /// [`crate::settings::Settings::history_minutes`], read once and kept in step with the menu.

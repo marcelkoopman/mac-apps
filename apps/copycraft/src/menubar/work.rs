@@ -23,22 +23,25 @@ pub(crate) enum Lane {
     Image,
     /// The Apple Intelligence model ([`AiRun`]).
     Ai,
+    /// The clipboard's picture as the card shows it, for Image ▾ ([`App::card_picture`]).
+    CardPicture,
 }
 
 impl Lane {
     /// Whether a slow job of this lane makes the card show its busy wheel. The AI run has its
     /// own spinner in its preview over the card: a second one would be drawn under it.
     pub(crate) fn shows_card_spinner(self) -> bool {
-        self != Lane::Ai
+        // Image ▾'s picture read for the card shows no wheel either: the picture is on screen.
+        !matches!(self, Lane::Ai | Lane::CardPicture)
     }
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Lanes {
-    sequence: [Sequence; 6],
+    sequence: [Sequence; 7],
     /// When the newest job of a lane became slow (the main thread stopped waiting): the
     /// spinner shows after [`SPINNER_DELAY`], like other background work.
-    slow: [Option<Instant>; 6],
+    slow: [Option<Instant>; 7],
 }
 
 impl Lanes {

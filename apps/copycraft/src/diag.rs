@@ -178,6 +178,20 @@ pub enum LogEvent {
         ms: u64,
     },
     SpinnerHidden,
+    /// Debug builds only: what decides the chips of a copied picture card, logged when it
+    /// changes. Only yes or no, never content: history kept, the card on history instead of the
+    /// clipboard, the clipboard holds a picture, history holds this copy, the picture read for
+    /// the card is in, it was asked for, its scan is in, and history refused this copy.
+    ImageGate {
+        kept_history: bool,
+        suppressed: bool,
+        image: bool,
+        in_history: bool,
+        read: bool,
+        asked: bool,
+        scanned: bool,
+        refused: bool,
+    },
     PreviewNoPicture,
     PreviewStarted,
     PreviewOpenFailed,
@@ -262,6 +276,7 @@ impl LogEvent {
             | E::TooltipFailed(_)
             | E::SpinnerShown { .. }
             | E::SpinnerHidden
+            | E::ImageGate { .. }
             | E::PreviewNoPicture
             | E::PreviewStarted
             | E::PreviewOpenFailed
@@ -357,7 +372,8 @@ impl LogEvent {
             | E::AgentOutline { .. }
             | E::AgentChecked { .. }
             | E::SpinnerShown { .. }
-            | E::SpinnerHidden => Level::Debug,
+            | E::SpinnerHidden
+            | E::ImageGate { .. } => Level::Debug,
         }
     }
 
@@ -424,6 +440,20 @@ impl LogEvent {
             E::WorkNotStarted(work, k) => format!("{work:?} failed to start: {}", k.describe()),
             E::SpinnerShown { ms } => format!("spinner shown after {ms} ms"),
             E::SpinnerHidden => "spinner hidden".into(),
+            E::ImageGate {
+                kept_history,
+                suppressed,
+                image,
+                in_history,
+                read,
+                asked,
+                scanned,
+                refused,
+            } => format!(
+                "image gate: history {kept_history}, suppressed {suppressed}, image {image}, \
+                 in history {in_history}, read {read}, asked {asked}, scanned {scanned}, \
+                 refused {refused}"
+            ),
             E::PreviewNoPicture => "preview: no picture to open".into(),
             E::PreviewStarted => "preview started".into(),
             E::PreviewOpenFailed => "preview: could not open Preview".into(),

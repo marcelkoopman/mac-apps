@@ -52,16 +52,115 @@ impl App {
         }
         #[cfg(target_os = "macos")]
         {
-            if self.pasteboard_suppressed() {
-                return self.history.image(self.history_cursor);
-            }
-            if !ClipboardView::from_os().is_image() {
-                return None;
-            }
-            self.history_image_on_pasteboard(crate::macos_pasteboard::change_count())
+            let suppressed = self.pasteboard_suppressed();
+            clipboard_card_picture(CardPictureGate {
+                suppressed,
+                entry: self.history.image(self.history_cursor).as_ref(),
+                is_image: !suppressed && ClipboardView::from_os().is_image(),
+                change: crate::macos_pasteboard::change_count(),
+                in_history: self.image_on_pasteboard.as_ref(),
+                read: self.card_picture.as_ref(),
+            })
         }
         #[cfg(not(target_os = "macos"))]
         None
+    }
+
+    /// Read the clipboard's picture for the card, once per copy, when history does not hold it
+    /// ([`App::card_picture`]): Image ▾ is then offered at once, with history off for the
+    /// clipboard (not shown then), held, or not recorded yet. The pasteboard is read here, on
+    /// the main thread, under the same rules as the card's scan; the bytes are made on a
+    /// worker, and a quick picture is back within `QUICK`, so the first card built has Image ▾.
+    pub(crate) fn ensure_card_picture(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let suppressed = self.pasteboard_suppressed();
+            let change = crate::macos_pasteboard::change_count();
+            let in_history = self.history_image_on_pasteboard(change).is_some();
+            let read = self.card_picture.as_ref().map(|(at, _)| *at);
+            if !card_picture_due(
+                suppressed,
+                change,
+                in_history,
+                read,
+                self.card_picture_asked,
+            ) {
+                return;
+            }
+            self.card_picture_asked = Some(change);
+            self.drop_card_picture();
+            let Some(input) = crate::macos_pasteboard::card_image_input() else {
+                return;
+            };
+            let ready = self.start_work(
+                work::Lane::CardPicture,
+                work::QUICK,
+                move || {
+                    crate::macos_pasteboard::image_input_bytes(input).and_then(SecretBytes::new)
+                },
+                move |app: &mut App, bytes| {
+                    if app.keep_card_picture(change, bytes) && launcher::is_open() {
+                        app.refresh_popup();
+                    }
+                },
+            );
+            if let Some(bytes) = ready {
+                self.keep_card_picture(change, bytes);
+            }
+        }
+    }
+
+    /// The clipboard's picture read for the card at `change` is in. `false` (zeroized) when
+    /// the clipboard changed meanwhile or nothing could be read.
+    #[cfg(target_os = "macos")]
+    fn keep_card_picture(&mut self, change: isize, bytes: Option<SecretBytes>) -> bool {
+        let Some(bytes) = bytes else {
+            return false;
+        };
+        if crate::macos_pasteboard::change_count() != change
+            || self.card_picture_asked != Some(change)
+        {
+            bytes.zeroize();
+            return false;
+        }
+        self.drop_card_picture();
+        self.card_picture = Some((change, bytes));
+        true
+    }
+
+    /// Forget (and zeroize) the clipboard's picture read for the card.
+    pub(crate) fn drop_card_picture(&mut self) {
+        if let Some((_, bytes)) = self.card_picture.take() {
+            bytes.zeroize();
+        }
+    }
+
+    /// Debug builds only: log what decides a copied picture card's chips when it changes
+    /// ([`crate::diag::LogEvent::ImageGate`]). Only yes or no, never content.
+    #[cfg(target_os = "macos")]
+    fn log_image_gate(&mut self) {
+        if !cfg!(debug_assertions) || self.opened.is_some() || self.browsing.is_some() {
+            return;
+        }
+        let suppressed = self.pasteboard_suppressed();
+        let change = crate::macos_pasteboard::change_count();
+        let event = crate::diag::LogEvent::ImageGate {
+            kept_history: crate::settings::clipboard_history(),
+            suppressed,
+            image: !suppressed && ClipboardView::from_os().is_image(),
+            in_history: self.history_image_on_pasteboard(change).is_some(),
+            read: self
+                .card_picture
+                .as_ref()
+                .is_some_and(|(at, _)| *at == change),
+            asked: self.card_picture_asked == Some(change),
+            scanned: self.image_scan_change == Some(change),
+            refused: self.skip_image_change == Some(change),
+        };
+        if self.image_gate_logged != Some(event) {
+            self.image_gate_logged = Some(event);
+            crate::diag::log(event);
+        }
     }
 
     /// The history id of the picture `bytes`, or [`NOT_IN_HISTORY`].
@@ -197,12 +296,18 @@ impl App {
             });
         }
         self.stop_spinner_when_idle();
-        let source = self.image_source();
-        let current = run.filter(|run| {
-            source
-                .as_ref()
-                .is_some_and(|bytes| bytes.allocation_id() == run.source)
+        // The step's picture is still on the card. History may have recorded the clipboard's
+        // copy while a step ran on the picture read for the card: that picture still counts.
+        let source = run.as_ref().and_then(|run| {
+            let matches = |bytes: &SecretBytes| bytes.allocation_id() == run.source;
+            self.image_source().filter(matches).or_else(|| {
+                self.card_picture
+                    .as_ref()
+                    .map(|(_, bytes)| bytes.clone())
+                    .filter(matches)
+            })
         });
+        let current = run.filter(|_| source.is_some());
         match (current, done.result) {
             (Some(_), Ok(finished)) => {
                 if let Some(source) = source {
@@ -311,9 +416,13 @@ impl App {
             return Some(scan);
         }
         let change = crate::macos_pasteboard::change_count();
-        self.image_on_pasteboard
-            .as_ref()
-            .filter(|(at, bytes)| *at == change && bytes.same_allocation(source))
+        // The clipboard's copy, from history or as read for the card: the card's scan of it.
+        let on_card = |slot: &Option<(isize, SecretBytes)>| {
+            slot.as_ref()
+                .is_some_and(|(at, bytes)| *at == change && bytes.same_allocation(source))
+        };
+        (on_card(&self.image_on_pasteboard) || on_card(&self.card_picture))
+            .then_some(())
             .and(self.image_scan_change)
             .filter(|at| *at == change)
             .and(self.image_scan.clone())
@@ -448,6 +557,8 @@ impl App {
         if data.subject_kind != SubjectKind::Image {
             return;
         }
+        #[cfg(target_os = "macos")]
+        self.log_image_gate();
         let Some(bytes) = self.image_source() else {
             return;
         };
@@ -483,5 +594,144 @@ impl App {
             working,
             note,
         });
+    }
+}
+
+/// What Image ▾ looks at for a card that shows no opened or browsed copy.
+pub(crate) struct CardPictureGate<'a, T> {
+    /// History off, held, or this copy blocked: the card shows history's entry at the cursor
+    /// (`entry`), never the clipboard.
+    pub suppressed: bool,
+    pub entry: Option<&'a T>,
+    /// The clipboard holds a picture (only asked when not suppressed).
+    pub is_image: bool,
+    /// The clipboard's change count now.
+    pub change: isize,
+    /// The history picture the clipboard holds, at its change count ([`App::image_on_pasteboard`]).
+    pub in_history: Option<&'a (isize, T)>,
+    /// The clipboard's picture read for the card, at its change count ([`App::card_picture`]).
+    pub read: Option<&'a (isize, T)>,
+}
+
+/// The picture Image ▾ works on. Suppressed: history's entry at the cursor. Otherwise the
+/// clipboard's copy when it is a picture: history's entry for it when history holds this copy
+/// (⌘Z then goes back through history), else the picture read for the card. Neither history
+/// nor text recognition is waited for. Pure.
+pub(crate) fn clipboard_card_picture<T: Clone>(gate: CardPictureGate<'_, T>) -> Option<T> {
+    if gate.suppressed {
+        return gate.entry.cloned();
+    }
+    if !gate.is_image {
+        return None;
+    }
+    let at = |slot: Option<&(isize, T)>| {
+        slot.filter(|(at, _)| *at == gate.change)
+            .map(|(_, value)| value.clone())
+    };
+    at(gate.in_history).or_else(|| at(gate.read))
+}
+
+/// Whether the clipboard's picture at `change` is read for the card now: once per copy (`read`
+/// and `asked` are the change counts read and asked for), not when history already holds this
+/// copy, and never while the card is suppressed (history off: the card does not show it). Pure.
+pub(crate) fn card_picture_due(
+    suppressed: bool,
+    change: isize,
+    in_history: bool,
+    read: Option<isize>,
+    asked: Option<isize>,
+) -> bool {
+    !suppressed && !in_history && read != Some(change) && asked != Some(change)
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    fn gate<'a>(
+        suppressed: bool,
+        entry: Option<&'a u8>,
+        in_history: Option<&'a (isize, u8)>,
+        read: Option<&'a (isize, u8)>,
+    ) -> CardPictureGate<'a, u8> {
+        CardPictureGate {
+            suppressed,
+            entry,
+            is_image: !suppressed,
+            change: 5,
+            in_history,
+            read,
+        }
+    }
+
+    #[test]
+    fn a_launch_picture_with_history_on_gets_image_steps_before_it_is_recorded() {
+        // On the clipboard at launch, not in history yet (recording waits for its text).
+        assert!(card_picture_due(false, 5, false, None, None));
+        assert_eq!(clipboard_card_picture(gate(false, None, None, None)), None);
+        // Read for the card: Image ▾ works on it, history or not.
+        assert_eq!(
+            clipboard_card_picture(gate(false, None, None, Some(&(5, 1)))),
+            Some(1)
+        );
+        assert!(!card_picture_due(false, 5, false, Some(5), Some(5)));
+        // Recorded later: history's entry, for ⌘Z.
+        assert_eq!(
+            clipboard_card_picture(gate(false, None, Some(&(5, 2)), Some(&(5, 1)))),
+            Some(2)
+        );
+        assert!(!card_picture_due(false, 5, true, None, None));
+        // A read of an earlier copy is not this one.
+        assert_eq!(
+            clipboard_card_picture(gate(false, None, Some(&(4, 2)), Some(&(4, 1)))),
+            None
+        );
+        assert!(card_picture_due(false, 5, false, Some(4), Some(4)));
+    }
+
+    #[test]
+    fn a_launch_picture_with_history_off_is_not_read_and_the_card_shows_history() {
+        // History off: the card shows history (a paste or a drop), never the clipboard, so the
+        // clipboard's picture is not read and gives no steps.
+        assert!(!card_picture_due(true, 5, false, None, None));
+        assert_eq!(
+            clipboard_card_picture(gate(true, None, None, Some(&(5, 1)))),
+            None
+        );
+        // A pasted picture in history gets its steps.
+        assert_eq!(
+            clipboard_card_picture(gate(true, Some(&3), None, None)),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn image_steps_do_not_wait_for_a_scan_still_pending() {
+        use crate::commands::{CommandId, ImageScan, image_chips};
+        // Scan still pending: Info and Image ▾ at once, no text toggle yet.
+        let ids: Vec<_> = image_chips(None, true, false)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(ids, vec![CommandId::Info, CommandId::ImageMenu]);
+        // No picture to work on: only Info.
+        let ids: Vec<_> = image_chips(None, false, false)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert_eq!(ids, vec![CommandId::Info]);
+        // The scan found text: the toggle joins with a card refresh.
+        let scan = ImageScan {
+            info: String::new(),
+            data_url: None,
+            ocr: Some("x".into()),
+            qr: None,
+        };
+        let ids: Vec<_> = image_chips(Some(&scan), true, false)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        assert!(ids.contains(&CommandId::ImageMenu));
+        assert!(ids.len() == 3, "Info, text toggle and Image ▾");
     }
 }

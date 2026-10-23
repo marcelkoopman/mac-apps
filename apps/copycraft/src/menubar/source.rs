@@ -207,6 +207,8 @@ impl App {
             crate::capture::set_ignore_next(false);
             #[cfg(target_os = "macos")]
             crate::macos_pasteboard::zeroize_caches();
+            self.drop_card_picture();
+            self.card_picture_asked = None;
             self.sync_tooltip(&ClipboardView::Empty);
         }
         self.refresh_status_menu();
@@ -404,6 +406,8 @@ impl App {
 
     pub(crate) fn launch_data(&mut self, view: &ClipboardView) -> LaunchData {
         if view.is_image() {
+            // Image ▾ first: it waits for neither history nor the scan's text recognition.
+            self.ensure_card_picture();
             self.ensure_image_scan();
         }
         let (subject_kind, subject_text) = match view {

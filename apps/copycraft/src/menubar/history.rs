@@ -58,6 +58,7 @@ impl App {
             self.clear_diff();
             self.current_image = None;
             self.image_on_pasteboard = None;
+            self.drop_card_picture();
             self.cancel_image_job();
             self.image_note = None;
             self.image_steps = None;
@@ -323,6 +324,8 @@ impl App {
         self.history_emptied = false;
         self.current_image = None;
         self.image_on_pasteboard = None;
+        self.drop_card_picture();
+        self.card_picture_asked = None;
         self.history_cursor = 0;
         self.clipboard_cursor = None;
         self.recorded_image_change = None;
@@ -764,6 +767,8 @@ impl App {
             return;
         }
         self.current_image = None;
+        // No picture on the clipboard now: the one read for the card goes.
+        self.drop_card_picture();
         // The clipboard's text is already the newest entry (every poll and card refresh reads
         // it again): not a new copy, so the card stays on the entry being browsed.
         if let Some(text) = view.text()
