@@ -153,7 +153,7 @@ impl ClipboardView {
             Self::Image => format::FormatKind::Image.menu_symbol().to_string(),
             Self::Hidden => hidden_content().to_string(),
             Self::Denied => crate::paste_access::denied_note().to_string(),
-            Self::Pending => crate::paste_access::pending_note().to_string(),
+            Self::Pending => crate::paste_access::pending_note(),
             Self::Held => String::new(),
         }
     }

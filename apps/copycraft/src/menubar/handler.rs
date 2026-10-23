@@ -61,6 +61,8 @@ impl ApplicationHandler<UserEvent> for App {
                 page,
             } => self.finish_pdf_zoom(&source, index, zoom, page),
             UserEvent::LabelsChecked => self.labels_checked(),
+            // Only the tooltip: an open card reads the copy anyway.
+            UserEvent::PasteHint => self.sync_tooltip(&ClipboardView::from_os()),
             UserEvent::SessionEnded => self.session_ended(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),
             UserEvent::TableWindow(event) => self.table_window_event(event),

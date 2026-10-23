@@ -38,6 +38,8 @@
 pub use tray_icon;
 pub use winit;
 
+#[cfg(all(target_os = "macos", feature = "widgets"))]
+pub use block2;
 #[cfg(target_os = "macos")]
 pub use objc2;
 #[cfg(target_os = "macos")]

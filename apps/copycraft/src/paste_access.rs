@@ -56,9 +56,104 @@ pub fn denied_note() -> &'static str {
 }
 
 /// The card's placeholder (and the icon's tooltip) for a copy not read yet: with Default or Ask
-/// the copy is read once the card is shown.
-pub fn pending_note() -> &'static str {
-    crate::locale::t("paste_pending_note")
+/// the copy is read once the card is shown. With the kind macOS detected for it, when there is
+/// one ([`PasteHint`]).
+pub fn pending_note() -> String {
+    #[cfg(target_os = "macos")]
+    let hint = crate::macos_pasteboard::pending_hint();
+    #[cfg(not(target_os = "macos"))]
+    let hint = None;
+    pending_note_with(hint)
+}
+
+/// [`pending_note`] for `hint`. Pure.
+pub fn pending_note_with(hint: Option<PasteHint>) -> String {
+    match hint {
+        Some(hint) => crate::locale::tf("paste_pending_hint", &[&hint.label()]),
+        None => crate::locale::t("paste_pending_note").to_string(),
+    }
+}
+
+/// A pattern `NSPasteboard detectPatternsForPatterns:` reported for the first item (macOS 15.4+).
+/// Detecting reads no content and shows no privacy alert (FINDINGS §2); only the kind is known,
+/// never the text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetectedPattern {
+    ProbableWebUrl,
+    Link,
+    Number,
+    PhoneNumber,
+    EmailAddress,
+    PostalAddress,
+    CalendarEvent,
+}
+
+impl DetectedPattern {
+    /// The patterns CopyCraft asks about. Web searches, tracking and flight numbers and money
+    /// amounts are not asked: the card has no hint for them.
+    pub const ASKED: [DetectedPattern; 7] = [
+        DetectedPattern::ProbableWebUrl,
+        DetectedPattern::Link,
+        DetectedPattern::Number,
+        DetectedPattern::PhoneNumber,
+        DetectedPattern::EmailAddress,
+        DetectedPattern::PostalAddress,
+        DetectedPattern::CalendarEvent,
+    ];
+}
+
+/// The kind of a copy not read yet, as the card and the icon's tooltip name it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteHint {
+    Link,
+    Number,
+    EmailAddress,
+    PhoneNumber,
+    CalendarEvent,
+    PostalAddress,
+}
+
+impl PasteHint {
+    pub fn label(self) -> &'static str {
+        match self {
+            PasteHint::Link => crate::locale::t("paste_hint_link"),
+            PasteHint::Number => crate::locale::t("paste_hint_number"),
+            PasteHint::EmailAddress => crate::locale::t("paste_hint_email"),
+            PasteHint::PhoneNumber => crate::locale::t("paste_hint_phone"),
+            PasteHint::CalendarEvent => crate::locale::t("paste_hint_calendar"),
+            PasteHint::PostalAddress => crate::locale::t("paste_hint_postal"),
+        }
+    }
+}
+
+/// The one hint for the patterns `found`, the most specific first: an e-mail address, phone
+/// number, date or address also holds links or numbers, a link often holds digits. `None`
+/// when nothing was found.
+pub fn hint_of(found: &[DetectedPattern]) -> Option<PasteHint> {
+    const ORDER: [(DetectedPattern, PasteHint); 7] = [
+        (DetectedPattern::EmailAddress, PasteHint::EmailAddress),
+        (DetectedPattern::PhoneNumber, PasteHint::PhoneNumber),
+        (DetectedPattern::CalendarEvent, PasteHint::CalendarEvent),
+        (DetectedPattern::PostalAddress, PasteHint::PostalAddress),
+        (DetectedPattern::Link, PasteHint::Link),
+        (DetectedPattern::ProbableWebUrl, PasteHint::Link),
+        (DetectedPattern::Number, PasteHint::Number),
+    ];
+    ORDER
+        .iter()
+        .find(|(pattern, _)| found.contains(pattern))
+        .map(|(_, hint)| *hint)
+}
+
+/// Is a hint looked for? Only for a copy waiting for the card ([`ReadPlan::Wait`]) under
+/// Default or Ask; not under Always Deny, a setting this build does not know, or a copy that
+/// is read anyway.
+pub fn detects_hint(behavior: Option<AccessBehavior>, plan: ReadPlan) -> bool {
+    plan == ReadPlan::Wait
+        && matches!(
+            behavior,
+            Some(AccessBehavior::Default | AccessBehavior::Ask)
+        )
 }
 
 /// The card's one-time explanation the first time CopyCraft reads with Default or Ask.
@@ -312,6 +407,87 @@ mod tests {
             ),
             ReadPlan::Deny
         );
+    }
+
+    #[test]
+    fn each_pattern_names_its_kind() {
+        use DetectedPattern as P;
+        assert_eq!(hint_of(&[]), None);
+        assert_eq!(hint_of(&[P::Link]), Some(PasteHint::Link));
+        assert_eq!(hint_of(&[P::ProbableWebUrl]), Some(PasteHint::Link));
+        assert_eq!(hint_of(&[P::Number]), Some(PasteHint::Number));
+        assert_eq!(hint_of(&[P::EmailAddress]), Some(PasteHint::EmailAddress));
+        assert_eq!(hint_of(&[P::PhoneNumber]), Some(PasteHint::PhoneNumber));
+        assert_eq!(hint_of(&[P::CalendarEvent]), Some(PasteHint::CalendarEvent));
+        assert_eq!(hint_of(&[P::PostalAddress]), Some(PasteHint::PostalAddress));
+        for pattern in DetectedPattern::ASKED {
+            assert!(hint_of(&[pattern]).is_some(), "{pattern:?}");
+        }
+    }
+
+    #[test]
+    fn the_most_specific_kind_wins() {
+        use DetectedPattern as P;
+        assert_eq!(
+            hint_of(&[P::Number, P::PhoneNumber]),
+            Some(PasteHint::PhoneNumber)
+        );
+        assert_eq!(
+            hint_of(&[P::Link, P::EmailAddress]),
+            Some(PasteHint::EmailAddress)
+        );
+        assert_eq!(hint_of(&[P::Number, P::Link]), Some(PasteHint::Link));
+        assert_eq!(
+            hint_of(&[P::Number, P::PostalAddress, P::CalendarEvent]),
+            Some(PasteHint::CalendarEvent)
+        );
+    }
+
+    #[test]
+    fn the_note_names_the_kind_only() {
+        let plain = pending_note_with(None);
+        assert_eq!(plain, crate::locale::t("paste_pending_note"));
+        for hint in [
+            PasteHint::Link,
+            PasteHint::Number,
+            PasteHint::EmailAddress,
+            PasteHint::PhoneNumber,
+            PasteHint::CalendarEvent,
+            PasteHint::PostalAddress,
+        ] {
+            let note = pending_note_with(Some(hint));
+            assert!(note.contains(hint.label()), "{note}");
+            assert_ne!(note, plain);
+        }
+        assert_eq!(
+            crate::locale::t_in(crate::locale::Lang::Nl, "paste_hint_email"),
+            "E-mailadres"
+        );
+        assert_eq!(
+            crate::locale::t_in(crate::locale::Lang::En, "paste_hint_calendar"),
+            "Calendar event"
+        );
+    }
+
+    #[test]
+    fn only_a_waiting_copy_under_default_or_ask_is_detected() {
+        assert!(detects_hint(Some(AccessBehavior::Default), ReadPlan::Wait));
+        assert!(detects_hint(Some(AccessBehavior::Ask), ReadPlan::Wait));
+        assert!(!detects_hint(
+            Some(AccessBehavior::Other(7)),
+            ReadPlan::Wait
+        ));
+        assert!(!detects_hint(
+            Some(AccessBehavior::AlwaysDeny),
+            ReadPlan::Deny
+        ));
+        assert!(!detects_hint(
+            Some(AccessBehavior::AlwaysAllow),
+            ReadPlan::Read
+        ));
+        assert!(!detects_hint(None, ReadPlan::Read));
+        assert!(!detects_hint(Some(AccessBehavior::Ask), ReadPlan::Read));
+        assert!(!detects_hint(Some(AccessBehavior::Ask), ReadPlan::Reuse));
     }
 
     #[test]

@@ -47,7 +47,10 @@ see and stop it:
 - With history on, unless the user sets CopyCraft to *Always Allow* under Paste from Other Apps, macOS's
   pasteboard privacy applies and CopyCraft reads a copy only when the user opens the card
   (hotkey or menu bar icon). In the background it only looks at the pasteboard's change count and
-  type names, which read no content. With *Always Deny* it reads nothing.
+  type names, which read no content, and asks macOS which kind the copy is (link, number, email
+  address, phone number, calendar event, postal address: `detectPatternsForPatterns:`, which
+  reads no content and shows no prompt) so the menu bar tooltip can name it. With *Always Deny*
+  it reads nothing and asks nothing.
 
 **Clipboard access prompt.** CopyCraft reads the clipboard of other apps (on ⌘V in the card, and
 with history on also on its own), so macOS may show its "Paste from Other Apps" privacy prompt.

@@ -200,6 +200,8 @@ mod tests {
             "generate_uuid_v7",
             // "hex" in a message, the same word in Dutch.
             "encoding_hex_name",
+            // "Link" is Dutch too (the pending copy's hint).
+            "paste_hint_link",
             // Case style names are written in the style itself.
             "case_camel",
             "case_pascal",

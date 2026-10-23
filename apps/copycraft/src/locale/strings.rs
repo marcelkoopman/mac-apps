@@ -394,6 +394,18 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Nieuwe kopie — open de kaart om te bekijken",
         "New copy — open the card to view",
     ),
+    // The kind macOS detects for a copy not read yet (src/paste_access.rs, PasteHint).
+    (
+        "paste_pending_hint",
+        "Nieuwe kopie: {0} — open de kaart om te bekijken",
+        "New copy: {0} — open the card to view",
+    ),
+    ("paste_hint_link", "Link", "Link"),
+    ("paste_hint_number", "Getal", "Number"),
+    ("paste_hint_email", "E-mailadres", "Email address"),
+    ("paste_hint_phone", "Telefoonnummer", "Phone number"),
+    ("paste_hint_calendar", "Kalenderevent", "Calendar event"),
+    ("paste_hint_postal", "Postadres", "Postal address"),
     (
         "paste_ask_note",
         "macOS vraagt eerst of CopyCraft een kopie uit een andere app mag lezen.\nKies Sta toe om de kopie hier te zien.\nPrivacy en beveiliging › Plakken vanuit andere apps kan CopyCraft op Altijd toestaan zetten.",

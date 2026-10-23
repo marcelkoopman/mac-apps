@@ -48,6 +48,9 @@ pub enum UserEvent {
     ClipboardHistoryChanged,
     /// The background checker has the sensitivity labels of a long copy.
     LabelsChecked,
+    /// macOS detected the kind of a copy not read yet (Default or Ask): the icon's tooltip
+    /// names it ([`crate::paste_access::PasteHint`]).
+    PasteHint,
     /// The screen locked, the Mac is going to sleep, or the user switched away.
     SessionEnded,
     /// A table job ([`crate::table::Job`]) is done, or failed.

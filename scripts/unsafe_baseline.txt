@@ -15,7 +15,10 @@
 # copycraft blocks 107: +1 macos_reopen::install (the reopen Apple event handler: NSObject `init` of the
 # handler and setEventHandler:andSelector:forEventClass:andEventID:, which objc2-foundation only offers
 # behind objc2-core-services, a crate not in the tree; approved by Marcel as HIG point 7).
-copycraft blocks 107
+# copycraft blocks 109: +2 macos_pasteboard::hint (the paste-kind hint under Default/Ask, approved by Marcel
+# 2026-10-23): reading AppKit's NSPasteboardDetectionPattern* constants (extern statics), and the
+# NSSet pointer detectPatternsForPatterns:completionHandler: hands its block (objc2 types it `*mut`).
+copycraft blocks 109
 copycraft fn 5
 copycraft impl 7
 mac-ui blocks 82

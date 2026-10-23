@@ -184,7 +184,7 @@ pub(crate) fn icon_tip(view: &ClipboardView) -> String {
         ClipboardView::Image => crate::locale::t("title_image").to_string(),
         ClipboardView::Empty | ClipboardView::NoText => "CopyCraft".to_string(),
         ClipboardView::Denied => crate::paste_access::denied_note().to_string(),
-        ClipboardView::Pending => crate::paste_access::pending_note().to_string(),
+        ClipboardView::Pending => crate::paste_access::pending_note(),
         ClipboardView::Hidden => clipboard::hidden_content().to_string(),
         ClipboardView::Text(text) => {
             if crate::youtube::video_id(text.as_str()).is_some() {

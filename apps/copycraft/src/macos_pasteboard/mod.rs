@@ -90,7 +90,8 @@ pub(crate) fn current_view() -> ClipboardView {
     // The change count, the types and the access setting read no content (no privacy alert).
     // The setting is looked at on every look, so a change in Settings is picked up.
     let types = type_names(&pasteboard);
-    let strategy = paste_access::strategy(current_behavior(&pasteboard));
+    let behavior = current_behavior(&pasteboard);
+    let strategy = paste_access::strategy(behavior);
     let key = ReadKey::new(change_count, types.iter().map(String::as_str), strategy);
     let shown = CARD_SHOWN.load(Ordering::Relaxed);
     // The same copy is read once: also a reading that came back empty, failed or was denied,
@@ -137,8 +138,14 @@ pub(crate) fn current_view() -> ClipboardView {
             // Always Deny: no content reads at all. (`Reuse` always has a reading, returned
             // above.)
             ReadPlan::Deny | ReadPlan::Reuse => (ClipboardView::Denied, None, false),
-            // Default or Ask with the card closed: only the change count and types.
-            ReadPlan::Wait => (ClipboardView::Pending, None, false),
+            // Default or Ask with the card closed: only the change count and types, and the
+            // kind macOS detects (no content read, no alert).
+            ReadPlan::Wait => {
+                if paste_access::detects_hint(behavior, step) {
+                    hint::ask(&pasteboard, change_count);
+                }
+                (ClipboardView::Pending, None, false)
+            }
             ReadPlan::Read => {
                 let (view, image_path) = read_view(&pasteboard);
                 let text_declared = types.iter().any(|kind| kind == "public.utf8-plain-text");
@@ -338,6 +345,8 @@ mod write;
 #[allow(unused_imports)]
 pub use write::*;
 mod detect;
+mod hint;
+pub(crate) use hint::pending_hint;
 mod paste;
 #[allow(unused_imports)]
 pub use detect::*;

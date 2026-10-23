@@ -336,6 +336,14 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
       (a screenshot to the clipboard, ⌃⇧⌘4) and open the card: exactly one alert for it, with
       picture, Info and Text/QR chips and a history entry. Answer Don't Allow on a new copy:
       no further alert for it (also with the card open), one alert for the next copy.
+- [ ] Pasteboard privacy, kind hint under Ask (or never asked): with the card closed, copy
+      `https://example.org` in another app and hover the menu bar icon: the tooltip says *New
+      copy: Link — open the card to view* (NL *Nieuwe kopie: Link — …*), and no alert shows.
+      Copy `jan@example.org`: *Email address* (*E-mailadres*). Copy `+31 20 123 4567`: *Phone
+      number* (*Telefoonnummer*). Copy `42`: *Number* (*Getal*). Copy `tomorrow at 3pm`:
+      *Calendar event* (*Kalenderevent*). Copy a street address: *Postal address* (*Postadres*).
+      Copy `hello`: the plain *New copy — open the card to view*. Under Always Deny or Always
+      Allow there is no hint. Console (subsystem of CopyCraft) shows no detected kinds.
 - [ ] Pasteboard privacy, Always Allow: copies are read as they come (no alert, history fills
       with the card closed), as before.
 - [ ] Pasteboard privacy, switch while running: with the card closed, switch CopyCraft from
