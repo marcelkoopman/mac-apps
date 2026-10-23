@@ -157,16 +157,14 @@ impl App {
                     let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
                         return;
                     };
-                    if crate::macos_notify::explain(mtm) {
-                        self.notices.waiting = Some(NoticeWait {
-                            asked: true,
-                            ..wait
-                        });
-                        crate::macos_notify::request_permission();
-                    } else {
-                        crate::settings::set_notify_permission(Permission::Refused);
-                        crate::macos_settings::refresh_notifications();
-                    }
+                    // One way on: the explanation leads to the system's question, where the
+                    // choice is made.
+                    crate::macos_notify::explain(mtm);
+                    self.notices.waiting = Some(NoticeWait {
+                        asked: true,
+                        ..wait
+                    });
+                    crate::macos_notify::request_permission();
                 }
             }
             // Still undecided after the question: ask nothing more for this one.

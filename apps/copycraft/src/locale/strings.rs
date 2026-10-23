@@ -161,8 +161,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "notify_ask_title",
-        "Meldingen toestaan?",
-        "Allow notifications?",
+        "Meldingen van CopyCraft",
+        "Notifications from CopyCraft",
     ),
     (
         "notify_ask_message",
@@ -170,7 +170,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "CopyCraft can send a notification when an AI action or text recognition is done, or when possibly sensitive text was copied. A notification never contains your text. Everything stays local on your Mac. After Continue, macOS asks for permission.",
     ),
     ("notify_ask_ok", "Doorgaan", "Continue"),
-    ("notify_ask_no", "Geen meldingen", "No Notifications"),
     ("tip_paused", "Gepauzeerd", "Paused"),
     ("tip_copy_ignored", "Kopie genegeerd", "Copy ignored"),
     (

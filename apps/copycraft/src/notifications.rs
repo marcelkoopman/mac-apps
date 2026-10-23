@@ -583,7 +583,6 @@ mod tests {
                 "notify_ask_title",
                 "notify_ask_message",
                 "notify_ask_ok",
-                "notify_ask_no",
             ] {
                 assert_ne!(t_in(lang, key), "?", "{key}");
             }

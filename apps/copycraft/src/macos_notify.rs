@@ -50,17 +50,17 @@ pub fn probe_permission() {
     });
 }
 
-/// Explain, in a short dialog, why CopyCraft wants to send notifications. `true`: continue to
-/// the system's question.
-pub fn explain(mtm: MainThreadMarker) -> bool {
+/// Explain, in a short dialog, why CopyCraft wants to send notifications, before the system's
+/// question. One button, *Continue*: the choice is made in the system's question that follows,
+/// not here.
+pub fn explain(mtm: MainThreadMarker) {
     mac_ui::panel::activate_app(mtm);
-    mac_ui::dialog::confirm(
+    mac_ui::dialog::buttons(
         mtm,
         crate::locale::t("notify_ask_title"),
         crate::locale::t("notify_ask_message"),
-        crate::locale::t("notify_ask_ok"),
-        crate::locale::t("notify_ask_no"),
-    )
+        &[crate::locale::t("notify_ask_ok")],
+    );
 }
 
 /// Show the system's permission question. The answer comes back as

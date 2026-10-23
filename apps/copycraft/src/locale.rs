@@ -564,7 +564,6 @@ mod tests {
         "menu_redo",
         "menu_select_all",
         "menu_undo",
-        "notify_ask_no",
         "open_in_window",
         "open_table",
         "pause_recording",
