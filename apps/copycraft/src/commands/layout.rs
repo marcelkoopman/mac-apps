@@ -392,18 +392,20 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
 pub const AI_SYMBOL: &str = "sparkles";
 
 /// SF Symbol for `id` on its chip or menu item, if it has one. The title stays the label, so
-/// VoiceOver reads the same name as before.
+/// VoiceOver reads the same name as before. Plain glyphs, not the `.circle` variants (HIG
+/// toolbars); every name is in SF Symbols 3 (macOS 12) or older, and an unknown one leaves the
+/// plain title (`GlassButton::set_symbol`).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
     Some(match id {
-        CommandId::Original => "photo",
+        CommandId::Original => "arrow.uturn.backward",
         CommandId::Visit => "safari",
         CommandId::Format => "wand.and.stars",
         CommandId::Convert => "arrow.triangle.2.circlepath",
-        CommandId::Decode => "lock.open",
+        CommandId::Decode => "chevron.left.forwardslash.chevron.right",
         CommandId::Schema => "list.bullet.indent",
         CommandId::Sample => "doc.badge.plus",
-        CommandId::Info => "info.circle",
+        CommandId::Info => "info",
         CommandId::Ocr => "text.viewfinder",
         CommandId::Qr => "qrcode",
         CommandId::Diff => "arrow.left.arrow.right",
@@ -415,23 +417,23 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::UseClipboard => "doc.on.clipboard",
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",
-        CommandId::About => "info.circle",
+        CommandId::About => "info",
         CommandId::SuggestFeature => "lightbulb",
         CommandId::ReportProblem => "exclamationmark.bubble",
         CommandId::ExportDiagnostics => "stethoscope",
         CommandId::CheckAi => "sparkles",
         CommandId::Welcome => "hand.wave",
         CommandId::Quit => "power",
-        CommandId::Pause => "pause.circle",
+        CommandId::Pause => "pause",
         CommandId::IgnoreNext => "forward.end",
         CommandId::IgnoreFrontApp => "app.badge.checkmark",
         CommandId::ClearSensitive => "timer",
         CommandId::Pin => "pin",
         CommandId::Unpin => "pin.slash",
-        CommandId::DeleteHistory => "minus.circle",
+        CommandId::DeleteHistory => "minus",
         CommandId::DiffShown => "arrow.left.arrow.right",
-        CommandId::DiffSwap => "arrow.left.arrow.right.circle",
-        CommandId::TextMenu => "list.number",
+        CommandId::DiffSwap => "rectangle.2.swap",
+        CommandId::TextMenu => "textformat",
         CommandId::TextComplexity => "gauge.with.dots.needle.50percent",
         CommandId::AgentCommands => "terminal",
         CommandId::AgentOutline => "list.bullet.indent",
@@ -448,7 +450,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextFilter => "line.3.horizontal.decrease",
         CommandId::TextCleanUrl => "link",
         CommandId::TextJson => "curlybraces",
-        CommandId::TextCase(_) => "textformat",
+        CommandId::TextCase(_) => "textformat.abc",
         CommandId::TextEncode(_) => "chevron.left.forwardslash.chevron.right",
         CommandId::TextHash(_) => "number",
         CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiFn(..) => AI_SYMBOL,

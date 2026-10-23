@@ -366,3 +366,39 @@ fn delete_removes_the_marked_strip_card_but_not_while_searching() {
     assert_eq!(delete_key(true, true, 1), None);
     assert_eq!(delete_key(false, false, 0), None);
 }
+
+#[test]
+fn swap_lives_under_more_also_with_a_full_chip_row() {
+    use crate::commands::{card_chips, split_chips};
+    let mut input = data(SubjectKind::Text, Some(r#"{"name":"copycraft"}"#));
+    input.history.push(history_item(0, "first", true));
+    input.history.push(history_item(1, "second", true));
+    input.diff_picks = vec![0, 1];
+    let (shown, more) = split_chips(card_chips(&input));
+    assert!(shown.iter().all(|cmd| cmd.id != CommandId::DiffSwap));
+    let menu: Vec<_> = more.into_iter().chain(overflow(&input)).collect();
+    assert_eq!(
+        menu.iter()
+            .filter(|cmd| cmd.id == CommandId::DiffSwap)
+            .count(),
+        1
+    );
+    // Were Swap ever a chip, a fifth one would still go under ⋯.
+    let chip = |id: CommandId| crate::commands::Command {
+        id,
+        title: String::new(),
+        detail: String::new(),
+        keywords: String::new(),
+        enabled: true,
+    };
+    let row = [
+        CommandId::Convert,
+        CommandId::Format,
+        CommandId::Schema,
+        CommandId::Sample,
+        CommandId::DiffSwap,
+    ];
+    let (shown, more) = split_chips(row.into_iter().map(chip).collect());
+    assert!(shown.iter().all(|cmd| cmd.id != CommandId::DiffSwap));
+    assert!(more.iter().any(|cmd| cmd.id == CommandId::DiffSwap));
+}

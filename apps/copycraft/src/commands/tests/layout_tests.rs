@@ -269,6 +269,39 @@ fn chips_and_menu_steps_have_sf_symbols() {
 }
 
 #[test]
+fn chip_symbols_are_plain_and_distinct_where_it_matters() {
+    use crate::commands::symbol_for;
+    for id in [
+        CommandId::Info,
+        CommandId::About,
+        CommandId::Pause,
+        CommandId::DeleteHistory,
+        CommandId::DiffSwap,
+    ] {
+        let name = symbol_for(&id).expect("a symbol");
+        assert!(!name.ends_with(".circle"), "{id:?}: {name}");
+    }
+    // Original no longer looks like Image ▾, Swap not like Reverse Lines, Decode not a lock.
+    assert_ne!(
+        symbol_for(&CommandId::Original),
+        symbol_for(&CommandId::ImageMenu)
+    );
+    assert_ne!(
+        symbol_for(&CommandId::DiffSwap),
+        symbol_for(&CommandId::TextReverse)
+    );
+    assert_eq!(
+        symbol_for(&CommandId::Original),
+        Some("arrow.uturn.backward")
+    );
+    assert_eq!(
+        symbol_for(&CommandId::Decode),
+        Some("chevron.left.forwardslash.chevron.right")
+    );
+    assert_eq!(symbol_for(&CommandId::TextMenu), Some("textformat"));
+}
+
+#[test]
 fn overflow_menu_sections_follow_the_requested_order() {
     use crate::commands::{MenuSection, keep_history_short, menu_section, menu_submenu};
     let order = [
