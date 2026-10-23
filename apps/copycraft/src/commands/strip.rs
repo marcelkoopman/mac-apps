@@ -235,10 +235,11 @@ pub fn remove_frame() -> (f64, f64, f64) {
     )
 }
 
-/// What a click on strip card `index` does: show that copy, or with ⌘ or ⇧ held compare it
-/// with the copy on screen ([`super::CommandId::StripCompare`]).
-pub fn thumb_click(index: usize, command: bool, shift: bool) -> super::CommandId {
-    if command || shift {
+/// What a click on strip card `index` does: show that copy, or with ⌘ held compare it with
+/// the copy on screen ([`super::CommandId::StripCompare`]; on a card already compared it takes
+/// that card out of the diff). ⇧ is a plain click.
+pub fn thumb_click(index: usize, command: bool) -> super::CommandId {
+    if command {
         super::CommandId::StripCompare(index)
     } else {
         super::CommandId::HistoryView(index)
@@ -307,7 +308,7 @@ impl StripHint {
     }
 }
 
-/// The hint under the strip: while the strip shows, until ⌘- or ⇧-click compare was used once.
+/// The hint under the strip: while the strip shows, until ⌘-click compare was used once.
 /// `row_this_card`: compare had not been used when the card opened; `used`: it has been now.
 pub fn strip_hint(strip_shown: bool, row_this_card: bool, used: bool) -> StripHint {
     match (strip_shown && row_this_card, used) {
@@ -611,12 +612,10 @@ mod tests {
     }
 
     #[test]
-    fn command_or_shift_click_compares_a_plain_click_shows() {
+    fn only_command_click_compares_a_plain_or_shift_click_shows() {
         use crate::commands::CommandId;
-        assert_eq!(thumb_click(2, false, false), CommandId::HistoryView(2));
-        assert_eq!(thumb_click(2, true, false), CommandId::StripCompare(2));
-        assert_eq!(thumb_click(2, false, true), CommandId::StripCompare(2));
-        assert_eq!(thumb_click(0, true, true), CommandId::StripCompare(0));
+        assert_eq!(thumb_click(2, false), CommandId::HistoryView(2));
+        assert_eq!(thumb_click(2, true), CommandId::StripCompare(2));
     }
 
     #[test]

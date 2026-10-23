@@ -312,6 +312,7 @@ impl App {
 
     /// ⌘-click on strip card `index`: compare that copy with the one on screen (the older of the
     /// two is A). Both must be text; the same card, or a copy that is not text, does nothing.
+    /// A second ⌘-click on a card already in the diff takes it out, as *Remove from Diff*.
     pub(crate) fn compare_tiles(&mut self, index: usize) {
         if self.opened.is_some() {
             return;
@@ -322,6 +323,10 @@ impl App {
         else {
             return;
         };
+        if self.diff_sel.contains(other_id) {
+            self.toggle_diff(other_id);
+            return;
+        }
         if !self.history.is_text_id(shown_id) || !self.history.is_text_id(other_id) {
             return;
         }

@@ -402,7 +402,7 @@ pub enum CommandId {
     RemoveHistory(usize),
     /// ⌘Z after [`CommandId::RemoveHistory`]: put the copy back where it was.
     RestoreHistory,
-    /// ⌘-click (or ⇧-click) on strip card `n`: compare that copy with the one on screen in
+    /// ⌘-click on strip card `n`: compare that copy with the one on screen in
     /// the diff view (the older of the two is A, before).
     StripCompare(usize),
     /// Right-click on strip card `n` › Pin / Unpin: pin that copy, or unpin it when it is

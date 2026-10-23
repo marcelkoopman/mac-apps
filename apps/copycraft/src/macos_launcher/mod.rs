@@ -621,12 +621,12 @@ define_class!(
         #[unsafe(method(thumbClicked:))]
         fn thumb_clicked(&self, sender: Option<&NSButton>) {
             if let Some(sender) = sender {
-                // ⌘ or ⇧ held: compare that copy with the one on screen.
+                // ⌘ held: compare that copy with the one on screen (or, on a compared card,
+                // take it out of the diff). ⇧ is a plain click.
                 let flags = mac_ui::objc2_app_kit::NSEvent::modifierFlags_class();
                 launcher::emit(UserEvent::Run(commands::thumb_click(
                     sender.tag() as usize,
                     flags.contains(NSEventModifierFlags::Command),
-                    flags.contains(NSEventModifierFlags::Shift),
                 )));
             }
         }
