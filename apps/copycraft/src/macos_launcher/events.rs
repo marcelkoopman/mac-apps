@@ -23,6 +23,9 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
             chip.set_symbol(symbol);
         }
         wire_button(chip.button(), sel!(chipClicked:));
+        // A chip can take the keyboard focus (with Full Keyboard Access), so arrow-key
+        // selection shows the system focus ring on it.
+        chip.button().setRefusesFirstResponder(false);
         CHIP_POOL.with(|pool| {
             pool.borrow_mut().push(PooledChip {
                 id: cmd.id.clone(),
@@ -131,7 +134,8 @@ pub(crate) fn rebuild_pills(
     CHIPS.with(|slot| *slot.borrow_mut() = placed);
 }
 
-/// Show the selected chip as the prominent one. The chip index is the `SELECTION` index.
+/// Show the selected chip as the prominent one: the accent marks the chip Return runs. The
+/// chip index is the `SELECTION` index.
 pub(crate) fn paint_pills() {
     let selected = SELECTION.with(Cell::get);
     CHIPS.with(|slot| {
@@ -149,6 +153,19 @@ pub(crate) fn nudge(dx: isize, dy: isize) {
     }
     SELECTION.set(next);
     paint_pills();
+    focus_selected_chip();
+}
+
+/// Give the selected chip the keyboard focus, so the system draws its focus ring. AppKit only
+/// lets a button take it with Full Keyboard Access on; otherwise the search field keeps it and
+/// the accent alone shows the selection. Keys typed on a focused chip reach the window's
+/// `keyDown:` ([`on_key`]): Return runs the selection, Space clicks the chip, text searches.
+fn focus_selected_chip() {
+    let chip = CHIPS.with(|slot| slot.borrow().get(SELECTION.with(Cell::get)).cloned());
+    let window = WINDOW.with(|slot| slot.borrow().clone());
+    if let (Some(chip), Some(window)) = (chip, window) {
+        let _ = window.makeFirstResponder(Some(chip.button()));
+    }
 }
 
 /// The arrow key of a field editor's move command (`moveLeft:` …).
@@ -587,9 +604,6 @@ pub(crate) fn on_key(event: &NSEvent) {
 }
 
 pub(crate) fn begin_search_from_key(event: &NSEvent) {
-    if SEARCHING.with(Cell::get) {
-        return;
-    }
     let flags = event.modifierFlags();
     if flags.contains(NSEventModifierFlags::Command)
         || flags.contains(NSEventModifierFlags::Control)
@@ -600,6 +614,18 @@ pub(crate) fn begin_search_from_key(event: &NSEvent) {
         return;
     };
     let text = text.to_string();
+    if SEARCHING.with(Cell::get) {
+        // A chip had the focus during a search: the typed text goes on in the search field.
+        if is_search_text(&text) {
+            let mut query = current_query();
+            query.push_str(&text);
+            set_query(&query);
+            SELECTION.set(0);
+            layout(false);
+            focus_field();
+        }
+        return;
+    }
     if text == "/" {
         open_search("");
     } else if is_search_text(&text) {
