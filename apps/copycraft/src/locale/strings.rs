@@ -1296,8 +1296,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("decode_hex", "Decodeer hex", "Decode Hex"),
     (
         "detail_encoding",
-        "Hele tekst coderen of decoderen; ⌘Z zet hem terug",
-        "Encode or decode the whole text; ⌘Z undoes it",
+        "Hele tekst coderen of decoderen als nieuwe kopie; ⌘Z toont de vorige",
+        "Encode or decode the whole text as a new copy; ⌘Z shows the previous one",
     ),
     ("encoding_url_name", "URL-codering", "URL encoding"),
     ("encoding_hex_name", "hex", "hex"),
@@ -1327,8 +1327,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "detail_hash",
-        "Hash van de hele tekst als hex in kleine letters; ⌘Z zet hem terug",
-        "Hash of the whole text as lowercase hex; ⌘Z undoes it",
+        "Hash van de hele tekst als hex in kleine letters, als nieuwe kopie",
+        "Hash of the whole text as lowercase hex, as a new copy",
     ),
     (
         "detail_hash_weak",
@@ -1575,8 +1575,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("agent_check", "AGENTS.md controleren", "Check AGENTS.md"),
     (
         "detail_agent_commands",
-        "De shell-commando's, één per regel, als nieuwe versie en op het klembord",
-        "The shell commands, one per line, as a new version and on the clipboard",
+        "De shell-commando's, één per regel, als nieuwe kopie op het klembord",
+        "The shell commands, one per line, as a new copy on the clipboard",
     ),
     (
         "detail_agent_outline",
@@ -1671,12 +1671,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("text_reverse_label", "Omgekeerd", "Reversed"),
     ("text_column_label", "Kolom {0}", "Column {0}"),
     (
-        "undo_text_step",
-        "Maak tekststap ongedaan",
-        "Undo Text Step",
-    ),
-    ("redo_text_step", "Herhaal tekststap", "Redo Text Step"),
-    (
         "text_head_prompt",
         "Hoeveel regels vanaf het begin?",
         "How many lines from the start?",
@@ -1688,8 +1682,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "text_lines_message",
-        "Een heel getal vanaf 1. Het resultaat wordt gekopieerd; ⌘Z zet de vorige versie terug.",
-        "A whole number from 1. The result is copied; ⌘Z brings back the previous version.",
+        "Een heel getal vanaf 1. Het resultaat wordt een nieuwe kopie; ⌘Z toont de vorige.",
+        "A whole number from 1. The result is a new copy; ⌘Z shows the previous one.",
     ),
     (
         "text_count_invalid",

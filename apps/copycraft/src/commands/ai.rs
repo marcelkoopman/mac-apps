@@ -654,15 +654,7 @@ mod tests {
                 .expect("Text ▾");
             assert_eq!(ids[lines - 1], CommandId::AiMenu);
             // Text ▾ no longer holds the actions; search still finds them.
-            let edit = TextShown {
-                labels: vec!["Original".into()],
-                version: 0,
-                note: None,
-                code: false,
-                agent: false,
-                tracking: false,
-                json: false,
-            };
+            let edit = TextShown::default();
             assert!(
                 text_menu_items(&edit)
                     .iter()

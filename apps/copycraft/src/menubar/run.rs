@@ -138,7 +138,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_note: None,
         image_steps: None,
         text_steps: None,
-        opened_steps: None,
         text_note: None,
         text_generation: 0,
         ai: None,

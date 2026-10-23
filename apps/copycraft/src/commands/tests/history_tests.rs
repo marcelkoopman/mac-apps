@@ -433,3 +433,44 @@ fn a_pinned_history_row_carries_the_pin_not_a_mark() {
     assert_eq!(label, format!("¶  9 B, {}", crate::commands::pin_label()));
     assert!(!label.contains('•'));
 }
+
+#[test]
+fn a_text_step_makes_a_new_copy_without_a_capsule_or_undo_rows() {
+    use crate::commands::{TextShown, text_menu_items, text_undo_key};
+    let mut card = data(SubjectKind::Text, Some("b\na\n"));
+    card.text_edit = Some(TextShown {
+        can_undo: true,
+        ..TextShown::default()
+    });
+    // No "v2/2": the step's copy is a history entry of its own, as an Image ▾ step's.
+    assert_eq!(VersionBar::of(&card), None);
+    let edit = card.text_edit.clone().expect("Text ▾");
+    assert!(
+        text_menu_items(&edit)
+            .iter()
+            .all(|(cmd, _)| !matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
+    );
+    assert!(
+        !search_pool(&card)
+            .iter()
+            .any(|cmd| matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
+    );
+    // ⌘Z shows the copy the step was taken on; ⇧⌘Z has nothing to go to yet.
+    assert_eq!(
+        text_undo_key("z", true, false, false, Some(&edit)),
+        Some(CommandId::TableUndo)
+    );
+    assert_eq!(text_undo_key("Z", true, true, false, Some(&edit)), None);
+    let back = TextShown {
+        can_redo: true,
+        ..TextShown::default()
+    };
+    assert_eq!(
+        text_undo_key("Z", true, true, false, Some(&back)),
+        Some(CommandId::TableRedo)
+    );
+    assert_eq!(text_undo_key("z", true, false, false, Some(&back)), None);
+    assert_eq!(text_undo_key("z", false, false, false, Some(&edit)), None);
+    assert_eq!(text_undo_key("z", true, false, true, Some(&edit)), None);
+    assert_eq!(text_undo_key("z", true, false, false, None), None);
+}

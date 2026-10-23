@@ -134,13 +134,11 @@ pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
     Some(data.text_edit.clone().unwrap_or_else(|| {
         let kind = crate::format::detect(text);
         TextShown {
-            labels: vec![crate::locale::t("original").to_string()],
-            version: 0,
-            note: None,
             code: crate::complexity::Lang::of(kind).is_some(),
             agent: kind == crate::format::FormatKind::Agent,
             tracking: crate::text_ops::url_clean::has_tracking(text),
             json: kind == crate::format::FormatKind::Json,
+            ..TextShown::default()
         }
     }))
 }

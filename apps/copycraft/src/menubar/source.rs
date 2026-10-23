@@ -378,7 +378,6 @@ impl App {
         }
         self.opened = None;
         self.opened_superseded = false;
-        self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
         if let Some(cursor) = self.clipboard_cursor.take() {
             self.history_cursor = cursor;
@@ -398,7 +397,6 @@ impl App {
         }
         self.opened = Some(opened);
         self.opened_superseded = false;
-        self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
         self.reset_view();
         self.refresh_popup();

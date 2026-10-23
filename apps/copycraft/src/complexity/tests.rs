@@ -319,15 +319,7 @@ fn menu_rows_say_the_band_in_words_and_go_to_the_first_line() {
 #[test]
 fn lines_menu_offers_complexity_only_on_code() {
     use crate::commands::{CommandId, TextShown, text_menu_items};
-    let mut edit = TextShown {
-        labels: vec!["Original".into()],
-        version: 0,
-        note: None,
-        code: false,
-        agent: false,
-        tracking: false,
-        json: false,
-    };
+    let mut edit = TextShown::default();
     let has = |edit: &TextShown| {
         text_menu_items(edit)
             .iter()

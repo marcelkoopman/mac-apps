@@ -143,15 +143,12 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
-            // On a text Text ▾ worked on, undo, redo and the version capsule are the text's.
-            CommandId::TableUndo if self.text_versions_shown() => {
+            // On a text Text ▾ worked on, ⌘Z and ⇧⌘Z go between the copies its steps made.
+            CommandId::TableUndo if self.text_steps_shown() => {
                 self.text_goto(|cursor| cursor.checked_sub(1));
             }
-            CommandId::TableRedo if self.text_versions_shown() => {
+            CommandId::TableRedo if self.text_steps_shown() => {
                 self.text_goto(|cursor| Some(cursor + 1));
-            }
-            CommandId::TableVersion(index) if self.text_versions_shown() => {
-                self.text_goto(|_| Some(index));
             }
             CommandId::ToggleLineNumbers => {
                 commands::toggle_line_numbers();

@@ -206,6 +206,17 @@ pub enum LogEvent {
         held: bool,
         kept: bool,
     },
+    /// Debug builds only: how a Text ▾ step and the copy it was taken on went into history,
+    /// as [`LogEvent::ImageStepKept`]. Only yes or no.
+    TextStepKept {
+        source_in_history: bool,
+        clipboard_copy: bool,
+        source_kept: bool,
+        admitted: bool,
+        paused: bool,
+        held: bool,
+        kept: bool,
+    },
     PreviewNoPicture,
     PreviewStarted,
     PreviewOpenFailed,
@@ -292,6 +303,7 @@ impl LogEvent {
             | E::SpinnerHidden
             | E::ImageGate { .. }
             | E::ImageStepKept { .. }
+            | E::TextStepKept { .. }
             | E::PreviewNoPicture
             | E::PreviewStarted
             | E::PreviewOpenFailed
@@ -389,7 +401,8 @@ impl LogEvent {
             | E::SpinnerShown { .. }
             | E::SpinnerHidden
             | E::ImageGate { .. }
-            | E::ImageStepKept { .. } => Level::Debug,
+            | E::ImageStepKept { .. }
+            | E::TextStepKept { .. } => Level::Debug,
         }
     }
 
@@ -483,6 +496,19 @@ impl LogEvent {
                 "image step kept: source in history {source_in_history}, clipboard copy \
                  {clipboard_copy}, source kept {source_kept}, source checked {source_checked}, \
                  admitted {admitted}, paused {paused}, held {held}, kept {kept}"
+            ),
+            E::TextStepKept {
+                source_in_history,
+                clipboard_copy,
+                source_kept,
+                admitted,
+                paused,
+                held,
+                kept,
+            } => format!(
+                "text step kept: source in history {source_in_history}, clipboard copy \
+                 {clipboard_copy}, source kept {source_kept}, admitted {admitted}, paused \
+                 {paused}, held {held}, kept {kept}"
             ),
             E::PreviewNoPicture => "preview: no picture to open".into(),
             E::PreviewStarted => "preview started".into(),

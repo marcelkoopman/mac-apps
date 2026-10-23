@@ -272,6 +272,9 @@ thread_local! {
     /// Image ▾ on the picture card, for ⌘Z and ⇧⌘Z ([`commands::image_undo_key`]): a picture
     /// has no version capsule.
     static IMAGE_STEPS: RefCell<Option<commands::ImageShown>> = const { RefCell::new(None) };
+    /// Text ▾ on the text card, for ⌘Z and ⇧⌘Z ([`commands::text_undo_key`]): text has no
+    /// version capsule either.
+    static TEXT_STEPS: RefCell<Option<commands::TextShown>> = const { RefCell::new(None) };
     /// The version capsule's views.
     static VERSION_ROW: RefCell<Option<VersionRow>> = const { RefCell::new(None) };
     /// The "Table ▾" menu's commands ([`commands::table_menu`]).
@@ -442,7 +445,8 @@ define_class!(
                 launcher::emit(UserEvent::Run(CommandId::Save));
                 true
             } else if let Some(id) = undo_chord(event) {
-                // ⌘Z / ⇧⌘Z step through the table's versions (typed search text keeps them).
+                // ⌘Z / ⇧⌘Z step through the table's versions or a step's copies (typed search
+                // text keeps them).
                 if id == CommandId::RestoreHistory {
                     strip::note_strip_restore();
                 }

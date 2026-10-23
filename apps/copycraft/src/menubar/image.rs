@@ -427,14 +427,7 @@ impl App {
             let Some(recorded) = recorded else {
                 // Not kept: the pasteboard has its own copy of the picture.
                 done.wipe();
-                let note = if keep == StepKeep::Paused {
-                    crate::locale::t("text_not_kept")
-                } else if verdict.admitted {
-                    crate::locale::t("image_not_kept_large")
-                } else {
-                    crate::locale::t("text_not_kept_secret")
-                };
-                self.image_note = Some((source.allocation_id(), note.to_string()));
+                self.image_note = Some((source.allocation_id(), step_note(keep).to_string()));
                 return;
             };
             // A dropped or chosen picture: the card leaves it for the new copy.
@@ -716,15 +709,17 @@ pub(crate) fn card_picture_due(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StepKeep {
     Keep,
-    /// Pause is on: the copy is on the clipboard only.
+    /// Pause is on (for a text step also: an ignored app is in front): the copy is on the
+    /// clipboard only.
     Paused,
     /// The picture's text holds a token, key or URL password.
     Secret,
 }
 
-/// [`StepKeep`] for a step's copy. The user asked for it, so only Pause and the privacy rules
-/// hold it back; an ignored front app does not (the copy is CopyCraft's own, not that app's).
-/// Too large is decided by history itself. Pure.
+/// [`StepKeep`] for a step's copy. For an Image ▾ step `paused` is Pause alone: the user asked
+/// for the copy, so an ignored front app does not hold it (the copy is CopyCraft's own). A
+/// Text ▾ step passes held history (Pause or an ignored app), as its other own copies follow
+/// the ignore list. Too large is decided by history itself. Pure.
 pub(crate) fn step_keep(paused: bool, admitted: bool) -> StepKeep {
     if !admitted {
         StepKeep::Secret
@@ -735,7 +730,17 @@ pub(crate) fn step_keep(paused: bool, admitted: bool) -> StepKeep {
     }
 }
 
-/// Whether the picture a step was taken on goes into history before the step's copy: the
+/// Why a step's copy is not in history, for the meta line: `keep` held it back, or (it was to
+/// be kept) history refused it as too large.
+pub(crate) fn step_note(keep: StepKeep) -> &'static str {
+    match keep {
+        StepKeep::Paused => crate::locale::t("text_not_kept"),
+        StepKeep::Secret => crate::locale::t("text_not_kept_secret"),
+        StepKeep::Keep => crate::locale::t("image_not_kept_large"),
+    }
+}
+
+/// Whether the copy a step was taken on goes into history before the step's copy: the
 /// clipboard's copy read for the card (`clipboard_copy`) that history does not hold yet, under
 /// the rules of any copy (not `held` by Pause or an ignored front app, `admitted` on what is
 /// known of its text). Only while history is kept (`history_on`); a dropped or chosen picture
@@ -787,6 +792,33 @@ mod step_tests {
     #[test]
     fn a_dropped_picture_is_not_kept_as_a_source_here() {
         assert!(!keep_step_source(true, false, false, false, true));
+    }
+
+    #[test]
+    fn a_step_copy_left_out_says_why() {
+        assert_eq!(
+            step_note(StepKeep::Paused),
+            crate::locale::t("text_not_kept")
+        );
+        assert_eq!(
+            step_note(StepKeep::Secret),
+            crate::locale::t("text_not_kept_secret")
+        );
+        // Meant to be kept, refused by history: too large.
+        assert_eq!(
+            step_note(StepKeep::Keep),
+            crate::locale::t("image_not_kept_large")
+        );
+    }
+
+    #[test]
+    fn a_text_step_follows_the_ignore_list() {
+        // A text step passes held history (Pause or an ignored app) as `paused`.
+        let ignored_app = true;
+        assert_eq!(step_keep(ignored_app, true), StepKeep::Paused);
+        assert!(!keep_step_source(true, false, true, ignored_app, true));
+        // A copy still being checked for a token is not let in before the check.
+        assert!(!keep_step_source(true, false, true, false, false));
     }
 
     #[test]

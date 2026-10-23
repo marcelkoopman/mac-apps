@@ -148,8 +148,6 @@ pub(crate) struct App {
     pub(crate) image_steps: Option<CopySteps>,
     /// The copies Text ▾ steps made of the text on the card ([`CopySteps`]).
     pub(crate) text_steps: Option<CopySteps>,
-    /// Text ▾ versions of the opened file.
-    pub(crate) opened_steps: Option<super::text::OpenedSteps>,
     /// Why the last Text ▾ step did nothing, and for which history entry.
     pub(crate) text_note: Option<(u64, String)>,
     /// Bumped for every Text ▾ job; a result with another number is stale and dropped.

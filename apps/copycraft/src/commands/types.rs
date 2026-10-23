@@ -157,13 +157,14 @@ pub struct ImageShown {
     pub note: Option<String>,
 }
 
-/// The versions Text ▾ made of a text, for the card. Each version is a history entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Text ▾ on the text card. A step's result is a new copy (a history entry of its own), like
+/// an Image ▾ step's; there are no versions to page through on the card.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TextShown {
-    /// "Original", then each step's label.
-    pub labels: Vec<String>,
-    /// The version shown: 0 is the original.
-    pub version: usize,
+    /// ⌘Z shows the copy the step was taken on, ⇧⌘Z the step's copy again (only shown, the
+    /// clipboard is left alone).
+    pub can_undo: bool,
+    pub can_redo: bool,
     /// Why the last step did nothing, for the meta line.
     pub note: Option<String>,
     /// Code in a language with functions: Text ▾ offers Complexity.
@@ -174,17 +175,6 @@ pub struct TextShown {
     pub tracking: bool,
     /// A JSON card (also JSON with a mistake): Text ▾ offers Format JSON….
     pub json: bool,
-}
-
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-impl TextShown {
-    pub fn can_undo(&self) -> bool {
-        self.version > 0
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.version + 1 < self.labels.len()
-    }
 }
 
 /// A table version for the card: its frame, which version it is, and what the versions are.

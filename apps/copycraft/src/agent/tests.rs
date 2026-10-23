@@ -271,15 +271,7 @@ fn secrets_are_reported_by_line_and_kind_never_by_value() {
 #[test]
 fn lines_menu_offers_the_agent_steps_only_for_agent_instructions() {
     use crate::commands::{CommandId, TextShown, text_menu_items};
-    let mut edit = TextShown {
-        labels: vec!["Original".into()],
-        version: 0,
-        note: None,
-        code: false,
-        agent: false,
-        tracking: false,
-        json: false,
-    };
+    let mut edit = TextShown::default();
     let ids = |edit: &TextShown| -> Vec<CommandId> {
         text_menu_items(edit)
             .into_iter()

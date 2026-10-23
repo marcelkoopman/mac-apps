@@ -408,6 +408,13 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
+    TEXT_STEPS.with(|slot| {
+        slot.replace(
+            data.text_edit
+                .clone()
+                .filter(|_| data.subject_kind == commands::SubjectKind::Text),
+        )
+    });
     IMAGE_STEPS.with(|slot| {
         slot.replace(
             data.image_edit

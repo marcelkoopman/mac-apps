@@ -426,13 +426,8 @@ fn text_menu_chip_comes_first_on_a_code_card() {
     for text in [rust, reversed.as_str()] {
         let mut card = data(SubjectKind::Text, Some(text));
         card.text_edit = Some(crate::commands::TextShown {
-            labels: vec!["Original".into()],
-            version: 0,
-            note: None,
             code: true,
-            agent: false,
-            tracking: false,
-            json: false,
+            ..Default::default()
         });
         let ids: Vec<CommandId> = chips(&card).into_iter().map(|cmd| cmd.id).collect();
         let at = ids.iter().position(|id| *id == CommandId::TextMenu);
@@ -668,7 +663,6 @@ fn the_text_menu_is_split_into_lines_convert_and_analysis() {
         TextSection::Lines.title(),
         Some(crate::locale::t("text_section_lines"))
     );
-    assert_eq!(TextSection::Versions.title(), None);
     // The table menu keeps no headers.
     assert!(text_sections(&[CommandId::TableUndo]).is_none());
     assert!(text_sections(&[]).is_none());

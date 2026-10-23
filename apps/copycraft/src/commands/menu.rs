@@ -104,18 +104,15 @@ pub enum TextSection {
     Convert,
     /// Complexity and the AGENTS.md steps.
     Analyse,
-    /// Undo and redo: after a separator, without a header.
-    Versions,
 }
 
 impl TextSection {
-    /// The header title, NL/EN; `None` for undo and redo.
+    /// The header title, NL/EN.
     pub fn title(self) -> Option<&'static str> {
         match self {
             TextSection::Lines => Some(crate::locale::t("text_section_lines")),
             TextSection::Convert => Some(crate::locale::t("text_section_convert")),
             TextSection::Analyse => Some(crate::locale::t("text_section_analyse")),
-            TextSection::Versions => None,
         }
     }
 }
@@ -137,7 +134,6 @@ pub fn text_section(id: &CommandId) -> Option<TextSection> {
         | CommandId::AgentOutline
         | CommandId::AgentCheck
         | CommandId::TextComplexity => Some(TextSection::Analyse),
-        CommandId::TableUndo | CommandId::TableRedo => Some(TextSection::Versions),
         _ => None,
     }
 }
@@ -151,8 +147,8 @@ pub fn text_sections(items: &[CommandId]) -> Option<Vec<Option<TextSection>>> {
 }
 
 /// The "Text ▾" menu, in [`TextSection`]s: first and last lines, reverse, column and filter;
-/// case, Clean URL and Format JSON; Complexity and the AGENTS.md steps; then undo and redo
-/// when there is a version to go to. No check marks. Line count and size stay on the meta
+/// case, Clean URL and Format JSON; Complexity and the AGENTS.md steps. Each step makes a new
+/// copy; ⌘Z shows the copy the step was taken on. No check marks. Line count and size stay on the meta
 /// line under the preview, so the menu does not count again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
@@ -262,21 +258,6 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "complexity cognitive sonar functions methods score code",
         ));
     }
-    // Always there, dimmed when there is no version to go to (the HIG: dim, do not hide).
-    commands.push(command_enabled(
-        CommandId::TableUndo,
-        crate::locale::t("undo_text_step"),
-        version_label(&edit.labels, edit.can_undo().then_some(edit.version)),
-        "undo text version back",
-        edit.can_undo(),
-    ));
-    commands.push(command_enabled(
-        CommandId::TableRedo,
-        crate::locale::t("redo_text_step"),
-        version_label(&edit.labels, edit.can_redo().then_some(edit.version + 1)),
-        "redo text version forward",
-        edit.can_redo(),
-    ));
     commands
         .into_iter()
         .map(|command| (command, false))
@@ -308,11 +289,6 @@ pub fn popped_pick(popped: &[Command], tag: isize, title: &str) -> Option<Comman
 /// Resize › Custom….
 pub fn custom_resize_title() -> &'static str {
     crate::locale::t("custom_resize")
-}
-
-/// The label of version `at` for an undo or redo row's detail; empty when it is dimmed.
-fn version_label(labels: &[String], at: Option<usize>) -> &str {
-    at.and_then(|at| labels.get(at)).map_or("", String::as_str)
 }
 
 /// The "Image ▾" menu: Resize (a submenu), then the other steps. Each makes a new copy; ⌘Z

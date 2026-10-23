@@ -311,7 +311,6 @@ impl App {
         self.polled_image_wait = None;
         self.opened_table = crate::settings::preferred_table();
         self.card_text = None;
-        self.opened_steps = None;
         self.browsing = None;
         self.loose_table = crate::settings::preferred_table();
         self.loose_text = None;

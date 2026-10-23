@@ -3,8 +3,8 @@
 use super::*;
 
 /// The version capsule in the chip row, left of the history capsule: shown in the Dataframe
-/// view while the table has more than one version, and on a text Text ▾ stepped. A picture has
-/// none: an Image ▾ step makes a new copy.
+/// view while the table has more than one version. Text and pictures have none: a Text ▾ or
+/// Image ▾ step makes a new copy.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VersionBar {
     /// "Original", then each step's label.
@@ -17,16 +17,6 @@ impl VersionBar {
     pub fn of(data: &LaunchData) -> Option<Self> {
         if data.subject_kind == SubjectKind::Image {
             return None;
-        }
-        if let Some(edit) = &data.text_edit
-            && data.subject_kind == SubjectKind::Text
-            && data.view == CardView::Original
-            && edit.labels.len() > 1
-        {
-            return Some(Self {
-                labels: edit.labels.clone(),
-                current: edit.version.min(edit.labels.len() - 1),
-            });
         }
         let table = data.table.as_ref()?;
         let text = data.subject_text.as_deref()?;
@@ -112,6 +102,26 @@ pub fn image_undo_key(
     shift: bool,
     other_modifier: bool,
     edit: Option<&ImageShown>,
+) -> Option<CommandId> {
+    let edit = edit?;
+    step_key(
+        chars,
+        command,
+        shift,
+        other_modifier,
+        edit.can_undo,
+        edit.can_redo,
+    )
+}
+
+/// ⌘Z and ⇧⌘Z on a text card after a Text ▾ step: as [`image_undo_key`], with `edit`'s
+/// [`TextShown::can_undo`] and `can_redo`.
+pub fn text_undo_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    edit: Option<&TextShown>,
 ) -> Option<CommandId> {
     let edit = edit?;
     step_key(

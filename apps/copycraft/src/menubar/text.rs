@@ -1,6 +1,8 @@
 //! Text ▾ actions: first and last lines, reverse, column and filter ([`crate::text_ops`]). Each
-//! step copies its result, so every version is a history entry; ⌘Z puts the one before back.
+//! step copies its result as a new copy, a history entry of its own, as Image ▾ does; ⌘Z shows
+//! the copy it was taken on (the clipboard is left alone).
 
+use super::image::{StepKeep, keep_step_source, step_keep, step_note};
 use super::*;
 use crate::text_ops::case_style::CaseStyle;
 use crate::text_ops::{self, Separator, TextOp};
@@ -50,46 +52,9 @@ pub(crate) enum StepsOf {
     Image,
 }
 
-/// The id Text ▾ uses for an opened file: its versions live with the file, not in history.
+/// The id Text ▾ uses for an opened file's text: its step makes a new copy from the file's
+/// entry in history, if it has one ([`App::text_stepped`]).
 const OPENED_FILE: u64 = u64::MAX - 1;
-
-/// Versions of an opened file made by Text ▾ steps: the file's own text first. ⌘Z, ⇧⌘Z and
-/// the version capsule move between them; the clipboard is left alone.
-pub(crate) struct OpenedSteps {
-    pub(crate) texts: Vec<Zeroizing<String>>,
-    pub(crate) labels: Vec<String>,
-    pub(crate) cursor: usize,
-}
-
-impl OpenedSteps {
-    /// Start from the file's `original` text.
-    pub(crate) fn new(original: &str) -> Self {
-        Self {
-            texts: vec![Zeroizing::new(original.to_string())],
-            labels: vec![crate::locale::t("original").to_string()],
-            cursor: 0,
-        }
-    }
-
-    /// Add `text` as the version after the shown one (dropping any redo), and show it.
-    pub(crate) fn push(&mut self, label: String, text: &str) {
-        self.texts.truncate(self.cursor + 1);
-        self.labels.truncate(self.cursor + 1);
-        self.texts.push(Zeroizing::new(text.to_string()));
-        self.labels.push(label);
-        self.cursor += 1;
-    }
-
-    /// Show the version `to` picks; its text, or `None` when there is no such other version.
-    pub(crate) fn go(&mut self, to: impl FnOnce(usize) -> Option<usize>) -> Option<&str> {
-        let index = to(self.cursor).filter(|&index| index < self.texts.len())?;
-        if index == self.cursor {
-            return None;
-        }
-        self.cursor = index;
-        Some(self.texts[index].as_str())
-    }
-}
 
 /// The text a card for `data` shows, for Text ▾: its text subject.
 pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
@@ -104,8 +69,7 @@ impl App {
     /// follows history and is not a table (tables have their own steps).
     pub(crate) fn text_entry(&self) -> Option<(u64, Zeroizing<String>)> {
         if let Some(opened) = &self.opened {
-            // An opened text or code file has Text ▾ like a copy; its steps are versions of
-            // the file card ([`OpenedSteps`]), not clipboard copies.
+            // An opened text or code file has Text ▾ like a copy; a step makes a new copy.
             return opened
                 .text
                 .as_ref()
@@ -164,10 +128,14 @@ impl App {
         })
     }
 
-    /// An applied AI result goes to the clipboard, nowhere else.
+    /// A result that is no step on the card (an applied AI result for a card that moved on,
+    /// or for a scanned PDF): a new copy, in history by the rules of CopyCraft's own copies.
     pub(crate) fn copy_ai_result(&mut self, result: &Zeroizing<String>) {
         match self.write_own(result) {
-            Ok(()) => save_feedback(crate::locale::t("copied_toast")),
+            Ok(()) => {
+                self.record_own_copy(result);
+                save_feedback(crate::locale::t("copied_toast"));
+            }
             Err(e) => crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             )),
@@ -179,7 +147,7 @@ impl App {
         CopySteps::showing(self.text_steps.as_ref(), id)
     }
 
-    /// Undo, redo (and for text the version capsule) after a step: show the copy `to` picks
+    /// Undo and redo after a step: show the copy `to` picks
     /// from the one `which` steps show, entry `id`. The card browses history to it; the
     /// clipboard is left alone (no Copied toast), Copy puts it there. `false` when there is no
     /// such copy (also when history let it go: it keeps a limited number of copies).
@@ -214,20 +182,14 @@ impl App {
         true
     }
 
-    /// Undo, redo and the version capsule go to the text's versions.
-    pub(crate) fn text_versions_shown(&self) -> bool {
-        if self.opened.is_some() {
-            return self.text_entry().is_some()
-                && self
-                    .opened_steps
-                    .as_ref()
-                    .is_some_and(|s| s.texts.len() > 1);
-        }
+    /// Undo and redo go to the copies Text ▾ steps made of the text on the card.
+    pub(crate) fn text_steps_shown(&self) -> bool {
         self.text_entry()
             .is_some_and(|(id, _)| self.text_steps_of(id).is_some_and(|s| s.ids.len() > 1))
     }
 
-    /// Text ▾ for the card: its versions and a note for the meta line.
+    /// Text ▾ for the card: whether ⌘Z and ⇧⌘Z have a copy to go to, and a note for the meta
+    /// line.
     pub(crate) fn attach_text(&mut self, data: &mut LaunchData) {
         // Text ▾ works on the text this card is built from, whichever path built it.
         self.card_text = card_text_of(data);
@@ -240,16 +202,19 @@ impl App {
         let kind = crate::format::detect(&text);
         let code = crate::complexity::Lang::of(kind).is_some();
         let agent = kind == crate::format::FormatKind::Agent;
-        let steps = if id == OPENED_FILE {
-            self.opened_steps
-                .as_ref()
-                .map(|steps| (steps.labels.clone(), steps.cursor))
-        } else {
-            self.text_steps_of(id)
-                .map(|steps| (steps.labels.clone(), steps.cursor))
-        };
-        let (labels, version) =
-            steps.unwrap_or_else(|| (vec![crate::locale::t("original").to_string()], 0));
+        // Only to a copy history still has (it keeps a limited number).
+        let steps = (id != OPENED_FILE && id != NOT_IN_HISTORY)
+            .then(|| self.text_steps_of(id))
+            .flatten();
+        let can_undo = steps.is_some_and(|steps| {
+            steps.cursor > 0 && self.history.contains_id(steps.ids[steps.cursor - 1])
+        });
+        let can_redo = steps.is_some_and(|steps| {
+            steps
+                .ids
+                .get(steps.cursor + 1)
+                .is_some_and(|&next| self.history.contains_id(next))
+        });
         let note = self
             .text_note
             .as_ref()
@@ -262,8 +227,8 @@ impl App {
             });
         }
         data.text_edit = Some(commands::TextShown {
-            labels,
-            version,
+            can_undo,
+            can_redo,
             note,
             code,
             agent,
@@ -311,12 +276,12 @@ impl App {
             return;
         };
         match result {
-            // A hash of a sensitive card is copied concealed and stays out of history: the hash
-            // can be checked against a guess. An opened file's versions are not history.
+            // A hash of a sensitive card (or file) is copied concealed and stays out of history:
+            // the hash can be checked against a guess.
             text_ops::TextResult::Step {
                 op: TextOp::Hash(_),
                 text: Some(result),
-            } if id != OPENED_FILE && !crate::sensitivity::is_plain(&source) => {
+            } if !crate::sensitivity::is_plain(&source) => {
                 self.hash_kept_out(id, &result);
             }
             text_ops::TextResult::Step { text: None, .. } => {
@@ -326,7 +291,7 @@ impl App {
             text_ops::TextResult::Step {
                 op,
                 text: Some(result),
-            } => self.text_stepped(id, op.label(), matches!(op, TextOp::AgentCommands), &result),
+            } => self.text_stepped(id, op.label(), &result),
             // Names the code and the problem; the text itself is never shown or logged.
             text_ops::TextResult::Invalid { codec, reason } => {
                 self.text_note = Some((id, codec.invalid_note(reason)));
@@ -335,50 +300,103 @@ impl App {
         }
     }
 
-    /// Copy a step's `result` (a new history entry) and make it the version after entry `id`,
-    /// labelled `label`. `also_copy`: on an opened file, whose versions are not clipboard copies,
-    /// put the result on the clipboard too (Commands on agent instructions, an applied Apple
-    /// Intelligence preview: [`App::ai_apply`]).
-    pub(crate) fn text_stepped(
-        &mut self,
-        id: u64,
-        label: String,
-        also_copy: bool,
-        result: &Zeroizing<String>,
-    ) {
-        if id == OPENED_FILE {
-            self.file_stepped(label, also_copy, result);
+    /// Copy a step's `result` as a new copy (a history entry of its own) taken from entry `id`,
+    /// labelled `label`, as an Image ▾ step does: the clipboard holds the result, the card
+    /// shows it, ⌘Z shows entry `id` again. A copy that is not in history yet (the clipboard's
+    /// at launch) goes in first, by the rules of any copy ([`keep_step_source`]). The result
+    /// goes in by those rules too ([`step_keep`] with `held`): Pause, the ignore list, a token
+    /// or key in it, or its size keep it out, with a note. On an opened file the card leaves
+    /// the file for the new copy.
+    pub(crate) fn text_stepped(&mut self, id: u64, label: String, result: &Zeroizing<String>) {
+        let Some((entry, source)) = self.text_entry().filter(|(entry, _)| *entry == id) else {
+            // The card moved on (or a scanned PDF, which has no text of its own): the result
+            // is a copy like any other.
+            self.copy_ai_result(result);
             return;
+        };
+        let from_file = entry == OPENED_FILE;
+        // An opened file is in history when it was dropped or chosen (and allowed in).
+        let mut id = if from_file {
+            self.history
+                .text_index(&source, self.history_cursor)
+                .and_then(|index| self.history.id_at(index))
+                .unwrap_or(NOT_IN_HISTORY)
+        } else {
+            entry
+        };
+        let history_on = crate::settings::clipboard_history();
+        let in_history = id != NOT_IN_HISTORY;
+        let held = self.history.held();
+        let paused = crate::capture::history_paused();
+        let source_admitted = crate::sensitivity::record_when(crate::sensitivity::admission(
+            &crate::sensitivity::labeling(&source),
+        )) == crate::sensitivity::Record::Now;
+        // The clipboard's own copy, shown on the card (not a file, not a browsed entry).
+        let clipboard_copy = !from_file
+            && !in_history
+            && history_on
+            && self.browsed_index().is_none()
+            && ClipboardView::from_os().text() == Some(source.as_str());
+        let source_kept = keep_step_source(
+            history_on,
+            in_history,
+            clipboard_copy,
+            held,
+            source_admitted,
+        ) && self.history.record(source.to_string());
+        if source_kept && let Some(kept) = self.history.id_at(0) {
+            id = kept;
         }
+        let admitted = crate::sensitivity::admission(&crate::sensitivity::labeling(result))
+            != crate::sensitivity::Admission::Refuse;
+        // Unlike an Image ▾ step's copy, a text step's follows the ignore list too (`held` is
+        // Pause or an ignored front app), as CopyCraft's other own copies do.
+        let keep = step_keep(held, admitted);
         if let Err(e) = self.write_own(result) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             ));
             return;
         }
-        // The new version is the clipboard's: the card follows it again.
+        self.last_copy = Some(Instant::now());
+        // The new copy is the clipboard's: the card follows it again.
         self.browsing = None;
-        if !self.record_own_copy(result) {
-            // Recording is paused, the app is ignored, or the result holds a credential: it is on
-            // the clipboard but not in history, so it makes no version either.
-            let note = if self.history.held() {
-                crate::locale::t("text_not_kept")
-            } else {
-                crate::locale::t("text_not_kept_secret")
-            };
-            self.text_note = Some((id, note.to_string()));
+        let recorded = keep == StepKeep::Keep && self.history.record(result.to_string());
+        if cfg!(debug_assertions) {
+            crate::diag::log(crate::diag::LogEvent::TextStepKept {
+                source_in_history: in_history,
+                clipboard_copy,
+                source_kept,
+                admitted,
+                paused,
+                held,
+                kept: recorded,
+            });
+        }
+        if from_file {
+            self.leave_opened();
+        }
+        if source_kept || recorded {
+            self.history_cursor = 0;
+            self.clipboard_cursor = None;
+            self.refresh_status_menu();
+        }
+        if !recorded {
+            // On the card that shows now (the result, or while held the entry history shows).
+            let shown = self.text_entry().map_or(id, |(at, _)| at);
+            self.text_note = Some((shown, step_note(keep).to_string()));
+            self.reset_view();
             self.refresh_popup();
             return;
         }
-        let Some(new_id) = self.history.id_at(0) else {
-            return;
-        };
-        self.text_steps = Some(CopySteps::stepped(
-            self.text_steps.take(),
-            id,
-            new_id,
-            label,
-        ));
+        if let Some(new_id) = self.history.id_at(0) {
+            self.text_steps = Some(CopySteps::stepped(
+                self.text_steps.take(),
+                id,
+                new_id,
+                label,
+            ));
+        }
         self.text_note = None;
         self.reset_view();
         self.refresh_popup();
@@ -397,59 +415,9 @@ impl App {
         self.refresh_popup();
     }
 
-    /// A step on an opened file: a new version of the file card. Commands (agent instructions)
-    /// also puts its result on the clipboard, as promised; the card stays on the file.
-    fn file_stepped(&mut self, label: String, also_copy: bool, result: &Zeroizing<String>) {
-        let Some(opened) = self.opened.as_mut() else {
-            return;
-        };
-        let Some(current) = opened.text.as_ref() else {
-            // A scanned PDF has no text version: an applied result only goes to the clipboard.
-            let scanned_pdf = opened
-                .image
-                .as_ref()
-                .is_some_and(|image| image.pdf_source.is_some() || image.pdf_text.is_some());
-            if scanned_pdf {
-                match self.write_own(result) {
-                    Ok(()) => save_feedback(crate::locale::t("copied_toast")),
-                    Err(e) => crate::diag::log(crate::diag::LogEvent::TextStepFailed(
-                        crate::diag::ErrorKind::of(&e),
-                    )),
-                }
-            }
-            return;
-        };
-        let steps = self
-            .opened_steps
-            .get_or_insert_with(|| OpenedSteps::new(current));
-        steps.push(label, result);
-        opened.text = Some(Zeroizing::new(result.to_string()));
-        if also_copy && let Err(e) = self.write_own(result) {
-            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
-                crate::diag::ErrorKind::of(&e),
-            ));
-        }
-        self.text_note = None;
-        self.reset_view();
-        self.refresh_popup();
-    }
-
-    /// Show the version `to` picks from the one shown (undo, redo, the version capsule). Only
-    /// shown: the clipboard is left alone (no Copied toast); Copy puts the version there.
+    /// Show the copy `to` picks from the one shown (undo, redo). Only shown: the clipboard is
+    /// left alone (no Copied toast); Copy puts the copy there.
     pub(crate) fn text_goto(&mut self, to: impl FnOnce(usize) -> Option<usize>) {
-        if self.opened.is_some() {
-            let text = self
-                .opened_steps
-                .as_mut()
-                .and_then(|steps| steps.go(to))
-                .map(|text| Zeroizing::new(text.to_string()));
-            if let (Some(text), Some(opened)) = (text, self.opened.as_mut()) {
-                opened.text = Some(text);
-                self.text_note = None;
-                self.refresh_popup();
-            }
-            return;
-        }
         let Some((id, _)) = self.text_entry() else {
             return;
         };

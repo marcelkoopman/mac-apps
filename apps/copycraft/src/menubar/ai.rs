@@ -260,7 +260,8 @@ impl App {
         }
     }
 
-    /// "Apply to Clipboard": the result becomes the next text version. Undoable.
+    /// "Apply to Clipboard": the result is a new copy, as a Text ▾ step's; ⌘Z shows the copy
+    /// it was made from.
     pub(crate) fn ai_apply(&mut self) {
         let Some(run) = self.ai.take() else {
             return;
@@ -286,7 +287,6 @@ impl App {
         self.text_stepped(
             run.entry,
             commands::ai_label(run.action).to_string(),
-            true,
             &result,
         );
     }
