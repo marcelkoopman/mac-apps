@@ -61,6 +61,8 @@ mod popup;
 mod run;
 mod save;
 mod source;
+#[cfg(test)]
+use source::skip_after_drop;
 mod state;
 mod table;
 mod text;

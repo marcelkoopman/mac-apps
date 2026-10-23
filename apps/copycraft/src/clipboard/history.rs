@@ -55,6 +55,11 @@ impl ClipboardHistory {
         true
     }
 
+    /// History has `text` as an entry.
+    pub fn holds_text(&self, text: &str) -> bool {
+        self.text_pos(text).is_some()
+    }
+
     fn text_pos(&self, text: &str) -> Option<usize> {
         self.entries.iter().position(|entry| match &entry.body {
             HistoryBody::Text(existing) => existing.as_str() == text,

@@ -73,6 +73,29 @@ fn a_lock_forgets_the_copy_kept_for_undo_also_with_history_empty() {
 }
 
 #[test]
+fn a_drop_keeps_the_clipboard_text_that_history_does_not_have_yet() {
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    // Copied text not in history yet (still being checked, or not read before the drop): no
+    // skip, so it is still recorded afterwards.
+    assert!(super::skip_after_drop(&history, Some("copied text")).is_none());
+    // Recorded first (`show_dropped` admits it), then the dropped picture goes on top: the text
+    // stays, one further down, and only then is it skipped.
+    history.record("copied text".into());
+    let base = 0;
+    let moved_to = history.record_image_tracking(
+        crate::clipboard::SecretBytes::new(vec![1, 2, 3]).expect("bytes"),
+        base,
+    );
+    assert_eq!(moved_to, 1);
+    assert_eq!(history.get(1), Some("copied text"));
+    assert_eq!(history.len(), 2);
+    let skip = super::skip_after_drop(&history, Some("copied text")).expect("skip");
+    assert_eq!(skip.as_str(), "copied text");
+    // Nothing on the clipboard as text: nothing to skip.
+    assert!(super::skip_after_drop(&history, None).is_none());
+}
+
+#[test]
 fn a_removed_newest_copy_is_recorded_again_after_a_new_copy() {
     // Removed at change 7: the poll still sees 7 and does not record it again.
     assert!(!removal_skip_ends(Some(7), 7));

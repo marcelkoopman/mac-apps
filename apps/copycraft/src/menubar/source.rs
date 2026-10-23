@@ -58,14 +58,16 @@ impl App {
     /// left as it is.
     pub(crate) fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
         let opened = self.look_at_dropped_image(opened);
-        self.dropped_text_wait = None;
-        self.dropped_image_wait = None;
+        // The clipboard's copy goes into history first, by the usual rules (paused, private,
+        // a token or key, history off), if it is not there yet: the drop takes the card, not
+        // its place in history.
+        self.record_current(&ClipboardView::from_os());
         let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
         let clipboard_at = if let Some(image) = opened.image.as_ref() {
             if waits_for_recognition(image) {
                 // A picture goes into history once its text is recognised: one that shows a
                 // token or key stays out ([`Self::finish_dropped_scan`]).
-                self.dropped_image_wait = Some(image.bytes.clone());
+                self.dropped_image_wait.push(image.bytes.clone());
                 None
             } else {
                 Some(
@@ -82,7 +84,8 @@ impl App {
             )) {
                 Record::Now => self.history.record_tracking(text.to_string(), base),
                 Record::AfterCheck => {
-                    self.dropped_text_wait = Some(Zeroizing::new(text.to_string()));
+                    self.dropped_text_wait
+                        .push(Zeroizing::new(text.to_string()));
                     None
                 }
                 Record::Never => None,
@@ -110,48 +113,45 @@ impl App {
         launcher::order_front();
     }
 
-    /// The drop on the card is in history now, at index 0; the clipboard's own entry is at
-    /// `clipboard_at`.
-    pub(crate) fn dropped_recorded(&mut self, clipboard_at: usize) {
+    /// A drop is in history now, at index 0; the entry the card or the clipboard was on is at
+    /// `moved_to`. On the card: the clipboard's entry is remembered for when the card goes back
+    /// to it. Recorded after the card moved on (a late check): the card stays on its entry.
+    pub(crate) fn dropped_recorded(&mut self, moved_to: usize) {
         self.last_copy = Some(Instant::now());
-        // The clipboard is not recorded again (back to the front) until it changes. A
-        // copied picture is recorded once per pasteboard change anyway.
-        if let Some(current) = ClipboardView::from_os().text() {
-            self.skip_record = Some(Zeroizing::new(current.to_string()));
+        // The clipboard is not recorded again (back to the front) until it changes, when
+        // history has it. A copy not in history yet (one still being checked) is left to be
+        // recorded. A copied picture is recorded once per pasteboard change anyway.
+        if let Some(skip) = skip_after_drop(&self.history, ClipboardView::from_os().text()) {
+            self.skip_record = Some(skip);
         }
-        self.clipboard_cursor = Some(clipboard_at);
-        self.history_cursor = 0;
+        if self.opened.is_some() {
+            self.clipboard_cursor = Some(moved_to);
+            self.history_cursor = 0;
+        } else {
+            self.history_cursor = moved_to;
+        }
         self.refresh_status_menu();
     }
 
-    /// The checker has labels: the long dropped text that waited for them goes into history
-    /// now, unless it holds a credential or the card moved on (then it is not recorded).
+    /// The checker has labels: the long dropped texts that waited for them go into history
+    /// now, unless they hold a credential. Also when the card moved on: they were dropped.
     pub(crate) fn dropped_text_checked(&mut self) {
-        let Some(text) = self.dropped_text_wait.take() else {
-            return;
-        };
-        let shown = self
-            .opened
-            .as_ref()
-            .and_then(|file| file.text.as_deref())
-            .is_some_and(|shown| shown.as_str() == text.as_str());
-        if !shown {
-            return;
-        }
         use crate::sensitivity::Record;
-        match crate::sensitivity::record_when(crate::sensitivity::admission(
-            &crate::sensitivity::labeling(&text),
-        )) {
-            Record::Now => {
-                let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
-                if let Some(clipboard_at) = self.history.record_tracking(text.to_string(), base) {
-                    self.dropped_recorded(clipboard_at);
+        for text in std::mem::take(&mut self.dropped_text_wait) {
+            match crate::sensitivity::record_when(crate::sensitivity::admission(
+                &crate::sensitivity::labeling(&text),
+            )) {
+                Record::Now => {
+                    let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+                    if let Some(moved_to) = self.history.record_tracking(text.to_string(), base) {
+                        self.dropped_recorded(moved_to);
+                    }
                 }
+                Record::AfterCheck => self.dropped_text_wait.push(text),
+                Record::Never => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                    crate::diag::Skip::Credential,
+                )),
             }
-            Record::AfterCheck => self.dropped_text_wait = Some(text),
-            Record::Never => crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                crate::diag::Skip::Credential,
-            )),
         }
     }
 
@@ -255,6 +255,7 @@ impl App {
         {
             // Only a PDF's recognition can take long enough for a notification.
             self.notices.pdf_scan_started = pdf.is_some().then(Instant::now);
+            let id = image.allocation_id();
             let spawned = std::thread::Builder::new()
                 .name("copycraft-drop-scan".into())
                 .spawn(move || {
@@ -276,9 +277,13 @@ impl App {
                     crate::diag::ErrorKind::io(&e),
                 ));
                 // No scan: a picture waiting for it goes into history as before.
-                if let Some(waiting) = self.dropped_image_wait.clone() {
+                if let Some(waiting) = self
+                    .dropped_image_wait
+                    .iter()
+                    .find(|waiting| waiting.allocation_id() == id)
+                {
                     launcher::emit(UserEvent::DroppedImageScanned {
-                        image: waiting,
+                        image: waiting.clone(),
                         scan: None,
                     });
                 }
@@ -294,19 +299,29 @@ impl App {
         scan: Option<commands::ImageScan>,
     ) {
         // The picture was not recorded yet: its recognised text decides
-        // ([`crate::sensitivity::picture_admission`]). Never logged.
+        // ([`crate::sensitivity::picture_admission`]), also when the card moved on by now: it
+        // was dropped. Never logged.
         let waited = self
             .dropped_image_wait
-            .as_ref()
-            .is_some_and(|waiting| waiting.same_allocation(image));
-        if waited {
-            self.dropped_image_wait = None;
-        }
-        let admission = waited.then(|| {
-            crate::sensitivity::picture_admission(
+            .iter()
+            .position(|waiting| waiting.same_allocation(image));
+        if let Some(at) = waited {
+            self.dropped_image_wait.remove(at);
+            match crate::sensitivity::picture_admission(
                 scan.as_ref().and_then(|scan| scan.ocr.as_deref()),
-            )
-        });
+            ) {
+                crate::sensitivity::Admission::Keep => {
+                    let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
+                    let moved_to = self.history.record_image_tracking(image.clone(), base);
+                    if self.history.holds_image(image) {
+                        self.dropped_recorded(moved_to);
+                    }
+                }
+                _ => crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                    crate::diag::Skip::Credential,
+                )),
+            }
+        }
         // The card moved on (the clipboard, another drop, Wipe) while the thread ran.
         let Some(shown) = self
             .opened
@@ -314,6 +329,16 @@ impl App {
             .and_then(|file| file.image.as_mut())
             .filter(|shown| shown.bytes.same_allocation(image))
         else {
+            // Kept with its entry, so the card has it when it shows the entry.
+            if let Some(mut scan) = scan {
+                if self.history.holds_image(image) {
+                    self.history.remember_image_scan(image, &scan);
+                }
+                scan.wipe();
+            }
+            if launcher::is_open() {
+                self.refresh_popup();
+            }
             return;
         };
         // A PDF keeps the text of its text layer when the scan fails.
@@ -334,19 +359,6 @@ impl App {
                 None,
             );
         }
-        match admission {
-            Some(crate::sensitivity::Admission::Keep) => {
-                let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
-                let clipboard_at = self.history.record_image_tracking(image.clone(), base);
-                if self.history.holds_image(image) {
-                    self.dropped_recorded(clipboard_at);
-                }
-            }
-            Some(_) => crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                crate::diag::Skip::Credential,
-            )),
-            None => {}
-        }
         if launcher::is_open() {
             self.refresh_popup();
         }
@@ -363,8 +375,6 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
-        self.dropped_text_wait = None;
-        self.dropped_image_wait = None;
         self.opened_superseded = false;
         self.opened_steps = None;
         self.opened_table = crate::settings::preferred_table();
@@ -680,6 +690,18 @@ impl App {
             .filter(|(at, _)| *at == change)
             .map(|(_, bytes)| bytes.clone())
     }
+}
+
+/// What a drop leaves the clipboard's text `current` as: skipped (not moved back to the front
+/// by the next poll) only when history already has it. A copy not in history yet (still being
+/// checked, or never read) must still be recorded: a skip would lose it for good. Pure.
+pub(super) fn skip_after_drop(
+    history: &clipboard::ClipboardHistory,
+    current: Option<&str>,
+) -> Option<Zeroizing<String>> {
+    current
+        .filter(|text| history.holds_text(text))
+        .map(|text| Zeroizing::new(text.to_string()))
 }
 
 /// A dropped, pasted or chosen picture that goes into history only after its text recognition

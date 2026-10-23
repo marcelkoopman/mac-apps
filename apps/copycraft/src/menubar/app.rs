@@ -44,13 +44,15 @@ pub(crate) struct App {
     pub(crate) card_view: CardView,
     /// File on the card. Absent means the card follows the clipboard.
     pub(crate) opened: Option<crate::open_file::OpenedFile>,
-    /// A dropped, pasted or chosen long text whose labels were still being checked: recorded
-    /// by [`App::labels_checked`] once they are in, if it holds no credential and is still on
-    /// the card ([`crate::sensitivity::Record::AfterCheck`]).
-    pub(crate) dropped_text_wait: Option<Zeroizing<String>>,
-    /// A dropped or pasted picture whose text recognition is still running: recorded by
-    /// [`App::finish_dropped_scan`] unless its recognised text holds a credential.
-    pub(crate) dropped_image_wait: Option<SecretBytes>,
+    /// Dropped, pasted or chosen long texts whose labels were still being checked: recorded
+    /// by [`App::labels_checked`] once they are in, if they hold no credential
+    /// ([`crate::sensitivity::Record::AfterCheck`]), also when the card moved on by then. Only
+    /// Wipe and Clear History drop them.
+    pub(crate) dropped_text_wait: Vec<Zeroizing<String>>,
+    /// Dropped or pasted pictures whose text recognition is still running: recorded by
+    /// [`App::finish_dropped_scan`] unless the recognised text holds a credential, also when
+    /// the card moved on by then.
+    pub(crate) dropped_image_wait: Vec<SecretBytes>,
     /// The pasteboard change of a copied picture whose text recognition is still running
     /// ([`App::finish_polled_image`]).
     pub(crate) polled_image_wait: Option<isize>,

@@ -51,8 +51,8 @@ impl App {
         self.pin_refused = false;
         self.history_emptied = false;
         // A drop still waiting for its check stays out, like what was cleared.
-        self.dropped_text_wait = None;
-        self.dropped_image_wait = None;
+        self.dropped_text_wait.clear();
+        self.dropped_image_wait.clear();
         self.polled_image_wait = None;
         if full {
             self.clear_diff();
@@ -304,8 +304,8 @@ impl App {
         self.forget_decoded_picture();
         self.close_table_window();
         self.opened = None;
-        self.dropped_text_wait = None;
-        self.dropped_image_wait = None;
+        self.dropped_text_wait.clear();
+        self.dropped_image_wait.clear();
         self.polled_image_wait = None;
         self.opened_table = crate::settings::preferred_table();
         self.card_text = None;
