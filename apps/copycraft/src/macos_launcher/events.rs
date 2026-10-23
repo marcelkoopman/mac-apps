@@ -32,7 +32,11 @@ pub(crate) fn chip_for(mtm: MainThreadMarker, cmd: &Command) -> Rc<GlassButton> 
         });
         chip
     });
-    // The title is the label. VoiceOver reads the detail as the hint.
+    // The title is the label; a menu chip is a menu button named without its "▾". VoiceOver
+    // reads the detail as the hint.
+    if let Some(label) = commands::menu_chip_label(cmd) {
+        chip.set_menu_button(label);
+    }
     let help = (!cmd.detail.is_empty()).then(|| NSString::from_str(&cmd.detail));
     chip.button().setAccessibilityHelp(help.as_deref());
     // A disabled chip (Image ▾ on the recognized text) says why in its tooltip.

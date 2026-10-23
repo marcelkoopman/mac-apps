@@ -76,6 +76,16 @@ pub(crate) fn date_order_command(notes: &dataframe::ReadNotes) -> Option<Command
     ))
 }
 
+/// VoiceOver name of a menu chip (*Text ▾*, *Image ▾*, *Table ▾*): its title without the
+/// "▾", which the menu-button role already says. `None` for every other command.
+pub fn menu_chip_label(cmd: &Command) -> Option<&str> {
+    matches!(
+        cmd.id,
+        CommandId::TextMenu | CommandId::ImageMenu | CommandId::TableMenu
+    )
+    .then(|| cmd.title.trim_end_matches('▾').trim_end())
+}
+
 /// The "Image ▾" chip.
 pub fn image_menu_title() -> &'static str {
     crate::locale::t("image_menu")

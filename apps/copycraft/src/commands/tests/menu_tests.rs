@@ -347,3 +347,15 @@ fn the_overflow_has_a_theme_submenu_in_groups_and_a_help_submenu() {
     );
     assert_eq!(menu.last().map(|c| c.id.clone()), Some(CommandId::Quit));
 }
+
+#[test]
+fn menu_chips_are_named_without_the_arrow() {
+    use crate::commands::{command, menu_chip_label};
+    let text = command(CommandId::TextMenu, "Text ▾", "", "");
+    assert_eq!(menu_chip_label(&text), Some("Text"));
+    let image = command(CommandId::ImageMenu, "Afbeelding ▾", "", "");
+    assert_eq!(menu_chip_label(&image), Some("Afbeelding"));
+    // Any other chip keeps its title as the label.
+    let copy = command(CommandId::Copy, "Copy", "", "");
+    assert_eq!(menu_chip_label(&copy), None);
+}

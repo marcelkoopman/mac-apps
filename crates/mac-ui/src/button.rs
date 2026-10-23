@@ -232,6 +232,18 @@ impl GlassButton {
             .setAccessibilityLabel(Some(&NSString::from_str(label)));
     }
 
+    /// Make the button a menu button for VoiceOver (`NSAccessibilityMenuButtonRole`, "menu
+    /// button") named `label`, without the visible "▾" (the title keeps it, drawn as before).
+    /// Call again after [`set_title`](Self::set_title), which resets the label to the title.
+    pub fn set_menu_button(&self, label: &str) {
+        // The role's value, "AXMenuButton", spelled out: reading AppKit's constant is an
+        // `unsafe` extern static, and the value is fixed API.
+        self.button
+            .setAccessibilityRole(Some(&NSString::from_str("AXMenuButton")));
+        self.button
+            .setAccessibilityLabel(Some(&NSString::from_str(label)));
+    }
+
     /// New name for a [`symbol`](Self::symbol) button: the accessibility label and the tooltip,
     /// as at construction (e.g. after a language change).
     pub fn set_symbol_label(&self, label: &str) {
