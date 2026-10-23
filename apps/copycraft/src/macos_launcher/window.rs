@@ -258,9 +258,6 @@ pub fn relabel() {
     CLOSE.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
             label_symbol(button, t("close"));
-            button
-                .button()
-                .setToolTip(Some(&NSString::from_str(&close_tip())));
         }
     });
     COPY_BUTTON.with(|slot| {
@@ -341,9 +338,10 @@ pub(crate) fn label_symbol(button: &GlassButton, label: &str) {
     button.set_symbol_label(label);
 }
 
-/// Tooltip of ✕: its name and Esc, which closes the card too.
+/// Tooltip of ✕: its name, Esc and the hotkey, which close the card too.
 fn close_tip() -> String {
-    commands::keyed_tip(crate::locale::t("close"), "Esc")
+    let keys = format!("Esc, {}", crate::settings::hotkey_label());
+    commands::keyed_tip(crate::locale::t("close"), &keys)
 }
 
 /// Undo or redo in the version capsule. The drawn title stays the arrow.
@@ -443,7 +441,10 @@ pub(crate) fn layout(fresh_place: bool) {
     } else {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
-    let mut meta = card_meta();
+    // The header shows only the kind; a check (`missing }`) leads the meta line.
+    let title = zeroize::Zeroizing::new(CARD_TITLE.with(|slot| slot.borrow().clone()));
+    let (title, check) = commands::header_parts(&title);
+    let mut meta = commands::meta_with_check(&card_meta(), check);
     // A zoomed picture or text says so (a PDF's footer has it from the app).
     if let Some(label) = zoom::local_label() {
         meta = if meta.is_empty() {
@@ -497,7 +498,14 @@ pub(crate) fn layout(fresh_place: bool) {
     );
     place_window(mtm, placed.height, fresh_place);
     apply_window_chrome();
-    let title = CARD_TITLE.with(|slot| header_title(&slot.borrow()));
+    CLOSE.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            // The hotkey left the header; ✕ names it (it can change in Settings).
+            button
+                .button()
+                .setToolTip(Some(&NSString::from_str(&close_tip())));
+        }
+    });
     let button_h = mac_ui::metrics::BUTTON_H;
     let button_gap = mac_ui::metrics::BUTTON_GAP;
     let close_x = card_width() - PAD - button_h;
@@ -510,7 +518,7 @@ pub(crate) fn layout(fresh_place: bool) {
     let title_w = (symbols_x - PAD - button_gap).max(40.0);
     let button_y = placed.header_y + (HEADER_H - button_h) / 2.0;
     HEADER.with(|slot| {
-        set_header(slot, PAD, placed.header_y, title_w, HEADER_H, &title);
+        set_header(slot, PAD, placed.header_y, title_w, HEADER_H, title);
     });
     HEADER_GROUP.with(|slot| {
         if let Some(group) = slot.borrow().as_ref() {

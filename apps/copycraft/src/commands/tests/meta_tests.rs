@@ -32,3 +32,20 @@ fn a_long_image_name_keeps_its_dimensions() {
     assert!(tight.contains('…'), "{tight}");
     assert!(width(&tight) <= 10.0, "{tight}");
 }
+
+#[test]
+fn header_shows_the_kind_and_the_meta_line_the_check() {
+    use crate::commands::{header_parts, meta_with_check};
+    assert_eq!(header_parts("Rust"), ("Rust", None));
+    assert_eq!(
+        header_parts("Java · missing }"),
+        ("Java", Some("missing }"))
+    );
+    assert_eq!(header_parts("JSON · Invalid"), ("JSON", Some("Invalid")));
+    assert_eq!(
+        meta_with_check("3 lines, 0.1 KB", Some("missing }")),
+        "missing }  ·  3 lines, 0.1 KB"
+    );
+    assert_eq!(meta_with_check("", Some("missing }")), "missing }");
+    assert_eq!(meta_with_check("0.1 KB", None), "0.1 KB");
+}

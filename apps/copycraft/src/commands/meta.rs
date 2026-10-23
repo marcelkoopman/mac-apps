@@ -80,6 +80,24 @@ fn table_columns(text: &str) -> Option<String> {
         .map(columns_label)
 }
 
+/// The card header shows only the kind. A check after the first " · " (`Rust · missing }`,
+/// `JSON · Invalid`) is returned apart, for the meta line.
+pub fn header_parts(title: &str) -> (&str, Option<&str>) {
+    match title.split_once(" · ") {
+        Some((kind, check)) if !kind.is_empty() && !check.is_empty() => (kind, Some(check)),
+        _ => (title, None),
+    }
+}
+
+/// The meta line with the header's check first: `missing }  ·  12 lines, 0.3 KB`.
+pub fn meta_with_check(meta: &str, check: Option<&str>) -> String {
+    match check {
+        Some(check) if meta.is_empty() => check.to_string(),
+        Some(check) => format!("{check}  ·  {meta}"),
+        None => meta.to_string(),
+    }
+}
+
 /// "3 # · 7 ##" on a Markdown card; a level without headings is left out.
 fn markdown_headings(text: &str) -> Option<String> {
     if format::detect(text) != FormatKind::Markdown {

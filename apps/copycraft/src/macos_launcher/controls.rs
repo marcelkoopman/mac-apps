@@ -66,17 +66,11 @@ pub(crate) fn set_header(
     label.setAttributedStringValue(&header_line(text));
 }
 
-/// Kind in semibold, then the hotkey in the caption colour. The whole line truncates in the
-/// middle, so a long kind keeps the hotkey visible.
+/// The kind in semibold, cut in the middle when it is too long.
 pub(crate) fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
     let semibold = mac_ui::fonts::semibold_weight();
     let title_font = NSFont::systemFontOfSize_weight(mac_ui::metrics::FONT_TITLE, semibold);
-    let hotkey_font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_BODY);
     let attr = AttrText::new(text, &title_font, &NSColor::labelColor());
-    if let Some(at) = text.rfind(" · ") {
-        attr.font(&(at..text.len()), &hotkey_font)
-            .color(&(at..text.len()), &crate::appearance::caption_color());
-    }
     let built = attr.into_attributed();
     let style = NSMutableParagraphStyle::new();
     style.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
@@ -86,11 +80,6 @@ pub(crate) fn header_line(text: &str) -> Retained<NSMutableAttributedString> {
     };
     mac_ui::text::set_paragraph_style(&built, &style, range);
     built
-}
-
-/// The card title (kind, plus any check such as `missing }`) and the open hotkey.
-pub(crate) fn header_title(kind: &str) -> String {
-    format!("{kind} · {}", crate::settings::hotkey_label())
 }
 
 pub(crate) fn symbols_button_width() -> f64 {

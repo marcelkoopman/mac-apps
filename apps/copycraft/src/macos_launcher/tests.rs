@@ -32,16 +32,6 @@ impl Drop for FilterOn {
 }
 
 #[test]
-fn header_title_is_the_kind_and_the_hotkey() {
-    assert_eq!(super::header_title("Rust"), "Rust · ⌃⌘C");
-    assert_eq!(super::header_title("Clipboard"), "Clipboard · ⌃⌘C");
-    // Checks stay in the kind part; no date or time follows.
-    let title = super::header_title("Java · missing }");
-    assert_eq!(title, "Java · missing } · ⌃⌘C");
-    assert!(!title.chars().any(|ch| ch.is_ascii_digit()), "{title}");
-}
-
-#[test]
 fn well_radius_is_the_shared_eight() {
     assert_eq!(super::WELL_RADIUS, mac_ui::metrics::WELL_RADIUS);
     assert_eq!(super::WELL_RADIUS, mac_ui::metrics::SPACE_S);
