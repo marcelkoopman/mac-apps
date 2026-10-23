@@ -88,6 +88,7 @@ mod tests {
             "ftp://example.com/",
             "javascript:alert(1)",
             "x-apple-systempreferences:com.apple.preference",
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
             "smb://server/share",
             "https://",
             "",

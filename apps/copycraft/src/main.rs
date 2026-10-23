@@ -43,6 +43,8 @@ mod sensitivity;
 mod settings;
 mod settings_tabs;
 mod symbols;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+mod system_settings;
 mod table;
 mod table_ops;
 #[cfg(test)]

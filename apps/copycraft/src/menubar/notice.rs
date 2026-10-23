@@ -1,7 +1,8 @@
 //! Local notifications ([`crate::notifications`]): the App side. The decision is
 //! [`crate::notifications::decide`]; this asks the permission the first time one is needed,
-//! posts it, takes it away again when the card opens, and opens the card on a click. Nothing
-//! about a notification or its content is logged.
+//! checks it again (without asking) before a notification a refusal held back and when
+//! Settings › General opens, posts it, takes it away again when the card opens, and opens the
+//! card on a click. Nothing about a notification or its content is logged.
 
 use super::*;
 #[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
@@ -75,14 +76,22 @@ impl App {
                 failed,
                 took,
             };
-            let verdict = notifications::decide(
-                kind,
-                facts,
-                crate::settings::notify_switches(),
-                crate::settings::notify_permission(),
-                &self.notices.session,
-                Instant::now(),
-            );
+            let switches = crate::settings::notify_switches();
+            let permission = crate::settings::notify_permission();
+            let now = Instant::now();
+            let session = &self.notices.session;
+            // Refused may have been undone in System Settings: ask macOS (it never prompts)
+            // and post it once the answer says allowed.
+            if notifications::worth_rechecking(kind, facts, switches, permission, session, now) {
+                self.notices.waiting = Some(NoticeWait {
+                    kind,
+                    action: action.map(str::to_string),
+                    asked: false,
+                });
+                crate::macos_notify::probe_permission();
+                return;
+            }
+            let verdict = notifications::decide(kind, facts, switches, permission, session, now);
             match verdict {
                 Verdict::Send => self.post_notice(kind, action),
                 Verdict::AskPermission => {
@@ -111,7 +120,8 @@ impl App {
         }
     }
 
-    /// The permission question has an answer: from the check, or from the system's question.
+    /// The permission question has an answer: from a check (before a notification, or when
+    /// Settings › General opened), or from the system's question.
     pub(crate) fn notification_event(&mut self, event: launcher::NotificationEvent) {
         match event {
             launcher::NotificationEvent::Clicked(_) => self.notice_clicked(),
@@ -127,18 +137,20 @@ impl App {
     }
 
     fn notice_permission(&mut self, answer: Answer) {
+        // What macOS says is what is stored, also a permission given since a refusal; an open
+        // Settings window shows it (and dims the switches while refused).
+        crate::settings::set_notify_permission(Permission::from_answer(answer));
+        #[cfg(target_os = "macos")]
+        crate::macos_settings::refresh_notifications();
         let Some(wait) = self.notices.waiting.take() else {
             return;
         };
         match answer {
             Answer::Granted => {
-                crate::settings::set_notify_permission(Permission::Granted);
                 #[cfg(target_os = "macos")]
                 self.post_notice(wait.kind, wait.action.as_deref());
             }
-            Answer::Denied => {
-                crate::settings::set_notify_permission(Permission::Refused);
-            }
+            Answer::Denied => {}
             Answer::NotDetermined if !wait.asked => {
                 #[cfg(target_os = "macos")]
                 {
@@ -153,10 +165,11 @@ impl App {
                         crate::macos_notify::request_permission();
                     } else {
                         crate::settings::set_notify_permission(Permission::Refused);
+                        crate::macos_settings::refresh_notifications();
                     }
                 }
             }
-            // Still undecided after the question: ask nothing more.
+            // Still undecided after the question: ask nothing more for this one.
             Answer::NotDetermined => {}
         }
     }

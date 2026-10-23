@@ -99,15 +99,18 @@ impl Switches {
     }
 }
 
-/// Whether CopyCraft may show notifications. Asked only the first time one is needed; a refusal
-/// is final and never asked again.
+/// Whether CopyCraft may show notifications, as last heard from macOS. Asked only the first
+/// time one is needed. A refusal is not final: macOS is checked again (without asking) when
+/// Settings › General opens and before a notification that only the refusal held back, and
+/// a permission given since in System Settings turns it into [`Permission::Granted`]
+/// ([`Permission::from_answer`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Permission {
     /// Not asked yet.
     #[default]
     Unknown,
     Granted,
-    /// The user said no (to our explanation or to macOS): no notifications, no more asking.
+    /// macOS said no: no notifications until a check finds them allowed again.
     Refused,
 }
 
@@ -126,6 +129,18 @@ impl Permission {
             1 => Self::Granted,
             2 => Self::Refused,
             _ => Self::Unknown,
+        }
+    }
+
+    /// What to store after macOS answered a check or its own question: allowed is
+    /// [`Permission::Granted`] (also after a refusal), denied [`Permission::Refused`], and not
+    /// asked yet (reset in System Settings, or an old refusal of only the explanation)
+    /// [`Permission::Unknown`], so the next notification asks again.
+    pub fn from_answer(answer: Answer) -> Self {
+        match answer {
+            Answer::Granted => Self::Granted,
+            Answer::Denied => Self::Refused,
+            Answer::NotDetermined => Self::Unknown,
         }
     }
 }
@@ -195,6 +210,20 @@ impl Session {
             self.errors.push(kind);
         }
     }
+}
+
+/// A notification [`decide`] held back only because it was refused: one it would send if
+/// macOS allowed it now. Worth checking the permission again (without asking) first.
+pub fn worth_rechecking(
+    kind: Kind,
+    facts: Facts,
+    switches: Switches,
+    permission: Permission,
+    session: &Session,
+    now: Instant,
+) -> bool {
+    permission == Permission::Refused
+        && decide(kind, facts, switches, Permission::Granted, session, now) == Verdict::Send
 }
 
 /// Whether to show a notification of `kind`. Checked in this order: refused, the kind's switch,
@@ -451,7 +480,41 @@ mod tests {
     }
 
     #[test]
-    fn permission_is_asked_once_and_a_refusal_is_final() {
+    fn a_refusal_is_checked_again_and_undone_by_a_permission() {
+        let now = Instant::now();
+        let session = Session::default();
+        let recheck = |kind, facts, switches, permission| {
+            worth_rechecking(kind, facts, switches, permission, &session, now)
+        };
+        // Refused, and it would go out if allowed: check macOS again.
+        assert!(recheck(Kind::AiDone, away(), ON, Permission::Refused));
+        assert!(recheck(Kind::SecretCopied, away(), ON, Permission::Refused));
+        // Not refused: nothing to check again.
+        assert!(!recheck(Kind::AiDone, away(), ON, Permission::Granted));
+        assert!(!recheck(Kind::AiDone, away(), ON, Permission::Unknown));
+        // Held back for another reason too: no check.
+        let failed = Facts {
+            failed: true,
+            ..away()
+        };
+        assert!(!recheck(Kind::AiDone, failed, ON, Permission::Refused));
+        let off = Switches { ai: false, ..ON };
+        assert!(!recheck(Kind::AiDone, away(), off, Permission::Refused));
+        // What macOS answers is what is stored: a permission given in System Settings undoes
+        // the refusal, a reset asks again.
+        assert_eq!(
+            Permission::from_answer(Answer::Granted),
+            Permission::Granted
+        );
+        assert_eq!(Permission::from_answer(Answer::Denied), Permission::Refused);
+        assert_eq!(
+            Permission::from_answer(Answer::NotDetermined),
+            Permission::Unknown
+        );
+    }
+
+    #[test]
+    fn permission_is_asked_once_and_a_refusal_holds_until_checked_again() {
         let ask = |permission| {
             decide(
                 Kind::AiDone,
@@ -481,7 +544,8 @@ mod tests {
             ),
             Verdict::Skip(Skip::Failed)
         );
-        // Refused wins over everything, and the stored value round-trips.
+        // Refused wins over everything (until a check undoes it), and the stored value
+        // round-trips.
         for permission in [
             Permission::Unknown,
             Permission::Granted,

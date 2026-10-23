@@ -51,6 +51,38 @@ const NOTIFY_SWITCHES: [crate::notifications::Switch; 4] = [
     crate::notifications::Switch::Secret,
 ];
 
+/// The note under the notification switches: while macOS refuses notifications, that they
+/// are off (the switches then do nothing); otherwise that a notification never holds text.
+fn notify_note(refused: bool) -> &'static str {
+    if refused {
+        crate::locale::t("notify_off")
+    } else {
+        crate::locale::t("notify_note")
+    }
+}
+
+/// An open Settings window follows the stored notification permission: while refused the
+/// switches are dimmed, the note says notifications are off and the heading row offers the
+/// Notifications pane of System Settings.
+pub fn refresh_notifications() {
+    let refused = settings::notify_permission() == crate::notifications::Permission::Refused;
+    NOTIFY_BOXES.with(|slot| {
+        for button in slot.borrow().iter() {
+            button.setEnabled(!refused);
+        }
+    });
+    NOTIFY_NOTE.with(|slot| {
+        if let Some(note) = slot.borrow().as_ref() {
+            note.setStringValue(&NSString::from_str(notify_note(refused)));
+        }
+    });
+    NOTIFY_OPEN.with(|slot| {
+        if let Some(open) = slot.borrow().as_ref() {
+            open.setHidden(!refused);
+        }
+    });
+}
+
 /// The checkbox title of a notification switch (literal keys, for the locale scan test).
 fn notify_title(switch: crate::notifications::Switch) -> &'static str {
     use crate::notifications::Switch;
@@ -86,6 +118,11 @@ thread_local! {
     static SYMBOLS_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static IGNORED_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     static IGNORED_ADD: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
+    /// The four notification switches (dimmed while macOS refuses notifications), the note
+    /// under them and *Open System Settings › Notifications…* (only while refused).
+    static NOTIFY_BOXES: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
+    static NOTIFY_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static NOTIFY_OPEN: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
     static TABS: RefCell<Option<Retained<NSSegmentedControl>>> = const { RefCell::new(None) };
     /// One view per [`Tab`], in [`Tab::ALL`] order; only the selected one is visible.
     static PANES: RefCell<Vec<Retained<NSView>>> = const { RefCell::new(Vec::new()) };
@@ -344,6 +381,13 @@ define_class!(
             settings::set_notify(*switch, button.state() == NSControlStateValueOn);
         }
 
+        /// Shown while macOS refuses notifications: its Notifications pane, where CopyCraft can
+        /// be allowed again (checked when Settings › General opens next).
+        #[unsafe(method(openNotificationSettings:))]
+        fn open_notification_settings(&self, _sender: Option<&NSButton>) {
+            crate::system_settings::open(crate::system_settings::Pane::Notifications);
+        }
+
         #[unsafe(method(blurToggled:))]
         fn blur_toggled(&self, sender: Option<&NSButton>) {
             let Some(button) = sender else {
@@ -435,6 +479,9 @@ fn clear_controls() {
     SYMBOLS_FIELD.with(|s| *s.borrow_mut() = None);
     IGNORED_FIELD.with(|s| *s.borrow_mut() = None);
     IGNORED_ADD.with(|s| *s.borrow_mut() = None);
+    NOTIFY_BOXES.with(|s| s.borrow_mut().clear());
+    NOTIFY_NOTE.with(|s| *s.borrow_mut() = None);
+    NOTIFY_OPEN.with(|s| *s.borrow_mut() = None);
 }
 
 fn wire(control: &NSButton, action: mac_ui::objc2::runtime::Sel) {
@@ -499,6 +546,9 @@ pub fn show() {
         raise_above_card(&window);
         panel::bring_to_front(&window);
         refresh_all();
+        if current_tab() == Tab::General {
+            check_notifications();
+        }
         return;
     }
     build(mtm);
@@ -848,14 +898,34 @@ fn indented_checkbox(mtm: MainThreadMarker, title: &str, y: f64) -> Retained<NSB
 }
 
 /// The Meldingen block at the bottom of Algemeen: a heading, the four notification switches
-/// and their note, then Announce confirmations, from `top` down.
+/// and their note, then Announce confirmations, from `top` down. While macOS refuses
+/// notifications the note says so, the switches are dimmed and the heading row has *Open
+/// System Settings › Notifications…* ([`refresh_notifications`]).
 fn place_notifications(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
+    let y = take(top, BUTTON_H);
+    let open = GlassButton::pill(
+        mtm,
+        crate::locale::t("notify_open_settings"),
+        ButtonSize::Small,
+    );
+    open.set_symbol("bell.badge");
+    open.set_accessibility_label(crate::locale::t("notify_open_settings"));
+    let open_w = open
+        .width_within(WIDTH - MARGIN * 2.0 - LABEL_W)
+        .max(BUTTON_H);
+    open.view().setFrame(NSRect::new(
+        NSPoint::new(WIDTH - MARGIN - open_w, y),
+        NSSize::new(open_w, BUTTON_H),
+    ));
+    wire(open.button(), sel!(openNotificationSettings:));
+    body.addSubview(open.view());
+    NOTIFY_OPEN.with(|slot| *slot.borrow_mut() = Some(open.view().retain()));
     place_label(
         mtm,
         body,
         crate::locale::t("group_notifications"),
-        take(top, BUTTON_H),
-        WIDTH - MARGIN * 2.0,
+        y,
+        WIDTH - MARGIN * 2.0 - open_w - mac_ui::metrics::BUTTON_GAP,
     );
     let switches = settings::notify_switches();
     let column = (WIDTH - MARGIN * 2.0) / 2.0;
@@ -872,12 +942,21 @@ fn place_notifications(mtm: MainThreadMarker, body: &NSView, top: &mut f64) {
             box_.setState(state_of(switches.is_on(*switch)));
             wire(&box_, sel!(notifyToggled:));
             body.addSubview(&box_);
+            NOTIFY_BOXES.with(|slot| slot.borrow_mut().push(box_));
         }
         if row_index == 0 {
             gap(top, mac_ui::metrics::SPACE_S);
         }
     }
-    place_explanation(mtm, body, crate::locale::t("notify_note"), top);
+    gap(top, NOTE_GAP);
+    let note = place_note(
+        mtm,
+        body,
+        crate::locale::t("notify_note"),
+        take(top, NOTE_H),
+    );
+    NOTIFY_NOTE.with(|slot| *slot.borrow_mut() = Some(note));
+    refresh_notifications();
     // VoiceOver confirmations belong with the other ways CopyCraft tells you something.
     gap(top, mac_ui::metrics::SPACE_S);
     let y = take(top, BUTTON_H);
@@ -1151,6 +1230,15 @@ fn show_pane(tab: Tab) {
         }
     });
     fit_window(tab);
+    if tab == Tab::General {
+        check_notifications();
+    }
+}
+
+/// Ask macOS (it never prompts) whether notifications are allowed; the answer is stored and
+/// [`refresh_notifications`] shows it. A refusal undone in System Settings is picked up here.
+fn check_notifications() {
+    crate::macos_notify::probe_permission();
 }
 
 /// Give the open window `tab`'s height, its top edge where it was (as System Settings does),

@@ -125,6 +125,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "A notification never contains your text.",
     ),
     (
+        "notify_off",
+        "Meldingen staan uit voor CopyCraft",
+        "Notifications are off for CopyCraft",
+    ),
+    (
+        "notify_open_settings",
+        "Open Systeeminstellingen › Meldingen…",
+        "Open System Settings › Notifications…",
+    ),
+    (
         "notify_ai_done",
         "AI-actie klaar: {0}",
         "AI action done: {0}",
