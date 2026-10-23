@@ -192,6 +192,20 @@ pub enum LogEvent {
         scanned: bool,
         refused: bool,
     },
+    /// Debug builds only: how an Image ▾ step and the picture it was taken on went into
+    /// history. Only yes or no: the picture was in history, it was the clipboard copy read for
+    /// the card, it went in now, its text was known, the text admits it, Pause, held (Pause or
+    /// an ignored front app), and the copy of the step went in.
+    ImageStepKept {
+        source_in_history: bool,
+        clipboard_copy: bool,
+        source_kept: bool,
+        source_checked: bool,
+        admitted: bool,
+        paused: bool,
+        held: bool,
+        kept: bool,
+    },
     PreviewNoPicture,
     PreviewStarted,
     PreviewOpenFailed,
@@ -277,6 +291,7 @@ impl LogEvent {
             | E::SpinnerShown { .. }
             | E::SpinnerHidden
             | E::ImageGate { .. }
+            | E::ImageStepKept { .. }
             | E::PreviewNoPicture
             | E::PreviewStarted
             | E::PreviewOpenFailed
@@ -373,7 +388,8 @@ impl LogEvent {
             | E::AgentChecked { .. }
             | E::SpinnerShown { .. }
             | E::SpinnerHidden
-            | E::ImageGate { .. } => Level::Debug,
+            | E::ImageGate { .. }
+            | E::ImageStepKept { .. } => Level::Debug,
         }
     }
 
@@ -453,6 +469,20 @@ impl LogEvent {
                 "image gate: history {kept_history}, suppressed {suppressed}, image {image}, \
                  in history {in_history}, read {read}, asked {asked}, scanned {scanned}, \
                  refused {refused}"
+            ),
+            E::ImageStepKept {
+                source_in_history,
+                clipboard_copy,
+                source_kept,
+                source_checked,
+                admitted,
+                paused,
+                held,
+                kept,
+            } => format!(
+                "image step kept: source in history {source_in_history}, clipboard copy \
+                 {clipboard_copy}, source kept {source_kept}, source checked {source_checked}, \
+                 admitted {admitted}, paused {paused}, held {held}, kept {kept}"
             ),
             E::PreviewNoPicture => "preview: no picture to open".into(),
             E::PreviewStarted => "preview started".into(),

@@ -59,6 +59,7 @@ impl App {
             self.current_image = None;
             self.image_on_pasteboard = None;
             self.drop_card_picture();
+            self.unchecked_source = None;
             self.cancel_image_job();
             self.image_note = None;
             self.image_steps = None;
@@ -326,6 +327,7 @@ impl App {
         self.image_on_pasteboard = None;
         self.drop_card_picture();
         self.card_picture_asked = None;
+        self.unchecked_source = None;
         self.history_cursor = 0;
         self.clipboard_cursor = None;
         self.recorded_image_change = None;
@@ -682,6 +684,8 @@ impl App {
         bytes: SecretBytes,
         text: Option<Zeroizing<String>>,
     ) {
+        // A step put this picture into history before its text was in.
+        self.check_unchecked_source(change, text.as_deref().map(String::as_str));
         if self.polled_image_wait != Some(change)
             || crate::macos_pasteboard::change_count() != change
         {

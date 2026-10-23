@@ -130,7 +130,15 @@ impl ClipboardHistory {
     /// [`record_image`](Self::record_image) for bytes already made into [`SecretBytes`] (and
     /// hashed) on a background thread. Too large or held: not stored, and zeroized.
     pub fn record_secret_image(&mut self, bytes: SecretBytes) -> Option<SecretBytes> {
-        if self.held() || too_large(bytes.byte_len(), MAX_IMAGE_BYTES, true) {
+        let held = self.held();
+        self.record_image_unless(bytes, held)
+    }
+
+    /// [`record_secret_image`](Self::record_secret_image) with `held` decided by the caller
+    /// instead of the gate: an Image ▾ step's own copy, which the user asked for, is held by
+    /// Pause but not by an ignored front app (see `menubar::image::step_keep`).
+    pub fn record_image_unless(&mut self, bytes: SecretBytes, held: bool) -> Option<SecretBytes> {
+        if held || too_large(bytes.byte_len(), MAX_IMAGE_BYTES, true) {
             bytes.zeroize();
             return None;
         }

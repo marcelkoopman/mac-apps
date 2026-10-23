@@ -120,6 +120,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         image_on_pasteboard: None,
         card_picture: None,
         card_picture_asked: None,
+        unchecked_source: None,
         image_gate_logged: None,
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,

@@ -169,6 +169,13 @@ pub fn history_held() -> bool {
     held(paused, front.as_deref(), crate::settings::bundle_ignored)
 }
 
+/// Recording is paused (Pause, while history is kept). An Image ▾ step's own copy is held by
+/// this alone, not by an ignored front app.
+pub fn history_paused() -> bool {
+    crate::history_mode::capture_controls_active(crate::settings::clipboard_history())
+        && session().paused
+}
+
 /// [`history_held`] from its parts.
 pub fn held(paused: bool, front: Option<&str>, ignored: impl Fn(&str) -> bool) -> bool {
     paused || front.is_some_and(ignored)

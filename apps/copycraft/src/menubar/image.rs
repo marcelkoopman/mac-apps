@@ -128,6 +128,22 @@ impl App {
         true
     }
 
+    /// The text of the clipboard's picture at `change` is in (the card's scan or its own
+    /// recognition). A step put that picture into history before it was checked
+    /// ([`App::unchecked_source`]): a token, key or URL password takes it out again, as it
+    /// would have kept it out.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn check_unchecked_source(&mut self, change: isize, recognised: Option<&str>) {
+        let Some((at, source)) = self.unchecked_source.take_if(|(at, _)| *at == change) else {
+            return;
+        };
+        if crate::sensitivity::picture_admission(recognised) != crate::sensitivity::Admission::Keep
+            && self.history.holds_image(&source)
+        {
+            self.retract_step_copy(at, &source);
+        }
+    }
+
     /// Forget (and zeroize) the clipboard's picture read for the card.
     pub(crate) fn drop_card_picture(&mut self) {
         if let Some((_, bytes)) = self.card_picture.take() {
@@ -335,14 +351,47 @@ impl App {
     fn image_stepped(&mut self, source: &SecretBytes, mut done: crate::image_edit::JobDone) {
         #[cfg(target_os = "macos")]
         {
-            let id = self.image_id(source);
+            let mut id = self.image_id(source);
             let known = self.known_image_scan(source);
+            let scanned = known.is_some();
             let verdict = crate::sensitivity::picture_verdict(
                 known.as_ref().and_then(|scan| scan.ocr.as_deref()),
             );
             if let Some(mut known) = known {
                 known.wipe();
             }
+            // The clipboard's picture the step was taken on, read for the card but not in
+            // history (not recorded yet, or held): it goes in first, so the step's copy has a
+            // copy to go back to with ⌘Z and the strip shows both. Its own bytes: the card's
+            // are zeroized with the next copy.
+            let source_change = crate::macos_pasteboard::change_count();
+            let paused = crate::capture::history_paused();
+            let held = self.history.held();
+            let clipboard_copy = self
+                .card_picture
+                .as_ref()
+                .is_some_and(|(at, bytes)| *at == source_change && bytes.same_allocation(source));
+            let in_history = id != NOT_IN_HISTORY;
+            let history_on = crate::settings::clipboard_history();
+            let source_kept = keep_step_source(
+                history_on,
+                in_history,
+                clipboard_copy,
+                held,
+                verdict.admitted,
+            ) && source
+                .with(|bytes| SecretBytes::new(bytes.to_vec()))
+                .and_then(|copy| self.history.record_secret_image(copy))
+                .map(|kept| {
+                    id = self.image_id(&kept);
+                    // Its own recording (waiting for its text) is not needed any more; its
+                    // text, when in, can still take it out again (`check_unchecked_source`).
+                    self.polled_image_wait = None;
+                    self.recorded_image_change = Some(source_change);
+                    self.unchecked_source = (!scanned).then_some((source_change, kept));
+                })
+                .is_some();
+            let keep = step_keep(paused, verdict.admitted);
             let png = Zeroizing::new(done.picture.with(<[u8]>::to_vec));
             if let Err(e) = self.write_own_image(&png, verdict.concealed) {
                 done.wipe();
@@ -355,17 +404,30 @@ impl App {
             self.last_copy = Some(Instant::now());
             // The new copy is the clipboard's: the card follows it again.
             self.browsing = None;
-            let held = self.history.held();
-            let recorded = if verdict.admitted {
-                self.history.record_secret_image(done.picture.clone())
-            } else {
-                None
-            };
+            // The user asked for this copy: an ignored front app does not hold it, Pause does.
+            let recorded = (keep == StepKeep::Keep)
+                .then(|| {
+                    self.history
+                        .record_image_unless(done.picture.clone(), false)
+                })
+                .flatten();
+            if cfg!(debug_assertions) {
+                crate::diag::log(crate::diag::LogEvent::ImageStepKept {
+                    source_in_history: in_history,
+                    clipboard_copy,
+                    source_kept,
+                    source_checked: scanned,
+                    admitted: verdict.admitted,
+                    paused,
+                    held,
+                    kept: recorded.is_some(),
+                });
+            }
             self.scan_step_copy(change, png, verdict, recorded.clone());
             let Some(recorded) = recorded else {
                 // Not kept: the pasteboard has its own copy of the picture.
                 done.wipe();
-                let note = if held {
+                let note = if keep == StepKeep::Paused {
                     crate::locale::t("text_not_kept")
                 } else if verdict.admitted {
                     crate::locale::t("image_not_kept_large")
@@ -480,6 +542,12 @@ impl App {
         if recheck.retract {
             if let Some(bytes) = kept {
                 self.retract_step_copy(change, &bytes);
+            }
+            // The picture it was taken on went in unchecked with it: out again too.
+            if let Some((at, source)) = self.unchecked_source.take()
+                && self.history.holds_image(&source)
+            {
+                self.retract_step_copy(at, &source);
             }
             if let Some(mut scan) = scan.take() {
                 scan.wipe();
@@ -642,6 +710,89 @@ pub(crate) fn card_picture_due(
     asked: Option<isize>,
 ) -> bool {
     !suppressed && !in_history && read != Some(change) && asked != Some(change)
+}
+
+/// Whether an Image ▾ step's copy goes into history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StepKeep {
+    Keep,
+    /// Pause is on: the copy is on the clipboard only.
+    Paused,
+    /// The picture's text holds a token, key or URL password.
+    Secret,
+}
+
+/// [`StepKeep`] for a step's copy. The user asked for it, so only Pause and the privacy rules
+/// hold it back; an ignored front app does not (the copy is CopyCraft's own, not that app's).
+/// Too large is decided by history itself. Pure.
+pub(crate) fn step_keep(paused: bool, admitted: bool) -> StepKeep {
+    if !admitted {
+        StepKeep::Secret
+    } else if paused {
+        StepKeep::Paused
+    } else {
+        StepKeep::Keep
+    }
+}
+
+/// Whether the picture a step was taken on goes into history before the step's copy: the
+/// clipboard's copy read for the card (`clipboard_copy`) that history does not hold yet, under
+/// the rules of any copy (not `held` by Pause or an ignored front app, `admitted` on what is
+/// known of its text). Only while history is kept (`history_on`); a dropped or chosen picture
+/// has its own way in. Pure.
+pub(crate) fn keep_step_source(
+    history_on: bool,
+    in_history: bool,
+    clipboard_copy: bool,
+    held: bool,
+    admitted: bool,
+) -> bool {
+    history_on && !in_history && clipboard_copy && !held && admitted
+}
+
+#[cfg(test)]
+mod step_tests {
+    use super::*;
+
+    #[test]
+    fn a_step_on_a_launch_picture_keeps_the_picture_and_the_copy() {
+        // Not in history, read for the card: both go in, the picture first.
+        assert!(keep_step_source(true, false, true, false, true));
+        assert_eq!(step_keep(false, true), StepKeep::Keep);
+    }
+
+    #[test]
+    fn a_step_on_a_picture_in_history_adds_only_its_copy() {
+        assert!(!keep_step_source(true, true, true, false, true));
+        assert!(!keep_step_source(true, true, false, false, true));
+        assert_eq!(step_keep(false, true), StepKeep::Keep);
+    }
+
+    #[test]
+    fn an_ignored_front_app_holds_the_picture_but_not_the_step_copy() {
+        // `held` without Pause: the front app is ignored.
+        assert!(!keep_step_source(true, false, true, true, true));
+        assert_eq!(step_keep(false, true), StepKeep::Keep);
+    }
+
+    #[test]
+    fn pause_and_a_secret_keep_both_out() {
+        assert!(!keep_step_source(true, false, true, true, true));
+        assert_eq!(step_keep(true, true), StepKeep::Paused);
+        assert!(!keep_step_source(true, false, true, false, false));
+        assert_eq!(step_keep(false, false), StepKeep::Secret);
+        assert_eq!(step_keep(true, false), StepKeep::Secret);
+    }
+
+    #[test]
+    fn a_dropped_picture_is_not_kept_as_a_source_here() {
+        assert!(!keep_step_source(true, false, false, false, true));
+    }
+
+    #[test]
+    fn without_history_the_picture_is_not_kept_as_a_source() {
+        assert!(!keep_step_source(false, false, true, false, true));
+    }
 }
 
 #[cfg(test)]

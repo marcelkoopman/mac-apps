@@ -668,6 +668,9 @@ impl App {
     }
 
     pub(crate) fn finish_image_scan(&mut self, change: isize, scan: Option<commands::ImageScan>) {
+        // Also when a step's copy replaced this picture meanwhile.
+        #[cfg(target_os = "macos")]
+        self.check_unchecked_source(change, scan.as_ref().and_then(|scan| scan.ocr.as_deref()));
         #[cfg(target_os = "macos")]
         let current = crate::macos_pasteboard::change_count();
         #[cfg(not(target_os = "macos"))]
