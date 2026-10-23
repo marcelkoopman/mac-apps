@@ -6,6 +6,8 @@
 //! Prompts and picks have OK (default, Return) and Cancel (Escape) buttons. The titles follow
 //! [`crate::lang`]. A button whose title is the cancel label in either language ("Cancel" or
 //! "Annuleer") answers Escape, marked on the button rather than left to AppKit's English title.
+//! [`confirm_destructive`] is the exception: there Return and Escape both answer cancel, and
+//! the destructive button has no key.
 //!
 //! Do not start one while a menu is still tracking (see [`can_run_modal`]): run it from the
 //! event loop once the run loop is back in its default mode.
@@ -63,9 +65,11 @@ impl DestructiveAnswer {
     }
 }
 
-/// Ask before a destructive action. `cancel` is the default button (Return, and Escape);
-/// `action` is marked destructive (red on macOS 11+). With `dont_ask`, a checkbox with that
-/// title is shown under the message.
+/// Ask before a destructive action. `cancel` is the default button: Return answers it, and
+/// so does Escape (an invisible key catcher in the alert window, with the `widgets` feature;
+/// without it Escape alone answers cancel and Return does nothing). `action` is marked
+/// destructive (red on macOS 11+) and has no key: only a click (or Space with keyboard focus
+/// on it) runs it. With `dont_ask`, a checkbox with that title is shown under the message.
 pub fn confirm_destructive(
     mtm: MainThreadMarker,
     title: &str,
@@ -80,7 +84,11 @@ pub fn confirm_destructive(
     let alert = new_alert(mtm, title, message, &[cancel, action]);
     let buttons = alert.buttons();
     if let Some(cancel_button) = buttons.iter().next() {
-        cancel_button.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+        // Return belongs to cancel, the default button (`mark_cancel` gave it Escape; with
+        // `widgets` the key catcher below answers Escape instead).
+        if cfg!(feature = "widgets") {
+            cancel_button.setKeyEquivalent(&NSString::from_str("\r"));
+        }
         cancel_button.setAccessibilityLabel(Some(&NSString::from_str(cancel)));
     }
     if let Some(action_button) = buttons.iter().nth(1) {
@@ -98,11 +106,42 @@ pub fn confirm_destructive(
             check.setAccessibilityLabel(Some(&NSString::from_str(label)));
         }
     }
+    #[cfg(feature = "widgets")]
+    let escape = escape_answers_cancel(mtm, &alert);
     let index = button_index(run(mtm, &alert));
+    #[cfg(feature = "widgets")]
+    drop(escape);
     let suppressed = alert
         .suppressionButton()
         .is_some_and(|check| check.state() == NSControlStateValueOn);
     DestructiveAnswer::from_response(index, dont_ask.is_some() && suppressed)
+}
+
+/// Escape in `alert` ends it as its first button (cancel), as `cancelOperation:` would: a
+/// transparent 0 × 0 button in the alert window, keyed to Escape, that stops the modal session
+/// with the first button's response. It takes no focus and VoiceOver skips it. The returned
+/// target must outlive `runModal` (the button holds it weakly).
+#[cfg(feature = "widgets")]
+fn escape_answers_cancel(mtm: MainThreadMarker, alert: &NSAlert) -> Retained<preview::Watcher> {
+    use objc2_app_kit::{NSButton, NSView};
+    let watcher = preview::Watcher::new(
+        mtm,
+        Box::new(move || {
+            NSApplication::sharedApplication(mtm).stopModalWithCode(NSAlertFirstButtonReturn)
+        }),
+    );
+    alert.layout();
+    let catcher = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
+    catcher.setTransparent(true);
+    catcher.setRefusesFirstResponder(true);
+    catcher.setAccessibilityElement(false);
+    catcher.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+    crate::actions::connect(&catcher, &watcher, objc2::sel!(refresh:));
+    if let Some(content) = alert.window().contentView() {
+        let content: &NSView = &content;
+        content.addSubview(&catcher);
+    }
+    watcher
 }
 
 /// Show `labels` as buttons and return the index of the clicked one. The first label is the
