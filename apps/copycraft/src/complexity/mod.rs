@@ -116,10 +116,7 @@ pub enum Refused {
 /// [`analyze`] within the limits, with any panic caught: the card never goes down with it.
 pub fn analyze_guarded(text: &str, lang: Lang) -> Result<Vec<FnScore>, Refused> {
     if text.len() > MAX_BYTES || text.lines().nth(MAX_LINES).is_some() {
-        crate::diag::log(crate::diag::LogEvent::ComplexityTooLarge {
-            lang,
-            bytes: text.len(),
-        });
+        crate::diag::log(crate::diag::LogEvent::ComplexityTooLarge { bytes: text.len() });
         return Err(Refused::TooLarge);
     }
     std::panic::catch_unwind(|| analyze(text, lang)).map_err(|_| {

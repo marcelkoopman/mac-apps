@@ -261,9 +261,9 @@ fn secrets_are_reported_by_line_and_kind_never_by_value() {
     // The log events are counts only.
     let event = crate::diag::LogEvent::AgentChecked {
         warnings: warnings.len(),
-        secrets: found.len(),
     };
     assert!(!event.line().contains("ghp_"));
+    assert!(!event.line().contains("secret"), "no kind is logged");
     let event = crate::diag::LogEvent::AgentCommands { count: 1 };
     assert!(!event.line().contains("ghp_"));
 }

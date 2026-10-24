@@ -109,8 +109,9 @@ pub enum Skip {
     Paused,
     IgnoreNext,
     IgnoredApp,
-    /// It holds a credential ([`crate::sensitivity::Admission::Refuse`]).
-    Credential,
+    /// Kept out by what is in it ([`crate::sensitivity::Admission::Refuse`]). Which kind of
+    /// data that was is not logged.
+    Refused,
 }
 
 /// Everything copycraft logs. Only fixed names, numbers and kinds: see the module docs.
@@ -244,19 +245,18 @@ pub enum LogEvent {
     AgentOutline {
         headings: usize,
     },
-    /// Text ▾ › Check AGENTS.md found this many warnings, this many of them possible secrets.
+    /// Text ▾ › Check AGENTS.md found this many warnings (of any kind: whether one is a
+    /// possible secret is not logged).
     AgentChecked {
         warnings: usize,
-        secrets: usize,
     },
     /// A copy this large (bytes) was not kept in history: over the per-item limit.
     HistoryItemTooLarge {
         image: bool,
         bytes: usize,
     },
-    /// Text ▾ › Complexity refused a text this large (bytes).
+    /// Text ▾ › Complexity refused a text this large (bytes). Not its language.
     ComplexityTooLarge {
-        lang: crate::complexity::Lang,
         bytes: usize,
     },
     /// The complexity scanner panicked on a text this large (bytes); the panic was caught.
@@ -543,16 +543,12 @@ impl LogEvent {
             E::SaveFailed(k) => format!("save failed: {}", k.describe()),
             E::AgentCommands { count } => format!("agent commands: {count}"),
             E::AgentOutline { headings } => format!("agent outline: {headings} headings"),
-            E::AgentChecked { warnings, secrets } => {
-                format!("agent check: {warnings} warnings, {secrets} possible secrets")
-            }
+            E::AgentChecked { warnings } => format!("agent check: {warnings} warnings"),
             E::HistoryItemTooLarge { image, bytes } => {
                 let kind = if image { "image" } else { "text" };
                 format!("history: {kind} too large to keep ({bytes} bytes)")
             }
-            E::ComplexityTooLarge { lang, bytes } => {
-                format!("complexity: {lang:?} too large ({bytes} bytes)")
-            }
+            E::ComplexityTooLarge { bytes } => format!("complexity: too large ({bytes} bytes)"),
             E::ComplexityFailed { lang, bytes } => {
                 format!("complexity: {lang:?} scanner failed ({bytes} bytes)")
             }

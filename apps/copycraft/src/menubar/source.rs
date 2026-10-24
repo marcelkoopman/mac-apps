@@ -147,7 +147,7 @@ impl App {
                 }
                 Record::AfterCheck => self.dropped_text_wait.push(text),
                 Record::Never => crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                    crate::diag::Skip::Credential,
+                    crate::diag::Skip::Refused,
                 )),
             }
         }

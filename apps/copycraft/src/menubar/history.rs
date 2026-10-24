@@ -692,7 +692,7 @@ impl App {
             bytes.zeroize();
             self.skip_image_change = Some(change);
             crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                crate::diag::Skip::Credential,
+                crate::diag::Skip::Refused,
             ));
             return;
         }
@@ -815,7 +815,7 @@ impl App {
                     self.skip_record = Some(Zeroizing::new(text.to_string()));
                     self.browsing = None;
                     crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                        crate::diag::Skip::Credential,
+                        crate::diag::Skip::Refused,
                     ));
                     return;
                 }

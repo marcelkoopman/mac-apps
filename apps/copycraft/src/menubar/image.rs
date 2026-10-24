@@ -634,7 +634,7 @@ impl App {
         self.clipboard_cursor = clipboard_at.and_then(|kept| self.history.index_of(kept));
         self.history_emptied = self.history.is_empty();
         crate::diag::log(crate::diag::LogEvent::CopySkipped(
-            crate::diag::Skip::Credential,
+            crate::diag::Skip::Refused,
         ));
         self.after_history_edit();
     }

@@ -346,11 +346,8 @@ fn texts_over_the_limit_are_refused_not_scored() {
         crate::commands::complexity_refused(Refused::TooLarge),
         crate::locale::t("complexity_too_large")
     );
-    let event = crate::diag::LogEvent::ComplexityTooLarge {
-        lang: Lang::Java,
-        bytes: 9,
-    };
-    assert_eq!(event.line(), "complexity: Java too large (9 bytes)");
+    let event = crate::diag::LogEvent::ComplexityTooLarge { bytes: 9 };
+    assert_eq!(event.line(), "complexity: too large (9 bytes)");
 }
 
 /// xorshift64*: a small, seeded generator, so a failure repeats.

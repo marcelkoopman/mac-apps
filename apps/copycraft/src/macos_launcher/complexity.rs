@@ -66,10 +66,6 @@ pub fn show_agent_lists(check: bool) {
                 let warnings = crate::agent::check(&text);
                 crate::diag::log(crate::diag::LogEvent::AgentChecked {
                     warnings: warnings.len(),
-                    secrets: warnings
-                        .iter()
-                        .filter(|w| matches!(w, crate::agent::Warning::Secret { .. }))
-                        .count(),
                 });
                 let empty = warnings.is_empty();
                 let rows = commands::agent_check_rows(&warnings);
