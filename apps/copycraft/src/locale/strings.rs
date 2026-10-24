@@ -1851,8 +1851,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "text_not_kept",
-        "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd of app genegeerd)",
-        "Copied, not in history (recording paused or app ignored)",
+        "Gekopieerd, niet in de geschiedenis (opnemen gepauzeerd)",
+        "Copied, not in history (recording paused)",
     ),
     (
         "text_not_kept_secret",

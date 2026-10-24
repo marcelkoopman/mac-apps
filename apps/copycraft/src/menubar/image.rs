@@ -735,8 +735,8 @@ pub(crate) fn card_picture_due(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StepKeep {
     Keep,
-    /// Pause is on (for a text step also: an ignored app is in front): the copy is on the
-    /// clipboard only.
+    /// Pause is on: the copy is on the clipboard only. An ignored app in front does not hold a
+    /// step's copy, text or picture ([`step_keep`]).
     Paused,
     /// The picture's text holds a token, key or URL password.
     Secret,
