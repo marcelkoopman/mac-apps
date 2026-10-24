@@ -1860,6 +1860,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Copied, not in history (holds a token or key)",
     ),
     (
+        "text_not_kept_blank",
+        "Gekopieerd, niet in de geschiedenis (leeg)",
+        "Copied, not in history (empty)",
+    ),
+    (
         "image_not_kept_large",
         "Gekopieerd, niet in de geschiedenis (te groot)",
         "Copied, not in history (too large)",

@@ -160,7 +160,7 @@ impl App {
         match self.write_own_as(result, verdict.concealed) {
             Ok(()) => {
                 self.last_copy = Some(Instant::now());
-                if self.record_step_copy(result, verdict.admitted).1 {
+                if self.record_step_copy(result, verdict.admitted).1.is_ok() {
                     self.history_cursor = 0;
                     self.clipboard_cursor = None;
                     self.refresh_status_menu();
@@ -175,11 +175,19 @@ impl App {
 
     /// Record a step's copy `result` as an Image ▾ step's: the user asked for it, so an ignored
     /// front app does not hold it; Pause, a token or key (`admitted` false) or its size do.
-    /// Returns the verdict and whether history took it.
-    fn record_step_copy(&mut self, result: &str, admitted: bool) -> (StepKeep, bool) {
+    /// Returns the verdict and whether history took it (`Err` why not, when it was to be
+    /// kept; [`Refused::Held`] when the verdict held it back).
+    fn record_step_copy(
+        &mut self,
+        result: &str,
+        admitted: bool,
+    ) -> (StepKeep, Result<(), crate::clipboard::Refused>) {
         let keep = step_keep(crate::capture::history_paused(), admitted);
-        let recorded =
-            keep == StepKeep::Keep && self.history.record_unless(result.to_string(), false);
+        let recorded = if keep == StepKeep::Keep {
+            self.history.record_unless(result.to_string(), false)
+        } else {
+            Err(crate::clipboard::Refused::Held)
+        };
         (keep, recorded)
     }
 
@@ -421,7 +429,8 @@ impl App {
         self.last_copy = Some(Instant::now());
         // The new copy is the clipboard's: the card follows it again.
         self.browsing = None;
-        let (keep, recorded) = self.record_step_copy(result, admitted);
+        let (keep, taken) = self.record_step_copy(result, admitted);
+        let recorded = taken.is_ok();
         if cfg!(debug_assertions) {
             crate::diag::log(crate::diag::LogEvent::TextStepKept {
                 source_in_history: in_history,
@@ -444,7 +453,7 @@ impl App {
         if !recorded {
             // On the card that shows now (the result, or while held the entry history shows).
             let shown = self.text_entry().map_or(id, |(at, _)| at);
-            self.text_note = Some((shown, step_note(keep).to_string()));
+            self.text_note = Some((shown, step_note(keep, taken.err()).to_string()));
             self.reset_view();
             self.refresh_popup();
             return;

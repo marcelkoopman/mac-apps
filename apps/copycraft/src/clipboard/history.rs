@@ -1,5 +1,16 @@
 use super::*;
 
+/// Why history did not take a copy ([`ClipboardHistory::record_unless`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    /// Empty or only whitespace.
+    Blank,
+    /// Pause, or an ignored app in front.
+    Held,
+    /// Over history's size limit.
+    TooLarge,
+}
+
 #[derive(Default, Clone)]
 pub struct ClipboardHistory {
     entries: Vec<HistoryEntry>,
@@ -31,17 +42,28 @@ impl ClipboardHistory {
     /// pinned. An unpinned one further down is replaced by a fresh entry in front that keeps
     /// its id: a step back to an earlier text (A, B, A) is the same entry, so ⌘Z after it still
     /// finds the copy it was taken on.
-    /// Returns whether `text` is in history now (`false`: blank, or history is held).
+    /// Returns whether `text` is in history now (`false`: blank, too large, or history is
+    /// held).
     pub fn record(&mut self, text: String) -> bool {
         let held = self.held();
-        self.record_unless(text, held)
+        self.record_unless(text, held).is_ok()
     }
     /// [`Self::record`] with `held` given by the caller: a step's own copy passes Pause alone,
     /// so an ignored front app does not hold it (as [`Self::record_image_unless`]).
-    pub fn record_unless(&mut self, mut text: String, held: bool) -> bool {
-        if text.trim().is_empty() || held || too_large(text.len(), MAX_TEXT_BYTES, false) {
+    /// `Err` says why it is not in history.
+    pub fn record_unless(&mut self, mut text: String, held: bool) -> Result<(), Refused> {
+        let refused = if text.trim().is_empty() {
+            Some(Refused::Blank)
+        } else if held {
+            Some(Refused::Held)
+        } else if too_large(text.len(), MAX_TEXT_BYTES, false) {
+            Some(Refused::TooLarge)
+        } else {
+            None
+        };
+        if let Some(refused) = refused {
             text.zeroize();
-            return false;
+            return Err(refused);
         }
         let same = self.text_pos(&text);
         if let Some(index) = same
@@ -51,7 +73,7 @@ impl ClipboardHistory {
                 self.move_to_front(index);
             }
             text.zeroize();
-            return true;
+            return Ok(());
         }
         // An unpinned copy of it further down makes way for a fresh entry (its cards go), with
         // its id.
@@ -62,7 +84,7 @@ impl ClipboardHistory {
         self.removed = None;
         self.entries.insert(0, HistoryEntry::text(id, text));
         self.trim_unpinned();
-        true
+        Ok(())
     }
 
     /// History has `text` as an entry.

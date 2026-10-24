@@ -767,7 +767,7 @@ mod held_history {
     /// alone (`paused`), as an Image ▾ step's.
     fn text_step(history: &mut ClipboardHistory, source: &str, paused: bool) -> bool {
         let result = TextOp::Reverse.apply(source).expect("a result");
-        history.record_unless(result, paused)
+        history.record_unless(result, paused).is_ok()
     }
 
     #[test]
@@ -895,4 +895,24 @@ fn a_step_back_to_an_earlier_text_or_picture_is_the_same_entry() {
     assert_eq!(history.len(), 4);
     // History shares the new bytes (the step's handle), not the old ones.
     assert!(history.holds_image(&again));
+}
+
+#[test]
+fn a_copy_history_does_not_take_says_why() {
+    use super::{MAX_TEXT_BYTES, Refused};
+    let mut history = ClipboardHistory::default();
+    assert_eq!(
+        history.record_unless(" \n\t ".into(), false),
+        Err(Refused::Blank)
+    );
+    assert_eq!(
+        history.record_unless("text".into(), true),
+        Err(Refused::Held)
+    );
+    assert_eq!(
+        history.record_unless("x".repeat(MAX_TEXT_BYTES + 1), false),
+        Err(Refused::TooLarge)
+    );
+    assert_eq!(history.record_unless("text".into(), false), Ok(()));
+    assert_eq!(history.len(), 1);
 }

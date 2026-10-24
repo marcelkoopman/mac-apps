@@ -451,7 +451,7 @@ impl App {
             let Some(recorded) = recorded else {
                 // Not kept: the pasteboard has its own copy of the picture.
                 done.wipe();
-                self.image_note = Some((source.allocation_id(), step_note(keep).to_string()));
+                self.image_note = Some((source.allocation_id(), step_note(keep, None).to_string()));
                 return;
             };
             // A dropped or chosen picture: the card leaves it for the new copy.
@@ -757,12 +757,22 @@ pub(crate) fn step_keep(paused: bool, admitted: bool) -> StepKeep {
 }
 
 /// Why a step's copy is not in history, for the meta line: `keep` held it back, or (it was to
-/// be kept) history refused it as too large.
-pub(crate) fn step_note(keep: StepKeep) -> &'static str {
-    match keep {
-        StepKeep::Paused => crate::locale::t("text_not_kept"),
-        StepKeep::Secret => crate::locale::t("text_not_kept_secret"),
-        StepKeep::Keep => crate::locale::t("image_not_kept_large"),
+/// be kept) history refused it: `refused` says why (a picture's only reason is its size, so
+/// `None` reads as too large).
+pub(crate) fn step_note(
+    keep: StepKeep,
+    refused: Option<crate::clipboard::Refused>,
+) -> &'static str {
+    use crate::clipboard::Refused;
+    match (keep, refused) {
+        (StepKeep::Paused, _) | (StepKeep::Keep, Some(Refused::Held)) => {
+            crate::locale::t("text_not_kept")
+        }
+        (StepKeep::Secret, _) => crate::locale::t("text_not_kept_secret"),
+        (StepKeep::Keep, Some(Refused::Blank)) => crate::locale::t("text_not_kept_blank"),
+        (StepKeep::Keep, Some(Refused::TooLarge) | None) => {
+            crate::locale::t("image_not_kept_large")
+        }
     }
 }
 
@@ -823,16 +833,27 @@ mod step_tests {
     #[test]
     fn a_step_copy_left_out_says_why() {
         assert_eq!(
-            step_note(StepKeep::Paused),
+            step_note(StepKeep::Paused, None),
             crate::locale::t("text_not_kept")
         );
         assert_eq!(
-            step_note(StepKeep::Secret),
+            step_note(StepKeep::Secret, None),
             crate::locale::t("text_not_kept_secret")
         );
-        // Meant to be kept, refused by history: too large.
+        // Meant to be kept, refused by history: too large, or (a text) blank.
+        use crate::clipboard::Refused;
+        for refused in [None, Some(Refused::TooLarge)] {
+            assert_eq!(
+                step_note(StepKeep::Keep, refused),
+                crate::locale::t("image_not_kept_large")
+            );
+        }
         assert_eq!(
-            step_note(StepKeep::Keep),
+            step_note(StepKeep::Keep, Some(Refused::Blank)),
+            crate::locale::t("text_not_kept_blank")
+        );
+        assert_ne!(
+            crate::locale::t("text_not_kept_blank"),
             crate::locale::t("image_not_kept_large")
         );
     }
