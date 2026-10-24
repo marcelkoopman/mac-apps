@@ -52,7 +52,7 @@ impl TextResult {
     }
 }
 
-/// A step that makes a new version of the text.
+/// A step that makes a new copy of the text (⌘Z goes back to the one it was taken on).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub enum TextOp {

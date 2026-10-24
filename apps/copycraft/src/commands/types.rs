@@ -433,7 +433,7 @@ pub enum CommandId {
     TextMenu,
     /// Text ▾ › Complexity: cognitive complexity per function, in a menu.
     TextComplexity,
-    /// Text ▾ › Commands from AGENTS.md on agent instructions: their shell commands as a new version.
+    /// Text ▾ › Commands from AGENTS.md on agent instructions: their shell commands as a new copy.
     AgentCommands,
     /// Text ▾ › Heading Outline: the headings, each going to its line.
     AgentOutline,
@@ -443,24 +443,24 @@ pub enum CommandId {
     GotoLine(usize),
     /// Show or hide the line numbers of plain text cards (the well's numbers button).
     ToggleLineNumbers,
-    /// Ask for N, then keep the first N lines as a new version.
+    /// Ask for N, then keep the first N lines as a new copy.
     TextHead,
-    /// Ask for N, then keep the last N lines as a new version.
+    /// Ask for N, then keep the last N lines as a new copy.
     TextTail,
-    /// The lines in reverse order, as a new version.
+    /// The lines in reverse order, as a new copy.
     TextReverse,
-    /// Ask for a separator and a column, then keep that column as a new version.
+    /// Ask for a separator and a column, then keep that column as a new copy.
     TextColumn,
     /// Text ▾ › Filter (regex)…: keep the lines a pattern matches, like grep.
     TextFilter,
     /// Text ▾ › Clean URL… (and the chip on a link card): a preview of the URLs without their
-    /// tracking parameters, then Apply to Clipboard as a new version.
+    /// tracking parameters, then Apply to Clipboard as a new copy.
     TextCleanUrl,
     /// Text ▾ › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
-    /// clipboard as a new version.
+    /// clipboard as a new copy.
     TextJson,
     /// Text ▾ › Case style › a style: the dialog with that style picked, a preview, then
-    /// Apply to Clipboard as a new version.
+    /// Apply to Clipboard as a new copy.
     TextCase(crate::text_ops::case_style::CaseStyle),
     /// ⋯ › New: a UUID, the Unix time or ISO 8601 now, as a new card and on the clipboard.
     Generate(crate::generate::Generator),

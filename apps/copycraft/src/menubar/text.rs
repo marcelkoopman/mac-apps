@@ -647,7 +647,7 @@ impl App {
     }
 
     /// Clean URL…: how many tracking parameters go and the first cleaned URLs, worked out in
-    /// the background; Apply to Clipboard takes the step (a new version, ⌘Z goes back).
+    /// the background; Apply to Clipboard takes the step (a new copy, ⌘Z goes back).
     pub(crate) fn text_clean_url_prompt(&mut self) {
         #[cfg(target_os = "macos")]
         {
