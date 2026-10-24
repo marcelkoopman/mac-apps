@@ -150,12 +150,12 @@ define_class!(
 
         #[unsafe(method(tableWindowUndoClicked:))]
         fn undo_clicked(&self, _sender: Option<&AnyObject>) {
-            run(CommandId::TableUndo);
+            run(CommandId::StepBack);
         }
 
         #[unsafe(method(tableWindowRedoClicked:))]
         fn redo_clicked(&self, _sender: Option<&AnyObject>) {
-            run(CommandId::TableRedo);
+            run(CommandId::StepForward);
         }
 
         #[unsafe(method(tableWindowCopyClicked:))]

@@ -158,7 +158,7 @@ pub fn forget_chips() {
 /// Search finds undo and redo only when there is a version to go to; the menus show them
 /// dimmed instead.
 fn offered_in_search(command: &Command) -> bool {
-    command.enabled || !matches!(command.id, CommandId::TableUndo | CommandId::TableRedo)
+    command.enabled || !matches!(command.id, CommandId::StepBack | CommandId::StepForward)
 }
 
 pub fn search_pool(data: &LaunchData) -> Vec<Command> {

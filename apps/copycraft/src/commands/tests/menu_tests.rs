@@ -37,7 +37,7 @@ fn the_table_menu_has_five_items_and_sorts_by_each_column_in_submenus() {
         .label(),
         "Sorted by Price ↓"
     );
-    assert_eq!(menu_group(&CommandId::TableUndo), None);
+    assert_eq!(menu_group(&CommandId::StepBack), None);
     // Without a frame there are no columns to offer yet.
     let mut loading = table.clone();
     loading.frame = None;
@@ -185,8 +185,8 @@ fn menu_rows_show_the_chords_the_card_runs() {
     assert_eq!(menu_key(&CommandId::ChooseFile), Some(("o", false)));
     assert_eq!(menu_key(&CommandId::Settings), Some((",", false)));
     assert_eq!(menu_key(&CommandId::ToggleStrip), Some(("y", false)));
-    assert_eq!(menu_key(&CommandId::TableUndo), Some(("z", false)));
-    assert_eq!(menu_key(&CommandId::TableRedo), Some(("z", true)));
+    assert_eq!(menu_key(&CommandId::StepBack), Some(("z", false)));
+    assert_eq!(menu_key(&CommandId::StepForward), Some(("z", true)));
     assert_eq!(menu_key(&CommandId::Copy), None);
     assert_eq!(menu_key(&CommandId::History(0)), None);
     // ⌘Z / ⇧⌘Z after an Image ▾ step go between its copies, without a capsule or menu rows.
@@ -195,11 +195,11 @@ fn menu_rows_show_the_chords_the_card_runs() {
     let edit = edited.image_edit.as_ref();
     assert_eq!(
         image_undo_key("z", true, false, false, edit),
-        Some(CommandId::TableUndo)
+        Some(CommandId::StepBack)
     );
     assert_eq!(
         image_undo_key("z", true, true, false, edit),
-        Some(CommandId::TableRedo)
+        Some(CommandId::StepForward)
     );
     let menu = crate::commands::image_menu_items();
     assert!(menu.iter().all(|(cmd, _)| menu_key(&cmd.id).is_none()));

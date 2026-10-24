@@ -158,10 +158,10 @@ impl App {
                 let target = TableTarget::Window;
                 match id {
                     CommandId::TableStep(op) => self.table_step(target, op),
-                    CommandId::TableUndo => {
+                    CommandId::StepBack => {
                         self.table_goto(target, |cursor| cursor.checked_sub(1));
                     }
-                    CommandId::TableRedo => self.table_goto(target, |cursor| Some(cursor + 1)),
+                    CommandId::StepForward => self.table_goto(target, |cursor| Some(cursor + 1)),
                     CommandId::TableVersion(index) => self.table_goto(target, |_| Some(index)),
                     CommandId::TableDateOrder(month_first) => {
                         self.table_reread(target, |options| {

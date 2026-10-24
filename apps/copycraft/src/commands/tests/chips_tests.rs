@@ -270,21 +270,21 @@ fn undo_and_redo_are_in_the_search_not_in_the_table_menu() {
     let in_menu = |table: &TableShown| -> Vec<CommandId> {
         table_menu(Some(table)).into_iter().map(|c| c.id).collect()
     };
-    assert!(!in_menu(&table).contains(&CommandId::TableUndo));
+    assert!(!in_menu(&table).contains(&CommandId::StepBack));
     table.version = 0;
-    assert!(!in_menu(&table).contains(&CommandId::TableRedo));
-    assert!(keeps_card_open(&CommandId::TableUndo));
+    assert!(!in_menu(&table).contains(&CommandId::StepForward));
+    assert!(keeps_card_open(&CommandId::StepBack));
     let mut input = data(SubjectKind::Text, Some("name,n\na,1\na,1"));
     assert!(
         !search_pool(&input)
             .iter()
-            .any(|c| c.id == CommandId::TableRedo)
+            .any(|c| c.id == CommandId::StepForward)
     );
     input.table = Some(table);
     assert!(
         search_pool(&input)
             .iter()
-            .any(|c| c.id == CommandId::TableRedo)
+            .any(|c| c.id == CommandId::StepForward)
     );
 }
 
@@ -664,6 +664,6 @@ fn the_text_menu_is_split_into_lines_convert_and_analysis() {
         Some(crate::locale::t("text_section_lines"))
     );
     // The table menu keeps no headers.
-    assert!(text_sections(&[CommandId::TableUndo]).is_none());
+    assert!(text_sections(&[CommandId::StepBack]).is_none());
     assert!(text_sections(&[]).is_none());
 }

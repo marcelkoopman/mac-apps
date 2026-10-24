@@ -55,8 +55,8 @@ pub fn menu_key(id: &CommandId) -> Option<(&'static str, bool)> {
         CommandId::Settings => Some((",", false)),
         CommandId::ToggleStrip => Some(("y", false)),
         // Undo / Redo in Text ▾ and Image ▾ (Table ▾ has no undo rows).
-        CommandId::TableUndo => Some(("z", false)),
-        CommandId::TableRedo => Some(("z", true)),
+        CommandId::StepBack => Some(("z", false)),
+        CommandId::StepForward => Some(("z", true)),
         _ => None,
     }
 }

@@ -333,7 +333,7 @@ fn submenus_carry_the_icon_on_their_own_row() {
     ]));
     assert!(menu_shows_icons(&[
         CommandId::TextReverse,
-        CommandId::TableUndo
+        CommandId::StepBack
     ]));
 }
 

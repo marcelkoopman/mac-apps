@@ -146,9 +146,9 @@ fn step_key(
         return None;
     }
     if shift {
-        can_redo.then_some(CommandId::TableRedo)
+        can_redo.then_some(CommandId::StepForward)
     } else {
-        can_undo.then_some(CommandId::TableUndo)
+        can_undo.then_some(CommandId::StepBack)
     }
 }
 

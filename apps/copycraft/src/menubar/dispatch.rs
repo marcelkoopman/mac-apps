@@ -144,10 +144,10 @@ impl App {
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
             // On a text Text ▾ worked on, ⌘Z and ⇧⌘Z go between the copies its steps made.
-            CommandId::TableUndo if self.text_steps_shown() => {
+            CommandId::StepBack if self.text_steps_shown() => {
                 self.text_goto(|cursor| cursor.checked_sub(1));
             }
-            CommandId::TableRedo if self.text_steps_shown() => {
+            CommandId::StepForward if self.text_steps_shown() => {
                 self.text_goto(|cursor| Some(cursor + 1));
             }
             CommandId::ToggleLineNumbers => {
@@ -178,16 +178,16 @@ impl App {
             CommandId::AiUnavailable | CommandId::AiOnDevice => {}
             // On a picture card, ⌘Z and ⇧⌘Z go between the copies Image ▾ steps made (there is
             // no version capsule), as on a text Text ▾ stepped.
-            CommandId::TableUndo if self.shows_image() => {
+            CommandId::StepBack if self.shows_image() => {
                 self.image_goto(|cursor| cursor.checked_sub(1));
             }
-            CommandId::TableRedo if self.shows_image() => {
+            CommandId::StepForward if self.shows_image() => {
                 self.image_goto(|cursor| Some(cursor + 1))
             }
-            CommandId::TableUndo => {
+            CommandId::StepBack => {
                 self.table_goto(TableTarget::Card, |cursor| cursor.checked_sub(1));
             }
-            CommandId::TableRedo => self.table_goto(TableTarget::Card, |cursor| Some(cursor + 1)),
+            CommandId::StepForward => self.table_goto(TableTarget::Card, |cursor| Some(cursor + 1)),
             CommandId::TableVersion(index) => self.table_goto(TableTarget::Card, |_| Some(index)),
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),

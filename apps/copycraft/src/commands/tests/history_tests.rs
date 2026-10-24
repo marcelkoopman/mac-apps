@@ -33,7 +33,7 @@ fn a_picture_has_image_menu_and_no_version_bar() {
     assert!(
         !search_pool(&plain)
             .iter()
-            .any(|cmd| matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
+            .any(|cmd| matches!(cmd.id, CommandId::StepBack | CommandId::StepForward))
     );
     let grouped: Vec<Option<&str>> = menu.iter().map(|(cmd, _)| menu_group(&cmd.id)).collect();
     assert_eq!(grouped[..6], [Some("Resize"); 6]);
@@ -49,7 +49,7 @@ fn a_picture_has_image_menu_and_no_version_bar() {
     assert_eq!(VersionBar::of(&edited), None);
     assert_eq!(
         image_undo_key("z", true, false, false, edited.image_edit.as_ref()),
-        Some(CommandId::TableUndo)
+        Some(CommandId::StepBack)
     );
     assert_eq!(
         image_undo_key("Z", true, true, false, edited.image_edit.as_ref()),
@@ -119,14 +119,14 @@ fn command_z_undoes_and_shift_command_z_redoes_a_table_step() {
     };
     assert_eq!(
         undo_key("z", true, false, false, Some(&bar)),
-        Some(CommandId::TableUndo)
+        Some(CommandId::StepBack)
     );
     // Nothing to redo at the newest version; the key is left alone.
     assert_eq!(undo_key("Z", true, true, false, Some(&bar)), None);
     let back = VersionBar { current: 0, ..bar };
     assert_eq!(
         undo_key("Z", true, true, false, Some(&back)),
-        Some(CommandId::TableRedo)
+        Some(CommandId::StepForward)
     );
     assert_eq!(undo_key("z", true, false, false, Some(&back)), None);
     assert_eq!(undo_key("z", false, false, false, Some(&back)), None);
@@ -448,17 +448,17 @@ fn a_text_step_makes_a_new_copy_without_a_capsule_or_undo_rows() {
     assert!(
         text_menu_items(&edit)
             .iter()
-            .all(|(cmd, _)| !matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
+            .all(|(cmd, _)| !matches!(cmd.id, CommandId::StepBack | CommandId::StepForward))
     );
     assert!(
         !search_pool(&card)
             .iter()
-            .any(|cmd| matches!(cmd.id, CommandId::TableUndo | CommandId::TableRedo))
+            .any(|cmd| matches!(cmd.id, CommandId::StepBack | CommandId::StepForward))
     );
     // ⌘Z shows the copy the step was taken on; ⇧⌘Z has nothing to go to yet.
     assert_eq!(
         text_undo_key("z", true, false, false, Some(&edit)),
-        Some(CommandId::TableUndo)
+        Some(CommandId::StepBack)
     );
     assert_eq!(text_undo_key("Z", true, true, false, Some(&edit)), None);
     let back = TextShown {
@@ -467,7 +467,7 @@ fn a_text_step_makes_a_new_copy_without_a_capsule_or_undo_rows() {
     };
     assert_eq!(
         text_undo_key("Z", true, true, false, Some(&back)),
-        Some(CommandId::TableRedo)
+        Some(CommandId::StepForward)
     );
     assert_eq!(text_undo_key("z", true, false, false, Some(&back)), None);
     assert_eq!(text_undo_key("z", false, false, false, Some(&edit)), None);

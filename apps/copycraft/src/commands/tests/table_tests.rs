@@ -91,8 +91,8 @@ fn the_table_window_shows_the_version_with_its_meta_columns_versions_and_menu() 
     let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
     for not_in_menu in [
         CommandId::TableOpenWindow,
-        CommandId::TableUndo,
-        CommandId::TableRedo,
+        CommandId::StepBack,
+        CommandId::StepForward,
     ] {
         assert!(!ids.contains(&&not_in_menu), "{not_in_menu:?}");
     }

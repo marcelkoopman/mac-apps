@@ -324,8 +324,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Copy
             | CommandId::Save
             | CommandId::TableStep(_)
-            | CommandId::TableUndo
-            | CommandId::TableRedo
+            | CommandId::StepBack
+            | CommandId::StepForward
             | CommandId::TableVersion(_)
             | CommandId::TableMenu
             | CommandId::ImageMenu
@@ -474,8 +474,8 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",
         CommandId::TableChooseColumns => "checklist",
-        CommandId::TableUndo => "arrow.uturn.backward",
-        CommandId::TableRedo => "arrow.uturn.forward",
+        CommandId::StepBack => "arrow.uturn.backward",
+        CommandId::StepForward => "arrow.uturn.forward",
         CommandId::TextHead => "arrow.up.to.line",
         CommandId::TextTail => "arrow.down.to.line",
         CommandId::TextReverse => "arrow.up.arrow.down",

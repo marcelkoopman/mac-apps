@@ -745,12 +745,12 @@ define_class!(
 
         #[unsafe(method(tableUndoClicked:))]
         fn table_undo_clicked(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::TableUndo));
+            launcher::emit(UserEvent::Run(CommandId::StepBack));
         }
 
         #[unsafe(method(tableRedoClicked:))]
         fn table_redo_clicked(&self, _sender: Option<&NSButton>) {
-            launcher::emit(UserEvent::Run(CommandId::TableRedo));
+            launcher::emit(UserEvent::Run(CommandId::StepForward));
         }
 
         #[unsafe(method(versionsClicked:))]

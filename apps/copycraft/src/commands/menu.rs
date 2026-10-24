@@ -337,7 +337,7 @@ pub(crate) fn table_undo_redo(table: &TableShown) -> Vec<Command> {
     let mut commands = Vec::new();
     if table.can_undo() {
         commands.push(command(
-            CommandId::TableUndo,
+            CommandId::StepBack,
             crate::locale::t("undo_table_step"),
             &table.labels[table.version],
             "undo table version back",
@@ -345,7 +345,7 @@ pub(crate) fn table_undo_redo(table: &TableShown) -> Vec<Command> {
     }
     if table.can_redo() {
         commands.push(command(
-            CommandId::TableRedo,
+            CommandId::StepForward,
             crate::locale::t("redo_table_step"),
             &table.labels[table.version + 1],
             "redo table version forward",

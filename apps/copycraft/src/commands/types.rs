@@ -406,10 +406,11 @@ pub enum CommandId {
     KeepHistory(u32),
     /// A step on the table: a new version after the one shown ([`crate::table`]).
     TableStep(crate::table::TableOp),
-    /// Show the table version before the one shown.
-    TableUndo,
-    /// Show the table version after the one shown.
-    TableRedo,
+    /// ⌘Z: the table version before the one shown, or the copy before a Text ▾ or Image ▾
+    /// step's.
+    StepBack,
+    /// ⇧⌘Z: the table version after the one shown, or the copy after a step's.
+    StepForward,
     /// Show table version `n` (0 is the original), from the version capsule's menu.
     TableVersion(usize),
     /// Right-click on a cell of the table window's grid › Copy Cell: that cell's value, by
