@@ -115,39 +115,6 @@ impl TextOp {
         };
         (!out.trim().is_empty()).then_some(out)
     }
-
-    /// The version's name in the version capsule: "First 5 lines", "Column 2".
-    pub fn label(&self) -> String {
-        match self {
-            TextOp::Head(n) => crate::locale::tf("text_head_label", &[n]),
-            TextOp::Tail(n) => crate::locale::tf("text_tail_label", &[n]),
-            TextOp::Reverse => crate::locale::t("text_reverse_label").to_string(),
-            TextOp::AgentCommands => crate::locale::t("agent_commands").to_string(),
-            TextOp::CleanUrls => crate::locale::t("url_clean_label").to_string(),
-            TextOp::Case(style) => crate::locale::tf("case_label", &[&style.title()]),
-            TextOp::Encode(codec) => codec.label(),
-            TextOp::Hash(kind) => kind.label(),
-            TextOp::Json(style) => match (style.compress, style.sort) {
-                (false, false) => crate::locale::t("json_label_format"),
-                (false, true) => crate::locale::t("json_label_format_sorted"),
-                (true, false) => crate::locale::t("json_label_compress"),
-                (true, true) => crate::locale::t("json_label_compress_sorted"),
-            }
-            .to_string(),
-            TextOp::Column(_, n) => crate::locale::tf("text_column_label", &[n]),
-            TextOp::Filter {
-                pattern, invert, ..
-            } => {
-                // The pattern is the user's own; it is short and shown only in the capsule.
-                let short: String = pattern.chars().take(24).collect();
-                if *invert {
-                    crate::locale::tf("filter_label_invert", &[&short])
-                } else {
-                    crate::locale::tf("filter_label", &[&short])
-                }
-            }
-        }
-    }
 }
 
 /// How a line splits into columns.

@@ -295,7 +295,6 @@ fn the_commands_step_and_the_footer() {
     let step = crate::text_ops::TextOp::AgentCommands;
     let out = step.apply(AGENTS).unwrap();
     assert!(out.starts_with("rustup toolchain install stable\ncargo build\n"));
-    assert_eq!(step.label(), crate::locale::t("agent_commands"));
     let meta = crate::commands::text_meta(AGENTS);
     assert!(
         meta.contains(&format!("≈ {} tokens", token_estimate(AGENTS))),

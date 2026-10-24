@@ -469,7 +469,7 @@ impl App {
                     self.image_steps.take(),
                     id,
                     new_id,
-                    done.label,
+                    Some(done.label),
                 ));
             }
             self.image_note = None;
@@ -667,7 +667,7 @@ impl App {
             entry: entry as u64,
             label: steps
                 .filter(|steps| steps.cursor > 0)
-                .and_then(|steps| steps.labels.get(steps.cursor).cloned()),
+                .and_then(|steps| steps.labels.get(steps.cursor).cloned().flatten()),
             // Only to a copy history still has (a dropped file's picture may not be in it).
             can_undo: steps.is_some_and(|steps| {
                 steps.cursor > 0 && self.history.contains_id(steps.ids[steps.cursor - 1])

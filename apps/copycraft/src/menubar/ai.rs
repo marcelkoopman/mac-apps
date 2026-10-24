@@ -286,12 +286,7 @@ impl App {
             self.copy_ai_result(&result, &found);
             return;
         }
-        self.text_stepped(
-            run.entry,
-            commands::ai_label(run.action).to_string(),
-            &result,
-            &found,
-        );
+        self.text_stepped(run.entry, &result, &found);
     }
 
     /// Cancel, Esc or the card closing: stop the model and drop the result. The preview is

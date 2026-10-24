@@ -231,7 +231,6 @@ mod tests {
             "support_link",
             "sep_tab",
             "text_filter",
-            "filter_label",
             // "zoom 125%": the same word.
             "pdf_zoom",
             // A colour name, the same word in Dutch.

@@ -352,22 +352,6 @@ pub fn card_chips(data: &LaunchData) -> Vec<Command> {
     chips
 }
 
-/// The label of the version an applied `action` makes (the version capsule and its menu).
-pub fn ai_label(action: Action) -> &'static str {
-    match action {
-        Action::Summarize => crate::locale::t("ai_label_summarize"),
-        Action::Shorter => crate::locale::t("ai_label_shorter"),
-        Action::MoreFormal => crate::locale::t("ai_label_formal"),
-        Action::Proofread => crate::locale::t("ai_label_proofread"),
-        Action::Translate => crate::locale::t("ai_label_translate"),
-        Action::ExplainCode => crate::locale::t("ai_label_explain"),
-        Action::DocComment => crate::locale::t("ai_label_doc_comment"),
-        Action::ExplainStructure => crate::locale::t("ai_label_structure"),
-        Action::SummarizeRules => crate::locale::t("ai_label_summarize"),
-        Action::FindConflicts => crate::locale::t("ai_label_conflicts"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,7 +546,6 @@ mod tests {
             }
             for action in Action::ALL {
                 assert_ne!(ai_title(action), "?");
-                assert_ne!(ai_label(action), "?");
             }
             for key in ["ai_working", "ai_apply", "ai_apply_a11y", "ai_truncated"] {
                 assert_ne!(crate::locale::t(key), "?");

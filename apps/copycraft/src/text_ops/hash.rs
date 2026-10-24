@@ -43,20 +43,6 @@ impl HashKind {
         matches!(self, HashKind::Sha1 | HashKind::Md5)
     }
 
-    /// The algorithm's name: "SHA-256", "SHA-1", "MD5".
-    pub fn name(self) -> &'static str {
-        match self {
-            HashKind::Sha256 => "SHA-256",
-            HashKind::Sha1 => "SHA-1",
-            HashKind::Md5 => "MD5",
-        }
-    }
-
-    /// The version's name in the version capsule: "SHA-256 hash".
-    pub fn label(self) -> String {
-        crate::locale::tf("hash_label", &[&self.name()])
-    }
-
     /// The hash of `text`'s UTF-8 bytes as lowercase hex.
     pub fn hex(self, text: &str) -> String {
         let bytes = text.as_bytes();

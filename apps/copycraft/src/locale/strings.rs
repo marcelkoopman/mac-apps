@@ -1301,8 +1301,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("encoding_url_name", "URL-codering", "URL encoding"),
     ("encoding_hex_name", "hex", "hex"),
-    ("encoding_label_encoded", "{0} gecodeerd", "{0} encoded"),
-    ("encoding_label_decoded", "{0} gedecodeerd", "{0} decoded"),
     (
         "encoding_invalid",
         "Dit is geen geldige {0}",
@@ -1335,7 +1333,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Hash als hex in kleine letters; niet voor beveiliging (MD5 en SHA-1 zijn gebroken)",
         "Hash as lowercase hex; not for security (MD5 and SHA-1 are broken)",
     ),
-    ("hash_label", "{0}-hash", "{0} hash"),
     (
         "hash_not_kept",
         "Hash gekopieerd, niet in de geschiedenis (de tekst is gevoelig)",
@@ -1547,15 +1544,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Voorbeeld van het resultaat",
         "Preview of the result",
     ),
-    ("ai_label_summarize", "Samengevat", "Summarized"),
-    ("ai_label_shorter", "Korter", "Shorter"),
-    ("ai_label_formal", "Formeler", "More formal"),
-    ("ai_label_explain", "Uitleg", "Explanation"),
-    ("ai_label_proofread", "Gecorrigeerd", "Corrected"),
-    ("ai_label_doc_comment", "Commentaar", "Doc comment"),
-    ("ai_label_structure", "Structuur", "Structure"),
-    ("ai_label_conflicts", "Conflicten", "Conflicts"),
-    ("ai_label_translate", "Vertaald", "Translated"),
     ("text_complexity", "Meet complexiteit", "Measure Complexity"),
     (
         "agent_instructions",
@@ -1666,10 +1654,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("text_tail", "Laatste regels…", "Last Lines…"),
     ("text_reverse", "Keer regels om", "Reverse Lines"),
     ("text_column", "Kolom…", "Column…"),
-    ("text_head_label", "Eerste {0} regels", "First {0} lines"),
-    ("text_tail_label", "Laatste {0} regels", "Last {0} lines"),
-    ("text_reverse_label", "Omgekeerd", "Reversed"),
-    ("text_column_label", "Kolom {0}", "Column {0}"),
     (
         "text_head_prompt",
         "Hoeveel regels vanaf het begin?",
@@ -1729,12 +1713,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Patroon te groot of te zwaar",
         "Pattern too large or too heavy",
     ),
-    ("filter_label", "Filter: {0}", "Filter: {0}"),
-    (
-        "filter_label_invert",
-        "Filter zonder: {0}",
-        "Filter without: {0}",
-    ),
     // Text ▾ › Clean URL… (text_ops::url_clean)
     ("text_clean_url", "Schoon URL op…", "Clean URL…"),
     ("url_clean_title", "URL opschonen", "Clean URL"),
@@ -1758,7 +1736,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Geen trackingparameters gevonden",
         "No tracking parameters found",
     ),
-    ("url_clean_label", "URL opgeschoond", "URL cleaned"),
     ("text_apply", "Pas toe op klembord", "Apply to Clipboard"),
     // Text ▾ › Case style (text_ops::case_style)
     ("case_menu", "Hoofdletterstijl", "Case Style"),
@@ -1778,7 +1755,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Regels die veranderen: {0}",
         "Lines that change: {0}",
     ),
-    ("case_label", "Hoofdletterstijl: {0}", "Case style: {0}"),
     ("case_camel", "camelCase", "camelCase"),
     ("case_pascal", "PascalCase", "PascalCase"),
     ("case_snake", "snake_case", "snake_case"),
@@ -1817,22 +1793,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "json_numbers_lossy",
         "Een getal is te groot of te precies om ongewijzigd terug te schrijven.",
         "A number is too large or too precise to be written back unchanged.",
-    ),
-    ("json_label_format", "JSON opgemaakt", "JSON formatted"),
-    (
-        "json_label_format_sorted",
-        "JSON opgemaakt, gesorteerd",
-        "JSON formatted, sorted",
-    ),
-    (
-        "json_label_compress",
-        "JSON gecomprimeerd",
-        "JSON compressed",
-    ),
-    (
-        "json_label_compress_sorted",
-        "JSON gecomprimeerd, gesorteerd",
-        "JSON compressed, sorted",
     ),
     (
         "pager_status",

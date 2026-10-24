@@ -11,23 +11,32 @@ use crate::text_ops::{self, Separator, TextOp};
 pub(crate) const NOT_IN_HISTORY: u64 = u64::MAX;
 
 /// The copies Text ▾ (or Image ▾) steps made: the history entries they are, oldest first (the
-/// copy the first step was taken on, then one per step), and which is shown. Only ids and
-/// labels: the copies stay in history (and go when it forgets them).
+/// copy the first step was taken on, then one per step), and which is shown. Only ids and an
+/// Image ▾ step's name: the copies stay in history (and go when it forgets them).
 pub(crate) struct CopySteps {
     pub(crate) ids: Vec<u64>,
-    pub(crate) labels: Vec<String>,
+    /// Per copy, the name of the Image ▾ step that made it ("Rotated 90° left"), for the
+    /// picture card's meta line. `None` for the first copy and for a Text ▾ step, whose name
+    /// is not shown (a filter's would hold the user's pattern).
+    pub(crate) labels: Vec<Option<String>>,
     pub(crate) cursor: usize,
 }
 
 impl CopySteps {
-    /// A step on entry `id` made entry `new_id`, labelled `label`: `steps` go on from `id` when
-    /// they show it (the copies after it are dropped), else new steps start at `id`.
-    pub(crate) fn stepped(steps: Option<Self>, id: u64, new_id: u64, label: String) -> Self {
+    /// A step on entry `id` made entry `new_id`, named `label` (an Image ▾ step's): `steps` go
+    /// on from `id` when they show it (the copies after it are dropped), else new steps start
+    /// at `id`.
+    pub(crate) fn stepped(
+        steps: Option<Self>,
+        id: u64,
+        new_id: u64,
+        label: Option<String>,
+    ) -> Self {
         let mut steps = match steps {
             Some(steps) if steps.ids.get(steps.cursor) == Some(&id) => steps,
             _ => Self {
                 ids: vec![id],
-                labels: vec![crate::locale::t("original").to_string()],
+                labels: vec![None],
                 cursor: 0,
             },
         };
@@ -334,11 +343,10 @@ impl App {
                 self.refresh_popup();
             }
             text_ops::TextResult::Step {
-                op,
-                text: Some(result),
+                text: Some(result), ..
             } => {
                 let found = found.unwrap_or_else(|| crate::sensitivity::found(&result));
-                self.text_stepped(id, op.label(), &result, &found);
+                self.text_stepped(id, &result, &found);
             }
             // Names the code and the problem; the text itself is never shown or logged.
             text_ops::TextResult::Invalid { codec, reason } => {
@@ -349,7 +357,7 @@ impl App {
     }
 
     /// Copy a step's `result` as a new copy (a history entry of its own) taken from entry `id`,
-    /// labelled `label`, as an Image ▾ step does: the clipboard holds the result, the card
+    /// as an Image ▾ step does: the clipboard holds the result, the card
     /// shows it, ⌘Z shows entry `id` again. A copy that is not in history yet (the clipboard's
     /// at launch) goes in first, by the rules of any copy ([`keep_step_source`]). The result
     /// goes in as an Image ▾ step's ([`Self::record_step_copy`]): the user asked for it, so an
@@ -360,7 +368,6 @@ impl App {
     pub(crate) fn text_stepped(
         &mut self,
         id: u64,
-        label: String,
         result: &Zeroizing<String>,
         found: &crate::sensitivity::Found,
     ) {
@@ -443,12 +450,7 @@ impl App {
             return;
         }
         if let Some(new_id) = self.history.id_at(0) {
-            self.text_steps = Some(CopySteps::stepped(
-                self.text_steps.take(),
-                id,
-                new_id,
-                label,
-            ));
+            self.text_steps = Some(CopySteps::stepped(self.text_steps.take(), id, new_id, None));
         }
         self.text_note = None;
         self.reset_view();

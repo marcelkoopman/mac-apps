@@ -76,15 +76,6 @@ impl Codec {
         )
     }
 
-    /// The version's name in the version capsule: "Base64 encoded", "Hex decoded".
-    pub fn label(self) -> String {
-        if self.encodes() {
-            crate::locale::tf("encoding_label_encoded", &[&self.code_name()])
-        } else {
-            crate::locale::tf("encoding_label_decoded", &[&self.code_name()])
-        }
-    }
-
     /// The note when `reason` stopped a decode. Content-free.
     pub fn invalid_note(self, reason: Invalid) -> String {
         match reason {
@@ -309,10 +300,9 @@ mod tests {
     }
 
     #[test]
-    fn every_codec_has_a_title_and_a_label() {
+    fn every_codec_has_a_title() {
         for codec in Codec::ALL {
             assert_ne!(codec.title(), "?", "{codec:?}");
-            assert!(!codec.label().is_empty());
         }
         assert_eq!(Codec::ALL.iter().filter(|codec| codec.encodes()).count(), 4);
     }

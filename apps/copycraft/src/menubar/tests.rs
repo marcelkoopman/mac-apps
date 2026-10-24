@@ -369,21 +369,21 @@ fn lines_works_on_the_text_the_card_was_built_from() {
 #[test]
 fn copy_steps_go_on_from_the_shown_copy_and_start_over_elsewhere() {
     use super::text::CopySteps;
-    let steps = CopySteps::stepped(None, 1, 2, "Grayscale".into());
+    let steps = CopySteps::stepped(None, 1, 2, Some("Grayscale".into()));
+    assert_eq!(steps.labels, [None, Some("Grayscale".to_string())]);
     assert_eq!(steps.ids, [1, 2]);
     assert_eq!(steps.cursor, 1);
-    assert_eq!(steps.labels[1], "Grayscale");
     // The next step on the shown copy goes on.
-    let mut steps = CopySteps::stepped(Some(steps), 2, 3, "Flip Vertical".into());
+    let mut steps = CopySteps::stepped(Some(steps), 2, 3, None);
     assert_eq!(steps.ids, [1, 2, 3]);
     // ⌘Z back to the first copy, then a step from there drops the later ones.
     steps.cursor = 0;
     assert!(CopySteps::showing(Some(&steps), 1).is_some());
     assert!(CopySteps::showing(Some(&steps), 3).is_none());
-    let steps = CopySteps::stepped(Some(steps), 1, 4, "Rotate 90° Left".into());
+    let steps = CopySteps::stepped(Some(steps), 1, 4, None);
     assert_eq!(steps.ids, [1, 4]);
     // A step on another copy starts new steps.
-    let steps = CopySteps::stepped(Some(steps), 9, 10, "Grayscale".into());
+    let steps = CopySteps::stepped(Some(steps), 9, 10, None);
     assert_eq!(steps.ids, [9, 10]);
 }
 
