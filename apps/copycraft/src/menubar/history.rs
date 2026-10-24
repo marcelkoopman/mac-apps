@@ -278,17 +278,15 @@ impl App {
         crate::capture::on_session_end();
         #[cfg(target_os = "macos")]
         crate::macos_settings::refresh_ignored_field();
-        discard_preview_files();
         self.last_copy = None;
-        self.full_card = None;
-        // Closed and wiped whatever history holds (a chosen file's window too), pins included.
-        self.close_table_window();
-        self.clear_diff();
-        if end_session_history(&mut self.history) {
-            self.forget_entries(true);
+        // What Wipe forgets besides the pasteboard, also with history empty: the card's text,
+        // file and picture, the steps, the AI run and the table window (pins included).
+        self.forget_held_state();
+        let had_entries = end_session_history(&mut self.history);
+        // History (now or already empty) and the copy on the clipboard is not recorded again.
+        self.forget_entries(true);
+        if had_entries {
             crate::diag::log(crate::diag::LogEvent::HistoryForgottenLock);
-        } else if launcher::is_open() {
-            self.refresh_popup();
         }
     }
 
@@ -301,9 +299,11 @@ impl App {
         Ok(())
     }
 
-    /// Overwrite clipboard text and image bytes still held in this process,
-    /// then empty the pasteboard.
-    pub(crate) fn clear_secrets(&mut self) {
+    /// Everything Wipe and a lock forget besides history itself: the card's text, file and
+    /// picture, what is waiting for a check, the steps (⌘Z), their notes and running jobs (a
+    /// result still on its way is dropped), the AI run, the table window and what the card
+    /// showed. The one routine for both, so neither can miss a part.
+    pub(crate) fn forget_held_state(&mut self) {
         discard_preview_files();
         self.clear_diff();
         self.forget_decoded_picture();
@@ -320,30 +320,42 @@ impl App {
         self.loose_text = None;
         self.cancel_image_job();
         self.image_note = None;
+        self.image_steps = None;
+        self.text_steps = None;
+        self.text_note = None;
+        // A Text ▾ result still on its way is for a copy that is gone.
+        self.text_generation = self.text_generation.wrapping_add(1);
+        self.ai_stop();
         self.cancel_table_job();
         self.table_error = None;
         self.full_card = None;
-        self.history.clear();
-        self.pin_refused = false;
-        self.history_emptied = false;
         self.current_image = None;
         self.image_on_pasteboard = None;
         self.drop_card_picture();
         self.card_picture_asked = None;
         self.unchecked_source = None;
-        self.history_cursor = 0;
-        self.clipboard_cursor = None;
-        self.recorded_image_change = None;
-        self.skip_image_change = None;
         self.reset_view();
         self.image_scan = None;
         self.image_scan_change = None;
         self.image_scan_for = None;
-        self.skip_record = None;
         #[cfg(target_os = "macos")]
         crate::macos_pasteboard::zeroize_caches();
         crate::memo::forget_all();
         launcher::wipe_shown();
+    }
+
+    /// Overwrite clipboard text and image bytes still held in this process,
+    /// then empty the pasteboard.
+    pub(crate) fn clear_secrets(&mut self) {
+        self.forget_held_state();
+        self.history.clear();
+        self.pin_refused = false;
+        self.history_emptied = false;
+        self.history_cursor = 0;
+        self.clipboard_cursor = None;
+        self.recorded_image_change = None;
+        self.skip_image_change = None;
+        self.skip_record = None;
         if let Err(e) = clipboard::clear_clipboard() {
             crate::diag::log(crate::diag::LogEvent::ClearClipboardFailed(
                 crate::diag::ErrorKind::from_text(&e),

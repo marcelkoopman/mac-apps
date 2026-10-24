@@ -502,3 +502,46 @@ fn a_step_result_for_a_copy_the_card_no_longer_shows_is_dropped() {
     // Another entry with the same text is another copy too.
     assert!(!card_still_shows(3, started_on, Some(&(4, a))));
 }
+
+/// The body of `fn name` in `src`, up to the next method.
+fn method_body<'a>(src: &'a str, name: &str) -> &'a str {
+    let start = src
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("{name}"));
+    let rest = &src[start..];
+    &rest[..rest.find("\n    }\n").unwrap_or(rest.len())]
+}
+
+#[test]
+fn wipe_and_lock_forget_the_steps_and_the_card_alike() {
+    let src = include_str!("history.rs");
+    let held = method_body(src, "forget_held_state");
+    for part in [
+        "self.text_steps = None;",
+        "self.image_steps = None;",
+        "self.text_note = None;",
+        "self.image_note = None;",
+        "self.text_generation = self.text_generation.wrapping_add(1);",
+        "self.ai_stop();",
+        "self.cancel_image_job();",
+        "self.opened = None;",
+        "self.card_text = None;",
+        "self.browsing = None;",
+        "self.loose_text = None;",
+        "self.dropped_text_wait.clear();",
+        "self.polled_unchecked.clear();",
+        "launcher::wipe_shown();",
+    ] {
+        assert!(held.contains(part), "forget_held_state misses {part}");
+    }
+    for caller in ["clear_secrets", "session_ended"] {
+        assert!(
+            method_body(src, caller).contains("self.forget_held_state();"),
+            "{caller} forgets the card and the steps"
+        );
+    }
+    // A lock forgets history (and skips the clipboard's copy) also when history is empty.
+    let lock = method_body(src, "session_ended");
+    assert!(lock.contains("self.forget_entries(true);"));
+    assert!(!lock.contains("if end_session_history"));
+}
