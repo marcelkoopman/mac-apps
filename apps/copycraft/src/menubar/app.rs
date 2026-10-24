@@ -44,7 +44,8 @@ pub(crate) struct App {
     pub(crate) card_view: CardView,
     /// File on the card. Absent means the card follows the clipboard.
     pub(crate) opened: Option<crate::open_file::OpenedFile>,
-    /// Dropped, pasted or chosen long texts whose labels were still being checked: recorded
+    /// Dropped, pasted or chosen long texts, and CopyCraft's own long copies
+    /// ([`App::record_own_copy`]), whose labels were still being checked: recorded
     /// by [`App::labels_checked`] once they are in, if they hold no credential
     /// ([`crate::sensitivity::Record::AfterCheck`]), also when the card moved on by then. Only
     /// Wipe and Clear History drop them.

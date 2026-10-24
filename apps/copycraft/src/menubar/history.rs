@@ -607,15 +607,25 @@ impl App {
     /// the menu): the newest copy in history. The poller skips copycraft's own writes, so this
     /// is where they are recorded.
     /// Put copycraft's own copy into history. Returns `false` when history is held (recording
-    /// paused, or an ignored app in front): the clipboard has it, history does not.
+    /// paused, or an ignored app in front), when it holds a credential, or when it is long and
+    /// its labels are still being checked (recorded later): the clipboard has it, history does
+    /// not (yet).
     pub(crate) fn record_own_copy(&mut self, text: &str) -> bool {
         self.last_copy = Some(Instant::now());
         // CopyCraft's own copy of a token, key or URL password stays out of history too. A long
-        // copy whose labels are not in yet is kept: it was already in history or a step on it.
-        if crate::sensitivity::admission(&crate::sensitivity::labeling(text))
-            == crate::sensitivity::Admission::Refuse
-        {
-            return false;
+        // copy whose labels are not in yet waits for them, as a long drop does: `labels_checked`
+        // records it then, unless it holds a credential.
+        use crate::sensitivity::Record;
+        match crate::sensitivity::record_when(crate::sensitivity::admission(
+            &crate::sensitivity::labeling(text),
+        )) {
+            Record::Now => {}
+            Record::AfterCheck => {
+                self.dropped_text_wait
+                    .push(Zeroizing::new(text.to_string()));
+                return false;
+            }
+            Record::Never => return false,
         }
         if !self.history.record(text.to_string()) {
             return false;

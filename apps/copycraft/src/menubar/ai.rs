@@ -275,19 +275,22 @@ impl App {
         // A cut text is not overwritten (its end would be lost), and neither is a card that is
         // not the one the run was started for (a new copy came in meanwhile): the result only
         // goes to the clipboard.
+        // An AI result is short (the model's answer), so its labels are found here.
+        let found = crate::sensitivity::found(&result);
         if !apply_makes_version_of(
             run.truncated,
             run.entry,
             run.input_hash,
             self.ai_entry().as_ref(),
         ) {
-            self.copy_ai_result(&result);
+            self.copy_ai_result(&result, &found);
             return;
         }
         self.text_stepped(
             run.entry,
             commands::ai_label(run.action).to_string(),
             &result,
+            &found,
         );
     }
 

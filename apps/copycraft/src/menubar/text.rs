@@ -56,6 +56,17 @@ pub(crate) enum StepsOf {
 /// entry in history, if it has one ([`App::text_stepped`]).
 const OPENED_FILE: u64 = u64::MAX - 1;
 
+/// The labels of a Text ▾ step's text, found where the step ran (also for a long one, which
+/// the card would hand to the background checker). `None` when the step left no text.
+pub(crate) fn step_labels(result: &text_ops::TextResult) -> Option<crate::sensitivity::Found> {
+    match result {
+        text_ops::TextResult::Step {
+            text: Some(text), ..
+        } => Some(crate::sensitivity::found(text)),
+        _ => None,
+    }
+}
+
 /// The text a card for `data` shows, for Text ▾: its text subject.
 pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
     data.subject_text
@@ -130,13 +141,17 @@ impl App {
 
     /// A result that is no step on the card (an applied AI result for a card that moved on,
     /// or for a scanned PDF): a new copy, in history by the rules of CopyCraft's own copies.
-    pub(crate) fn copy_ai_result(&mut self, result: &Zeroizing<String>) {
-        match self.write_own(result) {
+    /// `found` holds its labels ([`crate::sensitivity::copy_verdict`]).
+    pub(crate) fn copy_ai_result(
+        &mut self,
+        result: &Zeroizing<String>,
+        found: &crate::sensitivity::Found,
+    ) {
+        let verdict = crate::sensitivity::copy_verdict(found);
+        match self.write_own_as(result, verdict.concealed) {
             Ok(()) => {
                 self.last_copy = Some(Instant::now());
-                let admitted = crate::sensitivity::admission(&crate::sensitivity::labeling(result))
-                    != crate::sensitivity::Admission::Refuse;
-                if self.record_step_copy(result, admitted).1 {
+                if self.record_step_copy(result, verdict.admitted).1 {
                     self.history_cursor = 0;
                     self.clipboard_cursor = None;
                     self.refresh_status_menu();
@@ -266,10 +281,14 @@ impl App {
             .name("copycraft-text".into())
             .spawn(move || {
                 let result = text_ops::TextResult::work(&text, &op);
+                // A long result's labels too, here and not on the main thread: a token or key
+                // in it keeps it out of history at once ([`App::text_stepped`]).
+                let found = step_labels(&result);
                 launcher::emit(UserEvent::TextReady {
                     generation,
                     entry,
                     result: Box::new(result),
+                    found,
                 });
             });
         match spawned {
@@ -285,6 +304,7 @@ impl App {
         generation: u64,
         entry: u64,
         result: text_ops::TextResult,
+        found: Option<crate::sensitivity::Found>,
     ) {
         if generation != self.text_generation {
             return;
@@ -308,7 +328,10 @@ impl App {
             text_ops::TextResult::Step {
                 op,
                 text: Some(result),
-            } => self.text_stepped(id, op.label(), &result),
+            } => {
+                let found = found.unwrap_or_else(|| crate::sensitivity::found(&result));
+                self.text_stepped(id, op.label(), &result, &found);
+            }
             // Names the code and the problem; the text itself is never shown or logged.
             text_ops::TextResult::Invalid { codec, reason } => {
                 self.text_note = Some((id, codec.invalid_note(reason)));
@@ -324,12 +347,19 @@ impl App {
     /// goes in as an Image ▾ step's ([`Self::record_step_copy`]): the user asked for it, so an
     /// ignored front app does not hold it; Pause, a token or key in it, or its size keep it
     /// out, with a note. On an opened file the card leaves
-    /// the file for the new copy.
-    pub(crate) fn text_stepped(&mut self, id: u64, label: String, result: &Zeroizing<String>) {
+    /// the file for the new copy. `found` holds the result's labels, also for a long one
+    /// ([`crate::sensitivity::copy_verdict`]).
+    pub(crate) fn text_stepped(
+        &mut self,
+        id: u64,
+        label: String,
+        result: &Zeroizing<String>,
+        found: &crate::sensitivity::Found,
+    ) {
         let Some((entry, source)) = self.text_entry().filter(|(entry, _)| *entry == id) else {
             // The card moved on (or a scanned PDF, which has no text of its own): the result
             // is a copy like any other.
-            self.copy_ai_result(result);
+            self.copy_ai_result(result, found);
             return;
         };
         let from_file = entry == OPENED_FILE;
@@ -365,9 +395,9 @@ impl App {
         if source_kept && let Some(kept) = self.history.id_at(0) {
             id = kept;
         }
-        let admitted = crate::sensitivity::admission(&crate::sensitivity::labeling(result))
-            != crate::sensitivity::Admission::Refuse;
-        if let Err(e) = self.write_own(result) {
+        let verdict = crate::sensitivity::copy_verdict(found);
+        let admitted = verdict.admitted;
+        if let Err(e) = self.write_own_as(result, verdict.concealed) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
             ));

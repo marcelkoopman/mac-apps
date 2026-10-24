@@ -473,3 +473,7 @@ Mac only, no data.
 - [ ] Taken out late: copy a screenshot of a text with a made-up token (`ghp_` and 36 letters/digits). Its tile shows at once and goes away after its text is read (a few seconds); it does not come back, not even after closing and opening the card. *Copy* of another tile still works.
 - [ ] Still kept out: with *Pause* on, or with an ignored app in front, or with a private copy (1Password), a copied picture gets no tile.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows `image admitted at once: checked false` then `image checked: retracted false` (or `true` for the token), never a file name or text.
+
+### Review fixes (Oct 2026)
+
+- [ ] Long step with a key: make a JSON file of over 32 KB with `"aws": "AKIAIOSFODNN7EXAMPLE"` in it (for example `python3 -c 'print("[" + ",".join(["{\"k\": \"plain value\"}"]*2000) + ",{\"aws\": \"AKIAIOSFODNN7EXAMPLE\"}]")' > /tmp/big.json`), drop it on the card and take *Format JSON* (or *Text ▾ › Reverse Lines*): the result is on the clipboard (concealed: a clipboard manager that honours it does not show it) and the card notes it is not in history; the strip and the history menu do not have it. The same file without the key: the result is in history.

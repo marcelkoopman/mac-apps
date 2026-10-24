@@ -84,7 +84,8 @@ impl ApplicationHandler<UserEvent> for App {
                 generation,
                 entry,
                 result,
-            } => self.finish_text(generation, entry, *result),
+                found,
+            } => self.finish_text(generation, entry, *result, found),
             UserEvent::Notification(event) => self.notification_event(event),
         }
     }

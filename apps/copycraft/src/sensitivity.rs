@@ -133,6 +133,18 @@ pub fn picture_verdict(recognised: Option<&str>) -> PictureVerdict {
     }
 }
 
+/// How CopyCraft's own copy of a text with labels `found` goes on the clipboard and into
+/// history (a Text ▾ step's result, an AI result): concealed with any label, kept out of
+/// history with a credential. Its labels are always known here, never still being checked: a
+/// long step result is checked on the step's own thread, so a token or key in it cannot slip
+/// into history while the background checker is on it. Pure.
+pub fn copy_verdict(found: &Found) -> PictureVerdict {
+    PictureVerdict {
+        concealed: !found.labels.is_empty(),
+        admitted: !found.labels.contains(&Label::Credential),
+    }
+}
+
 /// What an Image ▾ step's own recognition changes about its copy, made with `before`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Recheck {

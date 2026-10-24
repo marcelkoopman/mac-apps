@@ -445,3 +445,40 @@ fn the_strip_forgets_the_drawn_picture_of_a_card_taken_out() {
         &[thumb(None)]
     ));
 }
+
+#[test]
+fn a_long_step_result_with_a_key_stays_out_of_history() {
+    use super::text::step_labels;
+    use crate::sensitivity::{Admission, Labeling, admission, copy_verdict};
+    use crate::text_ops::{TextOp, TextResult};
+    // Over the 32 KB the card hands to the background checker.
+    let mut long = "{\"k\": \"plain value\"},\n".repeat(2_000);
+    long.push_str("{\"aws\": \"AKIAIOSFODNN7EXAMPLE\"}\n");
+    assert!(long.len() > crate::sensitivity::SYNC_LIMIT);
+    let result = TextResult::Step {
+        op: TextOp::Reverse,
+        text: Some(Zeroizing::new(long.clone())),
+    };
+    let found = step_labels(&result).expect("a step with text has labels");
+    let verdict = copy_verdict(&found);
+    assert!(!verdict.admitted, "a key in a long result keeps it out");
+    assert!(verdict.concealed);
+    // The old check let a long result in while its labels were still being checked.
+    assert_ne!(
+        admission(&Labeling::Checking),
+        Admission::Refuse,
+        "still checking is no refusal: that is why the labels are found on the step's thread"
+    );
+    // Plain long text: in history, not concealed.
+    let plain = "{\"k\": \"plain value\"},\n".repeat(2_000);
+    let verdict = copy_verdict(&crate::sensitivity::found(&plain));
+    assert!(verdict.admitted && !verdict.concealed);
+    // A step that left no text has nothing to check.
+    assert!(
+        step_labels(&TextResult::Step {
+            op: TextOp::Reverse,
+            text: None
+        })
+        .is_none()
+    );
+}

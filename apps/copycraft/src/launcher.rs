@@ -106,6 +106,9 @@ pub enum UserEvent {
         generation: u64,
         entry: u64,
         result: Box<crate::text_ops::TextResult>,
+        /// The labels of the step's text, found on the step's thread ([`crate::menubar`]'s
+        /// `step_labels`). Never the text.
+        found: Option<crate::sensitivity::Found>,
     },
     /// Something about notifications ([`crate::notifications`]).
     Notification(NotificationEvent),
