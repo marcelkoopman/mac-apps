@@ -1,0 +1,175 @@
+//! The tray menu and the welcome window. Part of the catalog in `strings.rs`, whose glossary holds here too.
+
+pub(super) const STRINGS: &[(&str, &str, &str)] = &[
+    // Tray / overflow
+    ("settings", "Instellingen…", "Settings…"),
+    ("about", "Over CopyCraft", "About CopyCraft"),
+    ("welcome_menu", "Welkomstscherm", "Welcome Screen"),
+    // Welcome window
+    (
+        "welcome_title",
+        "Welkom bij CopyCraft",
+        "Welcome to CopyCraft",
+    ),
+    (
+        "welcome_hotkey",
+        "Open CopyCraft vanuit elke app met {0}.",
+        "Open CopyCraft from any app with {0}.",
+    ),
+    (
+        "welcome_history",
+        "Standaard leest CopyCraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
+        "By default CopyCraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
+    ),
+    (
+        "welcome_history_choice",
+        "Zet je dit aan, dan leest CopyCraft elke kopie, alleen in het geheugen; weg bij stoppen of vergrendelen, en na de bewaartermijn (5, 15 of 60 min) als je die kiest. macOS vraagt één keer of CopyCraft andere apps mag lezen. Anders alleen wat je in de kaart plakt of neerzet.",
+        "When on, CopyCraft reads every copy, in memory only; gone when you quit or lock, and after the retention time (5, 15 or 60 min) if you pick one. macOS asks once whether CopyCraft may read other apps. Otherwise only what you paste or drop on the card.",
+    ),
+    (
+        "clipboard_history",
+        "Klembordgeschiedenis bijhouden",
+        "Keep clipboard history",
+    ),
+    (
+        "clipboard_history_note",
+        "Leest elke kopie, alleen in het geheugen; weg bij stoppen of vergrendelen. macOS vraagt één keer of CopyCraft andere apps mag lezen.",
+        "Reads every copy, in memory only; gone when you quit or lock. macOS asks once whether CopyCraft may read other apps.",
+    ),
+    (
+        "welcome_local",
+        "Alles blijft lokaal op je Mac, zonder internet.",
+        "Everything stays local on your Mac, no internet.",
+    ),
+    (
+        "welcome_sensitive",
+        "Wachtwoorden uit een wachtwoordbeheerder en herkende tokens en sleutels blijven buiten de geschiedenis.",
+        "Passwords from password managers and recognised tokens and keys stay out of history.",
+    ),
+    (
+        "welcome_way_back",
+        "Is het menubalkpictogram verborgen? Open CopyCraft dan opnieuw vanuit de Finder of met {0}.",
+        "Menu bar icon hidden? Open CopyCraft again from the Finder or with {0}.",
+    ),
+    ("welcome_start", "Aan de slag", "Get Started"),
+    (
+        "welcome_login_failed",
+        "{0}\n\nJe kunt het ook aanzetten in Systeeminstellingen › Algemeen › Inlogonderdelen.",
+        "{0}\n\nYou can also turn it on in System Settings › General › Login Items.",
+    ),
+    ("quit", "Stop", "Quit"),
+    ("history", "Geschiedenis", "History"),
+    (
+        "allow_screenshots",
+        "Schermafbeeldingen toestaan",
+        "Allow Screenshots",
+    ),
+    ("empty_pasteboard", "Leeg klembord", "Empty Clipboard"),
+    ("clear_history", "Wis geschiedenis", "Clear History"),
+    ("pause_recording", "Pauzeer opname", "Pause Recording"),
+    ("ignore_next", "Negeer volgende kopie", "Ignore Next Copy"),
+    (
+        "ignore_front_app",
+        "Negeer kopieën van de voorste app",
+        "Ignore Copies from the Frontmost App",
+    ),
+    ("pin", "Zet vast", "Pin"),
+    ("unpin", "Maak los", "Unpin"),
+    ("pinned", "Vastgezet", "Pinned"),
+    (
+        "remove_history",
+        "Verwijder uit geschiedenis",
+        "Remove from History",
+    ),
+    (
+        "history_remove_item",
+        "Verwijder uit geschiedenis",
+        "Remove from History",
+    ),
+    ("clear_pins", "Wis vastgezette items", "Clear Pins"),
+    (
+        "pin_list_full",
+        "De vastgezette lijst is vol",
+        "The pin list is full",
+    ),
+    ("group_notifications", "Meldingen", "Notifications"),
+    ("notify_switch_ai", "AI-actie klaar", "AI action done"),
+    (
+        "notify_switch_ocr",
+        "PDF-herkenning klaar",
+        "PDF recognition done",
+    ),
+    ("notify_switch_errors", "Fouten", "Errors"),
+    ("notify_switch_secret", "Gevoelige kopie", "Sensitive copy"),
+    (
+        "clear_sensitive_notify_hint",
+        "Een melding bij een gevoelige kopie: Algemeen › Meldingen › Gevoelige kopie.",
+        "A notification for a sensitive copy: General › Notifications › Sensitive copy.",
+    ),
+    (
+        "notify_note",
+        "Een melding bevat nooit je tekst.",
+        "A notification never contains your text.",
+    ),
+    (
+        "notify_off",
+        "Meldingen staan uit voor CopyCraft",
+        "Notifications are off for CopyCraft",
+    ),
+    (
+        "notify_open_settings",
+        "Open Systeeminstellingen › Meldingen…",
+        "Open System Settings › Notifications…",
+    ),
+    (
+        "notify_ai_done",
+        "AI-actie klaar: {0}",
+        "AI action done: {0}",
+    ),
+    (
+        "notify_ocr_done",
+        "Tekstherkenning van de pdf is klaar",
+        "PDF text recognition is done",
+    ),
+    (
+        "notify_pin_full",
+        "De vastgezette lijst is vol",
+        "The pin list is full",
+    ),
+    (
+        "notify_ai_unavailable",
+        "Apple Intelligence is niet beschikbaar",
+        "Apple Intelligence is not available",
+    ),
+    (
+        "notify_secret",
+        "Mogelijk gevoelige tekst gekopieerd",
+        "Possibly sensitive text copied",
+    ),
+    (
+        "notify_ask_title",
+        "Meldingen van CopyCraft",
+        "Notifications from CopyCraft",
+    ),
+    (
+        "notify_ask_message",
+        "CopyCraft kan een melding sturen als een AI-actie of tekstherkenning klaar is, of als er mogelijk gevoelige tekst is gekopieerd. Een melding bevat nooit je tekst. Alles blijft lokaal op je Mac. Na Doorgaan vraagt macOS om toestemming.",
+        "CopyCraft can send a notification when an AI action or text recognition is done, or when possibly sensitive text was copied. A notification never contains your text. Everything stays local on your Mac. After Continue, macOS asks for permission.",
+    ),
+    ("notify_ask_ok", "Doorgaan", "Continue"),
+    ("tip_paused", "Gepauzeerd", "Paused"),
+    ("tip_copy_ignored", "Kopie genegeerd", "Copy ignored"),
+    (
+        "clear_sensitive",
+        "Gevoelige kopieën na 60 s wissen",
+        "Clear sensitive copies after 60 s",
+    ),
+    ("appearance", "Weergave", "Appearance"),
+    ("window_size_menu", "Venstergrootte", "Window Size"),
+    ("window_compact", "Compact", "Compact"),
+    ("window_normal", "Normaal", "Normal"),
+    ("window_wide", "Breed", "Wide"),
+    ("theme_system", "Systeem", "System"),
+    ("theme_light", "Licht", "Light"),
+    ("theme_dark", "Donker", "Dark"),
+];

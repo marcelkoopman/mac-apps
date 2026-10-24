@@ -1,0 +1,265 @@
+//! The card: its chips, the symbols popover, sensitivity and clipboard states, titles and its chrome. Part of the catalog in `strings.rs`, whose glossary holds here too.
+
+pub(super) const STRINGS: &[(&str, &str, &str)] = &[
+    // Card chips (common)
+    ("copy", "Kopieer", "Copy"),
+    // The table window grid's right-click menu.
+    ("copy_cell", "Kopieer cel", "Copy Cell"),
+    ("copy_row", "Kopieer rij", "Copy Row"),
+    ("copy_column", "Kopieer kolom", "Copy Column"),
+    // The card's save button opens a save panel, hence the ellipsis; the table window has its
+    // own strings (save_table_a11y, save_table_tip), so it does not change with it.
+    ("save_card", "Bewaar…", "Save…"),
+    ("original", "Origineel", "Original"),
+    ("show_image", "Toon afbeelding", "Show Image"),
+    (
+        "image_view_only",
+        "Alleen in afbeeldingsweergave",
+        "Image view only",
+    ),
+    ("show_text", "Toon tekst", "Show Text"),
+    ("show_code", "Toon code", "Show Code"),
+    ("detail_svg_code", "Toon de SVG-code", "Show the SVG code"),
+    (
+        "detail_svg_picture",
+        "Toon de getekende SVG",
+        "Show the drawn SVG",
+    ),
+    (
+        "detail_original_image",
+        "Toon de afbeelding zoals gekopieerd",
+        "Show the image as copied",
+    ),
+    ("chip_diff", "Diff", "Diff"),
+    ("table_menu", "Tabel ▾", "Table ▾"),
+    ("open_table", "Open tabel", "Open Table"),
+    ("table_view", "Tabel", "Table"),
+    ("image_menu", "Afbeelding ▾", "Image ▾"),
+    ("show_columns", "Toon kolommen", "Show Columns"),
+    ("show_table", "Toon tabel", "Show Table"),
+    ("decode_unix_time", "Unix-tijd", "Unix time"),
+    (
+        "decode_picture_over_bytes",
+        "Niet getoond: groter dan {0} MB",
+        "Not shown: larger than {0} MB",
+    ),
+    (
+        "decode_picture_over_pixels",
+        "Niet getoond: meer dan {0} megapixel",
+        "Not shown: more than {0} megapixels",
+    ),
+    // Symbols popover
+    ("symbols", "Tekens", "Symbols"),
+    (
+        "symbols_note",
+        "Tekens onder de knop Speciale tekens op de kaart, gescheiden door spaties.",
+        "Characters under the card's Special Characters button, separated by spaces.",
+    ),
+    ("symbols_a11y", "Speciale tekens", "Special characters"),
+    ("symbols_tip", "Kopieer een teken", "Copy a character"),
+    ("symbols_restore", "Herstel standaard", "Restore Defaults"),
+    // The question before Restore Defaults replaces your own Symbols.
+    (
+        "symbols_restore_title",
+        "Standaardsymbolen herstellen?",
+        "Restore Default Symbols?",
+    ),
+    (
+        "symbols_restore_message",
+        "Je eigen tekens op de knop Symbolen worden vervangen door de standaardlijst.",
+        "Your own characters on the Symbols button are replaced by the standard list.",
+    ),
+    (
+        "symbols_field_a11y",
+        "Lijst met speciale tekens",
+        "Special character list",
+    ),
+    ("ignored_apps", "Genegeerde apps", "Ignored apps"),
+    (
+        "ignored_note",
+        "Apps waarvan kopieën niet worden bewaard.",
+        "Apps whose copies are not kept.",
+    ),
+    (
+        "ignored_apps_add",
+        "Voeg voorste app toe",
+        "Add Frontmost App",
+    ),
+    // Sensitivity labels and status (meta line)
+    ("label_credential", "inloggegevens", "credential"),
+    ("label_pii", "PII", "PII"),
+    ("label_financial", "financieel", "financial"),
+    ("checking", "Controleren…", "Checking…"),
+    // Clipboard states, paste access
+    (
+        "clipboard_empty_label",
+        "(klembord is leeg)",
+        "(clipboard is empty)",
+    ),
+    (
+        "clipboard_no_text_label",
+        "(klembord bevat geen tekst)",
+        "(clipboard has no text)",
+    ),
+    ("hidden_content", "Verborgen inhoud", "Hidden content"),
+    (
+        "paste_denied_note",
+        "Toegang tot het klembord geweigerd in Privacy en beveiliging",
+        "Clipboard access denied in Privacy & Security",
+    ),
+    (
+        "paste_pending_note",
+        "Nieuwe kopie — open de kaart om te bekijken",
+        "New copy — open the card to view",
+    ),
+    // The kind macOS detects for a copy not read yet (src/paste_access.rs, PasteHint).
+    (
+        "paste_pending_hint",
+        "Nieuwe kopie: {0} — open de kaart om te bekijken",
+        "New copy: {0} — open the card to view",
+    ),
+    ("paste_hint_link", "Link", "Link"),
+    ("paste_hint_number", "Getal", "Number"),
+    ("paste_hint_email", "E-mailadres", "Email address"),
+    ("paste_hint_phone", "Telefoonnummer", "Phone number"),
+    ("paste_hint_calendar", "Kalenderevent", "Calendar event"),
+    ("paste_hint_postal", "Postadres", "Postal address"),
+    (
+        "paste_ask_note",
+        "macOS vraagt eerst of CopyCraft een kopie uit een andere app mag lezen.\nKies Sta toe om de kopie hier te zien.\nPrivacy en beveiliging › Plakken vanuit andere apps kan CopyCraft op Altijd toestaan zetten.",
+        "macOS asks before CopyCraft may read a copy from another app.\nChoose Allow to see the copy here.\nPrivacy & Security › Paste from Other Apps can set CopyCraft to Always Allow.",
+    ),
+    (
+        "paste_denied_detail",
+        "Plakken vanuit andere apps staat voor CopyCraft op Weiger.",
+        "Paste from Other Apps is set to Deny for CopyCraft.",
+    ),
+    (
+        "paste_denied_open",
+        "Open Privacy en beveiliging…",
+        "Open Privacy & Security…",
+    ),
+    (
+        "drop_hint",
+        "Sleep hier een tekstbestand of afbeelding heen om het te openen",
+        "Drop a text file or image here to open it",
+    ),
+    (
+        "empty_history",
+        "Plak (⌘V) of sleep iets hierheen",
+        "Paste (⌘V) or drop something here",
+    ),
+    (
+        "empty_privacy_settings",
+        "Open privacy-instellingen…",
+        "Open Privacy Settings…",
+    ),
+    (
+        "paste_here_hint",
+        "Plak hier (⌘V) of zet geschiedenis aan in Instellingen",
+        "Paste here (⌘V) or turn on history in Settings",
+    ),
+    (
+        "paste_nothing",
+        "Geen tekst of afbeelding op het klembord om te plakken",
+        "No text or image on the clipboard to paste",
+    ),
+    (
+        "no_text_on_clipboard",
+        "Geen tekst op het klembord",
+        "No text on the clipboard",
+    ),
+    (
+        "private_copy_note",
+        "De app die dit kopieerde heeft het als privé gemarkeerd.\nCopyCraft toont het niet en bewaart het niet in de geschiedenis.",
+        "The app that copied this marked it private.\nCopyCraft does not show it or keep it in history.",
+    ),
+    ("title_clipboard", "Klembord", "Clipboard"),
+    ("title_file", "Bestand", "File"),
+    ("title_link", "Link", "Link"),
+    ("link_query_heading", "Queryparameters", "Query parameters"),
+    ("link_query_more", "… en nog {0}", "… and {0} more"),
+    ("title_youtube", "YouTube", "YouTube"),
+    ("title_image", "Afbeelding", "Image"),
+    ("title_image_info", "Afbeeldingsinfo", "Image info"),
+    ("title_text", "Tekst", "Text"),
+    // Titles and validation
+    ("title_content", "Inhoud", "Content"),
+    ("formatted_json", "Opgemaakt JSON", "Formatted JSON"),
+    ("formatted_rust", "Opgemaakt Rust", "Formatted Rust"),
+    ("formatted_java", "Opgemaakt Java", "Formatted Java"),
+    ("formatted_xml", "Opgemaakt XML", "Formatted XML"),
+    (
+        "formatted_markdown",
+        "Opgemaakt Markdown",
+        "Formatted Markdown",
+    ),
+    ("valid_language", "{0} geldig", "Valid {0}"),
+    ("invalid_language", "{0} ongeldig", "Invalid {0}"),
+    ("broken_json_title", "JSON · Ongeldig", "JSON · Invalid"),
+    (
+        "json_problem_note",
+        "Regel {0}, kolom {1}: {2}",
+        "Line {0}, column {1}: {2}",
+    ),
+    ("json_missing_bracket", "] ontbreekt", "missing ]"),
+    ("json_missing_brace", "} of ] ontbreekt", "missing } or ]"),
+    (
+        "json_key_quotes",
+        "sleutel moet een string tussen dubbele aanhalingstekens zijn",
+        "key must be a string in double quotes",
+    ),
+    ("code_missing", "{0} ontbreekt", "missing {0}"),
+    ("code_unbalanced", "{0} niet in evenwicht", "unbalanced {0}"),
+    (
+        "python_expected_indent",
+        "inspringing verwacht",
+        "expected indent",
+    ),
+    (
+        "python_mixed_indent",
+        "tabs en spaties door elkaar",
+        "mixed tabs and spaces",
+    ),
+    // Card chrome
+    ("drop_to_open", "Laat los om te openen", "Drop to open"),
+    ("more", "Meer", "More"),
+    ("close", "Sluit", "Close"),
+    ("wipe", "Alles wissen", "Clear All"),
+    (
+        "wipe_tip",
+        "Alles wissen: geschiedenis, pins en klembord",
+        "Clear All: history, pins and clipboard",
+    ),
+    (
+        "reveal_hidden",
+        "Toon verborgen inhoud",
+        "Reveal Hidden Content",
+    ),
+    (
+        "no_matching_commands",
+        "Geen passende opdrachten",
+        "No matching commands",
+    ),
+    ("search", "Zoeken", "Search"),
+    ("search_commands", "Zoek opdrachten", "Search commands"),
+    ("find", "Zoek", "Find"),
+    ("find_in_item", "Zoek in item", "Find in item"),
+    (
+        "clipboard_content",
+        "Inhoud van het klembord",
+        "Clipboard content",
+    ),
+    (
+        "image_preview",
+        "Voorbeeld van de afbeelding",
+        "Image preview",
+    ),
+    ("loading", "Laden", "Loading"),
+    ("show_all_title", "{0}  ·  Toon alles", "{0}  ·  Show all"),
+    (
+        "show_all_tip",
+        "Laad en toon de hele tekst",
+        "Load and show the whole text",
+    ),
+];

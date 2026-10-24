@@ -1,0 +1,183 @@
+//! Table steps and versions, Dataframe notes, the table window and its column picker. Part of the catalog in `strings.rs`, whose glossary holds here too.
+
+pub(super) const STRINGS: &[(&str, &str, &str)] = &[
+    // Table steps and versions
+    (
+        "table_label_dedupe",
+        "Dubbele rijen verwijderd",
+        "Duplicates removed",
+    ),
+    (
+        "table_label_drop_empty",
+        "Lege rijen en kolommen verwijderd",
+        "Empty rows and columns removed",
+    ),
+    (
+        "table_label_sorted",
+        "Gesorteerd op {0} {1}",
+        "Sorted by {0} {1}",
+    ),
+    (
+        "table_label_kept",
+        "{0} van {1} kolommen behouden",
+        "Kept {0} of {1} columns",
+    ),
+    ("table_label_only", "Alleen {0}", "Only {0}"),
+    (
+        "table_label_chosen",
+        "{0} kolommen gekozen",
+        "{0} columns chosen",
+    ),
+    (
+        "table_remove_duplicates",
+        "Verwijder dubbele rijen",
+        "Remove Duplicate Rows",
+    ),
+    (
+        "table_remove_empty",
+        "Verwijder lege rijen en kolommen",
+        "Remove Empty Rows and Columns",
+    ),
+    (
+        "table_keep_columns",
+        "Behoud {0} kolommen",
+        "Keep {0} Columns",
+    ),
+    ("sort_ascending", "Sorteer oplopend", "Sort Ascending"),
+    ("sort_descending", "Sorteer aflopend", "Sort Descending"),
+    (
+        "nothing_to_change",
+        "Niets te wijzigen",
+        "Nothing to change",
+    ),
+    (
+        "max_versions",
+        "Maximaal {0} versies",
+        "{0} versions at most",
+    ),
+    ("not_a_table", "Geen tabel", "Not a table"),
+    ("cancelled", "Geannuleerd", "Cancelled"),
+    (
+        "every_column_empty",
+        "Elke kolom is leeg",
+        "Every column is empty",
+    ),
+    (
+        "choose_one_column",
+        "Kies minstens één kolom",
+        "Choose at least one column",
+    ),
+    ("keeping_of", "{0} van {1} behouden", "Keeping {0} of {1}"),
+    // Dataframe notes and column overview
+    (
+        "dates_read_dmy",
+        "Datums gelezen als dd/mm/jjjj",
+        "Dates read as dd/mm/yyyy",
+    ),
+    (
+        "dates_read_mdy",
+        "Datums gelezen als mm/dd/jjjj",
+        "Dates read as mm/dd/yyyy",
+    ),
+    (
+        "header_on_line",
+        "Koptekst op regel {0}",
+        "Header on line {0}",
+    ),
+    ("type_number", "getal", "number"),
+    ("type_whole_number", "geheel getal", "whole number"),
+    ("type_date", "datum", "date"),
+    ("type_datetime", "datum en tijd", "datetime"),
+    ("type_text", "tekst", "text"),
+    ("type_yes_no", "ja/nee", "yes/no"),
+    ("type_empty", "leeg", "empty"),
+    ("values_empty", "{0} leeg", "{0} empty"),
+    ("values_always", "altijd {0}", "always {0}"),
+    ("values_always_true", "altijd waar", "always true"),
+    ("values_always_false", "altijd onwaar", "always false"),
+    (
+        "values_true_false",
+        "waar {0} · onwaar {1}",
+        "true {0} · false {1}",
+    ),
+    (
+        "values_distinct_common",
+        "{0} verschillend · meest voorkomend: {1}",
+        "{0} distinct · most common: {1}",
+    ),
+    ("values_distinct", "{0} verschillend", "{0} distinct"),
+    (
+        "overview_head",
+        "{0} kolommen · {1} rijen",
+        "{0} columns · {1} rows",
+    ),
+    (
+        "overview_head_one_row",
+        "{0} kolommen · {1} rij",
+        "{0} columns · {1} row",
+    ),
+    ("overview_column", "kolom", "column"),
+    ("overview_type", "type", "type"),
+    ("overview_values", "waarden", "values"),
+    // Table window and column picker
+    ("cancel", "Annuleer", "Cancel"),
+    ("picker_all", "Selecteer alles", "Select All"),
+    ("picker_none", "Selecteer niets", "Select None"),
+    ("picker_apply", "Pas toe", "Apply"),
+    (
+        "picker_apply_a11y",
+        "Pas toe: houd de aangevinkte kolommen",
+        "Apply: keep the checked columns",
+    ),
+    (
+        "picker_keep_all",
+        "Behoud alle kolommen",
+        "Keep All Columns",
+    ),
+    (
+        "picker_keep_all_tip",
+        "Behoud alle kolommen (⌘A)",
+        "Keep All Columns (⌘A)",
+    ),
+    (
+        "picker_keep_none",
+        "Behoud geen kolommen",
+        "Keep No Columns",
+    ),
+    ("picker_title", "Kies kolommen", "Choose columns"),
+    ("filter_columns", "Filter kolommen", "Filter columns"),
+    ("columns_title", "Kolommen", "Columns"),
+    (
+        "picker_alert_info",
+        "Houd de aangevinkte kolommen over als één stap. Pas toe vereist er minstens één.",
+        "Keep the checked columns as one step. Apply needs at least one.",
+    ),
+    ("table_window_title", "Tabel", "Table"),
+    ("table_steps_a11y", "Tabelstappen", "Table steps"),
+    ("copy_table_a11y", "Kopieer de tabel", "Copy the table"),
+    (
+        "copy_table_tip",
+        "Kopieer de getoonde tabel",
+        "Copy the table shown",
+    ),
+    ("save_table_a11y", "Bewaar de tabel", "Save the table"),
+    (
+        "save_table_tip",
+        "Bewaar de getoonde tabel",
+        "Save the table shown",
+    ),
+    ("reveal_table", "Toon de tabel", "Reveal the table"),
+    ("click_to_reveal", "Klik om te tonen", "Click to reveal"),
+    ("one_column", "1 kolom", "1 column"),
+    ("n_columns", "{0} kolommen", "{0} columns"),
+    (
+        "checking_sensitive",
+        "Controleren op gevoelige gegevens…",
+        "Checking for sensitive data…",
+    ),
+    (
+        "click_table_to_reveal",
+        "Klik op de tabel om hem te tonen",
+        "Click the table to reveal it",
+    ),
+];

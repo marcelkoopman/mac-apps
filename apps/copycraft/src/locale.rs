@@ -1,6 +1,7 @@
 //! User-facing strings follow Settings › Language: System (the macOS preferred language),
 //! Nederlands or English. Every string the user can see goes through [`t`] / [`tf`] with a key
-//! from `locale/strings.rs`, which holds the Dutch and the English text side by side.
+//! from `locale/strings.rs` and its parts (one per screen or section), which hold the Dutch
+//! and the English text side by side.
 
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -54,15 +55,10 @@ pub fn apply() {
 
 /// Look up a catalog entry by key.
 fn entry(key: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
-    static INDEX: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
-    let index = INDEX.get_or_init(|| {
-        strings::STRINGS
-            .iter()
-            .enumerate()
-            .map(|(at, (key, _, _))| (*key, at))
-            .collect()
-    });
-    index.get(key).map(|at| &strings::STRINGS[*at])
+    type Entry = (&'static str, &'static str, &'static str);
+    static INDEX: OnceLock<HashMap<&'static str, &'static Entry>> = OnceLock::new();
+    let index = INDEX.get_or_init(|| strings::all().map(|entry| (entry.0, entry)).collect());
+    index.get(key).copied()
 }
 
 /// Translate a UI key into `lang`. An unknown key is a typo: it is logged and shows as `?`
@@ -141,7 +137,7 @@ pub fn copy_symbol(lang: Lang, symbol: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lang, lang, set_test_language, strings::STRINGS, system_lang, t, t_in, tf_in};
+    use super::{Lang, lang, set_test_language, strings::all, system_lang, t, t_in, tf_in};
     use std::collections::HashSet;
     use std::path::Path;
 
@@ -164,7 +160,7 @@ mod tests {
     #[test]
     fn every_key_has_dutch_and_english() {
         let mut seen = HashSet::new();
-        for (key, nl, en) in STRINGS {
+        for (key, nl, en) in all() {
             assert!(seen.insert(*key), "duplicate key {key}");
             assert!(!key.is_empty() && !nl.is_empty() && !en.is_empty(), "{key}");
             assert_eq!(t_in(Lang::Nl, key), *nl, "{key}");
@@ -246,7 +242,7 @@ mod tests {
             "ai_button",
             "ai_check_title",
         ];
-        for (key, nl, en) in STRINGS {
+        for (key, nl, en) in all() {
             if nl == en {
                 assert!(
                     SAME.contains(key),
@@ -267,8 +263,7 @@ mod tests {
             "pasted_text",
             "pasted_image",
         ] {
-            let (_, nl, en) = STRINGS
-                .iter()
+            let (_, nl, en) = all()
                 .find(|(k, _, _)| *k == key)
                 .unwrap_or_else(|| panic!("{key} is missing"));
             assert!(!nl.is_empty() && !en.is_empty() && nl != en, "{key}");
@@ -304,8 +299,7 @@ mod tests {
             "open_at_login",
             "settings",
         ] {
-            let (_, nl, en) = STRINGS
-                .iter()
+            let (_, nl, en) = all()
                 .find(|(k, _, _)| *k == key)
                 .unwrap_or_else(|| panic!("{key} is missing"));
             assert!(!nl.is_empty() && !en.is_empty(), "{key}");
@@ -472,7 +466,7 @@ mod tests {
     /// afbeelding, Idee; history, image, clipboard.
     #[test]
     fn visible_strings_follow_the_glossary() {
-        for (key, nl, en) in STRINGS {
+        for (key, nl, en) in all() {
             let wrong = forbidden_terms(nl, NL_FORBIDDEN, NL_ALLOWED);
             assert!(
                 wrong.is_empty(),
@@ -758,7 +752,7 @@ mod tests {
     /// identifiers keep it lowercase.
     #[test]
     fn visible_strings_spell_the_app_name_copycraft() {
-        for (key, nl, en) in STRINGS {
+        for (key, nl, en) in all() {
             for text in [nl, en] {
                 let wrong = misspelled_app_names(text);
                 assert!(wrong.is_empty(), "{key}: {wrong:?} should be CopyCraft");
@@ -815,7 +809,7 @@ mod tests {
     /// key is used by some call (so no translation is left behind unused).
     #[test]
     fn keys_in_sources_are_in_the_catalog() {
-        let keys: HashSet<&str> = STRINGS.iter().map(|(key, _, _)| *key).collect();
+        let keys: HashSet<&str> = all().map(|(key, _, _)| *key).collect();
         let mut used = HashSet::new();
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = vec![dir];
@@ -828,6 +822,9 @@ mod tests {
             }
             if path.extension().is_none_or(|ext| ext != "rs")
                 || path.ends_with("strings.rs")
+                || path
+                    .parent()
+                    .is_some_and(|dir| dir.ends_with("locale/strings"))
                 || path.ends_with("locale.rs")
             {
                 continue;
