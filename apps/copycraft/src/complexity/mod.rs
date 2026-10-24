@@ -120,10 +120,7 @@ pub fn analyze_guarded(text: &str, lang: Lang) -> Result<Vec<FnScore>, Refused> 
         return Err(Refused::TooLarge);
     }
     std::panic::catch_unwind(|| analyze(text, lang)).map_err(|_| {
-        crate::diag::log(crate::diag::LogEvent::ComplexityFailed {
-            lang,
-            bytes: text.len(),
-        });
+        crate::diag::log(crate::diag::LogEvent::ComplexityFailed { bytes: text.len() });
         Refused::Failed
     })
 }

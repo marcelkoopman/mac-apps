@@ -260,8 +260,8 @@ pub enum LogEvent {
         bytes: usize,
     },
     /// The complexity scanner panicked on a text this large (bytes); the panic was caught.
+    /// Not its language.
     ComplexityFailed {
-        lang: crate::complexity::Lang,
         bytes: usize,
     },
     /// Text ▾ › Complexity scored this many functions.
@@ -549,9 +549,7 @@ impl LogEvent {
                 format!("history: {kind} too large to keep ({bytes} bytes)")
             }
             E::ComplexityTooLarge { bytes } => format!("complexity: too large ({bytes} bytes)"),
-            E::ComplexityFailed { lang, bytes } => {
-                format!("complexity: {lang:?} scanner failed ({bytes} bytes)")
-            }
+            E::ComplexityFailed { bytes } => format!("complexity: scanner failed ({bytes} bytes)"),
             E::ComplexityScored { functions, ms } => {
                 format!("complexity: {functions} functions in {ms} ms")
             }
