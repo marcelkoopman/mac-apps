@@ -28,7 +28,9 @@ impl ClipboardHistory {
 
     /// `text` as the newest copy. Already the newest: nothing changes (`text` is zeroized), so
     /// the entry keeps its cards. A pinned copy of the same text moves to the front and stays
-    /// pinned. An unpinned one further down is replaced by a new entry in front.
+    /// pinned. An unpinned one further down is replaced by a fresh entry in front that keeps
+    /// its id: a step back to an earlier text (A, B, A) is the same entry, so ⌘Z after it still
+    /// finds the copy it was taken on.
     /// Returns whether `text` is in history now (`false`: blank, or history is held).
     pub fn record(&mut self, text: String) -> bool {
         let held = self.held();
@@ -41,7 +43,8 @@ impl ClipboardHistory {
             text.zeroize();
             return false;
         }
-        if let Some(index) = self.text_pos(&text)
+        let same = self.text_pos(&text);
+        if let Some(index) = same
             && (index == 0 || self.entries[index].pinned)
         {
             if index != 0 {
@@ -50,12 +53,13 @@ impl ClipboardHistory {
             text.zeroize();
             return true;
         }
-        self.entries.retain(|existing| match &existing.body {
-            HistoryBody::Text(existing) => existing.as_str() != text,
-            HistoryBody::Image(_) => true,
-        });
+        // An unpinned copy of it further down makes way for a fresh entry (its cards go), with
+        // its id.
+        let id = match same {
+            Some(index) => self.entries.remove(index).id,
+            None => self.alloc_id(),
+        };
         self.removed = None;
-        let id = self.alloc_id();
         self.entries.insert(0, HistoryEntry::text(id, text));
         self.trim_unpinned();
         true
@@ -158,7 +162,8 @@ impl ClipboardHistory {
 
     /// Like [`record`](Self::record) for a picture. The entry that holds these very bytes (a
     /// history entry put back) moves to the front: dropping it would zeroize the bytes it shares
-    /// with `bytes`. An equal picture in other bytes is replaced by `bytes`, as before.
+    /// with `bytes`. An equal picture in other bytes is replaced by `bytes` (its own are
+    /// zeroized), keeping its id, so a step back to an earlier picture is the same entry.
     fn insert_image(&mut self, bytes: SecretBytes) -> SecretBytes {
         let shared = self.entries.iter().position(|entry| match &entry.body {
             HistoryBody::Image(existing) => existing.same_allocation(&bytes),
@@ -179,12 +184,15 @@ impl ClipboardHistory {
             };
             return existing.clone();
         }
-        self.entries.retain(|existing| match &existing.body {
-            HistoryBody::Image(existing) => existing != &bytes,
-            HistoryBody::Text(_) => true,
+        let equal = self.entries.iter().position(|entry| match &entry.body {
+            HistoryBody::Image(existing) => existing == &bytes,
+            HistoryBody::Text(_) => false,
         });
+        let id = match equal {
+            Some(index) => self.entries.remove(index).id,
+            None => self.alloc_id(),
+        };
         self.removed = None;
-        let id = self.alloc_id();
         self.entries
             .insert(0, HistoryEntry::image(id, bytes.clone()));
         self.trim_unpinned();

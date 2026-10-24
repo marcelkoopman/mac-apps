@@ -278,7 +278,8 @@ impl HistoryBody {
 /// Only the entries near the one shown keep them ([`DERIVED_NEAR`]).
 #[derive(Clone)]
 struct HistoryEntry {
-    /// Stable while the entry stays in history. A re-copy replaces the entry and gets a new id.
+    /// Stable while the entry stays in history, also when the same copy comes again (it moves
+    /// to the front with its id).
     id: u64,
     body: HistoryBody,
     kind: format::FormatKind,

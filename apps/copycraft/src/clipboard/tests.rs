@@ -482,7 +482,7 @@ fn marks_come_from_the_format_found_on_record() {
 }
 
 #[test]
-fn re_copying_an_older_text_gets_a_new_id_and_moving_keeps_it() {
+fn re_copying_an_older_text_and_moving_keep_its_id() {
     use crate::commands::CardView;
     let mut history = ClipboardHistory::default();
     history.record("one".into());
@@ -500,9 +500,12 @@ fn re_copying_an_older_text_gets_a_new_id_and_moving_keeps_it() {
         "the newest copy is left as it is"
     );
     history.record("two".into());
-    let replaced = history.id_at(0).expect("replaced");
-    assert_ne!(replaced, two);
-    assert!(!history.contains_id(two));
+    assert_eq!(
+        history.id_at(0),
+        Some(two),
+        "an older copy comes to the front with its id"
+    );
+    assert_eq!(history.len(), 2);
     assert!(history.is_text_id(one));
     assert_eq!(
         history.text_of(one).as_deref().map(String::as_str),
@@ -869,4 +872,27 @@ fn equal_bytes_compare_by_length_and_hash_then_bytes() {
     let (x, y) = (a.clone(), b.clone());
     let two = std::thread::spawn(move || (0..10_000).all(|_| y == x));
     assert!(one.join().unwrap() && two.join().unwrap());
+}
+
+#[test]
+fn a_step_back_to_an_earlier_text_or_picture_is_the_same_entry() {
+    // Toggle case twice: A, B, A. The steps hold A's id; it must still be A's.
+    let mut history = ClipboardHistory::default();
+    history.record("hello".into());
+    let a = history.id_at(0).expect("a");
+    history.record("HELLO".into());
+    let b = history.id_at(0).expect("b");
+    history.record("hello".into());
+    assert_eq!(history.id_at(0), Some(a));
+    assert_eq!(history.id_at(1), Some(b));
+    assert_eq!(history.len(), 2);
+    // A picture turned left and back right is equal to the one before, in other bytes.
+    history.record_image(vec![1, 2, 3]).expect("first");
+    let first = history.id_at(0).expect("first");
+    history.record_image(vec![3, 2, 1]).expect("turned");
+    let again = history.record_image(vec![1, 2, 3]).expect("back");
+    assert_eq!(history.id_at(0), Some(first));
+    assert_eq!(history.len(), 4);
+    // History shares the new bytes (the step's handle), not the old ones.
+    assert!(history.holds_image(&again));
 }
