@@ -68,7 +68,7 @@ pub(crate) fn apply_makes_version_of(
     input_hash: u64,
     now: Option<&(u64, Zeroizing<String>)>,
 ) -> bool {
-    !truncated && apply_makes_version(entry, input_hash, now)
+    !truncated && card_still_shows(entry, input_hash, now)
 }
 
 /// Whether switching to another history entry first hides the card like "Hide": a run or preview
@@ -305,9 +305,10 @@ impl App {
     }
 }
 
-/// Whether an applied result may become a version of the card: the card still shows the
-/// entry the run started on (same id, same text).
-pub(crate) fn apply_makes_version(
+/// Whether a result (an applied AI result, a Text ▾ step's) still belongs to the card: it
+/// shows the entry the run started on (same id, same text). The text matters too: every copy
+/// outside history shares one id ([`super::text::NOT_IN_HISTORY`]).
+pub(crate) fn card_still_shows(
     entry: u64,
     input_hash: u64,
     now: Option<&(u64, Zeroizing<String>)>,
@@ -324,15 +325,15 @@ mod tests {
         let text = Zeroizing::new("hello".to_string());
         let hash = hash_text(&text);
         let same = (7, text.clone());
-        assert!(apply_makes_version(7, hash, Some(&same)));
+        assert!(card_still_shows(7, hash, Some(&same)));
         // Another entry, other text (a new copy) or no card text: copy only.
-        assert!(!apply_makes_version(8, hash, Some(&same)));
-        assert!(!apply_makes_version(
+        assert!(!card_still_shows(8, hash, Some(&same)));
+        assert!(!card_still_shows(
             7,
             hash,
             Some(&(7, Zeroizing::new("new".into())))
         ));
-        assert!(!apply_makes_version(7, hash, None));
+        assert!(!card_still_shows(7, hash, None));
     }
     #[test]
     fn switching_history_hides_an_open_ai_panel_only() {

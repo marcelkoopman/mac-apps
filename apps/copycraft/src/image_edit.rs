@@ -467,9 +467,9 @@ impl Job {
         }
     }
 
-    /// The allocation of the picture the step is taken on ([`SecretBytes::allocation_id`]).
-    pub fn source(&self) -> usize {
-        self.original.allocation_id()
+    /// The picture the step is taken on (a handle on the same bytes).
+    pub fn original(&self) -> SecretBytes {
+        self.original.clone()
     }
 
     /// Decode the picture, take the step and encode the result as PNG. `cancel` is checked

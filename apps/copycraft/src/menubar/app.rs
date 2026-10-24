@@ -194,9 +194,18 @@ pub(crate) struct ImageRun {
     pub(crate) started: Background,
     pub(crate) generation: u64,
     pub(crate) cancel: Arc<AtomicBool>,
-    /// The picture the step is taken on (its allocation): the result is dropped when the
-    /// card shows another one by then.
-    pub(crate) source: usize,
+    /// The picture the step is taken on: the result is dropped when the card shows another one
+    /// by then (compared by allocation, [`ImageRun::source`]). Held while the run is current,
+    /// so its allocation cannot be freed and reused by a newer picture, which would then pass
+    /// for the step's own. Zeroized with its entry as any handle is (Wipe).
+    pub(crate) original: SecretBytes,
+}
+
+impl ImageRun {
+    /// The allocation of the picture the step is taken on.
+    pub(crate) fn source(&self) -> usize {
+        self.original.allocation_id()
+    }
 }
 
 /// A table job running on its thread ([`crate::table::Job`]).

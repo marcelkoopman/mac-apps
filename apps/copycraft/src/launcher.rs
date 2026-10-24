@@ -109,6 +109,9 @@ pub enum UserEvent {
         /// The labels of the step's text, found on the step's thread ([`crate::menubar`]'s
         /// `step_labels`). Never the text.
         found: Option<crate::sensitivity::Found>,
+        /// [`crate::menubar`]'s `hash_text` of the text the step was taken on: a result for
+        /// a copy the card no longer shows is dropped.
+        source_hash: u64,
     },
     /// Something about notifications ([`crate::notifications`]).
     Notification(NotificationEvent),

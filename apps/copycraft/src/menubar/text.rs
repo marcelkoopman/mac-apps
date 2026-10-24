@@ -277,6 +277,7 @@ impl App {
         };
         self.text_generation = self.text_generation.wrapping_add(1);
         let generation = self.text_generation;
+        let source_hash = super::state::hash_text(&text);
         let spawned = std::thread::Builder::new()
             .name("copycraft-text".into())
             .spawn(move || {
@@ -289,6 +290,7 @@ impl App {
                     entry,
                     result: Box::new(result),
                     found,
+                    source_hash,
                 });
             });
         match spawned {
@@ -298,18 +300,24 @@ impl App {
     }
 
     /// A Text ▾ result is back on the main thread. Dropped when stale: a newer job started,
-    /// history was wiped, or the card shows another entry by now.
+    /// history was wiped, or the card shows another entry or another text by now.
     pub(crate) fn finish_text(
         &mut self,
         generation: u64,
         entry: u64,
         result: text_ops::TextResult,
         found: Option<crate::sensitivity::Found>,
+        source_hash: u64,
     ) {
         if generation != self.text_generation {
             return;
         }
-        let Some((id, source)) = self.text_entry().filter(|(id, _)| *id == entry) else {
+        // The same entry is not enough: copies outside history (and opened files) share an
+        // id, so a newer copy would get the result of the step taken on the one before.
+        let Some((id, source)) = self
+            .text_entry()
+            .filter(|now| super::ai::card_still_shows(entry, source_hash, Some(now)))
+        else {
             return;
         };
         match result {

@@ -482,3 +482,23 @@ fn a_long_step_result_with_a_key_stays_out_of_history() {
         .is_none()
     );
 }
+
+#[test]
+fn a_step_result_for_a_copy_the_card_no_longer_shows_is_dropped() {
+    use super::ai::card_still_shows;
+    use super::state::hash_text;
+    use super::text::NOT_IN_HISTORY;
+    // Recording paused: copy A, take a slow step, copy B. Both are outside history, so they
+    // share an id; only the text tells them apart.
+    let a = Zeroizing::new("copy A".to_string());
+    let b = (NOT_IN_HISTORY, Zeroizing::new("copy B".to_string()));
+    let started_on = hash_text(&a);
+    assert!(!card_still_shows(NOT_IN_HISTORY, started_on, Some(&b)));
+    assert!(card_still_shows(
+        NOT_IN_HISTORY,
+        started_on,
+        Some(&(NOT_IN_HISTORY, a.clone()))
+    ));
+    // Another entry with the same text is another copy too.
+    assert!(!card_still_shows(3, started_on, Some(&(4, a))));
+}

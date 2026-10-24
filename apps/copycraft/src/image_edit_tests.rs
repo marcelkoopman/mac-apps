@@ -211,7 +211,7 @@ fn a_step_makes_a_new_picture_and_leaves_the_original() {
     let original = original(40, 20);
     let before = original.with(<[u8]>::to_vec);
     let job = Job::new(ImageOp::RotateRight, &original);
-    assert_eq!(job.source(), original.allocation_id());
+    assert_eq!(job.original().allocation_id(), original.allocation_id());
     let done = run(job).unwrap();
     assert_eq!(done.label, "Rotated 90° right");
     assert_eq!(size_of(&done), (20, 40));

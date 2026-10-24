@@ -286,7 +286,7 @@ impl App {
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&cancel);
         let generation = job.generation;
-        let source = job.source();
+        let original = job.original();
         let spawned = std::thread::Builder::new()
             .name("copycraft-image".into())
             .spawn(move || {
@@ -310,7 +310,7 @@ impl App {
                     started: Background::now(),
                     generation,
                     cancel,
-                    source,
+                    original,
                 });
             }
             Err(e) => self.work_failed(crate::diag::Work::ImageJob, &e),
@@ -339,7 +339,7 @@ impl App {
         // The step's picture is still on the card. History may have recorded the clipboard's
         // copy while a step ran on the picture read for the card: that picture still counts.
         let source = run.as_ref().and_then(|run| {
-            let matches = |bytes: &SecretBytes| bytes.allocation_id() == run.source;
+            let matches = |bytes: &SecretBytes| bytes.allocation_id() == run.source();
             self.image_source().filter(matches).or_else(|| {
                 self.card_picture
                     .as_ref()
@@ -357,7 +357,7 @@ impl App {
             (None, Ok(mut finished)) => finished.wipe(),
             (_, Err(crate::image_edit::ImageError::Cancelled)) => {}
             // A step that changes nothing ("Already that size or smaller"): a note, no copy.
-            (Some(run), Err(e)) => self.image_note = Some((run.source, e.to_string())),
+            (Some(run), Err(e)) => self.image_note = Some((run.source(), e.to_string())),
             (None, Err(_)) => {}
         }
         if launcher::is_open() {
@@ -653,7 +653,7 @@ impl App {
         let working = self
             .image_job
             .as_ref()
-            .is_some_and(|run| run.source == entry);
+            .is_some_and(|run| run.source() == entry);
         let note = self
             .image_note
             .as_ref()
