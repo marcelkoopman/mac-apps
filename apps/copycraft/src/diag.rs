@@ -206,6 +206,16 @@ pub enum LogEvent {
         held: bool,
         kept: bool,
     },
+    /// Debug builds only: a copied picture went into history at once, before its text was
+    /// checked (or after, when the scan of the card was in). Only yes or no.
+    ImageAdmitted {
+        checked: bool,
+    },
+    /// Debug builds only: the text of a copied picture history took before its check is in;
+    /// whether that took it out again. Only yes or no.
+    ImageChecked {
+        retracted: bool,
+    },
     /// Debug builds only: how a Text ▾ step and the copy it was taken on went into history,
     /// as [`LogEvent::ImageStepKept`]. Only yes or no.
     TextStepKept {
@@ -303,6 +313,8 @@ impl LogEvent {
             | E::SpinnerHidden
             | E::ImageGate { .. }
             | E::ImageStepKept { .. }
+            | E::ImageAdmitted { .. }
+            | E::ImageChecked { .. }
             | E::TextStepKept { .. }
             | E::PreviewNoPicture
             | E::PreviewStarted
@@ -402,6 +414,8 @@ impl LogEvent {
             | E::SpinnerHidden
             | E::ImageGate { .. }
             | E::ImageStepKept { .. }
+            | E::ImageAdmitted { .. }
+            | E::ImageChecked { .. }
             | E::TextStepKept { .. } => Level::Debug,
         }
     }
@@ -497,6 +511,10 @@ impl LogEvent {
                  {clipboard_copy}, source kept {source_kept}, source checked {source_checked}, \
                  admitted {admitted}, paused {paused}, held {held}, kept {kept}"
             ),
+            E::ImageAdmitted { checked } => {
+                format!("image admitted at once: checked {checked}")
+            }
+            E::ImageChecked { retracted } => format!("image checked: retracted {retracted}"),
             E::TextStepKept {
                 source_in_history,
                 clipboard_copy,

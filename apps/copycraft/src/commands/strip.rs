@@ -149,6 +149,18 @@ pub fn strip_shown(len: usize, turned_off: bool) -> bool {
     len > 1 && !turned_off
 }
 
+/// Whether the strip keeps its drawn picture for the picture with allocation `id`: only while
+/// one of its cards (`items`) shows that picture. A picture taken out of history (a token
+/// found in it late, Delete, Wipe) loses its drawn tile with the next strip. Pure.
+pub fn thumb_kept(id: usize, items: &[Thumb]) -> bool {
+    items.iter().any(|thumb| {
+        thumb
+            .picture
+            .as_ref()
+            .is_some_and(|picture| picture.allocation_id() == id)
+    })
+}
+
 /// The type's name on a card's tooltip: *JSON*, *Afbeelding*, *Tekst*.
 pub fn thumb_kind_name(kind: crate::format::FormatKind) -> &'static str {
     use crate::format::FormatKind;

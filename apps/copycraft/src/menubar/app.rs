@@ -111,6 +111,10 @@ pub(crate) struct App {
     /// The clipboard's picture (at its change count) that a step put into history before its
     /// text was checked; its text, when in, can take it out again.
     pub(crate) unchecked_source: Option<(isize, SecretBytes)>,
+    /// Copied pictures (at their change counts) history took at once, before their text was
+    /// recognised: their recognition can take them out again
+    /// ([`App::check_unchecked_source`]). Cleared with history.
+    pub(crate) polled_unchecked: Vec<(isize, SecretBytes)>,
     /// The change count whose picture was last read for the card, so it is read once per copy.
     pub(crate) card_picture_asked: Option<isize>,
     /// The Image ▾ gate last logged (debug builds only), so it is logged when it changes.

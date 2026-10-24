@@ -386,3 +386,62 @@ fn copy_steps_go_on_from_the_shown_copy_and_start_over_elsewhere() {
     let steps = CopySteps::stepped(Some(steps), 9, 10, "Grayscale".into());
     assert_eq!(steps.ids, [9, 10]);
 }
+
+#[test]
+fn a_picture_goes_in_at_once_and_its_late_text_can_take_it_out() {
+    use super::source::{LateCheck, late_check};
+    // No scan yet: in history now (the strip shows it), checked when its text is in.
+    assert_eq!(late_check(None), LateCheck::Wait);
+    // Recognition found nothing, failed or took too long: it stays, as before.
+    assert_eq!(late_check(Some(None)), LateCheck::Admit);
+    assert_eq!(
+        late_check(Some(Some("Quarterly report\nRevenue up 4%"))),
+        LateCheck::Admit
+    );
+    // A token in the picture: out of history again.
+    let token = concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5");
+    let screenshot = format!("$ gh auth token\n{token}\n$");
+    assert_eq!(late_check(Some(Some(&screenshot))), LateCheck::Retract);
+}
+
+#[test]
+fn two_pictures_are_both_in_history_before_their_text_is_read() {
+    // The poll's path, as history sees it: each picture goes in when copied, so two copies
+    // in a row make two cards (the strip) at once; a late token takes only that one out.
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    let first = history.record_image(vec![1, 2, 3]).expect("first");
+    let second = history.record_image(vec![4, 5, 6]).expect("second");
+    assert_eq!(history.len(), 2);
+    assert!(crate::commands::strip_shown(history.len(), false));
+    let id = history.image_id(&first).expect("in history");
+    assert!(history.discard_id(id));
+    assert!(!history.holds_image(&first));
+    assert!(history.holds_image(&second));
+    // Zeroized with its entry: nothing of it is left to draw.
+    assert!(first.with(|bytes| bytes.iter().all(|byte| *byte == 0)));
+}
+
+#[test]
+fn the_strip_forgets_the_drawn_picture_of_a_card_taken_out() {
+    let picture = crate::clipboard::SecretBytes::new(vec![7, 8, 9]).expect("bytes");
+    let other = crate::clipboard::SecretBytes::new(vec![1, 2]).expect("bytes");
+    let thumb = |picture: Option<crate::clipboard::SecretBytes>| crate::commands::Thumb {
+        index: 0,
+        id: Some(1),
+        mark: "img".into(),
+        pinned: false,
+        lines: String::new(),
+        picture,
+        side: None,
+        kind: "",
+        copied: None,
+        menu: Vec::new(),
+    };
+    let shown = [thumb(Some(picture.clone())), thumb(None)];
+    assert!(crate::commands::thumb_kept(picture.allocation_id(), &shown));
+    assert!(!crate::commands::thumb_kept(other.allocation_id(), &shown));
+    assert!(!crate::commands::thumb_kept(
+        picture.allocation_id(),
+        &[thumb(None)]
+    ));
+}

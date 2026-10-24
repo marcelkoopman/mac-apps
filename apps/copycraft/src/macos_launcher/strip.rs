@@ -93,6 +93,11 @@ pub(crate) fn store_strip(items: &[commands::Thumb], cursor: usize, can_restore:
         }
         *slot = items.to_vec();
     });
+    // A picture no card shows any more (taken out of history) is not kept drawn.
+    THUMB_IMAGES.with(|slot| {
+        slot.borrow_mut()
+            .retain(|(id, _)| commands::thumb_kept(*id, items));
+    });
     STRIP_CURSOR.set(cursor);
 }
 

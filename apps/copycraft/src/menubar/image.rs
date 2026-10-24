@@ -2,6 +2,8 @@
 //! step's: on the clipboard and in history, shown on the card; ⌘Z shows the copy it was taken
 //! on ([`CopySteps`]).
 
+#[cfg(target_os = "macos")]
+use super::source::{LateCheck, late_check};
 use super::*;
 
 impl App {
@@ -128,19 +130,41 @@ impl App {
         true
     }
 
-    /// The text of the clipboard's picture at `change` is in (the card's scan or its own
-    /// recognition). A step put that picture into history before it was checked
-    /// ([`App::unchecked_source`]): a token, key or URL password takes it out again, as it
-    /// would have kept it out.
+    /// The text of the clipboard's picture at `change` is in: the card's scan, or (`own`) the
+    /// copy's own recognition. History took that picture before it was checked, by a step
+    /// ([`App::unchecked_source`]) or the poll ([`App::polled_unchecked`]): a token, key or URL
+    /// password takes it out again, with its strip tile, as it would have kept it out. A poll's
+    /// copy is settled by its own recognition (the card's scan can only take it out).
     #[cfg(target_os = "macos")]
-    pub(crate) fn check_unchecked_source(&mut self, change: isize, recognised: Option<&str>) {
-        let Some((at, source)) = self.unchecked_source.take_if(|(at, _)| *at == change) else {
-            return;
-        };
-        if crate::sensitivity::picture_admission(recognised) != crate::sensitivity::Admission::Keep
+    pub(crate) fn check_unchecked_source(
+        &mut self,
+        change: isize,
+        recognised: Option<&str>,
+        own: bool,
+    ) {
+        let check = late_check(Some(recognised));
+        if let Some((at, source)) = self.unchecked_source.take_if(|(at, _)| *at == change)
+            && check == LateCheck::Retract
             && self.history.holds_image(&source)
         {
-            self.retract_step_copy(at, &source);
+            self.retract_image(Some(at), &source);
+        }
+        let mut retracted = false;
+        let mut index = 0;
+        while index < self.polled_unchecked.len() {
+            let (at, _) = &self.polled_unchecked[index];
+            if *at != change || (check != LateCheck::Retract && !own) {
+                index += 1;
+                continue;
+            }
+            let (at, copy) = self.polled_unchecked.remove(index);
+            if check == LateCheck::Retract && self.history.holds_image(&copy) {
+                self.retract_image(Some(at), &copy);
+                retracted = true;
+            }
+        }
+        if cfg!(debug_assertions) && own {
+            crate::diag::log(crate::diag::LogEvent::ImageChecked { retracted });
         }
     }
 
@@ -534,13 +558,13 @@ impl App {
         let kept = recorded.filter(|bytes| self.history.holds_image(bytes));
         if recheck.retract {
             if let Some(bytes) = kept {
-                self.retract_step_copy(change, &bytes);
+                self.retract_image(Some(change), &bytes);
             }
             // The picture it was taken on went in unchecked with it: out again too.
             if let Some((at, source)) = self.unchecked_source.take()
                 && self.history.holds_image(&source)
             {
-                self.retract_step_copy(at, &source);
+                self.retract_image(Some(at), &source);
             }
             if let Some(mut scan) = scan.take() {
                 scan.wipe();
@@ -564,11 +588,11 @@ impl App {
         }
     }
 
-    /// Take a step's copy (`bytes`, clipboard change `change`) out of history again: it shows a
-    /// token or key. Gone for good (zeroized, not kept for ⌘Z); the clipboard keeps its
-    /// concealed copy, which history skips.
-    #[cfg(target_os = "macos")]
-    fn retract_step_copy(&mut self, change: isize, bytes: &SecretBytes) {
+    /// Take a picture history took before its text was checked (`bytes`; a step's copy or a
+    /// copied picture at clipboard change `change`, or a drop: `None`) out of history again: it
+    /// shows a token or key. Gone for good (zeroized, not kept for ⌘Z), its strip tile with
+    /// it; the clipboard keeps its copy, which history skips.
+    pub(crate) fn retract_image(&mut self, change: Option<isize>, bytes: &SecretBytes) {
         let Some(id) = self.history.image_id(bytes) else {
             return;
         };
@@ -586,10 +610,12 @@ impl App {
         {
             self.image_on_pasteboard = None;
         }
-        if self.recorded_image_change == Some(change) {
-            self.recorded_image_change = None;
+        if let Some(change) = change {
+            if self.recorded_image_change == Some(change) {
+                self.recorded_image_change = None;
+            }
+            self.skip_image_change = Some(change);
         }
-        self.skip_image_change = Some(change);
         // The card stays on the entry it was on; the copy's own place goes to the next one.
         let at = |history: &clipboard::ClipboardHistory, index: usize| {
             history.id_at(index).filter(|kept| *kept != id)

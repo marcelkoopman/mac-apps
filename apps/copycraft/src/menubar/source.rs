@@ -64,17 +64,15 @@ impl App {
         self.record_current(&ClipboardView::from_os());
         let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
         let clipboard_at = if let Some(image) = opened.image.as_ref() {
-            if waits_for_recognition(image) {
-                // A picture goes into history once its text is recognised: one that shows a
-                // token or key stays out ([`Self::finish_dropped_scan`]).
+            // A picture goes into history at once, so the strip shows it; one whose recognised
+            // text shows a token or key goes out again ([`Self::finish_dropped_scan`]).
+            let moved_to = self
+                .history
+                .record_image_tracking(image.bytes.clone(), base);
+            if waits_for_recognition(image) && self.history.holds_image(&image.bytes) {
                 self.dropped_image_wait.push(image.bytes.clone());
-                None
-            } else {
-                Some(
-                    self.history
-                        .record_image_tracking(image.bytes.clone(), base),
-                )
             }
+            Some(moved_to)
         } else if let Some(text) = opened.text.as_deref() {
             // A file that holds a token, key or URL password is shown, not kept in history. A
             // long one is checked in the background first: `labels_checked` decides then.
@@ -300,28 +298,18 @@ impl App {
         image: &SecretBytes,
         scan: Option<commands::ImageScan>,
     ) {
-        // The picture was not recorded yet: its recognised text decides
-        // ([`crate::sensitivity::picture_admission`]), also when the card moved on by now: it
-        // was dropped. Never logged.
+        // History took the picture before its text was in: a token, key or URL password in
+        // that text ([`crate::sensitivity::picture_admission`]) takes it out again, with its
+        // strip tile, also when the card moved on by now. Never logged.
         let waited = self
             .dropped_image_wait
             .iter()
             .position(|waiting| waiting.same_allocation(image));
         if let Some(at) = waited {
             self.dropped_image_wait.remove(at);
-            match crate::sensitivity::picture_admission(
-                scan.as_ref().and_then(|scan| scan.ocr.as_deref()),
-            ) {
-                crate::sensitivity::Admission::Keep => {
-                    let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
-                    let moved_to = self.history.record_image_tracking(image.clone(), base);
-                    if self.history.holds_image(image) {
-                        self.dropped_recorded(moved_to);
-                    }
-                }
-                _ => crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                    crate::diag::Skip::Credential,
-                )),
+            let check = late_check(Some(scan.as_ref().and_then(|scan| scan.ocr.as_deref())));
+            if check == LateCheck::Retract && self.history.holds_image(image) {
+                self.retract_image(None, image);
             }
         }
         // The card moved on (the clipboard, another drop, Wipe) while the thread ran.
@@ -668,7 +656,11 @@ impl App {
     pub(crate) fn finish_image_scan(&mut self, change: isize, scan: Option<commands::ImageScan>) {
         // Also when a step's copy replaced this picture meanwhile.
         #[cfg(target_os = "macos")]
-        self.check_unchecked_source(change, scan.as_ref().and_then(|scan| scan.ocr.as_deref()));
+        self.check_unchecked_source(
+            change,
+            scan.as_ref().and_then(|scan| scan.ocr.as_deref()),
+            false,
+        );
         #[cfg(target_os = "macos")]
         let current = crate::macos_pasteboard::change_count();
         #[cfg(not(target_os = "macos"))]
@@ -709,9 +701,35 @@ pub(super) fn skip_after_drop(
         .map(|text| Zeroizing::new(text.to_string()))
 }
 
-/// A dropped, pasted or chosen picture that goes into history only after its text recognition
-/// ([`App::finish_dropped_scan`]). A document's picture (Quick Look) is not recognised, and a
-/// PDF's first page goes in at once, as before; so does a picture too large for history.
+/// What the recognised text of a picture history took before it was checked says, `known`
+/// being that text once a scan is in (`None` while none is). Pure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LateCheck {
+    /// No text yet: it stays in history until its recognition is in.
+    Wait,
+    /// Checked: it stays.
+    Admit,
+    /// A token, key or URL password: out of history again.
+    Retract,
+}
+
+pub(crate) fn late_check(known: Option<Option<&str>>) -> LateCheck {
+    match known {
+        None => LateCheck::Wait,
+        Some(text) => {
+            if crate::sensitivity::picture_admission(text) == crate::sensitivity::Admission::Keep {
+                LateCheck::Admit
+            } else {
+                LateCheck::Retract
+            }
+        }
+    }
+}
+
+/// A dropped, pasted or chosen picture that goes into history at once and is checked after its
+/// text recognition ([`App::finish_dropped_scan`]), which can take it out again. A document's
+/// picture (Quick Look) is not recognised, and a PDF's first page needs no check; nor does a
+/// picture too large for history.
 pub(crate) fn waits_for_recognition(image: &crate::open_file::OpenedImage) -> bool {
     cfg!(target_os = "macos")
         && image.pdf_source.is_none()

@@ -1,5 +1,7 @@
 //! History actions, pins, sensitive clearing and recording copies.
 
+#[cfg(target_os = "macos")]
+use super::source::{LateCheck, late_check};
 use super::*;
 
 impl App {
@@ -54,6 +56,7 @@ impl App {
         self.dropped_text_wait.clear();
         self.dropped_image_wait.clear();
         self.polled_image_wait = None;
+        self.polled_unchecked.clear();
         if full {
             self.clear_diff();
             self.current_image = None;
@@ -309,6 +312,7 @@ impl App {
         self.dropped_text_wait.clear();
         self.dropped_image_wait.clear();
         self.polled_image_wait = None;
+        self.polled_unchecked.clear();
         self.opened_table = crate::settings::preferred_table();
         self.card_text = None;
         self.browsing = None;
@@ -638,87 +642,89 @@ impl App {
         }
     }
 
-    /// A copied picture's bytes, made on a worker for pasteboard `change`. Its text is
-    /// recognised next, on a thread of its own ([`Self::finish_polled_image`] records it). A
-    /// newer copy meanwhile, held history or a picture too large for history: the bytes are
-    /// zeroized and nothing is recognised.
+    /// A copied picture's bytes, made on a worker for pasteboard `change`. It goes into history
+    /// at once, so the strip shows it without waiting; its text is recognised next, on a thread
+    /// of its own, and a token, key or URL password in it takes it out again
+    /// ([`Self::finish_polled_image`]). A newer copy meanwhile, a step that recorded it already,
+    /// held history or a picture too large for history: the bytes are zeroized.
     #[cfg(target_os = "macos")]
     pub(crate) fn finish_image_record(&mut self, change: isize, bytes: Option<SecretBytes>) {
         let Some(bytes) = bytes else {
             return;
         };
-        if crate::macos_pasteboard::change_count() != change
+        if self.polled_image_wait != Some(change)
+            || crate::macos_pasteboard::change_count() != change
             || self.history.held()
             || bytes.byte_len() > clipboard::MAX_IMAGE_BYTES
         {
             bytes.zeroize();
             return;
         }
-        self.polled_image_wait = Some(change);
-        let copy = bytes.clone();
-        let fallback = bytes.clone();
-        let started = self.run_detached(
-            "copycraft-image-check",
-            move || {
-                // Copied out: the recognition reads its own bytes, history keeps `bytes`.
-                let pixels = Zeroizing::new(copy.with(<[u8]>::to_vec));
-                crate::macos_pasteboard::recognized_text_within(pixels)
-            },
-            move |app: &mut App, text| app.finish_polled_image(change, bytes, text),
-        );
-        if !started {
-            // No recognition: recorded as before.
-            self.finish_polled_image(change, fallback, None);
-        }
-    }
-
-    /// The text recognised in the copied picture of pasteboard `change` is in: the picture
-    /// goes into history, unless that text holds a token, key or URL password
-    /// ([`crate::sensitivity::picture_admission`]) or a newer copy came meanwhile. Refused, the
-    /// card still shows it while it is on the clipboard. The text is never logged.
-    #[cfg(target_os = "macos")]
-    pub(crate) fn finish_polled_image(
-        &mut self,
-        change: isize,
-        bytes: SecretBytes,
-        text: Option<Zeroizing<String>>,
-    ) {
-        // A step put this picture into history before its text was in.
-        self.check_unchecked_source(change, text.as_deref().map(String::as_str));
-        if self.polled_image_wait != Some(change)
-            || crate::macos_pasteboard::change_count() != change
-        {
+        self.polled_image_wait = None;
+        // The card's own scan of this copy may be in already: its text decides now.
+        let known = (self.image_scan_change == Some(change))
+            .then(|| self.image_scan.as_ref().map(|scan| scan.ocr.clone()))
+            .flatten();
+        let check = late_check(known.as_ref().map(|ocr| ocr.as_deref()));
+        if check == LateCheck::Retract {
             bytes.zeroize();
+            self.skip_image_change = Some(change);
+            crate::diag::log(crate::diag::LogEvent::CopySkipped(
+                crate::diag::Skip::Credential,
+            ));
             return;
         }
-        self.polled_image_wait = None;
-        match crate::sensitivity::picture_admission(text.as_deref().map(String::as_str)) {
-            crate::sensitivity::Admission::Keep => {
-                self.last_copy = Some(Instant::now());
-                self.current_image = self.history.record_secret_image(bytes);
-                self.image_on_pasteboard = self.current_image.clone().map(|bytes| (change, bytes));
-                // The card's own scan of this copy finished first: keep it with the entry.
-                if self.image_scan_change == Some(change)
-                    && let (Some(recorded), Some(scan)) =
-                        (self.current_image.as_ref(), self.image_scan.as_ref())
-                {
-                    self.history.remember_image_scan(recorded, scan);
-                }
-                self.history_cursor = 0;
-                self.clipboard_cursor = None;
-                self.browsing = None;
-            }
-            _ => {
-                bytes.zeroize();
-                self.skip_image_change = Some(change);
-                crate::diag::log(crate::diag::LogEvent::CopySkipped(
-                    crate::diag::Skip::Credential,
-                ));
+        let copy = bytes.clone();
+        self.last_copy = Some(Instant::now());
+        self.current_image = self.history.record_secret_image(bytes);
+        let Some(recorded) = self.current_image.clone() else {
+            copy.zeroize();
+            return;
+        };
+        self.image_on_pasteboard = Some((change, recorded.clone()));
+        if self.image_scan_change == Some(change)
+            && let Some(scan) = self.image_scan.as_ref()
+        {
+            self.history.remember_image_scan(&recorded, scan);
+        }
+        self.history_cursor = 0;
+        self.clipboard_cursor = None;
+        self.browsing = None;
+        if cfg!(debug_assertions) {
+            crate::diag::log(crate::diag::LogEvent::ImageAdmitted {
+                checked: check == LateCheck::Admit,
+            });
+        }
+        if check == LateCheck::Wait {
+            self.polled_unchecked.push((change, recorded));
+            let started = self.run_detached(
+                "copycraft-image-check",
+                move || {
+                    // Copied out: the recognition reads its own bytes, history keeps `bytes`.
+                    let pixels = Zeroizing::new(copy.with(<[u8]>::to_vec));
+                    crate::macos_pasteboard::recognized_text_within(pixels)
+                },
+                move |app: &mut App, text| app.finish_polled_image(change, text),
+            );
+            if !started {
+                // No recognition: kept, as when it fails or takes too long.
+                self.finish_polled_image(change, None);
             }
         }
+        self.refresh_status_menu();
         if launcher::is_open() {
             self.refresh_popup();
         }
+    }
+
+    /// The text recognised in the copied picture of pasteboard `change` is in. History took the
+    /// picture already ([`Self::finish_image_record`]): a token, key or URL password in that
+    /// text ([`crate::sensitivity::picture_admission`]) takes it out again, with its strip
+    /// tile, also when a newer copy came meanwhile. The text is never logged.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn finish_polled_image(&mut self, change: isize, text: Option<Zeroizing<String>>) {
+        // A step put this picture into history before its text was in; or the poll did.
+        self.check_unchecked_source(change, text.as_deref().map(String::as_str), true);
     }
 
     pub(crate) fn record_current(&mut self, view: &ClipboardView) {
@@ -755,6 +761,7 @@ impl App {
             // from another thread). Reading a copied file, hashing and wrapping the bytes run on
             // a worker; a quick picture is back within `QUICK` and recorded right here.
             if let Some(input) = crate::macos_pasteboard::history_image_input() {
+                self.polled_image_wait = Some(change);
                 let ready = self.start_work(
                     work::Lane::Image,
                     work::QUICK,
