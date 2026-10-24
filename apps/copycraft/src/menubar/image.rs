@@ -448,32 +448,35 @@ impl App {
                 });
             }
             self.scan_step_copy(change, png, verdict, recorded.clone());
-            let Some(recorded) = recorded else {
-                // Not kept: the pasteboard has its own copy of the picture.
-                done.wipe();
-                self.image_note = Some((source.allocation_id(), step_note(keep, None).to_string()));
-                return;
+            let kept = recorded.is_some();
+            if let Some(recorded) = recorded {
+                self.recorded_image_change = Some(change);
+                self.image_on_pasteboard = Some((change, recorded.clone()));
+                self.current_image = Some(recorded);
+            }
+            // A dropped or chosen picture: the card leaves it for the new copy, kept or not.
+            let leave_file = self.opened.is_some();
+            let label = std::mem::take(&mut done.label);
+            self.commit_step(
+                StepsOf::Image,
+                id,
+                leave_file,
+                source_kept,
+                kept.then_some(Some(label)),
+            );
+            self.image_note = if kept {
+                None
+            } else {
+                // Not kept: the card shows the clipboard's copy, these very bytes (the
+                // pasteboard has its own), as if read for it; the note goes on it.
+                self.drop_card_picture();
+                self.card_picture_asked = Some(change);
+                self.card_picture = Some((change, done.picture));
+                let shown = self
+                    .image_source()
+                    .map_or(source.allocation_id(), |shown| shown.allocation_id());
+                Some((shown, step_note(keep, None).to_string()))
             };
-            // A dropped or chosen picture: the card leaves it for the new copy.
-            if self.opened.is_some() {
-                self.leave_opened();
-            }
-            self.recorded_image_change = Some(change);
-            self.image_on_pasteboard = Some((change, recorded.clone()));
-            self.current_image = Some(recorded);
-            self.history_cursor = 0;
-            self.clipboard_cursor = None;
-            self.refresh_status_menu();
-            if let Some(new_id) = self.history.id_at(0) {
-                self.image_steps = Some(CopySteps::stepped(
-                    self.image_steps.take(),
-                    id,
-                    new_id,
-                    Some(done.label),
-                ));
-            }
-            self.image_note = None;
-            self.reset_view();
         }
         #[cfg(not(target_os = "macos"))]
         {

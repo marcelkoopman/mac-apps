@@ -442,28 +442,54 @@ impl App {
                 kept: recorded,
             });
         }
-        if from_file {
+        self.commit_step(
+            StepsOf::Text,
+            id,
+            from_file,
+            source_kept,
+            recorded.then_some(None),
+        );
+        self.text_note = if recorded {
+            None
+        } else {
+            // On the card that shows now (the result, or while held the entry history shows).
+            let shown = self.text_entry().map_or(id, |(at, _)| at);
+            Some((shown, step_note(keep, taken.err()).to_string()))
+        };
+        self.refresh_popup();
+    }
+
+    /// The end of a Text ▾ or Image ▾ step whose copy is on the clipboard now, alike for both:
+    /// the card leaves an opened file for the new copy (`leave_file`), the status menu and the
+    /// card's place follow history when the copy it was taken on (`source_kept`) or the step's
+    /// copy went in, and a kept copy (`kept`, with its step's name) is the step after entry
+    /// `from` for ⌘Z. The caller sets its note and refreshes the card.
+    pub(super) fn commit_step(
+        &mut self,
+        which: StepsOf,
+        from: u64,
+        leave_file: bool,
+        source_kept: bool,
+        kept: Option<Option<String>>,
+    ) {
+        if leave_file {
             self.leave_opened();
         }
-        if source_kept || recorded {
+        if source_kept || kept.is_some() {
             self.history_cursor = 0;
             self.clipboard_cursor = None;
             self.refresh_status_menu();
         }
-        if !recorded {
-            // On the card that shows now (the result, or while held the entry history shows).
-            let shown = self.text_entry().map_or(id, |(at, _)| at);
-            self.text_note = Some((shown, step_note(keep, taken.err()).to_string()));
-            self.reset_view();
-            self.refresh_popup();
-            return;
+        if let Some(label) = kept
+            && let Some(new_id) = self.history.id_at(0)
+        {
+            let slot = match which {
+                StepsOf::Text => &mut self.text_steps,
+                StepsOf::Image => &mut self.image_steps,
+            };
+            *slot = Some(CopySteps::stepped(slot.take(), from, new_id, label));
         }
-        if let Some(new_id) = self.history.id_at(0) {
-            self.text_steps = Some(CopySteps::stepped(self.text_steps.take(), id, new_id, None));
-        }
-        self.text_note = None;
         self.reset_view();
-        self.refresh_popup();
     }
 
     /// A hash of sensitive text: on the clipboard, concealed, and nowhere else. No version.

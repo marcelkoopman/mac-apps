@@ -545,3 +545,28 @@ fn wipe_and_lock_forget_the_steps_and_the_card_alike() {
     assert!(lock.contains("self.forget_entries(true);"));
     assert!(!lock.contains("if end_session_history"));
 }
+
+#[test]
+fn text_and_image_steps_end_alike() {
+    let text = method_body(include_str!("text.rs"), "text_stepped");
+    let image = method_body(include_str!("image.rs"), "image_stepped");
+    for (name, body) in [("text", text), ("image", image)] {
+        assert!(body.contains("self.commit_step("), "{name}");
+        // The helper does these, kept or not; the step does not do them on one path only.
+        for part in [
+            "self.leave_opened()",
+            "self.refresh_status_menu()",
+            "CopySteps::stepped(",
+        ] {
+            assert!(!body.contains(part), "{name}: {part}");
+        }
+    }
+    let commit = method_body(include_str!("text.rs"), "commit_step");
+    for part in [
+        "self.leave_opened()",
+        "self.refresh_status_menu()",
+        "self.reset_view()",
+    ] {
+        assert!(commit.contains(part), "{part}");
+    }
+}
