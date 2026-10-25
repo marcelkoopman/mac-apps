@@ -27,6 +27,10 @@
 //! - `image`: `image`, an `NSImage` from encoded bytes or straight RGBA8, and its pixel size.
 //! - `quicklook`: `quicklook`, the first page of a document (docx, …) as PNG bytes through
 //!   `QLThumbnailGenerator`, in memory, waited for with a timeout.
+//! - `screenshot`: `screenshot`, a screenshot through ScreenCaptureKit (linked, looked up at
+//!   run time, no crate): the Screen Recording permission, the selection overlay (area, window
+//!   or screen), the capture as PNG bytes in memory and the thumbnail afterwards. Its
+//!   arithmetic (`shot_area`) builds on every platform.
 //! - `wake`: `wake::observe_sleep_wake`, a callback when the Mac goes to sleep and wakes up.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
@@ -90,6 +94,9 @@ pub mod pasteboard_types;
 pub mod progress;
 #[cfg(all(target_os = "macos", feature = "quicklook"))]
 pub mod quicklook;
+#[cfg(all(target_os = "macos", feature = "screenshot"))]
+pub mod screenshot;
+pub mod shot_area;
 pub mod style;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod text;

@@ -41,9 +41,17 @@ copycraft impl 9
 # 2026-10-23): the history strip's 12 pt right-edge fade is a CAGradientLayer mask on the scroll view's layer
 # (msg_send!: no QuartzCore crate, none added). A mask, not a covering view, so it works over Liquid Glass
 # and clicks reach the cards under it; a per-width THUMB_GAP could not give every window size a 40 pt peek.
-mac-ui blocks 84
+# mac-ui blocks 92, impl 6: +8 blocks, +2 impl for screenshots phase 1 (approved by Marcel 2026-10-25,
+# mac_ui::screenshot behind the `screenshot` feature; no ScreenCaptureKit crate, so msg_send! on the
+# classes and a framework link). capture.rs (5): the shareable-content and screenshot completion
+# handlers' nullable arguments (2), getShareableContent…:completionHandler:, the SCContentFilter /
+# SCStreamConfiguration set-up, and captureImageWithFilter:configuration:completionHandler:.
+# select.rs (1): the overlay view's `initWithFrame:` on super. thumbnail.rs (2 blocks, 2 impl): the
+# thumbnail view's `initWithFrame:` on super and NSDraggingItem's setDraggingFrame:contents: (marked
+# `unsafe`), plus `unsafe impl NSObjectProtocol` and `unsafe impl NSDraggingSource` (drag the PNG out).
+mac-ui blocks 92
 mac-ui fn 4
-mac-ui impl 4
+mac-ui impl 6
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
 # 6 blocks (availability, Job::new/cancel/run (2)/drop) and 2 `unsafe impl` (Job: Send + Sync).
 # copycraft and mac-ui stay as they were: the AI code in copycraft adds no unsafe.

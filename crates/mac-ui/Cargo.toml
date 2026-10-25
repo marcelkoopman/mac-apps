@@ -162,6 +162,38 @@ quicklook = [
     "objc2-foundation/NSURL",
     "objc2-foundation/block2",
 ]
+# `mac_ui::screenshot`: ScreenCaptureKit (linked, its classes looked up at run time: there is no
+# crate for it in the tree) through block2 completion handlers; the Screen Recording permission
+# and the on-screen window list (ids and bounds only) from CoreGraphics' CGWindow, bridged to
+# NSArray/NSDictionary/NSNumber; the overlay (NSBezierPath, NSCursor) on borderless `panel`
+# windows; the thumbnail (NSImageView through `image`, a drag with NSDraggingItem and an
+# NSPasteboardItem, hidden through `widgets`' run_on_main). objc2-core-graphics and
+# objc2-core-foundation are already in the tree: no new crate.
+screenshot = [
+    "dep:block2",
+    "dep:objc2-core-foundation",
+    "dep:objc2-core-graphics",
+    "image",
+    "panel",
+    "widgets",
+    "objc2-app-kit/NSBezierPath",
+    "objc2-app-kit/NSBitmapImageRep",
+    "objc2-app-kit/NSCursor",
+    "objc2-app-kit/NSDragging",
+    "objc2-app-kit/NSDraggingItem",
+    "objc2-app-kit/NSDraggingSession",
+    "objc2-app-kit/NSGraphics",
+    "objc2-app-kit/NSImageRep",
+    "objc2-app-kit/NSImageView",
+    "objc2-app-kit/NSPasteboard",
+    "objc2-app-kit/NSPasteboardItem",
+    "objc2-app-kit/objc2-core-graphics",
+    "objc2-foundation/NSData",
+    "objc2-foundation/NSDictionary",
+    "objc2-foundation/NSError",
+    "objc2-foundation/NSValue",
+    "objc2-foundation/block2",
+]
 # `mac_ui::wake::observe_sleep_wake`: NSWorkspace will-sleep / did-wake notifications, delivered
 # on the main operation queue through a block observer.
 wake = [
@@ -202,6 +234,9 @@ block2 = { workspace = true, optional = true }
 objc2-user-notifications = { workspace = true, optional = true }
 # `quicklook` only.
 objc2-quick-look-thumbnailing = { workspace = true, optional = true }
+# `screenshot` only (both already in the tree through objc2-app-kit).
+objc2-core-foundation = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CFArray"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CGImage", "CGWindow"] }
 # `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
 
