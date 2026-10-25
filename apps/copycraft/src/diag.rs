@@ -124,6 +124,10 @@ pub enum LogEvent {
     LoginItemFailed(ErrorKind),
     MissingLocaleKey,
     ScreenshotsAllowed(bool),
+    /// A screenshot went to the clipboard. Nothing about it: no size, no window, no app.
+    ScreenshotCaptured,
+    /// A screenshot failed, and the kind of why.
+    ScreenshotFailed(crate::screenshot::Failure),
     HotkeyRegistered,
     HotkeyRegisterFailed(ErrorKind),
     HotkeyUnregisterFailed(ErrorKind),
@@ -283,7 +287,9 @@ impl LogEvent {
     pub fn category(self) -> Category {
         use LogEvent as E;
         match self {
-            E::CopySkipped(_)
+            E::ScreenshotCaptured
+            | E::ScreenshotFailed(_)
+            | E::CopySkipped(_)
             | E::ClipboardUnreadable
             | E::PasteAccess { .. }
             | E::CopyFailed(_)
@@ -370,6 +376,7 @@ impl LogEvent {
             | E::SaveFailed(_)
             | E::OpenPanelFailed(_)
             | E::SymbolCopyFailed(_)
+            | E::ScreenshotFailed(_)
             | E::VisitFailed => Level::Error,
             E::ComplexityFailed { .. } => Level::Fault,
             // Cosmetic or expected: worth a note, not an error.
@@ -388,6 +395,7 @@ impl LogEvent {
             | E::PreviewNoPicture
             | E::Started
             | E::ScreenshotsAllowed(_)
+            | E::ScreenshotCaptured
             | E::HotkeyRegistered
             | E::PasteAccess { .. }
             | E::SensitiveCleared
@@ -435,6 +443,8 @@ impl LogEvent {
             E::ScreenshotsAllowed(on) => {
                 format!("allow screenshots: {}", if on { "on" } else { "off" })
             }
+            E::ScreenshotCaptured => "screenshot: captured".into(),
+            E::ScreenshotFailed(why) => format!("screenshot: failed ({})", why.as_str()),
             E::HotkeyRegistered => "hotkey registered".into(),
             E::HotkeyRegisterFailed(k) => format!("hotkey register failed: {}", k.describe()),
             E::HotkeyUnregisterFailed(k) => format!("hotkey unregister failed: {}", k.describe()),
@@ -847,6 +857,16 @@ mod tests {
             Category::Table
         );
         assert_eq!(LogEvent::CopyFailed(ErrorKind::Other).level(), Level::Error);
+        // A screenshot: that it was taken, or the kind of failure. Nothing about the screen.
+        assert_eq!(LogEvent::ScreenshotCaptured.line(), "screenshot: captured");
+        assert_eq!(
+            LogEvent::ScreenshotFailed(crate::screenshot::Failure::NotAllowed).line(),
+            "screenshot: failed (not allowed)"
+        );
+        assert_eq!(
+            LogEvent::ScreenshotFailed(crate::screenshot::Failure::NoPicture).level(),
+            Level::Error
+        );
     }
 
     #[test]

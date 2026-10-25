@@ -534,6 +534,7 @@ impl App {
             paused: crate::capture::paused(),
             ignore_next: crate::capture::ignore_next(),
             can_ignore_app: crate::capture::last_foreign().is_some(),
+            can_screenshot: crate::screenshot::available(),
             notice: self
                 .pin_refused
                 .then(|| crate::locale::t("pin_list_full").to_string()),

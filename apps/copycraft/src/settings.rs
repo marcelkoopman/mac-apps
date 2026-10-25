@@ -54,6 +54,12 @@ pub struct Settings {
     /// Global hotkey as a [`global_hotkey::hotkey::HotKey`] string (`control+meta+KeyC`).
     /// `None` means the default ([`hotkey::open`]).
     pub hotkey: Option<String>,
+    /// Global hotkey that starts a screenshot, stored like [`Self::hotkey`]. `None` means the
+    /// default ([`hotkey::screenshot`]).
+    pub screenshot_hotkey: Option<String>,
+    /// CopyCraft's own windows are in a screenshot it takes (Settings › Privacy). Off by
+    /// default: they are left out of the capture.
+    pub screenshot_includes_own: bool,
     /// Interface language. [`Language::System`] until a choice is stored.
     pub language: Language,
     /// "Show all" on a long text shows it one page at a time, like `more`. On by default.
@@ -134,6 +140,8 @@ impl Default for Settings {
             blur: false,
             date_month_first: false,
             hotkey: None,
+            screenshot_hotkey: None,
+            screenshot_includes_own: false,
             language: Language::System,
             page_long_text: true,
             announce_confirmations: true,
@@ -155,6 +163,10 @@ const BLUR_KEY: &str = "CopycraftBlurMaskedWell";
 const DATE_MONTH_FIRST_KEY: &str = "CopycraftDateMonthFirst";
 const HOTKEY_KEY: &str = "CopycraftHotkey";
 const LANGUAGE_KEY: &str = "CopycraftLanguage";
+const SCREENSHOT_HOTKEY_KEY: &str = "CopycraftScreenshotHotkey";
+const SCREENSHOT_INCLUDES_OWN_KEY: &str = "CopycraftScreenshotIncludesOwn";
+/// The Screen Recording explanation was shown and the system asked once. Not content.
+const SCREENSHOT_ASKED_KEY: &str = "CopycraftScreenshotAsked";
 const PAGE_LONG_TEXT_KEY: &str = "CopycraftPageLongText";
 const ANNOUNCE_KEY: &str = "CopycraftAnnounceConfirmations";
 const WINDOW_SIZE_KEY: &str = "CopycraftWindowSize";
@@ -237,6 +249,12 @@ pub fn load() -> Settings {
     }
     if let Some(text) = load_string(HOTKEY_KEY).filter(|text| !text.is_empty()) {
         settings.hotkey = Some(text);
+    }
+    if let Some(text) = load_string(SCREENSHOT_HOTKEY_KEY).filter(|text| !text.is_empty()) {
+        settings.screenshot_hotkey = Some(text);
+    }
+    if let Some(value) = load_bool(SCREENSHOT_INCLUDES_OWN_KEY) {
+        settings.screenshot_includes_own = value;
     }
     if let Some(language) = load_string(LANGUAGE_KEY).and_then(|text| Language::parse(&text)) {
         settings.language = language;
@@ -481,9 +499,10 @@ pub(crate) fn language_test_lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
-/// Store `chord` when it is safe ([`hotkey::is_safe`]); otherwise keep the previous value.
+/// Store `chord` when it is safe ([`hotkey::is_safe`]) and not the screenshot chord; otherwise
+/// keep the previous value.
 pub fn set_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
-    if !hotkey::is_safe(chord) {
+    if !hotkey::may_store(chord, &screenshot_hotkey()) {
         return false;
     }
     store_string(HOTKEY_KEY, &hotkey::to_storage(chord));
@@ -498,6 +517,46 @@ pub fn hotkey() -> global_hotkey::hotkey::HotKey {
 /// Compact label of the stored chord (`⌃⌘C`).
 pub fn hotkey_label() -> String {
     hotkey::label(&hotkey())
+}
+
+/// Store the screenshot `chord` when it is safe and not the card's chord; otherwise keep the
+/// previous value.
+pub fn set_screenshot_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
+    if !hotkey::may_store(chord, &hotkey()) {
+        return false;
+    }
+    store_string(SCREENSHOT_HOTKEY_KEY, &hotkey::to_storage(chord));
+    true
+}
+
+/// The stored screenshot chord, or the default (⌃⇧4).
+pub fn screenshot_hotkey() -> global_hotkey::hotkey::HotKey {
+    hotkey::screenshot_from_storage(load().screenshot_hotkey.as_deref())
+}
+
+/// Compact label of the stored screenshot chord (`⌃⇧4`).
+pub fn screenshot_hotkey_label() -> String {
+    hotkey::label(&screenshot_hotkey())
+}
+
+/// Whether a screenshot also shows CopyCraft's own windows. Off unless the user stored it.
+pub fn screenshot_includes_own() -> bool {
+    load_bool(SCREENSHOT_INCLUDES_OWN_KEY).unwrap_or(Settings::default().screenshot_includes_own)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_screenshot_includes_own(on: bool) {
+    store_bool(SCREENSHOT_INCLUDES_OWN_KEY, on);
+}
+
+/// Whether the Screen Recording explanation and the system's question were shown once.
+pub fn screenshot_asked() -> bool {
+    load_bool(SCREENSHOT_ASKED_KEY).unwrap_or(false)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn set_screenshot_asked() {
+    store_bool(SCREENSHOT_ASKED_KEY, true);
 }
 
 /// Whether the welcome window should open: only while `hasSeenWelcome` was never stored.
@@ -914,6 +973,25 @@ mod tests {
     }
 
     #[test]
+    fn screenshots_leave_copycraft_out_until_the_user_includes_it() {
+        assert!(!Settings::default().screenshot_includes_own);
+        assert!(!super::screenshot_includes_own());
+        assert!(!super::load().screenshot_includes_own);
+        super::set_screenshot_includes_own(true);
+        assert!(super::screenshot_includes_own());
+        assert!(super::load().screenshot_includes_own);
+        super::set_screenshot_includes_own(false);
+        assert!(!super::screenshot_includes_own());
+    }
+
+    #[test]
+    fn the_screenshot_permission_is_asked_once() {
+        assert!(!super::screenshot_asked());
+        super::set_screenshot_asked();
+        assert!(super::screenshot_asked());
+    }
+
+    #[test]
     fn defaults_match_the_previous_behaviour() {
         let settings = Settings::default();
         assert!(settings.clear_sensitive);
@@ -922,6 +1000,7 @@ mod tests {
         assert!(!settings.blur);
         assert!(!settings.date_month_first);
         assert!(settings.hotkey.is_none());
+        assert!(settings.screenshot_hotkey.is_none());
         assert_eq!(settings.language, super::Language::System);
         assert!(super::HISTORY_MINUTES.contains(&settings.history_minutes));
     }

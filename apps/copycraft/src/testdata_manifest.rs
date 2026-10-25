@@ -83,6 +83,7 @@ fn data(text: &str, view: CardView) -> LaunchData {
         paused: false,
         ignore_next: false,
         can_ignore_app: false,
+        can_screenshot: false,
         notice: None,
         history_nav: None,
         strip: Vec::new(),

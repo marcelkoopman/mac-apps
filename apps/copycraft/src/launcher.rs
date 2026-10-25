@@ -53,6 +53,15 @@ pub enum UserEvent {
     PasteHint,
     /// The screen locked, the Mac is going to sleep, or the user switched away.
     SessionEnded,
+    /// A screenshot is done ([`crate::screenshot`]): its PNG bytes, or why not (`Err(None)`:
+    /// the user cancelled). One with a stale `generation` (Wipe, the lock screen) is dropped,
+    /// its bytes zeroized.
+    ScreenshotTaken {
+        generation: u64,
+        result: Result<crate::clipboard::SecretBytes, Option<crate::screenshot::Failure>>,
+    },
+    /// The screenshot's thumbnail was clicked: open the card on it.
+    ScreenshotOpened,
     /// A table job ([`crate::table::Job`]) is done, or failed.
     TableDone(Box<TableDone>),
     /// An Image ▾ job ([`crate::image_edit::Job`]) is done, or failed.
@@ -448,7 +457,24 @@ pub fn capture_for(allow_screenshots: bool) -> Capture {
 }
 
 pub fn capture() -> Capture {
-    capture_for(allows_screenshots())
+    capture_for(allows_screenshots() || SCREENSHOT_INCLUDES.load(Ordering::Relaxed))
+}
+
+/// While a screenshot of CopyCraft's own (Settings › Privacy › *Show CopyCraft in
+/// screenshots*) is being picked and taken, the card and the table window can be captured.
+static SCREENSHOT_INCLUDES: AtomicBool = AtomicBool::new(false);
+
+/// Let the card and the table window into the screenshot being taken (`true`), or leave them
+/// out again (`false`, also on Wipe and the lock screen); the open windows follow at once.
+pub fn set_screenshot_includes(on: bool) {
+    if SCREENSHOT_INCLUDES.swap(on, Ordering::Relaxed) == on {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_launcher::apply_capture();
+        crate::macos_table_window::apply_capture();
+    }
 }
 
 pub fn allows_screenshots() -> bool {

@@ -10,11 +10,17 @@ pub enum Pane {
     /// Privacy & Security › Paste from Other Apps (macOS 15.4+, where *Deny* is undone). An
     /// anchor macOS does not know opens Privacy & Security itself.
     PastePrivacy,
+    /// Privacy & Security › Screen & System Audio Recording, where screenshots are allowed.
+    ScreenRecordingPrivacy,
 }
 
 impl Pane {
     #[cfg(test)]
-    pub const ALL: [Self; 2] = [Self::Notifications, Self::PastePrivacy];
+    pub const ALL: [Self; 3] = [
+        Self::Notifications,
+        Self::PastePrivacy,
+        Self::ScreenRecordingPrivacy,
+    ];
 
     /// The pane's fixed URL.
     pub fn url(self) -> &'static str {
@@ -24,6 +30,9 @@ impl Pane {
             }
             Self::PastePrivacy => {
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Pasteboard"
+            }
+            Self::ScreenRecordingPrivacy => {
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture"
             }
         }
     }

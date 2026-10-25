@@ -459,6 +459,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::Pause => "pause",
         CommandId::IgnoreNext => "forward.end",
         CommandId::IgnoreFrontApp => "app.badge.checkmark",
+        CommandId::TakeScreenshot => "camera.viewfinder",
         CommandId::ClearSensitive => "timer",
         CommandId::Pin => "pin",
         CommandId::Unpin => "pin.slash",

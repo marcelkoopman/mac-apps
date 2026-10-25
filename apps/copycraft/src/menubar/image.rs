@@ -513,7 +513,7 @@ impl App {
     /// Scan a step's copy (`png`, on the clipboard as `change`, made with `verdict`; in history
     /// as `recorded`) on a thread, as the card would; [`Self::image_step_scanned`] takes it.
     #[cfg(target_os = "macos")]
-    fn scan_step_copy(
+    pub(crate) fn scan_step_copy(
         &mut self,
         change: isize,
         png: Zeroizing<Vec<u8>>,

@@ -1,4 +1,5 @@
-//! Global hotkey that summons the card. Stored in the user defaults; the default is ⌃⌘C.
+//! Global hotkeys: the one that summons the card (default ⌃⌘C) and the one that starts a
+//! screenshot (default ⌃⇧4). Both are stored in the user defaults.
 
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 
@@ -16,6 +17,30 @@ const PREVIOUS_DEFAULT_STORAGE: &str = "control+alt+super+KeyC";
 /// The chord registered at launch when none is stored.
 pub fn open() -> HotKey {
     HotKey::new(Some(Modifiers::CONTROL | Modifiers::META), Code::KeyC)
+}
+
+/// Menu / Settings label for the default screenshot chord ([`screenshot`]).
+#[cfg_attr(not(test), allow(dead_code))]
+pub const SCREENSHOT_LABEL: &str = "⌃⇧4";
+
+/// The chord that starts a screenshot when none is stored: ⇧⌘4 with Control instead of
+/// Command, so it sits next to the system's own chords without taking one of them.
+pub fn screenshot() -> HotKey {
+    HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Digit4)
+}
+
+/// The screenshot chord from `storage`, or [`screenshot`] when missing or unsafe.
+pub fn screenshot_from_storage(storage: Option<&str>) -> HotKey {
+    storage
+        .and_then(|text| text.parse::<HotKey>().ok())
+        .filter(is_safe)
+        .unwrap_or_else(screenshot)
+}
+
+/// Whether `chord` may be stored next to `other` (the other global hotkey): safe, and not the
+/// same chord, which would register only once.
+pub fn may_store(chord: &HotKey, other: &HotKey) -> bool {
+    is_safe(chord) && chord.id() != other.id()
 }
 
 /// The chord from `storage` (a [`HotKey`] string), or the default when missing, unsafe, or still
@@ -155,7 +180,49 @@ pub fn code_from_key_code(key_code: u16) -> Option<Code> {
 mod tests {
     use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 
-    use super::{DEFAULT_LABEL, DEFAULT_STORAGE, from_storage, is_safe, label, open, to_storage};
+    use super::{
+        DEFAULT_LABEL, DEFAULT_STORAGE, SCREENSHOT_LABEL, from_storage, is_safe, label, may_store,
+        open, screenshot, screenshot_from_storage, to_storage,
+    };
+
+    #[test]
+    fn the_screenshot_chord_is_control_shift_4_and_round_trips() {
+        let chord = screenshot();
+        assert_eq!(label(&chord), SCREENSHOT_LABEL);
+        assert_eq!(chord.key, Code::Digit4);
+        assert_eq!(chord.mods, Modifiers::CONTROL | Modifiers::SHIFT);
+        assert!(is_safe(&chord));
+        assert_ne!(chord.id(), open().id());
+        let stored = to_storage(&chord);
+        assert_eq!(screenshot_from_storage(Some(&stored)).id(), chord.id());
+        // Another safe chord is kept; nothing, rubbish or an unsafe chord gives the default.
+        let other = HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Digit5);
+        assert_eq!(
+            screenshot_from_storage(Some(&to_storage(&other))).id(),
+            other.id()
+        );
+        assert_eq!(screenshot_from_storage(None).id(), chord.id());
+        assert_eq!(screenshot_from_storage(Some("nonsense")).id(), chord.id());
+        assert_eq!(
+            screenshot_from_storage(Some("shift+Digit4")).id(),
+            chord.id()
+        );
+        // The previous default of the card's chord is a valid screenshot chord here.
+        let previous = screenshot_from_storage(Some("control+alt+super+KeyC"));
+        assert_eq!(previous.key, Code::KeyC);
+    }
+
+    #[test]
+    fn the_two_hotkeys_may_not_be_the_same_chord() {
+        assert!(may_store(&screenshot(), &open()));
+        assert!(may_store(&open(), &screenshot()));
+        assert!(!may_store(&open(), &open()));
+        assert!(!may_store(&screenshot(), &screenshot()));
+        assert!(!may_store(
+            &HotKey::new(Some(Modifiers::SHIFT), Code::Digit4),
+            &open()
+        ));
+    }
 
     #[test]
     fn default_chord_is_control_command_c() {

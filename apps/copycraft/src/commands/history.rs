@@ -284,6 +284,23 @@ pub(crate) fn capture_commands(data: &LaunchData) -> Vec<Command> {
     ]
 }
 
+/// *Take Screenshot…*, in search. Greyed out, with a note why, where ScreenCaptureKit is
+/// missing.
+pub(crate) fn screenshot_command(data: &LaunchData) -> Command {
+    let detail = if data.can_screenshot {
+        crate::locale::t("detail_screenshot")
+    } else {
+        crate::locale::t("screenshot_unavailable")
+    };
+    command_enabled(
+        CommandId::TakeScreenshot,
+        crate::locale::t("take_screenshot"),
+        detail,
+        "screenshot capture screen window area schermafbeelding scherm",
+        data.can_screenshot,
+    )
+}
+
 /// The history entry on screen, when the card is showing one.
 pub(crate) fn shown_history(data: &LaunchData) -> Option<&Hist> {
     let id = data.shown_id?;

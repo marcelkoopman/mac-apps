@@ -84,6 +84,11 @@ pub(crate) struct App {
     /// The currently registered chord (for unregister on change).
     pub(crate) format_hotkey: global_hotkey::hotkey::HotKey,
     pub(crate) format_hotkey_id: u32,
+    /// The screenshot hotkey as registered; `None` when another app holds it.
+    pub(crate) screenshot_hotkey: Option<global_hotkey::hotkey::HotKey>,
+    /// Bumped by every screenshot and by Wipe and the lock screen: a result for an older one
+    /// is dropped ([`UserEvent::ScreenshotTaken`]).
+    pub(crate) shot_generation: u64,
     /// The sensitive copy copycraft wrote last, to clear when its minute is up.
     pub(crate) sensitive_clear: Option<SensitiveClear>,
     /// Change count of copycraft's own write whose labels were still being checked.

@@ -11,6 +11,27 @@ pub(crate) fn register_format_hotkey()
     Ok((manager, hotkey, id))
 }
 
+/// Register the screenshot hotkey on `manager`. `None` (logged) when another app holds the
+/// chord: screenshots still run from the menu and search.
+pub(crate) fn register_screenshot_hotkey(
+    manager: &GlobalHotKeyManager,
+) -> Option<global_hotkey::hotkey::HotKey> {
+    let chord = crate::settings::screenshot_hotkey();
+    // The card's hotkey was set to this chord before there were screenshots: the card keeps it.
+    if chord == crate::settings::hotkey() {
+        return None;
+    }
+    match manager.register(chord) {
+        Ok(()) => Some(chord),
+        Err(e) => {
+            crate::diag::log(crate::diag::LogEvent::HotkeyRegisterFailed(
+                crate::diag::ErrorKind::from_text(&e.to_string()),
+            ));
+            None
+        }
+    }
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     mac_ui::log::set_subsystem(crate::diag::SUBSYSTEM);
     crate::diag::log(crate::diag::LogEvent::Started);
@@ -37,6 +58,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         ));
     }
     let (hotkeys, hotkey, format_hotkey_id) = register_format_hotkey()?;
+    let screenshot_hotkey = register_screenshot_hotkey(&hotkeys);
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.
     let icons = tray::Glyphs {
@@ -109,6 +131,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         hotkeys,
         format_hotkey: hotkey,
         format_hotkey_id,
+        screenshot_hotkey,
+        shot_generation: 0,
         sensitive_clear: None,
         conceal_when_checked: None,
         polled_change: None,

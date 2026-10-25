@@ -5,6 +5,8 @@ use super::*;
 /// "Allow Screenshots" (testing): the card and the table window can be captured until it is
 /// switched off or CopyCraft restarts.
 pub(crate) const ALLOW_SCREENSHOTS_ID: &str = "allow-screenshots";
+/// *Take Screenshot…*, with the screenshot hotkey beside it.
+pub(crate) const SCREENSHOT_ID: &str = "take-screenshot";
 pub(crate) const PAUSE_ID: &str = "pause-recording";
 pub(crate) const IGNORE_NEXT_ID: &str = "ignore-next";
 
@@ -28,6 +30,7 @@ pub(crate) fn status_rows() -> Vec<String> {
         crate::locale::t("pause_recording").to_string(),
         crate::locale::t("ignore_next").to_string(),
         crate::locale::t("history").to_string(),
+        crate::locale::t("take_screenshot").to_string(),
         crate::locale::t("allow_screenshots").to_string(),
         crate::locale::t("welcome_menu").to_string(),
         crate::locale::t("settings").to_string(),
@@ -37,13 +40,22 @@ pub(crate) fn status_rows() -> Vec<String> {
     ]
 }
 
+/// The screenshot hotkey as the item's shortcut (shown beside it; the hotkey itself is global).
+fn screenshot_accelerator() -> Option<mac_ui::tray_icon::menu::accelerator::Accelerator> {
+    crate::settings::screenshot_hotkey()
+        .into_string()
+        .parse()
+        .ok()
+}
+
 /// *History ▸* can be opened when there is something in it and *Keep clipboard history* is on.
 pub(crate) fn history_submenu_enabled(entries: usize, history_on: bool) -> bool {
     entries > 0 && history_on
 }
 
 /// The status menu, in groups with a separator between them (as the HIG asks): the hotkey
-/// hint; recording (*Pause*, *Ignore Next Copy*, *History*); *Allow Screenshots*; the
+/// hint; recording (*Pause*, *Ignore Next Copy*, *History*); *Take Screenshot…* (with its
+/// hotkey; greyed out without ScreenCaptureKit) and *Allow Screenshots*; the
 /// windows (*Welcome Screen*, *Settings…* ⌘,); *About* and the version; *Quit CopyCraft* ⌘Q.
 /// `entries`: each history row's index, title and whether it is pinned (the pin image).
 pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
@@ -85,6 +97,12 @@ pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
     }
     let _ = menu.append(&history);
     let _ = menu.append(&PredefinedMenuItem::separator());
+    let _ = menu.append(&MenuItem::with_id(
+        SCREENSHOT_ID,
+        crate::locale::t("take_screenshot"),
+        crate::screenshot::available(),
+        screenshot_accelerator(),
+    ));
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
         crate::locale::t("allow_screenshots"),

@@ -59,6 +59,10 @@ thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
     static DELEGATE: RefCell<Option<Retained<SettingsDelegate>>> = const { RefCell::new(None) };
     static HOTKEY_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    /// The screenshot hotkey's value on Algemeen.
+    static SHOT_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    /// Privacy's "Show CopyCraft in screenshots".
+    static SHOT_OWN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static DATE_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
     static THEME_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
     /// The card theme preview: its plate and the sample text on it.
@@ -90,6 +94,8 @@ thread_local! {
     /// A tab the next build opens on instead of the stored last one ([`show_privacy`]).
     static OPEN_ON: Cell<Option<Tab>> = const { Cell::new(None) };
     static RECORDING: Cell<bool> = const { Cell::new(false) };
+    /// While [`RECORDING`]: the chord goes to the screenshot hotkey, not the card's.
+    static RECORDING_SHOT: Cell<bool> = const { Cell::new(false) };
     /// Level before [`crate::macos_launcher::raise_above_card`], restored on close.
     static LEVEL_BEFORE: Cell<Option<NSWindowLevel>> = const { Cell::new(None) };
 }
@@ -180,13 +186,20 @@ define_class!(
     impl SettingsDelegate {
         #[unsafe(method(changeHotkey:))]
         fn change_hotkey(&self, _sender: Option<&NSButton>) {
-            RECORDING.set(true);
-            set_hotkey_text(crate::locale::t("press_shortcut"));
-            WINDOW.with(|slot| {
-                if let Some(window) = slot.borrow().as_ref() {
-                    window.makeKeyAndOrderFront(None);
-                }
-            });
+            start_recording(false);
+        }
+
+        #[unsafe(method(changeScreenshotHotkey:))]
+        fn change_screenshot_hotkey(&self, _sender: Option<&NSButton>) {
+            start_recording(true);
+        }
+
+        #[unsafe(method(screenshotOwnToggled:))]
+        fn screenshot_own_toggled(&self, sender: Option<&NSButton>) {
+            let Some(button) = sender else {
+                return;
+            };
+            settings::set_screenshot_includes_own(button.state() == NSControlStateValueOn);
         }
 
         #[unsafe(method(tabChanged:))]
@@ -424,6 +437,8 @@ fn clear_controls() {
     TABS.with(|s| *s.borrow_mut() = None);
     PANES.with(|s| s.borrow_mut().clear());
     HOTKEY_LABEL.with(|s| *s.borrow_mut() = None);
+    SHOT_LABEL.with(|s| *s.borrow_mut() = None);
+    SHOT_OWN_BOX.with(|s| *s.borrow_mut() = None);
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
     THEME_POPUP.with(|s| *s.borrow_mut() = None);
     THEME_PLATE.with(|s| *s.borrow_mut() = None);
@@ -617,7 +632,7 @@ fn select_tab(index: usize) {
     save_ignored_field();
     if RECORDING.get() {
         RECORDING.set(false);
-        set_hotkey_text(&settings::hotkey_label());
+        show_stored_hotkeys();
     }
     show_pane(tab);
 }
@@ -688,7 +703,12 @@ fn restore_level(window: &NSWindow) {
 }
 
 fn refresh_all() {
-    set_hotkey_text(&settings::hotkey_label());
+    show_stored_hotkeys();
+    SHOT_OWN_BOX.with(|slot| {
+        if let Some(button) = slot.borrow().as_ref() {
+            button.setState(state_of(settings::screenshot_includes_own()));
+        }
+    });
     THEME_POPUP.with(|slot| {
         if let Some(popup) = slot.borrow().as_ref() {
             select_card_theme(popup);

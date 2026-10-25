@@ -39,6 +39,7 @@ mod paste_access;
 mod pdf;
 mod python;
 mod recognize;
+mod screenshot;
 mod sensitivity;
 mod settings;
 mod settings_tabs;

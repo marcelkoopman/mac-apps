@@ -266,6 +266,7 @@ impl App {
                     }
                 }
             }
+            CommandId::TakeScreenshot => self.take_screenshot(),
             CommandId::Pin => self.pin_shown(true),
             CommandId::Unpin => self.pin_shown(false),
             CommandId::DeleteHistory => self.remove_from_history(self.history_cursor),
@@ -480,8 +481,31 @@ impl App {
             .map(crate::diff::Outcome::copy_text)
     }
 
-    /// Unregister the old chord and register the one stored in Settings.
+    /// Unregister the old chords and register the ones stored in Settings.
     pub(crate) fn rebind_hotkey(&mut self) {
+        self.rebind_card_hotkey();
+        self.rebind_screenshot_hotkey();
+    }
+
+    /// The screenshot hotkey: the stored chord, or none when it cannot be registered (taken
+    /// by another app); the card's hotkey is not touched.
+    pub(crate) fn rebind_screenshot_hotkey(&mut self) {
+        let next = crate::settings::screenshot_hotkey();
+        if self.screenshot_hotkey == Some(next) {
+            return;
+        }
+        if let Some(old) = self.screenshot_hotkey.take()
+            && let Err(e) = self.hotkeys.unregister(old)
+        {
+            crate::diag::log(crate::diag::LogEvent::HotkeyUnregisterFailed(
+                crate::diag::ErrorKind::from_text(&e.to_string()),
+            ));
+        }
+        self.screenshot_hotkey = register_screenshot_hotkey(&self.hotkeys);
+        self.refresh_status_menu();
+    }
+
+    fn rebind_card_hotkey(&mut self) {
         let next = crate::settings::hotkey();
         if next.id() == self.format_hotkey_id {
             return;

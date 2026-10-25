@@ -325,6 +325,7 @@ impl App {
         self.text_note = None;
         // A Text ▾ result still on its way is for a copy that is gone.
         self.text_generation = self.text_generation.wrapping_add(1);
+        self.forget_screenshot();
         self.ai_stop();
         self.cancel_table_job();
         self.table_error = None;

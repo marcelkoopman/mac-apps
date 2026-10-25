@@ -70,6 +70,8 @@ pub struct LaunchData {
     pub ignore_next: bool,
     /// A frontmost app other than CopyCraft was seen, so it can be ignored.
     pub can_ignore_app: bool,
+    /// ScreenCaptureKit is there, so *Take Screenshot…* can run.
+    pub can_screenshot: bool,
     /// One line for the card meta, such as a full pin list.
     pub notice: Option<String>,
     /// `<` older and `>` newer, when an earlier copy exists. Absent hides both.
@@ -510,6 +512,9 @@ pub enum CommandId {
     IgnoreNext,
     /// Add the last other frontmost app to the ignore list.
     IgnoreFrontApp,
+    /// Take a screenshot (an area, a window or the whole screen) to the clipboard and history
+    /// ([`crate::screenshot`]).
+    TakeScreenshot,
     /// Pin the entry on screen.
     Pin,
     /// Unpin the entry on screen.

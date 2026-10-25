@@ -60,6 +60,7 @@ mod pdf_pages;
 mod popup;
 mod run;
 mod save;
+mod shot;
 mod source;
 #[cfg(test)]
 use source::skip_after_drop;
@@ -68,6 +69,7 @@ mod table;
 mod text;
 mod work;
 
+pub(crate) use image::{StepKeep, step_keep};
 pub(crate) use work::WorkDone;
 
 use ai::*;

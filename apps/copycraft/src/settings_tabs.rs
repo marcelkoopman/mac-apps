@@ -19,14 +19,16 @@ pub const TAB_BAR_H: f64 = BUTTON_H;
 /// gap and a note, then a gap and Announce confirmations.
 pub const NOTIFY_H: f64 =
     BUTTON_H + 2.0 * BUTTON_H + SPACE_S + NOTE_GAP + NOTE_H + SPACE_S + SETTING_H;
-/// Algemeen: four settings, then the Meldingen block, four gaps.
-pub const GENERAL_H: f64 = 4.0 * SETTING_H + 4.0 * SPACE_S + NOTIFY_H;
+/// Algemeen: five settings (the card's hotkey, the screenshot hotkey, language, date order,
+/// Open at Login), then the Meldingen block, five gaps.
+pub const GENERAL_H: f64 = 5.0 * SETTING_H + 5.0 * SPACE_S + NOTIFY_H;
 /// The settings under "Keep clipboard history": retention, sensitive copies and ask before
 /// clearing, one row each without a note (the note is the tooltip), after a gap.
 pub const HISTORY_SUB_H: f64 = SPACE_S + 3.0 * BUTTON_H + 2.0 * SPACE_XS;
-/// Privacy: three settings ("Keep clipboard history", the privacy filter, blur), the second
-/// line of the history note, the rows under history, the ignored-apps block, three gaps.
-pub const PRIVACY_H: f64 = 3.0 * SETTING_H + NOTE_H + HISTORY_SUB_H + 3.0 * SPACE_S + FIELD_BLOCK_H;
+/// Privacy: four settings ("Keep clipboard history", the privacy filter, blur, CopyCraft in
+/// screenshots), the second line of the history note, the rows under history, the
+/// ignored-apps block, four gaps.
+pub const PRIVACY_H: f64 = 4.0 * SETTING_H + NOTE_H + HISTORY_SUB_H + 4.0 * SPACE_S + FIELD_BLOCK_H;
 /// The symbols on Weergave: the labelled setting, then the field with Restore on the same row.
 pub const FIELD_ROW_BLOCK_H: f64 = SETTING_H + SPACE_S + BUTTON_H;
 /// Weergave: the card theme row (popup and preview, no note), the pages setting, two gaps and
@@ -41,14 +43,14 @@ pub const fn window_height(pane_h: f64) -> f64 {
 const _: () = assert!(SETTING_H == 46.0);
 const _: () = assert!(FIELD_BLOCK_H == 118.0);
 const _: () = assert!(FIELD_ROW_BLOCK_H == 82.0);
-const _: () = assert!(GENERAL_H == 380.0);
+const _: () = assert!(GENERAL_H == 434.0);
 const _: () = assert!(HISTORY_SUB_H == 100.0);
-const _: () = assert!(PRIVACY_H == 396.0);
+const _: () = assert!(PRIVACY_H == 450.0);
 const _: () = assert!(DISPLAY_H == 172.0);
 const _: () = assert!(NOTIFY_H == 164.0);
 /// The tallest tabs (Privacy, then Algemeen) fit a 13" MacBook Air (about 560 pt for a window) with room to spare.
-const _: () = assert!(window_height(PRIVACY_H) == 472.0);
-const _: () = assert!(window_height(GENERAL_H) == 456.0);
+const _: () = assert!(window_height(PRIVACY_H) == 526.0);
+const _: () = assert!(window_height(GENERAL_H) == 510.0);
 
 /// The tabs of the window, in the order of the segments.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -166,9 +168,9 @@ mod tests {
     #[test]
     fn every_tab_has_its_own_height_and_the_tallest_fits() {
         let heights: Vec<f64> = Tab::ALL.iter().map(|tab| tab.window_height()).collect();
-        assert_eq!(heights, [456.0, 472.0, 248.0]);
+        assert_eq!(heights, [510.0, 526.0, 248.0]);
         // Under about 560 pt, the room a 13" MacBook Air has for a window.
-        assert!(heights.iter().all(|h| *h <= 472.0));
+        assert!(heights.iter().all(|h| *h <= 526.0));
     }
 
     #[test]

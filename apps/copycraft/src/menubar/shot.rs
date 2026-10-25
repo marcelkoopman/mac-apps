@@ -1,0 +1,214 @@
+//! Screenshots (phase 1): *Take Screenshot…* (status menu, search, the screenshot hotkey)
+//! asks for Screen Recording when needed, shows `mac_ui`'s selection overlay, takes the
+//! picture through ScreenCaptureKit and puts it on the clipboard as a new copy, in history like
+//! an Image ▾ step's (Pause holds it back), then shows the thumbnail. In memory only: Wipe and
+//! the lock screen drop a result still on its way, the overlay and the thumbnail
+//! ([`App::forget_screenshot`]). The log says only that one was taken, or the kind of failure.
+
+use super::*;
+
+use crate::screenshot::Failure;
+
+impl App {
+    /// *Take Screenshot…*: the permission first ([`crate::screenshot::next`]), then the
+    /// selection.
+    pub(crate) fn take_screenshot(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+                return;
+            };
+            if !crate::screenshot::available() {
+                crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(
+                    Failure::Unavailable,
+                ));
+                return;
+            }
+            use crate::screenshot::Next;
+            let next = crate::screenshot::next(
+                mac_ui::screenshot::allowed(),
+                crate::settings::screenshot_asked(),
+            );
+            match next {
+                Next::Select => self.select_screenshot(mtm),
+                Next::Explain => {
+                    explain(mtm);
+                    crate::settings::set_screenshot_asked();
+                    let granted = mac_ui::screenshot::ask();
+                    if crate::screenshot::after_question(granted) == Some(Next::Select) {
+                        self.select_screenshot(mtm);
+                    }
+                }
+                Next::Denied => denied(mtm),
+            }
+        }
+    }
+
+    /// Show the overlay; what is picked is captured off the main thread and comes back as
+    /// [`UserEvent::ScreenshotTaken`].
+    #[cfg(target_os = "macos")]
+    fn select_screenshot(&mut self, mtm: mac_ui::objc2::MainThreadMarker) {
+        self.shot_generation = self.shot_generation.wrapping_add(1);
+        let generation = self.shot_generation;
+        let include_own = crate::settings::screenshot_includes_own();
+        // CopyCraft's own windows stay out unless the user lets them in (Settings › Privacy).
+        let leave_out = (!include_own).then(mac_ui::screenshot::own_pid);
+        launcher::set_screenshot_includes(include_own);
+        mac_ui::screenshot::select(mtm, leave_out, move |pick| {
+            let Some(pick) = pick else {
+                launcher::emit(UserEvent::ScreenshotTaken {
+                    generation,
+                    result: Err(None),
+                });
+                return;
+            };
+            mac_ui::screenshot::capture(pick.into(), leave_out, move |result| {
+                let result = match result {
+                    Ok(mut png) => {
+                        SecretBytes::new(std::mem::take(&mut *png)).ok_or(Some(Failure::NoPicture))
+                    }
+                    Err(failed) => Err(Some(failure_of(failed))),
+                };
+                launcher::emit(UserEvent::ScreenshotTaken { generation, result });
+            });
+        });
+    }
+
+    /// A screenshot is back: on the clipboard, into history unless Pause holds it, then the
+    /// thumbnail. A stale one (Wipe, the lock screen in between) is zeroized instead.
+    pub(crate) fn screenshot_taken(
+        &mut self,
+        generation: u64,
+        result: Result<SecretBytes, Option<Failure>>,
+    ) {
+        if generation != self.shot_generation {
+            if let Ok(png) = result {
+                png.zeroize();
+            }
+            return;
+        }
+        launcher::set_screenshot_includes(false);
+        let png = match result {
+            Ok(png) => png,
+            Err(None) => return,
+            Err(Some(why)) => {
+                crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(why));
+                #[cfg(target_os = "macos")]
+                if why == Failure::NotAllowed
+                    && let Some(mtm) = mac_ui::objc2::MainThreadMarker::new()
+                {
+                    denied(mtm);
+                }
+                return;
+            }
+        };
+        #[cfg(target_os = "macos")]
+        self.keep_screenshot(png);
+        #[cfg(not(target_os = "macos"))]
+        png.zeroize();
+    }
+
+    /// As an Image ▾ step's copy ([`Self::image_stepped`]): the clipboard first, then history
+    /// unless paused, then the same scan (its text can conceal it or take it out again).
+    #[cfg(target_os = "macos")]
+    fn keep_screenshot(&mut self, png: SecretBytes) {
+        let keep = crate::screenshot::keep(crate::capture::history_paused());
+        let verdict = crate::sensitivity::picture_verdict(None);
+        let bytes = Zeroizing::new(png.with(<[u8]>::to_vec));
+        if self
+            .write_own_image(&bytes, crate::screenshot::concealed())
+            .is_err()
+        {
+            png.zeroize();
+            crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(Failure::Clipboard));
+            return;
+        }
+        let change = crate::macos_pasteboard::change_count();
+        self.last_copy = Some(Instant::now());
+        // The new copy is the clipboard's: the card follows it again.
+        self.browsing = None;
+        let recorded = (keep == StepKeep::Keep)
+            .then(|| self.history.record_image_unless(png.clone(), false))
+            .flatten();
+        if let Some(recorded) = &recorded {
+            self.recorded_image_change = Some(change);
+            self.image_on_pasteboard = Some((change, recorded.clone()));
+            self.current_image = Some(recorded.clone());
+        }
+        let thumbnail = Zeroizing::new(bytes.to_vec());
+        self.scan_step_copy(change, bytes, verdict, recorded);
+        crate::diag::log(crate::diag::LogEvent::ScreenshotCaptured);
+        self.refresh_status_menu();
+        if launcher::is_open() {
+            self.refresh_popup();
+        }
+        if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+            mac_ui::screenshot::show_thumbnail(mtm, &thumbnail, || {
+                launcher::emit(UserEvent::ScreenshotOpened);
+            });
+        }
+    }
+
+    /// The thumbnail was clicked: the card, on the newest copy (the screenshot).
+    pub(crate) fn open_screenshot(&mut self) {
+        self.history_cursor = 0;
+        self.browsing = None;
+        if launcher::is_open() {
+            self.refresh_popup();
+        } else {
+            self.summon_popup();
+        }
+    }
+
+    /// Wipe, the lock screen, the session ending: a screenshot on its way is dropped, the
+    /// overlay and the thumbnail (and its copy of the picture) go.
+    pub(crate) fn forget_screenshot(&mut self) {
+        self.shot_generation = self.shot_generation.wrapping_add(1);
+        launcher::set_screenshot_includes(false);
+        #[cfg(target_os = "macos")]
+        {
+            mac_ui::screenshot::cancel_selection();
+            mac_ui::screenshot::close_thumbnail();
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn failure_of(failed: mac_ui::screenshot::Failed) -> Failure {
+    match failed {
+        mac_ui::screenshot::Failed::Unavailable => Failure::Unavailable,
+        mac_ui::screenshot::Failed::NotAllowed => Failure::NotAllowed,
+        mac_ui::screenshot::Failed::NoPicture => Failure::NoPicture,
+    }
+}
+
+/// Why CopyCraft asks for Screen Recording, before the system's question. One button,
+/// *Continue*: the choice is made in the system's question that follows.
+#[cfg(target_os = "macos")]
+fn explain(mtm: mac_ui::objc2::MainThreadMarker) {
+    mac_ui::panel::activate_app(mtm);
+    mac_ui::dialog::buttons(
+        mtm,
+        crate::locale::t("screenshot_ask_title"),
+        crate::locale::t("screenshot_ask_message"),
+        &[crate::locale::t("notify_ask_ok")],
+    );
+}
+
+/// Screen Recording is off: say where to turn it on, with a button that opens that pane.
+#[cfg(target_os = "macos")]
+fn denied(mtm: mac_ui::objc2::MainThreadMarker) {
+    mac_ui::panel::activate_app(mtm);
+    let answer = mac_ui::dialog::buttons(
+        mtm,
+        crate::locale::t("screenshot_denied_title"),
+        crate::locale::t("screenshot_denied_message"),
+        &[
+            crate::locale::t("screenshot_open_privacy"),
+            crate::locale::t("cancel"),
+        ],
+    );
+    if answer == Some(0) {
+        crate::system_settings::open(crate::system_settings::Pane::ScreenRecordingPrivacy);
+    }
+}

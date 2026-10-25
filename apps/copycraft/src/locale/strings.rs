@@ -19,6 +19,7 @@ mod commands;
 mod files;
 mod history;
 mod image;
+mod screenshot;
 mod settings;
 mod table;
 mod text_menu;
@@ -28,6 +29,7 @@ mod welcome;
 const PARTS: &[&[(&str, &str, &str)]] = &[
     welcome::STRINGS,
     settings::STRINGS,
+    screenshot::STRINGS,
     card::STRINGS,
     files::STRINGS,
     history::STRINGS,

@@ -1,4 +1,4 @@
-//! The General tab: the hotkey, language, date order, Open at Login and the Meldingen block.
+//! The General tab: the two hotkeys (the card's and the screenshot's), language, date order, Open at Login and the Meldingen block.
 
 use super::*;
 
@@ -54,10 +54,44 @@ pub(super) fn notify_title(switch: crate::notifications::Switch) -> &'static str
     }
 }
 
+/// Put `text` in the value of the hotkey being recorded (the card's or the screenshot's).
 pub(super) fn set_hotkey_text(text: &str) {
-    HOTKEY_LABEL.with(|slot| {
+    let slot = if RECORDING_SHOT.get() {
+        &SHOT_LABEL
+    } else {
+        &HOTKEY_LABEL
+    };
+    slot.with(|slot| {
         if let Some(field) = slot.borrow().as_ref() {
             field.setStringValue(&NSString::from_str(text));
+        }
+    });
+}
+
+/// Both hotkey values as stored (after recording, or when it is cancelled).
+pub(super) fn show_stored_hotkeys() {
+    for (slot, text) in [
+        (&HOTKEY_LABEL, settings::hotkey_label()),
+        (&SHOT_LABEL, settings::screenshot_hotkey_label()),
+    ] {
+        slot.with(|slot| {
+            if let Some(field) = slot.borrow().as_ref() {
+                field.setStringValue(&NSString::from_str(&text));
+            }
+        });
+    }
+}
+
+/// Listen for a new chord: for the screenshot hotkey when `screenshot`, else the card's. A
+/// recording already under way for the other one ends without a change.
+pub(super) fn start_recording(screenshot: bool) {
+    show_stored_hotkeys();
+    RECORDING.set(true);
+    RECORDING_SHOT.set(screenshot);
+    set_hotkey_text(crate::locale::t("press_shortcut"));
+    WINDOW.with(|slot| {
+        if let Some(window) = slot.borrow().as_ref() {
+            window.makeKeyAndOrderFront(None);
         }
     });
 }
@@ -66,7 +100,7 @@ pub(super) fn handle_record_key(event: &NSEvent) {
     let key_code = event.keyCode();
     if key_code == mac_ui::keys::code::ESCAPE {
         RECORDING.set(false);
-        set_hotkey_text(&settings::hotkey_label());
+        show_stored_hotkeys();
         return;
     }
     let flags = event.modifierFlags();
@@ -91,30 +125,47 @@ pub(super) fn handle_record_key(event: &NSEvent) {
         set_hotkey_text(crate::locale::t("hotkey_rejected"));
         return;
     }
-    if settings::set_hotkey(&chord) {
+    let stored = if RECORDING_SHOT.get() {
+        settings::set_screenshot_hotkey(&chord)
+    } else {
+        settings::set_hotkey(&chord)
+    };
+    if stored {
         RECORDING.set(false);
-        set_hotkey_text(&settings::hotkey_label());
+        show_stored_hotkeys();
         launcher::emit(UserEvent::HotkeyChanged);
+    } else {
+        // Safe, so it is the other hotkey's chord.
+        set_hotkey_text(crate::locale::t("hotkey_in_use"));
     }
 }
 
-/// Algemeen: hotkey, language, date order, Open at Login and the Meldingen block. Returns the
-/// unused height.
-pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
-    let mut top = Tab::General.pane_height();
+/// A hotkey row from `top` down: `name`, the chord's value (kept in `slot` for recording) and
+/// a *Change* button sending `action`, then `note` under it.
+#[allow(clippy::too_many_arguments)]
+fn place_hotkey_row(
+    mtm: MainThreadMarker,
+    body: &NSView,
+    top: &mut f64,
+    name: &str,
+    chord: &str,
+    a11y: &str,
+    action: mac_ui::objc2::runtime::Sel,
+    slot: &'static std::thread::LocalKey<RefCell<Option<Retained<NSTextField>>>>,
+    note: &str,
+) {
     let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
-
-    let y = take(&mut top, BUTTON_H);
-    place_name(mtm, body, crate::locale::t("hotkey"), y);
+    let y = take(top, BUTTON_H);
+    place_name(mtm, body, name, y);
     let value = widgets::label(
         mtm,
         mac_ui::metrics::FONT_BODY,
         &crate::appearance::caption_color(),
     );
-    value.setStringValue(&NSString::from_str(&settings::hotkey_label()));
+    value.setStringValue(&NSString::from_str(chord));
     let change = GlassButton::pill(mtm, crate::locale::t("change_hotkey"), ButtonSize::Small);
     change.set_symbol("keyboard");
-    change.set_accessibility_label(crate::locale::t("change_hotkey_a11y"));
+    change.set_accessibility_label(a11y);
     let change_w = change.width_within(140.0).max(BUTTON_H);
     let change_x = WIDTH - MARGIN - change_w;
     value.setFrame(NSRect::new(
@@ -125,14 +176,44 @@ pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
         ),
     ));
     body.addSubview(&value);
-    HOTKEY_LABEL.with(|slot| *slot.borrow_mut() = Some(value));
+    slot.with(|slot| *slot.borrow_mut() = Some(value));
     change.view().setFrame(NSRect::new(
         NSPoint::new(change_x, y),
         NSSize::new(change_w, BUTTON_H),
     ));
-    wire(change.button(), sel!(changeHotkey:));
+    wire(change.button(), action);
     body.addSubview(change.view());
-    place_explanation(mtm, body, crate::locale::t("hotkey_note"), &mut top);
+    place_explanation(mtm, body, note, top);
+}
+
+/// Algemeen: hotkey, language, date order, Open at Login and the Meldingen block. Returns the
+/// unused height.
+pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
+    let mut top = Tab::General.pane_height();
+    place_hotkey_row(
+        mtm,
+        body,
+        &mut top,
+        crate::locale::t("hotkey"),
+        &settings::hotkey_label(),
+        crate::locale::t("change_hotkey_a11y"),
+        sel!(changeHotkey:),
+        &HOTKEY_LABEL,
+        crate::locale::t("hotkey_note"),
+    );
+
+    gap(&mut top, mac_ui::metrics::SPACE_S);
+    place_hotkey_row(
+        mtm,
+        body,
+        &mut top,
+        crate::locale::t("screenshot_hotkey"),
+        &settings::screenshot_hotkey_label(),
+        crate::locale::t("change_screenshot_hotkey_a11y"),
+        sel!(changeScreenshotHotkey:),
+        &SHOT_LABEL,
+        crate::locale::t("screenshot_hotkey_note"),
+    );
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);

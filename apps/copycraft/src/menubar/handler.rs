@@ -64,6 +64,10 @@ impl ApplicationHandler<UserEvent> for App {
             // Only the tooltip: an open card reads the copy anyway.
             UserEvent::PasteHint => self.sync_tooltip(&ClipboardView::from_os()),
             UserEvent::SessionEnded => self.session_ended(),
+            UserEvent::ScreenshotTaken { generation, result } => {
+                self.screenshot_taken(generation, result);
+            }
+            UserEvent::ScreenshotOpened => self.open_screenshot(),
             UserEvent::TableDone(done) => self.finish_table_job(*done),
             UserEvent::TableWindow(event) => self.table_window_event(event),
             UserEvent::SettingsChanged => {
@@ -124,6 +128,7 @@ impl ApplicationHandler<UserEvent> for App {
                     crate::diag::log(crate::diag::LogEvent::ScreenshotsAllowed(on));
                     self.refresh_status_menu();
                 }
+                SCREENSHOT_ID => self.run_command(event_loop, CommandId::TakeScreenshot),
                 PAUSE_ID => self.run_command(event_loop, CommandId::Pause),
                 IGNORE_NEXT_ID => self.run_command(event_loop, CommandId::IgnoreNext),
                 SETTINGS_ID => {
@@ -145,8 +150,13 @@ impl ApplicationHandler<UserEvent> for App {
         }
 
         while let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
-            if event.id == self.format_hotkey_id && event.state == HotKeyState::Pressed {
+            if event.state != HotKeyState::Pressed {
+                continue;
+            }
+            if event.id == self.format_hotkey_id {
                 self.summon_popup();
+            } else if Some(event.id) == self.screenshot_hotkey.map(|chord| chord.id()) {
+                self.take_screenshot();
             }
         }
 

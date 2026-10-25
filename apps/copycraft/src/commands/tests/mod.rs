@@ -27,6 +27,7 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         paused: false,
         ignore_next: false,
         can_ignore_app: false,
+        can_screenshot: true,
         notice: None,
         history_nav: None,
         strip: Vec::new(),

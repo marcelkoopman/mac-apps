@@ -212,6 +212,7 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
     }
     commands.extend(entry_commands(data));
     commands.extend(capture_commands(data));
+    commands.push(screenshot_command(data));
     if let Some(shown) = shown_history(data) {
         commands.push(diff_action(
             CommandId::DiffShown,

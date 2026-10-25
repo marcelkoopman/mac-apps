@@ -59,6 +59,20 @@ pub(super) fn build_privacy(mtm: MainThreadMarker, body: &NSView) -> f64 {
     ));
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
+    let y = take(&mut top, BUTTON_H);
+    let own = checkbox(mtm, crate::locale::t("screenshot_includes_own"), y);
+    own.setState(state_of(settings::screenshot_includes_own()));
+    wire(&own, sel!(screenshotOwnToggled:));
+    body.addSubview(&own);
+    SHOT_OWN_BOX.with(|slot| *slot.borrow_mut() = Some(own));
+    place_explanation(
+        mtm,
+        body,
+        crate::locale::t("screenshot_includes_own_note"),
+        &mut top,
+    );
+
+    gap(&mut top, mac_ui::metrics::SPACE_S);
     place_label(
         mtm,
         body,

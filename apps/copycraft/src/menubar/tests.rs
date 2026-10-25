@@ -236,6 +236,7 @@ fn status_menu_lists_history_between_the_hotkey_and_version() {
             crate::locale::t("pause_recording").to_string(),
             crate::locale::t("ignore_next").to_string(),
             crate::locale::t("history").to_string(),
+            crate::locale::t("take_screenshot").to_string(),
             crate::locale::t("allow_screenshots").to_string(),
             crate::locale::t("welcome_menu").to_string(),
             crate::locale::t("settings").to_string(),
@@ -569,4 +570,15 @@ fn text_and_image_steps_end_alike() {
     ] {
         assert!(commit.contains(part), "{part}");
     }
+}
+
+#[test]
+fn default_screenshot_hotkey_is_a_menu_shortcut() {
+    let chord = crate::hotkey::screenshot_from_storage(None);
+    use mac_ui::tray_icon::menu::accelerator::{Accelerator, Code, Modifiers};
+    let accelerator: Accelerator = chord
+        .into_string()
+        .parse()
+        .expect("⌃⇧4 parses as a menu shortcut");
+    assert!(accelerator.matches(Modifiers::CONTROL | Modifiers::SHIFT, Code::Digit4));
 }
