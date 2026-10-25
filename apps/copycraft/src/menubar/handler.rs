@@ -34,6 +34,9 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::PreviewReady { generation, result } => {
                 self.finish_preview(generation, result);
             }
+            UserEvent::PreviewOpened { generation, opened } => {
+                self.preview_opened(generation, opened);
+            }
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
             UserEvent::DroppedFile(path) => self.open_path(path, false),
             UserEvent::DroppedPromisedFile(path) => self.open_path(path, true),
@@ -182,6 +185,7 @@ impl ApplicationHandler<UserEvent> for App {
             self.refresh_table_window();
         }
         let wake = self.spin_slow_work(now);
+        let preview_wake = self.check_preview_wait(now);
         let blink_wake = self.show_blink(now);
         let clear_wake = self.clear_sensitive_when_due(now);
         let forget_wake = self.forget_history_when_due(now);
@@ -190,6 +194,7 @@ impl ApplicationHandler<UserEvent> for App {
             blink_wake,
             clear_wake,
             forget_wake,
+            preview_wake,
         ]));
     }
 }

@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::Context;
 use mac_ui::file_panel;
 use mac_ui::objc2::MainThreadMarker;
-use mac_ui::objc2_app_kit::{NSWorkspace, NSWorkspaceOpenConfiguration};
-use mac_ui::objc2_foundation::{NSArray, NSString, NSURL};
+use mac_ui::objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
+use mac_ui::objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use zeroize::Zeroizing;
 
 use crate::clipboard::SecretBytes;
@@ -186,8 +186,12 @@ fn preview_dir() -> anyhow::Result<PathBuf> {
 
 /// Preview shows `path`. `NSWorkspace` gives Preview a sandbox extension for the file, so this
 /// needs no extra entitlement and no subprocess. False when Preview cannot be found or the
-/// call is not on the main thread. Recent Items stays clear of the clipboard picture.
-pub(crate) fn open_in_preview(path: &Path) -> bool {
+/// call is not on the main thread. Recent Items stays clear of the clipboard picture. Preview's
+/// answer comes back as [`UserEvent::PreviewOpened`] for `generation` (launching Preview can take
+/// seconds; the Preview button spins until then).
+///
+/// [`UserEvent::PreviewOpened`]: crate::launcher::UserEvent::PreviewOpened
+pub(crate) fn open_in_preview(path: &Path, generation: u64) -> bool {
     if MainThreadMarker::new().is_none() || !is_preview_file(path) {
         return false;
     }
@@ -205,8 +209,21 @@ pub(crate) fn open_in_preview(path: &Path) -> bool {
     config.setActivates(true);
     config.setAddsToRecentItems(false);
     let urls = NSArray::from_slice(&[&*file]);
-    workspace
-        .openURLs_withApplicationAtURL_configuration_completionHandler(&urls, &app, &config, None);
+    // Called on a system queue once Preview runs and has the file, or failed. Only null checks:
+    // the pointers are not read.
+    let answered =
+        mac_ui::block2::RcBlock::new(move |app: *mut NSRunningApplication, error: *mut NSError| {
+            crate::launcher::emit(crate::launcher::UserEvent::PreviewOpened {
+                generation,
+                opened: !app.is_null() && error.is_null(),
+            });
+        });
+    workspace.openURLs_withApplicationAtURL_configuration_completionHandler(
+        &urls,
+        &app,
+        &config,
+        Some(&answered),
+    );
     true
 }
 

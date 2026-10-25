@@ -276,7 +276,12 @@ pub fn relabel() {
     });
     PREVIEW_BUTTON.with(|slot| {
         if let Some(button) = slot.borrow().as_ref() {
-            label_symbol(button, t("open_preview"));
+            let label = if preview_busy() {
+                t("preview_loading")
+            } else {
+                t("open_preview")
+            };
+            label_symbol(button, label);
         }
     });
     VERSION_ROW.with(|slot| {

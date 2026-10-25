@@ -31,6 +31,12 @@ pub enum UserEvent {
         generation: u64,
         result: Result<std::path::PathBuf, String>,
     },
+    /// Preview answered the open request of click `generation`: `opened` is false when it
+    /// could not open the picture.
+    PreviewOpened {
+        generation: u64,
+        opened: bool,
+    },
     /// The "Show all" thread built the whole-text card.
     FullCardReady(Box<FullCard>),
     /// A file was dropped on the card.
@@ -421,6 +427,14 @@ pub fn sync_with_card(data: LaunchData, card: crate::commands::WorkCard) {
 pub fn set_busy(busy: bool) {
     #[cfg(target_os = "macos")]
     crate::macos_launcher::set_busy(busy);
+    #[cfg(not(target_os = "macos"))]
+    let _ = busy;
+}
+
+/// The Preview button's spinner (dimmed, no second click) while Preview opens the picture.
+pub fn set_preview_busy(busy: bool) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::set_preview_busy(busy);
     #[cfg(not(target_os = "macos"))]
     let _ = busy;
 }

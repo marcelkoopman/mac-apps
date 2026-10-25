@@ -37,6 +37,7 @@ mod page_preview;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod paste_access;
 mod pdf;
+mod preview_wait;
 mod python;
 mod recognize;
 mod screenshot;

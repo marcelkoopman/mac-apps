@@ -498,3 +498,10 @@ Mac only, no data.
 - [ ] Wipe and lock: take a screenshot and press *Wipe* (or lock the screen) while the thumbnail shows: the thumbnail goes and the tile is gone from the strip.
 - [ ] Hotkey: Settings › General › *Screenshot* › *Change…*, press ⌃⌥5: ⌃⌥5 now takes screenshots and ⌃⇧4 does not; trying the card hotkey (⌃⌘C) there says *Already used by the other hotkey — try again*. Put ⌃⇧4 back.
 - [ ] Log: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows only `screenshot: captured` (or `screenshot: failed (not allowed)` and the like): no sizes, no app or window names.
+
+### Preview button waits
+
+- [ ] Quit Preview first. Copy a picture, open the card, hover the right edge of the picture and click *Voorvertoning* / *Preview* (the arrows button): until Preview's window is up the button shows a small spinner and is dimmed; a second click does nothing. Then the button is back, and the next click opens Preview again (quick now Preview runs).
+- [ ] VoiceOver on: while it spins the button reads *Voorvertoning laden…* / *Loading preview…*.
+- [ ] Close the card (Esc) right after the click: Preview still opens; open the card again: the button is normal.
+- [ ] Click and press *Wipe* (or lock the screen) at once: the spinner goes, and no Preview window shows the picture (or it is gone after Wipe).

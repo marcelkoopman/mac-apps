@@ -249,6 +249,8 @@ pub(crate) fn place_content_actions(preview_y: f64) {
         place_dock_action(slot, x, &mut y, actions.save, open, &save_tip);
     });
     PREVIEW_BUTTON.with(|slot| {
+        // While Preview opens, the button and its spinner stay up even off the dock.
+        let open = open || preview_busy();
         place_dock_action(slot, x, &mut y, actions.preview, open, &preview_tip);
     });
 }

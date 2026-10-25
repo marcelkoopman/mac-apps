@@ -300,6 +300,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("save_tip", "Bewaar {0}", "Save {0}"),
     ("open_preview", "Voorvertoning", "Preview"),
     (
+        "preview_loading",
+        "Voorvertoning laden…",
+        "Loading preview…",
+    ),
+    (
         "detail_open_preview",
         "Open in Voorvertoning",
         "Open in Preview",

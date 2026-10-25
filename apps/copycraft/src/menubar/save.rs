@@ -219,22 +219,26 @@ impl App {
         Ok(())
     }
 
-    /// Open the picture on the card in Preview. The card has already closed (it floats above
-    /// Preview). The write runs off the main thread; opening Preview stays on it.
+    /// Open the picture on the card in Preview. The write runs off the main thread; opening
+    /// Preview stays on it. Until Preview has the picture the Preview button spins and takes no
+    /// second click ([`crate::preview_wait`]).
     pub(crate) fn open_preview(&mut self) {
         #[cfg(target_os = "macos")]
         {
+            if !crate::preview_wait::PreviewWait::may_start(self.previewing.as_ref()) {
+                return;
+            }
             let Some(bytes) = self.preview_bytes() else {
                 crate::diag::log(crate::diag::LogEvent::PreviewNoPicture);
                 return;
             };
             let generation = crate::macos_open::begin_preview();
-            self.previewing = Some(Background::now());
-            if !self.spinner_on {
-                self.spinner_on = true;
-                launcher::set_busy(true);
-                crate::diag::log(crate::diag::LogEvent::PreviewStarted);
-            }
+            self.previewing = Some(crate::preview_wait::PreviewWait::new(
+                generation,
+                Instant::now(),
+            ));
+            launcher::set_preview_busy(true);
+            crate::diag::log(crate::diag::LogEvent::PreviewStarted);
             let spawned = std::thread::Builder::new()
                 .name("copycraft-preview".into())
                 .spawn(move || {
@@ -243,8 +247,7 @@ impl App {
                     launcher::emit(UserEvent::PreviewReady { generation, result });
                 });
             if let Err(err) = spawned {
-                self.previewing = None;
-                self.stop_spinner_when_idle();
+                self.end_preview_wait();
                 self.work_failed(crate::diag::Work::Preview, &err);
             }
         }
@@ -420,7 +423,6 @@ impl App {
         if self.spinner_on
             && self.saving.is_none()
             && self.loading_all.is_none()
-            && self.previewing.is_none()
             && self.table_job.as_ref().is_none_or(|run| run.quiet)
             && self.image_job.is_none()
             && self.diffing.is_none()
@@ -445,25 +447,67 @@ impl App {
                 }
                 return;
             }
-            // The newest preview is done either way: the spinner goes once the window is up.
-            self.previewing = None;
+            // Written: the spinner stays until Preview answers ([`Self::preview_opened`]).
             match result {
                 Ok(path) => {
-                    if crate::macos_open::open_in_preview(&path) {
+                    if crate::macos_open::open_in_preview(&path, generation) {
                         crate::macos_open::keep_preview(path);
-                    } else {
-                        crate::macos_open::shred_preview(&path);
-                        crate::diag::log(crate::diag::LogEvent::PreviewOpenFailed);
+                        return;
                     }
+                    crate::macos_open::shred_preview(&path);
+                    crate::diag::log(crate::diag::LogEvent::PreviewOpenFailed);
                 }
                 Err(message) => crate::diag::log(crate::diag::LogEvent::PreviewFailed(
                     crate::diag::ErrorKind::from_text(&message),
                 )),
             }
-            self.stop_spinner_when_idle();
+            if self
+                .previewing
+                .is_some_and(|wait| wait.ends_with(generation))
+            {
+                self.end_preview_wait();
+            }
         }
         #[cfg(not(target_os = "macos"))]
         let _ = (generation, result);
+    }
+
+    /// Preview answered click `generation`: its spinner goes (an older click's answer is
+    /// ignored; that click's wait already ended).
+    pub(crate) fn preview_opened(&mut self, generation: u64, opened: bool) {
+        if !self
+            .previewing
+            .is_some_and(|wait| wait.ends_with(generation))
+        {
+            return;
+        }
+        if !opened {
+            crate::diag::log(crate::diag::LogEvent::PreviewOpenFailed);
+        }
+        self.end_preview_wait();
+    }
+
+    /// The Preview button is itself again.
+    pub(crate) fn end_preview_wait(&mut self) {
+        self.previewing = None;
+        launcher::set_preview_busy(false);
+    }
+
+    /// While Preview opens: end the wait after Wipe/lock (the generation moved on) or after
+    /// [`crate::preview_wait::PREVIEW_WAIT_MAX`]. Returns when to look again.
+    pub(crate) fn check_preview_wait(&mut self, now: Instant) -> Option<Instant> {
+        let wait = self.previewing?;
+        #[cfg(target_os = "macos")]
+        let current = crate::macos_open::preview_is_current(wait.generation);
+        #[cfg(not(target_os = "macos"))]
+        let current = true;
+        match wait.check(current, now) {
+            crate::preview_wait::WaitCheck::Waiting { due } => Some(due),
+            crate::preview_wait::WaitCheck::Over => {
+                self.end_preview_wait();
+                None
+            }
+        }
     }
 
     pub(crate) fn finish_save(&mut self, result: Result<(), String>) {

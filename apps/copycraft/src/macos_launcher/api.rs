@@ -80,6 +80,56 @@ pub fn set_busy(busy: bool) {
 }
 
 thread_local! {
+    /// The Preview button's small spinner and the symbol it stands in for, while Preview opens
+    /// the picture ([`crate::preview_wait`]).
+    static PREVIEW_WAIT: RefCell<Option<(progress::Spinner, Option<Retained<NSImage>>)>> =
+        const { RefCell::new(None) };
+}
+
+/// Whether the Preview button shows its spinner.
+pub(crate) fn preview_busy() -> bool {
+    PREVIEW_WAIT.with(|slot| slot.borrow().is_some())
+}
+
+/// The Preview button spins (dimmed, read as "Loading preview…") until Preview has the
+/// picture, then is itself again.
+pub fn set_preview_busy(busy: bool) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    PREVIEW_BUTTON.with(|slot| {
+        let slot = slot.borrow();
+        let Some(button) = slot.as_ref() else {
+            return;
+        };
+        PREVIEW_WAIT.with(|wait| {
+            let mut wait = wait.borrow_mut();
+            if busy {
+                if wait.is_some() {
+                    return;
+                }
+                let label = crate::locale::t("preview_loading");
+                let image = button.button().image();
+                button.button().setImage(None);
+                button.button().setEnabled(false);
+                button.set_accessibility_label(label);
+                let spinner = progress::Spinner::new(mtm, SpinnerSize::Small);
+                spinner.set_accessibility_label(label);
+                spinner.add_centered(button.view(), button.view().bounds());
+                spinner.start();
+                *wait = Some((spinner, image));
+            } else if let Some((spinner, image)) = wait.take() {
+                spinner.remove();
+                button.button().setImage(image.as_deref());
+                button.button().setEnabled(true);
+                button.set_accessibility_label(crate::locale::t("open_preview"));
+            }
+        });
+    });
+    place_content_actions(WELL_BOTTOM.get());
+}
+
+thread_local! {
     /// Busy wheel shown while a modal open or save panel is starting. The panel blocks the
     /// main thread, so the wheel is committed before that call.
     static PANEL_WAIT: RefCell<Option<progress::Spinner>> = const { RefCell::new(None) };
