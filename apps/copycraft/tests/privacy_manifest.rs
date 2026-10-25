@@ -61,3 +61,30 @@ fn bundle_config_ships_the_manifest_and_the_export_key() {
     let ext = read("assets/Info.plist.ext");
     assert!(ext.contains("<key>ITSAppUsesNonExemptEncryption</key>\n  <false/>"));
 }
+
+/// The Screen Recording reason macOS shows for *Take Screenshot…*: in the Info.plist (English)
+/// and in en/nl InfoPlist.strings (scripts/finish_info_plist.sh copies them into the bundle).
+#[test]
+fn screen_recording_reason_is_there_in_both_languages() {
+    let ext = read("assets/Info.plist.ext");
+    let plist = strings_after(&ext, "NSScreenCaptureUsageDescription");
+    assert_eq!(plist.len(), 1);
+    let reason = |lang: &str| {
+        let strings = read(&format!("assets/{lang}.lproj/InfoPlist.strings"));
+        let line = strings
+            .lines()
+            .find_map(|l| l.strip_prefix("\"NSScreenCaptureUsageDescription\" = \""))
+            .unwrap_or_else(|| panic!("{lang}: no NSScreenCaptureUsageDescription"));
+        line.strip_suffix("\";").expect("ends with \";").to_string()
+    };
+    let (en, nl) = (reason("en"), reason("nl"));
+    assert_eq!(en, plist[0]);
+    assert_ne!(en, nl);
+    for text in [&en, &nl] {
+        assert!(!text.contains('"') && text.contains("CopyCraft"));
+    }
+    let script = read("../../scripts/finish_info_plist.sh");
+    assert!(
+        script.contains("InfoPlist.strings") && script.contains("NSScreenCaptureUsageDescription")
+    );
+}

@@ -14,6 +14,8 @@
     card or copied (src/open_file.rs, src/macos_pasteboard/).
   - SystemBootTime 35F9.1: std::time::Instant (macOS: monotonic uptime clock) to measure time
     elapsed between events inside the app (menu bar, tray blink, hotkey timing).
+  Screenshots (ScreenCaptureKit, CGPreflight/CGRequestScreenCaptureAccess) are not a
+  required-reason API and collect nothing: the picture stays in memory on the Mac.
   Not used: disk space (no statvfs, no volume capacity keys; sysinfo is in the tree through
   polars-utils but without its disk feature) and active keyboard APIs (the latter is a UIKit
   list; winit's TISCopyCurrentKeyboardLayoutInputSource is not on it).

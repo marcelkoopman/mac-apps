@@ -1,0 +1,2 @@
+/* Screen Recording: shown by macOS when CopyCraft asks for it (Take Screenshot…). */
+"NSScreenCaptureUsageDescription" = "CopyCraft needs Screen Recording only when you take a screenshot. The screenshot goes to the clipboard and stays on your Mac.";

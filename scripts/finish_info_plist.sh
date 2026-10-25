@@ -25,6 +25,14 @@ expect() {
 "$PB" -c 'Set :CFBundleDisplayName CopyCraft' "$PLIST" 2>/dev/null \
   || "$PB" -c 'Add :CFBundleDisplayName string CopyCraft' "$PLIST"
 
+# The Screen Recording reason (NSScreenCaptureUsageDescription, English in assets/Info.plist.ext)
+# in each language: cargo-bundle has no localised resources, so the lproj folders are copied here.
+ASSETS="$(cd "$(dirname "$0")/../apps/copycraft/assets" && pwd)"
+for lang in en nl; do
+  mkdir -p "$APP/Contents/Resources/$lang.lproj"
+  cp "$ASSETS/$lang.lproj/InfoPlist.strings" "$APP/Contents/Resources/$lang.lproj/InfoPlist.strings"
+done
+
 expect CFBundleDevelopmentRegion en
 expect CFBundleName CopyCraft
 expect CFBundleDisplayName CopyCraft
@@ -33,5 +41,7 @@ expect 'CFBundleLocalizations:1' nl
 expect NSHumanReadableCopyright '© 2026 Marcel Koopman'
 expect LSApplicationCategoryType public.app-category.utilities
 expect CFBundleIdentifier nl.marcelkoopman.copycraft
+"$PB" -c 'Print :NSScreenCaptureUsageDescription' "$PLIST" >/dev/null 2>&1 \
+  || die "NSScreenCaptureUsageDescription missing"
 plutil -lint "$PLIST" >/dev/null || die "plutil -lint failed"
 echo "finish_info_plist: $PLIST ok"

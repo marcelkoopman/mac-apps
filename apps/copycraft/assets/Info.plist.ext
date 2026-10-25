@@ -7,3 +7,5 @@
     <string>en</string>
     <string>nl</string>
   </array>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>CopyCraft needs Screen Recording only when you take a screenshot. The screenshot goes to the clipboard and stays on your Mac.</string>
