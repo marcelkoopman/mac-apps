@@ -5,6 +5,9 @@
 //! layout and whatever the modifiers, so matching on it behaves exactly like matching the raw
 //! numbers. Pure data, available on every platform.
 //!
+//! [`Board`] tells ISO, ANSI and JIS keyboards apart (on macOS [`board`] asks the system), for
+//! the key top left: § on ISO, ` on ANSI.
+//!
 //! With the `widgets` feature on macOS, [`is_command_chord`] and [`shift_held`] read the
 //! modifiers of an `NSEvent`.
 
@@ -28,6 +31,50 @@ pub mod code {
     pub const DOWN_ARROW: u16 = 0x7D;
     /// `kVK_UpArrow`.
     pub const UP_ARROW: u16 = 0x7E;
+    /// `kVK_ISO_Section`: the § key top left, next to 1, on ISO keyboards.
+    pub const ISO_SECTION: u16 = 0x0A;
+    /// `kVK_ANSI_Grave`: the ` key top left on ANSI keyboards. On ISO keyboards the same code
+    /// is the extra key next to the left Shift.
+    pub const ANSI_GRAVE: u16 = 0x32;
+}
+
+/// The physical layout of the keyboard: which key sits top left, next to 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Board {
+    /// ISO (most European keyboards): § ([`code::ISO_SECTION`]).
+    Iso,
+    /// ANSI (US): ` ([`code::ANSI_GRAVE`]).
+    Ansi,
+    /// JIS (Japanese): no key there.
+    Jis,
+}
+
+impl Board {
+    /// HIToolbox's `PhysicalKeyboardLayoutType` (`kKeyboardJIS` 'JIS ', `kKeyboardANSI`
+    /// 'ANSI', `kKeyboardISO` 'ISO '); `None` for `kKeyboardUnknown` and anything else.
+    pub const fn from_layout_type(layout: u32) -> Option<Self> {
+        match layout {
+            0x4953_4F20 => Some(Self::Iso),
+            0x414E_5349 => Some(Self::Ansi),
+            0x4A49_5320 => Some(Self::Jis),
+            _ => None,
+        }
+    }
+}
+
+/// The layout of the keyboard last typed on (`LMGetKbdType` and `KBGetLayoutType` from
+/// HIToolbox, which no crate in the tree binds); `None` when macOS does not know it.
+#[cfg(target_os = "macos")]
+pub fn board() -> Option<Board> {
+    #[link(name = "Carbon", kind = "framework")]
+    unsafe extern "C" {
+        fn LMGetKbdType() -> u8;
+        fn KBGetLayoutType(keyboard_type: i16) -> u32;
+    }
+    // SAFETY: both take and return plain integers and read only the system's keyboard state;
+    // `LMGetKbdType` gives the keyboard type `KBGetLayoutType` expects.
+    let layout = unsafe { KBGetLayoutType(i16::from(LMGetKbdType())) };
+    Board::from_layout_type(layout)
 }
 
 /// A key handled by name.
@@ -129,6 +176,26 @@ mod tests {
         assert_eq!(code::RIGHT_ARROW, 124);
         assert_eq!(code::DOWN_ARROW, 125);
         assert_eq!(code::UP_ARROW, 126);
+    }
+
+    #[test]
+    fn the_top_left_key_codes_and_layout_types() {
+        assert_eq!(code::ISO_SECTION, 10);
+        assert_eq!(code::ANSI_GRAVE, 50);
+        assert_eq!(
+            Board::from_layout_type(u32::from_be_bytes(*b"ISO ")),
+            Some(Board::Iso)
+        );
+        assert_eq!(
+            Board::from_layout_type(u32::from_be_bytes(*b"ANSI")),
+            Some(Board::Ansi)
+        );
+        assert_eq!(
+            Board::from_layout_type(u32::from_be_bytes(*b"JIS ")),
+            Some(Board::Jis)
+        );
+        assert_eq!(Board::from_layout_type(0), None);
+        assert_eq!(Board::from_layout_type(u32::from_be_bytes(*b"????")), None);
     }
 
     #[test]

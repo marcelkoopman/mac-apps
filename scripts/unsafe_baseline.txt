@@ -49,7 +49,10 @@ copycraft impl 9
 # select.rs (1): the overlay view's `initWithFrame:` on super. thumbnail.rs (2 blocks, 2 impl): the
 # thumbnail view's `initWithFrame:` on super and NSDraggingItem's setDraggingFrame:contents: (marked
 # `unsafe`), plus `unsafe impl NSObjectProtocol` and `unsafe impl NSDraggingSource` (drag the PNG out).
-mac-ui blocks 92
+# mac-ui blocks 93: +1 for the default hotkeys ⌥§ / ⌥⇧§ (approved by Marcel 2026-10-25): mac_ui::keys::board
+# calls HIToolbox's LMGetKbdType and KBGetLayoutType (Carbon, no crate in the tree binds them; plain integers
+# in and out) to tell ISO from ANSI, so the defaults sit on the key left of 1 (§ on ISO, ` on ANSI).
+mac-ui blocks 93
 mac-ui fn 4
 mac-ui impl 6
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
