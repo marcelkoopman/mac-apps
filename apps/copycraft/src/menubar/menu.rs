@@ -41,11 +41,23 @@ pub(crate) fn status_rows() -> Vec<String> {
 }
 
 /// The screenshot hotkey as the item's shortcut (shown beside it; the hotkey itself is global).
-fn screenshot_accelerator() -> Option<mac_ui::tray_icon::menu::accelerator::Accelerator> {
-    crate::settings::screenshot_hotkey()
-        .into_string()
-        .parse()
-        .ok()
+/// `None` for the § key: muda has no key equivalent for it (and would fail the item), so
+/// [`section_shortcut`] sets it after the menu is built.
+pub(crate) fn screenshot_accelerator(
+    chord: global_hotkey::hotkey::HotKey,
+) -> Option<mac_ui::tray_icon::menu::accelerator::Accelerator> {
+    if chord.key == global_hotkey::hotkey::Code::IntlBackslash {
+        return None;
+    }
+    chord.into_string().parse().ok()
+}
+
+/// The key equivalent and modifiers for a screenshot hotkey on the § key, which muda cannot
+/// show; `None` for any other key (muda shows those through [`screenshot_accelerator`]).
+pub(crate) fn section_shortcut(
+    chord: global_hotkey::hotkey::HotKey,
+) -> Option<(&'static str, global_hotkey::hotkey::Modifiers)> {
+    (chord.key == global_hotkey::hotkey::Code::IntlBackslash).then_some(("§", chord.mods))
 }
 
 /// *History ▸* can be opened when there is something in it and *Keep clipboard history* is on.
@@ -60,6 +72,7 @@ pub(crate) fn history_submenu_enabled(entries: usize, history_on: bool) -> bool 
 /// `entries`: each history row's index, title and whether it is pinned (the pin image).
 pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
     let [hotkey, version, quit] = status_labels();
+    let shot_chord = crate::settings::screenshot_hotkey();
     let menu = Menu::new();
     let _ = menu.append(&tray::info_item(&hotkey));
     let _ = menu.append(&PredefinedMenuItem::separator());
@@ -101,7 +114,7 @@ pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
         SCREENSHOT_ID,
         crate::locale::t("take_screenshot"),
         crate::screenshot::available(),
-        screenshot_accelerator(),
+        screenshot_accelerator(shot_chord),
     ));
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
@@ -131,6 +144,15 @@ pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
     let _ = menu.append(&tray::info_item(&version));
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::quit_item(&quit));
+    #[cfg(target_os = "macos")]
+    if let Some((key, mods)) = section_shortcut(shot_chord) {
+        crate::macos_pin::show_status_shortcut(
+            &menu,
+            crate::locale::t("take_screenshot"),
+            key,
+            mods,
+        );
+    }
     #[cfg(target_os = "macos")]
     if history_on {
         let pinned: Vec<bool> = entries.iter().map(|(_, _, pinned)| *pinned).collect();

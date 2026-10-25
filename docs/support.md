@@ -17,7 +17,7 @@ Je kunt ook in CopyCraft "Idee voorstellen…" of "Probleem melden…" kiezen (i
 
 ### Veelgestelde vragen
 
-1. **Hoe open ik CopyCraft?** Met de sneltoets (standaard ⌃⌘C) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
+1. **Hoe open ik CopyCraft?** Met de sneltoets (standaard ⌥§: Option en de toets links van 1) of via het icoon in de menubalk. De sneltoets verander je in Instellingen.
 2. **Waarom zie ik niet wat ik net kopieerde?** Standaard leest CopyCraft je klembord niet zelf. Druk in de kaart op ⌘V of sleep tekst of een afbeelding op de kaart; alle hulpmiddelen werken daarop. Wil je dat CopyCraft elke kopie zelf leest, zet dan **Klembordgeschiedenis bijhouden** aan in het welkomstscherm of in Instellingen › Privacy. Pauzeer opname, Negeer volgende kopie en Genegeerde apps werken alleen als die instelling aan staat.
 3. **Waarom is mijn tekst verborgen of vaag?** Dat is het privacyfilter. Het staat standaard uit; alleen als je "Gebruik privacyfilter" aanzet in Instellingen › Privacy blijft gekopieerde inhoud verborgen tot je erop klikt. Klik op de tekst om hem te tonen. Wil je het weer uit, zet dan "Gebruik privacyfilter" uit. Verborgen inhoud krijgt standaard een effen vlak; zet "Gemaskeerde inhoud vervagen" aan voor vervaging. Gevoelige tekst zoals een token komt nooit in de geschiedenis, ook met het filter uit.
 4. **Moet ik iets toestaan bij het klembord?** Op nieuwere macOS-versies vraagt het systeem of CopyCraft het klembord van andere apps mag lezen. Kies Sta toe, of stel het in via Systeeminstellingen › Privacy en beveiliging › Plakken vanuit andere apps. Met de geschiedenis uit leest CopyCraft het klembord alleen als je ⌘V in de kaart indrukt. Met de geschiedenis aan, en zolang je het niet altijd toestaat, leest CopyCraft een kopie pas als je de kaart opent.
@@ -43,7 +43,7 @@ You can also choose "Suggest a Feature…" or "Report a Problem…" in CopyCraft
 
 ### FAQ
 
-1. **How do I open CopyCraft?** With the hotkey (default ⌃⌘C) or from the menu bar icon. Change the hotkey in Settings.
+1. **How do I open CopyCraft?** With the hotkey (default ⌥§: Option and the key left of 1) or from the menu bar icon. Change the hotkey in Settings.
 2. **Why don't I see what I just copied?** By default CopyCraft does not read your clipboard on its own. Press ⌘V in the card, or drop text or a picture on the card; all tools work on it. If you want CopyCraft to read every copy itself, turn on **Keep clipboard history** on the welcome screen or in Settings › Privacy. Pause, Ignore Next Copy and Ignored apps only work while that setting is on.
 3. **Why is my text hidden or blurred?** That is the privacy filter. It is off by default; only when you tick "Use privacy filter" in Settings › Privacy does copied content stay hidden until you click it. Click the text to reveal it. To turn it off again, untick "Use privacy filter". Hidden content shows as a plain cover by default; tick "Blur masked content" to see a blur instead. Sensitive text such as a token is never kept in history, also with the filter off.
 4. **Do I have to allow clipboard access?** On newer macOS versions the system asks whether CopyCraft may read the clipboard from other apps. Choose Allow, or set it in System Settings › Privacy & Security › Paste from Other Apps. With history off, CopyCraft reads the clipboard only when you press ⌘V in the card. With history on, and unless you always allow it, CopyCraft reads a copy only when you open the card.

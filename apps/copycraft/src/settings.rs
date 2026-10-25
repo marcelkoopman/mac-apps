@@ -514,7 +514,7 @@ pub fn hotkey() -> global_hotkey::hotkey::HotKey {
     hotkey::from_storage(load().hotkey.as_deref())
 }
 
-/// Compact label of the stored chord (`⌃⌘C`).
+/// Compact label of the stored chord (`⌥§` by default).
 pub fn hotkey_label() -> String {
     hotkey::label(&hotkey())
 }
@@ -529,12 +529,12 @@ pub fn set_screenshot_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
     true
 }
 
-/// The stored screenshot chord, or the default (⌃⇧4).
+/// The stored screenshot chord, or the default (⌥⇧§).
 pub fn screenshot_hotkey() -> global_hotkey::hotkey::HotKey {
     hotkey::screenshot_from_storage(load().screenshot_hotkey.as_deref())
 }
 
-/// Compact label of the stored screenshot chord (`⌃⇧4`).
+/// Compact label of the stored screenshot chord (`⌥⇧§` by default).
 pub fn screenshot_hotkey_label() -> String {
     hotkey::label(&screenshot_hotkey())
 }

@@ -3,11 +3,15 @@
 //! The history strip's cards wear it as [`pin_badge`]; the rows of the history menus (the card's
 //! `⋯` › History and the status menu's *History ▸*) take [`pin_image`] through
 //! [`pin_menu_item`], and a pinned search chip shows the same symbol. No title carries a mark.
+//! The status menu's NSMenu is reached once, in `status_ns_menu`, which also serves
+//! [`show_status_shortcut`] (the § shortcut beside *Take Screenshot…*).
 
+use global_hotkey::hotkey::Modifiers;
 use mac_ui::objc2::MainThreadMarker;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2_app_kit::{
-    NSAccessibility, NSBox, NSColor, NSImage, NSImageScaling, NSMenu, NSMenuItem,
+    NSAccessibility, NSBox, NSColor, NSEventModifierFlags, NSImage, NSImageScaling, NSMenu,
+    NSMenuItem,
 };
 use mac_ui::objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use mac_ui::tray_icon::menu::{ContextMenu, Menu};
@@ -37,11 +41,7 @@ pub(crate) fn pin_status_history(menu: &Menu, pinned: &[bool]) {
     if !pinned.contains(&true) {
         return;
     }
-    // SAFETY: `ns_menu` is muda's own NSMenu for `menu` (tray-icon retains the same pointer in
-    // `set_menu`); it lives as long as `menu`, which the caller holds, and `retain` takes a
-    // reference of our own. `Retained::retain` returns `None` for a null pointer. The status
-    // menu is built on the main thread.
-    let Some(ns_menu) = (unsafe { Retained::retain(menu.ns_menu().cast::<NSMenu>()) }) else {
+    let Some(ns_menu) = status_ns_menu(menu) else {
         return;
     };
     let Some(history) = ns_menu.itemArray().iter().find_map(|item| item.submenu()) else {
@@ -52,6 +52,44 @@ pub(crate) fn pin_status_history(menu: &Menu, pinned: &[bool]) {
             pin_menu_item(&item);
         }
     }
+}
+
+/// The shortcut beside the status menu's item titled `title`: `key` with `mods`, set on the
+/// NSMenuItem muda made. For the § key, which muda's accelerators cannot show; AppKit draws it
+/// as ⌥⇧§. Only shown there: the chord itself is the global hotkey.
+pub(crate) fn show_status_shortcut(menu: &Menu, title: &str, key: &str, mods: Modifiers) {
+    let Some(ns_menu) = status_ns_menu(menu) else {
+        return;
+    };
+    let Some(item) = ns_menu
+        .itemArray()
+        .iter()
+        .find(|item| item.title().to_string() == title)
+    else {
+        return;
+    };
+    let mut mask = NSEventModifierFlags::empty();
+    for (modifier, flag) in [
+        (Modifiers::CONTROL, NSEventModifierFlags::Control),
+        (Modifiers::ALT, NSEventModifierFlags::Option),
+        (Modifiers::SHIFT, NSEventModifierFlags::Shift),
+        (Modifiers::META, NSEventModifierFlags::Command),
+    ] {
+        if mods.contains(modifier) {
+            mask |= flag;
+        }
+    }
+    item.setKeyEquivalent(&NSString::from_str(key));
+    item.setKeyEquivalentModifierMask(mask);
+}
+
+/// muda's NSMenu for the status `menu`, retained.
+fn status_ns_menu(menu: &Menu) -> Option<Retained<NSMenu>> {
+    // SAFETY: `ns_menu` is muda's own NSMenu for `menu` (tray-icon retains the same pointer in
+    // `set_menu`); it lives as long as `menu`, which the caller holds, and `retain` takes a
+    // reference of our own. `Retained::retain` returns `None` for a null pointer. The status
+    // menu is built on the main thread.
+    unsafe { Retained::retain(menu.ns_menu().cast::<NSMenu>()) }
 }
 
 /// The pin on a round backing `side` points wide, which keeps it readable on text and on a

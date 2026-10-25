@@ -1,7 +1,8 @@
 use super::{
     ClipSig, ICON_CLICK_GAP, card_returns_after_window, end_session_history, forget_opened_file,
     history_due, history_forgettable, history_submenu_enabled, icon_click_is_new, icon_tip,
-    removal_skip_ends, status_labels, status_rows, tray_label, version_label,
+    removal_skip_ends, screenshot_accelerator, section_shortcut, status_labels, status_rows,
+    tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -573,12 +574,28 @@ fn text_and_image_steps_end_alike() {
 }
 
 #[test]
-fn default_screenshot_hotkey_is_a_menu_shortcut() {
-    let chord = crate::hotkey::screenshot_from_storage(None);
-    use mac_ui::tray_icon::menu::accelerator::{Accelerator, Code, Modifiers};
-    let accelerator: Accelerator = chord
-        .into_string()
-        .parse()
-        .expect("⌃⇧4 parses as a menu shortcut");
+fn the_screenshot_hotkey_is_shown_beside_its_menu_item() {
+    use crate::hotkey::{screenshot_on, top_left_key};
+    use mac_ui::keys::Board;
+    use mac_ui::tray_icon::menu::accelerator::{Code, Modifiers};
+    // ISO ⌥⇧§: muda has no key equivalent for §, so it is set on the NSMenuItem instead.
+    let iso = screenshot_on(Board::Iso);
+    assert!(screenshot_accelerator(iso).is_none());
+    let (key, mods) = section_shortcut(iso).expect("§ is set by hand");
+    assert_eq!(key, "§");
+    assert_eq!(mods, iso.mods);
+    // ANSI ⌥⇧`: muda shows it.
+    let ansi = screenshot_on(Board::Ansi);
+    assert_eq!(
+        top_left_key(Board::Ansi),
+        global_hotkey::hotkey::Code::Backquote
+    );
+    assert!(section_shortcut(ansi).is_none());
+    let accelerator = screenshot_accelerator(ansi).expect("⌥⇧` is a menu shortcut");
+    assert!(accelerator.matches(Modifiers::ALT | Modifiers::SHIFT, Code::Backquote));
+    // A recorded ⌃⇧4 stays a muda shortcut.
+    let recorded = crate::hotkey::screenshot_from_storage(Some("shift+control+Digit4"));
+    let accelerator = screenshot_accelerator(recorded).expect("⌃⇧4 is a menu shortcut");
     assert!(accelerator.matches(Modifiers::CONTROL | Modifiers::SHIFT, Code::Digit4));
+    assert!(section_shortcut(recorded).is_none());
 }
