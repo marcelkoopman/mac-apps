@@ -114,7 +114,7 @@ pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
         SCREENSHOT_ID,
         crate::locale::t("take_screenshot"),
         crate::screenshot::available(),
-        screenshot_accelerator(shot_chord),
+        shot_chord.and_then(screenshot_accelerator),
     ));
     let _ = menu.append(&CheckMenuItem::with_id(
         ALLOW_SCREENSHOTS_ID,
@@ -145,7 +145,7 @@ pub(crate) fn status_menu(entries: &[(usize, String, bool)]) -> Menu {
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&tray::quit_item(&quit));
     #[cfg(target_os = "macos")]
-    if let Some((key, mods)) = section_shortcut(shot_chord) {
+    if let Some((key, mods)) = shot_chord.and_then(section_shortcut) {
         crate::macos_pin::show_status_shortcut(
             &menu,
             crate::locale::t("take_screenshot"),

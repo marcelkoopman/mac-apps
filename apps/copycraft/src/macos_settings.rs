@@ -702,6 +702,13 @@ fn restore_level(window: &NSWindow) {
     LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
+/// The hotkey values again, after the keyboard changed the defaults (not while recording).
+pub(crate) fn refresh_hotkeys() {
+    if !RECORDING.get() {
+        show_stored_hotkeys();
+    }
+}
+
 fn refresh_all() {
     show_stored_hotkeys();
     SHOT_OWN_BOX.with(|slot| {

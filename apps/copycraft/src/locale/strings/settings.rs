@@ -55,8 +55,18 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "hotkey_rejected",
-        "⌃ of ⌘ nodig (alleen ⌥ of ⌥⇧ mag met § of `) — opnieuw",
-        "Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again",
+        "⌃ of ⌘ nodig (alleen ⌥ of ⌥⇧ mag met §) — opnieuw",
+        "Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with §) — try again",
+    ),
+    (
+        "hotkey_none",
+        "Geen sneltoets, stel er een in",
+        "No hotkey, set one",
+    ),
+    (
+        "hotkey_layout_tip",
+        "Typt ⌥ met de toets links van 1 een teken op je toetsenbordindeling (Duits: „)? Kies dan een andere sneltoets.",
+        "Does ⌥ with the key left of 1 type a character on your keyboard layout (German: „)? Then pick another hotkey.",
     ),
     ("date_order", "Datumvolgorde", "Date order"),
     (

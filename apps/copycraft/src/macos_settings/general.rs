@@ -214,6 +214,16 @@ pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
         &SHOT_LABEL,
         crate::locale::t("screenshot_hotkey_note"),
     );
+    // Some layouts type a character with ⌥ on the key left of 1 (German: „).
+    for slot in [&HOTKEY_LABEL, &SHOT_LABEL] {
+        slot.with(|slot| {
+            if let Some(field) = slot.borrow().as_ref() {
+                field.setToolTip(Some(&NSString::from_str(crate::locale::t(
+                    "hotkey_layout_tip",
+                ))));
+            }
+        });
+    }
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
     let y = take(&mut top, BUTTON_H);

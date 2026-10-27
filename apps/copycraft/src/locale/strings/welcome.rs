@@ -17,6 +17,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Open CopyCraft from any app with {0}.",
     ),
     (
+        "welcome_hotkey_none",
+        "Stel in Instellingen › Algemeen een sneltoets in om CopyCraft vanuit elke app te openen.",
+        "Set a hotkey in Settings › General to open CopyCraft from any app.",
+    ),
+    (
         "welcome_history",
         "Standaard leest CopyCraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
         "By default CopyCraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
@@ -50,6 +55,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "welcome_way_back",
         "Is het menubalkpictogram verborgen? Open CopyCraft dan opnieuw vanuit de Finder of met {0}.",
         "Menu bar icon hidden? Open CopyCraft again from the Finder or with {0}.",
+    ),
+    (
+        "welcome_way_back_none",
+        "Is het menubalkpictogram verborgen? Open CopyCraft dan opnieuw vanuit de Finder.",
+        "Menu bar icon hidden? Open CopyCraft again from the Finder.",
     ),
     ("welcome_start", "Aan de slag", "Get Started"),
     (

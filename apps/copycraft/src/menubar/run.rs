@@ -2,13 +2,17 @@
 
 use super::*;
 
+/// The hotkey manager with the card's chord registered; none registered when there is no
+/// chord (a JIS keyboard with nothing recorded).
 pub(crate) fn register_format_hotkey()
--> Result<(GlobalHotKeyManager, global_hotkey::hotkey::HotKey, u32), Box<dyn std::error::Error>> {
+-> Result<(GlobalHotKeyManager, Option<global_hotkey::hotkey::HotKey>), Box<dyn std::error::Error>>
+{
     let manager = GlobalHotKeyManager::new()?;
     let hotkey = crate::settings::hotkey();
-    let id = hotkey.id();
-    manager.register(hotkey)?;
-    Ok((manager, hotkey, id))
+    if let Some(hotkey) = hotkey {
+        manager.register(hotkey)?;
+    }
+    Ok((manager, hotkey))
 }
 
 /// Register the screenshot hotkey on `manager`. `None` (logged) when another app holds the
@@ -16,9 +20,9 @@ pub(crate) fn register_format_hotkey()
 pub(crate) fn register_screenshot_hotkey(
     manager: &GlobalHotKeyManager,
 ) -> Option<global_hotkey::hotkey::HotKey> {
-    let chord = crate::settings::screenshot_hotkey();
+    let chord = crate::settings::screenshot_hotkey()?;
     // The card's hotkey was set to this chord before there were screenshots: the card keeps it.
-    if chord == crate::settings::hotkey() {
+    if Some(chord) == crate::settings::hotkey() {
         return None;
     }
     match manager.register(chord) {
@@ -57,7 +61,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             crate::diag::ErrorKind::from_text(&e.to_string()),
         ));
     }
-    let (hotkeys, hotkey, format_hotkey_id) = register_format_hotkey()?;
+    let (hotkeys, hotkey) = register_format_hotkey()?;
     let screenshot_hotkey = register_screenshot_hotkey(&hotkeys);
     // Always the same template glyph. The kind is in the tooltip and the VoiceOver label.
     // A copy blinks it briefly with a filled variant, also a template.
@@ -130,7 +134,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         icons,
         hotkeys,
         format_hotkey: hotkey,
-        format_hotkey_id,
         screenshot_hotkey,
         shot_generation: 0,
         sensitive_clear: None,
@@ -181,6 +184,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(
         || launcher::emit(UserEvent::SessionEnded),
+        || launcher::emit(UserEvent::KeyboardMayHaveChanged),
         crate::appearance::restyle_open_windows,
     );
     // Pasteboard privacy (macOS 15.4+): the access setting, in the local log only.

@@ -67,6 +67,7 @@ impl ApplicationHandler<UserEvent> for App {
             // Only the tooltip: an open card reads the copy anyway.
             UserEvent::PasteHint => self.sync_tooltip(&ClipboardView::from_os()),
             UserEvent::SessionEnded => self.session_ended(),
+            UserEvent::KeyboardMayHaveChanged => self.recheck_keyboard(),
             UserEvent::ScreenshotTaken { generation, result } => {
                 self.screenshot_taken(generation, result);
             }
@@ -156,7 +157,7 @@ impl ApplicationHandler<UserEvent> for App {
             if event.state != HotKeyState::Pressed {
                 continue;
             }
-            if event.id == self.format_hotkey_id {
+            if Some(event.id) == self.format_hotkey.map(|chord| chord.id()) {
                 self.summon_popup();
             } else if Some(event.id) == self.screenshot_hotkey.map(|chord| chord.id()) {
                 self.take_screenshot();

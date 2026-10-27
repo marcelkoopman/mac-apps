@@ -579,22 +579,26 @@ fn the_screenshot_hotkey_is_shown_beside_its_menu_item() {
     use mac_ui::keys::Board;
     use mac_ui::tray_icon::menu::accelerator::{Code, Modifiers};
     // ISO ⌥⇧§: muda has no key equivalent for §, so it is set on the NSMenuItem instead.
-    let iso = screenshot_on(Board::Iso);
+    let iso = screenshot_on(Board::Iso).expect("ISO default");
     assert!(screenshot_accelerator(iso).is_none());
     let (key, mods) = section_shortcut(iso).expect("§ is set by hand");
     assert_eq!(key, "§");
     assert_eq!(mods, iso.mods);
-    // ANSI ⌥⇧`: muda shows it.
-    let ansi = screenshot_on(Board::Ansi);
+    // ANSI ⌃⌥⇧`: muda shows it.
+    let ansi = screenshot_on(Board::Ansi).expect("ANSI default");
     assert_eq!(
         top_left_key(Board::Ansi),
-        global_hotkey::hotkey::Code::Backquote
+        Some(global_hotkey::hotkey::Code::Backquote)
     );
     assert!(section_shortcut(ansi).is_none());
-    let accelerator = screenshot_accelerator(ansi).expect("⌥⇧` is a menu shortcut");
-    assert!(accelerator.matches(Modifiers::ALT | Modifiers::SHIFT, Code::Backquote));
+    let accelerator = screenshot_accelerator(ansi).expect("⌃⌥⇧` is a menu shortcut");
+    assert!(accelerator.matches(
+        Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT,
+        Code::Backquote
+    ));
     // A recorded ⌃⇧4 stays a muda shortcut.
-    let recorded = crate::hotkey::screenshot_from_storage(Some("shift+control+Digit4"));
+    let recorded =
+        crate::hotkey::screenshot_from_storage(Some("shift+control+Digit4")).expect("stored");
     let accelerator = screenshot_accelerator(recorded).expect("⌃⇧4 is a menu shortcut");
     assert!(accelerator.matches(Modifiers::CONTROL | Modifiers::SHIFT, Code::Digit4));
     assert!(section_shortcut(recorded).is_none());

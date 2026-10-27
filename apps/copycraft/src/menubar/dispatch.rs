@@ -491,7 +491,7 @@ impl App {
     /// by another app); the card's hotkey is not touched.
     pub(crate) fn rebind_screenshot_hotkey(&mut self) {
         let next = crate::settings::screenshot_hotkey();
-        if self.screenshot_hotkey == Some(next) {
+        if self.screenshot_hotkey == next {
             return;
         }
         if let Some(old) = self.screenshot_hotkey.take()
@@ -507,18 +507,25 @@ impl App {
 
     fn rebind_card_hotkey(&mut self) {
         let next = crate::settings::hotkey();
-        if next.id() == self.format_hotkey_id {
+        if next == self.format_hotkey {
             return;
         }
-        if let Err(e) = self.hotkeys.unregister(self.format_hotkey) {
+        let previous = self.format_hotkey.take();
+        if let Some(old) = previous
+            && let Err(e) = self.hotkeys.unregister(old)
+        {
             crate::diag::log(crate::diag::LogEvent::HotkeyUnregisterFailed(
                 crate::diag::ErrorKind::from_text(&e.to_string()),
             ));
         }
+        let Some(next) = next else {
+            // No chord any more (a JIS keyboard, nothing recorded): the menu says so.
+            self.refresh_status_menu();
+            return;
+        };
         match self.hotkeys.register(next) {
             Ok(()) => {
-                self.format_hotkey = next;
-                self.format_hotkey_id = next.id();
+                self.format_hotkey = Some(next);
                 self.refresh_status_menu();
                 crate::diag::log(crate::diag::LogEvent::HotkeyRegistered);
             }
@@ -527,8 +534,26 @@ impl App {
                     crate::diag::ErrorKind::from_text(&e.to_string()),
                 ));
                 // Best effort: put the previous chord back.
-                let _ = self.hotkeys.register(self.format_hotkey);
+                if let Some(old) = previous
+                    && self.hotkeys.register(old).is_ok()
+                {
+                    self.format_hotkey = Some(old);
+                }
             }
         }
+    }
+
+    /// Ask macOS again which keyboard it is (wake, Settings opening, another input source);
+    /// when it changed, the default chords follow. A recorded chord stays as it is.
+    pub(crate) fn recheck_keyboard(&mut self) {
+        if !crate::hotkey::detect_board() {
+            return;
+        }
+        if crate::settings::hotkeys_stored() == (true, true) {
+            return;
+        }
+        self.rebind_hotkey();
+        #[cfg(target_os = "macos")]
+        crate::macos_settings::refresh_hotkeys();
     }
 }

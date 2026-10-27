@@ -511,8 +511,8 @@ Mac only, no data.
 - [ ] Fresh defaults: `defaults delete nl.marcelkoopman.copycraft CopycraftHotkey` and `defaults delete nl.marcelkoopman.copycraft CopycraftScreenshotHotkey` (an error that the key does not exist is fine), open CopyCraft. ⌥§ (Option and the key left of 1) opens and closes the card in any app; ⌥⇧§ starts a screenshot. Settings › General shows *⌥§* and *⌥⇧§*; the welcome screen says *… with ⌥§.*, ✕'s tooltip *Close (Esc, ⌥§)*, and the status menu's first row ⌥§.
 - [ ] Status menu: *Take Screenshot…* / *Maak schermafbeelding…* has ⌥⇧§ drawn beside it (the § set by hand; if it is missing or shows another glyph, say so).
 - [ ] Recorded chords stay: in Settings record ⌃⌘C for the card and ⌃⇧4 for screenshots, quit and open CopyCraft: both still work and ⌥§ / ⌥⇧§ do nothing. Delete the two keys again (step 1) for the new defaults.
-- [ ] Rules: recording ⌥C says *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again*; ⌥§ for the screenshot while the card has ⌥§ says *Already used by the other hotkey — try again*.
-- [ ] US keyboard (if one is at hand, or an ANSI MacBook): with the keys deleted, the defaults are ⌥` and ⌥⇧` (the key left of 1 there), shown with ` in Settings and the menu.
+- [ ] Rules: recording ⌥C says *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with §) — try again*; ⌥§ for the screenshot while the card has ⌥§ says *Already used by the other hotkey — try again*.
+- [ ] US keyboard (if one is at hand, or an ANSI MacBook): with the keys deleted, the defaults are ⌃⌥` and ⌃⌥⇧` (the key left of 1 there; ⌥` alone is a dead key), shown with ` in Settings and the menu.
 
 ### Screenshot review fixes (Oct 2026)
 
@@ -520,4 +520,8 @@ Mac only, no data.
 - [ ] Log: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` while taking one shows `screenshot checked: text in true, concealed false, admitted true` (or the like) and `screenshot: captured`: flags only, no text, no window names.
 - [ ] Settings itself stays out: open Settings and the card, tick Settings › Privacy › *Show CopyCraft in screenshots*, take a whole-screen screenshot: the card is on it, Settings is not (macOS 15 and later too). Open About and the welcome screen (status menu): not on it either. Untick it: the card is gone too.
 - [ ] Overlay and thumbnail stay out: take a whole-screen screenshot, and right after (thumbnail still showing) another: the second shows neither the dimmed overlay nor the first thumbnail. Space and a click on Settings' window picks nothing there (Settings is not offered).
-- [ ] ⌥⇧ with a letter: in Settings record ⌥⇧O for the card: *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again* (⌥⇧O types Ø). ⌥⇧§ for screenshots is still accepted.
+- [ ] ⌥⇧ with a letter: in Settings record ⌥⇧O for the card: *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with §) — try again* (⌥⇧O types Ø). ⌥⇧§ for screenshots is still accepted.
+- [ ] ANSI default: on a US (ANSI) keyboard with the hotkeys deleted (`defaults delete nl.marcelkoopman.copycraft CopycraftHotkey`, same for `CopycraftScreenshotHotkey`), ⌃⌥` opens the card and ⌃⌥⇧` takes a screenshot; ⌥` then e still types è. Recording ⌥` says *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with §) — try again*.
+- [ ] Dead keys on ISO: with the German input source, ⌥ and the key left of 1 opens the card instead of typing „; the tooltip on the hotkey in Settings › General says to pick another. Note here whether another ISO layout you use types something on ⌥§.
+- [ ] Keyboard follows: with no chord recorded, plug in (or switch to) a keyboard of the other kind, or switch the input source, or open Settings: Settings and the status menu show the new default (⌥§ ↔ ⌃⌥`) and it works. A recorded chord stays.
+- [ ] JIS (if one is at hand): with nothing recorded, no hotkey works, Settings shows *Geen sneltoets, stel er een in* / *No hotkey, set one* for both, the welcome screen says to set one in Settings › General, ✕'s tooltip says *Close (Esc)*. Record one: it works at once.

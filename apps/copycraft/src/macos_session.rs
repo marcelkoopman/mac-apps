@@ -8,8 +8,8 @@ use mac_ui::objc2::runtime::AnyObject;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
     NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
-    NSWorkspaceScreensDidSleepNotification, NSWorkspaceSessionDidResignActiveNotification,
-    NSWorkspaceWillSleepNotification,
+    NSWorkspaceDidWakeNotification, NSWorkspaceScreensDidSleepNotification,
+    NSWorkspaceSessionDidResignActiveNotification, NSWorkspaceWillSleepNotification,
 };
 use mac_ui::objc2_foundation::{
     NSDistributedNotificationCenter, NSNotification, NSObject, NSString,
@@ -17,10 +17,14 @@ use mac_ui::objc2_foundation::{
 
 /// Posted by loginwindow when the screen locks (no public constant).
 const SCREEN_LOCKED: &str = "com.apple.screenIsLocked";
+/// Posted by the Text Input Sources service when another input source is selected
+/// (`kTISNotifySelectedKeyboardInputSourceChanged`).
+const INPUT_SOURCE_CHANGED: &str = "com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged";
 
 thread_local! {
     static HOOK: OnceCell<fn()> = const { OnceCell::new() };
     static DISPLAY_HOOK: OnceCell<fn()> = const { OnceCell::new() };
+    static KEYBOARD_HOOK: OnceCell<fn()> = const { OnceCell::new() };
     /// The notification centers do not retain their observers: kept for the app's lifetime.
     static OBSERVER: OnceCell<Retained<SessionObserver>> = const { OnceCell::new() };
 }
@@ -32,6 +36,15 @@ define_class!(
     struct SessionObserver;
 
     impl SessionObserver {
+        #[unsafe(method(keyboardMayHaveChanged:))]
+        fn keyboard_may_have_changed(&self, _note: &NSNotification) {
+            KEYBOARD_HOOK.with(|hook| {
+                if let Some(hook) = hook.get() {
+                    hook();
+                }
+            });
+        }
+
         #[unsafe(method(displayOptionsChanged:))]
         fn display_options_changed(&self, _note: &NSNotification) {
             DISPLAY_HOOK.with(|hook| {
@@ -53,8 +66,9 @@ define_class!(
 );
 
 /// Run `hook` (on the main thread) when the screen locks, the Mac sleeps or the user switches,
-/// and `display` when Reduce Transparency, Increase Contrast or Reduce Motion change.
-pub fn observe(hook: fn(), display: fn()) {
+/// `display` when Reduce Transparency, Increase Contrast or Reduce Motion change, and
+/// `keyboard` when the Mac wakes or the input source changes (another keyboard may be in use).
+pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -63,6 +77,9 @@ pub fn observe(hook: fn(), display: fn()) {
     });
     DISPLAY_HOOK.with(|slot| {
         let _ = slot.set(display);
+    });
+    KEYBOARD_HOOK.with(|slot| {
+        let _ = slot.set(keyboard);
     });
     OBSERVER.with(|slot| {
         if slot.get().is_some() {
@@ -95,10 +112,23 @@ pub fn observe(hook: fn(), display: fn()) {
                 Some(NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification),
                 None,
             );
-            NSDistributedNotificationCenter::defaultCenter().addObserver_selector_name_object(
+            workspace.addObserver_selector_name_object(
+                target,
+                sel!(keyboardMayHaveChanged:),
+                Some(NSWorkspaceDidWakeNotification),
+                None,
+            );
+            let distributed = NSDistributedNotificationCenter::defaultCenter();
+            distributed.addObserver_selector_name_object(
                 target,
                 sel!(sessionEnded:),
                 Some(&NSString::from_str(SCREEN_LOCKED)),
+                None,
+            );
+            distributed.addObserver_selector_name_object(
+                target,
+                sel!(keyboardMayHaveChanged:),
+                Some(&NSString::from_str(INPUT_SOURCE_CHANGED)),
                 None,
             );
         }
