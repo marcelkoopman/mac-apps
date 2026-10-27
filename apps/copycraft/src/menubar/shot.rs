@@ -22,6 +22,9 @@ impl App {
                 crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(
                     Failure::Unavailable,
                 ));
+                // From the hotkey too (the command is greyed out): say so, not silence.
+                mac_ui::panel::activate_app(mtm);
+                mac_ui::dialog::alert(mtm, crate::locale::t("screenshot_unavailable"), "");
                 return;
             }
             use crate::screenshot::Next;
@@ -221,7 +224,8 @@ impl App {
         if let Some(thumbnail) = thumbnail
             && let Some(mtm) = mac_ui::objc2::MainThreadMarker::new()
         {
-            mac_ui::screenshot::show_thumbnail(mtm, thumbnail, || {
+            let label = crate::locale::t("screenshot_thumbnail_a11y");
+            mac_ui::screenshot::show_thumbnail(mtm, thumbnail, label, || {
                 launcher::emit(UserEvent::ScreenshotOpened);
             });
         }

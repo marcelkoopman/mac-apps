@@ -8,9 +8,10 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSControl, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession,
-    NSDraggingSource, NSEvent, NSFloatingWindowLevel, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageView, NSPasteboardItem, NSResponder, NSView, NSWindow, NSWindowSharingType,
+    NSAccessibility, NSControl, NSDragOperation, NSDraggingContext, NSDraggingItem,
+    NSDraggingSession, NSDraggingSource, NSEvent, NSFloatingWindowLevel, NSImage, NSImageAlignment,
+    NSImageScaling, NSImageView, NSPasteboardItem, NSResponder, NSView, NSWindow,
+    NSWindowSharingType,
 };
 use objc2_core_foundation::{
     CFBoolean, CFData, CFDictionary, CFNumber, CFRetained, CFType, kCFAllocatorNull,
@@ -125,19 +126,31 @@ define_class!(
             let clicked = with_thumb(|thumb| thumb.down.take().is_some() && !thumb.dragging)
                 .unwrap_or(false);
             if clicked {
-                let on_click = THUMB.with(|slot| {
-                    slot.borrow_mut()
-                        .as_mut()
-                        .map(|thumb| std::mem::replace(&mut thumb.on_click, Box::new(|| {})))
-                });
-                close_thumbnail();
-                if let Some(on_click) = on_click {
-                    on_click();
-                }
+                open();
             }
+        }
+
+        /// VoiceOver's press (VO-Space): as a click.
+        #[unsafe(method(accessibilityPerformPress))]
+        fn accessibility_perform_press(&self) -> bool {
+            open();
+            true
         }
     }
 );
+
+/// A click: the thumbnail goes, then the app's `on_click` runs.
+fn open() {
+    let on_click = THUMB.with(|slot| {
+        slot.borrow_mut()
+            .as_mut()
+            .map(|thumb| std::mem::replace(&mut thumb.on_click, Box::new(|| {})))
+    });
+    close_thumbnail();
+    if let Some(on_click) = on_click {
+        on_click();
+    }
+}
 
 impl ThumbView {
     fn new(mtm: MainThreadMarker, frame: NSRect) -> Retained<Self> {
@@ -208,12 +221,14 @@ fn small_image(png: &[u8]) -> Option<(CFRetained<CGImage>, f64, f64)> {
     Some((thumb, width, height))
 }
 
-/// Show `png` as the thumbnail, replacing one still showing. `on_click` runs after a click
-/// (the thumbnail is gone by then). Keeps the bytes (moved in, not copied) for a drag,
-/// zeroized when it closes.
+/// Show `png` as the thumbnail, replacing one still showing; `label` is its tooltip and what
+/// VoiceOver says (a button: VO-Space is a click). `on_click` runs after a click (the thumbnail
+/// is gone by then). Keeps the bytes (moved in, not copied) for a drag, zeroized when it
+/// closes.
 pub fn show_thumbnail(
     mtm: MainThreadMarker,
     png: Zeroizing<Vec<u8>>,
+    label: &str,
     on_click: impl Fn() + 'static,
 ) {
     close_thumbnail();
@@ -254,6 +269,11 @@ pub fn show_thumbnail(
     view.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
     view.setImageAlignment(NSImageAlignment::AlignCenter);
     view.setImage(Some(&image));
+    let label = NSString::from_str(label);
+    view.setToolTip(Some(&label));
+    let element: &NSView = view.as_ref();
+    element.setAccessibilityLabel(Some(&label));
+    element.setAccessibilityRole(Some(&NSString::from_str("AXButton")));
     crate::layer::round_view(&view, RADIUS);
     window.setContentView(Some(&view));
     window.orderFrontRegardless();

@@ -19,6 +19,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("screenshot_hotkey", "Schermafbeelding", "Screenshot"),
     (
+        "screenshot_thumbnail_a11y",
+        "Schermafbeelding — klik om te openen, sleep om te delen",
+        "Screenshot — click to open, drag to share",
+    ),
+    (
         "screenshot_hotkey_note",
         "Sleep een gebied, klik voor het hele scherm, Spatie kiest een venster.",
         "Drag an area, click for the whole screen, Space picks a window.",
