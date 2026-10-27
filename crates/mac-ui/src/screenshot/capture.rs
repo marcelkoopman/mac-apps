@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use block2::RcBlock;
-use objc2::rc::{Allocated, Retained};
+use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{AnyThread, msg_send};
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
@@ -193,22 +193,26 @@ fn shoot(filter: &AnyObject, config: &AnyObject, done: Done) {
         return;
     };
     let handler = RcBlock::new(move |image: *mut CGImage, error: *mut NSError| {
-        // SAFETY: `image` and `error` are null or kept alive by the system for this call; the
-        // image is encoded to PNG before it returns. An empty dictionary is a valid property
-        // list for any file type.
-        let (png, code) = unsafe {
-            let png = image.as_ref().and_then(|image| {
-                NSBitmapImageRep::initWithCGImage(NSBitmapImageRep::alloc(), image)
-                    .representationUsingType_properties(
-                        NSBitmapImageFileType::PNG,
-                        &NSDictionary::new(),
-                    )
-            });
-            (png, error.as_ref().map(|e| e.code()))
-        };
-        let result = png
-            .map(|data| Zeroizing::new(data.to_vec()))
-            .ok_or_else(|| failure(code));
+        // The bitmap and the PNG AppKit makes cannot be wiped: in a pool of their own, so they
+        // are freed as soon as the bytes are copied out (into the one buffer that is wiped and
+        // moved on from here), not when the system's queue drains its pool.
+        let result = autoreleasepool(|_| {
+            // SAFETY: `image` and `error` are null or kept alive by the system for this call;
+            // the image is encoded to PNG before it returns. An empty dictionary is a valid
+            // property list for any file type.
+            let (png, code) = unsafe {
+                let png = image.as_ref().and_then(|image| {
+                    NSBitmapImageRep::initWithCGImage(NSBitmapImageRep::alloc(), image)
+                        .representationUsingType_properties(
+                            NSBitmapImageFileType::PNG,
+                            &NSDictionary::new(),
+                        )
+                });
+                (png, error.as_ref().map(|e| e.code()))
+            };
+            png.map(|data| Zeroizing::new(data.to_vec()))
+                .ok_or_else(|| failure(code))
+        });
         finish(&done, result);
     });
     // SAFETY: `+[SCScreenshotManager captureImageWithFilter:configuration:completionHandler:]`

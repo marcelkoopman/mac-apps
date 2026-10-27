@@ -168,8 +168,11 @@ impl App {
             });
         }
         let keep = crate::screenshot::keep(crate::capture::history_paused(), shot);
-        let bytes = Zeroizing::new(png.with(<[u8]>::to_vec));
-        if self.write_own_image(&bytes, shot.mark_concealed).is_err() {
+        // Straight from the one copy; another only for the thumbnail and a later check.
+        if png
+            .with(|bytes| self.write_own_image(bytes, shot.mark_concealed))
+            .is_err()
+        {
             png.zeroize();
             if let Some(Some(mut scan)) = scan {
                 scan.wipe();
@@ -195,25 +198,30 @@ impl App {
             self.image_on_pasteboard = Some((change, recorded.clone()));
             self.current_image = Some(recorded.clone());
         }
-        let thumbnail = Zeroizing::new(bytes.to_vec());
+        // None with a token or key on it: nothing to drag to another app.
+        let thumbnail = shot
+            .verdict
+            .admitted
+            .then(|| Zeroizing::new(png.with(<[u8]>::to_vec)));
         match scan {
             // Known: kept with its entry and for the card, nothing to check again.
-            Some(scan) => {
-                drop(bytes);
-                self.image_step_scanned(change, shot.verdict, recorded, scan);
+            Some(scan) => self.image_step_scanned(change, shot.verdict, recorded, scan),
+            None => {
+                let bytes = Zeroizing::new(png.with(<[u8]>::to_vec));
+                self.scan_step_copy(change, bytes, shot.verdict, recorded);
             }
-            None => self.scan_step_copy(change, bytes, shot.verdict, recorded),
         }
+        // With no entry (paused, a token or key) the bytes are zeroized with this handle, now.
+        drop(png);
         crate::diag::log(crate::diag::LogEvent::ScreenshotCaptured);
         self.refresh_status_menu();
         if launcher::is_open() {
             self.refresh_popup();
         }
-        // None with a token or key on it: nothing to drag to another app.
-        if shot.verdict.admitted
+        if let Some(thumbnail) = thumbnail
             && let Some(mtm) = mac_ui::objc2::MainThreadMarker::new()
         {
-            mac_ui::screenshot::show_thumbnail(mtm, &thumbnail, || {
+            mac_ui::screenshot::show_thumbnail(mtm, thumbnail, || {
                 launcher::emit(UserEvent::ScreenshotOpened);
             });
         }

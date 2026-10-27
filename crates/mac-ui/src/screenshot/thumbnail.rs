@@ -12,7 +12,16 @@ use objc2_app_kit::{
     NSDraggingSource, NSEvent, NSFloatingWindowLevel, NSImage, NSImageAlignment, NSImageScaling,
     NSImageView, NSPasteboardItem, NSResponder, NSView, NSWindow, NSWindowSharingType,
 };
+use objc2_core_foundation::{
+    CFBoolean, CFData, CFDictionary, CFNumber, CFRetained, CFType, kCFAllocatorNull,
+};
+use objc2_core_graphics::CGImage;
 use objc2_foundation::{NSArray, NSData, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use objc2_image_io::{
+    CGImageSource, kCGImageSourceCreateThumbnailFromImageAlways,
+    kCGImageSourceCreateThumbnailWithTransform, kCGImageSourceShouldCache,
+    kCGImageSourceShouldCacheImmediately, kCGImageSourceThumbnailMaxPixelSize,
+};
 use zeroize::Zeroizing;
 
 use crate::shot_area::{self, Rect};
@@ -22,6 +31,9 @@ const HOLD_SECS: f64 = 5.0;
 const RECHECK_SECS: f64 = 1.0;
 /// Its longest side, and its distance to the screen's edges, in points.
 const MAX_SIDE: f64 = 180.0;
+/// Its longest side in pixels as decoded: sharp at 2× (Retina); the full picture is never
+/// decoded for it.
+const MAX_PIXELS: i64 = 360;
 const MARGIN: f64 = 16.0;
 const RADIUS: f64 = 8.0;
 /// A press that moves further than this is a drag, not a click.
@@ -158,19 +170,63 @@ fn with_thumb<R>(f: impl FnOnce(&mut Thumb) -> R) -> Option<R> {
     THUMB.with(|slot| slot.borrow_mut().as_mut().map(f))
 }
 
+/// The picture in `png` decoded at most [`MAX_PIXELS`] on its longest side (smaller pictures
+/// as they are), straight from the bytes: no copy of them, no full-size bitmap kept.
+fn small_image(png: &[u8]) -> Option<(CFRetained<CGImage>, f64, f64)> {
+    let max = CFNumber::new_i64(MAX_PIXELS);
+    let yes = CFBoolean::new(true);
+    let no = CFBoolean::new(false);
+    let length = isize::try_from(png.len()).ok()?;
+    // SAFETY: the CFData points into `png` without owning it (kCFAllocatorNull frees nothing)
+    // and, with the image source, lives only inside this block, while `png` is borrowed. The
+    // thumbnail is decoded at once (ShouldCacheImmediately) into a bitmap of its own, so the
+    // CGImage returned never reads `png` again. The option keys are CFStrings and the values a
+    // CFNumber and CFBooleans, as ImageIO documents for them.
+    let thumb = unsafe {
+        let data = CFData::with_bytes_no_copy(None, png.as_ptr(), length, kCFAllocatorNull)?;
+        let keys: [&CFType; 5] = [
+            kCGImageSourceThumbnailMaxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageAlways,
+            kCGImageSourceCreateThumbnailWithTransform,
+            kCGImageSourceShouldCache,
+            kCGImageSourceShouldCacheImmediately,
+        ]
+        .map(AsRef::as_ref);
+        let values: [&CFType; 5] = [
+            max.as_ref(),
+            yes.as_ref(),
+            yes.as_ref(),
+            no.as_ref(),
+            yes.as_ref(),
+        ];
+        let options = CFDictionary::from_slices(&keys, &values);
+        let source = CGImageSource::with_data(&data, None)?;
+        source.thumbnail_at_index(0, Some(options.as_opaque()))?
+    };
+    let width = CGImage::width(Some(&thumb)) as f64;
+    let height = CGImage::height(Some(&thumb)) as f64;
+    Some((thumb, width, height))
+}
+
 /// Show `png` as the thumbnail, replacing one still showing. `on_click` runs after a click
-/// (the thumbnail is gone by then). Keeps its own copy of the bytes for a drag, zeroized when
-/// it closes.
-pub fn show_thumbnail(mtm: MainThreadMarker, png: &[u8], on_click: impl Fn() + 'static) {
+/// (the thumbnail is gone by then). Keeps the bytes (moved in, not copied) for a drag,
+/// zeroized when it closes.
+pub fn show_thumbnail(
+    mtm: MainThreadMarker,
+    png: Zeroizing<Vec<u8>>,
+    on_click: impl Fn() + 'static,
+) {
     close_thumbnail();
-    let Some(image) = crate::image::from_bytes(png) else {
+    let Some((small, width, height)) = small_image(&png) else {
         return;
     };
     let Some(screen) = crate::panel::screen_at(mtm, NSEvent::mouseLocation()) else {
         return;
     };
-    let picture = image.size();
-    let size = shot_area::fit(picture.width, picture.height, MAX_SIDE);
+    // At most MAX_PIXELS a side: a larger picture shows at 2×, a smaller one as it is.
+    let size = shot_area::fit(width, height, MAX_SIDE);
+    let image =
+        NSImage::initWithCGImage_size(NSImage::alloc(), &small, NSSize::new(size.0, size.1));
     let visible = screen.visibleFrame();
     let frame = shot_area::bottom_right(
         &Rect::new(
@@ -209,7 +265,7 @@ pub fn show_thumbnail(mtm: MainThreadMarker, png: &[u8], on_click: impl Fn() + '
         *slot.borrow_mut() = Some(Thumb {
             window,
             view,
-            png: Zeroizing::new(png.to_vec()),
+            png,
             on_click: Box::new(on_click),
             down: None,
             dragging: false,

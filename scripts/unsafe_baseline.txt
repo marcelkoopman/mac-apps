@@ -52,7 +52,11 @@ copycraft impl 9
 # mac-ui blocks 93: +1 for the default hotkeys ⌥§ / ⌥⇧§ (approved by Marcel 2026-10-25): mac_ui::keys::board
 # calls HIToolbox's LMGetKbdType and KBGetLayoutType (Carbon, no crate in the tree binds them; plain integers
 # in and out) to tell ISO from ANSI, so the defaults sit on the key left of 1 (§ on ISO, ` on ANSI).
-mac-ui blocks 93
+# mac-ui blocks 94: +1 for the screenshot thumbnail decoded small (review fix 9, approved by Marcel via
+# Archimedes 2026-10-27; thumbnail.rs small_image): CGImageSourceCreateThumbnailAtIndex over a no-copy CFData
+# on the PNG (objc2-image-io and CFData's no-copy constructor are `unsafe`), instead of a full-size NSImage
+# and an extra unwiped NSData copy of the picture.
+mac-ui blocks 94
 mac-ui fn 4
 mac-ui impl 6
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):

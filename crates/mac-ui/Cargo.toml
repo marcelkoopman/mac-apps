@@ -168,12 +168,17 @@ quicklook = [
 # NSArray/NSDictionary/NSNumber; the overlay (NSBezierPath, NSCursor) on borderless `panel`
 # windows; the thumbnail (NSImageView through `image`, a drag with NSDraggingItem and an
 # NSPasteboardItem, hidden through `widgets`' run_on_main); the app in front before the overlay
-# (NSWorkspace, NSRunningApplication) is brought back after it. objc2-core-graphics and
+# (NSWorkspace, NSRunningApplication) is brought back after it. The thumbnail is decoded at its
+# own size through ImageIO (CGImageSourceCreateThumbnailAtIndex), never at full size. objc2-core-graphics and
 # objc2-core-foundation are already in the tree: no new crate.
 screenshot = [
     "dep:block2",
     "dep:objc2-core-foundation",
     "dep:objc2-core-graphics",
+    "dep:objc2-image-io",
+    "objc2-core-foundation/CFData",
+    "objc2-core-foundation/CFDictionary",
+    "objc2-core-foundation/CFNumber",
     "image",
     "panel",
     "widgets",
@@ -190,6 +195,7 @@ screenshot = [
     "objc2-app-kit/NSPasteboardItem",
     "objc2-app-kit/NSRunningApplication",
     "objc2-app-kit/NSWorkspace",
+    "objc2-app-kit/libc",
     "objc2-app-kit/objc2-core-graphics",
     "objc2-foundation/NSData",
     "objc2-foundation/NSDictionary",
@@ -240,6 +246,8 @@ objc2-quick-look-thumbnailing = { workspace = true, optional = true }
 # `screenshot` only (both already in the tree through objc2-app-kit).
 objc2-core-foundation = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CFArray"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CGImage", "CGWindow"] }
+# `screenshot` only: the thumbnail decoded small (already in the tree through copycraft).
+objc2-image-io = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CGImageSource", "objc2-core-graphics"] }
 # `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
 
