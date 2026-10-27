@@ -167,7 +167,8 @@ quicklook = [
 # and the on-screen window list (ids and bounds only) from CoreGraphics' CGWindow, bridged to
 # NSArray/NSDictionary/NSNumber; the overlay (NSBezierPath, NSCursor) on borderless `panel`
 # windows; the thumbnail (NSImageView through `image`, a drag with NSDraggingItem and an
-# NSPasteboardItem, hidden through `widgets`' run_on_main). objc2-core-graphics and
+# NSPasteboardItem, hidden through `widgets`' run_on_main); the app in front before the overlay
+# (NSWorkspace, NSRunningApplication) is brought back after it. objc2-core-graphics and
 # objc2-core-foundation are already in the tree: no new crate.
 screenshot = [
     "dep:block2",
@@ -187,6 +188,8 @@ screenshot = [
     "objc2-app-kit/NSImageView",
     "objc2-app-kit/NSPasteboard",
     "objc2-app-kit/NSPasteboardItem",
+    "objc2-app-kit/NSRunningApplication",
+    "objc2-app-kit/NSWorkspace",
     "objc2-app-kit/objc2-core-graphics",
     "objc2-foundation/NSData",
     "objc2-foundation/NSDictionary",

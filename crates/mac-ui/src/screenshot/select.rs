@@ -8,8 +8,9 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSBezierPath, NSColor, NSCursor, NSEvent, NSResponder, NSScreen, NSScreenSaverWindowLevel,
-    NSView, NSWindow, NSWindowCollectionBehavior, NSWindowSharingType,
+    NSApplicationActivationOptions, NSBezierPath, NSColor, NSCursor, NSEvent, NSResponder,
+    NSRunningApplication, NSScreen, NSScreenSaverWindowLevel, NSView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowSharingType, NSWorkspace,
 };
 use objc2_core_graphics::{CGWindowListCopyWindowInfo, CGWindowListOption, kCGNullWindowID};
 use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSPoint, NSRect, NSSize, NSString};
@@ -54,6 +55,9 @@ struct Session {
     /// Windows that can be picked, front to back, AppKit frames.
     targets: Vec<(u32, Rect)>,
     hover: Option<(u32, Rect)>,
+    /// The app that was in front before the overlay (not this one): in front again when the
+    /// overlay closes, so ⌘V works there at once.
+    previous: Option<Retained<NSRunningApplication>>,
     done: Box<dyn FnOnce(Option<Pick>)>,
 }
 
@@ -298,6 +302,10 @@ pub fn select(
         done(None);
         return;
     }
+    let own = super::own_pid();
+    let previous = NSWorkspace::sharedWorkspace()
+        .frontmostApplication()
+        .filter(|app| app.processIdentifier() != own);
     crate::panel::activate_app(mtm);
     let (x, y) = point();
     for screen in &shown {
@@ -317,6 +325,7 @@ pub fn select(
             now: None,
             targets,
             hover: None,
+            previous,
             done: Box::new(done),
         })
     });
@@ -331,6 +340,12 @@ pub fn cancel_selection() {
             *pick = None;
         }
     });
+}
+
+/// Close the overlay without a pick, as if cancelled, when the app is no longer active or the
+/// screens changed (it would hang over them otherwise). A pick on its way is kept.
+pub fn dismiss_selection() {
+    finish(None);
 }
 
 /// The window numbers of the overlay last shown (ordered out, kept until the next one closes),
@@ -439,8 +454,17 @@ fn finish(pick: Option<Pick>) {
         screen.window.orderOut(None);
     }
     NSCursor::arrowCursor().set();
-    let Session { screens, done, .. } = session;
+    let Session {
+        screens,
+        done,
+        previous,
+        ..
+    } = session;
     RETIRED.with(|slot| *slot.borrow_mut() = screens);
+    // Back to the app the user was in, also on a cancel.
+    if let Some(app) = previous {
+        let _ = app.activateWithOptions(NSApplicationActivationOptions::empty());
+    }
     // A cancel needs no wait; a pick waits until the window server drew without the overlay.
     if pick.is_none() {
         done(None);

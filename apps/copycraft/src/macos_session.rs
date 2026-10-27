@@ -1,5 +1,7 @@
 //! The end of a session: the screen locks, the Mac goes to sleep, or another user takes over
 //! (fast user switching). CopyCraft then forgets its history, whatever the retention setting.
+//! The same observer hears of a wake or another input source (the hotkey defaults may move),
+//! and of CopyCraft no longer being active or the screens changing (a screenshot overlay goes).
 
 use std::cell::OnceCell;
 
@@ -7,12 +9,13 @@ use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::AnyObject;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
+    NSApplicationDidChangeScreenParametersNotification, NSApplicationDidResignActiveNotification,
     NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
     NSWorkspaceDidWakeNotification, NSWorkspaceScreensDidSleepNotification,
     NSWorkspaceSessionDidResignActiveNotification, NSWorkspaceWillSleepNotification,
 };
 use mac_ui::objc2_foundation::{
-    NSDistributedNotificationCenter, NSNotification, NSObject, NSString,
+    NSDistributedNotificationCenter, NSNotification, NSNotificationCenter, NSObject, NSString,
 };
 
 /// Posted by loginwindow when the screen locks (no public constant).
@@ -36,6 +39,13 @@ define_class!(
     struct SessionObserver;
 
     impl SessionObserver {
+        #[unsafe(method(overlayInterrupted:))]
+        fn overlay_interrupted(&self, _note: &NSNotification) {
+            // Another app came to the front or the screens changed: the screenshot overlay
+            // would hang there, so it goes, as if cancelled.
+            mac_ui::screenshot::dismiss_selection();
+        }
+
         #[unsafe(method(keyboardMayHaveChanged:))]
         fn keyboard_may_have_changed(&self, _note: &NSNotification) {
             KEYBOARD_HOOK.with(|hook| {
@@ -118,6 +128,18 @@ pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
                 Some(NSWorkspaceDidWakeNotification),
                 None,
             );
+            let app_center = NSNotificationCenter::defaultCenter();
+            for name in [
+                NSApplicationDidResignActiveNotification,
+                NSApplicationDidChangeScreenParametersNotification,
+            ] {
+                app_center.addObserver_selector_name_object(
+                    target,
+                    sel!(overlayInterrupted:),
+                    Some(name),
+                    None,
+                );
+            }
             let distributed = NSDistributedNotificationCenter::defaultCenter();
             distributed.addObserver_selector_name_object(
                 target,

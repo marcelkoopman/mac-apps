@@ -18,7 +18,7 @@ mod thumbnail;
 
 pub use crate::shot_area::{LeaveOut, Rect};
 pub use capture::{Failed, Target, capture};
-pub use select::{Pick, cancel_selection, select};
+pub use select::{Pick, cancel_selection, dismiss_selection, select};
 pub use thumbnail::{close_thumbnail, show_thumbnail};
 
 use objc2::runtime::AnyClass;
