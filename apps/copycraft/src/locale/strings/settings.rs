@@ -55,8 +55,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "hotkey_rejected",
-        "⌃ of ⌘ nodig (alleen Option mag met § of `) — opnieuw",
-        "Need ⌃ or ⌘ (Option alone only with § or `) — try again",
+        "⌃ of ⌘ nodig (alleen ⌥ of ⌥⇧ mag met § of `) — opnieuw",
+        "Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again",
     ),
     ("date_order", "Datumvolgorde", "Date order"),
     (

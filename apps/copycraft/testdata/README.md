@@ -511,5 +511,9 @@ Mac only, no data.
 - [ ] Fresh defaults: `defaults delete nl.marcelkoopman.copycraft CopycraftHotkey` and `defaults delete nl.marcelkoopman.copycraft CopycraftScreenshotHotkey` (an error that the key does not exist is fine), open CopyCraft. ⌥§ (Option and the key left of 1) opens and closes the card in any app; ⌥⇧§ starts a screenshot. Settings › General shows *⌥§* and *⌥⇧§*; the welcome screen says *… with ⌥§.*, ✕'s tooltip *Close (Esc, ⌥§)*, and the status menu's first row ⌥§.
 - [ ] Status menu: *Take Screenshot…* / *Maak schermafbeelding…* has ⌥⇧§ drawn beside it (the § set by hand; if it is missing or shows another glyph, say so).
 - [ ] Recorded chords stay: in Settings record ⌃⌘C for the card and ⌃⇧4 for screenshots, quit and open CopyCraft: both still work and ⌥§ / ⌥⇧§ do nothing. Delete the two keys again (step 1) for the new defaults.
-- [ ] Rules: recording ⌥C says *Need ⌃ or ⌘ (Option alone only with § or `) — try again*; ⌥§ for the screenshot while the card has ⌥§ says *Already used by the other hotkey — try again*.
+- [ ] Rules: recording ⌥C says *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again*; ⌥§ for the screenshot while the card has ⌥§ says *Already used by the other hotkey — try again*.
 - [ ] US keyboard (if one is at hand, or an ANSI MacBook): with the keys deleted, the defaults are ⌥` and ⌥⇧` (the key left of 1 there), shown with ` in Settings and the menu.
+
+### Screenshot review fixes (Oct 2026)
+
+- [ ] ⌥⇧ with a letter: in Settings record ⌥⇧O for the card: *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again* (⌥⇧O types Ø). ⌥⇧§ for screenshots is still accepted.

@@ -23,8 +23,9 @@ menu bar menu ("Welcome Screen").
 **Global shortcut.** Press Option-§ (⌥§, the key left of 1; Option-` on a US keyboard) in any
 app to open the CopyCraft card for the current clipboard; the menu bar icon opens it too.
 Option-Shift-§ takes a screenshot. The shortcuts can be changed in Settings (a bare key, Shift
-as the only modifier, or Option as the only modifier on any key but § or `, is refused). It is registered as a regular
-global hotkey and needs no Accessibility or Input Monitoring permission.
+as the only modifier, or Option or Option-Shift as the only modifiers on any key but § or `,
+is refused). It is registered as a regular global hotkey and needs no Accessibility or Input
+Monitoring permission.
 
 **Clipboard history and guideline 2.5.14.** CopyCraft does not monitor the clipboard by default.
 It records nothing in the background unless the user explicitly opts in, and the user can always

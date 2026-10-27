@@ -99,8 +99,9 @@ fn is_top_left(key: Code) -> bool {
     matches!(key, Code::IntlBackslash | Code::Backquote)
 }
 
-/// Whether `chord` is strong enough: not a bare key, not Shift alone, and Option alone only on
-/// the key top left (Option-C while typing is too easy to hit; ⌥§ is the default).
+/// Whether `chord` is strong enough: not a bare key, not Shift alone, and Option or
+/// Option-Shift alone only on the key top left. Those type characters (⌥C is ç, ⌥⇧O is Ø), so
+/// on any other key a hotkey would take them away; ⌥§ and ⌥⇧§ are the defaults.
 /// Control-Option-C and Control-Command-C are fine.
 pub fn is_safe(chord: &HotKey) -> bool {
     let mods =
@@ -108,7 +109,8 @@ pub fn is_safe(chord: &HotKey) -> bool {
     if mods.is_empty() || mods == Modifiers::SHIFT {
         return false;
     }
-    mods != Modifiers::ALT || is_top_left(chord.key)
+    let typing = mods == Modifiers::ALT || mods == Modifiers::ALT | Modifiers::SHIFT;
+    !typing || is_top_left(chord.key)
 }
 
 /// Compact Mac label (`⌥§`, `⌃⌘C`) for menus and Settings.
@@ -349,6 +351,32 @@ mod tests {
         assert!(is_safe(&HotKey::new(Some(Modifiers::META), Code::KeyC)));
         assert!(is_safe(&open()));
         assert!(is_safe(&screenshot()));
+    }
+
+    #[test]
+    fn option_shift_alone_only_on_the_key_top_left() {
+        let option_shift = Some(Modifiers::ALT | Modifiers::SHIFT);
+        // ⌥⇧O types Ø, ⌥⇧2 €: a hotkey there would take the character away.
+        for key in [Code::KeyO, Code::KeyC, Code::Digit2, Code::Space] {
+            assert!(!is_safe(&HotKey::new(option_shift, key)), "{key:?}");
+        }
+        assert!(is_safe(&HotKey::new(option_shift, Code::IntlBackslash)));
+        assert!(is_safe(&HotKey::new(option_shift, Code::Backquote)));
+        // With Control or Command too it types nothing: fine on any key.
+        assert!(is_safe(&HotKey::new(
+            Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT),
+            Code::KeyO
+        )));
+        assert!(is_safe(&HotKey::new(
+            Some(Modifiers::META | Modifiers::ALT | Modifiers::SHIFT),
+            Code::KeyO
+        )));
+        // A stored ⌥⇧O falls back to the default.
+        assert_eq!(from_storage(Some("shift+alt+KeyO")).id(), open().id());
+        assert_eq!(
+            screenshot_from_storage(Some("shift+alt+KeyO")).id(),
+            screenshot().id()
+        );
     }
 
     #[test]
