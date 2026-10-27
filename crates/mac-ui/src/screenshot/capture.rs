@@ -11,7 +11,7 @@ use objc2_core_graphics::CGImage;
 use objc2_foundation::{NSArray, NSDictionary, NSError, NSPoint, NSRect, NSSize};
 use zeroize::Zeroizing;
 
-use crate::shot_area::{Rect, pixels};
+use crate::shot_area::{LeaveOut, Rect, pixels};
 
 /// What to capture.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -56,14 +56,19 @@ fn failure(code: Option<isize>) -> Failed {
     }
 }
 
-/// Capture `target`, leaving out the windows of process `leave_out` (CopyCraft's own, unless
-/// the user includes them), without the pointer. `done` gets the PNG bytes, on a system queue.
+/// Capture `target`, leaving out the windows `leave_out` names (an app's own, unless the user
+/// includes them; some always), and always the overlay and the thumbnail, without the pointer.
+/// A window target that is left out is refused. `done` gets the PNG bytes, on a system queue.
+/// Call on the main thread.
 pub fn capture(
     target: Target,
-    leave_out: Option<i32>,
+    leave_out: LeaveOut,
     done: impl FnOnce(Result<Zeroizing<Vec<u8>>, Failed>) + Send + 'static,
 ) {
     let done: Done = Arc::new(Mutex::new(Some(Box::new(done))));
+    let leave_out = leave_out
+        .with(super::select::overlay_windows())
+        .with(super::thumbnail::thumbnail_windows());
     let Some(content_class) = AnyClass::get(c"SCShareableContent") else {
         finish(&done, Err(Failed::Unavailable));
         return;
@@ -74,7 +79,7 @@ pub fn capture(
         // duration of this call; nothing is kept past it except the retained filter and
         // configuration.
         let (content, code) = unsafe { (content.as_ref(), error.as_ref().map(|e| e.code())) };
-        match content.and_then(|content| prepare(content, target, leave_out)) {
+        match content.and_then(|content| prepare(content, target, &leave_out)) {
             Some((filter, config)) => shoot(&filter, &config, on_content.clone()),
             None => finish(&on_content, Err(failure(code))),
         }
@@ -96,7 +101,7 @@ pub fn capture(
 fn prepare(
     content: &AnyObject,
     target: Target,
-    leave_out: Option<i32>,
+    leave_out: &LeaveOut,
 ) -> Option<(Retained<AnyObject>, Retained<AnyObject>)> {
     let filter_class = AnyClass::get(c"SCContentFilter")?;
     let config_class = AnyClass::get(c"SCStreamConfiguration")?;
@@ -116,6 +121,14 @@ fn prepare(
                     let window_id: u32 = msg_send![&**window, windowID];
                     window_id == id
                 })?;
+                let app: Option<Retained<AnyObject>> = msg_send![&*window, owningApplication];
+                let owner = app.map(|app| {
+                    let pid: i32 = msg_send![&*app, processID];
+                    pid
+                });
+                if leave_out.leaves_out(owner, id) {
+                    return None;
+                }
                 let filter: Retained<AnyObject> =
                     msg_send![allocated, initWithDesktopIndependentWindow: &*window];
                 (filter, None)
@@ -128,12 +141,14 @@ fn prepare(
                 let excluded: Vec<Retained<AnyObject>> = windows
                     .iter()
                     .filter(|window| {
+                        let window_id: u32 = msg_send![&**window, windowID];
                         let app: Option<Retained<AnyObject>> =
                             msg_send![&**window, owningApplication];
-                        app.is_some_and(|app| {
+                        let owner = app.map(|app| {
                             let pid: i32 = msg_send![&*app, processID];
-                            Some(pid) == leave_out
-                        })
+                            pid
+                        });
+                        leave_out.leaves_out(owner, window_id)
                     })
                     .collect();
                 let excluded = NSArray::from_retained_slice(&excluded);

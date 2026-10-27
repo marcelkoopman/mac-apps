@@ -43,6 +43,11 @@ pub(crate) fn sharing_type() -> NSWindowSharingType {
     }
 }
 
+/// The card's window number, when it is made.
+pub(crate) fn window_number() -> Option<isize> {
+    WINDOW.with(|slot| slot.borrow().as_ref().map(|window| window.windowNumber()))
+}
+
 /// Give the card (when made) the sharing type "Allow Screenshots" asks for.
 pub(crate) fn apply_capture() {
     WINDOW.with(|slot| {

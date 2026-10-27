@@ -516,4 +516,6 @@ Mac only, no data.
 
 ### Screenshot review fixes (Oct 2026)
 
+- [ ] Settings itself stays out: open Settings and the card, tick Settings › Privacy › *Show CopyCraft in screenshots*, take a whole-screen screenshot: the card is on it, Settings is not (macOS 15 and later too). Open About and the welcome screen (status menu): not on it either. Untick it: the card is gone too.
+- [ ] Overlay and thumbnail stay out: take a whole-screen screenshot, and right after (thumbnail still showing) another: the second shows neither the dimmed overlay nor the first thumbnail. Space and a click on Settings' window picks nothing there (Settings is not offered).
 - [ ] ⌥⇧ with a letter: in Settings record ⌥⇧O for the card: *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again* (⌥⇧O types Ø). ⌥⇧§ for screenshots is still accepted.

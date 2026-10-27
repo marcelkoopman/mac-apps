@@ -255,6 +255,26 @@ fn hide(generation: u64) {
     }
 }
 
+/// The window numbers of the thumbnail showing and the one last closed, for a capture to
+/// leave out.
+pub(super) fn thumbnail_windows() -> Vec<u32> {
+    let showing = THUMB.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|thumb| thumb.window.windowNumber())
+    });
+    let retired = RETIRED.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|(window, _)| window.windowNumber())
+    });
+    [showing, retired]
+        .into_iter()
+        .flatten()
+        .filter_map(|number| u32::try_from(number).ok())
+        .collect()
+}
+
 /// Close the thumbnail and zeroize its copy of the picture (also on Wipe and the lock screen).
 pub fn close_thumbnail() {
     GENERATION.with(|g| g.set(g.get().wrapping_add(1)));

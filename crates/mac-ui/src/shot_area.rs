@@ -39,6 +39,38 @@ impl Rect {
     }
 }
 
+/// What the window picker and a capture leave out: every window of process `pid` (an app's own,
+/// unless the user lets them in), and single windows by `CGWindowID` (the overlay, the
+/// thumbnail and an app's windows that always stay out). ScreenCaptureKit ignores a window's
+/// `sharingType` since macOS 15, so these are left out by id instead.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LeaveOut {
+    pub pid: Option<i32>,
+    pub windows: Vec<u32>,
+}
+
+impl LeaveOut {
+    /// Whether the window `window` of process `owner` (when known) stays out.
+    pub fn leaves_out(&self, owner: Option<i32>, window: u32) -> bool {
+        (self.pid.is_some() && owner == self.pid) || self.windows.contains(&window)
+    }
+
+    /// `self` with the windows `more` left out too (zero, an unset window number, is skipped).
+    pub fn with(mut self, more: impl IntoIterator<Item = u32>) -> Self {
+        for window in more {
+            if window != 0 && !self.windows.contains(&window) {
+                self.windows.push(window);
+            }
+        }
+        self
+    }
+}
+
+/// How long a capture waits after the overlay is ordered out, so the window server has drawn a
+/// frame without it: about three frames at 60 Hz.
+pub const AFTER_OVERLAY_SECS: f64 = 0.05;
+const _: () = assert!(AFTER_OVERLAY_SECS > 0.016 && AFTER_OVERLAY_SECS < 0.2);
+
 /// A drag shorter than this (in points, either way) is a click: the whole screen.
 pub const CLICK_SLOP: f64 = 4.0;
 
@@ -122,6 +154,25 @@ pub fn bottom_right(visible: &Rect, size: (f64, f64), margin: f64) -> Rect {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn leave_out_by_process_and_by_window() {
+        let none = LeaveOut::default();
+        assert!(!none.leaves_out(Some(7), 1));
+        let own = LeaveOut {
+            pid: Some(7),
+            windows: Vec::new(),
+        };
+        assert!(own.leaves_out(Some(7), 1));
+        assert!(!own.leaves_out(Some(8), 1));
+        assert!(!own.leaves_out(None, 1));
+        // Own windows let in, but the overlay (40), Settings (41) and the thumbnail stay out.
+        let some = LeaveOut::default().with([40, 41, 0, 40]);
+        assert_eq!(some.windows, vec![40, 41]);
+        assert!(some.leaves_out(Some(7), 40));
+        assert!(some.leaves_out(None, 41));
+        assert!(!some.leaves_out(Some(7), 42));
+    }
+
     use super::*;
 
     #[test]

@@ -14,7 +14,7 @@ use objc2_app_kit::{
 use objc2_core_graphics::{CGWindowListCopyWindowInfo, CGWindowListOption, kCGNullWindowID};
 use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSPoint, NSRect, NSSize, NSString};
 
-use crate::shot_area::{self, Rect};
+use crate::shot_area::{self, LeaveOut, Rect};
 
 /// What the user picked.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,7 +62,12 @@ thread_local! {
     /// The overlay last closed, kept until the next one closes: it is closed from inside its
     /// own view's methods, which must not free the view under them.
     static RETIRED: RefCell<Vec<Screen>> = const { RefCell::new(Vec::new()) };
+    /// The pick of the overlay just ordered out, handed over a few frames later
+    /// ([`shot_area::AFTER_OVERLAY_SECS`]) so the capture cannot catch the overlay.
+    static PENDING: RefCell<Option<Pending>> = const { RefCell::new(None) };
 }
+
+type Pending = (Box<dyn FnOnce(Option<Pick>)>, Option<Pick>);
 
 define_class!(
     // SAFETY: NSWindow has no subclassing requirements; the overrides keep its signatures and
@@ -188,9 +193,9 @@ fn number(dict: &NSDictionary<AnyObject, AnyObject>, key: &str) -> Option<f64> {
     Some(value.downcast_ref::<NSNumber>()?.doubleValue())
 }
 
-/// The normal windows on screen, front to back, by id and AppKit frame, without those of
-/// process `leave_out`. Only ids, owners and bounds are read, never names.
-fn on_screen_windows(main_height: f64, leave_out: Option<i32>) -> Vec<(u32, Rect)> {
+/// The normal windows on screen, front to back, by id and AppKit frame, without those
+/// `leave_out` names. Only ids, owners and bounds are read, never names.
+fn on_screen_windows(main_height: f64, leave_out: &LeaveOut) -> Vec<(u32, Rect)> {
     let Some(list) = CGWindowListCopyWindowInfo(
         CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
         kCGNullWindowID,
@@ -211,7 +216,7 @@ fn on_screen_windows(main_height: f64, leave_out: Option<i32>) -> Vec<(u32, Rect
         };
         let layer = number(info, "kCGWindowLayer").map(|layer| layer as i64);
         let owner = number(info, "kCGWindowOwnerPID").map(|pid| pid as i32);
-        if layer != Some(NORMAL_LAYER) || (leave_out.is_some() && owner == leave_out) {
+        if layer != Some(NORMAL_LAYER) {
             continue;
         }
         let (Some(id), Some(bounds)) = (
@@ -220,6 +225,9 @@ fn on_screen_windows(main_height: f64, leave_out: Option<i32>) -> Vec<(u32, Rect
         ) else {
             continue;
         };
+        if leave_out.leaves_out(owner, id as u32) {
+            continue;
+        }
         let Some(bounds) = bounds.downcast_ref::<NSDictionary>() else {
             continue;
         };
@@ -238,11 +246,11 @@ fn on_screen_windows(main_height: f64, leave_out: Option<i32>) -> Vec<(u32, Rect
 }
 
 /// Show the overlay on every screen and hand what the user picks to `done` (`None`: cancelled),
-/// after the overlay is gone. Windows of process `leave_out` cannot be picked. A selection
-/// already showing is cancelled first.
+/// a few frames after the overlay is gone. The windows `leave_out` names cannot be picked. A
+/// selection already showing is cancelled first.
 pub fn select(
     mtm: MainThreadMarker,
-    leave_out: Option<i32>,
+    leave_out: &LeaveOut,
     done: impl FnOnce(Option<Pick>) + 'static,
 ) {
     cancel_selection();
@@ -253,6 +261,8 @@ pub fn select(
         .map_or(0.0, |main| main.frame().size.height);
     // Read before the overlay exists, so it is never one of them.
     let targets = on_screen_windows(main_height, leave_out);
+    // A pick of the previous overlay not handed over yet goes first.
+    deliver();
     let mut shown = Vec::new();
     for screen in screens.iter() {
         let Some(display) = display_id(&screen) else {
@@ -312,9 +322,26 @@ pub fn select(
     });
 }
 
-/// Close the overlay without a pick (Wipe, the lock screen). Nothing when none is showing.
+/// Close the overlay without a pick (Wipe, the lock screen); a pick still on its way becomes
+/// none too. Nothing when none is showing.
 pub fn cancel_selection() {
     finish(None);
+    PENDING.with(|slot| {
+        if let Some((_, pick)) = slot.borrow_mut().as_mut() {
+            *pick = None;
+        }
+    });
+}
+
+/// The window numbers of the overlay last shown (ordered out, kept until the next one closes),
+/// for a capture to leave out.
+pub(super) fn overlay_windows() -> Vec<u32> {
+    RETIRED.with(|slot| {
+        slot.borrow()
+            .iter()
+            .filter_map(|screen| u32::try_from(screen.window.windowNumber()).ok())
+            .collect()
+    })
 }
 
 fn redraw(session: &Session) {
@@ -414,7 +441,29 @@ fn finish(pick: Option<Pick>) {
     NSCursor::arrowCursor().set();
     let Session { screens, done, .. } = session;
     RETIRED.with(|slot| *slot.borrow_mut() = screens);
-    done(pick);
+    // A cancel needs no wait; a pick waits until the window server drew without the overlay.
+    if pick.is_none() {
+        done(None);
+        return;
+    }
+    PENDING.with(|slot| *slot.borrow_mut() = Some((done, pick)));
+    let wait = std::time::Duration::from_secs_f64(shot_area::AFTER_OVERLAY_SECS);
+    let spawned = std::thread::Builder::new()
+        .name("shot-overlay-gone".into())
+        .spawn(move || {
+            std::thread::sleep(wait);
+            crate::actions::run_on_main(deliver);
+        });
+    if spawned.is_err() {
+        deliver();
+    }
+}
+
+/// Hand the pending pick to its caller.
+fn deliver() {
+    if let Some((done, pick)) = PENDING.with(|slot| slot.borrow_mut().take()) {
+        done(pick);
+    }
 }
 
 /// Dim the screen, leave the selection (or the window under the pointer) clear and outline it.

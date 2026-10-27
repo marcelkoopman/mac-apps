@@ -51,10 +51,17 @@ impl App {
         self.shot_generation = self.shot_generation.wrapping_add(1);
         let generation = self.shot_generation;
         let include_own = crate::settings::screenshot_includes_own();
-        // CopyCraft's own windows stay out unless the user lets them in (Settings › Privacy).
-        let leave_out = (!include_own).then(mac_ui::screenshot::own_pid);
+        // CopyCraft's own windows stay out unless the user lets them in (Settings › Privacy);
+        // that only lets in the card and the table window: Settings, About and Welcome stay out
+        // always. By window id too, as ScreenCaptureKit ignores `sharingType` since macOS 15.
+        let leave_out = mac_ui::screenshot::LeaveOut {
+            pid: (!include_own).then(mac_ui::screenshot::own_pid),
+            windows: Vec::new(),
+        }
+        .with(kept_out_windows(mtm, include_own));
         launcher::set_screenshot_includes(include_own);
-        mac_ui::screenshot::select(mtm, leave_out, move |pick| {
+        let picker = leave_out.clone();
+        mac_ui::screenshot::select(mtm, &picker, move |pick| {
             let Some(pick) = pick else {
                 launcher::emit(UserEvent::ScreenshotTaken {
                     generation,
@@ -211,4 +218,28 @@ fn denied(mtm: mac_ui::objc2::MainThreadMarker) {
     if answer == Some(0) {
         crate::system_settings::open(crate::system_settings::Pane::ScreenRecordingPrivacy);
     }
+}
+
+/// The window numbers of CopyCraft's windows a screenshot leaves out: all of them, except the
+/// card and the table window when `include_own` lets those in.
+#[cfg(target_os = "macos")]
+fn kept_out_windows(mtm: mac_ui::objc2::MainThreadMarker, include_own: bool) -> Vec<u32> {
+    let let_in: Vec<isize> = if include_own {
+        [
+            crate::macos_launcher::window_number(),
+            crate::macos_table_window::window_number(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    } else {
+        Vec::new()
+    };
+    mac_ui::objc2_app_kit::NSApplication::sharedApplication(mtm)
+        .windows()
+        .iter()
+        .map(|window| window.windowNumber())
+        .filter(|number| !let_in.contains(number))
+        .filter_map(|number| u32::try_from(number).ok())
+        .collect()
 }

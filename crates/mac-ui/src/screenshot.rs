@@ -16,7 +16,7 @@ mod capture;
 mod select;
 mod thumbnail;
 
-pub use crate::shot_area::Rect;
+pub use crate::shot_area::{LeaveOut, Rect};
 pub use capture::{Failed, Target, capture};
 pub use select::{Pick, cancel_selection, select};
 pub use thumbnail::{close_thumbnail, show_thumbnail};

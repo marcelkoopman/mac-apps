@@ -345,6 +345,15 @@ pub fn relabel() {
 }
 
 /// Give the window (when made) the sharing type "Allow Screenshots" asks for.
+/// The table window's number, when it is open.
+pub(crate) fn window_number() -> Option<isize> {
+    VIEWS.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|views| views.window.windowNumber())
+    })
+}
+
 pub fn apply_capture() {
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window {
