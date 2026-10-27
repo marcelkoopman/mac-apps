@@ -560,6 +560,10 @@ impl App {
         // Still in history (not wiped, trimmed or deleted meanwhile).
         let kept = recorded.filter(|bytes| self.history.holds_image(bytes));
         if recheck.retract {
+            // A screenshot's thumbnail goes too: no drag of it to another app.
+            if self.shot_change.take_if(|shot| *shot == change).is_some() {
+                mac_ui::screenshot::close_thumbnail();
+            }
             if let Some(bytes) = kept {
                 self.retract_image(Some(change), &bytes);
             }

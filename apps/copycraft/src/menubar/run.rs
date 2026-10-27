@@ -136,6 +136,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         format_hotkey: hotkey,
         screenshot_hotkey,
         shot_generation: 0,
+        shot_change: None,
         sensitive_clear: None,
         conceal_when_checked: None,
         polled_change: None,

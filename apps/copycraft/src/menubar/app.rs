@@ -89,6 +89,9 @@ pub(crate) struct App {
     /// Bumped by every screenshot and by Wipe and the lock screen: a result for an older one
     /// is dropped ([`UserEvent::ScreenshotTaken`]).
     pub(crate) shot_generation: u64,
+    /// The clipboard change of the screenshot whose thumbnail may be showing: closed when the
+    /// text check finds a token or key on it.
+    pub(crate) shot_change: Option<isize>,
     /// The sensitive copy copycraft wrote last, to clear when its minute is up.
     pub(crate) sensitive_clear: Option<SensitiveClear>,
     /// Change count of copycraft's own write whose labels were still being checked.

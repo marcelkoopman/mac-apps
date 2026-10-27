@@ -50,8 +50,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "screenshot_ask_message",
-        "Voor een schermafbeelding heeft CopyCraft toestemming voor schermopname nodig. De afbeelding gaat alleen naar het klembord en de geschiedenis op je Mac, nooit naar een bestand of het internet. Na Doorgaan vraagt macOS om toestemming.",
-        "For a screenshot CopyCraft needs Screen Recording permission. The image only goes to the clipboard and the history on your Mac, never to a file or the internet. After Continue, macOS asks for permission.",
+        "Voor een schermafbeelding heeft CopyCraft toestemming voor schermopname nodig. De afbeelding gaat alleen naar het klembord en de geschiedenis op je Mac, nooit naar het internet, en nooit naar een bestand, behalve als je hem zelf ergens heen sleept. Na Doorgaan vraagt macOS om toestemming.",
+        "For a screenshot CopyCraft needs Screen Recording permission. The image only goes to the clipboard and the history on your Mac: never to the internet, and never to a file unless you drag it somewhere yourself. After Continue, macOS asks for permission.",
     ),
     (
         "screenshot_denied_title",

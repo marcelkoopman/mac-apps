@@ -183,6 +183,7 @@ impl App {
             self.sensitive_clear = None;
         }
         let change = crate::macos_pasteboard::change_count();
+        self.shot_change = Some(change);
         self.last_copy = Some(Instant::now());
         // The new copy is the clipboard's: the card follows it again.
         self.browsing = None;
@@ -208,7 +209,10 @@ impl App {
         if launcher::is_open() {
             self.refresh_popup();
         }
-        if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+        // None with a token or key on it: nothing to drag to another app.
+        if shot.verdict.admitted
+            && let Some(mtm) = mac_ui::objc2::MainThreadMarker::new()
+        {
             mac_ui::screenshot::show_thumbnail(mtm, &thumbnail, || {
                 launcher::emit(UserEvent::ScreenshotOpened);
             });
@@ -230,6 +234,7 @@ impl App {
     /// overlay and the thumbnail (and its copy of the picture) go.
     pub(crate) fn forget_screenshot(&mut self) {
         self.shot_generation = self.shot_generation.wrapping_add(1);
+        self.shot_change = None;
         launcher::set_screenshot_includes(false);
         #[cfg(target_os = "macos")]
         {
