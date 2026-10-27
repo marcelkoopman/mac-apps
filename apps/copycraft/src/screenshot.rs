@@ -54,17 +54,37 @@ pub fn after_question(granted: bool) -> Option<Next> {
     granted.then_some(Next::Select)
 }
 
-/// Whether a screenshot goes into history. It holds no recognised text yet (that is checked
-/// after it went in, and a token or key takes it out again, as for an Image ▾ step's copy), so
-/// only Pause holds it back. Pure.
-pub fn keep(paused: bool) -> StepKeep {
-    let verdict = crate::sensitivity::picture_verdict(None);
-    crate::menubar::step_keep(paused, verdict.admitted)
+/// How long a screenshot waits for its text before it goes on the clipboard. Within it, the
+/// text decides at once, as for any picture; later, it goes on concealed and the full scan
+/// ([`crate::macos_pasteboard::RECOGNITION_LIMIT`]) checks it again.
+pub const RECOGNITION_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// How a screenshot goes on the clipboard and into history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShotVerdict {
+    /// What its text decided ([`crate::sensitivity::picture_verdict`]); with the text not in
+    /// yet, that of a picture without text, so the later scan can still tighten it
+    /// ([`crate::sensitivity::picture_recheck`]).
+    pub verdict: crate::sensitivity::PictureVerdict,
+    /// Marked Concealed on the clipboard: sensitive text, or text not known yet. Only a
+    /// sensitive text also clears it after a minute.
+    pub mark_concealed: bool,
 }
 
-/// Whether a screenshot goes on the clipboard concealed: not before its text is known.
-pub fn concealed() -> bool {
-    crate::sensitivity::picture_verdict(None).concealed
+/// [`ShotVerdict`] from the text recognised within [`RECOGNITION_WAIT`]: `None` when it was
+/// not in by then, `Some(None)` for a picture without text. Pure.
+pub fn verdict(recognised: Option<Option<&str>>) -> ShotVerdict {
+    let verdict = crate::sensitivity::picture_verdict(recognised.flatten());
+    ShotVerdict {
+        verdict,
+        mark_concealed: verdict.concealed || recognised.is_none(),
+    }
+}
+
+/// Whether a screenshot with `verdict` goes into history: Pause holds it back, and a token or
+/// key in its text keeps it out. Pure.
+pub fn keep(paused: bool, verdict: ShotVerdict) -> StepKeep {
+    crate::menubar::step_keep(paused, verdict.verdict.admitted)
 }
 
 /// Why a screenshot failed, for the log: a kind, never what was on the screen.
@@ -93,7 +113,7 @@ impl Failure {
 
 #[cfg(test)]
 mod tests {
-    use super::{Next, after_question, concealed, keep, next};
+    use super::{Next, after_question, keep, next, verdict};
     use crate::menubar::StepKeep;
 
     #[test]
@@ -112,9 +132,31 @@ mod tests {
 
     #[test]
     fn a_screenshot_goes_into_history_unless_recording_is_paused() {
-        assert_eq!(keep(false), StepKeep::Keep);
-        assert_eq!(keep(true), StepKeep::Paused);
-        // Its text is not known yet: plain on the clipboard until the check is in.
-        assert!(!concealed());
+        let plain = verdict(Some(None));
+        assert_eq!(keep(false, plain), StepKeep::Keep);
+        assert_eq!(keep(true, plain), StepKeep::Paused);
+        assert!(!plain.mark_concealed);
+    }
+
+    #[test]
+    fn a_screenshot_waits_for_its_text_before_the_clipboard() {
+        assert_eq!(super::RECOGNITION_WAIT, std::time::Duration::from_secs(1));
+        // Ordinary text: plain, in history.
+        let text = verdict(Some(Some("Meeting notes for Tuesday")));
+        assert!(!text.mark_concealed);
+        assert_eq!(keep(false, text), StepKeep::Keep);
+        // A token: concealed and kept out of history before it reaches either.
+        let token = verdict(Some(Some("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB")));
+        assert!(token.mark_concealed && token.verdict.concealed);
+        assert_eq!(keep(false, token), StepKeep::Secret);
+        // An e-mail address: concealed (cleared later), still in history.
+        let mail = verdict(Some(Some("write to jan.jansen@example.com")));
+        assert!(mail.mark_concealed && mail.verdict.concealed);
+        assert_eq!(keep(false, mail), StepKeep::Keep);
+        // Not in within the wait: concealed until the full scan, which can still take it out.
+        let late = verdict(None);
+        assert!(late.mark_concealed);
+        assert!(!late.verdict.concealed);
+        assert_eq!(keep(false, late), StepKeep::Keep);
     }
 }

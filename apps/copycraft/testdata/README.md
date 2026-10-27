@@ -516,6 +516,8 @@ Mac only, no data.
 
 ### Screenshot review fixes (Oct 2026)
 
+- [ ] Text first: open `testdata/sensitivity/credential_github_token.txt` in TextEdit (large font), take an area screenshot of the token: the clipboard gets it (paste in Preview), but the strip gets no new tile. Take one of a line with an e-mail address: it is in the strip, masked/concealed at once (not only after a moment), and a clipboard manager that honours `org.nspasteboard.ConcealedType` skips it. A screenshot without text: a normal tile.
+- [ ] Log: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` while taking one shows `screenshot checked: text in true, concealed false, admitted true` (or the like) and `screenshot: captured`: flags only, no text, no window names.
 - [ ] Settings itself stays out: open Settings and the card, tick Settings › Privacy › *Show CopyCraft in screenshots*, take a whole-screen screenshot: the card is on it, Settings is not (macOS 15 and later too). Open About and the welcome screen (status menu): not on it either. Untick it: the card is gone too.
 - [ ] Overlay and thumbnail stay out: take a whole-screen screenshot, and right after (thumbnail still showing) another: the second shows neither the dimmed overlay nor the first thumbnail. Space and a click on Settings' window picks nothing there (Settings is not offered).
 - [ ] ⌥⇧ with a letter: in Settings record ⌥⇧O for the card: *Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with § or `) — try again* (⌥⇧O types Ø). ⌥⇧§ for screenshots is still accepted.

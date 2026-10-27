@@ -58,9 +58,19 @@ pub(crate) const RECOGNITION_LIMIT: std::time::Duration = std::time::Duration::f
 /// [`scan_image_bytes`] on a thread of its own, at most [`RECOGNITION_LIMIT`]: `None` when it
 /// took longer (its late result is wiped) or could not start.
 pub(crate) fn scan_image_bytes_within(bytes: Zeroizing<Vec<u8>>) -> Option<ImageScan> {
+    scan_image_bytes_waiting(bytes, RECOGNITION_LIMIT).flatten()
+}
+
+/// [`scan_image_bytes`] on a thread of its own, waited for at most `limit`: `None` when it took
+/// longer (its late result is wiped) or could not start, `Some(None)` when the picture cannot
+/// be read.
+pub(crate) fn scan_image_bytes_waiting(
+    bytes: Zeroizing<Vec<u8>>,
+    limit: std::time::Duration,
+) -> Option<Option<ImageScan>> {
     crate::work::within(
         "copycraft-image-scan",
-        RECOGNITION_LIMIT,
+        limit,
         move || scan_image_bytes(&bytes),
         |scan| {
             if let Some(mut scan) = scan {
@@ -68,7 +78,6 @@ pub(crate) fn scan_image_bytes_within(bytes: Zeroizing<Vec<u8>>) -> Option<Image
             }
         },
     )
-    .flatten()
 }
 
 /// Only the text recognised in an encoded picture, for the history gate of a copied picture

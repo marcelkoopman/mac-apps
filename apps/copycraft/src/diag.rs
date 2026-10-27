@@ -216,6 +216,13 @@ pub enum LogEvent {
     ImageAdmitted {
         checked: bool,
     },
+    /// Debug builds only: how a screenshot went on the clipboard. Only yes or no: its text was
+    /// in within the wait, it was marked Concealed, and its text admits it into history.
+    ScreenshotChecked {
+        text_in: bool,
+        concealed: bool,
+        admitted: bool,
+    },
     /// Debug builds only: the text of a copied picture history took before its check is in;
     /// whether that took it out again. Only yes or no.
     ImageChecked {
@@ -321,6 +328,7 @@ impl LogEvent {
             | E::ImageStepKept { .. }
             | E::ImageAdmitted { .. }
             | E::ImageChecked { .. }
+            | E::ScreenshotChecked { .. }
             | E::TextStepKept { .. }
             | E::PreviewNoPicture
             | E::PreviewStarted
@@ -424,6 +432,7 @@ impl LogEvent {
             | E::ImageStepKept { .. }
             | E::ImageAdmitted { .. }
             | E::ImageChecked { .. }
+            | E::ScreenshotChecked { .. }
             | E::TextStepKept { .. } => Level::Debug,
         }
     }
@@ -525,6 +534,13 @@ impl LogEvent {
                 format!("image admitted at once: checked {checked}")
             }
             E::ImageChecked { retracted } => format!("image checked: retracted {retracted}"),
+            E::ScreenshotChecked {
+                text_in,
+                concealed,
+                admitted,
+            } => format!(
+                "screenshot checked: text in {text_in}, concealed {concealed}, admitted {admitted}"
+            ),
             E::TextStepKept {
                 source_in_history,
                 clipboard_copy,
@@ -859,6 +875,16 @@ mod tests {
         assert_eq!(LogEvent::CopyFailed(ErrorKind::Other).level(), Level::Error);
         // A screenshot: that it was taken, or the kind of failure. Nothing about the screen.
         assert_eq!(LogEvent::ScreenshotCaptured.line(), "screenshot: captured");
+        let checked = LogEvent::ScreenshotChecked {
+            text_in: true,
+            concealed: false,
+            admitted: true,
+        };
+        assert_eq!(
+            checked.line(),
+            "screenshot checked: text in true, concealed false, admitted true"
+        );
+        assert_eq!(checked.level(), Level::Debug);
         assert_eq!(
             LogEvent::ScreenshotFailed(crate::screenshot::Failure::NotAllowed).line(),
             "screenshot: failed (not allowed)"

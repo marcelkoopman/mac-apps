@@ -115,20 +115,72 @@ impl App {
         png.zeroize();
     }
 
-    /// As an Image ▾ step's copy ([`Self::image_stepped`]): the clipboard first, then history
-    /// unless paused, then the same scan (its text can conceal it or take it out again).
+    /// Its text first: recognised on a thread, waited for at most
+    /// [`crate::screenshot::RECOGNITION_WAIT`], so a token or key on the screen never reaches
+    /// the clipboard unconcealed or history at all ([`Self::write_screenshot`]).
     #[cfg(target_os = "macos")]
     fn keep_screenshot(&mut self, png: SecretBytes) {
-        let keep = crate::screenshot::keep(crate::capture::history_paused());
-        let verdict = crate::sensitivity::picture_verdict(None);
-        let bytes = Zeroizing::new(png.with(<[u8]>::to_vec));
-        if self
-            .write_own_image(&bytes, crate::screenshot::concealed())
-            .is_err()
-        {
+        let generation = self.shot_generation;
+        let source = png.clone();
+        let started = self.run_detached(
+            "copycraft-shot-text",
+            move || {
+                let bytes = source.with(|bytes| Zeroizing::new(bytes.to_vec()));
+                crate::macos_pasteboard::scan_image_bytes_waiting(
+                    bytes,
+                    crate::screenshot::RECOGNITION_WAIT,
+                )
+            },
+            move |app: &mut App, scan| app.write_screenshot(generation, png, scan),
+        );
+        if !started {
+            crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(Failure::Clipboard));
+        }
+    }
+
+    /// The screenshot's text is in (`Some`), or was not within the wait (`None`): the clipboard
+    /// (concealed with sensitive or unknown text), then history unless paused or it shows a
+    /// token or key, then the thumbnail. With the text not in yet the full scan checks it
+    /// again, as for an Image ▾ step's copy, and can conceal it or take it out of history.
+    #[cfg(target_os = "macos")]
+    fn write_screenshot(
+        &mut self,
+        generation: u64,
+        png: SecretBytes,
+        scan: Option<Option<commands::ImageScan>>,
+    ) {
+        if generation != self.shot_generation {
             png.zeroize();
+            if let Some(Some(mut scan)) = scan {
+                scan.wipe();
+            }
+            return;
+        }
+        let shot = crate::screenshot::verdict(
+            scan.as_ref()
+                .map(|scan| scan.as_ref().and_then(|scan| scan.ocr.as_deref())),
+        );
+        if cfg!(debug_assertions) {
+            crate::diag::log(crate::diag::LogEvent::ScreenshotChecked {
+                text_in: scan.is_some(),
+                concealed: shot.mark_concealed,
+                admitted: shot.verdict.admitted,
+            });
+        }
+        let keep = crate::screenshot::keep(crate::capture::history_paused(), shot);
+        let bytes = Zeroizing::new(png.with(<[u8]>::to_vec));
+        if self.write_own_image(&bytes, shot.mark_concealed).is_err() {
+            png.zeroize();
+            if let Some(Some(mut scan)) = scan {
+                scan.wipe();
+            }
             crate::diag::log(crate::diag::LogEvent::ScreenshotFailed(Failure::Clipboard));
             return;
+        }
+        // Concealed only until its text is known: cleared after a minute only for sensitive
+        // text (the full scan starts that timer when it finds some).
+        if !shot.verdict.concealed {
+            self.sensitive_clear = None;
         }
         let change = crate::macos_pasteboard::change_count();
         self.last_copy = Some(Instant::now());
@@ -143,7 +195,14 @@ impl App {
             self.current_image = Some(recorded.clone());
         }
         let thumbnail = Zeroizing::new(bytes.to_vec());
-        self.scan_step_copy(change, bytes, verdict, recorded);
+        match scan {
+            // Known: kept with its entry and for the card, nothing to check again.
+            Some(scan) => {
+                drop(bytes);
+                self.image_step_scanned(change, shot.verdict, recorded, scan);
+            }
+            None => self.scan_step_copy(change, bytes, shot.verdict, recorded),
+        }
         crate::diag::log(crate::diag::LogEvent::ScreenshotCaptured);
         self.refresh_status_menu();
         if launcher::is_open() {
