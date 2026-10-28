@@ -19,6 +19,28 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("code_minify_xml", "XML verkleinen", "Minify XML"),
     ("code_format_sql", "SQL opmaken", "Format SQL"),
     ("code_minify_sql", "SQL verkleinen", "Minify SQL"),
+    // A curl command as code (src/text_ops/curl.rs): text only, nothing is run.
+    (
+        "code_curl_fetch",
+        "Als JavaScript (fetch)",
+        "As JavaScript (fetch)",
+    ),
+    (
+        "code_curl_python",
+        "Als Python (requests)",
+        "As Python (requests)",
+    ),
+    ("code_curl_httpie", "Als HTTPie", "As HTTPie"),
+    (
+        "code_curl_reqwest",
+        "Als Rust (reqwest)",
+        "As Rust (reqwest)",
+    ),
+    (
+        "code_curl_swift",
+        "Als Swift (URLSession)",
+        "As Swift (URLSession)",
+    ),
     (
         "detail_code",
         "Opmaken, verkleinen of omzetten als nieuwe kopie; ⌘Z toont de vorige",

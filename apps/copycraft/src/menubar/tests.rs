@@ -594,3 +594,31 @@ fn the_screenshot_hotkey_is_shown_beside_its_menu_item() {
     assert!(accelerator.matches(Modifiers::CONTROL | Modifiers::SHIFT, Code::Digit4));
     assert!(section_shortcut(recorded).is_none());
 }
+
+#[test]
+fn a_curl_conversion_keeps_the_credential_label_of_its_command() {
+    use super::text::{step_labels, with_source_labels};
+    use crate::sensitivity::{Label, copy_verdict};
+    use crate::text_ops::code_style::CodeOp;
+    use crate::text_ops::curl::CurlTarget;
+    use crate::text_ops::{TextOp, TextResult};
+    for source in [
+        "curl -H 'Authorization: Bearer fake-token-123' https://api.example.com/items",
+        "curl -b 'session=fake' https://example.com/",
+        "curl -u demo:fake-pass https://example.com/",
+    ] {
+        for target in [CurlTarget::Fetch, CurlTarget::Python, CurlTarget::Swift] {
+            let op = TextOp::Code(CodeOp::Curl(target));
+            let result = TextResult::work(source, &op);
+            let found = with_source_labels(source, &op, step_labels(&result)).expect("labels");
+            assert!(found.labels.contains(&Label::Credential), "{target:?}");
+            let verdict = copy_verdict(&found);
+            assert!(!verdict.admitted && verdict.concealed, "{target:?}");
+        }
+    }
+    // A plain curl command: no label added; another step on a credential: as scanned.
+    let plain = "curl https://example.com/items";
+    let op = TextOp::Code(CodeOp::Curl(CurlTarget::Python));
+    let found = with_source_labels(plain, &op, step_labels(&TextResult::work(plain, &op)));
+    assert!(!found.expect("labels").labels.contains(&Label::Credential));
+}

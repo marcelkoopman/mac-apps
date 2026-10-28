@@ -285,6 +285,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
 
 pub mod case_style;
 pub mod code_style;
+pub mod curl;
 pub mod encoding;
 pub mod filter;
 pub mod hash;

@@ -9,6 +9,8 @@
 //! section) does nothing. Neither the text nor the result is ever logged.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
+use super::curl::CurlTarget;
+
 /// The language Text ▾ › Code offers steps for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodeLang {
@@ -16,12 +18,17 @@ pub enum CodeLang {
     Yaml,
     Xml,
     Sql,
+    /// A `curl` command ([`super::curl`]).
+    Curl,
 }
 
 impl CodeLang {
     /// The language of `text`, detected as `kind` by the card.
     pub fn of(text: &str, kind: crate::format::FormatKind) -> Option<CodeLang> {
         use crate::format::FormatKind;
+        if super::curl::looks_like_curl(text) && super::curl::parse(text).is_some() {
+            return Some(CodeLang::Curl);
+        }
         match kind {
             FormatKind::Json => Some(CodeLang::Json),
             FormatKind::Yaml => Some(CodeLang::Yaml),
@@ -38,6 +45,13 @@ impl CodeLang {
             CodeLang::Yaml => &[CodeOp::FormatYaml, CodeOp::MinifyYaml, CodeOp::YamlToJson],
             CodeLang::Xml => &[CodeOp::FormatXml, CodeOp::MinifyXml],
             CodeLang::Sql => &[CodeOp::FormatSql, CodeOp::MinifySql],
+            CodeLang::Curl => &[
+                CodeOp::Curl(CurlTarget::Fetch),
+                CodeOp::Curl(CurlTarget::Python),
+                CodeOp::Curl(CurlTarget::Httpie),
+                CodeOp::Curl(CurlTarget::Reqwest),
+                CodeOp::Curl(CurlTarget::Swift),
+            ],
         }
     }
 }
@@ -53,6 +67,8 @@ pub enum CodeOp {
     MinifyXml,
     FormatSql,
     MinifySql,
+    /// A curl command as code in another language.
+    Curl(CurlTarget),
 }
 
 impl CodeOp {
@@ -68,6 +84,11 @@ impl CodeOp {
             CodeOp::MinifyXml => t("code_minify_xml"),
             CodeOp::FormatSql => t("code_format_sql"),
             CodeOp::MinifySql => t("code_minify_sql"),
+            CodeOp::Curl(CurlTarget::Fetch) => t("code_curl_fetch"),
+            CodeOp::Curl(CurlTarget::Python) => t("code_curl_python"),
+            CodeOp::Curl(CurlTarget::Httpie) => t("code_curl_httpie"),
+            CodeOp::Curl(CurlTarget::Reqwest) => t("code_curl_reqwest"),
+            CodeOp::Curl(CurlTarget::Swift) => t("code_curl_swift"),
         }
     }
 
@@ -92,6 +113,7 @@ impl CodeOp {
             CodeOp::MinifyXml => minify_xml(text),
             CodeOp::FormatSql => format_sql(text),
             CodeOp::MinifySql => minify_sql(text),
+            CodeOp::Curl(target) => super::curl::convert(text, target),
         }
     }
 }

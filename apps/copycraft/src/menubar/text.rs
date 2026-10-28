@@ -76,6 +76,28 @@ pub(crate) fn step_labels(result: &text_ops::TextResult) -> Option<crate::sensit
     }
 }
 
+/// A curl command's conversion keeps the credential label of an Authorization or Cookie
+/// header (or `-u`) in the command, whatever the scanner finds in the code: the header's
+/// value is the same secret, written another way.
+pub(crate) fn with_source_labels(
+    source: &str,
+    op: &TextOp,
+    found: Option<crate::sensitivity::Found>,
+) -> Option<crate::sensitivity::Found> {
+    let mut found = found?;
+    if matches!(op, TextOp::Code(text_ops::code_style::CodeOp::Curl(_)))
+        && text_ops::curl::carries_credential(source)
+        && !found
+            .labels
+            .contains(&crate::sensitivity::Label::Credential)
+    {
+        found
+            .labels
+            .insert(0, crate::sensitivity::Label::Credential);
+    }
+    Some(found)
+}
+
 /// The text a card for `data` shows, for Text ▾: its text subject.
 pub(crate) fn card_text_of(data: &LaunchData) -> Option<Zeroizing<String>> {
     data.subject_text
@@ -301,7 +323,7 @@ impl App {
                 let result = text_ops::TextResult::work(&text, &op);
                 // A long result's labels too, here and not on the main thread: a token or key
                 // in it keeps it out of history at once ([`App::text_stepped`]).
-                let found = step_labels(&result);
+                let found = with_source_labels(&text, &op, step_labels(&result));
                 launcher::emit(UserEvent::TextReady {
                     generation,
                     entry,
