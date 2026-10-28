@@ -73,6 +73,22 @@ fn submenu(mtm: MainThreadMarker, title: &str, items: &[Item]) -> Retained<NSMen
     parent
 }
 
+/// Aim the app menu's Quit (⌘Q, `terminate:`) at `macos_reopen`'s handler, which quits the
+/// way the menu bar icon's Quit does instead of through `-[NSApplication terminate:]`.
+fn aim_quit(main: &NSMenu) {
+    let Some(target) = crate::macos_reopen::quit_target() else {
+        return;
+    };
+    let Some(app_menu) = main.itemAtIndex(0).and_then(|item| item.submenu()) else {
+        return;
+    };
+    for item in app_menu.itemArray().iter() {
+        if item.action() == Some(sel!(terminate:)) {
+            mac_ui::actions::set_menu_target(&item, &target);
+        }
+    }
+}
+
 /// Add Edit and Window after the app menu. Runs once, after launch (winit builds its menu in
 /// `applicationDidFinishLaunching:`); a second call or a missing main menu does nothing.
 pub fn install() {
@@ -90,6 +106,7 @@ pub fn install() {
     {
         return;
     }
+    aim_quit(&main);
     main.addItem(&submenu(mtm, edit_title, &edit_items()));
     let window = submenu(mtm, crate::locale::t("menu_window"), &window_items());
     main.addItem(&window);

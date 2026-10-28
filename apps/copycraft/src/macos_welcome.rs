@@ -99,6 +99,8 @@ define_class!(
             let window = WINDOW.with(|slot| slot.borrow_mut().take());
             if let Some(window) = window {
                 restore_level(&window);
+                // Not released while it is still closing.
+                panel::release_after_close(Retained::into_super(window));
             }
             LOGIN_BOX.with(|slot| *slot.borrow_mut() = None);
             HISTORY_BOX.with(|slot| *slot.borrow_mut() = None);

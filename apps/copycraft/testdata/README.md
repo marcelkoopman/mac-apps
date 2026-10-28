@@ -564,3 +564,13 @@ Mac only, fake links. Nothing is fetched: the card is built from the copied text
 - [ ] BSN only with its name: copy `123456782` (a fake number that passes the elfproef): no label. Copy `BSN: 123456782`: *PII*. The same with *burgerservicenummer*, *sofinummer*, *sofi-nummer* or *citizen service number* before it on the same line (any case, at most about 40 characters before the number). With the word on the line above, or after the number (`123456782 is mijn BSN`), there is no label. A pid or order number with 8 or 9 digits (`klantnummer 123456782`) has none either.
 - [ ] Links in the strip: copy a YouTube link, a Facebook link and a text, then open the card so the strip shows. The link cards show the globe symbol (in the mark colour, as on the big Link card) with the domain next to it (`youtube.com`, no `www.`) and the site or path below; no `://` and no `https://www.youtube…`. `http://localhost:3000` shows the network symbol and `localhost:3000`. With the privacy filter on the link card shows the globe and dots. VoiceOver reads *Link*. Check light, dark and a fixed card theme.
 - [ ] No inner frame on a link tile: show a link copy so its strip tile is the selected one, then click it and step with ←/→ (also with Full Keyboard Access on): the tile has only the outer accent frame, like a text tile; no second blue rectangle around the globe and the text. The globe and text sit centred in the tile, the text clear of the left and right edges.
+
+## Quit without a crash (Mac only, no data)
+
+Run each step twice: once from Terminal or Ghostty with `cargo run -p copycraft` (unbundled, a crash shows there), once as the bundled `CopyCraft.app`. After each quit, check that no *CopyCraft quit unexpectedly* report appears and that Console › *Crashrapporten* / *Crash Reports* has no new copycraft entry.
+
+- [ ] Right after launch: start CopyCraft, open the menu bar icon's menu within 5 s and choose *Stop* / *Quit*. It quits at once.
+- [ ] After the card: open the card (hotkey), close it with Esc, then quit from the menu bar icon. Again with the card still open.
+- [ ] After Settings, About and Welcome (Welcome via `defaults delete nl.marcelkoopman.copycraft hasSeenWelcome` and a restart): with each one open, and after closing it by its red button, quit from the menu bar icon.
+- [ ] ⌘Q: with the card or a CopyCraft window in front, press ⌘Q (the app menu's *Stop CopyCraft* / *Quit CopyCraft*): it quits the same way, without a crash report. Also from Activity Monitor (*Stop* / *Quit*, not *Force Quit*) and the table window (*Open table* on a CSV) open.
+- [ ] Closing is still safe: open and close Settings, About and Welcome five times each (red button, ⌘W), wait 30 s: CopyCraft keeps running and each opens again normally.

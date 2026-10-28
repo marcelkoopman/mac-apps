@@ -190,4 +190,41 @@ mod tests {
         assert!(body.contains("<string>TEAMID</string>"));
         assert!(!body.contains("<false/>") && !body.contains("<array>"));
     }
+
+    /// Quit must not crash (EXC_BAD_ACCESS in `-[NSThemeFrame dealloc]` on ⌘Q): the titled
+    /// windows hand their last reference to `release_after_close` instead of dropping it in
+    /// `windowWillClose:`, and ⌘Q and the quit Apple event quit through the event loop, not
+    /// through `terminate:` (winit then closes every window of the app).
+    #[test]
+    fn quit_and_close_do_not_release_a_closing_window() {
+        for (name, src) in [
+            ("macos_about.rs", include_str!("macos_about.rs")),
+            ("macos_settings.rs", include_str!("macos_settings.rs")),
+            ("macos_welcome.rs", include_str!("macos_welcome.rs")),
+        ] {
+            let close = &src[src.find("fn window_will_close").expect(name)..];
+            let close = &close[..close.find("\n    }\n").expect(name)];
+            assert!(close.contains("release_after_close("), "{name}");
+            assert!(!close.contains("= None;\n            });"), "{name}");
+        }
+        let menu = include_str!("macos_main_menu.rs");
+        assert!(menu.contains("aim_quit(&main);"));
+        let reopen = include_str!("macos_reopen.rs");
+        assert!(reopen.contains("#[unsafe(method(terminate:))]"));
+        assert!(reopen.contains("andEventID: QUIT_APPLICATION"));
+        assert!(!reopen.contains(".terminate("));
+        // Every exit holds the windows through winit's close-all first.
+        for (name, src) in [
+            ("dispatch.rs", include_str!("menubar/dispatch.rs")),
+            ("handler.rs", include_str!("menubar/handler.rs")),
+        ] {
+            assert_eq!(
+                src.matches("event_loop.exit();").count(),
+                src.matches("before_quit();\n").count(),
+                "{name}"
+            );
+        }
+        let state = include_str!("menubar/state.rs");
+        assert!(state.contains("mac_ui::panel::hold_windows_for_exit(mtm);"));
+    }
 }

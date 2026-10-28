@@ -235,6 +235,17 @@ pub(crate) fn discard_preview_files() {
     crate::macos_open::discard_previews();
 }
 
+/// Right before the event loop is told to exit (every Quit goes through here): the preview
+/// files go, and every window stays alive through winit's close-all at exit
+/// ([`mac_ui::panel::hold_windows_for_exit`]).
+pub(crate) fn before_quit() {
+    discard_preview_files();
+    #[cfg(target_os = "macos")]
+    if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+        mac_ui::panel::hold_windows_for_exit(mtm);
+    }
+}
+
 /// The clipboard's `text` is a new copy, not the newest history entry read again.
 pub(crate) fn is_new_copy(newest: Option<&str>, text: &str) -> bool {
     newest != Some(text)

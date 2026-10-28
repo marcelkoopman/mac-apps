@@ -8,8 +8,9 @@ impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, _: &ActiveEventLoop) {
         #[cfg(target_os = "macos")]
         {
-            crate::macos_main_menu::install();
+            // The reopen handler first: the main menu aims Quit at it.
             crate::macos_reopen::install();
+            crate::macos_main_menu::install();
         }
     }
 
@@ -121,7 +122,7 @@ impl ApplicationHandler<UserEvent> for App {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
                 tray::QUIT_ID => {
-                    discard_preview_files();
+                    before_quit();
                     event_loop.exit();
                     return;
                 }

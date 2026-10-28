@@ -3,11 +3,14 @@
 //! The helpers are stateless. The app keeps the window (usually its own `NSWindow` subclass for
 //! key handling), its delegate and any open/closed state.
 
+use std::cell::RefCell;
+use std::mem::ManuallyDrop;
+
 use objc2::rc::{Allocated, Retained};
 use objc2::{MainThreadMarker, Message, msg_send};
 use objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSEvent, NSFloatingWindowLevel, NSScreen, NSView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSApplication, NSBackingStoreType, NSColor, NSEvent, NSFloatingWindowLevel, NSScreen, NSView,
+    NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
@@ -36,6 +39,55 @@ where
             defer: false,
         ]
     }
+}
+
+thread_local! {
+    /// Windows handed to [`release_after_close`], released on a later main-queue turn.
+    /// `ManuallyDrop`: what is still here when the process exits is left to it, so no window
+    /// is released while AppKit and the thread-local storage are torn down.
+    static CLOSED: RefCell<ManuallyDrop<Vec<Retained<NSWindow>>>> =
+        const { RefCell::new(ManuallyDrop::new(Vec::new())) };
+}
+
+/// Drop the app's last reference to a window that is closing, but not now: from
+/// `windowWillClose:` (also when AppKit closes every window on Quit) the window is still in
+/// the middle of `close`, and releasing it there frees it while AppKit still uses its frame
+/// view, which then crashes when the autorelease pool drains. It is released on a later turn of
+/// the main queue, after `close` and that pool are done.
+pub fn release_after_close(window: Retained<NSWindow>) {
+    let first = CLOSED.with(|slot| {
+        let mut closed = slot.borrow_mut();
+        closed.push(window);
+        closed.len() == 1
+    });
+    if first {
+        crate::actions::run_on_main(release_closed);
+    }
+}
+
+fn release_closed() {
+    let closed = CLOSED.with(|slot| std::mem::take(&mut **slot.borrow_mut()));
+    drop(closed);
+}
+
+/// Call right before the event loop is told to exit. When it exits, winit closes every window
+/// of the app (`-close` on each of `NSApp.windows`, AppKit's own included), and a window
+/// released during that pass is freed while AppKit still works on its frame view, which
+/// crashed in `-[NSThemeFrame dealloc]` when the run loop's autorelease pool drained. One more
+/// reference to each window, never given back, keeps every window alive until the process is
+/// gone: the closes then free nothing, whoever else lets go of a window.
+pub fn hold_windows_for_exit(mtm: MainThreadMarker) {
+    let windows: Vec<Retained<NSWindow>> = NSApplication::sharedApplication(mtm)
+        .windows()
+        .iter()
+        .collect();
+    // Left to the process exit on purpose.
+    std::mem::forget(windows);
+}
+
+/// Windows waiting in [`release_after_close`] (for tests).
+pub fn closed_pending() -> usize {
+    CLOSED.with(|slot| slot.borrow().len())
 }
 
 /// Keep `window` alive when it closes: AppKit does not release it, so a caller's `Retained`

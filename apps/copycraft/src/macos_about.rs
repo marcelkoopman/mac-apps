@@ -79,12 +79,12 @@ define_class!(
     unsafe impl NSWindowDelegate for AboutDelegate {
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSObject) {
-            WINDOW.with(|slot| {
-                if let Some(window) = slot.borrow().as_ref() {
-                    restore_level(window);
-                }
-                *slot.borrow_mut() = None;
-            });
+            let window = WINDOW.with(|slot| slot.borrow_mut().take());
+            if let Some(window) = window {
+                restore_level(&window);
+                // Not released while it is still closing.
+                mac_ui::panel::release_after_close(Retained::into_super(window));
+            }
         }
     }
 
