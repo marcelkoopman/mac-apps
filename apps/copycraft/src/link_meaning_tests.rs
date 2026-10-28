@@ -207,48 +207,67 @@ fn labels_have_both_languages() {
 }
 
 #[test]
-fn facebook_and_instagram_say_what_the_link_is_not_its_id() {
+fn facebook_and_instagram_say_what_the_link_is_and_only_a_video_shows_its_id() {
     use super::SocialKind;
+    const NUM: &str = "1092344577040057";
     let site = |text: &str| parse(text).unwrap().site.clone();
-    for (text, kind) in [
+    // (link, kind, the ID shown: only a Facebook reel or video).
+    for (text, kind, id) in [
         (
             "https://www.facebook.com/reel/1092344577040057",
             SocialKind::Reel,
+            Some(NUM),
         ),
         (
             "https://www.facebook.com/watch?v=1092344577040057",
             SocialKind::Video,
+            Some(NUM),
         ),
         (
             "https://www.facebook.com/someone/posts/1092344577040057",
             SocialKind::Post,
+            None,
         ),
         (
             "https://www.facebook.com/someone/videos/1092344577040057",
             SocialKind::Video,
+            Some(NUM),
         ),
         (
             "https://www.facebook.com/groups/1092344577040057",
             SocialKind::Group,
+            None,
         ),
         (
             "https://www.facebook.com/events/1092344577040057",
             SocialKind::Event,
+            None,
         ),
         (
             "https://www.facebook.com/photo/?fbid=1092344577040057&set=a.1",
             SocialKind::Photo,
+            None,
         ),
         (
             "https://m.facebook.com/story.php?story_fbid=1092344577040057&id=4",
             SocialKind::Post,
+            None,
         ),
-        ("https://fb.watch/aBcDeF1234/", SocialKind::Video),
+        (
+            "https://fb.watch/aBcDeF1234/",
+            SocialKind::Video,
+            Some("aBcDeF1234"),
+        ),
         (
             "https://www.instagram.com/reel/aBcDeF1234/",
             SocialKind::Reel,
+            None,
         ),
-        ("https://www.instagram.com/p/aBcDeF1234/", SocialKind::Post),
+        (
+            "https://www.instagram.com/p/aBcDeF1234/",
+            SocialKind::Post,
+            None,
+        ),
     ] {
         let want = if text.contains("instagram") {
             "Instagram"
@@ -261,11 +280,33 @@ fn facebook_and_instagram_say_what_the_link_is_not_its_id() {
             "{text}"
         );
         assert!(!has_path(text), "{text}");
-        let shown = parse(text).unwrap().text();
-        for id in ["1092344577040057", "aBcDeF1234"] {
-            assert!(!shown.contains(id), "{id} in {shown}");
+        let card = parse(text).unwrap();
+        assert_eq!(card.video_id.as_deref(), id, "{text}");
+        let shown = card.text();
+        assert!(!shown.contains("someone"), "{shown}");
+        match id {
+            Some(id) => assert!(
+                shown.contains(&format!("{} · {id}", site(text).unwrap())),
+                "{shown}"
+            ),
+            None => {
+                for id in [NUM, "aBcDeF1234"] {
+                    assert!(!shown.contains(id), "{id} in {shown}");
+                }
+            }
         }
         assert!(chips(text).is_empty(), "{text}: {:?}", chips(text));
+    }
+    // Only the strict shape: digits for a Facebook number, letters and digits for fb.watch.
+    for odd in [
+        "https://www.facebook.com/reel/10923a4577040057",
+        "https://www.facebook.com/reel/1234567",
+        "https://www.facebook.com/watch?v=abc",
+        "https://www.facebook.com/someone/videos/123456789012345678901",
+        "https://fb.watch/ab-c_d1234/",
+        "https://fb.watch/abc/",
+    ] {
+        assert_eq!(parse(odd).unwrap().video_id, None, "{odd}");
     }
     // Other parameters keep their raw chip; a profile page keeps its path.
     assert_eq!(
@@ -282,19 +323,58 @@ fn tiktok_links_say_what_they_are() {
     let video = "https://www.tiktok.com/@someone/video/7312345678901234567?lang=nl";
     assert_eq!(site(video).as_deref(), Some("TikTok · Video"));
     assert!(!has_path(video));
-    let shown = parse(video).unwrap().text();
-    assert!(!shown.contains("7312345678901234567"), "{shown}");
-    assert_eq!(parse(video).unwrap().video_id, None);
+    // The video number is shown, the user never.
+    let card = parse(video).unwrap();
+    assert_eq!(card.video_id.as_deref(), Some("7312345678901234567"));
+    let shown = card.text();
+    assert!(
+        shown.contains("TikTok · Video · 7312345678901234567"),
+        "{shown}"
+    );
+    assert!(!shown.contains("someone"), "{shown}");
+    assert!(!card.ax_label().contains("someone"));
     assert_eq!(chips(video), ["lang"]);
+    let picture = parse("https://www.tiktok.com/@someone/photo/7312345678901234568").unwrap();
+    assert_eq!(picture.video_id.as_deref(), Some("7312345678901234568"));
+    assert!(!picture.text().contains("someone"));
     assert_eq!(
         site("https://vm.tiktok.com/ZMabc123/").as_deref(),
         Some("TikTok · Video")
     );
-    assert!(
-        !parse("https://vm.tiktok.com/ZMabc123/")
+    assert_eq!(
+        parse("https://vm.tiktok.com/ZMabc123/")
             .unwrap()
-            .text()
-            .contains("ZMabc123")
+            .video_id
+            .as_deref(),
+        Some("ZMabc123")
+    );
+    assert_eq!(
+        parse("https://vt.tiktok.com/ZSabc123/")
+            .unwrap()
+            .video_id
+            .as_deref(),
+        Some("ZSabc123")
+    );
+    // Only the strict shape: 15 to 20 digits, a short code of letters and digits.
+    for odd in [
+        "https://www.tiktok.com/@someone/video/73123456789x1234567",
+        "https://www.tiktok.com/@someone/video/12345",
+        "https://www.tiktok.com/@someone/video/731234567890123456789",
+        "https://vm.tiktok.com/ZM-abc_12/",
+        "https://vm.tiktok.com/ab/",
+    ] {
+        let card = parse(odd).unwrap();
+        assert_eq!(card.video_id, None, "{odd}");
+        assert!(!card.text().contains("someone"), "{odd}");
+    }
+    // A profile or a hashtag shows no ID.
+    assert_eq!(
+        parse("https://www.tiktok.com/@someone").unwrap().video_id,
+        None
+    );
+    assert_eq!(
+        parse("https://www.tiktok.com/tag/cats").unwrap().video_id,
+        None
     );
     for start in [
         "https://www.tiktok.com/nl-NL/",

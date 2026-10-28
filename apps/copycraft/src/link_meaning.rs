@@ -404,6 +404,49 @@ fn social_kind(host: &str, segments: &[String], names: &[String]) -> Option<Soci
     }
 }
 
+/// The ID of a TikTok or Facebook video link, when it has the strict shape: digits only for
+/// TikTok (15-20) and Facebook (8-20) video numbers, letters and digits for a TikTok
+/// (`vm.`/`vt.`, 5-12) or `fb.watch` (5-15) short code. Users, posts, groups, events and
+/// pictures give `None`, like Instagram and every other site.
+pub(crate) fn social_video_id(
+    host: &str,
+    segments: &[String],
+    pairs: &[(String, String)],
+) -> Option<String> {
+    let seg = |at: usize| segments.get(at).map(String::as_str);
+    let digits =
+        |text: &str, min: usize, max: usize| (min..=max).contains(&text.len()) && is_number(text);
+    let code = |text: &str, min: usize, max: usize| {
+        (min..=max).contains(&text.len()) && text.chars().all(|c| c.is_ascii_alphanumeric())
+    };
+    let names: Vec<String> = pairs.iter().map(|(name, _)| name.clone()).collect();
+    let kind = social_kind(host, segments, &names)?;
+    let id = if TIKTOK_SHORT_HOSTS.contains(&host) {
+        seg(0).filter(|s| code(s, 5, 12))
+    } else if TIKTOK_HOSTS.contains(&host) {
+        match kind {
+            SocialKind::Video | SocialKind::Photo => seg(2).filter(|s| digits(s, 15, 20)),
+            _ => None,
+        }
+    } else if host == "fb.watch" {
+        seg(0).filter(|s| code(s, 5, 15))
+    } else if FACEBOOK_HOSTS.contains(&host) {
+        match (kind, seg(0)) {
+            (SocialKind::Reel, _) => seg(1),
+            (SocialKind::Video, Some("watch")) => pairs
+                .iter()
+                .find(|(name, _)| name == "v")
+                .map(|(_, value)| value.as_str()),
+            (SocialKind::Video, _) => seg(2),
+            _ => None,
+        }
+        .filter(|s| digits(s, 8, 20))
+    } else {
+        None
+    };
+    id.map(str::to_string)
+}
+
 fn is_number(text: &str) -> bool {
     !text.is_empty() && text.chars().all(|c| c.is_ascii_digit())
 }

@@ -1037,6 +1037,30 @@ checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
     }
 
     #[test]
+    fn shown_video_ids_are_no_financial_or_personal_data() {
+        for text in [
+            "https://www.tiktok.com/@someone/video/7312345678901234567",
+            "https://www.tiktok.com/@someone/photo/7312345678901234567",
+            "https://vm.tiktok.com/ZMabc123/",
+            "https://www.facebook.com/reel/1092344577040057",
+            "https://www.facebook.com/watch?v=1092344577040057",
+            "https://www.facebook.com/someone/videos/1092344577040057",
+            "https://fb.watch/aBcDeF1234/",
+        ] {
+            let found = labels(text);
+            assert!(!found.contains(&Label::Financial), "{text}: {found:?}");
+            assert!(!found.contains(&Label::Pii), "{text}: {found:?}");
+            // The card's site line with the ID on it, as search and VoiceOver get it.
+            let card = crate::link_card::parse(text).expect("a link");
+            let line = card.site_line().expect("a site line");
+            assert!(card.video_id.is_some(), "{text}");
+            let found = labels(&line);
+            assert!(!found.contains(&Label::Financial), "{line}: {found:?}");
+            assert!(!found.contains(&Label::Pii), "{line}: {found:?}");
+        }
+    }
+
+    #[test]
     fn real_cards_ibans_and_phones_keep_their_label() {
         assert_eq!(labels("4111 1111 1111 1111"), vec![Label::Financial]);
         assert_eq!(

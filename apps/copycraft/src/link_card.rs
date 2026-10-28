@@ -87,8 +87,10 @@ pub(crate) struct LinkCard {
     pub path_explained: bool,
     /// The known site and what the link points at there.
     pub site: Option<String>,
-    /// A YouTube link's video ID (11 characters of `A-Z a-z 0-9 _ -`), the one value the card
-    /// shows: it tells two YouTube links apart. Every other value and ID stays hidden.
+    /// A video ID, the one value the card shows: it tells two video links apart. A YouTube ID
+    /// (11 characters of `A-Z a-z 0-9 _ -`) or a TikTok or Facebook video number or short
+    /// code ([`crate::link_meaning::social_video_id`]). Every other value, ID and user name
+    /// stays hidden.
     pub video_id: Option<String>,
     /// A parameter that looks like a token, key or signature.
     pub token: bool,
@@ -233,7 +235,9 @@ pub(crate) fn parse(text: &str) -> Option<LinkCard> {
     let video_id = if file {
         None
     } else {
-        crate::youtube::video_id(url).map(str::to_string)
+        crate::youtube::video_id(url)
+            .map(str::to_string)
+            .or_else(|| crate::link_meaning::social_video_id(&host, &segments, &pairs))
     };
     if video_id.is_some() {
         // The ID itself is on the site line.
@@ -759,8 +763,8 @@ impl LinkCard {
             .map_or(self.place.symbol(), crate::link_meaning::Brand::symbol)
     }
 
-    /// The site line: the known site, and a YouTube link's video ID after it
-    /// (`YouTube · Video · aBcDeFgHiJk`).
+    /// The site line: the known site, and a YouTube, TikTok or Facebook video ID after it
+    /// (`YouTube · Video · aBcDeFgHiJk`, `TikTok · Video · 7312345678901234567`).
     pub(crate) fn site_line(&self) -> Option<String> {
         let site = self.site.as_ref()?;
         Some(match &self.video_id {
