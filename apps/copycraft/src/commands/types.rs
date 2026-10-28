@@ -177,6 +177,8 @@ pub struct TextShown {
     pub json: bool,
     /// JSON, YAML, XML or SQL: Text ▾ › Code offers its steps.
     pub code_lang: Option<crate::text_ops::code_style::CodeLang>,
+    /// Short enough and no secret: Text ▾ offers QR Code ([`crate::qr_code::offered`]).
+    pub qr: bool,
 }
 
 /// A table version for the card: its frame, which version it is, and what the versions are.
@@ -465,6 +467,9 @@ pub enum CommandId {
     /// Text ▾ › Clean URL… (and the chip on a link card): a preview of the URLs without their
     /// tracking parameters, then Apply to Clipboard as a new copy.
     TextCleanUrl,
+    /// Text ▾ › QR Code (and the chip on a link card): the text as a QR code, as a new picture
+    /// copy ([`crate::qr_code`]).
+    TextQr,
     /// Text ▾ › Format JSON…: Format or Compress and Sort keys with a preview, then Apply to
     /// clipboard as a new copy.
     TextJson,

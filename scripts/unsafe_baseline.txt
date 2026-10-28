@@ -37,7 +37,10 @@
 # copycraft blocks 116: +2 for ⋯ › New › Pick Color from Screen… (feature D of the six-features plan,
 # approved by Marcel 2026-10-28; macos_color_pick.rs): NSColorSampler's showSamplerWithSelectionHandler:
 # (objc2-app-kit marks it `unsafe`), and the nullable NSColor pointer its block gets (nil on Esc).
-copycraft blocks 116
+# copycraft blocks 117: +1 for Text ▾ › QR Code (feature F of the six-features plan, approved by Marcel
+# 2026-10-28; macos_qr.rs): one block of msg_send calls to CIFilter (CIQRCodeGenerator) and CIContext, reached
+# by name like mac_ui::blur, as objc2-core-image would be a new crate.
+copycraft blocks 117
 copycraft fn 5
 copycraft impl 9
 # mac-ui blocks 84: +1 for mac_ui::widgets::fade_trailing_edge (collections HIG point 7, approved by Marcel

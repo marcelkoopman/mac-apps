@@ -260,7 +260,14 @@ fn page_card_adds_format_when_the_url_needs_it() {
     let messy = "https://example.com/search?q=a/b";
     assert_eq!(
         titles(&chips(&data(SubjectKind::Text, Some(messy)))),
-        vec!["Open", "Copy cleaned", "Copy domain only", "URL", "Format"]
+        vec![
+            "Open",
+            "Copy cleaned",
+            "Copy domain only",
+            "URL",
+            "Format",
+            "QR Code"
+        ]
     );
 }
 
@@ -709,4 +716,30 @@ fn the_text_menu_is_split_into_lines_convert_and_analysis() {
     // The table menu keeps no headers.
     assert!(text_sections(&[CommandId::StepBack]).is_none());
     assert!(text_sections(&[]).is_none());
+}
+
+#[test]
+fn a_qr_code_is_offered_for_links_and_text_but_never_for_a_secret() {
+    use crate::commands::{Command, text_menu_items, text_shown};
+    let has = |commands: &[Command]| commands.iter().any(|c| c.id == CommandId::TextQr);
+    // A link card: a chip.
+    let link = data(SubjectKind::Text, Some("https://x.nl/menu"));
+    assert!(has(&chips(&link)));
+    // Prose: in Text ▾.
+    let prose = data(
+        SubjectKind::Text,
+        Some("Wifi: Gasten, wachtwoord op de kaart.\n"),
+    );
+    let edit = text_shown(&prose).expect("Text ▾");
+    assert!(edit.qr);
+    let menu: Vec<Command> = text_menu_items(&edit).into_iter().map(|(c, _)| c).collect();
+    assert!(has(&menu));
+    // A token: neither (split, so secret scanners skip the test).
+    let token = format!(
+        "export GITHUB_TOKEN=ghp_{}\n",
+        "1234567890abcdefghijklmnopqrstuvwxyzAB"
+    );
+    let secret = data(SubjectKind::Text, Some(&token));
+    assert!(!has(&chips(&secret)));
+    assert!(text_shown(&secret).is_none_or(|edit| !edit.qr));
 }

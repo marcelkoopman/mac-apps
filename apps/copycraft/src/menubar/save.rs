@@ -212,6 +212,13 @@ impl App {
         let Some(text) = commands::image_view_text(scan, self.card_view).map(Zeroizing::new) else {
             return Ok(());
         };
+        // A code's text is a copy of its own: its card (a link card for a URL), the secret
+        // check and history, as a value made in CopyCraft.
+        if self.card_view == CardView::Qr {
+            self.reset_view();
+            self.new_value(crate::locale::t("title_qr_read"), text);
+            return Ok(());
+        }
         self.reset_view();
         self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());

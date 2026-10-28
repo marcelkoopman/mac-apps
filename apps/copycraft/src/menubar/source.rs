@@ -177,6 +177,23 @@ impl App {
         }
     }
 
+    /// A picture made in CopyCraft (Text ▾ › QR Code) goes on the clipboard and onto a new card
+    /// titled `title`, like [`Self::new_value`]. Never logged.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn new_image(&mut self, title: &str, png: Zeroizing<Vec<u8>>) {
+        if let Err(e) = self.write_own_image(&png, false) {
+            crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+            return;
+        }
+        let newest = self.history.id_at(0);
+        self.show_dropped(crate::open_file::from_image_data(title, png));
+        if self.history.id_at(0) != newest {
+            self.clipboard_cursor = Some(0);
+        }
+    }
+
     /// ⌘V in the card: what the clipboard held goes in like a drop. Text passes
     /// [`crate::sensitivity::admission`] before it is kept in history (in memory only, as a
     /// drop); the card and all its tools work on it. Also with history off: the user asked.

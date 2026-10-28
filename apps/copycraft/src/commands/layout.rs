@@ -340,6 +340,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextColumn
             | CommandId::TextFilter
             | CommandId::TextCleanUrl
+            | CommandId::TextQr
             | CommandId::TextJson
             | CommandId::TextCase(_)
             | CommandId::TextEncode(_)
@@ -487,6 +488,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextReverse => "arrow.up.arrow.down",
         CommandId::TextFilter => "line.3.horizontal.decrease",
         CommandId::TextCleanUrl => "link",
+        CommandId::TextQr => "qrcode",
         CommandId::TextJson => "curlybraces",
         CommandId::TextCase(_) => "textformat.abc",
         CommandId::TextEncode(_) => "chevron.left.forwardslash.chevron.right",

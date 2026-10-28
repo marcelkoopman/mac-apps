@@ -43,6 +43,7 @@ mod paste_access;
 mod pdf;
 mod preview_wait;
 mod python;
+mod qr_code;
 mod recognize;
 mod screenshot;
 mod sensitivity;
@@ -101,6 +102,8 @@ mod macos_pdf;
 mod macos_pin;
 #[cfg(target_os = "macos")]
 mod macos_preview_image;
+#[cfg(target_os = "macos")]
+mod macos_qr;
 #[cfg(target_os = "macos")]
 mod macos_reopen;
 #[cfg(target_os = "macos")]

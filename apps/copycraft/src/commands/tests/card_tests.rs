@@ -536,7 +536,7 @@ fn html_url_previews_like_a_page() {
     assert!(masks_content(&card, CardView::Original));
     assert_eq!(
         titles(&chips(&input)),
-        vec!["Open", "Copy cleaned", "Copy domain only"]
+        vec!["Open", "Copy cleaned", "Copy domain only", "QR Code"]
     );
     assert_eq!(
         content_actions(&input),
@@ -556,7 +556,13 @@ fn bare_host_is_a_link_card() {
     assert_eq!(card.link_page.as_deref(), Some("grok.com"));
     assert_eq!(
         titles(&chips(&input)),
-        vec!["Open", "Copy cleaned", "Copy domain only", "Format"]
+        vec![
+            "Open",
+            "Copy cleaned",
+            "Copy domain only",
+            "Format",
+            "QR Code"
+        ]
     );
 }
 
@@ -567,7 +573,7 @@ fn link_with_a_query_shows_its_url_view() {
     assert_eq!(work_card(&input).title, "Link");
     assert_eq!(
         titles(&chips(&input)),
-        vec!["Open", "Copy cleaned", "Copy domain only", "URL"]
+        vec!["Open", "Copy cleaned", "Copy domain only", "URL", "QR Code"]
     );
     let mut decoded = input.clone();
     decoded.view = CardView::Decode;
@@ -584,7 +590,7 @@ fn link_with_a_query_shows_its_url_view() {
     let plain = data(SubjectKind::Text, Some("https://example.com/docs"));
     assert_eq!(
         titles(&chips(&plain)),
-        vec!["Open", "Copy cleaned", "Copy domain only"]
+        vec!["Open", "Copy cleaned", "Copy domain only", "QR Code"]
     );
 }
 

@@ -622,3 +622,13 @@ fn a_curl_conversion_keeps_the_credential_label_of_its_command() {
     let found = with_source_labels(plain, &op, step_labels(&TextResult::work(plain, &op)));
     assert!(!found.expect("labels").labels.contains(&Label::Credential));
 }
+
+#[test]
+fn a_read_qr_code_becomes_a_copy_of_its_own_and_a_made_one_a_picture() {
+    let save = include_str!("save.rs");
+    let copy = method_body(save, "copy_image_view");
+    assert!(copy.contains("CardView::Qr") && copy.contains("self.new_value("));
+    let text = include_str!("text.rs");
+    let make = method_body(text, "text_qr");
+    assert!(make.contains("qr_code::offered") && make.contains("self.new_image("));
+}

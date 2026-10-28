@@ -137,6 +137,7 @@ pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
             tracking: crate::text_ops::url_clean::has_tracking(text),
             json: kind == crate::format::FormatKind::Json,
             code_lang: crate::text_ops::code_style::CodeLang::of(text, kind),
+            qr: crate::qr_code::offered(text),
             ..TextShown::default()
         }
     }))
@@ -337,6 +338,9 @@ pub(crate) fn link_chips(text: &str) -> Vec<Command> {
     // Tracking parameters to remove: Clean URL… (a preview, then Apply to Clipboard).
     if crate::text_ops::url_clean::has_tracking(text) {
         commands.push(clean_url_command());
+    }
+    if crate::qr_code::offered(text) {
+        commands.push(qr_command());
     }
     commands
 }

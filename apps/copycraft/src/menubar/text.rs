@@ -118,22 +118,7 @@ impl App {
                 .filter(|text| commands::offers_text_menu(text))
                 .map(|text| (OPENED_FILE, Zeroizing::new(text.to_string())));
         }
-        // The copied source the card shows, also when it shows it formatted: the text the
-        // card was built from. Reading the pasteboard again could see another state (a read
-        // still pending, a newer change) than the card, and leave Text ▾ off the card until
-        // it was built again. While recording is paused or the app is ignored (Held) the card
-        // shows the history entry: so does Text ▾.
-        let view = ClipboardView::from_os();
-        let text = if let Some(text) = &self.card_text {
-            Some(text.to_string())
-        } else if let Some(at) = self.browsed_index() {
-            self.history.get(at).map(str::to_string)
-        } else if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
-            self.history.get(self.history_cursor).map(str::to_string)
-        } else {
-            view.text().map(str::to_string)
-        };
-        let text = Zeroizing::new(text?);
+        let text = self.card_source_text()?;
         // A link card has no Text ▾, but Clean URL works on it (its chip), and the versions it
         // makes go back and forth like any other step's (the cleaned link has nothing left
         // to clean, so it is let in as one of those versions).
@@ -155,6 +140,50 @@ impl App {
                     .is_some_and(|steps| steps.ids.contains(&id))
         };
         (offered || stepped()).then_some((id, text))
+    }
+
+    /// The copied source the card shows, also when it shows it formatted: the text the card
+    /// was built from. Reading the pasteboard again could see another state (a read still
+    /// pending, a newer change) than the card, and leave Text ▾ off the card until it was built
+    /// again. While recording is paused or the app is ignored (Held) the card shows the history
+    /// entry: so does Text ▾.
+    fn card_source_text(&self) -> Option<Zeroizing<String>> {
+        let view = ClipboardView::from_os();
+        let text = if let Some(text) = &self.card_text {
+            Some(text.to_string())
+        } else if let Some(at) = self.browsed_index() {
+            self.history.get(at).map(str::to_string)
+        } else if matches!(view, ClipboardView::Held) || self.pasteboard_suppressed() {
+            self.history.get(self.history_cursor).map(str::to_string)
+        } else {
+            view.text().map(str::to_string)
+        };
+        text.map(Zeroizing::new)
+    }
+
+    /// Text ▾ › QR Code (and the chip on a link card): the card's text as a QR code, a new
+    /// picture copy on the clipboard and the card. Not for a secret ([`crate::qr_code::offered`]).
+    /// Neither the text nor the picture is logged.
+    pub(crate) fn text_qr(&mut self) {
+        let text = match &self.opened {
+            Some(opened) => opened
+                .text
+                .as_ref()
+                .map(|text| Zeroizing::new(text.to_string())),
+            None => self.card_source_text(),
+        };
+        let Some(text) = text.filter(|text| crate::qr_code::offered(text)) else {
+            return;
+        };
+        #[cfg(not(target_os = "macos"))]
+        let _ = text;
+        #[cfg(target_os = "macos")]
+        match crate::macos_qr::png(&text) {
+            Some(png) => self.new_image(crate::locale::t("title_qr_made"), Zeroizing::new(png)),
+            None => crate::diag::log(crate::diag::LogEvent::TextStepFailed(
+                crate::diag::ErrorKind::Unsupported,
+            )),
+        }
     }
 
     /// The text the AI chip works on: the card's text, or the recognized text of a scanned PDF
@@ -305,6 +334,7 @@ impl App {
             tracking: crate::text_ops::url_clean::has_tracking(&text),
             json: kind == crate::format::FormatKind::Json,
             code_lang: crate::text_ops::code_style::CodeLang::of(&text, kind),
+            qr: crate::qr_code::offered(&text),
         });
     }
 

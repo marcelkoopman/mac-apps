@@ -131,6 +131,7 @@ pub fn text_section(id: &CommandId) -> Option<TextSection> {
         | CommandId::TextHash(_)
         | CommandId::TextCode(_)
         | CommandId::TextCleanUrl
+        | CommandId::TextQr
         | CommandId::TextJson => Some(TextSection::Convert),
         CommandId::AgentCommands
         | CommandId::AgentOutline
@@ -235,6 +236,9 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
     if edit.tracking {
         commands.push(clean_url_command());
     }
+    if edit.qr {
+        commands.push(qr_command());
+    }
     if edit.json {
         commands.push(command(
             CommandId::TextJson,
@@ -284,6 +288,16 @@ pub(crate) fn clean_url_command() -> Command {
         crate::locale::t("text_clean_url"),
         crate::locale::t("detail_url_clean"),
         "clean url link tracking utm fbclid gclid parameters query strip",
+    )
+}
+
+/// QR Code: in Text ▾ and as a chip on a link card ([`crate::qr_code::offered`]).
+pub(crate) fn qr_command() -> Command {
+    command(
+        CommandId::TextQr,
+        crate::locale::t("text_qr"),
+        crate::locale::t("detail_text_qr"),
+        "qr code qrcode make generate barcode picture share scan",
     )
 }
 

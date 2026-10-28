@@ -113,6 +113,15 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // Text ▾ › Clean URL… (text_ops::url_clean)
     ("text_clean_url", "Schoon URL op…", "Clean URL…"),
     ("url_clean_title", "URL opschonen", "Clean URL"),
+    // Text ▾ › QR Code and the QR view's Copy (qr_code, macos_qr)
+    ("text_qr", "QR-code", "QR Code"),
+    (
+        "detail_text_qr",
+        "De tekst als QR-code, als nieuwe kopie (op het apparaat)",
+        "The text as a QR code, as a new copy (on the device)",
+    ),
+    ("title_qr_made", "QR-code", "QR code"),
+    ("title_qr_read", "Tekst uit QR-code", "Text from QR code"),
     (
         "url_clean_message",
         "Haalt trackingparameters (utm_…, fbclid, gclid, si, …) uit elke link. De rest van de link blijft zoals hij is; er wordt niets geopend of opgehaald. ⌘Z zet de tekst terug.",

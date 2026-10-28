@@ -98,7 +98,12 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
     let options = CFDictionary::from_slices(&keys, &values);
     // SAFETY: `options` is a valid dictionary of thumbnail keys; failure gives None.
     let image = unsafe { source.thumbnail_at_index(0, Some(options.as_opaque())) }?;
-    let (width, height) = (CGImage::width(Some(&image)), CGImage::height(Some(&image)));
+    rgba_of(&image)
+}
+
+/// `image` drawn as straight RGBA in sRGB, at its own size.
+pub fn rgba_of(image: &CGImage) -> Option<Rgba> {
+    let (width, height) = (CGImage::width(Some(image)), CGImage::height(Some(image)));
     if width == 0 || height == 0 || width.checked_mul(height)? > MAX_PIXELS {
         return None;
     }
@@ -109,7 +114,7 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
             CGPoint::new(0.0, 0.0),
             CGSize::new(width as f64, height as f64),
         );
-        CGContext::draw_image(Some(&context), rect, Some(&image));
+        CGContext::draw_image(Some(&context), rect, Some(image));
     }
     unpremultiply(&mut pixels);
     let pixels = std::mem::take(&mut *pixels);

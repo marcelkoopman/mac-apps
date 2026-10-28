@@ -170,6 +170,7 @@ impl App {
             CommandId::TextColumn => self.text_column_prompt(),
             CommandId::TextFilter => self.text_filter_prompt(),
             CommandId::TextCleanUrl => self.text_clean_url_prompt(),
+            CommandId::TextQr => self.text_qr(),
             CommandId::TextJson => self.text_json_prompt(),
             CommandId::TextCase(style) => self.text_case_prompt(style),
             CommandId::TextEncode(codec) => self.run_text(crate::text_ops::TextOp::Encode(codec)),
