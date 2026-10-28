@@ -218,6 +218,7 @@ mod tests {
             // A Facebook Reel and Video are called that in Dutch too.
             "link_social_reel",
             "link_social_video",
+            "link_social_hashtag",
             "title_qr",
             "detail_uri",
             "chip_schema",

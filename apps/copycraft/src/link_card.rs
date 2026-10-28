@@ -751,6 +751,14 @@ impl LinkCard {
         (self.place != Place::File).then(|| self.host.clone())
     }
 
+    /// The SF Symbol in front of the domain: a known brand's ([`crate::link_meaning::Brand`],
+    /// YouTube, Facebook, TikTok) or the place's (`globe`, `network`, `doc`).
+    pub(crate) fn symbol(&self) -> &'static str {
+        crate::link_meaning::brand(&self.host)
+            .filter(|_| self.place == Place::Web)
+            .map_or(self.place.symbol(), crate::link_meaning::Brand::symbol)
+    }
+
     /// The site line: the known site, and a YouTube link's video ID after it
     /// (`YouTube · Video · aBcDeFgHiJk`).
     pub(crate) fn site_line(&self) -> Option<String> {

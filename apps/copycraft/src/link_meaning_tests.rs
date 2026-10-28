@@ -257,7 +257,7 @@ fn facebook_and_instagram_say_what_the_link_is_not_its_id() {
         };
         assert_eq!(
             site(text),
-            Some(format!("{want} · {}", kind.label())),
+            Some(format!("{want} · {}", kind.label().unwrap())),
             "{text}"
         );
         assert!(!has_path(text), "{text}");
@@ -274,4 +274,96 @@ fn facebook_and_instagram_say_what_the_link_is_not_its_id() {
     );
     assert!(has_path("https://www.facebook.com/someone"));
     assert_eq!(site("https://www.facebook.com/someone"), None);
+}
+
+#[test]
+fn tiktok_links_say_what_they_are() {
+    let site = |text: &str| parse(text).unwrap().site.clone();
+    let video = "https://www.tiktok.com/@someone/video/7312345678901234567?lang=nl";
+    assert_eq!(site(video).as_deref(), Some("TikTok · Video"));
+    assert!(!has_path(video));
+    let shown = parse(video).unwrap().text();
+    assert!(!shown.contains("7312345678901234567"), "{shown}");
+    assert_eq!(parse(video).unwrap().video_id, None);
+    assert_eq!(chips(video), ["lang"]);
+    assert_eq!(
+        site("https://vm.tiktok.com/ZMabc123/").as_deref(),
+        Some("TikTok · Video")
+    );
+    assert!(
+        !parse("https://vm.tiktok.com/ZMabc123/")
+            .unwrap()
+            .text()
+            .contains("ZMabc123")
+    );
+    for start in [
+        "https://www.tiktok.com/nl-NL/",
+        "https://www.tiktok.com/",
+        "https://m.tiktok.com/en",
+    ] {
+        assert_eq!(site(start).as_deref(), Some("TikTok"), "{start}");
+        assert!(!has_path(start), "{start}");
+    }
+    let profile = "https://www.tiktok.com/@someone";
+    assert_eq!(
+        site(profile),
+        Some(format!(
+            "TikTok · {}",
+            crate::locale::t("link_social_profile")
+        ))
+    );
+    assert!(has_path(profile));
+    assert_eq!(
+        site("https://www.tiktok.com/tag/cats"),
+        Some(format!(
+            "TikTok · {}",
+            crate::locale::t("link_social_hashtag")
+        ))
+    );
+    assert_eq!(site("https://www.tiktok.com/some/other/page"), None);
+}
+
+#[test]
+fn youtube_facebook_and_tiktok_get_their_own_symbol() {
+    use super::Brand;
+    let symbol = |text: &str| parse(text).unwrap().symbol();
+    assert_eq!(
+        symbol("https://www.youtube.com/watch?v=aBcDeFgHiJk"),
+        "play.rectangle.fill"
+    );
+    assert_eq!(
+        symbol("https://youtu.be/aBcDeFgHiJk"),
+        "play.rectangle.fill"
+    );
+    assert_eq!(
+        symbol("https://www.facebook.com/reel/1092344577040057"),
+        "f.square.fill"
+    );
+    assert_eq!(symbol("https://fb.watch/aBcDeF1234/"), "f.square.fill");
+    assert_eq!(symbol("https://www.tiktok.com/nl-NL/"), "music.note");
+    assert_eq!(symbol("https://vm.tiktok.com/ZMabc123/"), "music.note");
+    for other in [
+        "https://www.instagram.com/p/aBcDeF1234/",
+        "https://github.com/acme/app",
+        "https://example.com/",
+    ] {
+        assert_eq!(symbol(other), "globe", "{other}");
+    }
+    assert_eq!(symbol("http://localhost:3000/"), "network");
+    assert_eq!(
+        Brand::YouTube.tint(),
+        crate::card_theme::Rgb(0xFF, 0x00, 0x00)
+    );
+    assert_eq!(
+        Brand::Facebook.tint(),
+        crate::card_theme::Rgb(0x18, 0x77, 0xF2)
+    );
+    assert_eq!(
+        Brand::TikTok.tint(),
+        crate::card_theme::Rgb(0xFE, 0x2C, 0x55)
+    );
+    for brand in [Brand::YouTube, Brand::Facebook, Brand::TikTok] {
+        assert_eq!(Brand::of_symbol(brand.symbol()), Some(brand));
+    }
+    assert_eq!(Brand::of_symbol("globe"), None);
 }

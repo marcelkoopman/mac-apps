@@ -172,7 +172,7 @@ pub fn link_thumb(text: &str) -> Option<(&'static str, String)> {
         lines.push('\n');
         lines.push_str(&cut_line(id));
     }
-    Some((link.place.symbol(), lines))
+    Some((link.symbol(), lines))
 }
 
 /// `line` cut at [`THUMB_LINE_CHARS`] characters, with `…`.
@@ -675,7 +675,7 @@ mod tests {
         use super::link_thumb;
         let (symbol, lines) =
             link_thumb("https://www.youtube.com/watch?v=dQw4w9WgXcQ").expect("a link");
-        assert_eq!(symbol, "globe");
+        assert_eq!(symbol, "play.rectangle.fill");
         assert!(lines.starts_with("youtube.com\n"), "{lines}");
         assert!(!lines.contains("://") && !lines.contains("www."), "{lines}");
         // The video ID on its own line, after the site.

@@ -128,9 +128,10 @@ pub(crate) fn explain(host: &str, segments: &[String], names: &[String]) -> Expl
         if matches!(seg(2), Some("pulls" | "issues")) || segments.is_empty() {
             known.push(("q", Meaning::SearchTerms));
         }
-    } else if social_kind(host, segments, names).is_some() {
-        // Facebook and Instagram: the site line says what it is; the IDs say nothing.
-        out.path = true;
+    } else if let Some(kind) = social_kind(host, segments, names) {
+        // Facebook, Instagram and TikTok: the site line says what it is; the IDs say nothing.
+        // A profile or hashtag keeps its path (the name, not an ID).
+        out.path = !matches!(kind, SocialKind::Profile | SocialKind::Hashtag);
         for name in names {
             if SOCIAL_ID_PARAMS.contains(&name.as_str()) {
                 out.params.push(name.clone());
@@ -227,7 +228,7 @@ pub(crate) fn explain(host: &str, segments: &[String], names: &[String]) -> Expl
     out
 }
 
-/// What a Facebook or Instagram link is.
+/// What a Facebook, Instagram or TikTok link is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SocialKind {
     Reel,
@@ -236,19 +237,27 @@ pub(crate) enum SocialKind {
     Group,
     Event,
     Photo,
+    Profile,
+    Hashtag,
+    /// The site's start page: the site line is the site's name alone.
+    StartPage,
 }
 
 impl SocialKind {
-    pub(crate) fn label(self) -> &'static str {
+    /// What follows the site's name on the site line; `None` for the start page.
+    pub(crate) fn label(self) -> Option<&'static str> {
         use crate::locale::t;
-        match self {
+        Some(match self {
             SocialKind::Reel => t("link_social_reel"),
             SocialKind::Video => t("link_social_video"),
             SocialKind::Post => t("link_social_post"),
             SocialKind::Group => t("link_social_group"),
             SocialKind::Event => t("link_social_event"),
             SocialKind::Photo => t("link_social_photo"),
-        }
+            SocialKind::Profile => t("link_social_profile"),
+            SocialKind::Hashtag => t("link_social_hashtag"),
+            SocialKind::StartPage => return None,
+        })
     }
 }
 
@@ -257,21 +266,117 @@ const SOCIAL_ID_PARAMS: &[&str] = &["v", "fbid", "set", "story_fbid", "id"];
 
 const FACEBOOK_HOSTS: &[&str] = &["facebook.com", "m.facebook.com", "web.facebook.com"];
 
-/// The site and kind of a Facebook or Instagram link with a known shape; `None` otherwise.
+const TIKTOK_HOSTS: &[&str] = &["tiktok.com", "m.tiktok.com"];
+/// TikTok's short links (`vm.tiktok.com/<code>`): always a video.
+const TIKTOK_SHORT_HOSTS: &[&str] = &["vm.tiktok.com", "vt.tiktok.com"];
+
+/// A site with its own symbol and colour on the Link card and the strip tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Brand {
+    YouTube,
+    Facebook,
+    TikTok,
+}
+
+impl Brand {
+    /// The SF Symbol (no logo is bundled), tinted [`Self::tint`].
+    pub(crate) fn symbol(self) -> &'static str {
+        match self {
+            Brand::YouTube => "play.rectangle.fill",
+            Brand::Facebook => "f.square.fill",
+            Brand::TikTok => "music.note",
+        }
+    }
+
+    /// YouTube red, Facebook blue, TikTok pink.
+    pub(crate) fn tint(self) -> crate::card_theme::Rgb {
+        use crate::card_theme::Rgb;
+        match self {
+            Brand::YouTube => Rgb(0xFF, 0x00, 0x00),
+            Brand::Facebook => Rgb(0x18, 0x77, 0xF2),
+            Brand::TikTok => Rgb(0xFE, 0x2C, 0x55),
+        }
+    }
+
+    /// The brand whose [`Self::symbol`] is `symbol`.
+    pub(crate) fn of_symbol(symbol: &str) -> Option<Brand> {
+        [Brand::YouTube, Brand::Facebook, Brand::TikTok]
+            .into_iter()
+            .find(|brand| brand.symbol() == symbol)
+    }
+}
+
+/// The brand of `host` (lower case, without `www.`).
+pub(crate) fn brand(host: &str) -> Option<Brand> {
+    if host == "youtu.be" || YOUTUBE_HOSTS.contains(&host) {
+        Some(Brand::YouTube)
+    } else if host == "fb.watch" || FACEBOOK_HOSTS.contains(&host) {
+        Some(Brand::Facebook)
+    } else if TIKTOK_HOSTS.contains(&host) || TIKTOK_SHORT_HOSTS.contains(&host) {
+        Some(Brand::TikTok)
+    } else {
+        None
+    }
+}
+
+/// The site and kind of a Facebook, Instagram or TikTok link with a known shape; `None`
+/// otherwise.
 pub(crate) fn social(host: &str, segments: &[String], names: &[String]) -> Option<String> {
     let kind = social_kind(host, segments, names)?;
     let site = if host.contains("instagram") {
         "Instagram"
+    } else if host.contains("tiktok") {
+        "TikTok"
     } else {
         "Facebook"
     };
-    Some(format!("{site} · {}", kind.label()))
+    Some(match kind.label() {
+        Some(label) => format!("{site} · {label}"),
+        None => site.to_string(),
+    })
+}
+
+/// `nl-NL`, `en`, `pt-BR`: a language path on TikTok's start page.
+fn is_language(segment: &str) -> bool {
+    let (lang, region) = segment.split_once('-').unwrap_or((segment, ""));
+    lang.len() == 2
+        && lang.chars().all(|c| c.is_ascii_lowercase())
+        && (region.is_empty()
+            || (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic())))
+}
+
+fn tiktok_kind(host: &str, segments: &[String]) -> Option<SocialKind> {
+    let seg = |at: usize| segments.get(at).map(String::as_str);
+    let len = segments.len();
+    if TIKTOK_SHORT_HOSTS.contains(&host) {
+        return match len {
+            0 => Some(SocialKind::StartPage),
+            1 => Some(SocialKind::Video),
+            _ => None,
+        };
+    }
+    if !TIKTOK_HOSTS.contains(&host) {
+        return None;
+    }
+    let user = |at: usize| seg(at).is_some_and(|s| s.len() > 1 && s.starts_with('@'));
+    match (seg(0), seg(1), len) {
+        (None, _, 0) => Some(SocialKind::StartPage),
+        (Some(lang), None, 1) if is_language(lang) => Some(SocialKind::StartPage),
+        (_, Some("video"), 3) if user(0) => Some(SocialKind::Video),
+        (_, Some("photo"), 3) if user(0) => Some(SocialKind::Photo),
+        (_, None, 1) if user(0) => Some(SocialKind::Profile),
+        (Some("tag"), Some(_), 2) => Some(SocialKind::Hashtag),
+        _ => None,
+    }
 }
 
 fn social_kind(host: &str, segments: &[String], names: &[String]) -> Option<SocialKind> {
     let seg = |at: usize| segments.get(at).map(String::as_str);
     let has = |name: &str| names.iter().any(|n| n == name);
     let len = segments.len();
+    if host.contains("tiktok") {
+        return tiktok_kind(host, segments);
+    }
     if host == "fb.watch" {
         return (len == 1).then_some(SocialKind::Video);
     }

@@ -842,10 +842,18 @@ fn link_title(
             None => (thumb.lines.clone(), String::new()),
         }
     };
+    // Masked: a brand's symbol would tell which site it is; the globe instead.
+    let symbol = if masked && crate::link_meaning::Brand::of_symbol(symbol).is_some() {
+        "globe"
+    } else {
+        symbol
+    };
     let built = NSMutableAttributedString::new();
-    if let Some(icon) =
-        crate::macos_card_text::symbol_text(symbol, mac_ui::metrics::FONT_CAPTION, &mark_colour)
-    {
+    if let Some(icon) = crate::macos_card_text::link_symbol_text(
+        symbol,
+        mac_ui::metrics::FONT_CAPTION,
+        &mark_colour,
+    ) {
         built.appendAttributedString(&icon);
         if !head.is_empty() {
             built

@@ -247,6 +247,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("link_social_group", "Groep", "Group"),
     ("link_social_event", "Evenement", "Event"),
     ("link_social_photo", "Afbeelding", "Image"),
+    ("link_social_profile", "Profiel", "Profile"),
+    ("link_social_hashtag", "Hashtag", "Hashtag"),
     ("link_kind_local", "lokaal adres", "local address"),
     ("link_kind_file", "bestand", "file"),
     ("link_ax", "Link naar {0}, {1}", "Link to {0}, {1}"),

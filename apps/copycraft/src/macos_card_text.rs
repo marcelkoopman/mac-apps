@@ -450,6 +450,20 @@ pub(crate) fn symbol_text(
     ))
 }
 
+/// A link's symbol ([`crate::link_card::LinkCard::symbol`]): a brand's in its own colour, any
+/// other in `color`. A brand symbol this system does not have falls back to `globe`.
+pub(crate) fn link_symbol_text(
+    name: &str,
+    size: f64,
+    color: &NSColor,
+) -> Option<Retained<NSAttributedString>> {
+    match crate::link_meaning::Brand::of_symbol(name) {
+        Some(brand) => symbol_text(name, size, &crate::appearance::srgb(brand.tint()))
+            .or_else(|| symbol_text("globe", size, color)),
+        None => symbol_text(name, size, color),
+    }
+}
+
 /// The Link card ([`crate::link_card`]): the place's SF Symbol and the domain large, the
 /// known site, the path small, the parameter names as chips, then the labels (warnings orange,
 /// the rest grey). Every part is drawn from `link`; nothing is fetched or logged.
@@ -478,7 +492,7 @@ pub(crate) fn paint_link(text: &NSTextView, link: &crate::link_card::LinkCard) {
         }
         match line {
             Line::Domain(domain) => {
-                if let Some(symbol) = symbol_text(link.place.symbol(), size * 1.4, &link_color) {
+                if let Some(symbol) = link_symbol_text(link.symbol(), size * 1.4, &link_color) {
                     attr.appendAttributedString(&symbol);
                     push(" ", &domain_font, &label);
                 }
