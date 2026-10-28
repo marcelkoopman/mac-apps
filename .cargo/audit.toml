@@ -12,26 +12,22 @@ ignore = [
     "RUSTSEC-2026-0195",
     # RUSTSEC-2025-0141: bincode 2 is unmaintained. Only in Cargo.lock, never compiled for any
     # target or feature set (`cargo tree -i bincode --target all -e all --all-features` prints
-    # nothing): copycraft's polars csv/json/parquet/temporal features carry weak
+    # nothing): copycraft's polars csv/json/temporal features carry weak
     # `polars-lazy?/...` features, and Cargo still locks weak optional deps (rust-lang/cargo#10801),
     # so polars-lazy and polars-utils' optional `serde` deps (bincode) land in the lockfile. Drop
     # when Cargo.lock no longer has bincode (polars without bincode, or Cargo no longer locking
     # inactive weak deps).
     "RUSTSEC-2025-0141",
     # RUSTSEC-2026-0391 (zstd), RUSTSEC-2026-0398 / 0403 (zstd-safe): zstd 0.13.3 / zstd-safe 7.3.0
-    # come only through copycraft's polars `parquet` feature (polars-parquet and polars-io need
-    # zstd ^0.13; polars 0.55.2 is the newest, and no zstd 0.13.x has the fixes, which start at
-    # zstd 0.14.3 / zstd-safe 8.2.0). None of the affected functions is reached:
-    # - 0391 is `stream::raw::{Encoder,Decoder}::with_context` on a reused context. Only
-    #   polars-parquet's page decompression calls it, i.e. reading Parquet, and copycraft
-    #   never reads Parquet outside its tests (it only writes it: Save as Parquet, through
-    #   `bulk::compress_to_buffer`).
-    # - 0398 is `seekable::*::decompress`: the `seekable` feature is off, so the code is not
-    #   compiled at all.
-    # - 0403 is `DCtx::decompress_stream` through `stream::write::Decoder`. polars-io only uses
-    #   `stream::read::Decoder` / `Encoder`, which the advisory names as unaffected.
-    # Recheck when new zstd advisories come in, or if copycraft starts reading Parquet. Drop these
-    # when Cargo.lock has zstd >= 0.14.3 (a polars on zstd 0.14) or polars is gone.
+    # are only in Cargo.lock, never compiled (`cargo tree -i zstd --target aarch64-apple-darwin
+    # -e features` prints nothing). copycraft no longer has Save as Parquet or the polars
+    # `parquet` feature; the same weak `polars-lazy?/...` features as for bincode above still
+    # lock polars-lazy, polars-stream and polars-parquet, and with them polars-arrow's optional
+    # zstd (`io_ipc_compression`). No zstd 0.13.x has the fixes (they start at zstd 0.14.3 /
+    # zstd-safe 8.2.0) and polars 0.55.2 is the newest. The `unsound` zstd-safe warnings are the
+    # same lockfile-only crate. Drop these when Cargo.lock no longer has zstd 0.13 (polars on
+    # zstd 0.14, or Cargo no longer locking inactive weak deps), and recheck if copycraft ever
+    # turns on a polars feature that compiles zstd (parquet, ipc).
     "RUSTSEC-2026-0391",
     "RUSTSEC-2026-0398",
     "RUSTSEC-2026-0403",
