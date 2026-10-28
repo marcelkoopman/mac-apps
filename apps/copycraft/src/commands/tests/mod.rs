@@ -347,6 +347,32 @@ fn line_numbers_are_off_by_default_and_the_button_offers_them() {
 }
 
 #[test]
+fn the_numbers_button_keeps_its_place_while_its_card_is_rebuilt() {
+    use super::{building_card, dock_offers_numbers, is_building_card};
+    // A slow YAML card: the numbers button rebuilds it, the "Working…" card comes first.
+    let yaml = data(SubjectKind::Text, Some("- a: 1\n- b: 2\n- c: 3"));
+    let real = work_card(&yaml);
+    let placeholder = building_card();
+    assert!(is_building_card(&placeholder));
+    assert!(super::offers_line_numbers(&yaml, &real));
+    assert!(!super::offers_line_numbers(&yaml, &placeholder));
+    // Same entry: the button stays, so the eye button below it does not move up.
+    assert!(dock_offers_numbers(
+        super::offers_line_numbers(&yaml, &placeholder),
+        true,
+        true,
+        true
+    ));
+    // The card arrives: as offered.
+    assert!(dock_offers_numbers(true, false, true, true));
+    // Another entry, or no button before: the placeholder has none.
+    assert!(!dock_offers_numbers(false, true, false, true));
+    assert!(!dock_offers_numbers(false, true, true, false));
+    // A real card without numbers (a table) hides it.
+    assert!(!dock_offers_numbers(false, false, true, true));
+}
+
+#[test]
 fn a_single_sentence_gets_the_numbers_button_and_room_for_every_well_button() {
     // A one-line Dutch sentence is `Plain` ("Inhoud"), not `Text`: it gets the button too.
     let sentence = "Dit is een gewone Nederlandse zin die Marcel kopieerde om te tellen.";

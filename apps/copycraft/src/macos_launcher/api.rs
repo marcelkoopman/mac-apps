@@ -363,13 +363,21 @@ pub(crate) fn store(data: LaunchData) {
 }
 
 pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
-    let offers_numbers = commands::offers_line_numbers(&data, &card);
-    PLACEHOLDER.set(commands::is_building_card(&card));
+    let building = commands::is_building_card(&card);
+    PLACEHOLDER.set(building);
     // Another entry is masked again. The same one stays revealed in every view, chip, version
     // and step, and when a rebuilt card or its labels arrive ([`commands::stays_revealed`]).
     let key = commands::content_key(&data);
     store_picker_source(&data, key);
     let shown = CONTENT_KEY.with(Cell::get);
+    // While the same entry's card is rebuilt (line numbers switched), the dock keeps its
+    // buttons where they are, so the eye button does not slide under the pointer.
+    let offers_numbers = commands::dock_offers_numbers(
+        commands::offers_line_numbers(&data, &card),
+        building,
+        shown == key,
+        OFFERS_NUMBERS.get(),
+    );
     REVEALED.set(commands::stays_revealed(
         REVEALED.with(Cell::get),
         shown,

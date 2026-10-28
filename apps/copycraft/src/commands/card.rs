@@ -772,6 +772,24 @@ pub fn offers_line_numbers(data: &LaunchData, card: &WorkCard) -> bool {
         && !matches!(data.view, CardView::Diff | CardView::Info | CardView::Qr)
 }
 
+/// Whether the well's dock shows the numbers button. `offers` is [`offers_line_numbers`] for the
+/// card now; `building` says it is the "Working…" placeholder of the entry already shown
+/// (`same_entry`), as after the numbers button itself rebuilds the card. Then the button
+/// keeps its place (`shown_before`): hiding it would move the eye button up into its slot,
+/// under the pointer, and the next click would blur the well.
+pub fn dock_offers_numbers(
+    offers: bool,
+    building: bool,
+    same_entry: bool,
+    shown_before: bool,
+) -> bool {
+    if building && same_entry {
+        shown_before
+    } else {
+        offers
+    }
+}
+
 /// SF Symbol and tooltip (NL/EN) for the numbers button.
 pub fn line_numbers_button_look(on: bool) -> (&'static str, &'static str) {
     if on {
