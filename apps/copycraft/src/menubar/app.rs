@@ -184,6 +184,8 @@ pub(crate) struct App {
     pub(crate) decoded_picture: Option<DecodedPicture>,
     /// History entries chosen for a diff, oldest first. Not stored.
     pub(crate) diff_sel: crate::diff::Selection,
+    /// The texts of two text files dropped at once, while the diff compares them. Not stored.
+    pub(crate) dropped_pair: Option<super::dropped_diff::DroppedPair>,
     /// Bumped when a diff is dropped, so a late result is ignored.
     pub(crate) diff_generation: u64,
     /// The last finished diff, while both picks are still chosen.

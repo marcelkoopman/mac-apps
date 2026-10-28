@@ -80,7 +80,8 @@ pub(crate) const WELL_RADIUS: f64 = mac_ui::metrics::WELL_RADIUS;
 /// PNG, JPEG, HEIC, GIF, WebP, TIFF, …) or PDF (`com.adobe.pdf`: its text layer, or text
 /// recognition on a scan), Word document (`org.openxmlformats.wordprocessingml.document`: its text,
 /// and the first page as a picture), also as a promised file (Photos); image data (a picture dragged from
-/// Safari or Preview); or dropped text. Not folders or several files.
+/// Safari or Preview); or dropped text; or several files, which compare when they are two text
+/// files ([`crate::menubar`]'s `compare_dropped_files`). Not a folder on its own.
 pub(crate) const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
     file_types: &[
         "public.text",
@@ -90,6 +91,7 @@ pub(crate) const DROP_ACCEPT: mac_ui::drop::Accept = mac_ui::drop::Accept {
     ],
     images: true,
     text: true,
+    several_files: true,
 };
 /// The drop outline sits this far inside the panel edge, concentric with it.
 pub(crate) const DROP_INSET: f64 = 4.0;

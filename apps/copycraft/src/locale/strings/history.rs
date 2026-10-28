@@ -26,6 +26,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Compare only works with text",
     ),
     (
+        "compare_two_text_files",
+        "Vergelijken werkt met twee tekstbestanden",
+        "Compare works with two text files",
+    ),
+    (
         "strip_action_compare",
         "Vergelijk met getoonde",
         "Compare with Shown",

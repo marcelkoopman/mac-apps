@@ -199,6 +199,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         work_error: None,
         pin_refused: false,
         diff_sel: crate::diff::Selection::default(),
+        dropped_pair: None,
         diff_generation: 0,
         diff_outcome: None,
         diffing: None,

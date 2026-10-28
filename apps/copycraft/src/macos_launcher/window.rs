@@ -44,6 +44,7 @@ pub(crate) fn ensure_window(mtm: MainThreadMarker) {
     let drop_target = mac_ui::drop::target(mtm, DROP_ACCEPT, Some(drop_highlight()), |dropped| {
         launcher::emit(match dropped {
             mac_ui::drop::Dropped::File(path) => UserEvent::DroppedFile(path),
+            mac_ui::drop::Dropped::Files(paths) => UserEvent::DroppedFiles(paths),
             mac_ui::drop::Dropped::Promised(path) => UserEvent::DroppedPromisedFile(path),
             mac_ui::drop::Dropped::Image(bytes) => {
                 UserEvent::DroppedImage(zeroize::Zeroizing::new(bytes))

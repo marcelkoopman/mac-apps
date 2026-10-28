@@ -40,6 +40,7 @@ impl ApplicationHandler<UserEvent> for App {
             }
             UserEvent::FullCardReady(card) => self.finish_show_all(card),
             UserEvent::DroppedFile(path) => self.open_path(path, false),
+            UserEvent::DroppedFiles(paths) => self.compare_dropped_files(paths),
             UserEvent::DroppedPromisedFile(path) => self.open_path(path, true),
             UserEvent::DroppedImage(bytes) => {
                 self.show_dropped(crate::open_file::from_image_data(dropped_image(), bytes));

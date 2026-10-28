@@ -1,4 +1,5 @@
-//! Drop target: a view that takes one dropped file, image or text.
+//! Drop target: a view that takes one dropped file, image or text (or, when asked, several
+//! files at once).
 //!
 //! [`target`] builds an `NSView` registered for file URLs, promised files, image data and/or
 //! plain text. Make it the window's content view (or another container) and build the content
@@ -12,8 +13,10 @@
 //! While the drag moves it is judged by [`judge`] on what the drag pasteboard declares, without
 //! reading any data or file: one file (or one promised file, as Photos and Mail drag them) whose
 //! type conforms to one of [`Accept::file_types`], image data when [`Accept::images`] is set, or
-//! text when [`Accept::text`] is set. Anything else, including several files, folders and a file
-//! of another type, gets `NSDragOperation::None`, so the pointer shows that it cannot drop there.
+//! text when [`Accept::text`] is set; with [`Accept::several_files`], also two or more files of
+//! any kind, which the caller judges after the drop. Anything else, including several files
+//! (without that), folders and a file of another type, gets `NSDragOperation::None`, so the
+//! pointer shows that it cannot drop there.
 //! A file whose name maps to no known type is let through: only its contents can tell, so the
 //! caller judges it after the drop. The drop itself is read once, on the main thread, and handed
 //! to the callback as [`Dropped`]; a promised file is handed over once the source has written it.
@@ -34,6 +37,10 @@ pub enum Dropped {
     /// into a new folder of its own in the temporary directory. Read it, then hand the path to
     /// [`discard_promised`].
     Promised(PathBuf),
+    /// Two or more files, by path, in the drag's order ([`Accept::several_files`]): of any
+    /// kind, folders too, so the caller can say what it does with them. As for
+    /// [`Dropped::File`], the drop has given the app access to them.
+    Files(Vec<PathBuf>),
     /// Encoded image data as the source put it on the drag: PNG, JPEG, HEIC, GIF, WebP, BMP or
     /// TIFF (see [`IMAGE_TYPES`]). The caller owns it, like [`Dropped::Text`].
     Image(Vec<u8>),
@@ -53,6 +60,9 @@ pub struct Accept {
     /// Take dropped plain text (`NSPasteboardTypeString`) when the drag has no files, image data
     /// or promised files.
     pub text: bool,
+    /// Take a drag of two or more files (of any kind) as [`Dropped::Files`], when the target
+    /// takes files. Promised files stay one at a time.
+    pub several_files: bool,
 }
 
 /// The image data types [`Accept::images`] takes, in the order they are preferred: the encoded
@@ -111,6 +121,7 @@ pub struct Contents<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Offer {
     File,
+    Files,
     Promised,
     Image,
     Text,
@@ -119,14 +130,18 @@ pub enum Offer {
 /// Whether a drag declaring `drag` can be dropped under `accept`, and as what.
 ///
 /// A drag with files is judged by its files only: exactly one, not a directory, of an accepted
-/// or unknown type. Its text never stands in, because for a file drag that is just the file's
-/// name or path. Without files, image data comes first (a picture dragged from a web page also
-/// promises its file and carries its address as text), then promised files (judged like files,
-/// and only when the target takes files), then text.
+/// or unknown type; or, with [`Accept::several_files`], two or more of any kind. Its text never
+/// stands in, because for a file drag that is just the file's name or path. Without files, image
+/// data comes first (a picture dragged from a web page also promises its file and carries its
+/// address as text), then promised files (judged like files, and only when the target takes
+/// files), then text.
 pub fn judge(drag: &Contents<'_>, accept: Accept) -> Option<Offer> {
     let one_file = |kinds: &[FileKind]| {
         matches!(kinds, [FileKind::Accepted | FileKind::Unknown]) && !accept.file_types.is_empty()
     };
+    if drag.files.len() >= 2 && accept.several_files && !accept.file_types.is_empty() {
+        return Some(Offer::Files);
+    }
     if !drag.files.is_empty() {
         return one_file(drag.files).then_some(Offer::File);
     }
@@ -420,6 +435,10 @@ mod appkit {
             }
             let dropped = autoreleasepool(|_| match offer? {
                 Offer::File => single_file_path(&pasteboard).map(Dropped::File),
+                Offer::Files => {
+                    let paths = file_paths(&pasteboard);
+                    (paths.len() >= 2).then_some(Dropped::Files(paths))
+                }
                 Offer::Image => image_data(&pasteboard).map(Dropped::Image),
                 Offer::Promised => None,
                 Offer::Text => pasteboard
@@ -638,6 +657,13 @@ mod appkit {
         (!bytes.is_empty()).then_some(bytes)
     }
 
+    fn file_paths(pasteboard: &NSPasteboard) -> Vec<PathBuf> {
+        file_urls(pasteboard)
+            .iter()
+            .filter_map(|url| url.path().map(|path| PathBuf::from(path.to_string())))
+            .collect()
+    }
+
     fn single_file_path(pasteboard: &NSPasteboard) -> Option<PathBuf> {
         let urls = file_urls(pasteboard);
         let [url] = urls.as_slice() else {
@@ -709,12 +735,14 @@ mod tests {
         file_types: &["public.text"],
         images: false,
         text: true,
+        several_files: false,
     };
 
     const TEXT_AND_IMAGES: Accept = Accept {
         file_types: &["public.text", "public.image"],
         images: true,
         text: true,
+        several_files: false,
     };
 
     fn files(files: &[FileKind], text: bool) -> Contents<'_> {
@@ -754,6 +782,45 @@ mod tests {
     }
 
     #[test]
+    fn several_files_drop_only_when_asked_for_whatever_they_are() {
+        let several = Accept {
+            several_files: true,
+            ..TEXT_FILES
+        };
+        for kinds in [
+            &[FileKind::Accepted, FileKind::Accepted][..],
+            &[FileKind::Accepted, FileKind::Other, FileKind::Directory],
+        ] {
+            assert_eq!(judge(&files(kinds, true), several), Some(Offer::Files));
+            assert_eq!(judge(&files(kinds, true), TEXT_FILES), None);
+        }
+        // One file is judged as before.
+        assert_eq!(
+            judge(&files(&[FileKind::Accepted], false), several),
+            Some(Offer::File)
+        );
+        assert_eq!(judge(&files(&[FileKind::Other], false), several), None);
+        // A target without file types takes none, several or not.
+        let no_files = Accept {
+            file_types: &[],
+            ..several
+        };
+        assert_eq!(
+            judge(
+                &files(&[FileKind::Accepted, FileKind::Accepted], false),
+                no_files
+            ),
+            None
+        );
+        // Several promises stay refused.
+        let two = Contents {
+            promised: &[FileKind::Accepted, FileKind::Accepted],
+            ..Contents::default()
+        };
+        assert_eq!(judge(&two, several), None);
+    }
+
+    #[test]
     fn a_file_drag_never_falls_back_to_its_text_or_image() {
         // Finder puts the file name on the drag as text too.
         assert_eq!(judge(&files(&[FileKind::Other], true), TEXT_FILES), None);
@@ -788,6 +855,7 @@ mod tests {
             file_types: &[],
             images: false,
             text: true,
+            several_files: false,
         };
         assert_eq!(judge(&files(&[FileKind::Accepted], true), text_only), None);
         assert_eq!(judge(&files(&[FileKind::Unknown], false), text_only), None);
@@ -813,6 +881,7 @@ mod tests {
             file_types: &[],
             images: false,
             text: true,
+            several_files: false,
         };
         assert_eq!(judge(&picture, no_images_no_files), Some(Offer::Text));
     }

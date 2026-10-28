@@ -41,6 +41,8 @@ pub enum UserEvent {
     FullCardReady(Box<FullCard>),
     /// A file was dropped on the card.
     DroppedFile(std::path::PathBuf),
+    /// Two or more files were dropped on the card at once: two text files are compared.
+    DroppedFiles(Vec<std::path::PathBuf>),
     /// A promised file (from Photos, Mail, …) was dropped and written to a temporary folder,
     /// which goes once it is read (`mac_ui::drop::discard_promised`).
     DroppedPromisedFile(std::path::PathBuf),

@@ -116,6 +116,11 @@ impl Selection {
     }
 
     /// A and B, when both are chosen.
+    /// Compare `left` (A) with `right` (B), whatever was chosen before.
+    pub fn set_pair(&mut self, left: u64, right: u64) {
+        self.picks = vec![left, right];
+    }
+
     pub fn pair(&self) -> Option<(u64, u64)> {
         match self.picks.as_slice() {
             [left, right] => Some((*left, *right)),

@@ -52,6 +52,7 @@ mod ai;
 mod app;
 mod checksum;
 mod dispatch;
+mod dropped_diff;
 mod handler;
 mod history;
 mod image;

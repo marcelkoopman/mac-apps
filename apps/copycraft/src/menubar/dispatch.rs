@@ -294,6 +294,7 @@ impl App {
     /// Add or remove history entry `id`. Two picks, or a third that replaces the oldest, start
     /// the diff. A non-text entry stays out.
     pub(crate) fn toggle_diff(&mut self, id: u64) {
+        self.forget_dropped_pair();
         if self.diff_sel.contains(id) {
             self.diff_sel.remove(id);
             self.invalidate_diff();
@@ -327,6 +328,7 @@ impl App {
     /// A dropped file or a made copy on the card is the marked strip card: compared as that
     /// history entry, it leaves the card for the diff ([`super::source::file_compares_as_shown`]).
     pub(crate) fn compare_tiles(&mut self, index: usize) {
+        self.forget_dropped_pair();
         let shown = self.history_cursor;
         let (Some(shown_id), Some(other_id)) =
             (self.history.id_at(shown), self.history.id_at(index))
@@ -408,10 +410,10 @@ impl App {
         let Some((left_id, right_id)) = self.diff_sel.pair() else {
             return false;
         };
-        let Some(left) = self.history.text_of(left_id) else {
+        let Some(left) = self.diff_side_text(left_id) else {
             return false;
         };
-        let Some(right) = self.history.text_of(right_id) else {
+        let Some(right) = self.diff_side_text(right_id) else {
             return false;
         };
         self.diff_generation = self.diff_generation.wrapping_add(1);
@@ -463,6 +465,7 @@ impl App {
 
     /// Wipe, lock and a cleared history drop the picks as well. Nothing is written to disk.
     pub(crate) fn clear_diff(&mut self) {
+        self.dropped_pair = None;
         self.diff_sel.clear();
         self.invalidate_diff();
         if self.card_view == CardView::Diff {
@@ -472,7 +475,9 @@ impl App {
 
     /// Drop picks whose entries have fallen off. One side gone leaves the diff view.
     pub(crate) fn sync_diff_picks(&mut self) {
-        let dropped = self.diff_sel.retain(|id| self.history.contains_id(id));
+        let dropped = self
+            .diff_sel
+            .retain(|id| self.history.contains_id(id) || super::dropped_diff::is_dropped_side(id));
         if !dropped {
             return;
         }
@@ -513,7 +518,7 @@ impl App {
     }
 
     pub(crate) fn side_labeling(&self, id: u64) -> crate::sensitivity::Labeling {
-        match self.history.text_of(id) {
+        match self.diff_side_text(id) {
             Some(text) => crate::sensitivity::labeling(text.as_str()),
             None => crate::sensitivity::Labeling::Known(crate::sensitivity::Found::default()),
         }

@@ -507,6 +507,17 @@ Mac only, no data.
 - [ ] Save: *Bewaar* / *Save* on the copy still offers PNG, JPEG and HEIC as before; nothing new was added (the app has the user-selected read-write entitlement already).
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path, size or location for the conversion.
 
+### Compare two dropped text files
+
+Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.
+
+- [ ] Two at once: select both in Finder and drop them together on the card: the card opens *Vergelijk* / *Compare* (the diff) with the first file on the left and the second on the right, `beta`/`BETA` marked as changed and `delta` as added. Swap and the other diff tools work as for two history items.
+- [ ] Not stored: neither file shows up in history, the strip or search, and after closing and opening the card nothing of them is left. *Wis geschiedenis* / *Clear History* or locking the screen while the diff is open closes it.
+- [ ] Not two text files: drop three text files together, a `.txt` with a `.png`, a `.txt` with a folder, or two pictures at once: no diff opens and a toast says *Vergelijken werkt met twee tekstbestanden* / *Compare works with two text files* (switch the language in Settings to check both). One file dropped alone still opens as before.
+- [ ] Privacy: put a made-up token (`ghp_` and 36 letters/digits) in `/tmp/b.txt` and drop both again: the diff is masked as for a secret history item, until revealed.
+- [ ] ⌘-click two history tiles afterwards: the diff now shows those two, not the dropped files.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path or text for the comparison.
+
 ### Pictures show in the strip at once
 
 - [ ] Two in a row: copy a screenshot (⌘⇧⌃4) and right after it a second one: within about a second the strip under the card has both tiles (the strip shows from 2 entries). Do the same with ⌘V of two pictures into the open card, and with two picture files dropped onto it: same.
