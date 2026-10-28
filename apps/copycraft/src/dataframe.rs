@@ -135,55 +135,16 @@ pub fn frame_csv(df: &DataFrame) -> Option<String> {
     write_csv(df.clone())
 }
 
-/// A table version as Parquet (Save in the Dataframe view, when Parquet is chosen).
-pub fn frame_parquet(df: &DataFrame) -> Option<Vec<u8>> {
-    write_parquet(&mut df.clone())
-}
-
-/// The file formats Save offers in the Dataframe view: CSV first (the default), then Parquet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TableFile {
-    Csv,
-    Parquet,
-}
-
-impl TableFile {
-    /// In the save panel's format popup, in this order; the first is the default.
-    pub const ALL: [TableFile; 2] = [TableFile::Csv, TableFile::Parquet];
-
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::Csv => "CSV",
-            Self::Parquet => "Parquet",
-        }
-    }
-
-    pub fn extension(self) -> &'static str {
-        match self {
-            Self::Csv => "csv",
-            Self::Parquet => "parquet",
-        }
-    }
-
-    /// `df` as this file: CSV is UTF-8 with a header of the real column names, `separator`
-    /// between cells (the source's), dates as `yyyy-mm-dd`. `None` for an empty table.
-    pub fn bytes(self, df: &DataFrame, separator: u8) -> Option<Vec<u8>> {
-        match self {
-            Self::Csv => write_csv_with(df.clone(), separator).map(String::into_bytes),
-            Self::Parquet => frame_parquet(df),
-        }
-    }
+/// A table version as a CSV file (Save in the Dataframe view): UTF-8 with a header of the
+/// real column names, `separator` between cells (the source's), dates as `yyyy-mm-dd`. `None`
+/// for an empty table.
+pub fn table_csv(df: &DataFrame, separator: u8) -> Option<Vec<u8>> {
+    write_csv_with(df.clone(), separator).map(String::into_bytes)
 }
 
 /// The text parses as a non-empty table (what [`try_format`] needs), without rendering it.
 pub fn is_table(text: &str) -> bool {
     parse(text).is_some_and(|df| df.width() > 0 && df.height() > 0)
-}
-
-#[cfg(test)]
-pub fn try_parquet_bytes(text: &str) -> Option<Vec<u8>> {
-    let mut df = parse_table(text)?;
-    write_parquet(&mut df)
 }
 
 pub fn looks_like_csv(text: &str) -> bool {
@@ -317,15 +278,6 @@ pub fn parse_table_with(text: &str, options: ReadOptions) -> Option<(DataFrame, 
         forced_month_first: dates.iter().any(DateColumn::forced_month_first),
     };
     Some((df, notes))
-}
-
-fn write_parquet(df: &mut DataFrame) -> Option<Vec<u8>> {
-    if df.width() == 0 || df.height() == 0 {
-        return None;
-    }
-    let mut buf = Cursor::new(Vec::new());
-    ParquetWriter::new(&mut buf).finish(df).ok()?;
-    Some(buf.into_inner())
 }
 
 fn write_csv(df: DataFrame) -> Option<String> {

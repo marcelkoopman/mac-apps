@@ -55,9 +55,10 @@ mac-ui = { path = "../../crates/mac-ui", features = ["appkit-full", "blur", "dia
 # the tree through polars.
 regex = "1.13"
 # `temporal`: reading `dd/mm/yyyy` text as dates (src/dataframe_dates.rs). No extra crates: the
-# polars-time crate was already in the tree through polars-io. Not `lazy`: with csv, json and
-# parquet it pulls in polars-stream and with it object_store and reqwest (network crates).
-polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "parquet", "temporal"] }
+# polars-time crate was already in the tree through polars-io. Not `lazy`: it pulls in
+# polars-stream and with it object_store and reqwest (network crates). No `parquet`: tables are
+# saved as CSV only.
+polars = { workspace = true, features = ["csv", "json", "fmt", "dtype-slim", "temporal"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 # Text ▾ › Convert › Encoding › SHA-256 / SHA-1 / MD5 (src/text_ops/hash.rs): RustCrypto, pure Rust,
 # MIT OR Apache-2.0, no network. Not the default `alloc`/`oid`; `zeroize` wipes the hasher state of

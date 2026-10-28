@@ -596,7 +596,7 @@ fn decode_utf16(bytes: &[u8]) -> Option<Zeroizing<String>> {
 }
 
 /// Save panel name: the stem of `name` (its own extension dropped: `people.csv`,
-/// `a.b.CSV`) and exactly one `extension`, lower case (`people.parquet`). A name without an
+/// `a.b.CSV`) and exactly one `extension`, lower case (`people.tsv`). A name without an
 /// extension keeps all of it; so does a last part that is no extension (`Report v1.2`).
 /// Empty `extension`: the stem alone.
 pub fn save_name(name: &str, extension: &str) -> String {
@@ -862,25 +862,25 @@ mod tests {
         assert_eq!(save_name("people.tsv", "tsv"), "people.tsv");
         let anker = "Thuis_Energiegegevens_2_Oct_2025_to_2_Oct_2026";
         assert_eq!(
-            save_name(&format!("{anker}.csv"), "parquet"),
-            format!("{anker}.parquet")
+            save_name(&format!("{anker}.csv"), "tsv"),
+            format!("{anker}.tsv")
         );
         // No extension; a dotted name loses only its last extension.
         assert_eq!(save_name("people", "csv"), "people.csv");
-        assert_eq!(save_name("a.b.csv", "parquet"), "a.b.parquet");
+        assert_eq!(save_name("a.b.csv", "tsv"), "a.b.tsv");
         // Already the target extension, in any case: still one.
-        assert_eq!(save_name("t.parquet", "parquet"), "t.parquet");
-        assert_eq!(save_name("t.PARQUET", "parquet"), "t.parquet");
-        assert_eq!(save_name("T.CSV", "parquet"), "T.parquet");
+        assert_eq!(save_name("t.tsv", "tsv"), "t.tsv");
+        assert_eq!(save_name("t.TSV", "tsv"), "t.tsv");
+        assert_eq!(save_name("T.CSV", "tsv"), "T.tsv");
         assert_eq!(save_name("t.csv", "CSV"), "t.csv");
-        assert_eq!(save_name("t.csv", ".parquet"), "t.parquet");
+        assert_eq!(save_name("t.csv", ".tsv"), "t.tsv");
         // Saving twice through the helper adds nothing.
-        let once = save_name("t.csv", "parquet");
-        assert_eq!(save_name(&once, "parquet"), once);
+        let once = save_name("t.csv", "tsv");
+        assert_eq!(save_name(&once, "tsv"), once);
         // Not extensions: a version number, a dot file. A trailing dot goes.
         assert_eq!(save_name("Report v1.2", "txt"), "Report v1.2.txt");
         assert_eq!(save_name("notes.", "txt"), "notes.txt");
-        assert_eq!(save_name(".csv", "parquet"), ".csv.parquet");
+        assert_eq!(save_name(".csv", "tsv"), ".csv.tsv");
         assert_eq!(save_name("", "png"), "clipboard.png");
         assert_eq!(save_name("people.tsv", ""), "people");
     }

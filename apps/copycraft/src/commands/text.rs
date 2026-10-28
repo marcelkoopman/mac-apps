@@ -143,8 +143,8 @@ pub fn deferred_save_name(source: &str, view: CardView) -> Option<(String, &'sta
 
 pub fn text_save_file(source: &str, view: CardView) -> Option<SaveFile> {
     if view == CardView::Dataframe {
-        // The table as the view reads it (dates typed), as CSV; the save panel can pick Parquet.
-        let bytes = dataframe::TableFile::Csv.bytes(
+        // The table as the view reads it (dates typed), as CSV.
+        let bytes = dataframe::table_csv(
             &dataframe::parse_table(source)?,
             dataframe::source_separator(source),
         )?;

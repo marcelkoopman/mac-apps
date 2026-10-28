@@ -163,7 +163,6 @@ fn table_opens_formatted_and_coloured() {
             "{src}"
         );
         let file = text_save_file(src, presented_view(src, CardView::Original)).unwrap();
-        assert_ne!(file.extension, "parquet", "{src}");
         assert_eq!(file.bytes, src.as_bytes(), "{src}");
     }
     let quoted = "name,city\nalice,\"Den Haag, NL\"\nbob,Utrecht";

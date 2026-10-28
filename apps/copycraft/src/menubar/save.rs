@@ -156,7 +156,7 @@ impl App {
         Ok(())
     }
 
-    /// Save the table version shown in the table window (CSV / Parquet panel, as on the card).
+    /// Save the table version shown in the table window (as CSV, as on the card).
     pub(crate) fn save_table_window(&mut self) {
         #[cfg(target_os = "macos")]
         {

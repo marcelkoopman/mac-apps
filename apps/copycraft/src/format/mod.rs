@@ -114,8 +114,7 @@ impl FormatKind {
             Self::Toml => "toml",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
-            // Save in the Dataframe view: CSV by default, Parquet on choice
-            // ([`crate::dataframe::TableFile`]).
+            // Save in the Dataframe view: CSV ([`crate::dataframe::table_csv`]).
             Self::Dataframe => "csv",
             Self::Image => "png",
             Self::Jwt => "json",

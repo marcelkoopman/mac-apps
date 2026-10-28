@@ -8,7 +8,6 @@ use mac_ui::objc2::MainThreadMarker;
 use zeroize::Zeroizing;
 
 use crate::commands::{self, CardView};
-use crate::dataframe::TableFile;
 use crate::image_edit::ImageFile;
 
 /// What the save icon writes: the name the panel suggests, and the bytes or the work that
@@ -19,7 +18,7 @@ pub struct SaveJob {
     pub content: SaveContent,
 }
 
-/// Bytes for a [`SaveJob`]. Anything slow (formatting, CSV or Parquet, PNG) is left for
+/// Bytes for a [`SaveJob`]. Anything slow (formatting, CSV, PNG) is left for
 /// [`SaveContent::write_to`], which runs on the save thread.
 pub enum SaveContent {
     /// Ready to write.
@@ -32,8 +31,8 @@ pub enum SaveContent {
     /// The clipboard picture, decoded and encoded as PNG. Fetched from the pasteboard on the
     /// main thread ([`crate::macos_pasteboard::card_image_input`]), decoded on the save thread.
     ClipboardPng(Option<crate::macos_pasteboard::CardImageInput>),
-    /// The table of the Dataframe view, as `format` (CSV unless Parquet is picked in the panel).
-    Table { table: TableData, format: TableFile },
+    /// The table of the Dataframe view, as CSV.
+    Table(TableData),
     /// A picture (the original or an Image ▾ version), as `file` (one of `files`, the Format
     /// popup). `png` says `bytes` are already a version's PNG, written as they are for PNG.
     Image {
@@ -62,11 +61,8 @@ impl SaveJob {
     fn table_of(table: TableData) -> Self {
         Self {
             filename: crate::format::FormatKind::Dataframe.suggested_filename(),
-            extension: TableFile::Csv.extension(),
-            content: SaveContent::Table {
-                table,
-                format: TableFile::Csv,
-            },
+            extension: crate::format::FormatKind::Dataframe.suggested_extension(),
+            content: SaveContent::Table(table),
         }
     }
 
@@ -95,8 +91,6 @@ impl SaveJob {
         })
     }
 
-    /// Ask where to save it (a table also asks CSV or Parquet). `Ok(None)` when the panel is
-    /// cancelled.
     /// A picture to save as `files[picked]` (or another of `files`, from the Format popup).
     /// `png`: `bytes` are a version's PNG.
     pub fn image(
@@ -122,6 +116,7 @@ impl SaveJob {
         }
     }
 
+    /// Ask where to save it. `Ok(None)` when the panel is cancelled.
     pub fn choose_path(&mut self) -> anyhow::Result<Option<PathBuf>> {
         if let SaveContent::Image { files, file, .. } = &mut self.content {
             let Some((path, chosen)) = choose_image_path(&self.filename, files, *file)? else {
@@ -130,14 +125,12 @@ impl SaveJob {
             *file = chosen;
             return Ok(Some(path));
         }
-        let SaveContent::Table { format, .. } = &mut self.content else {
-            return choose_path(&self.filename, self.extension);
+        let title = if matches!(self.content, SaveContent::Table(_)) {
+            crate::locale::t("save_panel_table")
+        } else {
+            crate::locale::t("save_panel_clipboard")
         };
-        let Some((path, chosen)) = choose_table_path(&self.filename, *format)? else {
-            return Ok(None);
-        };
-        *format = chosen;
-        Ok(Some(path))
+        choose_path(title, &self.filename, self.extension)
     }
 }
 
@@ -152,7 +145,7 @@ impl SaveContent {
                     .context("the card has nothing to save in this view")?;
                 Zeroizing::new(std::mem::take(&mut file.bytes))
             }
-            Self::Table { table, format } => {
+            Self::Table(table) => {
                 let (frame, separator) = match table {
                     TableData::Frame(frame, separator) => (frame, separator),
                     TableData::Text(source) => (
@@ -162,9 +155,7 @@ impl SaveContent {
                     ),
                 };
                 Zeroizing::new(
-                    format
-                        .bytes(&frame, separator)
-                        .context("the table is empty")?,
+                    crate::dataframe::table_csv(&frame, separator).context("the table is empty")?,
                 )
             }
             Self::Image {
@@ -195,15 +186,15 @@ impl SaveContent {
     }
 }
 
-/// Ask where to save `filename`. `Ok(None)` when the panel is cancelled, `Err` when the panel
-/// cannot be shown.
-pub fn choose_path(filename: &str, extension: &str) -> anyhow::Result<Option<PathBuf>> {
+/// Ask where to save `filename`, in a panel titled `title`. `Ok(None)` when the panel is
+/// cancelled, `Err` when the panel cannot be shown.
+fn choose_path(title: &str, filename: &str, extension: &str) -> anyhow::Result<Option<PathBuf>> {
     let mtm = MainThreadMarker::new().context("the save panel needs the main thread")?;
     // Every save path comes here: the stem and exactly one extension ([`save_name`]).
     let name = crate::open_file::save_name(filename, extension);
     Ok(file_panel::choose_save_path(
         mtm,
-        crate::locale::t("save_panel_clipboard"),
+        title,
         &name,
         &[extension],
     )?)
@@ -236,33 +227,4 @@ fn choose_image_path(
         selected,
     )?;
     Ok(chosen.map(|(path, index)| (path, files.get(index).copied().unwrap_or(file))))
-}
-
-/// Ask where to save a table, with a CSV / Parquet popup under the panel (`format` picked
-/// first). Switching it switches the name's extension. `Ok(None)` when the panel is cancelled.
-pub fn choose_table_path(
-    filename: &str,
-    format: TableFile,
-) -> anyhow::Result<Option<(PathBuf, TableFile)>> {
-    let mtm = MainThreadMarker::new().context("the save panel needs the main thread")?;
-    let name = crate::open_file::save_name(filename, format.extension());
-    let formats: Vec<file_panel::SaveFormat> = TableFile::ALL
-        .iter()
-        .map(|file| file_panel::SaveFormat {
-            title: file.title(),
-            extension: file.extension(),
-        })
-        .collect();
-    let selected = TableFile::ALL
-        .iter()
-        .position(|file| *file == format)
-        .unwrap_or(0);
-    let chosen = file_panel::choose_save_path_with_format(
-        mtm,
-        crate::locale::t("save_panel_table"),
-        &name,
-        &formats,
-        selected,
-    )?;
-    Ok(chosen.map(|(path, index)| (path, TableFile::ALL[index.min(TableFile::ALL.len() - 1)])))
 }

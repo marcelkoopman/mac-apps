@@ -113,7 +113,6 @@ fn is_time_colon(before: &str, after: &str) -> bool {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::try_format;
-    use polars::prelude::{ParquetReader, SerReader};
 
     /// The grid's right-click menu copies the frame's own values: a cell, a row with tabs,
     /// a column one per line without its name; empty cells stay empty, out of range is none.
@@ -313,10 +312,8 @@ pub(crate) mod tests {
         assert!(!preview.grid.contains("shape:"), "{}", preview.grid);
         assert!(preview.grid.contains("┌"), "{}", preview.grid);
         assert_eq!(super::frame_csv(&df).as_deref(), Some("name,n\na,1\nb,2\nc,3\n"));
-        let parquet = super::frame_parquet(&df).expect("parquet");
-        let back = ParquetReader::new(std::io::Cursor::new(parquet))
-            .finish()
-            .expect("read");
+        let csv = super::table_csv(&df, b',').expect("csv");
+        let back = super::parse_table(std::str::from_utf8(&csv).expect("UTF-8")).expect("read");
         assert!(back.equals(&df));
     }
 
@@ -468,7 +465,6 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
             .filter(|c| c.dtype() == &polars::prelude::DataType::Float64)
             .count();
         assert_eq!(floats, 19);
-        assert!(super::try_parquet_bytes(ENERGY_FIXTURE).is_some());
         let csv = super::frame_csv(&df).expect("csv");
         assert!(csv.starts_with("Date,"), "{}", &csv[..20]);
     }
@@ -591,10 +587,7 @@ Id,Naam,Geboortedatum,Adres,Telefoonnummer,Salaris
         assert_eq!(preview.dates[0].order, super::DateOrder::DayFirst);
         assert!(preview.grid.contains("2026-03-09"), "{}", preview.grid);
         assert_eq!(super::dates_note(&preview.dates), None);
-        let bytes = super::try_parquet_bytes(ENERGY_FIXTURE).expect("parquet");
-        let df = ParquetReader::new(std::io::Cursor::new(bytes))
-            .finish()
-            .expect("read");
+        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
         assert_eq!(df.columns()[0].dtype(), &DataType::Date);
     }
 
@@ -645,9 +638,7 @@ Date;Home Usage (kWh);Note
     fn assert_plain_csv(df: &polars::prelude::DataFrame, src: &str) {
         let copied = super::frame_copy(df, src).expect("csv");
         let saved = String::from_utf8(
-            super::TableFile::Csv
-                .bytes(df, super::source_separator(src))
-                .expect("bytes"),
+            super::table_csv(df, super::source_separator(src)).expect("bytes"),
         )
         .expect("utf-8");
         for out in [&copied, &saved] {
@@ -767,24 +758,7 @@ Id;Naam;Salaris
   <person><name>Anja</name><salary>2900</salary></person>
 </root>"#;
         assert!(try_format(src).is_none());
-        assert!(super::try_parquet_bytes(src).is_none());
-    }
-
-    #[test]
-    fn parquet_roundtrip_keeps_rows() {
-        for src in [
-            "name,age\nalice,30\nbob,40",
-            r#"[{"name":"alice","age":30},{"name":"bob","age":40}]"#,
-        ] {
-            let bytes = super::try_parquet_bytes(src).expect(src);
-            assert!(bytes.starts_with(b"PAR1"), "{src}");
-            assert!(bytes.ends_with(b"PAR1"), "{src}");
-            let df = ParquetReader::new(std::io::Cursor::new(bytes))
-                .finish()
-                .expect(src);
-            assert_eq!(df.height(), 2, "{src}");
-            assert_eq!(df.width(), 2, "{src}");
-        }
+        assert!(super::parse_table(src).and_then(|df| super::table_csv(&df, b',')).is_none());
     }
 
     fn names(df: &polars::prelude::DataFrame) -> Vec<String> {
@@ -797,7 +771,7 @@ Id;Naam;Salaris
     /// Save in the Dataframe view: CSV of the table as shown, read back the same.
     fn assert_csv_round_trip(df: &polars::prelude::DataFrame) -> String {
         use polars::prelude::DataType;
-        let bytes = super::TableFile::Csv.bytes(df, b',').expect("csv");
+        let bytes = super::table_csv(df, b',').expect("csv");
         assert!(!bytes.starts_with(&[0xEF, 0xBB, 0xBF]), "no BOM");
         let csv = String::from_utf8(bytes).expect("UTF-8");
         let header = csv.lines().next().expect("header");
@@ -848,19 +822,6 @@ Id;Naam;Salaris
         assert!(csv.contains("Jan,\"Den Haag, NL\",2026-03-13"), "{csv}");
         let semis = "id;prijs\n1;2,50\n2;3,75";
         assert_csv_round_trip(&super::parse_table(semis).expect("semis"));
-    }
-
-    #[test]
-    fn parquet_stays_a_choice() {
-        let df = super::parse_table(ENERGY_FIXTURE).expect("table");
-        let bytes = super::TableFile::Parquet.bytes(&df, b',').expect("parquet");
-        let back = ParquetReader::new(std::io::Cursor::new(bytes))
-            .finish()
-            .expect("read");
-        assert_eq!(back.shape(), df.shape());
-        assert_eq!(super::TableFile::ALL[0], super::TableFile::Csv);
-        assert_eq!(super::TableFile::Csv.extension(), "csv");
-        assert_eq!(super::TableFile::Parquet.extension(), "parquet");
     }
 
     #[test]
