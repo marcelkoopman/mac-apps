@@ -39,7 +39,13 @@ pub(crate) fn shown_body(body: &str) -> String {
 pub(crate) fn text_title(text: &str) -> String {
     crate::validate::title(text)
         .or_else(|| crate::validate::code_title(text))
-        .unwrap_or_else(|| format::detect(text).source_heading().to_string())
+        .unwrap_or_else(|| match format::detect(text) {
+            // A crash report or a log: *Crashlog* / *Log*.
+            kind @ (FormatKind::Text | FormatKind::Plain) => crate::log_text::detect(text)
+                .map_or_else(|| kind.source_heading(), crate::log_text::LogKind::title)
+                .to_string(),
+            kind => kind.source_heading().to_string(),
+        })
 }
 
 pub(crate) fn text_view_title(source: &str, view: CardView, body: &str) -> String {

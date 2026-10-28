@@ -213,6 +213,8 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("title_image", "Afbeelding", "Image"),
     ("title_image_info", "Afbeeldingsinfo", "Image info"),
     ("title_text", "Tekst", "Text"),
+    ("title_crash_log", "Crashlog", "Crash log"),
+    ("title_log", "Log", "Log"),
     // Titles and validation
     ("title_content", "Inhoud", "Content"),
     ("formatted_json", "Opgemaakt JSON", "Formatted JSON"),

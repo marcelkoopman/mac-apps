@@ -243,6 +243,8 @@ mod tests {
             "ai_check_title",
             // The Link card's label: the same word in Dutch.
             "link_badge_tracking",
+            // A log's title: the same word in Dutch.
+            "title_log",
         ];
         for (key, nl, en) in all() {
             if nl == en {

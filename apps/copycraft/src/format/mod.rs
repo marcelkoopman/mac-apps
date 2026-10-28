@@ -145,11 +145,27 @@ pub fn forget_detected() {
 }
 
 fn detect_uncached(text: &str) -> FormatKind {
+    // A crash report (also its `.ips` JSON form) or a timestamped log is text with its own
+    // title ([`crate::log_text`]), not YAML (`Process: …`), a table (tab-separated frames) or
+    // JSON.
+    let lines = || {
+        if text.contains('\n') {
+            FormatKind::Text
+        } else {
+            FormatKind::Plain
+        }
+    };
+    if crate::log_text::is_crash_log(text) {
+        return lines();
+    }
     // JSON with a mistake is JSON too ("JSON · Invalid"), not YAML or text.
     if crate::clipboard::try_format_json(text).is_some()
         || crate::validate::broken_json(text).is_some()
     {
         return FormatKind::Json;
+    }
+    if crate::log_text::is_log(text) {
+        return lines();
     }
     // A document that starts `<!DOCTYPE html>` or `<html` is HTML, also on one line where
     // `color: teal` in a style would make the whole line a YAML mapping.
@@ -200,11 +216,7 @@ fn detect_uncached(text: &str) -> FormatKind {
     if looks_like_xml(text) {
         return FormatKind::Xml;
     }
-    if text.contains('\n') {
-        FormatKind::Text
-    } else {
-        FormatKind::Plain
-    }
+    lines()
 }
 
 mod html;

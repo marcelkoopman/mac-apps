@@ -290,7 +290,12 @@ pub fn forget_labels() {
 /// classes they did not find. Both are linear: about 60 ms for a megabyte (release build).
 fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
     let kind = crate::format::detect(text);
-    let code = is_code(kind);
+    // Source code, a crash report and a log hold no personal or financial data: a path, a
+    // process id, `User ID: 501`, a timestamp or an address is no person and no card. A real
+    // key or token in them still counts.
+    let code = is_code(kind)
+        || (matches!(kind, FormatKind::Text | FormatKind::Plain)
+            && crate::log_text::detect(text).is_some());
     let scope = if code {
         crate::recognize::Scope::Code
     } else if is_docs(kind) {
@@ -306,7 +311,17 @@ fn scan(text: &str, cancelled: &dyn Fn() -> bool) -> Option<Found> {
         if cancelled() {
             return None;
         }
-        for hit in guard_for(classes).find(text) {
+        // Code and logs: only the credential detectors.
+        let wanted = if code {
+            crate::recognize::Classes {
+                pii: true,
+                financial: true,
+                ..classes
+            }
+        } else {
+            classes
+        };
+        for hit in guard_for(wanted).find(text) {
             let label = label_for(&hit.kind);
             // Documentation: the recognizers already decided on e-mail addresses (a few are a
             // support line, not a person).

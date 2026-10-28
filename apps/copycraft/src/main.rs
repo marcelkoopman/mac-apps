@@ -29,6 +29,7 @@ mod launcher;
 mod link_card;
 mod link_view;
 mod locale;
+mod log_text;
 mod mailto;
 mod memo;
 mod menubar;
