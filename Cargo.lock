@@ -556,7 +556,7 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "copycraft"
-version = "0.1.96"
+version = "0.1.97"
 dependencies = [
  "anyhow",
  "arboard",
