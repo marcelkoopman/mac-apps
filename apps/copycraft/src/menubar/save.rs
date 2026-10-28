@@ -133,6 +133,66 @@ impl App {
         }
     }
 
+    /// *Copy as JSON* / *Copy as CSV*: `target`'s table in the other form on the clipboard and
+    /// in history (by the usual rules for a token or key), with a toast. The window takes the
+    /// version it shows; the card the version shown in the Dataframe view, else the text as
+    /// it is.
+    pub(crate) fn copy_table_as(&mut self, target: TableTarget, copy: crate::dataframe::TableCopy) {
+        let frame = match target {
+            TableTarget::Window => match self.window_table_frame() {
+                Some(frame) => Some(frame),
+                None => return,
+            },
+            TableTarget::Card => (self.card_view == CardView::Dataframe)
+                .then(|| self.shown_table_version())
+                .flatten(),
+        };
+        let source = match (&frame, target) {
+            (None, TableTarget::Card) => match self.table_source() {
+                Some((text, _)) => Some(text),
+                None => return,
+            },
+            _ => None,
+        };
+        let body = self.start_work(
+            work::Lane::Copy,
+            work::QUICK,
+            move || {
+                match (frame, source) {
+                    (Some(frame), _) => crate::dataframe::frame_as(&frame, copy),
+                    (None, Some(text)) => crate::dataframe::table_copy(text.as_str(), copy),
+                    (None, None) => None,
+                }
+                .map(Zeroizing::new)
+            },
+            move |app, body| app.copied_table_as(body, copy),
+        );
+        if let Some(body) = body {
+            self.copied_table_as(body, copy);
+        }
+    }
+
+    fn copied_table_as(
+        &mut self,
+        body: Option<Zeroizing<String>>,
+        copy: crate::dataframe::TableCopy,
+    ) {
+        let Some(body) = body else {
+            super::state::save_feedback(crate::locale::t("table_copy_failed"));
+            return;
+        };
+        if let Err(e) = self.copy_grid(Some(body)) {
+            crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+            return;
+        }
+        super::state::save_feedback(match copy {
+            crate::dataframe::TableCopy::Json => crate::locale::t("table_copied_json"),
+            crate::dataframe::TableCopy::Csv => crate::locale::t("table_copied_csv"),
+        });
+    }
+
     /// The grid's right-click menu: one cell, row or column of the version shown in the table
     /// window on the clipboard and in history, as Copy does for the whole table.
     pub(crate) fn copy_table_part(&mut self, part: crate::dataframe::TablePart) {

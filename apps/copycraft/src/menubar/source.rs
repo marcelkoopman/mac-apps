@@ -122,8 +122,15 @@ impl App {
                 image.pdf_text.clone(),
             );
         }
+        let table_file = commands::is_table_file_name(&opened.name);
         self.show_source(opened);
-        launcher::order_front();
+        // A dropped CSV, TSV or JSON array of objects opens in the table window at once (the
+        // card comes back with it when the window closes). Anything else stays on the card.
+        if table_file && self.card_shows_opened_table() {
+            self.open_table_window();
+        } else {
+            launcher::order_front();
+        }
     }
 
     /// A drop is in history now, at index 0; the entry the card or the clipboard was on is at

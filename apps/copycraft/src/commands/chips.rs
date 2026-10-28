@@ -67,6 +67,23 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     if data.diff.is_some() {
         insert_diff_chip(&mut chips);
     }
+    // A dropped or chosen JSON array of objects: its table (the copied JSON stays a JSON card).
+    if data.subject_kind == SubjectKind::Text
+        && data.source_name.is_some()
+        && data
+            .subject_text
+            .as_deref()
+            .is_some_and(crate::dataframe::is_json_records)
+        && !chips.iter().any(|c| c.id == CommandId::TableOpenWindow)
+    {
+        chips.push(command(
+            CommandId::TableOpenWindow,
+            open_table_title(),
+            crate::locale::t("detail_table_window"),
+            "open window table larger resize sidebar",
+        ));
+        chips.push(table_copy_command(crate::dataframe::TableCopy::Csv));
+    }
     // Every dropped or chosen file, also one shown only as a note: its checksums.
     if data.checksum.is_some() {
         chips.extend(checksum_chips());
@@ -462,6 +479,11 @@ pub(crate) fn text_chips(text: &str) -> Vec<Command> {
             crate::locale::t("detail_table_window"),
             "open window table larger resize sidebar",
         ));
+        // A delimited table (not one read from JSON or a text that happens to parse as one):
+        // its rows as JSON.
+        if crate::dataframe::header_columns(text).is_some() {
+            commands.push(table_copy_command(crate::dataframe::TableCopy::Json));
+        }
     }
     // A sentence with one link in it stays a text card, with a small Open link. Prose only:
     // not the namespace URL in XML or a link in code.

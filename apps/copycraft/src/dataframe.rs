@@ -142,6 +142,54 @@ pub fn table_csv(df: &DataFrame, separator: u8) -> Option<Vec<u8>> {
     write_csv_with(df.clone(), separator).map(String::into_bytes)
 }
 
+/// What *Copy as JSON* / *Copy as CSV* make of a table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableCopy {
+    /// A JSON array with one object per row, its keys the column names in order.
+    Json,
+    /// CSV with commas, quoted where a cell needs it.
+    Csv,
+}
+
+/// A JSON array of objects (`[{…}, …]`), by its first and last characters only: cheap, for
+/// the chips of a dropped file. Whether it reads as a table is up to [`parse`].
+pub fn is_json_records(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.len() > 2
+        && trimmed.ends_with(']')
+        && trimmed
+            .strip_prefix('[')
+            .is_some_and(|rest| rest.trim_start().starts_with('{'))
+}
+
+/// `text`'s table as `copy`, read as it is (no dates or numbers typed: what the file says).
+/// `None` when it is no table or does not fit (a nested JSON value has no CSV cell).
+pub fn table_copy(text: &str, copy: TableCopy) -> Option<String> {
+    frame_as(&parse(text)?, copy)
+}
+
+/// A table version as `copy` ([`table_copy`]).
+pub fn frame_as(df: &DataFrame, copy: TableCopy) -> Option<String> {
+    match copy {
+        TableCopy::Json => frame_json(df),
+        TableCopy::Csv => write_csv_with(df.clone(), b','),
+    }
+}
+
+fn frame_json(df: &DataFrame) -> Option<String> {
+    if df.width() == 0 || df.height() == 0 {
+        return None;
+    }
+    let mut buf = zeroize::Zeroizing::new(Vec::new());
+    JsonWriter::new(&mut *buf)
+        .with_json_format(JsonFormat::Json)
+        .finish(&mut df.clone())
+        .ok()?;
+    // Pretty, with the keys in column order (serde_json keeps their order).
+    let value: serde_json::Value = serde_json::from_slice(&buf).ok()?;
+    serde_json::to_string_pretty(&value).ok()
+}
+
 /// The text parses as a non-empty table (what [`try_format`] needs), without rendering it.
 pub fn is_table(text: &str) -> bool {
     parse(text).is_some_and(|df| df.width() > 0 && df.height() > 0)

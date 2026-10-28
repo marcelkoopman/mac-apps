@@ -24,6 +24,25 @@ pub fn open_table_title() -> &'static str {
 #[cfg_attr(not(test), allow(dead_code))]
 pub const OPEN_TABLE_TITLE: &str = "Open Table";
 
+/// *Copy as JSON* or *Copy as CSV*, on the card and in the table window's Table ▾.
+pub fn table_copy_command(copy: crate::dataframe::TableCopy) -> Command {
+    use crate::dataframe::TableCopy;
+    let t = crate::locale::t;
+    let (title, detail, keywords) = match copy {
+        TableCopy::Json => (
+            t("table_copy_json"),
+            t("detail_table_copy_json"),
+            "copy json convert csv table array objects",
+        ),
+        TableCopy::Csv => (
+            t("table_copy_csv"),
+            t("detail_table_copy_csv"),
+            "copy csv convert json table array objects",
+        ),
+    };
+    command(CommandId::TableCopyAs(copy), title, detail, keywords)
+}
+
 /// The steps a table can take, for the "Table ▾" menu and the search.
 pub fn table_steps() -> Vec<Command> {
     crate::table::TableOp::ONE_CLICK

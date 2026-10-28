@@ -195,3 +195,115 @@ fn table_window_title_is_the_file_name_or_table() {
     view.wipe();
     assert_eq!(view.source_name, None);
 }
+
+#[test]
+fn a_csv_copies_as_json_with_quotes_commas_and_every_separator() {
+    use crate::dataframe::{TableCopy, table_copy};
+    let expected = serde_json::json!([
+        {"naam": "Jan, de Vries", "plaats": "Zei \"hoi\"", "code": "007"},
+        {"naam": "Anja", "plaats": "Utrecht", "code": "012"}
+    ]);
+    for src in [
+        "naam,plaats,code\n\"Jan, de Vries\",\"Zei \"\"hoi\"\"\",007\nAnja,Utrecht,012\n",
+        "naam;plaats;code\n\"Jan, de Vries\";\"Zei \"\"hoi\"\"\";007\nAnja;Utrecht;012\n",
+        "naam\tplaats\tcode\n\"Jan, de Vries\"\t\"Zei \"\"hoi\"\"\"\t007\nAnja\tUtrecht\t012\n",
+    ] {
+        let json = table_copy(src, TableCopy::Json).expect("json");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parses");
+        assert_eq!(value, expected, "{src}");
+        // Keys in column order, pretty.
+        assert!(json.find("\"naam\"") < json.find("\"code\""));
+        assert!(json.contains('\n'));
+    }
+}
+
+#[test]
+fn a_json_array_of_objects_copies_as_csv_quoted_where_needed() {
+    use crate::dataframe::{TableCopy, is_json_records, table_copy};
+    let src = r#"[
+  {"naam": "Jan, de Vries", "zin": "Zei \"hoi\"", "n": 3},
+  {"naam": "Anja", "zin": "Klaar", "n": 4}
+]"#;
+    assert!(is_json_records(src));
+    let csv = table_copy(src, TableCopy::Csv).expect("csv");
+    assert_eq!(
+        csv,
+        "naam,zin,n\n\"Jan, de Vries\",\"Zei \"\"hoi\"\"\",3\nAnja,Klaar,4\n"
+    );
+    // And back: the CSV reads as the same table.
+    let json = table_copy(&csv, TableCopy::Json).expect("json");
+    let back: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(back[0]["naam"], "Jan, de Vries");
+    assert_eq!(back[0]["zin"], "Zei \"hoi\"");
+    assert_eq!(back[1]["n"], 4);
+    // No array of objects, no table.
+    for text in [r#"{"a": 1}"#, "[1, 2, 3]", "[]", "[ ]", "plain text"] {
+        assert!(!is_json_records(text), "{text}");
+    }
+    assert!(table_copy("plain text", TableCopy::Csv).is_none());
+    // A nested value has no CSV cell: nothing, and the app says so.
+    let nested = r#"[{"a": {"b": 1}}, {"a": {"b": 2}}]"#;
+    assert!(is_json_records(nested));
+    assert!(table_copy(nested, TableCopy::Csv).is_none());
+}
+
+#[test]
+fn csv_tsv_and_json_files_open_as_a_table() {
+    use crate::commands::is_table_file_name;
+    for name in ["rows.csv", "Rows.CSV", "rows.tsv", "rows.json"] {
+        assert!(is_table_file_name(name), "{name}");
+    }
+    for name in ["rows.txt", "rows.xlsx", "csv", "rows.csv.png", "notes"] {
+        assert!(!is_table_file_name(name), "{name}");
+    }
+}
+
+#[test]
+fn table_cards_offer_the_other_form_and_the_window_too() {
+    use crate::dataframe::TableCopy;
+    let copy = |copy| CommandId::TableCopyAs(copy);
+    let csv = "naam;plaats\nJan;Groningen\nAnja;Utrecht\n";
+    let shown = ids(&chips(&data(SubjectKind::Text, Some(csv))));
+    assert!(shown.contains(&CommandId::TableOpenWindow));
+    assert!(shown.contains(&copy(TableCopy::Json)));
+    assert!(!shown.contains(&copy(TableCopy::Csv)));
+    // A copied JSON array stays a JSON card; a dropped one is a table.
+    let json = r#"[{"naam": "Jan"}, {"naam": "Anja"}]"#;
+    let copied = ids(&chips(&data(SubjectKind::Text, Some(json))));
+    assert!(!copied.contains(&CommandId::TableOpenWindow));
+    assert!(!copied.contains(&copy(TableCopy::Csv)));
+    let mut dropped = data(SubjectKind::Text, Some(json));
+    dropped.source_name = Some("rows.json".into());
+    let dropped = ids(&chips(&dropped));
+    assert!(dropped.contains(&CommandId::TableOpenWindow));
+    assert!(dropped.contains(&copy(TableCopy::Csv)));
+    // The window's Table ▾ offers the other form of what it read.
+    for (src, expected) in [(csv, TableCopy::Json), (json, TableCopy::Csv)] {
+        let table = read(src, crate::dataframe::ReadOptions::default());
+        let menu: Vec<CommandId> = crate::commands::table_window_menu(&table)
+            .into_iter()
+            .map(|(command, _)| command.id)
+            .collect();
+        assert_eq!(menu.last(), Some(&copy(expected)), "{src}");
+    }
+}
+
+#[test]
+fn the_copy_as_titles_read_differently_in_dutch_and_english() {
+    let keys = [
+        "table_copy_json",
+        "table_copy_csv",
+        "table_copied_json",
+        "table_copied_csv",
+        "table_copy_failed",
+    ];
+    let en: Vec<&str> = keys.iter().map(|key| crate::locale::t(key)).collect();
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    let nl: Vec<&str> = keys.iter().map(|key| crate::locale::t(key)).collect();
+    crate::locale::set_test_language(crate::settings::Language::En);
+    assert_eq!(nl[0], "Kopieer als JSON");
+    assert_eq!(nl[1], "Kopieer als CSV");
+    for (nl, en) in nl.iter().zip(&en) {
+        assert_ne!(nl, en);
+    }
+}

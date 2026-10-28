@@ -542,6 +542,9 @@ pub enum CommandId {
     TableChooseColumns,
     /// Open the table on the card in its own resizable window ([`table_window_view`]).
     TableOpenWindow,
+    /// *Copy as JSON* (a CSV or TSV) or *Copy as CSV* (a JSON array of objects): the table on
+    /// the clipboard in the other form ([`crate::dataframe::table_copy`]).
+    TableCopyAs(crate::dataframe::TableCopy),
     /// Open the Settings window (hotkey, date order, blur, Open at Login).
     Settings,
     /// Open the About window (name, version, offline promise).

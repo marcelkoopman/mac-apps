@@ -151,6 +151,7 @@ impl App {
             }
             CommandId::TableStep(op) => self.table_step(TableTarget::Card, op),
             CommandId::TableOpenWindow => self.open_table_window(),
+            CommandId::TableCopyAs(copy) => self.copy_table_as(TableTarget::Card, copy),
             // On a text Text ▾ worked on, ⌘Z and ⇧⌘Z go between the copies its steps made.
             CommandId::StepBack if self.text_steps_shown() => {
                 self.text_goto(|cursor| cursor.checked_sub(1));

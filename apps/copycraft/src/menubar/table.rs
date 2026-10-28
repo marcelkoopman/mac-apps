@@ -11,7 +11,9 @@ impl App {
             Some(text) => text.clone(),
             None => Zeroizing::new(self.source_text()?),
         };
-        if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text) {
+        if !crate::toolbar_visibility::shows_dataframe_button(format::detect(&text), &text)
+            && !self.opened_json_table(&text)
+        {
             return None;
         }
         let home = pick_table_home(
@@ -19,6 +21,26 @@ impl App {
             self.opened.is_some(),
         );
         Some((text, home))
+    }
+
+    /// The card's table is the dropped or chosen file's own (not a text the card showed before).
+    pub(crate) fn card_shows_opened_table(&self) -> bool {
+        let opened = self.opened_text().map(Zeroizing::new);
+        self.table_source().is_some_and(|(text, home)| {
+            home == TableHome::Opened
+                && opened.as_deref().map(String::as_str) == Some(text.as_str())
+        })
+    }
+
+    /// `text` is a dropped or chosen file's JSON array of objects: a table too, though a copied
+    /// one stays a JSON card.
+    pub(crate) fn opened_json_table(&self, text: &str) -> bool {
+        crate::dataframe::is_json_records(text)
+            && self
+                .opened
+                .as_ref()
+                .and_then(|file| file.text.as_deref())
+                .is_some_and(|opened| opened.as_str() == text)
     }
 
     /// The loose slot holds `text`'s table: a new text starts it over.
@@ -170,6 +192,10 @@ impl App {
                     }
                     CommandId::TableChooseColumns => {
                         launcher::open_table_window_column_picker();
+                        return;
+                    }
+                    CommandId::TableCopyAs(copy) => {
+                        self.copy_table_as(target, copy);
                         return;
                     }
                     CommandId::Copy => {

@@ -112,23 +112,23 @@ Columns (fixed; the test parses this table between the markers):
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Text ▾, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Text ▾, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Text ▾, Sample | sample~<customer>sample</customer> |
-| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Open Table | meta~Header on line 3; read=4x4; notes=Header on line 3 |
-| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Open Table | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
-| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Open Table | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
-| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Open Table | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
-| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Open Table | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
-| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Open Table | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
-| `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Open Table | read=3x2; dtypes=str,str; dfcard~007 |
-| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Open Table | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
-| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Open Table | read=6x20; columns~… PV1 Generation; dfcard~┌ |
-| `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Open Table | read=4x3 |
-| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Open Table | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
-| `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Open Table | read=5x3; dtypes=datetime[μs],str,f64 |
-| `tables/small_table.csv` | Table: a small table | plain text | CSV | — | Open Table | read=4x3 |
-| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open Table) | plain text | CSV | — | Open Table | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
-| `tables/window_payees_iban.csv` | Table: Open Table on a sensitive table (IBANs): the window opens revealed and names the labels | plain text | CSV | financial | Open Table | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
-| `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Open Table | read=6x5; dtypes=str,str,i64,f64,date |
-| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Open Table | kind=Tsv; read=3x4; dataframe~Desk lamp |
+| `tables/header_on_line_3.csv` | Table: title and Definition line above the header | plain text | CSV | — | Open Table, Copy as JSON | meta~Header on line 3; read=4x4; notes=Header on line 3 |
+| `tables/dates_ambiguous.csv` | Table: dates that fit dd/mm and mm/dd | plain text | CSV | — | Open Table, Copy as JSON | read=5x2; notes=Dates read as dd/mm/yyyy; dtypes=date,i64; dataframe~2026-02-01; dfmeta~Dates read as dd/mm/yyyy |
+| `tables/dates_day_over_12.csv` | Table: a day over 12 in the second part forces mm/dd/yyyy | plain text | CSV | — | Open Table, Copy as JSON | read=5x2; notes=Dates read as mm/dd/yyyy; dtypes=date,i64; dataframe~2026-01-13; dfcard~2026-01-13; dfmeta~Dates read as mm/dd/yyyy |
+| `tables/dates_mixed_orders.csv` | Table: one date only fits dd/mm, another only mm/dd (stays text) | plain text | CSV | — | Open Table, Copy as JSON | read=3x2; notes=none; dtypes=str,i64; dataframe~13/01/2026 |
+| `tables/dates_iso.csv` | Table: ISO dates and datetimes | plain text | CSV | — | Open Table, Copy as JSON | read=4x3; notes=none; dtypes=date,datetime[μs],f64 |
+| `tables/semicolon_decimal_comma.csv` | Table: `;` and decimal comma, numbers typed as the table is read | plain text | CSV | — | Open Table, Copy as JSON | read=4x4; notes=Dates read as dd/mm/yyyy; dtypes=date,str,f64,i64; dfcard~24.95 |
+| `tables/leading_zero_ids.csv` | Table: IDs with a leading zero (`007`) stay text when read | plain text | CSV | — | Open Table, Copy as JSON | read=3x2; dtypes=str,str; dfcard~007 |
+| `tables/messy_table.csv` | Table: duplicate rows, empty rows and column (and a constant column, kept) | plain text | CSV | — | Open Table, Copy as JSON | read=8x5; step:Dedupe=5x5; step:DropEmpty=6x4; step:DropEmpty>Dedupe=4x4 |
+| `tables/wide_prefix_20_columns.csv` | Table: 20 columns sharing a name prefix | plain text | CSV | — | Open Table, Copy as JSON | read=6x20; columns~… PV1 Generation; dfcard~┌ |
+| `tables/join_orders.csv` | Table: orders (once the Join with example; now a plain table) | plain text | CSV | — | Open Table, Copy as JSON | read=4x3 |
+| `tables/datetime_first_column.csv` | Table: datetimes like `2026-09-01 08:15` in the first column (the colon in the time is no `key: value`) | plain text | CSV | — | Open Table, Copy as JSON | kind=Csv; read=4x3; dtypes=datetime[μs],str,f64; dataframe~2026-09-01 08:15; dataframe~Greenhouse south |
+| `tables/ledger_filter.csv` | Table: a datetime first column and negative amounts (once the Filter example) | plain text | CSV | financial | Open Table, Copy as JSON | read=5x3; dtypes=datetime[μs],str,f64 |
+| `tables/small_table.csv` | Table: a small table | plain text | CSV | — | Open Table, Copy as JSON | read=4x3 |
+| `tables/wide_six_columns.csv` | Table: six columns with long values, wider than the card (the first column stays in view while scrolling sideways, in the card and in Open Table) | plain text | CSV | — | Open Table, Copy as JSON | read=4x6; frozen~│ Office chair ┆; dfcard~Trading Company; windowmeta~4 rows × 6 columns; window~Trading Company |
+| `tables/window_payees_iban.csv` | Table: Open Table on a sensitive table (IBANs): the window opens revealed and names the labels | plain text | CSV | financial | Open Table, Copy as JSON | read=3x4; windowmeta~3 rows × 4 columns; windowmeta~financial; window~Bob Jansen; windowcolumns=payee, iban, amount, paid on |
+| `tables/sales_by_region.csv` | Table: text, whole numbers, decimals and dates, dates kept as dates | plain text | CSV | — | Open Table, Copy as JSON | read=6x5; dtypes=str,str,i64,f64,date |
+| `tables/tsv_table.tsv` | Table: TSV (tab separated) | plain text | TSV | — | Open Table, Copy as JSON | kind=Tsv; read=3x4; dataframe~Desk lamp |
 | `sensitivity/credential_private_key.txt` | Credential: private-key header (fake body) | plain text | Content | credential | Text ▾ | kind=Text |
 | `sensitivity/credential_aws_key.txt` | Credential: AWS example key id | plain text | Content | credential | Text ▾ | kind=Plain |
 | `sensitivity/credential_github_token.txt` | Credential: GitHub token (synthetic, as in `corpus.rs`) | plain text | Content | credential | Text ▾ | kind=Plain |
@@ -136,10 +136,10 @@ Columns (fixed; the test parses this table between the markers):
 | `sensitivity/pii_email.txt` | PII: `example.com` email | plain text | Content | PII | Text ▾ | kind=Plain |
 | `sensitivity/pii_phone.txt` | PII: fake 06 number | plain text | Content | PII | Text ▾ | kind=Plain |
 | `sensitivity/pii_bsn.txt` | PII: test BSN 111222333 | plain text | Content | PII | Text ▾ | kind=Plain |
-| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Open Table | kind=Csv |
+| `sensitivity/pii_names_column.csv` | PII: a names column (`naam`) | plain text | CSV | PII | Open Table, Copy as JSON | kind=Csv |
 | `sensitivity/financial_iban.txt` | Financial: test IBAN | plain text | Content | financial | Text ▾ | kind=Plain |
 | `sensitivity/financial_card.txt` | Financial: test card 4111 1111 1111 1111 | plain text | Content | financial | Text ▾ | kind=Plain |
-| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Open Table | kind=Csv |
+| `sensitivity/financial_salary_column.csv` | Financial: a salary column (`salaris`) | plain text | CSV | financial | Open Table, Copy as JSON | kind=Csv |
 | `sensitivity/leak_url_credentials.txt` | Leakguard: credentials in a URL | plain text | Content | credential | Text ▾ | kind=Plain |
 | `sensitivity/leak_ip_address.txt` | Leakguard: IPs from 192.0.2.0/24 | plain text | Content | PII | Text ▾ | kind=Plain |
 | `sensitivity/leak_mac_address.txt` | Leakguard: MAC address | plain text | Content | PII | Text ▾ | kind=Plain |
@@ -305,7 +305,8 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
       Copying new items until its entry leaves history also closes it.
 - [ ] `tables/window_payees_iban.csv` in the window: the meta line shows financial in red.
 - [ ] Open Table on any table opens the window; its Table ▾ shows exactly: Remove duplicate
-      rows, Remove Empty Rows and Columns, Choose Columns…, Sort Ascending ›, Sort Descending ›. The
+      rows, Remove Empty Rows and Columns, Choose Columns…, Sort Ascending ›, Sort Descending ›,
+      then *Copy as JSON* (*Kopieer als JSON*; *Copy as CSV* for a table read from JSON). The
       window's Table ▾ has the two Remove steps and the two Sort submenus.
 - [ ] There is no Dataframe chip and no Show Columns chip: a table shows Original and Table ▾;
       clicking Table ▾ shows the grid with card title *Table* / *Tabel* (not Dataframe). Column
@@ -506,6 +507,19 @@ Mac only, no data.
 - [ ] Width: drop a screenshot wider than 1920 px (a full-screen ⌘⇧3 on a Retina display) and pick *1920 px Wide*: the copy is 1920 wide with the height in proportion (meta *Resized to 1920×…, metadata removed*), still a PNG. A wide JPEG photo stays a JPEG. A picture already narrower than the width makes no copy and notes *Al dat formaat of kleiner* / *Already that size or smaller*.
 - [ ] Save: *Bewaar* / *Save* on the copy still offers PNG, JPEG and HEIC as before; nothing new was added (the app has the user-selected read-write entitlement already).
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path, size or location for the conversion.
+
+### Drop a CSV or JSON file: the table
+
+Make fake files first:
+`printf 'naam;plaats;code\n"Jan, de Vries";"Zei ""hoi""";007\nAnja;Utrecht;012\n' > /tmp/rows.csv`
+and `printf '[{"naam": "Jan, de Vries", "n": 3}, {"naam": "Anja", "n": 4}]' > /tmp/rows.json`.
+
+- [ ] CSV: drop `/tmp/rows.csv` on the card: the table window opens at once, titled `rows.csv`, with three columns; `Jan, de Vries` and `Zei "hoi"` are one cell each, `007` stays `007`. Do the same with `tables/small_table.csv` (`,`) and `tables/tsv_table.tsv` (tab): the separator is found by itself. ⌘O (*Kies bestand* / *Choose File*) on a CSV does the same.
+- [ ] Copy as JSON: Table ▾ › *Kopieer als JSON* / *Copy as JSON*: a toast *Gekopieerd als JSON* / *Copied as JSON*; ⌘V in TextEdit gives a pretty JSON array with `"naam": "Jan, de Vries"`, `"plaats": "Zei \"hoi\""` and `"code": "007"`, keys in column order. After *Remove duplicate rows* or a sort it copies that version. Close the window: the card shows the file with the chips *Open Table* and *Copy as JSON*; the chip copies the file as it is.
+- [ ] JSON: drop `/tmp/rows.json`: the table window opens with columns `naam` and `n`. Table ▾ › *Kopieer als CSV* / *Copy as CSV*: toast *Gekopieerd als CSV* / *Copied as CSV*, and ⌘V gives `naam,n`, `"Jan, de Vries",3`, `Anja,4`. Closed again, the card shows the JSON formatted, with *Open Table* and *Copy as CSV*. The same JSON copied as text from another app stays a plain JSON card, with no table chips.
+- [ ] Not a table: a `.json` file with one object (`{"a": 1}`) or a list of numbers, and a `.txt` with CSV text, stay on the card as before (the `.txt` still offers *Open Table*). A JSON array whose objects hold nested objects: *Copy as CSV* shows the toast *Deze tabel past niet in die vorm* / *This table doesn't fit that form*.
+- [ ] Privacy: `tables/window_payees_iban.csv` dropped opens the window with *financial* on its meta line; with *Use privacy filter* on, the grid is masked until clicked. Put a made-up token (`ghp_` and 36 letters/digits) in a cell of a fake CSV, drop it and *Copy as JSON*: the JSON is on the clipboard but not in history.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows only the column and row counts the table window logged before, never a file name, path or cell.
 
 ### Compare two dropped text files
 

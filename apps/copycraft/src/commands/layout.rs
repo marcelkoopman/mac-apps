@@ -365,6 +365,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::GotoLine(_)
             | CommandId::TableDateOrder(_)
             | CommandId::TableChooseColumns
+            | CommandId::TableCopyAs(_)
     )
 }
 
@@ -489,6 +490,8 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::ImageStep(crate::image_edit::ImageOp::RemoveMetadata) => "eye.slash",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",
+        CommandId::TableCopyAs(crate::dataframe::TableCopy::Json) => "curlybraces",
+        CommandId::TableCopyAs(crate::dataframe::TableCopy::Csv) => "tablecells",
         CommandId::TableChooseColumns => "checklist",
         CommandId::StepBack => "arrow.uturn.backward",
         CommandId::StepForward => "arrow.uturn.forward",

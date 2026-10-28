@@ -592,10 +592,35 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
 /// The table window's Table ▾ menu: the steps, Choose Columns…, and the sorts (Open table is
 /// the card chip only).
 pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
-    table_menu_items(Some(table))
+    let mut menu: Vec<(Command, bool)> = table_menu_items(Some(table))
         .into_iter()
         .filter(|(command, _)| command.id != CommandId::TableOpenWindow)
-        .collect()
+        .collect();
+    if table.frame.is_some() {
+        menu.push((table_copy_command(window_copy(table)), false));
+    }
+    menu
+}
+
+/// A file name that opens in the table window when dropped: `.csv`, `.tsv` or `.json` (whose
+/// text still has to read as a table).
+pub fn is_table_file_name(name: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ["csv", "tsv", "json"]
+                .iter()
+                .any(|known| ext.eq_ignore_ascii_case(known))
+        })
+}
+
+/// The other form of the window's table: JSON for a delimited one, CSV for one read from JSON.
+pub fn window_copy(table: &TableShown) -> crate::dataframe::TableCopy {
+    match table.notes.and_then(|notes| notes.start) {
+        Some(_) => crate::dataframe::TableCopy::Json,
+        None => crate::dataframe::TableCopy::Csv,
+    }
 }
 
 /// What Table ▾ shows for `menu`: the menu itself, or, while it is empty (no table yet, or
