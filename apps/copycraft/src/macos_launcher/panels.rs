@@ -624,6 +624,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
     set_item_text(body.to_string());
     let highlight = CARD_HIGHLIGHT.with(|slot| *slot.borrow());
     let error_line = CARD_ERROR_LINE.get();
+    let swatch = CARD_SWATCH.get().filter(|_| payload);
     let selectable = CARD_SELECTABLE.with(Cell::get);
     set_preview_text_hidden(false);
     PREVIEW_TEXT.with(|slot| {
@@ -642,7 +643,8 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
                 && painted.diff_lines == diff_lines
                 && painted.numbers == numbers
         })
-    }) && PAINTED_ERROR_LINE.get() == error_line;
+    }) && PAINTED_ERROR_LINE.get() == error_line
+        && PAINTED_SWATCH.get() == swatch;
     if unchanged {
         PAINTED_ITEM.set(Some(ITEM_GEN.get()));
         return;
@@ -670,15 +672,21 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
                         .with(|slot| slot.borrow().as_deref().and_then(crate::link_card::parse))
                 })
                 .flatten();
-            match &link {
-                Some(link) => crate::macos_card_text::paint_link(view, link),
-                None => crate::macos_card_text::paint(
+            match (&link, &swatch) {
+                (Some(link), _) => crate::macos_card_text::paint_link(view, link),
+                // A Colour card: the swatch above its rows.
+                (None, Some(swatch)) => crate::macos_card_text::paint_color(view, swatch, body),
+                (None, None) => crate::macos_card_text::paint(
                     view, body, highlight, payload, error_line, numbers,
                 ),
             }
-            // VoiceOver hears the domain and the kind of link; not while the well is blurred.
-            let spoken = match &link {
-                Some(link) if !well_is_masked() => link.ax_label(),
+            // VoiceOver hears the domain and the kind of link, or the colour's HEX; not while
+            // the well is blurred.
+            let spoken = match (&link, &swatch) {
+                (Some(link), _) if !well_is_masked() => link.ax_label(),
+                (None, Some(swatch)) if !well_is_masked() => {
+                    format!("{} {}", crate::locale::t("title_color"), swatch.hex())
+                }
                 _ => crate::locale::t("clipboard_content").to_string(),
             };
             view.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
@@ -722,6 +730,7 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
         }));
     });
     PAINTED_ERROR_LINE.set(error_line);
+    PAINTED_SWATCH.set(swatch);
     // `set_item_text(body)` above: the view shows the item.
     PAINTED_ITEM.set(Some(ITEM_GEN.get()));
 }

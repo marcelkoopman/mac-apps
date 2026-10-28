@@ -543,6 +543,60 @@ pub(crate) fn paint_link(text: &NSTextView, link: &crate::link_card::LinkCard) {
     }
 }
 
+/// The Colour card: a swatch (wide spaces on the colour, see-through as the colour is), then
+/// `body`'s rows, each label in the secondary colour and its value in the code font.
+pub(crate) fn paint_color(text: &NSTextView, swatch: &crate::color::Swatch, body: &str) {
+    let size = zoomed(mac_ui::metrics::FONT_BODY);
+    let label = label_color();
+    let secondary = secondary_color();
+    let small = NSFont::systemFontOfSize(size * 0.9);
+    let code = editor_font();
+    let attr = NSMutableAttributedString::new();
+    let block = NSFont::systemFontOfSize(size * 3.0);
+    let fill = NSColor::colorWithSRGBRed_green_blue_alpha(
+        swatch.red,
+        swatch.green,
+        swatch.blue,
+        swatch.alpha,
+    );
+    let spaces = "\u{2003}".repeat(8);
+    let piece = AttrText::new(&spaces, &block, &label);
+    piece.background_utf16(piece.all(), &fill);
+    attr.appendAttributedString(&piece.into_attributed());
+    for line in body.lines() {
+        attr.appendAttributedString(&plain("\n", &small, &label));
+        // `label  value`: the label is padded, the value follows the last run of two spaces.
+        let split = line
+            .char_indices()
+            .zip(line.chars().skip(1))
+            .find(|((at, c), next)| *c == ' ' && *next == ' ' && *at > 0)
+            .map(|((at, _), _)| at);
+        match split {
+            Some(at) => {
+                let value_at = at + line[at..].len() - line[at..].trim_start().len();
+                attr.appendAttributedString(&plain(&line[..value_at], &small, &secondary));
+                attr.appendAttributedString(&plain(&line[value_at..], &code, &label));
+            }
+            None => attr.appendAttributedString(&plain(line, &small, &secondary)),
+        }
+    }
+    let style = mac_ui::objc2_app_kit::NSMutableParagraphStyle::new();
+    style.setParagraphSpacing(size * 0.3);
+    mac_ui::text::set_paragraph_style(
+        &attr,
+        &style,
+        NSRange {
+            location: 0,
+            length: attr.length(),
+        },
+    );
+    if let Some(storage) = mac_ui::widgets::text_storage(text) {
+        storage.setAttributedString(&attr);
+    } else {
+        text.setString(&NSString::from_str(body));
+    }
+}
+
 /// A fixed dark theme, or (System) a dark appearance on the view.
 fn is_dark(view: &NSTextView) -> bool {
     use mac_ui::objc2_app_kit::NSAppearanceCustomization;

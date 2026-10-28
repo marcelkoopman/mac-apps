@@ -667,3 +667,41 @@ fn an_opaque_cover_says_to_click_it() {
     );
     assert!(!crate::locale::t("click_to_reveal").is_empty());
 }
+
+#[test]
+fn a_css_colour_is_a_colour_card() {
+    for text in ["#3366CC", "rgb(51 102 204)", "hsl(220, 60%, 50%)"] {
+        let input = data(SubjectKind::Text, Some(text));
+        let card = work_card(&input);
+        assert_eq!(card.title, crate::locale::t("title_color"), "{text}");
+        let swatch = card.swatch.expect("swatch");
+        assert_eq!(swatch.hex(), "#3366CC");
+        assert!(card.excerpt.starts_with("HEX"), "{}", card.excerpt);
+        assert!(
+            card.excerpt.contains("NSColor(srgbRed: 0.2"),
+            "{}",
+            card.excerpt
+        );
+        assert!(card.selectable);
+    }
+    // An issue number and a sentence are not.
+    for text in ["#123", "the colour #3366CC"] {
+        let card = work_card(&data(SubjectKind::Text, Some(text)));
+        assert_eq!(card.swatch, None, "{text}");
+    }
+}
+
+#[test]
+fn the_new_menu_offers_the_colour_sampler() {
+    let input = data(SubjectKind::Text, Some("hello"));
+    let commands = crate::commands::source_commands(&input);
+    let pick = commands
+        .iter()
+        .find(|command| command.id == CommandId::PickColor)
+        .expect("sampler");
+    assert_eq!(pick.title, crate::locale::t("generate_color_menu"));
+    assert_eq!(
+        crate::commands::menu_submenu(&CommandId::PickColor),
+        Some(crate::locale::t("new_menu"))
+    );
+}

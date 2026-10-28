@@ -473,6 +473,8 @@ pub enum CommandId {
     TextCase(crate::text_ops::case_style::CaseStyle),
     /// ⋯ › New: a UUID, the Unix time or ISO 8601 now, as a new card and on the clipboard.
     Generate(crate::generate::Generator),
+    /// ⋯ › New › Color from Screen…: the system loupe; the colour as a new card and copy.
+    PickColor,
     /// Text ▾ › Convert › Encoding: Base64, URL or hex, either way.
     TextEncode(crate::text_ops::encoding::Codec),
     /// Text ▾ › Convert › Encoding: SHA-256, SHA-1 or MD5 as lowercase hex.
@@ -589,6 +591,9 @@ pub struct WorkCard {
     pub preview_note: Option<String>,
     /// The line (1-based, in the excerpt) where copied JSON stops parsing; the well marks it.
     pub error_line: Option<usize>,
+    /// The colour on a Colour card ([`crate::color`]); the well draws it as a swatch above the
+    /// excerpt, which holds the same colour in every notation.
+    pub swatch: Option<crate::color::Swatch>,
 }
 
 impl WorkCard {

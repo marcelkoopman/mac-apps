@@ -299,6 +299,7 @@ fn card(excerpt: &str) -> crate::commands::WorkCard {
         link_page: None,
         preview_note: None,
         error_line: None,
+        swatch: None,
     }
 }
 

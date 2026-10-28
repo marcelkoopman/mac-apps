@@ -145,6 +145,13 @@ thread_local! {
     static AI_FNS: RefCell<Option<commands::AiFns>> = const { RefCell::new(None) };
 }
 
+// A second block: one `thread_local!` with every slot reaches the macro recursion limit.
+thread_local! {
+    /// The Colour card's colour ([`commands::WorkCard::swatch`]), and the one last painted.
+    static CARD_SWATCH: Cell<Option<crate::color::Swatch>> = const { Cell::new(None) };
+    static PAINTED_SWATCH: Cell<Option<crate::color::Swatch>> = const { Cell::new(None) };
+}
+
 thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.

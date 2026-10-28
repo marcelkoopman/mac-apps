@@ -157,7 +157,12 @@ impl App {
     /// card (so also with history off). It is the clipboard's copy too, so the card follows
     /// it. The value is never logged.
     pub(crate) fn generate(&mut self, generator: crate::generate::Generator) {
-        let value = Zeroizing::new(generator.make());
+        self.new_value(generator.title(), Zeroizing::new(generator.make()));
+    }
+
+    /// A value made in CopyCraft (⋯ › New) goes on the clipboard and onto a new card titled
+    /// `title`. Never logged.
+    pub(crate) fn new_value(&mut self, title: &str, value: Zeroizing<String>) {
         if let Err(e) = self.write_own(&value) {
             crate::diag::log(crate::diag::LogEvent::TextStepFailed(
                 crate::diag::ErrorKind::of(&e),
@@ -165,7 +170,7 @@ impl App {
             return;
         }
         let newest = self.history.id_at(0);
-        self.show_dropped(crate::open_file::from_text(generator.title(), value));
+        self.show_dropped(crate::open_file::from_text(title, value));
         // Recorded: the new entry at index 0 is also what the clipboard holds now.
         if self.history.id_at(0) != newest {
             self.clipboard_cursor = Some(0);

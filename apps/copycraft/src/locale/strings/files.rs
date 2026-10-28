@@ -30,6 +30,18 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Unix Time (Milliseconds)",
     ),
     ("generate_iso_now", "ISO 8601 nu", "ISO 8601 Now"),
+    // ⋯ › New › the colour sampler (src/macos_color_pick.rs); the card's title after the pick.
+    (
+        "generate_color_menu",
+        "Kies kleur van scherm…",
+        "Pick Color from Screen…",
+    ),
+    ("generate_color", "Kleur van scherm", "Color from Screen"),
+    (
+        "detail_generate_color",
+        "Kies een kleur met de loep, als HEX op het klembord",
+        "Pick a color with the loupe, as HEX on the clipboard",
+    ),
     (
         "detail_generate",
         "Nieuwe kaart, ook op het klembord",

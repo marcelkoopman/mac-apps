@@ -427,6 +427,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         CARD_PLACEHOLDER.with(|slot| set_secret(slot, card.placeholder));
         CARD_HIGHLIGHT.with(|slot| slot.replace(card.highlight));
         CARD_ERROR_LINE.set(card.error_line);
+        CARD_SWATCH.set(card.swatch);
         CARD_SELECTABLE.set(card.selectable);
         LINK_PAGE.with(|slot| set_secret_opt(slot, card.link_page));
         SHOWS_IMAGE.set(card.shows_image);

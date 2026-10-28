@@ -305,6 +305,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Clear
             | CommandId::ChooseFile
             | CommandId::Generate(_)
+            | CommandId::PickColor
             | CommandId::UseClipboard
             | CommandId::ShowAll
             | CommandId::Original
@@ -449,6 +450,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::OpenPreview => "eye",
         CommandId::ClearClipboard | CommandId::ClearHistory | CommandId::Clear => "trash",
         CommandId::ChooseFile => "folder",
+        CommandId::PickColor => "eyedropper",
         CommandId::UseClipboard => "doc.on.clipboard",
         CommandId::ShowAll => "text.justify",
         CommandId::Settings => "gearshape",

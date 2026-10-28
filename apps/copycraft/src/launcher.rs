@@ -48,6 +48,8 @@ pub enum UserEvent {
     DroppedImage(zeroize::Zeroizing<Vec<u8>>),
     /// Text was dropped on the card. Zeroized when the event is dropped.
     DroppedText(zeroize::Zeroizing<String>),
+    /// ⋯ › New › Color from Screen…: the picked colour as `#RRGGBB`. Zeroized when dropped.
+    ColorPicked(zeroize::Zeroizing<String>),
     /// ⌘V in the card: what the clipboard held, read once while the key was handled.
     Pasted(crate::history_mode::Pasted),
     /// "Keep clipboard history" was turned on or off (welcome window or Settings).

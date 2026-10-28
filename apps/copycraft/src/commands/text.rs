@@ -119,6 +119,27 @@ pub(crate) fn link_card(text: &str) -> Option<WorkCard> {
         link_page: Some(text.trim().to_string()),
         preview_note: None,
         error_line: None,
+        swatch: None,
+    })
+}
+
+/// A copy that is exactly one CSS colour ([`crate::color`]): a swatch, and the colour as HEX,
+/// RGB, HSL, OKLCH, SwiftUI and NSColor with its contrast on white and black. The rows can be
+/// selected and copied.
+pub(crate) fn color_card(text: &str) -> Option<WorkCard> {
+    let parsed = crate::color::parse(text)?;
+    Some(WorkCard {
+        title: crate::locale::t("title_color").to_string(),
+        meta: text_meta(text),
+        excerpt: parsed.text(),
+        placeholder: String::new(),
+        shows_image: false,
+        highlight: None,
+        selectable: true,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+        swatch: Some(parsed.swatch),
     })
 }
 

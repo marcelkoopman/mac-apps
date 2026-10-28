@@ -34,7 +34,10 @@
 # Marcel 2026-10-23; macos_pin::pin_status_history): muda's items take only an RGBA icon, not the pin.fill
 # SF Symbol, so `Retained::retain` on muda's `ns_menu()` pointer (the NSMenu tray-icon also retains) to set
 # the image on its NSMenuItems. It replaces the "• " title mark (PIN_MARK).
-copycraft blocks 114
+# copycraft blocks 116: +2 for ⋯ › New › Pick Color from Screen… (feature D of the six-features plan,
+# approved by Marcel 2026-10-28; macos_color_pick.rs): NSColorSampler's showSamplerWithSelectionHandler:
+# (objc2-app-kit marks it `unsafe`), and the nullable NSColor pointer its block gets (nil on Esc).
+copycraft blocks 116
 copycraft fn 5
 copycraft impl 9
 # mac-ui blocks 84: +1 for mac_ui::widgets::fade_trailing_edge (collections HIG point 7, approved by Marcel

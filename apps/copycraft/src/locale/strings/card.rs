@@ -177,6 +177,15 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("title_clipboard", "Klembord", "Clipboard"),
     ("title_file", "Bestand", "File"),
     ("title_link", "Link", "Link"),
+    // The Colour card (src/color.rs): a copy that is one CSS colour.
+    ("title_color", "Kleur", "Color"),
+    ("color_on_white", "Contrast met wit", "Contrast on white"),
+    ("color_on_black", "Contrast met zwart", "Contrast on black"),
+    (
+        "color_clipped",
+        "Buiten sRGB: afgerond naar de dichtstbijzijnde kleur",
+        "Outside sRGB: clipped to the nearest color",
+    ),
     ("title_youtube", "YouTube", "YouTube"),
     // Link card (link_card.rs): labels, the localhost title, the VoiceOver label.
     (

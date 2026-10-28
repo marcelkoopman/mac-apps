@@ -99,6 +99,10 @@ impl App {
             CommandId::Clear => self.clear_secrets(),
             CommandId::ChooseFile => self.choose_file(),
             CommandId::Generate(generator) => self.generate(generator),
+            CommandId::PickColor => {
+                #[cfg(target_os = "macos")]
+                crate::macos_color_pick::start();
+            }
             CommandId::UseClipboard => {
                 self.leave_opened();
                 self.reset_view();

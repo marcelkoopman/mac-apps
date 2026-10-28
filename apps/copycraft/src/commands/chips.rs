@@ -283,6 +283,12 @@ pub(crate) fn source_commands(data: &LaunchData) -> Vec<Command> {
             "new generate uuid guid v4 v7 unix time epoch timestamp seconds milliseconds iso 8601 now date",
         )
     }));
+    commands.push(command(
+        CommandId::PickColor,
+        crate::locale::t("generate_color_menu"),
+        crate::locale::t("detail_generate_color"),
+        "new color colour pick sampler eyedropper screen hex kleur",
+    ));
     commands
 }
 

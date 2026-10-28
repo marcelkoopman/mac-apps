@@ -7,6 +7,7 @@ mod capture;
 mod card_layout;
 mod card_theme;
 mod clipboard;
+mod color;
 mod column_picker;
 mod commands;
 mod complexity;
@@ -74,6 +75,8 @@ static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 mod macos_about;
 #[cfg(target_os = "macos")]
 mod macos_card_text;
+#[cfg(target_os = "macos")]
+mod macos_color_pick;
 #[cfg(target_os = "macos")]
 mod macos_feedback;
 #[cfg(target_os = "macos")]

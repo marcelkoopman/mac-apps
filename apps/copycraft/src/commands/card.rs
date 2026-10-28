@@ -214,6 +214,7 @@ pub fn building_card() -> WorkCard {
         link_page: None,
         preview_note: None,
         error_line: None,
+        swatch: None,
     }
 }
 
@@ -258,6 +259,7 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         };
     }
     let mut card = compose_card(data);
@@ -331,6 +333,7 @@ pub(crate) fn diff_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         };
     };
     let (excerpt, placeholder, meta, selectable) = match &diff.phase {
@@ -372,6 +375,7 @@ pub(crate) fn diff_card(data: &LaunchData) -> WorkCard {
         link_page: None,
         preview_note: None,
         error_line: None,
+        swatch: None,
     };
     with_diff_labels(&mut card, &diff.labels);
     card
@@ -406,6 +410,11 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             {
                 return card;
             }
+            if data.view == CardView::Original
+                && let Some(card) = color_card(text)
+            {
+                return card;
+            }
             let (excerpt, preview_note) = excerpt_for(text, data.full);
             let mut card = WorkCard {
                 title: text_title(text),
@@ -418,6 +427,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
                 link_page: None,
                 preview_note,
                 error_line: None,
+                swatch: None,
             };
             let mut view = presented_view(text, data.view);
             let svg = format::detect(text) == FormatKind::Svg;
@@ -462,6 +472,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         },
         SubjectKind::Hidden => WorkCard {
             title: crate::clipboard::hidden_content().to_string(),
@@ -474,6 +485,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         },
         SubjectKind::Denied => WorkCard {
             title: crate::locale::t("title_clipboard").to_string(),
@@ -491,6 +503,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         },
         SubjectKind::Pending | SubjectKind::PasteAsk => WorkCard {
             title: crate::locale::t("title_clipboard").to_string(),
@@ -507,6 +520,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         },
         SubjectKind::NoText => WorkCard {
             title: crate::locale::t("title_clipboard").to_string(),
@@ -523,6 +537,7 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         },
     }
 }
@@ -570,6 +585,7 @@ pub(crate) fn image_card(data: &LaunchData) -> WorkCard {
             link_page: None,
             preview_note: None,
             error_line: None,
+            swatch: None,
         };
     }
     WorkCard {
@@ -583,6 +599,7 @@ pub(crate) fn image_card(data: &LaunchData) -> WorkCard {
         link_page: None,
         preview_note: None,
         error_line: None,
+        swatch: None,
     }
 }
 
@@ -710,6 +727,7 @@ fn svg_picture_card(text: &str) -> WorkCard {
         link_page: None,
         preview_note: None,
         error_line: None,
+        swatch: None,
     }
 }
 

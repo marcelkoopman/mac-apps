@@ -47,6 +47,13 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::DroppedText(text) => {
                 self.show_dropped(crate::open_file::from_text(dropped_text(), text));
             }
+            UserEvent::ColorPicked(value) => {
+                self.new_value(crate::locale::t("generate_color"), value);
+                // The loupe can close the card (it takes the focus): open it again on the value.
+                if !launcher::is_open() {
+                    self.reopen_card();
+                }
+            }
             UserEvent::Pasted(pasted) => self.show_pasted(pasted),
             UserEvent::ClipboardHistoryChanged => self.clipboard_history_changed(),
             UserEvent::DecodedPicture { key, picture } => self.finish_decoded_picture(key, picture),
