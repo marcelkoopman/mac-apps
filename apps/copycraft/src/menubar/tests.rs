@@ -641,3 +641,81 @@ fn a_filled_snippet_is_a_new_copy_through_the_secret_check() {
     assert!(!fill.contains("diag::log"), "snippet text is never logged");
     assert!(!fill.contains("write_own"), "only through new_value");
 }
+
+/// The strip's ✕ on a link next to a QR code made of it (Text ▾ › QR Code): the QR picture is a
+/// drop on the card, in history too. The strip marks the card shown, and each ✕ takes its own
+/// copy out of history, the strip and search; on the shown card the card goes on to the next.
+#[test]
+fn the_strip_cross_removes_its_own_copy_also_next_to_a_made_qr_code() {
+    let link = "https://github.com/example-user";
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("some notes".into());
+    history.record(link.into());
+    // The card shows the link (newest, the strip's mark); QR Code records the picture first.
+    let base = 0;
+    let moved_to = history.record_image_tracking(
+        crate::clipboard::SecretBytes::new(vec![9, 8, 7]).expect("bytes"),
+        base,
+    );
+    assert_eq!(moved_to, 1);
+    let (mut cursor, clipboard) = super::drop_cursors(moved_to, true);
+    // The strip marks the QR code the card shows, not the link: selection and card agree.
+    assert_eq!(cursor, 0);
+    assert!(history.image(cursor).is_some());
+    assert_eq!(clipboard, Some(1));
+    assert_eq!(history.get(1), Some(link));
+    // ✕ on the link: it goes; the QR code stays on the card.
+    assert!(!super::removal_leaves_file(true, 1, cursor));
+    let id = history.id_at(1).expect("link");
+    let removed = history.take_id(id).expect("removed");
+    cursor = crate::clipboard::cursor_after_remove(removed, cursor, history.len());
+    assert_eq!(history.len(), 2);
+    assert!((0..history.len()).all(|at| history.get(at) != Some(link)));
+    assert!(
+        history
+            .labels()
+            .iter()
+            .all(|(_, title)| !title.contains("github"))
+    );
+    assert!(
+        crate::commands::strip_range(history.len(), cursor).all(|at| history.get(at) != Some(link))
+    );
+    assert!(history.image(cursor).is_some());
+    // ✕ on the QR code the card shows: the file leaves the card, the card goes on to the next.
+    assert!(super::removal_leaves_file(true, cursor, cursor));
+    let id = history.id_at(cursor).expect("qr");
+    let removed = history.take_id(id).expect("removed");
+    cursor = crate::clipboard::cursor_after_remove(removed, cursor, history.len());
+    assert_eq!(history.len(), 1);
+    assert_eq!(history.get(cursor), Some("some notes"));
+}
+
+#[test]
+fn the_strip_cross_on_the_shown_copy_moves_the_card_to_the_next_one() {
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    for text in ["oldest", "middle", "newest"] {
+        history.record(text.into());
+    }
+    // The card shows the middle one; its ✕: the older right neighbour takes its place.
+    let cursor = 1;
+    assert!(!super::removal_leaves_file(false, 1, cursor));
+    let id = history.id_at(1).expect("middle");
+    let removed = history.take_id(id).expect("removed");
+    let next = crate::clipboard::cursor_after_remove(removed, cursor, history.len());
+    assert_eq!(history.get(next), Some("oldest"));
+    assert!((0..history.len()).all(|at| history.get(at) != Some("middle")));
+    // The last one: its left neighbour. ⌘Z puts it back.
+    let id = history.id_at(1).expect("oldest");
+    let removed = history.take_id(id).expect("removed");
+    let next = crate::clipboard::cursor_after_remove(removed, 1, history.len());
+    assert_eq!(history.get(next), Some("newest"));
+    assert_eq!(history.restore_removed(), Some(1));
+    assert_eq!(history.get(1), Some("oldest"));
+}
+
+#[test]
+fn a_drop_recorded_late_leaves_the_card_on_its_entry() {
+    // The long text's check came after the card moved on: the strip keeps its mark.
+    assert_eq!(super::drop_cursors(3, false), (3, None));
+    assert_eq!(super::drop_cursors(3, true), (0, Some(3)));
+}

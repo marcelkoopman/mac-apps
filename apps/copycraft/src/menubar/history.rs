@@ -153,12 +153,18 @@ impl App {
     /// took its place, or the paste hint when history is empty now. ⌘Z puts it back
     /// ([`Self::restore_removed`]).
     pub(crate) fn remove_from_history(&mut self, index: usize) {
-        if self.opened.is_some() {
-            return;
-        }
         let Some(id) = self.history.id_at(index) else {
             return;
         };
+        // A dropped file or a made picture (a QR code) on the card is in history too: its own
+        // card's ✕ takes it off the card, and the card goes on to the next copy; another card's
+        // ✕ leaves it on the card ([`super::source::removal_leaves_file`]).
+        if super::source::removal_leaves_file(self.opened.is_some(), index, self.history_cursor) {
+            let clipboard = self.clipboard_cursor;
+            self.leave_opened();
+            self.history_cursor = index;
+            self.clipboard_cursor = clipboard;
+        }
         // The newest entry is usually what the clipboard holds: the next poll must not record
         // it again.
         if index == 0 {
@@ -201,12 +207,15 @@ impl App {
     /// ⌘Z: the copy [`Self::remove_from_history`] took out goes back where it was, and the
     /// card shows it.
     pub(crate) fn restore_removed(&mut self) {
-        if self.opened.is_some() {
-            return;
-        }
         let Some(index) = self.history.restore_removed() else {
             return;
         };
+        // The card shows the copy put back, also when a file was on it.
+        if self.opened.is_some() {
+            let clipboard = self.clipboard_cursor;
+            self.leave_opened();
+            self.clipboard_cursor = clipboard;
+        }
         if self.history.snippet_name(index).is_some() {
             self.save_snippets();
         }

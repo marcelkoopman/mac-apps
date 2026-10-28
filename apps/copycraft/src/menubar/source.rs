@@ -91,8 +91,10 @@ impl App {
         } else {
             None
         };
+        // Recorded before the card shows it ([`Self::show_source`] below): the strip marks
+        // the drop, not the entry the card was on.
         if let Some(clipboard_at) = clipboard_at {
-            self.dropped_recorded(clipboard_at);
+            self.dropped_recorded(clipboard_at, true);
         }
         // A document's picture (Quick Look) has its text already; recognizing the picture would
         // only replace it.
@@ -112,9 +114,10 @@ impl App {
     }
 
     /// A drop is in history now, at index 0; the entry the card or the clipboard was on is at
-    /// `moved_to`. On the card: the clipboard's entry is remembered for when the card goes back
-    /// to it. Recorded after the card moved on (a late check): the card stays on its entry.
-    pub(crate) fn dropped_recorded(&mut self, moved_to: usize) {
+    /// `moved_to`. On the card (`on_card`): the strip marks the drop and the clipboard's entry
+    /// is remembered for when the card goes back to it. Recorded after the card moved on (a
+    /// late check): the card stays on its entry ([`drop_cursors`]).
+    pub(crate) fn dropped_recorded(&mut self, moved_to: usize, on_card: bool) {
         self.last_copy = Some(Instant::now());
         // The clipboard is not recorded again (back to the front) until it changes, when
         // history has it. A copy not in history yet (one still being checked) is left to be
@@ -122,11 +125,10 @@ impl App {
         if let Some(skip) = skip_after_drop(&self.history, ClipboardView::from_os().text()) {
             self.skip_record = Some(skip);
         }
-        if self.opened.is_some() {
-            self.clipboard_cursor = Some(moved_to);
-            self.history_cursor = 0;
-        } else {
-            self.history_cursor = moved_to;
+        let (history_cursor, clipboard_cursor) = drop_cursors(moved_to, on_card);
+        self.history_cursor = history_cursor;
+        if clipboard_cursor.is_some() {
+            self.clipboard_cursor = clipboard_cursor;
         }
         self.refresh_status_menu();
     }
@@ -142,7 +144,8 @@ impl App {
                 Record::Now => {
                     let base = self.clipboard_cursor.unwrap_or(self.history_cursor);
                     if let Some(moved_to) = self.history.record_tracking(text.to_string(), base) {
-                        self.dropped_recorded(moved_to);
+                        let on_card = self.opened.is_some();
+                        self.dropped_recorded(moved_to, on_card);
                     }
                 }
                 Record::AfterCheck => self.dropped_text_wait.push(text),
@@ -732,6 +735,26 @@ impl App {
 /// What a drop leaves the clipboard's text `current` as: skipped (not moved back to the front
 /// by the next poll) only when history already has it. A copy not in history yet (still being
 /// checked, or never read) must still be recorded: a skip would lose it for good. Pure.
+/// The strip's mark and the clipboard's place once a drop went into history at index 0 and the
+/// entry the card or the clipboard was on moved to `moved_to`: `(history_cursor,
+/// clipboard_cursor)`. On the card the strip marks the drop (0), the one the card shows, and the
+/// clipboard's entry is kept for when the card goes back to it; off the card (a late check) the
+/// card stays on its entry and the clipboard's place is left as it was (`None`).
+pub(super) fn drop_cursors(moved_to: usize, on_card: bool) -> (usize, Option<usize>) {
+    if on_card {
+        (0, Some(moved_to))
+    } else {
+        (moved_to, None)
+    }
+}
+
+/// What the ✕ (or ⌫, ⋯ › Remove from History) on strip card `index` does to a file or a made
+/// picture on the card (`opened`), with `cursor` the card the strip marks: the card it is on
+/// leaves the file, so the card goes on to the next copy; another card keeps it.
+pub(super) fn removal_leaves_file(opened: bool, index: usize, cursor: usize) -> bool {
+    opened && index == cursor
+}
+
 pub(super) fn skip_after_drop(
     history: &clipboard::ClipboardHistory,
     current: Option<&str>,

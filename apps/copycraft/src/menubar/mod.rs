@@ -65,6 +65,8 @@ mod snippets;
 mod source;
 #[cfg(test)]
 use source::skip_after_drop;
+#[cfg(test)]
+use source::{drop_cursors, removal_leaves_file};
 mod state;
 mod table;
 mod text;
