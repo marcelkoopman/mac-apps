@@ -53,6 +53,7 @@ pub fn menu_group(id: &CommandId) -> Option<&'static str> {
         CommandId::TextCase(_) => Some(crate::locale::t("case_menu")),
         CommandId::TextEncode(_) => Some(crate::locale::t("encoding_menu")),
         CommandId::TextHash(_) => Some(crate::locale::t("hash_menu")),
+        CommandId::TextCode(_) => Some(crate::locale::t("code_menu")),
         _ => None,
     }
 }
@@ -128,6 +129,7 @@ pub fn text_section(id: &CommandId) -> Option<TextSection> {
         CommandId::TextCase(_)
         | CommandId::TextEncode(_)
         | CommandId::TextHash(_)
+        | CommandId::TextCode(_)
         | CommandId::TextCleanUrl
         | CommandId::TextJson => Some(TextSection::Convert),
         CommandId::AgentCommands
@@ -219,6 +221,17 @@ pub fn text_menu_items(edit: &TextShown) -> Vec<(Command, bool)> {
             "hash digest checksum sha sha256 sha-256 sha1 sha-1 md5 hex",
         )
     }));
+    // Code › format, minify and convert steps for JSON, YAML, XML or SQL: a submenu.
+    if let Some(lang) = edit.code_lang {
+        commands.extend(lang.ops().iter().map(|op| {
+            command(
+                CommandId::TextCode(*op),
+                op.title(),
+                crate::locale::t("detail_code"),
+                "code format pretty minify compact one line convert json yaml xml sql indent keywords",
+            )
+        }));
+    }
     if edit.tracking {
         commands.push(clean_url_command());
     }

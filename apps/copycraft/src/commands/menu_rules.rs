@@ -18,6 +18,10 @@ pub fn separator_before(previous: Option<&CommandId>, id: &CommandId) -> bool {
         (CommandId::TextEncode(before), CommandId::TextEncode(codec)) => {
             before.encodes() && !codec.encodes()
         }
+        // Code ▸: the conversion (YAML to JSON) apart from the layouts.
+        (CommandId::TextCode(before), CommandId::TextCode(op)) => {
+            !before.converts() && op.converts()
+        }
         // Theme ▸: a line between the basic, classic and colourful themes, as in Settings.
         (CommandId::CardTheme(before), CommandId::CardTheme(theme)) => {
             before.group() != theme.group()

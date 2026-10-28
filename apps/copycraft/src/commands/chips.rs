@@ -136,6 +136,7 @@ pub fn text_shown(data: &LaunchData) -> Option<TextShown> {
             agent: kind == crate::format::FormatKind::Agent,
             tracking: crate::text_ops::url_clean::has_tracking(text),
             json: kind == crate::format::FormatKind::Json,
+            code_lang: crate::text_ops::code_style::CodeLang::of(text, kind),
             ..TextShown::default()
         }
     }))

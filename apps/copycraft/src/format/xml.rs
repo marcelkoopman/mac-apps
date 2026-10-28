@@ -174,11 +174,11 @@ pub(super) fn inline_leaf(tokens: &[XmlToken], i: usize) -> Option<(String, usiz
     }
 }
 
-pub(super) fn collapse_xml_text(text: &str) -> String {
+pub(crate) fn collapse_xml_text(text: &str) -> String {
     text.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
 
-pub(super) enum XmlToken {
+pub(crate) enum XmlToken {
     Decl(String),
     Comment(String),
     Open(String),
@@ -187,7 +187,7 @@ pub(super) enum XmlToken {
     Text(String),
 }
 
-pub(super) fn xml_tokens(src: &str) -> Vec<XmlToken> {
+pub(crate) fn xml_tokens(src: &str) -> Vec<XmlToken> {
     let chars: Vec<char> = src.chars().collect();
     let mut tokens = Vec::new();
     let mut i = 0;

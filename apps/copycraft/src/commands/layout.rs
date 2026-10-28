@@ -343,6 +343,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::TextCase(_)
             | CommandId::TextEncode(_)
             | CommandId::TextHash(_)
+            | CommandId::TextCode(_)
             | CommandId::AiMenu
             | CommandId::Ai(_)
             | CommandId::AiFn(..)
@@ -488,6 +489,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::TextCase(_) => "textformat.abc",
         CommandId::TextEncode(_) => "chevron.left.forwardslash.chevron.right",
         CommandId::TextHash(_) => "number",
+        CommandId::TextCode(_) => "text.alignleft",
         CommandId::AiMenu | CommandId::Ai(_) | CommandId::AiFn(..) => AI_SYMBOL,
         CommandId::HistoryOlder => "chevron.left",
         CommandId::HistoryNewer => "chevron.right",

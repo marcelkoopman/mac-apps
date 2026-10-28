@@ -198,6 +198,7 @@ mod tests {
             "encoding_hex_name",
             // "Hash" is Dutch too (Text ▾ › Hash ›).
             "hash_menu",
+            "code_menu",
             // "Help" is Dutch too (`⋯` › Help ›).
             "help_menu",
             // "Link" is Dutch too (the pending copy's hint).

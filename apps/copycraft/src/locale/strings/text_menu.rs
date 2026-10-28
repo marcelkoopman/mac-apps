@@ -9,6 +9,21 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("encoding_menu", "Codering", "Encoding"),
     // Text ▾ › Convert › Hash ›: SHA-256, SHA-1, MD5 ("hash" is Dutch too).
     ("hash_menu", "Hash", "Hash"),
+    // Text ▾ › Convert › Code (src/text_ops/code_style.rs); "Code" is Dutch too.
+    ("code_menu", "Code", "Code"),
+    ("code_format_yaml", "YAML opmaken", "Format YAML"),
+    ("code_minify_yaml", "YAML op één regel", "YAML on One Line"),
+    ("code_yaml_to_json", "YAML naar JSON", "YAML to JSON"),
+    ("code_json_to_yaml", "JSON naar YAML", "JSON to YAML"),
+    ("code_format_xml", "XML opmaken", "Format XML"),
+    ("code_minify_xml", "XML verkleinen", "Minify XML"),
+    ("code_format_sql", "SQL opmaken", "Format SQL"),
+    ("code_minify_sql", "SQL verkleinen", "Minify SQL"),
+    (
+        "detail_code",
+        "Opmaken, verkleinen of omzetten als nieuwe kopie; ⌘Z toont de vorige",
+        "Format, minify or convert as a new copy; ⌘Z shows the previous one",
+    ),
     // `⋯` submenus: the card themes, and help and feedback.
     ("theme_menu", "Thema", "Theme"),
     ("help_menu", "Help", "Help"),

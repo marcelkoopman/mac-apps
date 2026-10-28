@@ -175,6 +175,8 @@ pub struct TextShown {
     pub tracking: bool,
     /// A JSON card (also JSON with a mistake): Text ▾ offers Format JSON….
     pub json: bool,
+    /// JSON, YAML, XML or SQL: Text ▾ › Code offers its steps.
+    pub code_lang: Option<crate::text_ops::code_style::CodeLang>,
 }
 
 /// A table version for the card: its frame, which version it is, and what the versions are.
@@ -475,6 +477,9 @@ pub enum CommandId {
     TextEncode(crate::text_ops::encoding::Codec),
     /// Text ▾ › Convert › Encoding: SHA-256, SHA-1 or MD5 as lowercase hex.
     TextHash(crate::text_ops::hash::HashKind),
+    /// Text ▾ › Convert › Code: YAML, XML or SQL formatted or minified, JSON ⇄ YAML, as a new
+    /// copy.
+    TextCode(crate::text_ops::code_style::CodeOp),
     /// The "AI" chip left of Text ▾ on text and code cards: the card pops [`ai_menu_items`].
     AiMenu,
     /// An Apple Intelligence action (from the AI chip's menu or search): runs on this click only, never on its own. The

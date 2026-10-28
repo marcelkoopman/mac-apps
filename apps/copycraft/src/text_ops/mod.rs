@@ -82,6 +82,8 @@ pub enum TextOp {
     Encode(encoding::Codec),
     /// The whole text's SHA-256, SHA-1 or MD5 as lowercase hex ([`hash`]).
     Hash(hash::HashKind),
+    /// YAML, XML or SQL formatted or minified, JSON ⇄ YAML ([`code_style`]).
+    Code(code_style::CodeOp),
 }
 
 impl TextOp {
@@ -112,6 +114,7 @@ impl TextOp {
             TextOp::Case(style) => case_style::convert(text, *style),
             TextOp::Encode(codec) => codec.apply(text).ok()?,
             TextOp::Hash(kind) => kind.hex(text),
+            TextOp::Code(op) => op.apply(text)?,
         };
         (!out.trim().is_empty()).then_some(out)
     }
@@ -281,6 +284,7 @@ pub fn parse_count(typed: &str) -> Option<usize> {
 }
 
 pub mod case_style;
+pub mod code_style;
 pub mod encoding;
 pub mod filter;
 pub mod hash;
