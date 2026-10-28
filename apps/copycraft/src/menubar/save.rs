@@ -606,22 +606,13 @@ impl App {
         let Some(text) = self.source_text() else {
             return;
         };
-        let raw = crate::page_preview::page_url(&text)
-            .map(str::to_string)
-            .or_else(|| crate::youtube::video_id(&text).map(|_| text.trim().to_string()));
-        let Some(raw) = raw else {
-            return;
-        };
-        let url = crate::format::format_text(&raw);
-        let url = if crate::page_preview::url_has_userinfo(&url) {
-            crate::page_preview::strip_userinfo(&url)
-        } else {
-            url
-        };
-        if !crate::url_policy::may_visit(&url) {
-            crate::diag::log(crate::diag::LogEvent::VisitRefused);
+        if !crate::link_card::is_link(&text) {
             return;
         }
+        let Some(url) = crate::link_card::open_url(&text) else {
+            crate::diag::log(crate::diag::LogEvent::VisitRefused);
+            return;
+        };
         #[cfg(target_os = "macos")]
         if !crate::macos_open::open_web_url(&url) {
             crate::diag::log(crate::diag::LogEvent::VisitFailed);

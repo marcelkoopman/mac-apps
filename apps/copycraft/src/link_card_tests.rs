@@ -372,3 +372,40 @@ fn link_in_text_finds_exactly_one() {
     assert_eq!(link_in_text("no link here"), None);
     assert_eq!(link_in_text("https://example.com/a"), None);
 }
+
+#[test]
+fn warning_orange_is_readable_on_every_well() {
+    use crate::card_theme::{CardTheme, Rgb, contrast};
+    let navy = Rgb(0x07, 0x11, 0x2D);
+    assert!(contrast(WARN_ON_DARK, navy) >= mac_ui::style::AA_BODY);
+    assert!(contrast(WARN_ON_LIGHT, Rgb(255, 255, 255)) >= mac_ui::style::AA_BODY);
+    for theme in CardTheme::ALL {
+        let Some(palette) = theme.palette() else {
+            continue;
+        };
+        let warn = if palette.dark {
+            WARN_ON_DARK
+        } else {
+            WARN_ON_LIGHT
+        };
+        assert!(
+            contrast(warn, palette.background) >= mac_ui::style::AA_BODY,
+            "{theme:?}"
+        );
+    }
+}
+
+#[test]
+fn open_url_is_http_without_credentials() {
+    assert_eq!(
+        open_url("https://deploy:hunter2@example.com/a").as_deref(),
+        Some("https://example.com/a")
+    );
+    assert_eq!(
+        open_url("localhost:3000/x").as_deref(),
+        Some("http://localhost:3000/x")
+    );
+    assert!(open_url("example.com/x").is_some_and(|url| url.starts_with("http")));
+    assert_eq!(open_url("file:///Applications/Calculator.app"), None);
+    assert_eq!(open_url("see https://example.com"), None);
+}

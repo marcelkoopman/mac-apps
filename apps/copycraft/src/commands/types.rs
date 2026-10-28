@@ -2,8 +2,6 @@
 
 use super::*;
 
-pub(crate) const EXCERPT_LINES: usize = 6;
-pub(crate) const EXCERPT_LINE_CHARS: usize = 48;
 /// Formatted code stays whole so the card can color real tokens. Past this, the tail is cut.
 pub(crate) const CODE_CAP: usize = 80_000;
 /// Lines (table rows) a card shows before "Show all". Enough to read the data, quick to lay out.

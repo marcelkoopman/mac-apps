@@ -257,16 +257,6 @@ pub(crate) fn format_kilobytes(n: usize) -> String {
     format!("{body} KB")
 }
 
-pub(crate) fn clip_chars(text: &str, max: usize) -> String {
-    let mut chars = text.chars();
-    let body: String = chars.by_ref().take(max).collect();
-    if chars.next().is_some() {
-        format!("{body}…")
-    } else {
-        body
-    }
-}
-
 pub(crate) fn theme_name(theme: Theme) -> &'static str {
     match theme {
         Theme::System => crate::locale::t("theme_system"),

@@ -200,26 +200,6 @@ pub fn content_key(data: &LaunchData) -> u64 {
     hasher.finish()
 }
 
-/// The start of the clipboard text, kept on its own lines.
-pub fn payload_excerpt(text: &str) -> String {
-    let mut out = Vec::new();
-    let mut extra = false;
-    for (index, line) in text.lines().enumerate() {
-        if index >= EXCERPT_LINES {
-            extra = true;
-            break;
-        }
-        out.push(clip_chars(line, EXCERPT_LINE_CHARS));
-    }
-    if extra
-        && let Some(last) = out.last_mut()
-        && !last.ends_with('…')
-    {
-        last.push('…');
-    }
-    out.join("\n")
-}
-
 /// The card shown while a slow card is built on its thread: no copied text, only "Working…".
 pub fn building_card() -> WorkCard {
     let working = crate::locale::t("card_building").to_string();
@@ -421,13 +401,10 @@ pub(crate) fn compose_card(data: &LaunchData) -> WorkCard {
         SubjectKind::Text => {
             let text = data.subject_text.as_deref().unwrap_or("");
             // A link's decoder view (URL) is a text view; the Link card is its Original.
-            if data.view != CardView::Decode {
-                if let Some(card) = youtube_card(text) {
-                    return card;
-                }
-                if let Some(card) = page_card(text) {
-                    return card;
-                }
+            if data.view != CardView::Decode
+                && let Some(card) = link_card(text)
+            {
+                return card;
             }
             let (excerpt, preview_note) = excerpt_for(text, data.full);
             let mut card = WorkCard {

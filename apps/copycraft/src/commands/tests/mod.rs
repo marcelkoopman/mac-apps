@@ -5,9 +5,9 @@ use super::{
     CardView, CommandId, ContentActions, DiffShown, Hist, ImageFacts, ImageScan, LaunchData,
     NAV_SPAN, SubjectKind, chip_width, chips, content_actions, content_key, copy_tip,
     deferred_save_name, effective_mask, history_label, history_nav, keeps_card_open, keyed_tip,
-    layout_chips, masks_content, matching, overflow, payload_excerpt, presented_view, save_tip,
-    search_pool, stays_revealed, step_chip, step_history, text_save_file, transformed_text,
-    well_mask, work_card,
+    layout_chips, masks_content, matching, overflow, presented_view, save_tip, search_pool,
+    stays_revealed, step_chip, step_history, text_save_file, transformed_text, well_mask,
+    work_card,
 };
 use super::{OPEN_TABLE_TITLE, table_window_view};
 use super::{PREVIEW_CHARS, PREVIEW_ROWS, excerpt_for, group_thousands, showing_note};

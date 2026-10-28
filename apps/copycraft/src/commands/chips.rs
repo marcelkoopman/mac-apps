@@ -87,8 +87,7 @@ pub(crate) static TEXT_CHIPS: crate::memo::Memo<Vec<Command>> =
 
 pub(crate) fn copied_text_chips(text: &str) -> Vec<Command> {
     TEXT_CHIPS.get_or_compute(text, |text| {
-        if crate::youtube::video_id(text).is_some() || crate::page_preview::page_url(text).is_some()
-        {
+        if crate::link_card::is_link(text) {
             link_chips(text)
         } else {
             text_chips(text)
@@ -102,8 +101,7 @@ pub(crate) fn copied_text_chips(text: &str) -> Vec<Command> {
 /// Remembered per text like the chips.
 pub fn offers_text_menu(text: &str) -> bool {
     TEXT_MENU.get_or_compute(text, |text| {
-        if crate::youtube::video_id(text).is_some() || crate::page_preview::page_url(text).is_some()
-        {
+        if crate::link_card::is_link(text) {
             return false;
         }
         let kind = crate::format::detect(text);
@@ -288,12 +286,16 @@ pub(crate) fn source_commands(data: &LaunchData) -> Vec<Command> {
 }
 
 pub(crate) fn link_chips(text: &str) -> Vec<Command> {
-    let mut commands = vec![command(
-        CommandId::Visit,
-        crate::locale::t("chip_visit"),
-        crate::locale::t("detail_visit"),
-        "visit open browser",
-    )];
+    let mut commands = Vec::new();
+    // Not for a `file://` link: the browser gets http(s) only.
+    if crate::link_card::open_url(text).is_some() {
+        commands.push(command(
+            CommandId::Visit,
+            crate::locale::t("chip_visit"),
+            crate::locale::t("detail_visit"),
+            "visit open browser",
+        ));
+    }
     if toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,

@@ -528,7 +528,9 @@ fn html_url_previews_like_a_page() {
     let card = work_card(&input);
     assert_eq!(card.title, "Link");
     assert_eq!(card.link_page.as_deref(), Some(url));
-    assert_eq!(card.excerpt, url);
+    // Domain without `www.`, then the path; the URL itself is in `link_page`.
+    assert_eq!(card.excerpt, "example.com\n/news/story");
+    assert_eq!(card.highlight, Some(crate::format::FormatKind::Url));
     assert!(card.selectable);
     // Blurred until revealed, like any copy.
     assert!(masks_content(&card, CardView::Original));

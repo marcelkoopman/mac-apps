@@ -2,7 +2,7 @@
 
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2_app_kit::{NSColor, NSFont, NSTextView};
-use mac_ui::objc2_foundation::{NSMutableAttributedString, NSRange, NSString};
+use mac_ui::objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSRange, NSString};
 use mac_ui::text::AttrText;
 
 use crate::card_theme::Palette;
@@ -422,6 +422,119 @@ fn pin_width_from_grid(text: &NSTextView, lines: &[crate::dataframe::FrozenLine]
     }
     // Container coords → view coords (left inset).
     Some((max_x + inset.width).max(1.0))
+}
+
+/// The Link card ([`crate::link_card`]): the place's SF Symbol and the domain large, the
+/// known site, the path small, the parameter names as chips, then the labels (warnings orange,
+/// the rest grey). Every part is drawn from `link`; nothing is fetched or logged.
+pub(crate) fn paint_link(text: &NSTextView, link: &crate::link_card::LinkCard) {
+    use crate::link_card::Line;
+    use mac_ui::objc2_app_kit::{
+        NSAttributedStringAttachmentConveniences, NSImageSymbolConfiguration, NSTextAttachment,
+    };
+    let size = zoomed(mac_ui::metrics::FONT_BODY);
+    let label = label_color();
+    let secondary = secondary_color();
+    let domain_font = NSFont::systemFontOfSize_weight(size * 1.6, mac_ui::fonts::semibold_weight());
+    let site_font = NSFont::systemFontOfSize_weight(size, mac_ui::fonts::semibold_weight());
+    let small = NSFont::systemFontOfSize(size * 0.9);
+    let link_color = crate::appearance::card_link_color(palette());
+    let warn = crate::appearance::srgb(if is_dark(text) {
+        crate::link_card::WARN_ON_DARK
+    } else {
+        crate::link_card::WARN_ON_LIGHT
+    });
+    let chip_bg = tertiary_color().colorWithAlphaComponent(0.22);
+    let attr = NSMutableAttributedString::new();
+    let push = |piece: &str, font: &NSFont, color: &NSColor| {
+        attr.appendAttributedString(&AttrText::new(piece, font, color).into_attributed());
+    };
+    for (index, line) in link.lines().iter().enumerate() {
+        if index > 0 {
+            push("\n", &small, &label);
+        }
+        match line {
+            Line::Domain(domain) => {
+                let symbol =
+                    mac_ui::icon::system_symbol(link.place.symbol(), "").and_then(|image| {
+                        let config =
+                            NSImageSymbolConfiguration::configurationWithHierarchicalColor(
+                                &link_color,
+                            )
+                            .configurationByApplyingConfiguration(
+                                &NSImageSymbolConfiguration::configurationWithPointSize_weight(
+                                    size * 1.4,
+                                    mac_ui::fonts::semibold_weight(),
+                                ),
+                            );
+                        image.imageWithSymbolConfiguration(&config)
+                    });
+                if let Some(image) = symbol {
+                    let attachment = NSTextAttachment::new();
+                    attachment.setImage(Some(&image));
+                    attr.appendAttributedString(
+                        &NSAttributedString::attributedStringWithAttachment(&attachment),
+                    );
+                    push(" ", &domain_font, &label);
+                }
+                push(domain, &domain_font, &label);
+            }
+            Line::Site(site) => push(site, &site_font, &label),
+            Line::Path(path) => push(path, &small, &secondary),
+            Line::Params(names) => {
+                for (at, name) in names.iter().enumerate() {
+                    if at > 0 {
+                        push("  ", &small, &label);
+                    }
+                    let padded = format!("\u{2002}{name}\u{2002}");
+                    let chip = AttrText::new(&padded, &small, &label);
+                    chip.background_utf16(chip.all(), &chip_bg);
+                    attr.appendAttributedString(&chip.into_attributed());
+                }
+            }
+            Line::Badges(badges) => {
+                for (at, badge) in badges.iter().enumerate() {
+                    if at > 0 {
+                        push("  ·  ", &small, &secondary);
+                    }
+                    if badge.warn {
+                        push(&format!("⚠︎ {}", badge.text), &small, &warn);
+                    } else {
+                        push(&badge.text, &small, &secondary);
+                    }
+                }
+            }
+        }
+    }
+    // A little air between the lines.
+    let style = mac_ui::objc2_app_kit::NSMutableParagraphStyle::new();
+    style.setParagraphSpacing(size * 0.45);
+    mac_ui::text::set_paragraph_style(
+        &attr,
+        &style,
+        NSRange {
+            location: 0,
+            length: attr.length(),
+        },
+    );
+    if let Some(storage) = mac_ui::widgets::text_storage(text) {
+        storage.setAttributedString(&attr);
+    } else {
+        text.setString(&NSString::from_str(&link.text()));
+    }
+}
+
+/// A fixed dark theme, or (System) a dark appearance on the view.
+fn is_dark(view: &NSTextView) -> bool {
+    use mac_ui::objc2_app_kit::NSAppearanceCustomization;
+    match palette() {
+        Some(palette) => palette.dark,
+        None => view
+            .effectiveAppearance()
+            .name()
+            .to_string()
+            .contains("Dark"),
+    }
 }
 
 #[cfg(test)]

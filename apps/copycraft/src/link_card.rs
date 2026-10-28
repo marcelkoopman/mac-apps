@@ -16,6 +16,11 @@ const MAX_NAME: usize = 24;
 /// Longer copies are not read as a link (they are not one URL a person copied).
 const MAX_LEN: usize = 16 * 1024;
 
+/// Orange of a warning label on a dark well (the darkest is the app's #07112D) and on a light
+/// one; both keep body-text contrast (tested).
+pub(crate) const WARN_ON_DARK: crate::card_theme::Rgb = crate::card_theme::Rgb(255, 159, 10);
+pub(crate) const WARN_ON_LIGHT: crate::card_theme::Rgb = crate::card_theme::Rgb(168, 72, 0);
+
 /// Where a link points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Place {
@@ -685,6 +690,7 @@ impl LinkCard {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     /// What Copy domain puts on the clipboard: the host, without port; empty for a file.
     pub(crate) fn copy_domain(&self) -> Option<String> {
         (self.place != Place::File).then(|| self.host.clone())
@@ -693,26 +699,26 @@ impl LinkCard {
     /// The labels, warnings first.
     pub(crate) fn badges(&self) -> Vec<Badge> {
         let mut out = Vec::new();
-        let mut push = |key: &'static str, warn: bool| {
+        let mut push = |text: &str, warn: bool| {
             out.push(Badge {
-                text: crate::locale::t(key).to_string(),
+                text: text.to_string(),
                 warn,
             });
         };
         if self.token {
-            push("link_badge_token", true);
+            push(crate::locale::t("link_badge_token"), true);
         }
         if self.credentials {
-            push("link_badge_credentials", true);
+            push(crate::locale::t("link_badge_credentials"), true);
         }
         if self.punycode {
-            push("link_badge_punycode", true);
+            push(crate::locale::t("link_badge_punycode"), true);
         }
         if self.odd_host {
-            push("link_badge_odd_host", true);
+            push(crate::locale::t("link_badge_odd_host"), true);
         }
         if self.tracking {
-            push("link_badge_tracking", false);
+            push(crate::locale::t("link_badge_tracking"), false);
         }
         if let Some(scheme) = self.scheme.as_deref().filter(|scheme| *scheme != "https") {
             out.push(Badge {
@@ -779,12 +785,32 @@ impl LinkCard {
         crate::locale::tf("link_ax", &[&self.domain(), &kind])
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     /// Open asks first: the link may hand a token to the browser and the site.
     pub(crate) fn asks_before_open(&self) -> bool {
         self.token
     }
 }
 
+/// What Open hands to the browser: an `http(s)` link (scheme-less ones get one; `localhost`
+/// gets `http://`), without `user:password@`, when [`crate::url_policy::may_visit`] allows it.
+/// `None` for a `file://` link and anything that is not a link.
+pub(crate) fn open_url(text: &str) -> Option<String> {
+    let link = parse(text)?;
+    if link.place == Place::File {
+        return None;
+    }
+    let raw = text.trim();
+    let url = if link.scheme.is_none() && raw.to_ascii_lowercase().starts_with("localhost") {
+        format!("http://{raw}")
+    } else {
+        crate::format::format_text(raw)
+    };
+    let url = crate::page_preview::strip_userinfo(&url);
+    crate::url_policy::may_visit(&url).then_some(url)
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
 /// What Copy cleaned puts on the clipboard: `text` without tracking parameters and without
 /// `user:password@`.
 pub(crate) fn cleaned(text: &str) -> String {
@@ -792,6 +818,7 @@ pub(crate) fn cleaned(text: &str) -> String {
     crate::text_ops::url_clean::clean_url(&url).0
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 /// The one `http(s)` URL inside a longer text (a sentence with a link), for Open link on a
 /// text card. `None` without one, with more than one, or when the text is a link itself.
 pub(crate) fn link_in_text(text: &str) -> Option<&str> {

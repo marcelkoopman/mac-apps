@@ -476,22 +476,6 @@ Kleinste opdracht die de change dekt.
 }
 
 #[test]
-fn excerpt_keeps_lines_and_cuts_a_long_one() {
-    assert_eq!(payload_excerpt("alpha\nbeta"), "alpha\nbeta");
-    let long = "x".repeat(80);
-    let cut = payload_excerpt(&long);
-    assert!(cut.ends_with('…'));
-    let many = (0..12)
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let clipped = payload_excerpt(&many);
-    assert_eq!(clipped.lines().count(), 6);
-    assert!(clipped.ends_with('…'));
-    assert!(cut.chars().count() <= 49);
-}
-
-#[test]
 fn large_table_card_previews_rows_and_show_all_renders_them() {
     let src = csv_rows(300);
     let mut d = data(SubjectKind::Text, Some(&src));

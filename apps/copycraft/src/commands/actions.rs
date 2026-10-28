@@ -36,9 +36,7 @@ pub fn content_actions(data: &LaunchData) -> ContentActions {
             let text = data.subject_text.as_deref().unwrap_or("");
             // A Base64 picture drawn in the Decode view. The description text is not a picture.
             let preview = data.view == CardView::Decode && data.picture.is_some();
-            if crate::youtube::video_id(text).is_some()
-                || crate::page_preview::page_url(text).is_some()
-            {
+            if crate::link_card::is_link(text) {
                 // Copy the URL. Nothing to save.
                 ContentActions {
                     copy: true,

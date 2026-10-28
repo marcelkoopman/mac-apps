@@ -305,7 +305,8 @@ fn youtube_url_is_a_link_card() {
     let card = work_card(&data(SubjectKind::Text, Some(url)));
     assert_eq!(card.title, "YouTube");
     assert_eq!(card.link_page.as_deref(), Some(url));
-    assert_eq!(card.excerpt, url);
+    assert_eq!(card.excerpt.lines().next(), Some("youtube.com"));
+    assert!(card.excerpt.contains("YouTube · Video"), "{}", card.excerpt);
     assert!(card.selectable);
     assert!(!card.shows_image);
     let input = data(SubjectKind::Text, Some(url));
@@ -321,31 +322,33 @@ fn youtube_url_is_a_link_card() {
 }
 
 #[test]
-fn file_urls_stay_text() {
-    let card = work_card(&data(
-        SubjectKind::Text,
-        Some("https://example.com/report.pdf"),
-    ));
-    assert_eq!(card.title, "URL");
-    assert!(card.link_page.is_none());
+fn file_urls_are_link_cards() {
+    // A copy that is one URL is a Link card, also when it points at a file.
+    let pdf = data(SubjectKind::Text, Some("https://example.com/report.pdf"));
+    let card = work_card(&pdf);
+    assert_eq!(card.title, "Link");
     assert_eq!(
-        ids(&chips(&data(
-            SubjectKind::Text,
-            Some("https://example.com/report.pdf")
-        ))),
-        vec![CommandId::TextMenu]
+        card.link_page.as_deref(),
+        Some("https://example.com/report.pdf")
     );
+    assert!(
+        card.excerpt.starts_with("example.com\n/report.pdf"),
+        "{}",
+        card.excerpt
+    );
+    assert_eq!(ids(&chips(&pdf))[0], CommandId::Visit);
     assert_eq!(
-        content_actions(&data(
-            SubjectKind::Text,
-            Some("https://example.com/report.pdf")
-        )),
+        content_actions(&pdf),
         ContentActions {
             copy: true,
-            save: true,
+            save: false,
             preview: false,
         }
     );
+    // A `file://` link has a card but nothing for the browser.
+    let local = data(SubjectKind::Text, Some("file:///Users/someone/notes.txt"));
+    assert_eq!(work_card(&local).title, "Link");
+    assert!(!ids(&chips(&local)).contains(&CommandId::Visit));
 }
 
 #[test]

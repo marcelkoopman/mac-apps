@@ -662,7 +662,26 @@ pub(crate) fn paint_preview_text(body: &str, payload: bool) {
             } else {
                 crate::pdf::ZOOM_FIT
             });
-            crate::macos_card_text::paint(view, body, highlight, payload, error_line, numbers);
+            // A Link card is drawn from the link itself (domain, site, path, parameter names,
+            // labels); its excerpt is the same in plain text.
+            let link = (payload && highlight == Some(FormatKind::Url))
+                .then(|| {
+                    LINK_PAGE
+                        .with(|slot| slot.borrow().as_deref().and_then(crate::link_card::parse))
+                })
+                .flatten();
+            match &link {
+                Some(link) => crate::macos_card_text::paint_link(view, link),
+                None => crate::macos_card_text::paint(
+                    view, body, highlight, payload, error_line, numbers,
+                ),
+            }
+            // VoiceOver hears the domain and the kind of link; not while the well is blurred.
+            let spoken = match &link {
+                Some(link) if !well_is_masked() => link.ax_label(),
+                _ => crate::locale::t("clipboard_content").to_string(),
+            };
+            view.setAccessibilityLabel(Some(&NSString::from_str(&spoken)));
             crate::macos_card_text::set_font_zoom(crate::pdf::ZOOM_FIT);
         }
         crate::macos_card_text::set_palette(None);

@@ -1,14 +1,6 @@
-//! The Link card's text: the whole URL (the well wraps it) and its query parameters as a small
-//! `name │ value` table, decoded for display. String work only: nothing is fetched, and nothing
-//! here logs the text.
-
-/// Rows of the parameter table before "… and N more".
-const MAX_ROWS: usize = 40;
-/// Characters of a parameter name or value shown; the rest is cut with `…`.
-const MAX_NAME: usize = 24;
-const MAX_VALUE: usize = 200;
-/// Characters of the URL itself shown.
-const MAX_URL: usize = 4000;
+//! A URL split into decoded parts, and the spans the well styles (scheme dim, host bold, path
+//! dim). The Link card itself is [`crate::link_card`]. String work only: nothing is fetched, and
+//! nothing here logs the text.
 
 /// A URL split into parts, each decoded for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,59 +122,6 @@ pub(crate) fn url_spans(url: &str) -> Option<UrlSpans> {
     })
 }
 
-/// At most `max` characters of `text` on one line (control characters and line breaks become
-/// spaces), cut with `…`.
-fn one_line(text: &str, max: usize) -> String {
-    let mut out: String = text
-        .chars()
-        .take(max)
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    if text.chars().nth(max).is_some() {
-        out.push('…');
-    }
-    out
-}
-
-/// The card text for `text`: the full URL, then (with a query) a blank line, a heading and one
-/// `name │ value` row per parameter. `None` when `text` is not a URL: the card then shows it as
-/// before.
-pub(crate) fn card_text(text: &str) -> Option<String> {
-    let url = text.trim();
-    let parts = split_url(url)?;
-    let shown = crate::page_preview::strip_userinfo(url);
-    let mut out = one_line(&shown, MAX_URL);
-    if parts.query.is_empty() {
-        return Some(out);
-    }
-    let name_width = parts
-        .query
-        .iter()
-        .take(MAX_ROWS)
-        .map(|(name, _)| one_line(name, MAX_NAME).chars().count())
-        .max()
-        .unwrap_or(0);
-    out.push_str("\n\n");
-    out.push_str(crate::locale::t("link_query_heading"));
-    for (name, value) in parts.query.iter().take(MAX_ROWS) {
-        let name = one_line(name, MAX_NAME);
-        let pad = name_width.saturating_sub(name.chars().count());
-        out.push('\n');
-        out.push_str(&name);
-        out.push_str(&" ".repeat(pad));
-        out.push_str(" │ ");
-        out.push_str(&one_line(value, MAX_VALUE));
-    }
-    if parts.query.len() > MAX_ROWS {
-        out.push('\n');
-        out.push_str(&crate::locale::tf(
-            "link_query_more",
-            &[&(parts.query.len() - MAX_ROWS)],
-        ));
-    }
-    Some(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,10 +236,6 @@ mod tests {
         let p = split_url("https://example.com/path").unwrap();
         assert!(p.query.is_empty());
         assert_eq!(p.fragment, None);
-        assert_eq!(
-            card_text("https://example.com/path").unwrap(),
-            "https://example.com/path"
-        );
         let bare = split_url("example.com").unwrap();
         assert_eq!(
             (bare.scheme, bare.host.as_str(), bare.path.as_str()),
@@ -347,50 +282,6 @@ mod tests {
             "https://:80/",
         ] {
             assert_eq!(split_url(text), None, "{text}");
-            assert_eq!(card_text(text), None, "{text}");
         }
-    }
-
-    #[test]
-    fn userinfo_is_not_shown() {
-        let text = card_text("https://user:secret@example.com/x?a=1").unwrap();
-        assert!(!text.contains("secret"), "{text}");
-        assert!(text.starts_with("https://example.com/x?a=1"));
-    }
-
-    #[test]
-    fn long_parameters_are_clipped_to_one_line_each() {
-        let long = "x".repeat(5000);
-        let url = format!("https://e.com/?{long}=b&v={long}&nl=a%0Ab%0D");
-        let text = card_text(&url).unwrap();
-        for line in text.lines().skip(2) {
-            assert!(
-                line.chars().count() <= MAX_NAME + 1 + 3 + MAX_VALUE + 1,
-                "{}",
-                line.len()
-            );
-        }
-        assert!(text.contains('…'));
-        // The row with `%0A` stays one row.
-        assert!(
-            text.lines()
-                .any(|l| l.starts_with("nl") && l.contains("│ a b"))
-        );
-        // The full URL is shown on top (up to its own cap).
-        assert!(text.starts_with("https://e.com/?xxxx"));
-    }
-
-    #[test]
-    fn many_parameters_are_summed_up() {
-        let query: Vec<String> = (0..50).map(|i| format!("k{i}=v")).collect();
-        let text = card_text(&format!("https://e.com/?{}", query.join("&"))).unwrap();
-        assert_eq!(text.lines().filter(|l| l.contains(" │ ")).count(), MAX_ROWS);
-        assert!(text.lines().last().unwrap().contains("10"));
-    }
-
-    #[test]
-    fn table_aligns_names() {
-        let text = card_text("https://e.com/?a=1&longer=2").unwrap();
-        assert!(text.contains("\na      │ 1\nlonger │ 2"), "{text}");
     }
 }

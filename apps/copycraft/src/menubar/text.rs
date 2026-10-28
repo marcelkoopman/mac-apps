@@ -115,8 +115,7 @@ impl App {
         // A link card has no Text ▾, but Clean URL works on it (its chip), and the versions it
         // makes go back and forth like any other step's (the cleaned link has nothing left
         // to clean, so it is let in as one of those versions).
-        let link = crate::page_preview::page_url(&text).is_some()
-            || crate::youtube::video_id(&text).is_some();
+        let link = crate::link_card::is_link(&text);
         let offered = commands::offers_text_menu(&text)
             || (link && crate::text_ops::url_clean::has_tracking(&text));
         // A copy that is not in history (not recorded) still gets Text ▾; only ⌘Z back to it

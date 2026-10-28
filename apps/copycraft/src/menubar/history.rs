@@ -9,8 +9,7 @@ impl App {
         let Some(text) = self.source_text() else {
             return false;
         };
-        let link = crate::page_preview::page_url(&text).is_some()
-            || crate::youtube::video_id(&text).is_some();
+        let link = crate::link_card::is_link(&text);
         if !link {
             return false;
         }

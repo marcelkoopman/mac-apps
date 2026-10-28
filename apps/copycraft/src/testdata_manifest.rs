@@ -137,12 +137,7 @@ fn shown_chips(data: &LaunchData) -> String {
 
 /// What Visit opens for a link (`menubar::visit_current`, without opening it).
 fn visit_url(text: &str) -> Option<String> {
-    let raw = crate::page_preview::page_url(text)
-        .map(str::to_string)
-        .or_else(|| crate::youtube::video_id(text).map(|_| text.trim().to_string()))?;
-    let url = crate::format::format_text(&raw);
-    let url = crate::page_preview::strip_userinfo(&url);
-    crate::url_policy::may_visit(&url).then_some(url)
+    crate::link_card::open_url(text)
 }
 
 fn table_op(name: &str) -> TableOp {

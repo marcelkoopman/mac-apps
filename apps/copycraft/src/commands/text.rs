@@ -91,36 +91,24 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
     }
 }
 
-/// A page link: the URL as plain text under the kind, "Link". Nothing is fetched for it.
-pub(crate) fn page_card(text: &str) -> Option<WorkCard> {
-    let page = crate::page_preview::page_url(text)?;
+/// A copy that is exactly one URL ([`crate::link_card`]): domain, known site, path,
+/// parameter names and labels, drawn by the well from the link; the excerpt is the same in
+/// plain text. Nothing is fetched for it.
+pub(crate) fn link_card(text: &str) -> Option<WorkCard> {
+    let link = crate::link_card::parse(text)?;
+    let title = if crate::youtube::video_id(text).is_some() {
+        crate::locale::t("title_youtube")
+    } else {
+        crate::locale::t("title_link")
+    };
     Some(WorkCard {
-        title: crate::locale::t("title_link").to_string(),
+        title: title.to_string(),
         meta: text_meta(text),
-        // The whole URL and its parameters; text that does not split reads as before.
-        excerpt: crate::link_view::card_text(text).unwrap_or_else(|| payload_excerpt(text)),
+        excerpt: link.text(),
         placeholder: String::new(),
         shows_image: false,
-        // A URL that splits is drawn as a link (scheme dim, host bold, path dim); text that does
-        // not stays plain.
-        highlight: crate::link_view::card_text(text).map(|_| crate::format::FormatKind::Url),
-        // The URL can be selected and copied.
-        selectable: true,
-        link_page: Some(page.to_string()),
-        preview_note: None,
-        error_line: None,
-    })
-}
-
-pub(crate) fn youtube_card(text: &str) -> Option<WorkCard> {
-    crate::youtube::video_id(text)?;
-    Some(WorkCard {
-        title: crate::locale::t("title_youtube").to_string(),
-        meta: text_meta(text),
-        excerpt: payload_excerpt(text),
-        placeholder: String::new(),
-        shows_image: false,
-        highlight: None,
+        highlight: Some(crate::format::FormatKind::Url),
+        // The card text can be selected and copied.
         selectable: true,
         link_page: Some(text.trim().to_string()),
         preview_note: None,
