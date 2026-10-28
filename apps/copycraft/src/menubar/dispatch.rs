@@ -41,7 +41,8 @@ impl App {
             | CommandId::Sample
             | CommandId::Info
             | CommandId::Ocr
-            | CommandId::Qr => {
+            | CommandId::Qr
+            | CommandId::Checksums => {
                 if matches!(id, CommandId::Format) && self.format_link_in_place() {
                     return;
                 }
@@ -200,6 +201,7 @@ impl App {
             CommandId::TableVersion(index) => self.table_goto(TableTarget::Card, |_| Some(index)),
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),
+            CommandId::ChecksumCompare => self.compare_checksum(),
             // The card pops the menu itself.
             CommandId::TableMenu
             | CommandId::ImageMenu

@@ -36,20 +36,22 @@ impl App {
     /// Read a dropped or chosen file on a thread (a large file, a picture), then show it. A
     /// promised file (`promised`) is removed after the read.
     pub(crate) fn open_path(&mut self, path: std::path::PathBuf, promised: bool) {
+        // Its checksums are read alongside, on their own thread ([`App::start_checksum`]); a
+        // promised file goes when both reads are done with it.
+        let promised = promised.then(|| super::checksum::PromisedFile::new(path.clone()));
+        let checksum = self.start_checksum(path.clone(), promised.clone());
         let opened = self.start_work(
             work::Lane::File,
             work::QUICK,
             move || {
                 let opened = crate::open_file::load_dropped(&path);
-                if promised {
-                    mac_ui::drop::discard_promised(&path);
-                }
+                drop(promised);
                 opened
             },
-            |app, opened| app.show_dropped(opened),
+            move |app, opened| app.show_dropped_file(opened, Some(checksum)),
         );
         if let Some(opened) = opened {
-            self.show_dropped(opened);
+            self.show_dropped_file(opened, Some(checksum));
         }
     }
 
@@ -57,6 +59,17 @@ impl App {
     /// same limit, zeroized when it falls off or on Wipe), then onto the card. The clipboard is
     /// left as it is.
     pub(crate) fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
+        self.show_dropped_file(opened, None);
+    }
+
+    /// [`Self::show_dropped`] for a file read from a path, whose checksums are being read by
+    /// run `checksum` ([`App::start_checksum`]); `None` for what has none.
+    pub(crate) fn show_dropped_file(
+        &mut self,
+        opened: crate::open_file::OpenedFile,
+        checksum: Option<u64>,
+    ) {
+        self.tie_checksum(checksum);
         let opened = self.look_at_dropped_image(opened);
         // The clipboard's copy goes into history first, by the usual rules (paused, private,
         // a token or key, history off), if it is not there yet: the drop takes the card, not
@@ -391,6 +404,7 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
+        self.drop_checksum();
         self.opened_superseded = false;
         self.opened_table = crate::settings::preferred_table();
         if let Some(cursor) = self.clipboard_cursor.take() {
@@ -610,6 +624,7 @@ impl App {
             shown_mark: None,
             diff_picks: Vec::new(),
             diff: None,
+            checksum: None,
         }
     }
 

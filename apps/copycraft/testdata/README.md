@@ -490,6 +490,14 @@ Mac only, no data.
 - [ ] Not offered: a copied picture (⌃⇧⌘4 to the clipboard) and a QR code made with *Tekst ▾* / *Text ▾* › *QR Code* have no *Strip Metadata* chip (it is still in *Image ▾*). Neither does a dropped PDF. On *Tekst* / *Text* (the recognized text of a dropped picture), the chip is greyed out like *Image ▾*. Search (type *metadata*) lists *Strip Metadata* once.
 - [ ] Debug build: `log stream` (command above) shows no file name, path, coordinates or location for the drop or the step.
 
+### Checksums of a dropped file
+
+- [ ] Shown: make a fake file (`printf 'fake checksum test\n' > /tmp/fake.txt`) and drop it on the card. The chip row ends with *Controlegetallen* / *Checksums* and *Vergelijk met klembord* / *Compare with Clipboard*. *Checksums* shows the file name, then `SHA-256` with 64 hex digits and `MD5` with 32; they are the same as `shasum -a 256 /tmp/fake.txt` and `md5 /tmp/fake.txt` in Terminal, and can be selected. Clicking *Checksums* again goes back to the text. A dropped picture and a dropped PDF have the two chips too, and so does a file too large to show (it shows only a note).
+- [ ] Compare, ✓: copy the SHA-256 from Terminal (`shasum -a 256 /tmp/fake.txt | cut -c1-64 | pbcopy`) and click *Compare with Clipboard*: a toast *✓ Gelijk aan de SHA-256 op het klembord* / *✓ Matches the SHA-256 on the clipboard*, and the card's checksum view says it on the meta line. Uppercase with spaces (`… | tr a-f A-F | sed 's/..../& /g' | pbcopy`) gives ✓ too, and so does the MD5 (`md5 -q /tmp/fake.txt | pbcopy`: *… MD5 …*).
+- [ ] Compare, ✗: change one digit of the copied hash: *✗ Anders dan de hash op het klembord* / *✗ Differs from the hash on the clipboard*. Copy plain text (`hello`): *Geen hash op het klembord* / *No hash on the clipboard*.
+- [ ] Large file: `mkfile 2g /tmp/big.bin` and drop it. The card stays usable at once; the checksum view says *Berekenen… N%* / *Calculating… N%*, counting up, until the hashes show. Drop another file while it reads: the new file's checksums come, not the old one's. Delete `/tmp/big.bin` afterwards.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path, hash or clipboard text for the drop or the compare.
+
 ### Pictures show in the strip at once
 
 - [ ] Two in a row: copy a screenshot (⌘⇧⌃4) and right after it a second one: within about a second the strip under the card has both tiles (the strip shows from 2 entries). Do the same with ⌘V of two pictures into the open card, and with two picture files dropped onto it: same.

@@ -128,6 +128,22 @@ pub struct LaunchData {
     pub diff_picks: Vec<u64>,
     /// The diff of those two, when both are chosen.
     pub diff: Option<DiffShown>,
+    /// The checksums of the dropped or chosen file on the card. Absent for anything else.
+    pub checksum: Option<ChecksumShown>,
+}
+
+/// The checksums of the file on the card ([`crate::checksum`]): only for a dropped or chosen
+/// file, worked out on a thread. Never stored or logged.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ChecksumShown {
+    /// Still being read; the percent read for a large file
+    /// ([`crate::checksum::SHOW_PROGRESS_ABOVE`]).
+    pub working: Option<Option<u8>>,
+    pub digests: Option<crate::checksum::Digests>,
+    /// The file could not be read.
+    pub failed: bool,
+    /// What *Compare with Clipboard* found, until another file is on the card.
+    pub verdict: Option<crate::checksum::Verdict>,
 }
 
 /// The diff the card is showing. Not stored with a history entry.
@@ -268,6 +284,8 @@ pub enum CardView {
     Qr,
     /// Line diff of two history copies. Not a view of one entry, and not stored.
     Diff,
+    /// SHA-256 and MD5 of a dropped or chosen file ([`crate::checksum`]).
+    Checksum,
 }
 
 impl CardView {
@@ -284,6 +302,7 @@ impl CardView {
             CommandId::Ocr => Self::Ocr,
             CommandId::Qr => Self::Qr,
             CommandId::Diff => Self::Diff,
+            CommandId::Checksums => Self::Checksum,
             _ => return None,
         })
     }
@@ -447,6 +466,10 @@ pub enum CommandId {
     ImageStep(crate::image_edit::ImageOp),
     /// Resize › Custom…: asks for a width or a height.
     ImageResizeCustom,
+    /// The checksums of a dropped or chosen file (the [`CardView::Checksum`] view).
+    Checksums,
+    /// Compare a hex hash on the clipboard with the file's checksums: ✓ or ✗.
+    ChecksumCompare,
     /// The "Text ▾" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
     /// Text ▾ › Complexity: cognitive complexity per function, in a menu.

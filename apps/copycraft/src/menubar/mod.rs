@@ -50,6 +50,7 @@ const PREWARM_LEN: usize = 64 * 1024;
 
 mod ai;
 mod app;
+mod checksum;
 mod dispatch;
 mod handler;
 mod history;

@@ -110,6 +110,7 @@ fn data(text: &str, view: CardView) -> LaunchData {
         shown_mark: None,
         diff_picks: Vec::new(),
         diff: None,
+        checksum: None,
     }
 }
 

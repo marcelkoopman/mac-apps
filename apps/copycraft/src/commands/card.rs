@@ -73,7 +73,8 @@ pub fn stays_revealed(revealed: bool, shown_key: u64, next_key: u64) -> bool {
 /// The well has copied content, so it stays blurred until it is clicked.
 /// Image info is dimensions and a data URL, so the Info chip stays sharp.
 pub fn masks_content(card: &WorkCard, view: CardView) -> bool {
-    if view == CardView::Info {
+    // Checksums say nothing of what the file holds.
+    if matches!(view, CardView::Info | CardView::Checksum) {
         return false;
     }
     // A diff is copied text even while it is still being built (the excerpt is empty then).
@@ -200,6 +201,57 @@ pub fn content_key(data: &LaunchData) -> u64 {
     hasher.finish()
 }
 
+/// The checksum view of a dropped or chosen file: SHA-256 first, then MD5, selectable; what
+/// *Compare with Clipboard* found on the meta line. While the file is read, "Calculating…"
+/// (with the percent read for a large file).
+pub(crate) fn checksum_card(data: &LaunchData, checksum: &ChecksumShown) -> WorkCard {
+    let title = data
+        .source_name
+        .clone()
+        .unwrap_or_else(|| crate::locale::t("title_file").to_string());
+    let mut card = WorkCard {
+        title,
+        meta: String::new(),
+        excerpt: String::new(),
+        placeholder: String::new(),
+        shows_image: false,
+        highlight: None,
+        selectable: true,
+        link_page: None,
+        preview_note: None,
+        error_line: None,
+        swatch: None,
+    };
+    if let Some(digests) = &checksum.digests {
+        card.excerpt = format!("SHA-256\n{}\n\nMD5\n{}", digests.sha256, digests.md5);
+        card.meta = match checksum.verdict {
+            Some(verdict) => checksum_verdict(verdict).to_string(),
+            None => crate::locale::t("checksum_meta").to_string(),
+        };
+    } else if checksum.failed {
+        card.placeholder = crate::locale::t("checksum_failed").to_string();
+    } else {
+        let working = crate::locale::t("checksum_working");
+        card.placeholder = match checksum.working.flatten() {
+            Some(percent) => format!("{working} {percent}%"),
+            None => working.to_string(),
+        };
+        card.meta = card.placeholder.clone();
+    }
+    card
+}
+
+/// What *Compare with Clipboard* found, with ✓ or ✗: the toast and the checksum card's meta.
+pub fn checksum_verdict(verdict: crate::checksum::Verdict) -> &'static str {
+    use crate::checksum::Verdict;
+    match verdict {
+        Verdict::Sha256 => crate::locale::t("checksum_match_sha256"),
+        Verdict::Md5 => crate::locale::t("checksum_match_md5"),
+        Verdict::Differs => crate::locale::t("checksum_differs"),
+        Verdict::NoHash => crate::locale::t("checksum_no_hash"),
+    }
+}
+
 /// The card shown while a slow card is built on its thread: no copied text, only "Working…".
 pub fn building_card() -> WorkCard {
     let working = crate::locale::t("card_building").to_string();
@@ -243,6 +295,11 @@ pub fn failed_card(reason: &str) -> WorkCard {
 pub fn work_card(data: &LaunchData) -> WorkCard {
     if data.view == CardView::Diff {
         return diff_card(data);
+    }
+    if data.view == CardView::Checksum
+        && let Some(checksum) = &data.checksum
+    {
+        return checksum_card(data, checksum);
     }
     if let Some(note) = &data.source_note {
         return WorkCard {

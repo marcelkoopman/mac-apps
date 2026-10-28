@@ -93,7 +93,7 @@ pub fn transformed_text(source: &str, view: CardView) -> Option<String> {
             }
         }
         CardView::Sample => crate::xsd_schema::try_sample(source),
-        CardView::Info | CardView::Ocr | CardView::Qr | CardView::Diff => None,
+        CardView::Info | CardView::Ocr | CardView::Qr | CardView::Diff | CardView::Checksum => None,
     }
 }
 

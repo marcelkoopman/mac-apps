@@ -143,4 +143,53 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Kan deze afbeelding niet lezen",
         "Can't read this image",
     ),
+    // Checksums of a dropped or chosen file
+    ("chip_checksums", "Controlegetallen", "Checksums"),
+    (
+        "detail_checksums",
+        "SHA-256 en MD5 van dit bestand",
+        "SHA-256 and MD5 of this file",
+    ),
+    (
+        "chip_checksum_compare",
+        "Vergelijk met klembord",
+        "Compare with Clipboard",
+    ),
+    (
+        "detail_checksum_compare",
+        "Kijk of de hash op het klembord bij dit bestand hoort",
+        "Check whether the hash on the clipboard matches this file",
+    ),
+    ("checksum_meta", "SHA-256 en MD5", "SHA-256 and MD5"),
+    ("checksum_working", "Berekenen…", "Calculating…"),
+    (
+        "checksum_failed",
+        "Kan dit bestand niet lezen",
+        "Can't read this file",
+    ),
+    (
+        "checksum_not_ready",
+        "Controlegetallen worden nog berekend",
+        "Checksums are still being calculated",
+    ),
+    (
+        "checksum_match_sha256",
+        "✓ Gelijk aan de SHA-256 op het klembord",
+        "✓ Matches the SHA-256 on the clipboard",
+    ),
+    (
+        "checksum_match_md5",
+        "✓ Gelijk aan de MD5 op het klembord",
+        "✓ Matches the MD5 on the clipboard",
+    ),
+    (
+        "checksum_differs",
+        "✗ Anders dan de hash op het klembord",
+        "✗ Differs from the hash on the clipboard",
+    ),
+    (
+        "checksum_no_hash",
+        "Geen hash op het klembord",
+        "No hash on the clipboard",
+    ),
 ];

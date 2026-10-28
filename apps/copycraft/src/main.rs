@@ -6,6 +6,7 @@ mod brackets;
 mod capture;
 mod card_layout;
 mod card_theme;
+mod checksum;
 mod clipboard;
 mod color;
 mod column_picker;

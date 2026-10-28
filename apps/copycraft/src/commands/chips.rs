@@ -67,7 +67,29 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     if data.diff.is_some() {
         insert_diff_chip(&mut chips);
     }
+    // Every dropped or chosen file, also one shown only as a note: its checksums.
+    if data.checksum.is_some() {
+        chips.extend(checksum_chips());
+    }
     chips
+}
+
+/// The Checksums view toggle and *Compare with Clipboard*, last on the row.
+pub(crate) fn checksum_chips() -> [Command; 2] {
+    [
+        command(
+            CommandId::Checksums,
+            crate::locale::t("chip_checksums"),
+            crate::locale::t("detail_checksums"),
+            "checksum hash sha256 sha-256 md5 sum",
+        ),
+        command(
+            CommandId::ChecksumCompare,
+            crate::locale::t("chip_checksum_compare"),
+            crate::locale::t("detail_checksum_compare"),
+            "checksum hash compare verify clipboard sha256 md5",
+        ),
+    ]
 }
 
 /// "Diff" up front (after Visit on a link).
