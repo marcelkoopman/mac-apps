@@ -70,6 +70,10 @@ impl Codec for ImageIoCodec {
     fn encode_png(&self, image: &Rgba) -> Option<Vec<u8>> {
         encode(image, Encoding::Png)
     }
+
+    fn encode_jpeg(&self, image: &Rgba, quality: f64) -> Option<Vec<u8>> {
+        encode(image, Encoding::Jpeg(quality))
+    }
 }
 
 /// Call `read` with an image source over `bytes` (read in place, so no copy of the picture is

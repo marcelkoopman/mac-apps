@@ -15,6 +15,26 @@ impl Codec for PngCodec {
     fn encode_png(&self, image: &Rgba) -> Option<Vec<u8>> {
         png(image.width, image.height, &image.pixels)
     }
+
+    fn encode_jpeg(&self, image: &Rgba, quality: f64) -> Option<Vec<u8>> {
+        let rgb: Vec<u8> = image
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect();
+        let mut out = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, (quality * 100.0) as u8)
+            .encode(
+                &rgb,
+                image.width as u32,
+                image.height as u32,
+                image::ExtendedColorType::Rgb8,
+            )
+            .ok()?;
+        Some(out)
+    }
 }
 
 fn png(width: usize, height: usize, pixels: &[u8]) -> Option<Vec<u8>> {
@@ -126,6 +146,11 @@ fn steps_have_menu_titles_groups_and_labels() {
     assert_eq!(
         titles,
         [
+            "To PNG",
+            "To JPG (80%)",
+            "1920 px Wide",
+            "1280 px Wide",
+            "800 px Wide",
             "50%",
             "25%",
             "Longest side 2048",
@@ -150,6 +175,87 @@ fn steps_have_menu_titles_groups_and_labels() {
     assert_eq!(ImageOp::RotateLeft.label(1, 1), "Rotated 90° left");
     assert_eq!(ImageOp::FlipVertical.label(1, 1), "Flipped vertically");
     assert_eq!(ImageOp::RemoveMetadata.label(1, 1), "Metadata removed");
+}
+
+#[test]
+fn convert_is_a_submenu_that_says_the_metadata_is_gone_in_both_languages() {
+    use crate::image_edit::Convert;
+    let converts: Vec<ImageOp> = ImageOp::MENU
+        .iter()
+        .copied()
+        .filter(|op| op.group() == Some("Convert"))
+        .collect();
+    assert_eq!(
+        converts,
+        [
+            ImageOp::Convert(Convert::Png),
+            ImageOp::Convert(Convert::Jpeg),
+            ImageOp::Convert(Convert::Width(1920)),
+            ImageOp::Convert(Convert::Width(1280)),
+            ImageOp::Convert(Convert::Width(800)),
+        ]
+    );
+    assert_eq!(
+        ImageOp::Convert(Convert::Jpeg).label(4, 3),
+        "Converted to JPG (80%), metadata removed"
+    );
+    assert_eq!(
+        ImageOp::Convert(Convert::Width(800)).label(800, 600),
+        "Resized to 800×600, metadata removed"
+    );
+    let english: Vec<(String, String)> = converts
+        .iter()
+        .map(|op| (op.title(), op.label(800, 600)))
+        .collect();
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    let dutch: Vec<(String, String)> = converts
+        .iter()
+        .map(|op| (op.title(), op.label(800, 600)))
+        .collect();
+    let group = crate::image_edit::convert_group();
+    crate::locale::set_test_language(crate::settings::Language::En);
+    assert_eq!(group, "Converteren");
+    assert_eq!(dutch[1].0, "Naar JPG (80%)");
+    assert_eq!(dutch[4].0, "Breedte 800 px");
+    for (nl, en) in dutch.iter().zip(&english) {
+        assert_ne!(nl.0, en.0);
+        assert_ne!(nl.1, en.1);
+    }
+}
+
+#[test]
+fn convert_writes_png_or_jpeg_and_a_width_keeps_the_aspect_and_never_enlarges() {
+    use crate::image_edit::Convert;
+    let pixels: Vec<u8> = (0..40 * 20).flat_map(|_| [200, 10, 10, 255]).collect();
+    let source = SecretBytes::new(png(40, 20, &pixels).unwrap()).unwrap();
+    let run = |op: ImageOp, source: &SecretBytes| {
+        Job::new(op, source).run(&AtomicBool::new(false), &PngCodec)
+    };
+    let jpeg = run(ImageOp::Convert(Convert::Jpeg), &source).unwrap();
+    let bytes = jpeg.picture.with(<[u8]>::to_vec);
+    assert_eq!(bytes[..3], [0xFF, 0xD8, 0xFF], "a JPEG");
+    let again = run(ImageOp::Convert(Convert::Png), &jpeg.picture).unwrap();
+    assert!(again.picture.with(|b| b.starts_with(b"\x89PNG")));
+    // A width: PNG from a PNG, JPEG from a JPEG, the height in proportion.
+    let wide = SecretBytes::new(png(2000, 1000, &[9; 2000 * 1000 * 4]).unwrap()).unwrap();
+    let resized = run(ImageOp::Convert(Convert::Width(800)), &wide).unwrap();
+    let back = PngCodec
+        .decode(&resized.picture.with(<[u8]>::to_vec))
+        .unwrap();
+    assert_eq!((back.width, back.height), (800, 400));
+    assert!(resized.picture.with(|b| b.starts_with(b"\x89PNG")));
+    let wide_jpeg = run(ImageOp::Convert(Convert::Jpeg), &wide).unwrap();
+    let smaller = run(ImageOp::Convert(Convert::Width(1280)), &wide_jpeg.picture).unwrap();
+    assert!(smaller.picture.with(|b| b.starts_with(&[0xFF, 0xD8])));
+    let back = PngCodec
+        .decode(&smaller.picture.with(<[u8]>::to_vec))
+        .unwrap();
+    assert_eq!((back.width, back.height), (1280, 640));
+    // Narrower than the width: no copy.
+    assert!(matches!(
+        run(ImageOp::Convert(Convert::Width(1920)), &source),
+        Err(ImageError::Unchanged(_))
+    ));
 }
 
 #[test]

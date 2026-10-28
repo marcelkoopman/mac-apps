@@ -109,4 +109,24 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Dat is geen formaat. Typ een breedte zoals 1200 of w 1200, of een hoogte zoals h 800.",
         "That is not a size. Type a width like 1200 or w 1200, or a height like h 800.",
     ),
+    // Image ▾ › Convert
+    ("image_convert", "Converteren", "Convert"),
+    ("image_to_png", "Naar PNG", "To PNG"),
+    ("image_to_jpeg", "Naar JPG (80%)", "To JPG (80%)"),
+    ("image_to_width", "Breedte {0} px", "{0} px Wide"),
+    (
+        "image_converted_png",
+        "Omgezet naar PNG, zonder metadata",
+        "Converted to PNG, metadata removed",
+    ),
+    (
+        "image_converted_jpeg",
+        "Omgezet naar JPG (80%), zonder metadata",
+        "Converted to JPG (80%), metadata removed",
+    ),
+    (
+        "image_converted_size",
+        "Formaat gewijzigd naar {0}×{1}, zonder metadata",
+        "Resized to {0}×{1}, metadata removed",
+    ),
 ];

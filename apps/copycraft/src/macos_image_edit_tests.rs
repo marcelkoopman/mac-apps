@@ -19,6 +19,10 @@ impl Codec for NoScan {
     fn encode_png(&self, image: &Rgba) -> Option<Vec<u8>> {
         encode(image, Encoding::Png)
     }
+
+    fn encode_jpeg(&self, image: &Rgba, quality: f64) -> Option<Vec<u8>> {
+        encode(image, Encoding::Jpeg(quality))
+    }
 }
 
 /// `width` × `height`: the left half red, the right half blue, opaque.
@@ -336,6 +340,29 @@ fn a_location_is_found_and_strip_metadata_takes_it_off() {
     assert_eq!(done.label, "Metadata removed");
     // The original is left as it was.
     assert_eq!(original.with(<[u8]>::to_vec), located);
+}
+
+#[test]
+fn convert_through_imageio_takes_the_location_off_too() {
+    use crate::image_edit::Convert;
+    let located = SecretBytes::new(with_gps(&jpeg(32, 16, &halves(32, 16)))).unwrap();
+    for (op, uti) in [
+        (ImageOp::Convert(Convert::Png), "public.png"),
+        (ImageOp::Convert(Convert::Jpeg), "public.jpeg"),
+        (ImageOp::Convert(Convert::Width(8)), "public.jpeg"),
+    ] {
+        let done = crate::image_edit::Job::new(op, &located)
+            .run(&AtomicBool::new(false), &NoScan)
+            .unwrap();
+        let copy = done.picture.with(<[u8]>::to_vec);
+        assert_eq!(uti_of(&copy), uti, "{op:?}");
+        assert!(!has_location(&copy), "{op:?}");
+        let keys = property_keys(&copy);
+        for gone in ["{GPS}", "{TIFF}.Make", "{IPTC}", "{Exif}.DateTimeOriginal"] {
+            assert!(!keys.contains(&gone.to_string()), "{gone} in {keys:?}");
+        }
+        assert_eq!(orientation(&copy), 1);
+    }
 }
 
 #[test]

@@ -498,6 +498,15 @@ Mac only, no data.
 - [ ] Large file: `mkfile 2g /tmp/big.bin` and drop it. The card stays usable at once; the checksum view says *Berekenen… N%* / *Calculating… N%*, counting up, until the hashes show. Drop another file while it reads: the new file's checksums come, not the old one's. Delete `/tmp/big.bin` afterwards.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path, hash or clipboard text for the drop or the compare.
 
+### Convert a dropped picture
+
+- [ ] Menu: drop `testdata/images/exif_rotated_gps.jpg` (fake GPS) on the card and open *Afbeelding ▾* / *Image ▾*: the first row is the submenu *Converteren* / *Convert* with *Naar PNG* / *To PNG*, *Naar JPG (80%)* / *To JPG (80%)*, *Breedte 1920 px* / *1920 px Wide*, *Breedte 1280 px*, *Breedte 800 px*; *Wijzig formaat* / *Resize* follows.
+- [ ] To JPG: pick *To JPG (80%)*. Within a second the card shows the new copy, its meta line starts with *JPEG* and ends with *Omgezet naar JPG (80%), zonder metadata* / *Converted to JPG (80%), metadata removed*, with no location warning; the strip has it in front. ⌘V in Preview (*Nieuw van klembord* / *New from Clipboard*) pastes it; *Extra › Toon inspector* / *Tools › Show Inspector* shows no GPS tab and no camera make. The file in Finder is unchanged.
+- [ ] To PNG: on a dropped JPEG, *To PNG*: the meta line starts with *PNG* and says *Converted to PNG, metadata removed*; the picture is upright (the EXIF turn is in the pixels).
+- [ ] Width: drop a screenshot wider than 1920 px (a full-screen ⌘⇧3 on a Retina display) and pick *1920 px Wide*: the copy is 1920 wide with the height in proportion (meta *Resized to 1920×…, metadata removed*), still a PNG. A wide JPEG photo stays a JPEG. A picture already narrower than the width makes no copy and notes *Al dat formaat of kleiner* / *Already that size or smaller*.
+- [ ] Save: *Bewaar* / *Save* on the copy still offers PNG, JPEG and HEIC as before; nothing new was added (the app has the user-selected read-write entitlement already).
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no file name, path, size or location for the conversion.
+
 ### Pictures show in the strip at once
 
 - [ ] Two in a row: copy a screenshot (⌘⇧⌃4) and right after it a second one: within about a second the strip under the card has both tiles (the strip shows from 2 entries). Do the same with ⌘V of two pictures into the open card, and with two picture files dropped onto it: same.

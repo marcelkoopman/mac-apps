@@ -15,6 +15,11 @@ fn a_picture_has_image_menu_and_no_version_bar() {
     assert_eq!(
         menu_titles,
         [
+            "To PNG",
+            "To JPG (80%)",
+            "1920 px Wide",
+            "1280 px Wide",
+            "800 px Wide",
             "50%",
             "25%",
             "Longest side 2048",
@@ -36,11 +41,12 @@ fn a_picture_has_image_menu_and_no_version_bar() {
             .any(|cmd| matches!(cmd.id, CommandId::StepBack | CommandId::StepForward))
     );
     let grouped: Vec<Option<&str>> = menu.iter().map(|(cmd, _)| menu_group(&cmd.id)).collect();
-    assert_eq!(grouped[..6], [Some("Resize"); 6]);
-    assert!(grouped[6..].iter().all(Option::is_none));
-    assert!(menu[..12].iter().all(|(cmd, _)| cmd.enabled));
+    assert_eq!(grouped[..5], [Some("Convert"); 5]);
+    assert_eq!(grouped[5..11], [Some("Resize"); 6]);
+    assert!(grouped[11..].iter().all(Option::is_none));
+    assert!(menu[..17].iter().all(|(cmd, _)| cmd.enabled));
     assert_eq!(
-        menu[3].0.id,
+        menu[8].0.id,
         CommandId::ImageStep(ImageOp::Resize(Resize::Longest(1024)))
     );
 

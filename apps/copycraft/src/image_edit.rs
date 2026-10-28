@@ -36,11 +36,38 @@ pub enum ImageOp {
     /// The pixels as they are, without EXIF, GPS or other metadata (as every version is).
     RemoveMetadata,
     Grayscale,
+    /// The Convert submenu: a copy in another format or width, always without metadata.
+    Convert(Convert),
+}
+
+/// What Convert makes of a picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Convert {
+    Png,
+    /// JPEG at [`CONVERT_JPEG_QUALITY`].
+    Jpeg,
+    /// This many pixels wide, the height in proportion; a JPEG or HEIC stays a JPEG.
+    Width(u32),
+}
+
+/// The quality Convert › To JPG uses (and a converted width of a JPEG or HEIC).
+pub const CONVERT_JPEG_QUALITY: f64 = 0.8;
+
+/// How a step's copy is encoded.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Output {
+    Png,
+    Jpeg(f64),
 }
 
 impl ImageOp {
     /// The steps of the "Image ▾" menu, in its order (Resize › Custom… comes after the sizes).
-    pub const MENU: [ImageOp; 11] = [
+    pub const MENU: [ImageOp; 16] = [
+        ImageOp::Convert(Convert::Png),
+        ImageOp::Convert(Convert::Jpeg),
+        ImageOp::Convert(Convert::Width(1920)),
+        ImageOp::Convert(Convert::Width(1280)),
+        ImageOp::Convert(Convert::Width(800)),
         ImageOp::Resize(Resize::Percent(50)),
         ImageOp::Resize(Resize::Percent(25)),
         ImageOp::Resize(Resize::Longest(2048)),
@@ -67,12 +94,34 @@ impl ImageOp {
             Self::FlipVertical => crate::locale::t("image_flip_vertical").to_string(),
             Self::RemoveMetadata => crate::locale::t("image_remove_metadata").to_string(),
             Self::Grayscale => crate::locale::t("image_grayscale").to_string(),
+            Self::Convert(Convert::Png) => crate::locale::t("image_to_png").to_string(),
+            Self::Convert(Convert::Jpeg) => crate::locale::t("image_to_jpeg").to_string(),
+            Self::Convert(Convert::Width(width)) => crate::locale::tf("image_to_width", &[width]),
         }
     }
 
     /// The submenu the step is in, if any.
     pub fn group(&self) -> Option<&'static str> {
-        matches!(self, Self::Resize(_)).then_some(resize_group())
+        match self {
+            Self::Resize(_) => Some(resize_group()),
+            Self::Convert(_) => Some(convert_group()),
+            _ => None,
+        }
+    }
+
+    /// How the copy is encoded: PNG, except a JPEG from Convert (also a converted width of a
+    /// JPEG or HEIC `source`, so a photo does not grow into a large PNG).
+    pub fn output(&self, source: &[u8]) -> Output {
+        let photo = || {
+            infer::get(source).is_some_and(|kind| {
+                matches!(kind.mime_type(), "image/jpeg" | "image/heif" | "image/heic")
+            })
+        };
+        match self {
+            Self::Convert(Convert::Jpeg) => Output::Jpeg(CONVERT_JPEG_QUALITY),
+            Self::Convert(Convert::Width(_)) if photo() => Output::Jpeg(CONVERT_JPEG_QUALITY),
+            _ => Output::Png,
+        }
     }
 
     /// The version's label, once its size (`width` × `height`) is known.
@@ -85,13 +134,20 @@ impl ImageOp {
             Self::FlipVertical => crate::locale::t("image_flipped_vertically").to_string(),
             Self::RemoveMetadata => crate::locale::t("image_metadata_removed").to_string(),
             Self::Grayscale => crate::locale::t("image_grayscale").to_string(),
+            Self::Convert(Convert::Png) => crate::locale::t("image_converted_png").to_string(),
+            Self::Convert(Convert::Jpeg) => crate::locale::t("image_converted_jpeg").to_string(),
+            Self::Convert(Convert::Width(_)) => {
+                crate::locale::tf("image_converted_size", &[&width, &height])
+            }
         }
     }
 
     /// The meta-line note when the step would change nothing (a Resize that would enlarge).
     pub fn unchanged_note(&self) -> &'static str {
         match self {
-            Self::Resize(_) => crate::locale::t("image_already_that_size"),
+            Self::Resize(_) | Self::Convert(Convert::Width(_)) => {
+                crate::locale::t("image_already_that_size")
+            }
             _ => crate::locale::t("nothing_to_change"),
         }
     }
@@ -110,6 +166,10 @@ impl ImageOp {
             Self::FlipVertical => Ok(flip(image, false)),
             Self::RemoveMetadata => Ok(image),
             Self::Grayscale => Ok(grayscale(image)),
+            Self::Convert(Convert::Png | Convert::Jpeg) => Ok(image),
+            Self::Convert(Convert::Width(width)) => {
+                Self::Resize(Resize::Width(*width)).apply(image)
+            }
         }
     }
 }
@@ -117,6 +177,11 @@ impl ImageOp {
 /// The Resize submenu.
 pub fn resize_group() -> &'static str {
     crate::locale::t("image_resize")
+}
+
+/// The Convert submenu.
+pub fn convert_group() -> &'static str {
+    crate::locale::t("image_convert")
 }
 
 /// `Custom…` in the Resize submenu: "1200" or "w 1200" is a width, "h 800" a height (also
@@ -411,6 +476,8 @@ pub trait Codec {
     fn decode(&self, bytes: &[u8]) -> Option<Rgba>;
     /// `image` as PNG, without metadata.
     fn encode_png(&self, image: &Rgba) -> Option<Vec<u8>>;
+    /// `image` as JPEG at `quality` (0.0 to 1.0), without metadata or transparency.
+    fn encode_jpeg(&self, image: &Rgba, quality: f64) -> Option<Vec<u8>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -441,7 +508,7 @@ pub struct Job {
     op: ImageOp,
 }
 
-/// A finished [`Job`]: the new picture as PNG and what the step did. It is copied at once; its
+/// A finished [`Job`]: the new picture (PNG or JPEG) and what the step did. It is copied at once; its
 /// scan (info, text, barcodes) runs afterwards, off the main thread. A copy shares the
 /// picture's bytes.
 #[derive(Clone)]
@@ -472,12 +539,13 @@ impl Job {
         self.original.clone()
     }
 
-    /// Decode the picture, take the step and encode the result as PNG. `cancel` is checked
+    /// Decode the picture, take the step and encode the result ([`ImageOp::output`]). `cancel` is checked
     /// before and after the step.
     pub fn run(self, cancel: &AtomicBool, codec: &dyn Codec) -> Result<JobDone, ImageError> {
         let unreadable = || ImageError::Failed(crate::locale::t("image_cannot_read").to_string());
         let bytes = Zeroizing::new(self.original.with(<[u8]>::to_vec));
         let image = codec.decode(&bytes).ok_or_else(unreadable)?;
+        let output = self.op.output(&bytes);
         drop(bytes);
         if cancel.load(Ordering::Relaxed) {
             return Err(ImageError::Cancelled);
@@ -490,10 +558,12 @@ impl Job {
         if cancel.load(Ordering::Relaxed) {
             return Err(ImageError::Cancelled);
         }
-        let png = codec.encode_png(&image).ok_or_else(|| {
-            ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
-        })?;
-        let picture = SecretBytes::new(png).ok_or_else(|| {
+        let encoded = match output {
+            Output::Png => codec.encode_png(&image),
+            Output::Jpeg(quality) => codec.encode_jpeg(&image, quality),
+        }
+        .ok_or_else(|| ImageError::Failed(crate::locale::t("image_cannot_write").to_string()))?;
+        let picture = SecretBytes::new(encoded).ok_or_else(|| {
             ImageError::Failed(crate::locale::t("image_cannot_write").to_string())
         })?;
         Ok(JobDone {

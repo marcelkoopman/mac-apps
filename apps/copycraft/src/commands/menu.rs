@@ -355,6 +355,7 @@ pub(crate) fn image_keywords(op: &crate::image_edit::ImageOp) -> &'static str {
         ImageOp::FlipHorizontal | ImageOp::FlipVertical => "flip mirror image",
         ImageOp::RemoveMetadata => "remove metadata exif gps strip image",
         ImageOp::Grayscale => "grayscale black white gray image",
+        ImageOp::Convert(_) => "convert png jpg jpeg width resize metadata image",
     }
 }
 
