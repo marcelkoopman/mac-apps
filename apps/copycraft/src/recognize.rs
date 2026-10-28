@@ -208,7 +208,7 @@ pub fn classes(text: &str, scope: Scope) -> Classes {
         }
     }
     if !code {
-        if !found.pii && has_bare_bsn(text) {
+        if !found.pii && has_named_bsn(text) {
             found.pii = true;
         }
         if !(found.pii && found.financial) {
@@ -436,9 +436,24 @@ fn iban_mod97(compact: &[u8]) -> bool {
     remainder == 1
 }
 
-/// A standalone 8- or 9-digit run that passes the elfproef. A longer run, such as the ten
-/// account digits in an IBAN, is not a BSN; digits glued to a letter or `_` stay that token's.
-pub fn has_bare_bsn(text: &str) -> bool {
+/// Words that name a BSN ([`has_named_bsn`]), lower case.
+const BSN_WORDS: &[&str] = &[
+    "bsn",
+    "burgerservicenummer",
+    "sofinummer",
+    "sofi-nummer",
+    "citizen service number",
+];
+
+/// How far before a number its [`BSN_WORDS`] may stand, in characters, on the same line.
+pub const BSN_WORD_REACH: usize = 40;
+
+/// A standalone 8- or 9-digit run that passes the elfproef, with a word that names it
+/// ([`BSN_WORDS`], any case) on the same line at most [`BSN_WORD_REACH`] characters before
+/// it: `BSN: 123456782`, `burgerservicenummer van Jan is 123456782`. A bare number (a pid, an
+/// order number, a timestamp) is no BSN, nor is a longer run such as the ten account digits
+/// in an IBAN; digits glued to a letter or `_` stay that token's.
+pub fn has_named_bsn(text: &str) -> bool {
     let bytes = text.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
@@ -453,11 +468,43 @@ pub fn has_bare_bsn(text: &str) -> bool {
         let end = index;
         let left_open = start == 0 || !is_ident_byte(bytes[start - 1]);
         let right_open = end == bytes.len() || !is_ident_byte(bytes[end]);
-        if left_open && right_open && passes_elfproef(&bytes[start..end]) {
+        if left_open
+            && right_open
+            && passes_elfproef(&bytes[start..end])
+            && named_before(text, start)
+        {
             return true;
         }
     }
     false
+}
+
+/// Is one of [`BSN_WORDS`] on the line before byte `start`, within [`BSN_WORD_REACH`]
+/// characters? A word counts from its start: not glued to a letter or digit before it.
+fn named_before(text: &str, start: usize) -> bool {
+    let line_start = text[..start].rfind('\n').map_or(0, |at| at + 1);
+    let line = &text[line_start..start];
+    let from = line
+        .char_indices()
+        .rev()
+        .nth(BSN_WORD_REACH - 1)
+        .map_or(0, |(at, _)| at);
+    let window = line[from..].to_lowercase();
+    // From where the reach starts, a word cut off by it does not count.
+    let whole = from == 0
+        || !line[..from]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric);
+    BSN_WORDS.iter().any(|word| {
+        window.match_indices(word).any(|(at, _)| {
+            let before = window[..at].chars().next_back();
+            match before {
+                Some(c) => !c.is_alphanumeric(),
+                None => whole,
+            }
+        })
+    })
 }
 
 fn is_ident_byte(byte: u8) -> bool {
@@ -631,7 +678,7 @@ fn field_for_label(label: &str) -> Option<Field> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Classes, Scope, classes, has_bare_bsn, iban_mod97, luhn};
+    use super::{Classes, Scope, classes, has_named_bsn, iban_mod97, luhn};
 
     fn found(text: &str) -> Classes {
         classes(text, Scope::Plain)
@@ -706,11 +753,44 @@ mod tests {
         assert!(!found("10.06\t2026-04-16\t3.17").pii);
         assert!(!found("waarde 10.06 12345678").pii);
         assert!(!found("06\n12345678").pii);
-        assert!(found("klant 111222333 bevestigd").pii);
+        // A number that passes the elfproef is a BSN only when a word names it.
+        assert!(!found("klant 111222333 bevestigd").pii);
+        assert!(found("klant BSN 111222333 bevestigd").pii);
         assert!(!found("ref 123456789").pii);
-        assert!(has_bare_bsn("oud nummer 12345672"));
-        assert!(!has_bare_bsn("id x111222333 en 1112223330"));
-        assert!(!has_bare_bsn("pay to NL91ABNA0417164300"));
+        assert!(!has_named_bsn("oud nummer 12345672"));
+        assert!(has_named_bsn("oud sofinummer 12345672"));
+        assert!(!has_named_bsn("BSN: x111222333 en 1112223330"));
+        assert!(!has_named_bsn("BSN NL91ABNA0417164300"));
+    }
+
+    #[test]
+    fn a_bsn_needs_a_word_that_names_it() {
+        for text in [
+            "BSN: 123456782",
+            "bsn 123456782",
+            "Burgerservicenummer van de klant: 123456782",
+            "Sofinummer 12345672",
+            "sofi-nummer: 123456782",
+            "Citizen Service Number 123456782",
+            "(BSN) — 123456782",
+        ] {
+            assert!(has_named_bsn(text), "{text}");
+        }
+        for text in [
+            "123456782",
+            "pid 123456782",
+            "klantnummer 123456782 bevestigd",
+            // The word on another line, or too far before.
+            "BSN:\n123456782",
+            "BSN en dan een heel lang stuk tekst ertussen van meer dan veertig tekens 123456782",
+            // After the number, or inside another word.
+            "123456782 is mijn BSN",
+            "absn 123456782",
+            // A word that names it, but the number fails the elfproef.
+            "bsn 123456789 x",
+        ] {
+            assert!(!has_named_bsn(text), "{text}");
+        }
     }
 
     #[test]

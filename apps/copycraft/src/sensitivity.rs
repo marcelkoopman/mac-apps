@@ -921,9 +921,12 @@ fn main() {
     }
 
     #[test]
-    fn bare_bsn_that_passes_the_elfproef_is_pii() {
-        assert_eq!(labels("111222333"), vec![Label::Pii]);
-        assert_eq!(labels("nummer 12345672 einde"), vec![Label::Pii]);
+    fn a_bsn_is_pii_only_with_a_word_that_names_it() {
+        assert!(labels("123456782").is_empty());
+        assert!(labels("111222333").is_empty());
+        assert!(labels("nummer 12345672 einde").is_empty());
+        assert_eq!(labels("BSN: 123456782"), vec![Label::Pii]);
+        assert_eq!(labels("burgerservicenummer 12345672"), vec![Label::Pii]);
     }
 
     #[test]
@@ -944,7 +947,7 @@ fn main() {
     fn iban_stays_financial_and_is_not_a_bsn() {
         assert_eq!(labels("pay to NL91ABNA0417164300"), vec![Label::Financial]);
         assert_eq!(
-            label_line(&labels("NL91ABNA0417164300 en 111222333")),
+            label_line(&labels("NL91ABNA0417164300 en BSN 111222333")),
             "PII · financial"
         );
     }

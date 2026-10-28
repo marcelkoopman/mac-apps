@@ -113,7 +113,8 @@ pub const SAMPLES: &[(&str, &[Label])] = &[
         P,
     ),
     ("BSN: 111222333", P),
-    ("klantnummer 123456782 bevestigd", P),
+    ("klant met burgerservicenummer 123456782 bevestigd", P),
+    ("klantnummer 123456782 bevestigd", NONE),
     (
         "id;naam;email\n1;Jan de Vries;jan@example.nl\n2;Piet Jansen;piet@example.nl",
         P,
