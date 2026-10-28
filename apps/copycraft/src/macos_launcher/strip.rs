@@ -734,7 +734,27 @@ fn build_tile(
         card.addSubview(&view);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     } else if let Some(symbol) = thumb.symbol {
-        button.setAttributedTitle(&link_title(thumb, symbol, masked, themed));
+        // A link: the symbol and the lines in a label under the button, as a picture tile has
+        // its image view. Not the button's own title: a title with a symbol in it (a text
+        // attachment) made AppKit draw the button's focus ring as a rectangle around the text
+        // block, an inner blue frame inside the card's selection frame.
+        let label =
+            mac_ui::widgets::label(mtm, mac_ui::metrics::FONT_CAPTION, &NSColor::labelColor());
+        label.setUsesSingleLineMode(false);
+        label.setMaximumNumberOfLines(commands::THUMB_LINES as isize);
+        label.setAttributedStringValue(&link_title(thumb, symbol, masked, themed));
+        // Centred in the card, as a button centres its title.
+        let height = label
+            .fittingSize()
+            .height
+            .ceil()
+            .min(commands::THUMB_H - 2.0 * commands::THUMB_PAD);
+        label.setFrame(NSRect::new(
+            NSPoint::new(0.0, ((commands::THUMB_H - height) / 2.0).floor()),
+            NSSize::new(commands::THUMB_W, height),
+        ));
+        label.setAccessibilityElement(false);
+        card.addSubview(&label);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     } else {
         // The type mark first, small; then the lines (dots while masked).
