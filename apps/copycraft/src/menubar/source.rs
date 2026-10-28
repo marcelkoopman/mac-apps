@@ -473,17 +473,33 @@ impl App {
                         .byte_len(index)
                         .is_some_and(|len| len <= commands::THUMB_PICTURE_MAX_BYTES)
                 });
+                // A link: the Link card's symbol and the domain, not `://` and the URL's start.
+                let link = (self.history.kind(index) == Some(crate::format::FormatKind::Url))
+                    .then(|| self.history.get(index).and_then(commands::link_thumb))
+                    .flatten();
+                let (mark, symbol, lines) = match link {
+                    Some((symbol, lines)) => (
+                        crate::locale::t("title_link").to_string(),
+                        Some(symbol),
+                        lines,
+                    ),
+                    None => (
+                        self.history.mark(index).unwrap_or("").to_string(),
+                        None,
+                        self.history
+                            .get(index)
+                            .map(commands::thumb_lines)
+                            .unwrap_or_default(),
+                    ),
+                };
                 commands::Thumb {
                     index,
                     id: self.history.id_at(index),
                     // The pin is a symbol on the card ([`commands::pin_frame`]), not a mark.
-                    mark: self.history.mark(index).unwrap_or("").to_string(),
+                    mark,
+                    symbol,
                     pinned: self.history.is_pinned(index),
-                    lines: self
-                        .history
-                        .get(index)
-                        .map(commands::thumb_lines)
-                        .unwrap_or_default(),
+                    lines,
                     picture,
                     side: self
                         .history

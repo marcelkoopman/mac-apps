@@ -431,6 +431,7 @@ fn the_strip_forgets_the_drawn_picture_of_a_card_taken_out() {
         index: 0,
         id: Some(1),
         mark: "img".into(),
+        symbol: None,
         pinned: false,
         lines: String::new(),
         picture,

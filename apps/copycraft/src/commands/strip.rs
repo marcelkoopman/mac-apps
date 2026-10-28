@@ -42,8 +42,12 @@ pub struct Thumb {
     /// The history entry's id: the strip keeps a card's views by it, so a removal moves the
     /// other cards instead of building them again.
     pub id: Option<u64>,
-    /// The type mark (`{}`, `md`, `img`).
+    /// The type mark (`{}`, `md`, `img`); for a link the word VoiceOver reads (*Link*), as
+    /// its card draws [`Thumb::symbol`] instead.
     pub mark: String,
+    /// A link's SF Symbol (`globe`, as on the Link card), drawn in place of the mark, with the
+    /// domain next to it ([`link_thumb`]). `None` for other copies.
+    pub symbol: Option<&'static str>,
     /// The copy is pinned: the card wears the pin ([`pin_frame`], [`PIN_SYMBOL`]).
     pub pinned: bool,
     /// The first few short lines of the text ([`THUMB_LINES`]). Empty for a picture.
@@ -135,11 +139,43 @@ pub fn thumb_lines(text: &str) -> String {
         if count > 0 {
             out.push('\n');
         }
-        let mut chars = line.chars();
-        out.extend(chars.by_ref().take(THUMB_LINE_CHARS));
-        if chars.next().is_some() {
-            out.push('…');
+        out.push_str(&cut_line(line));
+    }
+    out
+}
+
+/// A link's small card: the Link card's symbol for its place (`globe`, `network`, `doc`) and
+/// its lines, the domain first, then the known site or the path (cut in the middle). `None`
+/// when `text` is not one URL ([`crate::link_card::parse`]). Never the full URL, which the
+/// card cuts after a few characters (`https://www.youtube…`).
+pub fn link_thumb(text: &str) -> Option<(&'static str, String)> {
+    let link = crate::link_card::parse(text)?;
+    let mut lines = cut_line(&link.domain());
+    // `localhost · poort 3000` says again what the domain line says.
+    let site = link
+        .site
+        .as_ref()
+        .filter(|_| link.place == crate::link_card::Place::Web);
+    let second = match site {
+        Some(site) => Some(cut_line(site)),
+        None if !link.path.is_empty() && link.path != "/" => {
+            Some(crate::link_card::middle_cut(&link.path, THUMB_LINE_CHARS))
         }
+        None => None,
+    };
+    if let Some(second) = second {
+        lines.push('\n');
+        lines.push_str(&second);
+    }
+    Some((link.place.symbol(), lines))
+}
+
+/// `line` cut at [`THUMB_LINE_CHARS`] characters, with `…`.
+fn cut_line(line: &str) -> String {
+    let mut chars = line.chars();
+    let mut out: String = chars.by_ref().take(THUMB_LINE_CHARS).collect();
+    if chars.next().is_some() {
+        out.push('…');
     }
     out
 }
@@ -629,11 +665,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_link_card_shows_the_symbol_and_the_domain_not_the_url() {
+        use super::link_thumb;
+        let (symbol, lines) =
+            link_thumb("https://www.youtube.com/watch?v=dQw4w9WgXcQ").expect("a link");
+        assert_eq!(symbol, "globe");
+        assert!(lines.starts_with("youtube.com\n"), "{lines}");
+        assert!(!lines.contains("://") && !lines.contains("www."), "{lines}");
+        let (_, lines) =
+            link_thumb("https://www.facebook.com/reel/1092344577040057").expect("a link");
+        assert_eq!(lines.lines().next(), Some("facebook.com"));
+        assert!(lines.lines().count() <= super::THUMB_LINES);
+        assert!(
+            lines
+                .lines()
+                .all(|line| line.chars().count() <= super::THUMB_LINE_CHARS + 1)
+        );
+        let (symbol, lines) = link_thumb("http://localhost:3000/").expect("a link");
+        assert_eq!(symbol, "network");
+        assert_eq!(lines, "localhost:3000");
+        assert_eq!(link_thumb("two words"), None);
+    }
+
     fn thumb(index: usize, side: Option<&'static str>) -> Thumb {
         Thumb {
             index,
             id: Some(index as u64),
             mark: "{}".to_string(),
+            symbol: None,
             pinned: false,
             lines: String::new(),
             picture: None,

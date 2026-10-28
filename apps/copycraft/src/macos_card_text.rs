@@ -424,14 +424,37 @@ fn pin_width_from_grid(text: &NSTextView, lines: &[crate::dataframe::FrozenLine]
     Some((max_x + inset.width).max(1.0))
 }
 
+/// SF Symbol `name` as one character of text: `size` points, semibold, in `color`. The Link
+/// card and the strip's link cards put it before the domain. `None` without that symbol.
+pub(crate) fn symbol_text(
+    name: &str,
+    size: f64,
+    color: &NSColor,
+) -> Option<Retained<NSAttributedString>> {
+    use mac_ui::objc2_app_kit::{
+        NSAttributedStringAttachmentConveniences, NSImageSymbolConfiguration, NSTextAttachment,
+    };
+    let image = mac_ui::icon::system_symbol(name, "")?;
+    let config = NSImageSymbolConfiguration::configurationWithHierarchicalColor(color)
+        .configurationByApplyingConfiguration(
+            &NSImageSymbolConfiguration::configurationWithPointSize_weight(
+                size,
+                mac_ui::fonts::semibold_weight(),
+            ),
+        );
+    let image = image.imageWithSymbolConfiguration(&config)?;
+    let attachment = NSTextAttachment::new();
+    attachment.setImage(Some(&image));
+    Some(NSAttributedString::attributedStringWithAttachment(
+        &attachment,
+    ))
+}
+
 /// The Link card ([`crate::link_card`]): the place's SF Symbol and the domain large, the
 /// known site, the path small, the parameter names as chips, then the labels (warnings orange,
 /// the rest grey). Every part is drawn from `link`; nothing is fetched or logged.
 pub(crate) fn paint_link(text: &NSTextView, link: &crate::link_card::LinkCard) {
     use crate::link_card::Line;
-    use mac_ui::objc2_app_kit::{
-        NSAttributedStringAttachmentConveniences, NSImageSymbolConfiguration, NSTextAttachment,
-    };
     let size = zoomed(mac_ui::metrics::FONT_BODY);
     let label = label_color();
     let secondary = secondary_color();
@@ -455,26 +478,8 @@ pub(crate) fn paint_link(text: &NSTextView, link: &crate::link_card::LinkCard) {
         }
         match line {
             Line::Domain(domain) => {
-                let symbol =
-                    mac_ui::icon::system_symbol(link.place.symbol(), "").and_then(|image| {
-                        let config =
-                            NSImageSymbolConfiguration::configurationWithHierarchicalColor(
-                                &link_color,
-                            )
-                            .configurationByApplyingConfiguration(
-                                &NSImageSymbolConfiguration::configurationWithPointSize_weight(
-                                    size * 1.4,
-                                    mac_ui::fonts::semibold_weight(),
-                                ),
-                            );
-                        image.imageWithSymbolConfiguration(&config)
-                    });
-                if let Some(image) = symbol {
-                    let attachment = NSTextAttachment::new();
-                    attachment.setImage(Some(&image));
-                    attr.appendAttributedString(
-                        &NSAttributedString::attributedStringWithAttachment(&attachment),
-                    );
+                if let Some(symbol) = symbol_text(link.place.symbol(), size * 1.4, &link_color) {
+                    attr.appendAttributedString(&symbol);
                     push(" ", &domain_font, &label);
                 }
                 push(domain, &domain_font, &label);

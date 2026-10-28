@@ -1,5 +1,6 @@
 //! The history strip along the bottom of the card: a row of small cards (type mark and a few
-//! short lines, or a small picture), horizontally scrollable, the copy on screen marked. A click
+//! short lines, or a small picture; a link shows the Link card's symbol and its domain),
+//! horizontally scrollable, the copy on screen marked. A click
 //! shows that copy ([`CommandId::HistoryView`]); nothing is copied. Masked copies (privacy
 //! filter) show their type mark only. Each card's views are kept per history entry: when
 //! history changes the cards slide to their new places, a new one fades in and a removed one
@@ -492,6 +493,7 @@ fn look_of(thumb: &commands::Thumb, current: bool, masked: bool) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     thumb.mark.hash(&mut hasher);
+    thumb.symbol.hash(&mut hasher);
     thumb.side.hash(&mut hasher);
     thumb.pinned.hash(&mut hasher);
     thumb.lines.hash(&mut hasher);
@@ -651,6 +653,7 @@ fn signature_of(
     for thumb in items {
         thumb.index.hash(&mut hasher);
         thumb.mark.hash(&mut hasher);
+        thumb.symbol.hash(&mut hasher);
         thumb.side.hash(&mut hasher);
         thumb.pinned.hash(&mut hasher);
         thumb.lines.hash(&mut hasher);
@@ -730,6 +733,9 @@ fn build_tile(
         view.setAccessibilityElement(false);
         card.addSubview(&view);
         button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
+    } else if let Some(symbol) = thumb.symbol {
+        button.setAttributedTitle(&link_title(thumb, symbol, masked, themed));
+        button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::NoImage);
     } else {
         // The type mark first, small; then the lines (dots while masked).
         let body = if masked {
@@ -789,6 +795,75 @@ fn build_tile(
         kind: thumb.kind,
         copied: thumb.copied,
     }
+}
+
+/// A link's small card: the Link card's symbol (in the mark colour) and the domain on the first
+/// line, the known site or the path under it ([`commands::link_thumb`]). Masked: the symbol,
+/// then dots.
+fn link_title(
+    thumb: &commands::Thumb,
+    symbol: &str,
+    masked: bool,
+    themed: Option<crate::card_theme::TileColours>,
+) -> Retained<NSMutableAttributedString> {
+    let font = NSFont::systemFontOfSize(mac_ui::metrics::FONT_CAPTION);
+    let (text_colour, mark_colour) = match themed {
+        Some(tile) => (
+            crate::appearance::srgb(tile.text),
+            crate::appearance::srgb(tile.mark),
+        ),
+        None => (NSColor::labelColor(), crate::appearance::caption_color()),
+    };
+    let (head, rest) = if masked {
+        (String::new(), "••••••".to_string())
+    } else {
+        match thumb.lines.split_once('\n') {
+            Some((head, rest)) => (head.to_string(), rest.to_string()),
+            None => (thumb.lines.clone(), String::new()),
+        }
+    };
+    let built = NSMutableAttributedString::new();
+    if let Some(icon) =
+        crate::macos_card_text::symbol_text(symbol, mac_ui::metrics::FONT_CAPTION, &mark_colour)
+    {
+        built.appendAttributedString(&icon);
+        if !head.is_empty() {
+            built
+                .appendAttributedString(&AttrText::new(" ", &font, &text_colour).into_attributed());
+        }
+    } else {
+        // No symbol on this system: the mark word instead.
+        let word = format!("{} ", thumb.mark);
+        built.appendAttributedString(&AttrText::new(&word, &font, &mark_colour).into_attributed());
+    }
+    let first_end = built.length() + head.encode_utf16().count() + usize::from(!rest.is_empty());
+    let text = if rest.is_empty() {
+        head
+    } else {
+        format!("{head}\n{rest}")
+    };
+    built.appendAttributedString(&AttrText::new(&text, &font, &text_colour).into_attributed());
+    let lead = commands::mark_indent(thumb.side.is_some());
+    let tail = commands::text_tail(thumb.pinned);
+    let total = built.length();
+    let first_end = first_end.min(total);
+    mac_ui::text::set_paragraph_style(
+        &built,
+        &tile_text_style(lead, tail),
+        NSRange {
+            location: 0,
+            length: first_end,
+        },
+    );
+    mac_ui::text::set_paragraph_style(
+        &built,
+        &tile_text_style(commands::THUMB_PAD, tail),
+        NSRange {
+            location: first_end,
+            length: total - first_end,
+        },
+    );
+    built
 }
 
 /// A card's paragraph style: one line per paragraph, cut with `…`, indented `lead` on the
