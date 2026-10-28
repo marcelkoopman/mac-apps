@@ -56,7 +56,9 @@ copycraft impl 9
 # Archimedes 2026-10-27; thumbnail.rs small_image): CGImageSourceCreateThumbnailAtIndex over a no-copy CFData
 # on the PNG (objc2-image-io and CFData's no-copy constructor are `unsafe`), instead of a full-size NSImage
 # and an extra unwiped NSData copy of the picture.
-mac-ui blocks 94
+# mac-ui blocks 93: -1, mac_ui::keys::board removed (2026-10-28): the defaults are ⌃⌥Space / ⌃⌥4 on every
+# keyboard, so CopyCraft no longer asks HIToolbox (LMGetKbdType / KBGetLayoutType) which keyboard it is.
+mac-ui blocks 93
 mac-ui fn 4
 mac-ui impl 6
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
