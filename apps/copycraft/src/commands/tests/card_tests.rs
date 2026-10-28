@@ -346,7 +346,7 @@ fn credential_url_stays_a_link_card() {
             .iter()
             .map(|cmd| cmd.title.as_str())
             .collect::<Vec<_>>(),
-        vec!["Visit"]
+        vec!["Open", "Copy cleaned", "Copy domain only"]
     );
 }
 
@@ -534,7 +534,10 @@ fn html_url_previews_like_a_page() {
     assert!(card.selectable);
     // Blurred until revealed, like any copy.
     assert!(masks_content(&card, CardView::Original));
-    assert_eq!(titles(&chips(&input)), vec!["Visit"]);
+    assert_eq!(
+        titles(&chips(&input)),
+        vec!["Open", "Copy cleaned", "Copy domain only"]
+    );
     assert_eq!(
         content_actions(&input),
         ContentActions {
@@ -551,7 +554,10 @@ fn bare_host_is_a_link_card() {
     let card = work_card(&input);
     assert_eq!(card.title, "Link");
     assert_eq!(card.link_page.as_deref(), Some("grok.com"));
-    assert_eq!(titles(&chips(&input)), vec!["Visit", "Format"]);
+    assert_eq!(
+        titles(&chips(&input)),
+        vec!["Open", "Copy cleaned", "Copy domain only", "Format"]
+    );
 }
 
 #[test]
@@ -559,7 +565,10 @@ fn link_with_a_query_shows_its_url_view() {
     let link = "https://example.com/docs?page=2&sort=name";
     let input = data(SubjectKind::Text, Some(link));
     assert_eq!(work_card(&input).title, "Link");
-    assert_eq!(titles(&chips(&input)), vec!["Visit", "URL"]);
+    assert_eq!(
+        titles(&chips(&input)),
+        vec!["Open", "Copy cleaned", "Copy domain only", "URL"]
+    );
     let mut decoded = input.clone();
     decoded.view = CardView::Decode;
     let card = work_card(&decoded);
@@ -573,7 +582,10 @@ fn link_with_a_query_shows_its_url_view() {
     assert!(masks_content(&card, CardView::Decode));
     // A link without a query or escapes has no decoder chip.
     let plain = data(SubjectKind::Text, Some("https://example.com/docs"));
-    assert_eq!(titles(&chips(&plain)), vec!["Visit"]);
+    assert_eq!(
+        titles(&chips(&plain)),
+        vec!["Open", "Copy cleaned", "Copy domain only"]
+    );
 }
 
 #[test]

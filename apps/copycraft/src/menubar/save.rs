@@ -602,20 +602,90 @@ impl App {
         job("clipboard.png", "png", SaveContent::ClipboardPng(input))
     }
 
+    /// Open on a link card.
     pub(crate) fn visit_current(&self) {
-        let Some(text) = self.source_text() else {
+        let Some(text) = self.source_text().map(Zeroizing::new) else {
             return;
         };
         if !crate::link_card::is_link(&text) {
             return;
         }
-        let Some(url) = crate::link_card::open_url(&text) else {
-            crate::diag::log(crate::diag::LogEvent::VisitRefused);
+        open_link(&text);
+    }
+
+    /// Open link on a text card with one URL in it.
+    pub(crate) fn open_link_in_text(&self) {
+        let Some(text) = self.source_text().map(Zeroizing::new) else {
             return;
         };
-        #[cfg(target_os = "macos")]
+        if let Some(link) = crate::link_card::link_in_text(&text) {
+            open_link(link);
+        }
+    }
+
+    /// Copy cleaned (`domain` false) or Copy domain only on a link card: onto the clipboard
+    /// and into history. Nothing for a `file://` link.
+    pub(crate) fn copy_link_part(&mut self, domain: bool) {
+        let Some(text) = self.source_text().map(Zeroizing::new) else {
+            return;
+        };
+        let Some(link) = crate::link_card::parse(&text) else {
+            return;
+        };
+        let Some(host) = link.copy_domain() else {
+            return;
+        };
+        let value = Zeroizing::new(if domain {
+            host
+        } else {
+            crate::link_card::cleaned(&text)
+        });
+        if let Err(e) = self.write_own(&value) {
+            crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                crate::diag::ErrorKind::of(&e),
+            ));
+            return;
+        }
+        self.record_own_copy(&value);
+    }
+}
+
+/// Open `text` (one link) in the browser: http(s) only, without `user:password@`, and when it
+/// may hold a token only after the user says so. Neither the link nor its kind is logged.
+fn open_link(text: &str) {
+    let Some(url) = crate::link_card::open_url(text) else {
+        crate::diag::log(crate::diag::LogEvent::VisitRefused);
+        return;
+    };
+    let asks = crate::link_card::parse(text).is_some_and(|link| link.asks_before_open());
+    #[cfg(target_os = "macos")]
+    {
+        if asks && !confirm_token_link() {
+            return;
+        }
         if !crate::macos_open::open_web_url(&url) {
             crate::diag::log(crate::diag::LogEvent::VisitFailed);
         }
     }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (url, asks);
+}
+
+/// "Open a link that may contain a token?": true for Open.
+#[cfg(target_os = "macos")]
+fn confirm_token_link() -> bool {
+    let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() else {
+        return false;
+    };
+    let open = crate::macos_launcher::holding_reveal(|| {
+        mac_ui::dialog::confirm(
+            mtm,
+            crate::locale::t("link_token_title"),
+            crate::locale::t("link_token_message"),
+            crate::locale::t("link_token_open"),
+            crate::locale::t("cancel"),
+        )
+    });
+    launcher::order_front();
+    open
 }

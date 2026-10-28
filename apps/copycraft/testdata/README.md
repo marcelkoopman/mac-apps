@@ -63,9 +63,9 @@ Columns (fixed; the test parses this table between the markers):
 | `detect/python_expected_indent.py` | Detection: Python, block without body | python | Python · expected indent | — | Text ▾ | kind=Python |
 | `detect/python_mixed_tabs.py` | Detection: Python, tab and spaces | python | Python · mixed tabs and spaces | — | Text ▾ | kind=Python |
 | `detect/python_one_liner.txt` | Detection: one Python-like line stays plain text | plain text | Content | — | Text ▾ | kind=Plain |
-| `detect/link.txt` | Link | plain text | Link | — | Visit | kind=Url; link=https://example.com/docs/getting-started; visit=https://example.com/docs/getting-started |
-| `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Visit | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
-| `detect/link_userinfo.txt` | Link with `user:pass@` (Visit strips it; the URL view leaves it out) | plain text | Link | credential | Visit, URL | kind=Url; visit=https://example.com/private/report?id=7; decode~id = 7; decodetitle=URL; decodemeta~credential |
+| `detect/link.txt` | Link | plain text | Link | — | Open, Copy cleaned, Copy domain only | kind=Url; link=https://example.com/docs/getting-started; visit=https://example.com/docs/getting-started |
+| `detect/youtube_link.txt` | YouTube link | plain text | YouTube | — | Open, Copy cleaned, Copy domain only | kind=Url; visit=https://www.youtube.com/watch?v=aBcDeFgHiJk |
+| `detect/link_userinfo.txt` | Link with `user:pass@` (Open strips it; the URL view leaves it out) | plain text | Link | credential | Open, Copy cleaned, Copy domain only, URL | kind=Url; visit=https://example.com/private/report?id=7; decode~id = 7; decodetitle=URL; decodemeta~credential |
 | `detect/plain_text.txt` | Plain text | plain text | Content | — | Text ▾ | kind=Text |
 | `convert/yaml_to_json_simple.yaml` | To JSON: simple YAML | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","features":["format","decode"]} |
 | `convert/yaml_to_json_nested.yaml` | To JSON: nested YAML | yaml | YAML | — | Text ▾, To JSON | kind=Yaml; convert=Json; json={"app":"copycraft-demo","version":3,"features":["format","convert","decode"],"owner":{"team":"demo","active":true}} |
@@ -106,9 +106,9 @@ Columns (fixed; the test parses this table between the markers):
 | `decode/unix_seconds.txt` | Unix time chip: 10 digits (seconds) in local time, UTC, relative, ISO 8601 | plain text | Content | — | Text ▾, Unix time | decode~14/11/2023 22:13:20  UTC; decode~ago; decode~ISO 8601: 2023-11-14T22:13:20Z; decodetitle=Unix time |
 | `decode/unix_milliseconds.txt` | Unix time chip: 13 digits (milliseconds) | plain text | Content | — | Text ▾, Unix time | decode~06/10/2026 08:00:00.123  UTC; decode~Unix time in milliseconds |
 | `decode/unix_negative_numbers.txt` | No chip: a phone-like `06…` number, out of range (2282), 9, 11 and 16 digits, grouped digits (each line checked in `decode/unix_time.rs`) | plain text | Content | PII | Text ▾ | kind=Text |
-| `decode/url_query.txt` | URL chip on a link: scheme, host, path and each query parameter decoded (`%xx`, `+`) | plain text | Link | — | Visit, URL | decode~Path: /zoek/fietsen & zo; decode~q = rode fiets; decode~city = Den Haag; decode~Fragment: top; decodetitle=URL |
+| `decode/url_query.txt` | URL chip on a link: scheme, host, path and each query parameter decoded (`%xx`, `+`) | plain text | Link | — | Open, Copy cleaned, Copy domain only, URL | decode~Path: /zoek/fietsen & zo; decode~q = rode fiets; decode~city = Den Haag; decode~Fragment: top; decodetitle=URL |
 | `decode/url_encoded_whole.txt` | URL chip: a URL encoded as a whole, decoded and split | plain text | Content | — | Text ▾, URL | decode~q = copy craft |
-| `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | Text ▾ | kind=Text |
+| `decode/url_negative.txt` | No chip: a link without query or escapes, `100% done`, prose, a `mailto:` (PII; each line checked in `decode/url.rs`) | plain text | Content | PII | Text ▾, Open link | kind=Text |
 | `convert/json_to_avro.json` | JSON → Avro schema | json | Valid JSON | — | Text ▾, Schema | schema~"type": "record"; schema~"name": "order_id" |
 | `convert/xml_to_xsd.xml` | XML → XSD schema | xml | Valid XML | — | Text ▾, Schema | schema~<xs:element name="order"> |
 | `convert/xsd_to_sample.xsd` | XSD → sample XML | xml | Valid XML | — | Text ▾, Sample | sample~<customer>sample</customer> |
@@ -169,7 +169,7 @@ Columns (fixed; the test parses this table between the markers):
 | `meta~S` / `placeholder~S` | the card's meta line / placeholder contains `S` |
 | `link=U` | the Link card shows `U` |
 | `errorline=N` | the well marks line N (copied JSON that stops parsing there) |
-| `visit=U` | Visit opens `U` (userinfo stripped, as `menubar::visit_current`) |
+| `visit=U` | Open opens `U` (userinfo stripped, as `menubar::visit_current`) |
 | `convert=K` / `convert~S` | the Convert result is detected as `K` / contains `S` |
 | `json=J` | the Convert / To JSON result is the JSON value `J` (compact, key order free) |
 | `pretty=FILE` | the Format view (what the card opens with) is exactly the testdata file `FILE` (without its final newline) |

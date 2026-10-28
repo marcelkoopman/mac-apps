@@ -330,6 +330,12 @@ pub struct HistoryNav {
 pub enum CommandId {
     Original,
     Visit,
+    /// Link card: the link without tracking parameters and `user:password@` on the clipboard.
+    CopyCleanLink,
+    /// Link card: only the domain on the clipboard.
+    CopyDomain,
+    /// Text card with one URL in it: open that URL.
+    OpenLink,
     Format,
     Convert,
     Decode,

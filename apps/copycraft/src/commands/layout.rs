@@ -431,7 +431,9 @@ pub fn menu_shows_icons(ids: &[CommandId]) -> bool {
 pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
     Some(match id {
         CommandId::Original => "arrow.uturn.backward",
-        CommandId::Visit => "safari",
+        CommandId::Visit | CommandId::OpenLink => "safari",
+        CommandId::CopyCleanLink => "wand.and.rays",
+        CommandId::CopyDomain => "globe",
         CommandId::Format => "wand.and.stars",
         CommandId::Convert => "arrow.triangle.2.circlepath",
         CommandId::Decode => "chevron.left.forwardslash.chevron.right",

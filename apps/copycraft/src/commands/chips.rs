@@ -285,9 +285,11 @@ pub(crate) fn source_commands(data: &LaunchData) -> Vec<Command> {
     commands
 }
 
+/// The Link card's chips: Open (not for a `file://` link: the browser gets http(s) only),
+/// Copy cleaned, Copy domain only, the URL decoder, then Format and Clean URL… when they have
+/// something to do. Open stays first, the default action.
 pub(crate) fn link_chips(text: &str) -> Vec<Command> {
     let mut commands = Vec::new();
-    // Not for a `file://` link: the browser gets http(s) only.
     if crate::link_card::open_url(text).is_some() {
         commands.push(command(
             CommandId::Visit,
@@ -296,6 +298,27 @@ pub(crate) fn link_chips(text: &str) -> Vec<Command> {
             "visit open browser",
         ));
     }
+    if crate::link_card::parse(text).is_some_and(|link| link.copy_domain().is_some()) {
+        commands.push(command(
+            CommandId::CopyCleanLink,
+            crate::locale::t("chip_copy_clean_link"),
+            crate::locale::t("detail_copy_clean_link"),
+            "copy cleaned clean url link tracking",
+        ));
+        commands.push(command(
+            CommandId::CopyDomain,
+            crate::locale::t("chip_copy_domain"),
+            crate::locale::t("detail_copy_domain"),
+            "copy domain host",
+        ));
+    }
+    // A link with a query or escapes: the URL decoder. Not on a YouTube video, whose query is
+    // its id.
+    if crate::youtube::video_id(text).is_none()
+        && let Some(found) = decode::detect(text)
+    {
+        commands.push(decoder_command(found));
+    }
     if toolbar_visibility::shows_format(text) {
         commands.push(command(
             CommandId::Format,
@@ -303,13 +326,6 @@ pub(crate) fn link_chips(text: &str) -> Vec<Command> {
             crate::locale::t("detail_uri"),
             "format url uri",
         ));
-    }
-    // A page link with a query or escapes: the URL decoder after Visit (which
-    // stays first, the default action). Not on a YouTube video, whose query is its id.
-    if crate::youtube::video_id(text).is_none()
-        && let Some(found) = decode::detect(text)
-    {
-        commands.push(decoder_command(found));
     }
     // Tracking parameters to remove: Clean URL… (a preview, then Apply to Clipboard).
     if crate::text_ops::url_clean::has_tracking(text) {
@@ -395,6 +411,20 @@ pub(crate) fn text_chips(text: &str) -> Vec<Command> {
             open_table_title(),
             crate::locale::t("detail_table_window"),
             "open window table larger resize sidebar",
+        ));
+    }
+    // A sentence with one link in it stays a text card, with a small Open link. Prose only:
+    // not the namespace URL in XML or a link in code.
+    if matches!(
+        kind,
+        FormatKind::Text | FormatKind::Plain | FormatKind::Markdown
+    ) && crate::link_card::link_in_text(text).is_some()
+    {
+        commands.push(command(
+            CommandId::OpenLink,
+            crate::locale::t("chip_open_link"),
+            crate::locale::t("detail_open_link"),
+            "open link url browser",
         ));
     }
     finish_modes(commands)

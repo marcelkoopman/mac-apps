@@ -690,7 +690,6 @@ impl LinkCard {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     /// What Copy domain puts on the clipboard: the host, without port; empty for a file.
     pub(crate) fn copy_domain(&self) -> Option<String> {
         (self.place != Place::File).then(|| self.host.clone())
@@ -785,7 +784,6 @@ impl LinkCard {
         crate::locale::tf("link_ax", &[&self.domain(), &kind])
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     /// Open asks first: the link may hand a token to the browser and the site.
     pub(crate) fn asks_before_open(&self) -> bool {
         self.token
@@ -810,7 +808,6 @@ pub(crate) fn open_url(text: &str) -> Option<String> {
     crate::url_policy::may_visit(&url).then_some(url)
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 /// What Copy cleaned puts on the clipboard: `text` without tracking parameters and without
 /// `user:password@`.
 pub(crate) fn cleaned(text: &str) -> String {
@@ -818,7 +815,6 @@ pub(crate) fn cleaned(text: &str) -> String {
     crate::text_ops::url_clean::clean_url(&url).0
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 /// The one `http(s)` URL inside a longer text (a sentence with a link), for Open link on a
 /// text card. `None` without one, with more than one, or when the text is a link itself.
 pub(crate) fn link_in_text(text: &str) -> Option<&str> {

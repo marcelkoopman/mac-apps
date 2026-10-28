@@ -19,6 +19,9 @@ impl App {
         }
         match id {
             CommandId::Visit => self.visit_current(),
+            CommandId::OpenLink => self.open_link_in_text(),
+            CommandId::CopyCleanLink => self.copy_link_part(false),
+            CommandId::CopyDomain => self.copy_link_part(true),
             CommandId::Copy => {
                 if let Err(e) = self.copy_current() {
                     crate::diag::log(crate::diag::LogEvent::CopyFailed(

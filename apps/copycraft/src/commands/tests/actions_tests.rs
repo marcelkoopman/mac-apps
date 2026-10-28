@@ -310,7 +310,10 @@ fn youtube_url_is_a_link_card() {
     assert!(card.selectable);
     assert!(!card.shows_image);
     let input = data(SubjectKind::Text, Some(url));
-    assert_eq!(titles(&chips(&input)), vec!["Visit"]);
+    assert_eq!(
+        titles(&chips(&input)),
+        vec!["Open", "Copy cleaned", "Copy domain only"]
+    );
     assert_eq!(
         content_actions(&input),
         ContentActions {

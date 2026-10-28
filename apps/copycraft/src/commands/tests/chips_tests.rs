@@ -260,8 +260,51 @@ fn page_card_adds_format_when_the_url_needs_it() {
     let messy = "https://example.com/search?q=a/b";
     assert_eq!(
         titles(&chips(&data(SubjectKind::Text, Some(messy)))),
-        vec!["Visit", "Format", "URL"]
+        vec!["Open", "Copy cleaned", "Copy domain only", "URL", "Format"]
     );
+}
+
+#[test]
+fn link_card_chips_open_copy_cleaned_copy_domain_then_the_decoder() {
+    let ids = |text: &str| -> Vec<CommandId> {
+        chips(&data(SubjectKind::Text, Some(text)))
+            .into_iter()
+            .map(|cmd| cmd.id)
+            .collect()
+    };
+    let link = ids("https://example.com/zoek?q=fiets&utm_source=nieuwsbrief");
+    assert_eq!(
+        link[..4],
+        [
+            CommandId::Visit,
+            CommandId::CopyCleanLink,
+            CommandId::CopyDomain,
+            CommandId::Decode,
+        ]
+    );
+    // A file link: no Open (http(s) only) and nothing to copy a domain from.
+    let file = ids("file:///Users/test/rapport.pdf");
+    assert!(!file.contains(&CommandId::Visit));
+    assert!(!file.contains(&CommandId::CopyDomain));
+    assert!(!file.contains(&CommandId::CopyCleanLink));
+}
+
+#[test]
+fn one_link_in_a_sentence_gets_open_link() {
+    let has = |text: &str| {
+        chips(&data(SubjectKind::Text, Some(text)))
+            .iter()
+            .any(|cmd| cmd.id == CommandId::OpenLink)
+    };
+    assert!(has("Kijk even op https://example.com/docs voor de uitleg"));
+    assert!(!has("https://example.com/docs"));
+    assert!(!has(
+        "Twee links: https://example.com/a en https://example.org/b"
+    ));
+    assert!(!has("Geen link hier"));
+    assert!(!has(
+        "<root xmlns=\"http://example.com/ns\"><a>1</a><b>2</b></root>"
+    ));
 }
 
 #[test]
