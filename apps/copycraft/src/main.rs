@@ -26,6 +26,8 @@ mod image_edit;
 mod image_ops;
 mod item_find;
 mod launcher;
+#[cfg_attr(not(test), allow(dead_code))]
+mod link_card;
 mod link_view;
 mod locale;
 mod mailto;

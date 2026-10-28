@@ -241,6 +241,8 @@ mod tests {
             "ai_group",
             "ai_button",
             "ai_check_title",
+            // The Link card's label: the same word in Dutch.
+            "link_badge_tracking",
         ];
         for (key, nl, en) in all() {
             if nl == en {

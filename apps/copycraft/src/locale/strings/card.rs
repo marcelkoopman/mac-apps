@@ -180,6 +180,38 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("link_query_heading", "Queryparameters", "Query parameters"),
     ("link_query_more", "… en nog {0}", "… and {0} more"),
     ("title_youtube", "YouTube", "YouTube"),
+    // Link card (link_card.rs): labels, the localhost title, the VoiceOver label.
+    (
+        "link_badge_token",
+        "Bevat mogelijk token",
+        "May contain a token",
+    ),
+    (
+        "link_badge_credentials",
+        "Bevat gebruikersnaam/wachtwoord",
+        "Contains user name/password",
+    ),
+    (
+        "link_badge_punycode",
+        "Internationale domeinnaam: controleer de schrijfwijze",
+        "International domain name: check the spelling",
+    ),
+    (
+        "link_badge_odd_host",
+        "Ongewone tekens in de domeinnaam",
+        "Unusual characters in the domain name",
+    ),
+    ("link_badge_tracking", "Tracking", "Tracking"),
+    (
+        "link_site_port",
+        "localhost · poort {0}",
+        "localhost · port {0}",
+    ),
+    ("link_file_host", "Bestand op deze Mac", "File on this Mac"),
+    ("link_kind_web", "webpagina", "web page"),
+    ("link_kind_local", "lokaal adres", "local address"),
+    ("link_kind_file", "bestand", "file"),
+    ("link_ax", "Link naar {0}, {1}", "Link to {0}, {1}"),
     ("title_image", "Afbeelding", "Image"),
     ("title_image_info", "Afbeeldingsinfo", "Image info"),
     ("title_text", "Tekst", "Text"),
