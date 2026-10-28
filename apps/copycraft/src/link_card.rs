@@ -1,7 +1,8 @@
 //! The Link card: a copy that is exactly one URL, read into its parts for a richer card than
 //! one line of text. Domain, path, the names of the query parameters, the site it belongs to
 //! (from a fixed local list: GitHub, GitLab, Jira, Notion, Google Docs, Figma, Stack Overflow,
-//! YouTube, localhost) and warnings (a token, tracking, a user name and password, an
+//! YouTube, Facebook, Instagram, localhost), readable names for a known site's path and
+//! parameters ([`crate::link_meaning`]) and warnings (a token, tracking, a user name and password, an
 //! internationalised domain). String work in memory only: nothing is fetched, stored or logged
 //! (no URL, domain, parameter or site), and parameter values are never shown.
 
@@ -59,7 +60,8 @@ pub(crate) enum Line {
     Site(String),
     /// The path, small, cut in the middle when long.
     Path(String),
-    /// Query parameter names (never values), at most [`MAX_PARAMS`], then `+N`.
+    /// A known site's readable names (*Video-ID*), then the other query parameter names (never
+    /// values), at most [`MAX_PARAMS`], then `+N`.
     Params(Vec<String>),
     Badges(Vec<Badge>),
 }
@@ -75,8 +77,14 @@ pub(crate) struct LinkCard {
     pub place: Place,
     /// Decoded path, without query and fragment.
     pub path: String,
-    /// Decoded parameter names, each once, in order (query, then a `#a=b` fragment).
+    /// Decoded parameter names, each once, in order (query, then a `#a=b` fragment), without
+    /// the ones a [`Self::meanings`] entry stands for.
     pub params: Vec<String>,
+    /// Readable names of a known site's parts (*Video-ID* for YouTube's `v`), shown as chips
+    /// before the raw names.
+    pub meanings: Vec<crate::link_meaning::Meaning>,
+    /// The known site explains the whole path (the site line and the meanings): no path line.
+    pub path_explained: bool,
     /// The known site and what the link points at there.
     pub site: Option<String>,
     /// A parameter that looks like a token, key or signature.
@@ -210,6 +218,26 @@ pub(crate) fn parse(text: &str) -> Option<LinkCard> {
     } else {
         site_title(url, &host, port.as_deref(), &segments, &pairs)
     };
+    let explained = if file {
+        crate::link_meaning::Explained::default()
+    } else {
+        crate::link_meaning::explain(&host, &segments, &params)
+    };
+    let mut explained = explained;
+    params.retain_mut(|name| {
+        let keep = !explained.params.contains(name);
+        if !keep {
+            name.zeroize();
+        }
+        keep
+    });
+    for name in &mut explained.params {
+        name.zeroize();
+    }
+    let mut segments = segments;
+    for segment in &mut segments {
+        segment.zeroize();
+    }
     let mut pairs = pairs;
     for (name, value) in &mut pairs {
         name.zeroize();
@@ -222,6 +250,8 @@ pub(crate) fn parse(text: &str) -> Option<LinkCard> {
         place,
         path,
         params,
+        meanings: explained.meanings.clone(),
+        path_explained: explained.path,
         site,
         token,
         tracking,
@@ -523,7 +553,14 @@ fn site_title(
     }
     if crate::youtube::video_id(url).is_some() {
         parts.push("YouTube".into());
-        parts.push("Video".into());
+        parts.push(
+            if seg(0) == Some("shorts") {
+                "Short"
+            } else {
+                "Video"
+            }
+            .into(),
+        );
     } else if host == "github.com" {
         parts.push("GitHub".into());
         match (seg(0), seg(1)) {
@@ -624,7 +661,8 @@ fn site_title(
             }
         }
     } else {
-        return None;
+        let names: Vec<String> = pairs.iter().map(|(name, _)| name.clone()).collect();
+        return crate::link_meaning::social(host, segments, &names);
     }
     Some(parts.join(" · "))
 }
@@ -734,18 +772,19 @@ impl LinkCard {
         if let Some(site) = &self.site {
             lines.push(Line::Site(site.clone()));
         }
-        if !self.path.is_empty() && self.path != "/" {
+        if !self.path_explained && !self.path.is_empty() && self.path != "/" {
             lines.push(Line::Path(middle_cut(&self.path, MAX_PATH)));
         }
-        if !self.params.is_empty() {
-            let mut names: Vec<String> = self
-                .params
-                .iter()
-                .take(MAX_PARAMS)
-                .map(|name| one_name(name))
-                .collect();
-            if self.params.len() > MAX_PARAMS {
-                names.push(format!("+{}", self.params.len() - MAX_PARAMS));
+        let all: Vec<String> = self
+            .meanings
+            .iter()
+            .map(|meaning| meaning.label().to_string())
+            .chain(self.params.iter().map(|name| one_name(name)))
+            .collect();
+        if !all.is_empty() {
+            let mut names: Vec<String> = all.iter().take(MAX_PARAMS).cloned().collect();
+            if all.len() > MAX_PARAMS {
+                names.push(format!("+{}", all.len() - MAX_PARAMS));
             }
             lines.push(Line::Params(names));
         }

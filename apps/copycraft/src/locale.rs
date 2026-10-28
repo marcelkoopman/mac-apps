@@ -213,6 +213,11 @@ mod tests {
             "label_pii",
             "title_link",
             "title_youtube",
+            // A YouTube Short is called that in Dutch too.
+            "link_mean_short",
+            // A Facebook Reel and Video are called that in Dutch too.
+            "link_social_reel",
+            "link_social_video",
             "title_qr",
             "detail_uri",
             "chip_schema",

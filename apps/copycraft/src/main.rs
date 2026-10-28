@@ -27,6 +27,7 @@ mod image_ops;
 mod item_find;
 mod launcher;
 mod link_card;
+mod link_meaning;
 mod link_view;
 mod locale;
 mod log_text;

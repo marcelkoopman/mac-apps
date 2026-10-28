@@ -348,13 +348,16 @@ fn lines_and_text_follow_the_layout() {
     let lines = link.lines();
     assert_eq!(lines[0], Line::Domain("github.com".into()));
     assert_eq!(lines[1], Line::Site("GitHub · acme/app · PR #42".into()));
-    assert_eq!(lines[2], Line::Path("/acme/app/pull/42".into()));
+    // The site line says what the path says; `tab` has a readable name, first.
     assert_eq!(
-        lines[3],
-        Line::Params(vec!["utm_source".into(), "tab".into()])
+        lines[2],
+        Line::Params(vec![
+            crate::locale::t("link_mean_tab").into(),
+            "utm_source".into()
+        ])
     );
-    assert!(matches!(&lines[4], Line::Badges(badges) if badges.len() == 2));
-    assert_eq!(link.text().lines().count(), 5);
+    assert!(matches!(&lines[3], Line::Badges(badges) if badges.len() == 2));
+    assert_eq!(link.text().lines().count(), 4);
     let ax = link.ax_label();
     assert!(ax.contains("github.com") && ax.contains("PR #42"), "{ax}");
 }

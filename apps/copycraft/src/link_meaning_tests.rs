@@ -1,0 +1,249 @@
+//! Readable names for known sites' link parts, on made-up URLs only.
+
+use super::Meaning::*;
+use crate::link_card::{Line, parse};
+
+fn chips(text: &str) -> Vec<String> {
+    let link = parse(text).unwrap_or_else(|| panic!("not a link: {text}"));
+    link.lines()
+        .into_iter()
+        .find_map(|line| match line {
+            Line::Params(names) => Some(names),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn has_path(text: &str) -> bool {
+    parse(text)
+        .unwrap()
+        .lines()
+        .iter()
+        .any(|line| matches!(line, Line::Path(_)))
+}
+
+fn meanings(text: &str) -> Vec<super::Meaning> {
+    parse(text).unwrap().meanings.clone()
+}
+
+#[test]
+fn a_youtube_watch_link_says_video_id_not_watch_and_v() {
+    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&t=42s&list=PLfake&index=3";
+    assert!(!has_path(text));
+    assert_eq!(
+        meanings(text),
+        [VideoId, StartTime, Playlist, PlaylistPosition]
+    );
+    let link = parse(text).unwrap();
+    assert!(link.params.is_empty(), "{:?}", link.params);
+    let shown = link.text();
+    for hidden in ["/watch", "aBcDeFgHiJk", "42s", "PLfake"] {
+        assert!(!shown.contains(hidden), "{hidden} in {shown}");
+    }
+    assert_eq!(chips(text).len(), 4);
+}
+
+#[test]
+fn youtu_be_shorts_embed_and_playlist() {
+    assert!(!has_path("https://youtu.be/aBcDeFgHiJk?t=10"));
+    assert_eq!(
+        meanings("https://youtu.be/aBcDeFgHiJk?t=10"),
+        [VideoId, StartTime]
+    );
+    let short = "https://www.youtube.com/shorts/aBcDeFgHiJk";
+    assert!(!has_path(short));
+    assert_eq!(meanings(short), [Short, VideoId]);
+    assert_eq!(
+        parse(short).unwrap().site.as_deref(),
+        Some("YouTube · Short")
+    );
+    assert_eq!(
+        meanings("https://www.youtube.com/embed/aBcDeFgHiJk"),
+        [VideoId]
+    );
+    let playlist = "https://www.youtube.com/playlist?list=PLfake";
+    assert!(!has_path(playlist));
+    assert_eq!(meanings(playlist), [Playlist]);
+}
+
+#[test]
+fn unknown_parameters_keep_their_raw_chips_after_the_meanings() {
+    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&feature=share&pp=x&ab=1&cd=2";
+    let chips = chips(text);
+    assert_eq!(chips[1..4], ["feature", "pp", "ab"]);
+    assert_eq!(chips.last().map(String::as_str), Some("+1"));
+    assert_eq!(chips.len(), 5);
+    assert_eq!(parse(text).unwrap().params, ["feature", "pp", "ab", "cd"]);
+}
+
+#[test]
+fn tracking_and_token_labels_stay() {
+    let link = parse("https://www.youtube.com/watch?v=aBcDeFgHiJk&utm_source=x").unwrap();
+    assert!(link.tracking);
+    assert_eq!(link.params, ["utm_source"]);
+    let link = parse("https://www.figma.com/design/FAKEKEY/Flow?node-id=1-2&token=abc").unwrap();
+    assert!(link.token);
+    assert_eq!(link.params, ["token"]);
+    assert_eq!(link.meanings, [FileId, SelectedLayer]);
+}
+
+#[test]
+fn github_gitlab_and_jira_paths_are_on_the_site_line() {
+    for text in [
+        "https://github.com/acme/app",
+        "https://github.com/acme/app/pull/42",
+        "https://github.com/acme/app/issues/7",
+        "https://github.com/acme/app/commit/0123456789abcdef",
+        "https://gitlab.com/group/project/-/merge_requests/7",
+        "https://example.atlassian.net/browse/ABC-123",
+    ] {
+        assert!(!has_path(text), "{text}");
+        assert!(meanings(text).is_empty(), "{text}");
+    }
+    // A file in a repository: the path says which.
+    assert!(has_path("https://github.com/acme/app/blob/main/src/lib.rs"));
+    assert_eq!(
+        meanings("https://github.com/acme/app/pull/42?tab=files"),
+        [Tab]
+    );
+    assert_eq!(
+        meanings(
+            "https://example.atlassian.net/jira/software/projects/ABC/boards/1?selectedIssue=ABC-9"
+        ),
+        [SelectedIssue]
+    );
+}
+
+#[test]
+fn google_figma_stack_overflow_and_notion() {
+    let doc = "https://docs.google.com/document/d/FAKEDOCID/edit";
+    assert!(!has_path(doc));
+    assert_eq!(meanings(doc), [DocumentId]);
+    assert!(!parse(doc).unwrap().text().contains("FAKEDOCID"));
+    assert_eq!(
+        meanings("https://docs.google.com/spreadsheets/d/FAKEID/edit?gid=0"),
+        [DocumentId, SheetTab]
+    );
+    assert_eq!(
+        meanings("https://drive.google.com/file/d/FAKEID/view"),
+        [FileId]
+    );
+    assert_eq!(
+        meanings("https://drive.google.com/drive/folders/FAKEID"),
+        [FolderId]
+    );
+    let figma = "https://www.figma.com/design/FAKEKEY/Onboarding-Flow?node-id=1-2";
+    assert!(!has_path(figma));
+    assert_eq!(meanings(figma), [FileId, SelectedLayer]);
+    let question = "https://stackoverflow.com/questions/12345/how-to-parse-a-url";
+    assert!(!has_path(question));
+    assert_eq!(meanings(question), [QuestionNumber]);
+    let page = "https://www.notion.so/acme/Plan-0123456789abcdef0123456789abcdef?v=fake";
+    assert!(!has_path(page));
+    assert_eq!(meanings(page), [PageId, DatabaseView]);
+}
+
+#[test]
+fn other_sites_keep_path_and_raw_names() {
+    let text = "https://example.com/watch?v=1&t=2";
+    assert!(has_path(text));
+    assert!(meanings(text).is_empty());
+    assert_eq!(chips(text), ["v", "t"]);
+    // A YouTube page that is not a known shape.
+    assert!(has_path("https://www.youtube.com/@channel/videos"));
+}
+
+#[test]
+fn labels_have_both_languages() {
+    for meaning in [
+        VideoId,
+        Short,
+        StartTime,
+        Playlist,
+        PlaylistPosition,
+        Tab,
+        SearchTerms,
+        DocumentId,
+        SheetTab,
+        FileId,
+        FolderId,
+        SelectedLayer,
+        QuestionNumber,
+        SelectedIssue,
+        PageId,
+        DatabaseView,
+    ] {
+        assert!(!meaning.label().is_empty(), "{meaning:?}");
+        assert!(!meaning.label().starts_with("link_mean"), "{meaning:?}");
+    }
+}
+
+#[test]
+fn facebook_and_instagram_say_what_the_link_is_not_its_id() {
+    use super::SocialKind;
+    let site = |text: &str| parse(text).unwrap().site.clone();
+    for (text, kind) in [
+        (
+            "https://www.facebook.com/reel/1092344577040057",
+            SocialKind::Reel,
+        ),
+        (
+            "https://www.facebook.com/watch?v=1092344577040057",
+            SocialKind::Video,
+        ),
+        (
+            "https://www.facebook.com/someone/posts/1092344577040057",
+            SocialKind::Post,
+        ),
+        (
+            "https://www.facebook.com/someone/videos/1092344577040057",
+            SocialKind::Video,
+        ),
+        (
+            "https://www.facebook.com/groups/1092344577040057",
+            SocialKind::Group,
+        ),
+        (
+            "https://www.facebook.com/events/1092344577040057",
+            SocialKind::Event,
+        ),
+        (
+            "https://www.facebook.com/photo/?fbid=1092344577040057&set=a.1",
+            SocialKind::Photo,
+        ),
+        (
+            "https://m.facebook.com/story.php?story_fbid=1092344577040057&id=4",
+            SocialKind::Post,
+        ),
+        ("https://fb.watch/aBcDeF1234/", SocialKind::Video),
+        (
+            "https://www.instagram.com/reel/aBcDeF1234/",
+            SocialKind::Reel,
+        ),
+        ("https://www.instagram.com/p/aBcDeF1234/", SocialKind::Post),
+    ] {
+        let want = if text.contains("instagram") {
+            "Instagram"
+        } else {
+            "Facebook"
+        };
+        assert_eq!(
+            site(text),
+            Some(format!("{want} · {}", kind.label())),
+            "{text}"
+        );
+        assert!(!has_path(text), "{text}");
+        let shown = parse(text).unwrap().text();
+        for id in ["1092344577040057", "aBcDeF1234"] {
+            assert!(!shown.contains(id), "{id} in {shown}");
+        }
+        assert!(chips(text).is_empty(), "{text}: {:?}", chips(text));
+    }
+    // Other parameters keep their raw chip; a profile page keeps its path.
+    assert_eq!(
+        chips("https://www.facebook.com/reel/1092344577040057?mibextid=x"),
+        ["mibextid"]
+    );
+    assert!(has_path("https://www.facebook.com/someone"));
+    assert_eq!(site("https://www.facebook.com/someone"), None);
+}
