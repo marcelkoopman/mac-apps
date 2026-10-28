@@ -510,7 +510,11 @@ fn counts(text: &str, hit: &Match) -> bool {
                     .bytes()
                     .any(|byte| byte.is_ascii_digit())
         }
-        Kind::CreditCard | Kind::Iban => standalone(text.as_bytes(), hit.start, hit.end),
+        // The same rules as copycraft's own recognizers: a card needs a known issuer prefix,
+        // Luhn and to stand on its own (not a hex value, an ID in a URL path, a decimal); an
+        // IBAN its mod-97.
+        Kind::CreditCard => crate::recognize::card_number(text.as_bytes(), hit.start, hit.end),
+        Kind::Iban => crate::recognize::iban(text.as_bytes(), hit.start, hit.end),
         _ => true,
     }
 }
@@ -991,6 +995,45 @@ checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
     fn standalone_phone_numbers_still_count() {
         assert_eq!(labels("bel 0612345678"), vec![Label::Pii]);
         assert!(!labels("hash d0a5c0629063962b03").contains(&Label::Pii));
+    }
+
+    #[test]
+    fn ids_in_urls_hex_values_and_bare_numbers_are_no_card() {
+        for text in [
+            "https://www.facebook.com/reel/1092344577040057",
+            "www.facebook.com/reel/1092344577040057",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=4111111111111111",
+            "https://example.com/orders/4111111111111111/items",
+            "frame 0x4111111111111111 + 16",
+            "0x4111111111111111",
+            "id 1092344577040057",
+            "version 4111.1111.1111.1111",
+            "amount 4111111111111111.50",
+            "path /tmp/4111111111111111",
+            "2026-10-28 4111 11 1111 1111 11",
+        ] {
+            assert!(!labels(text).contains(&Label::Financial), "{text}");
+        }
+        // A Luhn-valid number without a card network's prefix.
+        assert!(!crate::recognize::card_number(b"1092344577040057", 0, 16));
+    }
+
+    #[test]
+    fn real_cards_ibans_and_phones_keep_their_label() {
+        assert_eq!(labels("4111 1111 1111 1111"), vec![Label::Financial]);
+        assert_eq!(
+            labels("pay 5555-5555-5555-4444 now"),
+            vec![Label::Financial]
+        );
+        assert_eq!(labels("amex 3782 822463 10005"), vec![Label::Financial]);
+        assert_eq!(
+            labels("IBAN GB82 WEST 1234 5698 7654 32"),
+            vec![Label::Financial]
+        );
+        assert_eq!(labels("bel +31 6 12345678"), vec![Label::Pii]);
+        assert!(!labels("IBAN GB83 WEST 1234 5698 7654 32").contains(&Label::Financial));
+        // Mixed groups are no card.
+        assert!(!labels("ref 41 1111 1111 1111 11").contains(&Label::Financial));
     }
 
     #[test]

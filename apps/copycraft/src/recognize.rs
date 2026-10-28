@@ -52,7 +52,8 @@ impl Classes {
 enum Check {
     /// A token with a distinctive prefix: no letter right before it, no token character after.
     Token,
-    /// Luhn over the digits, no digit right before or after.
+    /// A standalone card number ([`card_number`]): 13 to 19 digits, plain or in groups,
+    /// a known issuer prefix and Luhn.
     Card,
     /// Mod-97 over the compact form, 15 to 34 characters, bounded on both sides.
     Iban,
@@ -241,29 +242,8 @@ fn valid(bytes: &[u8], start: usize, end: usize, check: Check) -> bool {
             before.is_none_or(|byte| !byte.is_ascii_alphabetic())
                 && after.is_none_or(|byte| !is_token_byte(byte))
         }
-        Check::Card => {
-            let digits: Vec<u8> = bytes[start..end]
-                .iter()
-                .copied()
-                .filter(u8::is_ascii_digit)
-                .collect();
-            // A standalone number: not a run inside a hex hash or another token
-            // (`checksum = "c982642fa9…"` in a Cargo.lock).
-            before.is_none_or(|byte| !is_token_byte(byte))
-                && after.is_none_or(|byte| !is_token_byte(byte))
-                && luhn(&digits)
-        }
-        Check::Iban => {
-            let compact: Vec<u8> = bytes[start..end]
-                .iter()
-                .copied()
-                .filter(|byte| *byte != b' ')
-                .collect();
-            before.is_none_or(|byte| !byte.is_ascii_alphabetic())
-                && after.is_none_or(|byte| !is_token_byte(byte))
-                && (15..=34).contains(&compact.len())
-                && iban_mod97(&compact)
-        }
+        Check::Card => card_number(bytes, start, end),
+        Check::Iban => iban(bytes, start, end),
         Check::Email => {
             let at = bytes[start..end]
                 .iter()
@@ -300,6 +280,129 @@ fn no_digit(byte: Option<u8>) -> bool {
 
 fn is_token_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'
+}
+
+/// Is `bytes[start..end]` a card number on its own? 13 to 19 digits, written in one run or in
+/// groups of four (Amex and Diners 4-6-5 / 4-6-4) split by one kind of space or hyphen, with a
+/// known issuer prefix ([`known_issuer`]) and a valid Luhn digit. Standalone: not inside a hex
+/// value or another token (`0x4111…`, `c982642fa9…`), not in a URL or a path
+/// (`facebook.com/reel/1092…`), not a decimal or part of a dotted number. Pure.
+pub(crate) fn card_number(bytes: &[u8], start: usize, end: usize) -> bool {
+    let Some(span) = bytes.get(start..end) else {
+        return false;
+    };
+    let before = start.checked_sub(1).map(|at| bytes[at]);
+    let after = bytes.get(end).copied();
+    if !card_edge(before) || !card_edge(after) {
+        return false;
+    }
+    // `1111.` ends a sentence; `1111.5` or `1111.x` is a longer token.
+    if after == Some(b'.') && bytes.get(end + 1).is_some_and(|byte| is_token_byte(*byte)) {
+        return false;
+    }
+    if before == Some(b'.') || in_path(bytes, start) {
+        return false;
+    }
+    if !span.first().is_some_and(u8::is_ascii_digit) {
+        return false;
+    }
+    let digits: Vec<u8> = span.iter().copied().filter(u8::is_ascii_digit).collect();
+    (13..=19).contains(&digits.len()) && grouped(span) && known_issuer(&digits) && luhn(&digits)
+}
+
+/// Before or after a card number: the start or end, white space or punctuation that is not
+/// part of a URL, path, number or token.
+fn card_edge(byte: Option<u8>) -> bool {
+    byte.is_none_or(|byte| {
+        !is_token_byte(byte)
+            && !matches!(
+                byte,
+                b'/' | b'\\' | b'?' | b'&' | b'=' | b'#' | b'%' | b'+' | b'@' | b'~' | b'$'
+            )
+    })
+}
+
+/// `start` sits in a URL or path: its white-space-delimited token has `/` or `://` before it.
+fn in_path(bytes: &[u8], start: usize) -> bool {
+    let token = bytes[..start]
+        .iter()
+        .rposition(u8::is_ascii_whitespace)
+        .map_or(0, |space| space + 1);
+    bytes[token..start]
+        .iter()
+        .any(|byte| *byte == b'/' || *byte == b'\\')
+}
+
+/// Digits in one run, or groups split by one kind of separator: all fours (the last may be
+/// shorter), or 4-6-5 / 4-6-4.
+fn grouped(span: &[u8]) -> bool {
+    let separator = span.iter().copied().find(|byte| !byte.is_ascii_digit());
+    let Some(separator) = separator else {
+        return true;
+    };
+    if span
+        .iter()
+        .any(|byte| !byte.is_ascii_digit() && *byte != separator)
+    {
+        return false;
+    }
+    let groups: Vec<usize> = span
+        .split(|byte| *byte == separator)
+        .map(<[u8]>::len)
+        .collect();
+    let fours = groups.len() >= 3
+        && groups[..groups.len() - 1].iter().all(|len| *len == 4)
+        && (1..=4).contains(&groups[groups.len() - 1]);
+    fours || groups == [4, 6, 5] || groups == [4, 6, 4]
+}
+
+/// The issuer prefix (IIN) of a card network: Visa, Mastercard, American Express, Discover,
+/// Diners Club, JCB, UnionPay, Maestro and Mir.
+fn known_issuer(digits: &[u8]) -> bool {
+    let prefix = |len: usize| -> u32 {
+        digits
+            .iter()
+            .take(len)
+            .fold(0, |acc, digit| acc * 10 + u32::from(digit - b'0'))
+    };
+    let (one, two, three, four, six) = (prefix(1), prefix(2), prefix(3), prefix(4), prefix(6));
+    one == 4
+        || (51..=55).contains(&two)
+        || (2221..=2720).contains(&four)
+        || two == 34
+        || two == 37
+        || four == 6011
+        || (644..=649).contains(&three)
+        || two == 65
+        || (622126..=622925).contains(&six)
+        || two == 62
+        || (300..=305).contains(&three)
+        || two == 36
+        || two == 38
+        || two == 39
+        || (3528..=3589).contains(&four)
+        || matches!(
+            four,
+            5018 | 5020 | 5038 | 5893 | 6304 | 6759 | 6761 | 6762 | 6763
+        )
+        || (2200..=2204).contains(&four)
+}
+
+/// Is `bytes[start..end]` an IBAN on its own? 15 to 34 characters once spaces are gone, no
+/// letter right before it, no token character after it, and a valid ISO 7064 mod-97. Pure.
+pub(crate) fn iban(bytes: &[u8], start: usize, end: usize) -> bool {
+    let Some(span) = bytes.get(start..end) else {
+        return false;
+    };
+    let before = start.checked_sub(1).map(|at| bytes[at]);
+    let after = bytes.get(end).copied();
+    let compact: Vec<u8> = span.iter().copied().filter(|byte| *byte != b' ').collect();
+    before.is_none_or(|byte| !byte.is_ascii_alphanumeric() && byte != b'_')
+        && after.is_none_or(|byte| !is_token_byte(byte))
+        && (15..=34).contains(&compact.len())
+        && compact[..2].iter().all(u8::is_ascii_uppercase)
+        && compact[2..4].iter().all(u8::is_ascii_digit)
+        && iban_mod97(&compact)
 }
 
 fn luhn(digits: &[u8]) -> bool {
