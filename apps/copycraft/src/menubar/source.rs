@@ -560,6 +560,7 @@ impl App {
                 text: self.history.get(index).is_some(),
                 search: self.history.search_text(index),
                 pinned: self.history.is_pinned(index),
+                snippet: self.history.snippet_name(index).map(str::to_string),
             })
             .collect();
         LaunchData {

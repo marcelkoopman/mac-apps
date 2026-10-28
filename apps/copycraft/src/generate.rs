@@ -128,7 +128,7 @@ pub fn iso_local(secs: i64, offset: i64) -> String {
 /// 16 random bytes: those of a fresh `NSUUID` (the system's random UUID; its six fixed
 /// version and variant bits are set again by [`uuid_v4`] and [`uuid_v7`]).
 #[cfg(target_os = "macos")]
-fn random_bytes() -> [u8; 16] {
+pub(crate) fn random_bytes() -> [u8; 16] {
     let text = mac_ui::objc2_foundation::NSUUID::UUID()
         .UUIDString()
         .to_string();
@@ -145,7 +145,7 @@ fn random_bytes() -> [u8; 16] {
 
 /// Off macOS (the Linux tests): the standard library's random hash keys.
 #[cfg(not(target_os = "macos"))]
-fn random_bytes() -> [u8; 16] {
+pub(crate) fn random_bytes() -> [u8; 16] {
     use std::hash::{BuildHasher, Hasher};
     let mut out = [0u8; 16];
     for half in out.chunks_mut(8) {

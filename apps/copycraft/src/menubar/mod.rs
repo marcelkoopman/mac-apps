@@ -61,6 +61,7 @@ mod popup;
 mod run;
 mod save;
 mod shot;
+mod snippets;
 mod source;
 #[cfg(test)]
 use source::skip_after_drop;

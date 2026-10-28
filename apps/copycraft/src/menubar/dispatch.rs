@@ -278,6 +278,8 @@ impl App {
             CommandId::TakeScreenshot => self.take_screenshot(),
             CommandId::Pin => self.pin_shown(true),
             CommandId::Unpin => self.pin_shown(false),
+            CommandId::SnippetName => self.snippet_name_prompt(),
+            CommandId::SnippetFill(id) => self.snippet_fill(id),
             CommandId::DeleteHistory => self.remove_from_history(self.history_cursor),
             CommandId::ClearPins => self.clear_pins(),
             CommandId::Quit => {

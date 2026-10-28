@@ -632,3 +632,12 @@ fn a_read_qr_code_becomes_a_copy_of_its_own_and_a_made_one_a_picture() {
     let make = method_body(text, "text_qr");
     assert!(make.contains("qr_code::offered") && make.contains("self.new_image("));
 }
+
+#[test]
+fn a_filled_snippet_is_a_new_copy_through_the_secret_check() {
+    let source = include_str!("snippets.rs");
+    let fill = method_body(source, "snippet_fill");
+    assert!(fill.contains("crate::snippet::fill(") && fill.contains("self.new_value("));
+    assert!(!fill.contains("diag::log"), "snippet text is never logged");
+    assert!(!fill.contains("write_own"), "only through new_value");
+}

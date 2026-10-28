@@ -190,6 +190,7 @@ fn query_finds_appearance_and_history_but_not_quit() {
         text: true,
         search: Zeroizing::new(String::new()),
         pinned: false,
+        snippet: None,
     });
     let pool = search_pool(&input);
     assert!(matching(&pool, "quit").is_empty());
@@ -220,6 +221,7 @@ fn default_chips_leave_history_for_search() {
             text: true,
             search: Zeroizing::new(String::new()),
             pinned: false,
+            snippet: None,
         });
     }
     input.can_clear_history = true;
@@ -258,6 +260,7 @@ fn search_hits_the_body_while_a_masked_title_stays_a_label() {
         text: true,
         search: Zeroizing::new(phrase.into()),
         pinned: true,
+        snippet: None,
     });
     input.settings.privacy_filter = true;
     let masked = matching(&search_pool(&input), "phrase");
@@ -473,4 +476,65 @@ fn a_text_step_makes_a_new_copy_without_a_capsule_or_undo_rows() {
     assert_eq!(text_undo_key("z", false, false, false, Some(&edit)), None);
     assert_eq!(text_undo_key("z", true, false, true, Some(&edit)), None);
     assert_eq!(text_undo_key("z", true, false, false, None), None);
+}
+
+#[test]
+fn a_pinned_text_can_become_a_snippet_and_search_fills_it_in_by_name() {
+    let mut input = data(SubjectKind::Text, Some("Hoi {{naam}}"));
+    let mut item = history_item(4, "Text", true);
+    item.pinned = true;
+    input.history.push(item.clone());
+    input.shown_id = Some(4);
+    let entry = ids(&crate::commands::entry_commands(&input));
+    assert!(entry.contains(&CommandId::SnippetName));
+    assert!(
+        !entry
+            .iter()
+            .any(|id| matches!(id, CommandId::SnippetFill(_)))
+    );
+
+    // Named: Fill In Snippet… and Rename Snippet…, the chip goes by the name, and search
+    // finds it once by that name.
+    input.history[0].snippet = Some("Antwoord klant".into());
+    let entry = crate::commands::entry_commands(&input);
+    assert_eq!(
+        ids(&entry),
+        vec![
+            CommandId::Unpin,
+            CommandId::SnippetFill(4),
+            CommandId::SnippetName,
+            CommandId::DeleteHistory
+        ]
+    );
+    assert_eq!(entry[2].title, "Rename Snippet…");
+    assert_eq!(
+        crate::commands::history_chip_title(&input.history[0], true),
+        "Antwoord klant"
+    );
+    let pool = search_pool(&input);
+    let fills = pool
+        .iter()
+        .filter(|command| command.id == CommandId::SnippetFill(4))
+        .count();
+    assert_eq!(fills, 1);
+    input.shown_id = None;
+    let pool = search_pool(&input);
+    let found = matching(&pool, "antwoord");
+    assert!(
+        found
+            .iter()
+            .any(|command| command.id == CommandId::SnippetFill(4)
+                && command.title == "Snippet: Antwoord klant")
+    );
+
+    // A picture or an unpinned text is never a snippet.
+    for (pinned, text) in [(false, true), (true, false)] {
+        let mut other = data(SubjectKind::Text, Some("x"));
+        let mut item = history_item(5, "Item", text);
+        item.pinned = pinned;
+        other.history.push(item);
+        other.shown_id = Some(5);
+        let entry = ids(&crate::commands::entry_commands(&other));
+        assert!(!entry.contains(&CommandId::SnippetName));
+    }
 }

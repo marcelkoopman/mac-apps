@@ -295,6 +295,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::IgnoreFrontApp
             | CommandId::Pin
             | CommandId::Unpin
+            | CommandId::SnippetName
+            | CommandId::SnippetFill(_)
             | CommandId::DeleteHistory
             | CommandId::ClearPins
             | CommandId::Settings
@@ -469,6 +471,8 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::ClearSensitive => "timer",
         CommandId::Pin => "pin",
         CommandId::Unpin => "pin.slash",
+        CommandId::SnippetName => "text.badge.star",
+        CommandId::SnippetFill(_) => "text.insert",
         CommandId::DeleteHistory => "minus",
         CommandId::DiffShown => "arrow.left.arrow.right",
         CommandId::DiffSwap => "rectangle.2.swap",

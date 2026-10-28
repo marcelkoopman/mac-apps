@@ -241,6 +241,7 @@ fn history_item(index: usize, title: &str, text: bool) -> Hist {
         text,
         search: Zeroizing::new(String::new()),
         pinned: false,
+        snippet: None,
     }
 }
 

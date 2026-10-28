@@ -211,6 +211,12 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         });
     }
     commands.extend(entry_commands(data));
+    for fill in snippet_search_commands(data) {
+        // The snippet on screen already has its Fill In Snippet….
+        if !commands.iter().any(|known| known.id == fill.id) {
+            commands.push(fill);
+        }
+    }
     commands.extend(capture_commands(data));
     commands.push(screenshot_command(data));
     if let Some(shown) = shown_history(data) {

@@ -43,6 +43,8 @@ pub struct Hist {
     pub search: Zeroizing<String>,
     /// The entry is pinned: its rows show the pin image, not a mark in [`Self::title`].
     pub pinned: bool,
+    /// A pinned text's snippet name ([`crate::snippet`]).
+    pub snippet: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -535,6 +537,10 @@ pub enum CommandId {
     Pin,
     /// Unpin the entry on screen.
     Unpin,
+    /// ⋯ › Save as Snippet… / Rename Snippet…: name the pinned text on screen ([`crate::snippet`]).
+    SnippetName,
+    /// Fill In Snippet…: the fill-in panel for the snippet with this history id, then a new copy.
+    SnippetFill(u64),
     /// Delete the entry on screen.
     DeleteHistory,
     /// Drop every pin. Unpinned entries stay.

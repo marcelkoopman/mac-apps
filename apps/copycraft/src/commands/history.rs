@@ -199,6 +199,10 @@ pub fn matching(commands: &[Command], query: &str) -> Vec<Command> {
 /// and size (and the pin mark). With the filter off it is one line of the text, cut at about
 /// 80 characters. The match can sit outside that line: keywords hold the capped text.
 pub fn history_chip_title(item: &Hist, privacy: bool) -> String {
+    // A snippet goes by its name, which the user chose (and is not its text).
+    if let Some(name) = &item.snippet {
+        return name.clone();
+    }
     if privacy || item.search.is_empty() {
         return item.title.clone();
     }
@@ -244,15 +248,68 @@ pub(crate) fn entry_commands(data: &LaunchData) -> Vec<Command> {
             "pin history",
         )
     };
-    vec![
-        pin,
-        command(
-            CommandId::DeleteHistory,
-            crate::locale::t("remove_history"),
-            crate::locale::t("detail_remove_history"),
-            "delete remove history",
-        ),
-    ]
+    let mut commands = vec![pin];
+    commands.extend(snippet_commands(shown));
+    commands.push(command(
+        CommandId::DeleteHistory,
+        crate::locale::t("remove_history"),
+        crate::locale::t("detail_remove_history"),
+        "delete remove history",
+    ));
+    commands
+}
+
+/// A pinned text on screen: Save as Snippet… (or Rename Snippet… and Fill In Snippet… once it
+/// has a name). Nothing for other entries.
+fn snippet_commands(shown: &Hist) -> Vec<Command> {
+    if !shown.pinned || !shown.text {
+        return Vec::new();
+    }
+    let keywords = "snippet fragment template sjabloon placeholder name";
+    match &shown.snippet {
+        None => vec![command(
+            CommandId::SnippetName,
+            crate::locale::t("snippet_save"),
+            crate::locale::t("detail_snippet_save"),
+            keywords,
+        )],
+        Some(_) => vec![
+            snippet_fill_command(shown),
+            command(
+                CommandId::SnippetName,
+                crate::locale::t("snippet_rename"),
+                crate::locale::t("detail_snippet_rename"),
+                keywords,
+            ),
+        ],
+    }
+}
+
+/// Fill In Snippet… for `item` (a snippet), titled with its name in search.
+fn snippet_fill_command(item: &Hist) -> Command {
+    command(
+        CommandId::SnippetFill(item.id),
+        crate::locale::t("snippet_fill"),
+        crate::locale::t("detail_snippet_fill"),
+        "snippet fragment fill in template sjabloon placeholder",
+    )
+}
+
+/// Search: every snippet by its name (*Snippet: Reply to customer*), to fill in.
+pub(crate) fn snippet_search_commands(data: &LaunchData) -> Vec<Command> {
+    data.history
+        .iter()
+        .filter_map(|item| {
+            let name = item.snippet.as_deref()?;
+            let keywords = format!("snippet fragment {name}");
+            Some(command(
+                CommandId::SnippetFill(item.id),
+                &crate::locale::tf("snippet_named", &[&name]),
+                crate::locale::t("detail_snippet_fill"),
+                &keywords,
+            ))
+        })
+        .collect()
 }
 
 /// Pause, ignore-next and ignore-frontmost. Quit stays out of search. Greyed out while
@@ -527,6 +584,8 @@ pub fn menu_section(id: &CommandId) -> MenuSection {
         | CommandId::DiffSwap
         | CommandId::Pin
         | CommandId::Unpin
+        | CommandId::SnippetName
+        | CommandId::SnippetFill(_)
         | CommandId::DeleteHistory => MenuSection::Clipboard,
         CommandId::History(_)
         | CommandId::DiffToggle(_)

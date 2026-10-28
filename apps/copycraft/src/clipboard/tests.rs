@@ -917,3 +917,20 @@ fn a_copy_history_does_not_take_says_why() {
     assert_eq!(history.record_unless("text".into(), false), Ok(()));
     assert_eq!(history.len(), 1);
 }
+
+#[test]
+fn only_a_pinned_text_is_a_snippet_and_unpinning_takes_the_name_off() {
+    let mut history = ClipboardHistory::default();
+    history.record("Hoi {{naam}}".into());
+    let id = history.id_at(0).expect("id");
+    assert!(!history.name_snippet(id, "Groet"), "not pinned yet");
+    assert!(history.pin(id));
+    assert!(history.name_snippet(id, "  Groet  "));
+    assert_eq!(history.snippet_name(0), Some("Groet"));
+    assert!(history.name_snippet(id, "   "));
+    assert_eq!(history.snippet_name(0), None);
+    assert!(history.name_snippet(id, "Groet"));
+    assert!(history.unpin(id));
+    assert_eq!(history.snippet_name(0), None);
+    assert!(!history.name_snippet(u64::MAX, "Weg"));
+}

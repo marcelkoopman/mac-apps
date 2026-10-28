@@ -292,6 +292,8 @@ struct HistoryEntry {
     /// Skips the unpinned cap and the minute timer. Still dropped by Wipe, lock, sleep,
     /// user switch and quit.
     pinned: bool,
+    /// A pinned text's snippet name ([`crate::snippet`]), given by the user. Goes with the pin.
+    snippet: Option<Zeroizing<String>>,
     /// When it was copied (or copied again and moved to the front), for the strip's tooltip.
     copied: std::time::Instant,
 }
@@ -307,6 +309,7 @@ impl HistoryEntry {
             scan: None,
             table: None,
             pinned: false,
+            snippet: None,
             copied: std::time::Instant::now(),
         }
     }
@@ -320,6 +323,7 @@ impl HistoryEntry {
             scan: None,
             table: None,
             pinned: false,
+            snippet: None,
             copied: std::time::Instant::now(),
         }
     }

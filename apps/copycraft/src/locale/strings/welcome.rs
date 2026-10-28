@@ -76,6 +76,42 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("pin", "Zet vast", "Pin"),
     ("unpin", "Maak los", "Unpin"),
     ("pinned", "Vastgezet", "Pinned"),
+    ("snippet_save", "Bewaar als fragment…", "Save as Snippet…"),
+    (
+        "detail_snippet_save",
+        "Geef deze vastgezette tekst een naam om hem later in te vullen",
+        "Name this pinned text to fill it in later",
+    ),
+    ("snippet_rename", "Hernoem fragment…", "Rename Snippet…"),
+    (
+        "detail_snippet_rename",
+        "Een andere naam; leeg maakt er weer gewone tekst van",
+        "Another name; empty makes it plain text again",
+    ),
+    ("snippet_fill", "Vul fragment in…", "Fill In Snippet…"),
+    (
+        "detail_snippet_fill",
+        "Vul de velden in; Return maakt er een nieuwe kopie van",
+        "Fill in the fields; Return makes a new copy",
+    ),
+    ("snippet_named", "Fragment: {0}", "Snippet: {0}"),
+    (
+        "snippet_name_title",
+        "Naam van het fragment",
+        "Snippet Name",
+    ),
+    (
+        "snippet_name_message",
+        "Bijvoorbeeld Antwoord aan klant. In de tekst vraagt {{naam}} om een waarde; {{datum}}, {{tijd}}, {{uuid}} en {{klembord}} vullen zichzelf in.",
+        "For example Reply to customer. In the text, {{name}} asks for a value; {{date}}, {{time}}, {{uuid}} and {{clipboard}} fill in by themselves.",
+    ),
+    (
+        "snippet_fill_message",
+        "Tab gaat naar het volgende veld; Return maakt de kopie.",
+        "Tab goes to the next field; Return makes the copy.",
+    ),
+    ("snippet_make", "Maak kopie", "Make Copy"),
+    ("snippet_preview", "Wordt", "Becomes"),
     (
         "remove_history",
         "Verwijder uit geschiedenis",

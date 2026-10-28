@@ -566,6 +566,8 @@ pub fn fields(
 
     alert.setAccessoryView(Some(&view));
     alert.layout();
+    // Tab goes from field to field, top to bottom.
+    alert.window().recalculateKeyViewLoop();
     if let Some(first) = inputs.first() {
         alert.window().setInitialFirstResponder(Some(first));
     }

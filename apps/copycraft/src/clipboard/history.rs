@@ -519,8 +519,33 @@ impl ClipboardHistory {
             return false;
         };
         self.entries[index].pinned = false;
+        self.entries[index].snippet = None;
         self.trim_unpinned();
         self.contains_id(id)
+    }
+
+    /// The snippet name of entry `index` ([`crate::snippet`]), when it has one.
+    pub fn snippet_name(&self, index: usize) -> Option<&str> {
+        self.entries
+            .get(index)?
+            .snippet
+            .as_deref()
+            .map(String::as_str)
+    }
+
+    /// Give pinned text entry `id` the snippet name `name`; blank takes the name off. `false`
+    /// when the entry is gone, not pinned or a picture.
+    pub fn name_snippet(&mut self, id: u64, name: &str) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        let entry = &mut self.entries[index];
+        if !entry.pinned || !matches!(entry.body, HistoryBody::Text(_)) {
+            return false;
+        }
+        let name = name.trim();
+        entry.snippet = (!name.is_empty()).then(|| Zeroizing::new(name.to_string()));
+        true
     }
 
     /// Take one entry out so [`restore_removed`](Self::restore_removed) can put it back at the
@@ -564,6 +589,7 @@ impl ClipboardHistory {
         }
         if entry.pinned && self.pin_count() >= PIN_MAX {
             entry.pinned = false;
+            entry.snippet = None;
         }
         let id = entry.id;
         let at = index.min(self.entries.len());
