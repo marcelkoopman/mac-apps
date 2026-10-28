@@ -279,13 +279,26 @@ fn explain(mtm: mac_ui::objc2::MainThreadMarker) {
 }
 
 /// Screen Recording is off: say where to turn it on, with a button that opens that pane.
+/// Outside an .app bundle (`cargo run`) macOS counts the app that started CopyCraft (a
+/// terminal or editor), so the text names that app instead.
 #[cfg(target_os = "macos")]
 fn denied(mtm: mac_ui::objc2::MainThreadMarker) {
     mac_ui::panel::activate_app(mtm);
+    let (title, message) = if mac_ui::notify::is_bundled() {
+        (
+            crate::locale::t("screenshot_denied_title"),
+            crate::locale::t("screenshot_denied_message"),
+        )
+    } else {
+        (
+            crate::locale::t("screenshot_denied_unbundled_title"),
+            crate::locale::t("screenshot_denied_unbundled_message"),
+        )
+    };
     let answer = mac_ui::dialog::buttons(
         mtm,
-        crate::locale::t("screenshot_denied_title"),
-        crate::locale::t("screenshot_denied_message"),
+        title,
+        message,
         &[
             crate::locale::t("screenshot_open_privacy"),
             crate::locale::t("cancel"),

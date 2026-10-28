@@ -68,6 +68,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Zet CopyCraft aan in Systeeminstellingen › Privacy en beveiliging › Schermopname en systeemaudio. Misschien moet je CopyCraft daarna opnieuw openen.",
         "Turn on CopyCraft in System Settings › Privacy & Security › Screen & System Audio Recording. You may need to open CopyCraft again after that.",
     ),
+    // Run outside an .app (`cargo run`): macOS gives the permission to the app that started it.
+    (
+        "screenshot_denied_unbundled_title",
+        "Schermopname staat uit voor de app die CopyCraft startte",
+        "Screen Recording is off for the app that started CopyCraft",
+    ),
+    (
+        "screenshot_denied_unbundled_message",
+        "Gestart via terminal of editor. Zet die app (bijv. Zed of Terminal) aan in Systeeminstellingen › Privacy en beveiliging › Schermopname en systeemaudio, en herstart hem. Of open de gebundelde CopyCraft.app.",
+        "Started from a terminal or editor. Turn on that app (such as Zed or Terminal) in System Settings › Privacy & Security › Screen & System Audio Recording, and restart it. Or open the bundled CopyCraft.app.",
+    ),
     (
         "screenshot_open_privacy",
         "Open Privacy en beveiliging…",
