@@ -1,7 +1,7 @@
 //! The end of a session: the screen locks, the Mac goes to sleep, or another user takes over
 //! (fast user switching). CopyCraft then forgets its history, whatever the retention setting.
-//! The same observer hears of a wake or another input source (the hotkey defaults may move),
-//! and of CopyCraft no longer being active or the screens changing (a screenshot overlay goes).
+//! The same observer hears of CopyCraft no longer being active or the screens changing (a
+//! screenshot overlay goes).
 
 use std::cell::OnceCell;
 
@@ -11,8 +11,8 @@ use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, se
 use mac_ui::objc2_app_kit::{
     NSApplicationDidChangeScreenParametersNotification, NSApplicationDidResignActiveNotification,
     NSWorkspace, NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
-    NSWorkspaceDidWakeNotification, NSWorkspaceScreensDidSleepNotification,
-    NSWorkspaceSessionDidResignActiveNotification, NSWorkspaceWillSleepNotification,
+    NSWorkspaceScreensDidSleepNotification, NSWorkspaceSessionDidResignActiveNotification,
+    NSWorkspaceWillSleepNotification,
 };
 use mac_ui::objc2_foundation::{
     NSDistributedNotificationCenter, NSNotification, NSNotificationCenter, NSObject, NSString,
@@ -20,14 +20,10 @@ use mac_ui::objc2_foundation::{
 
 /// Posted by loginwindow when the screen locks (no public constant).
 const SCREEN_LOCKED: &str = "com.apple.screenIsLocked";
-/// Posted by the Text Input Sources service when another input source is selected
-/// (`kTISNotifySelectedKeyboardInputSourceChanged`).
-const INPUT_SOURCE_CHANGED: &str = "com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged";
 
 thread_local! {
     static HOOK: OnceCell<fn()> = const { OnceCell::new() };
     static DISPLAY_HOOK: OnceCell<fn()> = const { OnceCell::new() };
-    static KEYBOARD_HOOK: OnceCell<fn()> = const { OnceCell::new() };
     /// The notification centers do not retain their observers: kept for the app's lifetime.
     static OBSERVER: OnceCell<Retained<SessionObserver>> = const { OnceCell::new() };
 }
@@ -44,15 +40,6 @@ define_class!(
             // Another app came to the front or the screens changed: the screenshot overlay
             // would hang there, so it goes, as if cancelled.
             mac_ui::screenshot::dismiss_selection();
-        }
-
-        #[unsafe(method(keyboardMayHaveChanged:))]
-        fn keyboard_may_have_changed(&self, _note: &NSNotification) {
-            KEYBOARD_HOOK.with(|hook| {
-                if let Some(hook) = hook.get() {
-                    hook();
-                }
-            });
         }
 
         #[unsafe(method(displayOptionsChanged:))]
@@ -76,9 +63,8 @@ define_class!(
 );
 
 /// Run `hook` (on the main thread) when the screen locks, the Mac sleeps or the user switches,
-/// `display` when Reduce Transparency, Increase Contrast or Reduce Motion change, and
-/// `keyboard` when the Mac wakes or the input source changes (another keyboard may be in use).
-pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
+/// and `display` when Reduce Transparency, Increase Contrast or Reduce Motion change.
+pub fn observe(hook: fn(), display: fn()) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -87,9 +73,6 @@ pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
     });
     DISPLAY_HOOK.with(|slot| {
         let _ = slot.set(display);
-    });
-    KEYBOARD_HOOK.with(|slot| {
-        let _ = slot.set(keyboard);
     });
     OBSERVER.with(|slot| {
         if slot.get().is_some() {
@@ -122,12 +105,6 @@ pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
                 Some(NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification),
                 None,
             );
-            workspace.addObserver_selector_name_object(
-                target,
-                sel!(keyboardMayHaveChanged:),
-                Some(NSWorkspaceDidWakeNotification),
-                None,
-            );
             let app_center = NSNotificationCenter::defaultCenter();
             for name in [
                 NSApplicationDidResignActiveNotification,
@@ -140,17 +117,10 @@ pub fn observe(hook: fn(), display: fn(), keyboard: fn()) {
                     None,
                 );
             }
-            let distributed = NSDistributedNotificationCenter::defaultCenter();
-            distributed.addObserver_selector_name_object(
+            NSDistributedNotificationCenter::defaultCenter().addObserver_selector_name_object(
                 target,
                 sel!(sessionEnded:),
                 Some(&NSString::from_str(SCREEN_LOCKED)),
-                None,
-            );
-            distributed.addObserver_selector_name_object(
-                target,
-                sel!(keyboardMayHaveChanged:),
-                Some(&NSString::from_str(INPUT_SOURCE_CHANGED)),
                 None,
             );
         }

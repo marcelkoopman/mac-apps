@@ -502,58 +502,41 @@ pub(crate) fn language_test_lock() -> std::sync::MutexGuard<'static, ()> {
 /// Store `chord` when it is safe ([`hotkey::is_safe`]) and not the screenshot chord; otherwise
 /// keep the previous value.
 pub fn set_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
-    if !hotkey::may_store(chord, screenshot_hotkey().as_ref()) {
+    if !hotkey::may_store(chord, &screenshot_hotkey()) {
         return false;
     }
     store_string(HOTKEY_KEY, &hotkey::to_storage(chord));
     true
 }
 
-/// The stored chord, or the default; none on a JIS keyboard with nothing stored.
-pub fn hotkey() -> Option<global_hotkey::hotkey::HotKey> {
+/// The stored chord, or the default.
+pub fn hotkey() -> global_hotkey::hotkey::HotKey {
     hotkey::from_storage(load().hotkey.as_deref())
 }
 
-/// Whether a chord for the card or for screenshots is stored (then the keyboard does not
-/// change it).
-pub fn hotkeys_stored() -> (bool, bool) {
-    let settings = load();
-    (
-        settings.hotkey.is_some(),
-        settings.screenshot_hotkey.is_some(),
-    )
-}
-
-/// Compact label of the stored chord (`⌥§` by default), or *No hotkey, set one*.
+/// Compact label of the stored chord (`⌃⌥Space` by default).
 pub fn hotkey_label() -> String {
-    chord_label(hotkey())
-}
-
-fn chord_label(chord: Option<global_hotkey::hotkey::HotKey>) -> String {
-    match chord {
-        Some(chord) => hotkey::label(&chord),
-        None => crate::locale::t("hotkey_none").to_string(),
-    }
+    hotkey::label(&hotkey())
 }
 
 /// Store the screenshot `chord` when it is safe and not the card's chord; otherwise keep the
 /// previous value.
 pub fn set_screenshot_hotkey(chord: &global_hotkey::hotkey::HotKey) -> bool {
-    if !hotkey::may_store(chord, hotkey().as_ref()) {
+    if !hotkey::may_store(chord, &hotkey()) {
         return false;
     }
     store_string(SCREENSHOT_HOTKEY_KEY, &hotkey::to_storage(chord));
     true
 }
 
-/// The stored screenshot chord, or the default (⌥⇧§); none on JIS with nothing stored.
-pub fn screenshot_hotkey() -> Option<global_hotkey::hotkey::HotKey> {
+/// The stored screenshot chord, or the default (⌃⌥4).
+pub fn screenshot_hotkey() -> global_hotkey::hotkey::HotKey {
     hotkey::screenshot_from_storage(load().screenshot_hotkey.as_deref())
 }
 
-/// Compact label of the stored screenshot chord (`⌥⇧§` by default), or *No hotkey, set one*.
+/// Compact label of the stored screenshot chord (`⌃⌥4` by default).
 pub fn screenshot_hotkey_label() -> String {
-    chord_label(screenshot_hotkey())
+    hotkey::label(&screenshot_hotkey())
 }
 
 /// Whether a screenshot also shows CopyCraft's own windows. Off unless the user stored it.

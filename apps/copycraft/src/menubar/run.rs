@@ -2,38 +2,60 @@
 
 use super::*;
 
-/// The hotkey manager with the card's chord registered; none registered when there is no
-/// chord (a JIS keyboard with nothing recorded).
+/// The hotkey manager with the card's chord registered, or none (logged, and Settings says the
+/// chord is taken) when another app or macOS holds it: the card still opens from the menu.
 pub(crate) fn register_format_hotkey()
 -> Result<(GlobalHotKeyManager, Option<global_hotkey::hotkey::HotKey>), Box<dyn std::error::Error>>
 {
     let manager = GlobalHotKeyManager::new()?;
-    let hotkey = crate::settings::hotkey();
-    if let Some(hotkey) = hotkey {
-        manager.register(hotkey)?;
-    }
+    let hotkey = register_card_chord(&manager, crate::settings::hotkey());
     Ok((manager, hotkey))
 }
 
-/// Register the screenshot hotkey on `manager`. `None` (logged) when another app holds the
-/// chord: screenshots still run from the menu and search.
-pub(crate) fn register_screenshot_hotkey(
+/// Register the card's `chord` on `manager`: `Some` when that worked, else `None` (logged).
+/// Either way [`crate::hotkey::set_taken`] records the outcome for Settings.
+pub(crate) fn register_card_chord(
     manager: &GlobalHotKeyManager,
+    chord: global_hotkey::hotkey::HotKey,
 ) -> Option<global_hotkey::hotkey::HotKey> {
-    let chord = crate::settings::screenshot_hotkey()?;
-    // The card's hotkey was set to this chord before there were screenshots: the card keeps it.
-    if Some(chord) == crate::settings::hotkey() {
-        return None;
-    }
-    match manager.register(chord) {
-        Ok(()) => Some(chord),
+    let registered = match manager.register(chord) {
+        Ok(()) => {
+            crate::diag::log(crate::diag::LogEvent::HotkeyRegistered);
+            Some(chord)
+        }
         Err(e) => {
             crate::diag::log(crate::diag::LogEvent::HotkeyRegisterFailed(
                 crate::diag::ErrorKind::from_text(&e.to_string()),
             ));
             None
         }
-    }
+    };
+    crate::hotkey::set_taken(false, registered.is_none());
+    registered
+}
+
+/// Register the screenshot hotkey on `manager`. `None` (logged, and marked taken for Settings)
+/// when another app or macOS holds the chord: screenshots still run from the menu and search.
+pub(crate) fn register_screenshot_hotkey(
+    manager: &GlobalHotKeyManager,
+) -> Option<global_hotkey::hotkey::HotKey> {
+    let chord = crate::settings::screenshot_hotkey();
+    // The card's hotkey was set to this chord before there were screenshots: the card keeps it.
+    let registered = if chord == crate::settings::hotkey() {
+        None
+    } else {
+        match manager.register(chord) {
+            Ok(()) => Some(chord),
+            Err(e) => {
+                crate::diag::log(crate::diag::LogEvent::HotkeyRegisterFailed(
+                    crate::diag::ErrorKind::from_text(&e.to_string()),
+                ));
+                None
+            }
+        }
+    };
+    crate::hotkey::set_taken(true, registered.is_none());
+    registered
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -185,7 +207,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     crate::macos_session::observe(
         || launcher::emit(UserEvent::SessionEnded),
-        || launcher::emit(UserEvent::KeyboardMayHaveChanged),
         crate::appearance::restyle_open_windows,
     );
     // Pasteboard privacy (macOS 15.4+): the access setting, in the local log only.

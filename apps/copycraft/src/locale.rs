@@ -307,8 +307,8 @@ mod tests {
         assert_eq!(t_in(Lang::En, "welcome_title"), "Welcome to CopyCraft");
         assert_eq!(t_in(Lang::Nl, "welcome_title"), "Welkom bij CopyCraft");
         assert_eq!(
-            tf_in(Lang::En, "welcome_hotkey", &[&"⌥§"]),
-            "Open CopyCraft from any app with ⌥§."
+            tf_in(Lang::En, "welcome_hotkey", &[&"⌃⌥Space"]),
+            "Open CopyCraft from any app with ⌃⌥Space."
         );
     }
 

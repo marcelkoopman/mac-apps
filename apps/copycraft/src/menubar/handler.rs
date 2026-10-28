@@ -67,7 +67,6 @@ impl ApplicationHandler<UserEvent> for App {
             // Only the tooltip: an open card reads the copy anyway.
             UserEvent::PasteHint => self.sync_tooltip(&ClipboardView::from_os()),
             UserEvent::SessionEnded => self.session_ended(),
-            UserEvent::KeyboardMayHaveChanged => self.recheck_keyboard(),
             UserEvent::ScreenshotTaken { generation, result } => {
                 self.screenshot_taken(generation, result);
             }

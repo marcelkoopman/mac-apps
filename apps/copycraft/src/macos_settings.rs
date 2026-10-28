@@ -61,6 +61,9 @@ thread_local! {
     static HOTKEY_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// The screenshot hotkey's value on Algemeen.
     static SHOT_LABEL: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    /// The notes under the two hotkey rows: they say when a chord is taken.
+    static HOTKEY_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
+    static SHOT_NOTE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
     /// Privacy's "Show CopyCraft in screenshots".
     static SHOT_OWN_BOX: RefCell<Option<Retained<NSButton>>> = const { RefCell::new(None) };
     static DATE_POPUP: RefCell<Option<Retained<NSPopUpButton>>> = const { RefCell::new(None) };
@@ -438,6 +441,8 @@ fn clear_controls() {
     PANES.with(|s| s.borrow_mut().clear());
     HOTKEY_LABEL.with(|s| *s.borrow_mut() = None);
     SHOT_LABEL.with(|s| *s.borrow_mut() = None);
+    HOTKEY_NOTE.with(|s| *s.borrow_mut() = None);
+    SHOT_NOTE.with(|s| *s.borrow_mut() = None);
     SHOT_OWN_BOX.with(|s| *s.borrow_mut() = None);
     DATE_POPUP.with(|s| *s.borrow_mut() = None);
     THEME_POPUP.with(|s| *s.borrow_mut() = None);
@@ -702,7 +707,7 @@ fn restore_level(window: &NSWindow) {
     LEVEL_BEFORE.with(|previous| crate::macos_launcher::restore_above_card(window, previous));
 }
 
-/// The hotkey values again, after the keyboard changed the defaults (not while recording).
+/// The hotkey values and notes again, after registering (not while recording).
 pub(crate) fn refresh_hotkeys() {
     if !RECORDING.get() {
         show_stored_hotkeys();

@@ -59,15 +59,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Need ⌃ or ⌘ (⌥ or ⌥⇧ alone only with §) — try again",
     ),
     (
-        "hotkey_none",
-        "Geen sneltoets, stel er een in",
-        "No hotkey, set one",
+        "hotkey_taken",
+        "Sneltoets in gebruik, kies een andere",
+        "Hotkey in use, pick another",
     ),
     (
-        "hotkey_layout_tip",
-        "Typt ⌥ met de toets links van 1 een teken op je toetsenbordindeling (Duits: „)? Kies dan een andere sneltoets.",
-        "Does ⌥ with the key left of 1 type a character on your keyboard layout (German: „)? Then pick another hotkey.",
+        "hotkey_input_source_tip",
+        "Met meer dan één invoerbron gebruikt macOS ⌃⌥Spatie mogelijk zelf (Selecteer volgende bron in invoermenu). Zet dat uit in Systeeminstellingen › Toetsenbord › Toetscombinaties › Invoerbronnen, of kies een andere sneltoets.",
+        "With more than one input source macOS may use ⌃⌥Space itself (Select next source in Input menu). Turn that off in System Settings › Keyboard › Keyboard Shortcuts › Input Sources, or pick another hotkey.",
     ),
+    // The Space key in a hotkey label (⌃⌥Space).
+    ("key_space", "Spatie", "Space"),
     ("date_order", "Datumvolgorde", "Date order"),
     (
         "date_order_note",

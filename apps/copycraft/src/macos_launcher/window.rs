@@ -349,10 +349,7 @@ pub(crate) fn label_symbol(button: &GlassButton, label: &str) {
 
 /// Tooltip of ✕: its name, Esc and the hotkey, which close the card too.
 fn close_tip() -> String {
-    let keys = match crate::settings::hotkey() {
-        Some(chord) => format!("Esc, {}", crate::hotkey::label(&chord)),
-        None => "Esc".to_string(),
-    };
+    let keys = format!("Esc, {}", crate::settings::hotkey_label());
     commands::keyed_tip(crate::locale::t("close"), &keys)
 }
 

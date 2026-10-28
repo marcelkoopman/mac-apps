@@ -279,26 +279,12 @@ fn build(mtm: MainThreadMarker) {
     heading.setAlignment(NSTextAlignment::Center);
 
     let body_font = NSFont::systemFontOfSize(NSFont::systemFontSize());
-    // No hotkey (a JIS keyboard with none recorded): say where to set one.
-    let (open_with, way_back) = match crate::settings::hotkey() {
-        Some(chord) => {
-            let label = crate::hotkey::label(&chord);
-            (
-                crate::locale::tf("welcome_hotkey", &[&label]),
-                crate::locale::tf("welcome_way_back", &[&label]),
-            )
-        }
-        None => (
-            crate::locale::t("welcome_hotkey_none").to_string(),
-            crate::locale::t("welcome_way_back_none").to_string(),
-        ),
-    };
     let points = [
-        open_with,
+        crate::locale::tf("welcome_hotkey", &[&crate::settings::hotkey_label()]),
         crate::locale::t("welcome_history").to_string(),
         crate::locale::t("welcome_local").to_string(),
         crate::locale::t("welcome_sensitive").to_string(),
-        way_back,
+        crate::locale::tf("welcome_way_back", &[&crate::settings::hotkey_label()]),
     ];
     let point_views: Vec<Retained<NSTextField>> = points
         .iter()

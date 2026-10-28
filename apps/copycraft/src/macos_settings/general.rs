@@ -68,7 +68,17 @@ pub(super) fn set_hotkey_text(text: &str) {
     });
 }
 
-/// Both hotkey values as stored (after recording, or when it is cancelled).
+/// The note under a hotkey row: *Hotkey in use, pick another* while its chord could not be
+/// registered ([`hotkey::is_taken`]), otherwise what the hotkey does.
+fn hotkey_note(screenshot: bool) -> &'static str {
+    match (screenshot, hotkey::is_taken(screenshot)) {
+        (_, true) => crate::locale::t("hotkey_taken"),
+        (false, false) => crate::locale::t("hotkey_note"),
+        (true, false) => crate::locale::t("screenshot_hotkey_note"),
+    }
+}
+
+/// Both hotkey values as stored (after recording, or when it is cancelled), and their notes.
 pub(super) fn show_stored_hotkeys() {
     for (slot, text) in [
         (&HOTKEY_LABEL, settings::hotkey_label()),
@@ -77,6 +87,13 @@ pub(super) fn show_stored_hotkeys() {
         slot.with(|slot| {
             if let Some(field) = slot.borrow().as_ref() {
                 field.setStringValue(&NSString::from_str(&text));
+            }
+        });
+    }
+    for (slot, screenshot) in [(&HOTKEY_NOTE, false), (&SHOT_NOTE, true)] {
+        slot.with(|slot| {
+            if let Some(note) = slot.borrow().as_ref() {
+                note.setStringValue(&NSString::from_str(hotkey_note(screenshot)));
             }
         });
     }
@@ -141,7 +158,7 @@ pub(super) fn handle_record_key(event: &NSEvent) {
 }
 
 /// A hotkey row from `top` down: `name`, the chord's value (kept in `slot` for recording) and
-/// a *Change* button sending `action`, then `note` under it.
+/// a *Change* button sending `action`, then `note` under it (kept in `note_slot`).
 #[allow(clippy::too_many_arguments)]
 fn place_hotkey_row(
     mtm: MainThreadMarker,
@@ -153,6 +170,7 @@ fn place_hotkey_row(
     action: mac_ui::objc2::runtime::Sel,
     slot: &'static std::thread::LocalKey<RefCell<Option<Retained<NSTextField>>>>,
     note: &str,
+    note_slot: &'static std::thread::LocalKey<RefCell<Option<Retained<NSTextField>>>>,
 ) {
     let value_x = MARGIN + LABEL_W + mac_ui::metrics::BUTTON_GAP;
     let y = take(top, BUTTON_H);
@@ -183,7 +201,9 @@ fn place_hotkey_row(
     ));
     wire(change.button(), action);
     body.addSubview(change.view());
-    place_explanation(mtm, body, note, top);
+    gap(top, NOTE_GAP);
+    let note = place_note(mtm, body, note, take(top, NOTE_H));
+    note_slot.with(|slot| *slot.borrow_mut() = Some(note));
 }
 
 /// Algemeen: hotkey, language, date order, Open at Login and the Meldingen block. Returns the
@@ -199,7 +219,8 @@ pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
         crate::locale::t("change_hotkey_a11y"),
         sel!(changeHotkey:),
         &HOTKEY_LABEL,
-        crate::locale::t("hotkey_note"),
+        hotkey_note(false),
+        &HOTKEY_NOTE,
     );
 
     gap(&mut top, mac_ui::metrics::SPACE_S);
@@ -212,14 +233,15 @@ pub(super) fn build_general(mtm: MainThreadMarker, body: &NSView) -> f64 {
         crate::locale::t("change_screenshot_hotkey_a11y"),
         sel!(changeScreenshotHotkey:),
         &SHOT_LABEL,
-        crate::locale::t("screenshot_hotkey_note"),
+        hotkey_note(true),
+        &SHOT_NOTE,
     );
-    // Some layouts type a character with ⌥ on the key left of 1 (German: „).
-    for slot in [&HOTKEY_LABEL, &SHOT_LABEL] {
+    // With more than one input source macOS may use ⌃⌥Space itself.
+    for slot in [&HOTKEY_LABEL, &SHOT_LABEL, &HOTKEY_NOTE, &SHOT_NOTE] {
         slot.with(|slot| {
             if let Some(field) = slot.borrow().as_ref() {
                 field.setToolTip(Some(&NSString::from_str(crate::locale::t(
-                    "hotkey_layout_tip",
+                    "hotkey_input_source_tip",
                 ))));
             }
         });

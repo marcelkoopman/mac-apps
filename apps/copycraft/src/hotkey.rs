@@ -1,153 +1,85 @@
-//! Global hotkeys: the one that summons the card (default ⌥§) and the one that starts a
-//! screenshot (default ⌥⇧§, Option-Shift-§, written in the Mac order ⌃⌥⇧⌘). Both are stored
-//! in the user defaults; a default is never stored, so a stored chord is one the user
-//! recorded in Settings.
+//! Global hotkeys: the one that summons the card (default ⌃⌥Space) and the one that starts a
+//! screenshot (default ⌃⌥4), written in the Mac order ⌃⌥⇧⌘. Both are stored in the user
+//! defaults; a default is never stored, so a stored chord is one the user recorded in Settings.
 //!
-//! Both defaults sit on the key top left, next to 1, by its position, not its character: § on
-//! ISO keyboards (`kVK_ISO_Section`, [`Code::IntlBackslash`]), ` on ANSI keyboards
-//! (`kVK_ANSI_Grave`, [`Code::Backquote`]). On ANSI ⌥` is a dead key (à, è), so the default
-//! there has Control too: ⌃⌥` and ⌃⌥⇧`. A JIS keyboard has no key there: no default, the
-//! user records one. [`board`] asks macOS which keyboard it is, again on wake, when Settings
-//! opens and when the input source changes ([`detect_board`]).
-//!
-//! Some ISO layouts type a character with ⌥ on that key too (German: ⌥^ is „); the README
-//! and Settings say so, and another chord can be recorded.
+//! The defaults are the same on every keyboard (ISO, ANSI, JIS): Space (`kVK_Space`) and 4
+//! (`kVK_ANSI_4`) sit in the same place on all of them, and with Control and Option together
+//! they type nothing. With more than one input source macOS may use ⌃⌥Space itself (*Select
+//! next source in Input menu*); a chord that cannot be registered is marked taken ([`set_taken`])
+//! and Settings says so.
 
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-use mac_ui::keys::Board;
 
-/// Menu / Settings label for the default chord on an ISO keyboard.
+/// Storage form of the card's default ([`open`]); never stored by CopyCraft itself.
 #[cfg_attr(not(test), allow(dead_code))]
-pub const DEFAULT_LABEL: &str = "⌥§";
-
-/// Storage form of the default ([`open`]) on an ISO keyboard.
-#[cfg_attr(not(test), allow(dead_code))]
-pub const DEFAULT_STORAGE: &str = "alt+IntlBackslash";
+pub const DEFAULT_STORAGE: &str = "control+alt+Space";
 
 /// The default before ⌃⌘C. A stored copy of it follows [`open`] so the chord moves with the
-/// app. ⌃⌘C itself (`control+meta+KeyC`, the default until ⌥§) stays: CopyCraft never stored
-/// a default, so a stored ⌃⌘C was recorded by the user.
+/// app. Every later default (⌃⌘C, ⌥§, ⌃⌥`; for screenshots ⌃⇧4, ⌥⇧§, ⌃⌥⇧`) stays when stored:
+/// CopyCraft never stored a default, so a stored one was recorded by the user.
 const PREVIOUS_DEFAULT_STORAGE: &str = "control+alt+super+KeyC";
 
-/// The keyboard last detected ([`board_code`]); 0 before the first look.
-static BOARD: AtomicU8 = AtomicU8::new(0);
-
-const fn board_code(board: Board) -> u8 {
-    match board {
-        Board::Iso => 1,
-        Board::Ansi => 2,
-        Board::Jis => 3,
-    }
+/// The chord registered when none is stored: ⌃⌥Space.
+pub fn open() -> HotKey {
+    HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
 }
 
-const fn board_of(code: u8) -> Option<Board> {
-    match code {
-        1 => Some(Board::Iso),
-        2 => Some(Board::Ansi),
-        3 => Some(Board::Jis),
-        _ => None,
-    }
+/// The chord that starts a screenshot when none is stored: ⌃⌥4.
+pub fn screenshot() -> HotKey {
+    HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Digit4)
 }
 
-/// The keyboard's layout as macOS reports it now; ISO when it does not know (and off macOS).
-fn detected() -> Board {
-    #[cfg(target_os = "macos")]
-    {
-        mac_ui::keys::board().unwrap_or(Board::Iso)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Board::Iso
-    }
+/// The card's hotkey could not be registered (another app or macOS holds it).
+static CARD_TAKEN: AtomicBool = AtomicBool::new(false);
+/// The screenshot hotkey could not be registered.
+static SHOT_TAKEN: AtomicBool = AtomicBool::new(false);
+
+/// Note whether the card's chord (`screenshot` false) or the screenshot chord could not be
+/// registered, for Settings ([`is_taken`]).
+pub fn set_taken(screenshot: bool, taken: bool) {
+    let slot = if screenshot { &SHOT_TAKEN } else { &CARD_TAKEN };
+    slot.store(taken, Ordering::Relaxed);
 }
 
-/// The keyboard's layout, for the default chords: the one last detected (the first call
-/// looks).
-pub fn board() -> Board {
-    board_of(BOARD.load(Ordering::Relaxed)).unwrap_or_else(|| {
-        let board = detected();
-        BOARD.store(board_code(board), Ordering::Relaxed);
-        board
-    })
-}
-
-/// Ask macOS again which keyboard it is (wake, Settings opening, another input source).
-/// Whether it changed, so the default chords need registering again.
-pub fn detect_board() -> bool {
-    let next = board_code(detected());
-    BOARD.swap(next, Ordering::Relaxed) != next
-}
-
-/// The key top left, next to 1, on `board`: § on ISO, ` on ANSI, none on JIS.
-pub fn top_left_key(board: Board) -> Option<Code> {
-    match board {
-        Board::Ansi => Some(Code::Backquote),
-        Board::Iso => Some(Code::IntlBackslash),
-        Board::Jis => None,
-    }
-}
-
-/// The card's default chord on `board`: Option and the key top left (⌥§), with Control on
-/// ANSI (⌃⌥`, as ⌥` is a dead key there); none on JIS.
-pub fn open_on(board: Board) -> Option<HotKey> {
-    let key = top_left_key(board)?;
-    let mods = match board {
-        Board::Ansi => Modifiers::CONTROL | Modifiers::ALT,
-        Board::Iso | Board::Jis => Modifiers::ALT,
-    };
-    Some(HotKey::new(Some(mods), key))
-}
-
-/// The chord registered when none is stored: ⌥§ (⌃⌥` on ANSI, none on JIS).
-pub fn open() -> Option<HotKey> {
-    open_on(board())
-}
-
-/// Menu / Settings label for the default screenshot chord ([`screenshot`]) on ISO.
-#[cfg_attr(not(test), allow(dead_code))]
-pub const SCREENSHOT_LABEL: &str = "⌥⇧§";
-
-/// The screenshot default on `board`: the card's chord with Shift.
-pub fn screenshot_on(board: Board) -> Option<HotKey> {
-    open_on(board).map(|chord| HotKey::new(Some(chord.mods | Modifiers::SHIFT), chord.key))
-}
-
-/// The chord that starts a screenshot when none is stored: ⌥⇧§ (⌃⌥⇧` on ANSI, none on JIS).
-pub fn screenshot() -> Option<HotKey> {
-    screenshot_on(board())
+/// Whether the card's chord (`screenshot` false) or the screenshot chord is not registered
+/// because it is taken.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+pub fn is_taken(screenshot: bool) -> bool {
+    let slot = if screenshot { &SHOT_TAKEN } else { &CARD_TAKEN };
+    slot.load(Ordering::Relaxed)
 }
 
 /// The screenshot chord from `storage`, or [`screenshot`] when missing or unsafe. A stored
-/// ⌃⇧4 (the default until ⌥⇧§) stays: it was recorded by the user.
-pub fn screenshot_from_storage(storage: Option<&str>) -> Option<HotKey> {
+/// earlier default (⌃⇧4, ⌥⇧§) stays: it was recorded by the user.
+pub fn screenshot_from_storage(storage: Option<&str>) -> HotKey {
     storage
         .and_then(|text| text.parse::<HotKey>().ok())
         .filter(is_safe)
-        .or_else(screenshot)
+        .unwrap_or_else(screenshot)
 }
 
-/// Whether `chord` may be stored next to `other` (the other global hotkey, if any): safe, and
-/// not the same chord, which would register only once.
-pub fn may_store(chord: &HotKey, other: Option<&HotKey>) -> bool {
-    is_safe(chord) && other.is_none_or(|other| chord.id() != other.id())
+/// Whether `chord` may be stored next to `other` (the other global hotkey): safe, and not the
+/// same chord, which would register only once.
+pub fn may_store(chord: &HotKey, other: &HotKey) -> bool {
+    is_safe(chord) && chord.id() != other.id()
 }
 
 /// The chord from `storage` (a [`HotKey`] string), or the default when missing, unsafe, or still
 /// the previous default.
-pub fn from_storage(storage: Option<&str>) -> Option<HotKey> {
+pub fn from_storage(storage: Option<&str>) -> HotKey {
     storage
         .filter(|text| *text != PREVIOUS_DEFAULT_STORAGE)
         .and_then(|text| text.parse::<HotKey>().ok())
         .filter(is_safe)
-        .or_else(open)
+        .unwrap_or_else(open)
 }
 
 /// Whether `chord` is strong enough: not a bare key, not Shift alone, and Option or
 /// Option-Shift alone only on § (ISO, top left). Those type characters (⌥C is ç, ⌥⇧O is Ø,
-/// ⌥` a dead key on ANSI), so on any other key a hotkey would take them away; ⌥§ and ⌥⇧§ are
-/// the ISO defaults. Control-Option-C and Control-Command-C are fine.
+/// ⌥` a dead key on ANSI), so on any other key a hotkey would take them away. With Control or
+/// Command too nothing is typed: the defaults ⌃⌥Space and ⌃⌥4, ⌃⌥C and ⌃⌘C are fine.
 pub fn is_safe(chord: &HotKey) -> bool {
     let mods =
         chord.mods & (Modifiers::CONTROL | Modifiers::ALT | Modifiers::META | Modifiers::SHIFT);
@@ -158,7 +90,7 @@ pub fn is_safe(chord: &HotKey) -> bool {
     !typing || chord.key == Code::IntlBackslash
 }
 
-/// Compact Mac label (`⌥§`, `⌃⌘C`) for menus and Settings.
+/// Compact Mac label (`⌃⌥Space`, `⌃⌘C`; Space is *Spatie* in Dutch) for menus and Settings.
 pub fn label(chord: &HotKey) -> String {
     let mut out = String::new();
     if chord.mods.contains(Modifiers::CONTROL) {
@@ -220,7 +152,7 @@ fn key_glyph(code: Code) -> String {
         Code::Digit7 => "7".into(),
         Code::Digit8 => "8".into(),
         Code::Digit9 => "9".into(),
-        Code::Space => "Space".into(),
+        Code::Space => crate::locale::t("key_space").into(),
         Code::IntlBackslash => "§".into(),
         Code::Backquote => "`".into(),
         other => format!("{other:?}").replace("Key", ""),
@@ -278,121 +210,111 @@ pub fn code_from_key_code(key_code: u16) -> Option<Code> {
 #[cfg(test)]
 mod tests {
     use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-    use mac_ui::keys::Board;
 
     use super::{
-        DEFAULT_LABEL, DEFAULT_STORAGE, SCREENSHOT_LABEL, board, board_code, board_of,
-        code_from_key_code, from_storage, is_safe, label, may_store, open, open_on, screenshot,
-        screenshot_from_storage, screenshot_on, to_storage,
+        DEFAULT_STORAGE, code_from_key_code, from_storage, is_safe, is_taken, label, may_store,
+        open, screenshot, screenshot_from_storage, set_taken, to_storage,
     };
 
-    fn iso() -> HotKey {
-        open_on(Board::Iso).expect("ISO default")
-    }
-
-    fn iso_shot() -> HotKey {
-        screenshot_on(Board::Iso).expect("ISO screenshot default")
-    }
-
     #[test]
-    fn the_defaults_sit_on_the_key_top_left_by_position() {
-        // ISO: § (kVK_ISO_Section), Option alone.
-        assert_eq!(iso().key, Code::IntlBackslash);
-        assert_eq!(iso_shot().key, Code::IntlBackslash);
-        assert_eq!(iso().mods, Modifiers::ALT);
-        assert_eq!(iso_shot().mods, Modifiers::ALT | Modifiers::SHIFT);
-        assert_eq!(label(&iso()), DEFAULT_LABEL);
-        assert_eq!(label(&iso_shot()), SCREENSHOT_LABEL);
-        assert_eq!(to_storage(&iso()), DEFAULT_STORAGE);
-        // ANSI: ` (kVK_ANSI_Grave) with Control too, as ⌥` is a dead key (à, è).
-        let ansi = open_on(Board::Ansi).expect("ANSI default");
-        let ansi_shot = screenshot_on(Board::Ansi).expect("ANSI screenshot default");
-        assert_eq!(ansi.key, Code::Backquote);
-        assert_eq!(label(&ansi), "⌃⌥`");
-        assert_eq!(label(&ansi_shot), "⌃⌥⇧`");
-        assert!(is_safe(&ansi) && is_safe(&ansi_shot));
-        // JIS has no key there: no default at all.
-        assert_eq!(open_on(Board::Jis), None);
-        assert_eq!(screenshot_on(Board::Jis), None);
-        // Recording in Settings reads the same keys back.
+    fn the_defaults_are_control_option_space_and_four_on_every_keyboard() {
+        let (card, shot) = (open(), screenshot());
+        assert_eq!(card.mods, Modifiers::CONTROL | Modifiers::ALT);
+        assert_eq!(card.key, Code::Space);
+        assert_eq!(shot.mods, Modifiers::CONTROL | Modifiers::ALT);
+        assert_eq!(shot.key, Code::Digit4);
+        assert_eq!(label(&card), "⌃⌥Space");
+        assert_eq!(label(&shot), "⌃⌥4");
+        assert_eq!(to_storage(&card), DEFAULT_STORAGE);
+        assert!(is_safe(&card) && is_safe(&shot));
+        // kVK_Space and kVK_ANSI_4: the same keys on ISO, ANSI and JIS.
+        assert_eq!(code_from_key_code(0x31), Some(Code::Space));
+        assert_eq!(code_from_key_code(0x15), Some(Code::Digit4));
+        // The other top left keys can still be recorded.
         assert_eq!(code_from_key_code(0x0A), Some(Code::IntlBackslash));
         assert_eq!(code_from_key_code(0x32), Some(Code::Backquote));
     }
 
     #[test]
-    fn the_board_is_kept_until_looked_at_again() {
-        for b in [Board::Iso, Board::Ansi, Board::Jis] {
-            assert_eq!(board_of(board_code(b)), Some(b));
-        }
-        assert_eq!(board_of(0), None);
-        // Off macOS the look always says ISO.
-        if cfg!(not(target_os = "macos")) {
-            assert_eq!(board(), Board::Iso);
-            assert!(!super::detect_board());
-            assert_eq!(open(), Some(iso()));
-        }
+    fn space_is_named_in_the_language_of_the_app() {
+        crate::locale::set_test_language(crate::settings::Language::Nl);
+        assert_eq!(label(&open()), "⌃⌥Spatie");
+        crate::locale::set_test_language(crate::settings::Language::En);
+        assert_eq!(label(&open()), "⌃⌥Space");
+    }
+
+    #[test]
+    fn a_taken_chord_is_remembered_per_hotkey() {
+        set_taken(true, true);
+        assert!(is_taken(true));
+        set_taken(true, false);
+        assert!(!is_taken(true));
+        // The card's flag is only touched by the card (and by no other test).
+        assert!(!is_taken(false));
+        set_taken(false, true);
+        assert!(is_taken(false));
+        set_taken(false, false);
+        assert!(!is_taken(false));
     }
 
     #[test]
     fn the_screenshot_chord_round_trips() {
-        let chord = screenshot().expect("default");
-        assert!(is_safe(&chord));
-        assert_ne!(Some(chord.id()), open().map(|c| c.id()));
+        let chord = screenshot();
+        assert_ne!(chord.id(), open().id());
         let stored = to_storage(&chord);
-        assert_eq!(screenshot_from_storage(Some(&stored)), Some(chord));
+        assert_eq!(screenshot_from_storage(Some(&stored)), chord);
         // Another safe chord is kept; nothing, rubbish or an unsafe chord gives the default.
         let other = HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Digit5);
-        assert_eq!(
-            screenshot_from_storage(Some(&to_storage(&other))),
-            Some(other)
-        );
-        assert_eq!(screenshot_from_storage(None), Some(chord));
-        assert_eq!(screenshot_from_storage(Some("nonsense")), Some(chord));
-        assert_eq!(screenshot_from_storage(Some("shift+Digit4")), Some(chord));
+        assert_eq!(screenshot_from_storage(Some(&to_storage(&other))), other);
+        assert_eq!(screenshot_from_storage(None), chord);
+        assert_eq!(screenshot_from_storage(Some("nonsense")), chord);
+        assert_eq!(screenshot_from_storage(Some("shift+Digit4")), chord);
         // The previous default of the card's chord is a valid screenshot chord here.
         let previous = screenshot_from_storage(Some("control+alt+super+KeyC"));
-        assert_eq!(previous.map(|c| c.key), Some(Code::KeyC));
+        assert_eq!(previous.key, Code::KeyC);
     }
 
     #[test]
     fn recorded_chords_keep_their_value_when_the_defaults_move() {
         // The old defaults were never stored by CopyCraft, so a stored one was recorded.
-        let card = from_storage(Some("control+meta+KeyC")).expect("stored");
+        let card = from_storage(Some("control+meta+KeyC"));
         assert_eq!(card.mods, Modifiers::CONTROL | Modifiers::META);
         assert_eq!(card.key, Code::KeyC);
-        assert_eq!(from_storage(Some("control+super+KeyC")), Some(card));
-        let shot = screenshot_from_storage(Some("shift+control+Digit4")).expect("stored");
+        assert_eq!(from_storage(Some("control+super+KeyC")), card);
+        let shot = screenshot_from_storage(Some("shift+control+Digit4"));
         assert_eq!(shot.mods, Modifiers::CONTROL | Modifiers::SHIFT);
         assert_eq!(shot.key, Code::Digit4);
+        // ⌥§ / ⌥⇧§ (ISO) and ⌃⌥` / ⌃⌥⇧` (ANSI), the defaults before ⌃⌥Space, stay as recorded.
+        for (stored, key) in [
+            ("alt+IntlBackslash", Code::IntlBackslash),
+            ("control+alt+Backquote", Code::Backquote),
+        ] {
+            assert_eq!(from_storage(Some(stored)).key, key, "{stored}");
+        }
+        for (stored, key) in [
+            ("shift+alt+IntlBackslash", Code::IntlBackslash),
+            ("shift+control+alt+Backquote", Code::Backquote),
+        ] {
+            assert_eq!(screenshot_from_storage(Some(stored)).key, key, "{stored}");
+        }
         // Nothing stored: the new defaults.
         assert_eq!(from_storage(None), open());
         assert_eq!(screenshot_from_storage(None), screenshot());
         // The default before ⌃⌘C still follows the default, as it did.
         assert_eq!(from_storage(Some("control+alt+super+KeyC")), open());
-        // Recorded defaults of either board round-trip.
-        for chord in [iso(), screenshot_on(Board::Ansi).expect("ANSI")] {
-            assert_eq!(from_storage(Some(&to_storage(&chord))), Some(chord));
-        }
     }
 
     #[test]
     fn the_two_hotkeys_may_not_be_the_same_chord() {
-        for board in [Board::Iso, Board::Ansi] {
-            let (card, shot) = (
-                open_on(board).expect("card"),
-                screenshot_on(board).expect("shot"),
-            );
-            assert_ne!(card.id(), shot.id());
-            assert!(may_store(&shot, Some(&card)));
-            assert!(may_store(&card, Some(&shot)));
-            assert!(!may_store(&card, Some(&card)));
-            assert!(!may_store(&shot, Some(&shot)));
-        }
-        // JIS: the other has none, any safe chord goes.
-        assert!(may_store(&iso(), None));
+        let (card, shot) = (open(), screenshot());
+        assert_ne!(card.id(), shot.id());
+        assert!(may_store(&shot, &card));
+        assert!(may_store(&card, &shot));
+        assert!(!may_store(&card, &card));
+        assert!(!may_store(&shot, &shot));
         assert!(!may_store(
             &HotKey::new(Some(Modifiers::SHIFT), Code::Digit4),
-            None
+            &card
         ));
     }
 
@@ -425,8 +347,8 @@ mod tests {
             Code::KeyC
         )));
         assert!(is_safe(&HotKey::new(Some(Modifiers::META), Code::KeyC)));
-        assert!(is_safe(&iso()));
-        assert!(is_safe(&iso_shot()));
+        assert!(is_safe(&open()));
+        assert!(is_safe(&screenshot()));
     }
 
     #[test]
@@ -462,18 +384,19 @@ mod tests {
 
     #[test]
     fn storage_roundtrips_and_falls_back_when_unsafe() {
-        let chord = from_storage(Some("control+alt+KeyC")).expect("stored");
+        let chord = from_storage(Some("control+alt+KeyC"));
         assert_eq!(chord.mods, Modifiers::CONTROL | Modifiers::ALT);
         assert_eq!(chord.key, Code::KeyC);
         assert_eq!(from_storage(Some("alt+KeyC")), open());
         assert_eq!(from_storage(None), open());
-        assert_eq!(from_storage(Some(DEFAULT_STORAGE)), Some(iso()));
+        assert_eq!(from_storage(Some(DEFAULT_STORAGE)), open());
     }
 
     #[test]
     fn hotkey_leaves_plain_copy_and_find_to_the_card() {
-        let chord = iso();
-        assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyC));
-        assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyF));
+        for chord in [open(), screenshot()] {
+            assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyC));
+            assert_ne!(chord, HotKey::new(Some(Modifiers::META), Code::KeyF));
+        }
     }
 }

@@ -488,10 +488,10 @@ impl App {
     }
 
     /// The screenshot hotkey: the stored chord, or none when it cannot be registered (taken
-    /// by another app); the card's hotkey is not touched.
+    /// by another app or macOS; Settings says so); the card's hotkey is not touched.
     pub(crate) fn rebind_screenshot_hotkey(&mut self) {
         let next = crate::settings::screenshot_hotkey();
-        if self.screenshot_hotkey == next {
+        if self.screenshot_hotkey == Some(next) {
             return;
         }
         if let Some(old) = self.screenshot_hotkey.take()
@@ -503,56 +503,26 @@ impl App {
         }
         self.screenshot_hotkey = register_screenshot_hotkey(&self.hotkeys);
         self.refresh_status_menu();
+        #[cfg(target_os = "macos")]
+        crate::macos_settings::refresh_hotkeys();
     }
 
+    /// The card's hotkey: the stored chord, or none when it cannot be registered (Settings
+    /// says it is taken, and the menu still opens the card).
     fn rebind_card_hotkey(&mut self) {
         let next = crate::settings::hotkey();
-        if next == self.format_hotkey {
+        if self.format_hotkey == Some(next) {
             return;
         }
-        let previous = self.format_hotkey.take();
-        if let Some(old) = previous
+        if let Some(old) = self.format_hotkey.take()
             && let Err(e) = self.hotkeys.unregister(old)
         {
             crate::diag::log(crate::diag::LogEvent::HotkeyUnregisterFailed(
                 crate::diag::ErrorKind::from_text(&e.to_string()),
             ));
         }
-        let Some(next) = next else {
-            // No chord any more (a JIS keyboard, nothing recorded): the menu says so.
-            self.refresh_status_menu();
-            return;
-        };
-        match self.hotkeys.register(next) {
-            Ok(()) => {
-                self.format_hotkey = Some(next);
-                self.refresh_status_menu();
-                crate::diag::log(crate::diag::LogEvent::HotkeyRegistered);
-            }
-            Err(e) => {
-                crate::diag::log(crate::diag::LogEvent::HotkeyRegisterFailed(
-                    crate::diag::ErrorKind::from_text(&e.to_string()),
-                ));
-                // Best effort: put the previous chord back.
-                if let Some(old) = previous
-                    && self.hotkeys.register(old).is_ok()
-                {
-                    self.format_hotkey = Some(old);
-                }
-            }
-        }
-    }
-
-    /// Ask macOS again which keyboard it is (wake, Settings opening, another input source);
-    /// when it changed, the default chords follow. A recorded chord stays as it is.
-    pub(crate) fn recheck_keyboard(&mut self) {
-        if !crate::hotkey::detect_board() {
-            return;
-        }
-        if crate::settings::hotkeys_stored() == (true, true) {
-            return;
-        }
-        self.rebind_hotkey();
+        self.format_hotkey = register_card_chord(&self.hotkeys, next);
+        self.refresh_status_menu();
         #[cfg(target_os = "macos")]
         crate::macos_settings::refresh_hotkeys();
     }

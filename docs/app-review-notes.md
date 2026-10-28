@@ -20,9 +20,12 @@ has a "Keep clipboard history" checkbox (off), an "Open at Login" checkbox (off)
 started" button. The welcome window can be shown again from the
 menu bar menu ("Welcome Screen").
 
-**Global shortcut.** Press Option-§ (⌥§, the key left of 1; Control-Option-` on a US keyboard)
-in any app to open the CopyCraft card for the current clipboard; the menu bar icon opens it too.
-Option-Shift-§ takes a screenshot. The shortcuts can be changed in Settings (a bare key, Shift
+**Global shortcut.** Press Control-Option-Space (⌃⌥Space, on every keyboard) in any app to open
+the CopyCraft card for the current clipboard; the menu bar icon opens it too. Control-Option-4
+(⌃⌥4) takes a screenshot. With more than one input source macOS may use Control-Option-Space for
+"Select next source in Input menu"; turn that off in System Settings › Keyboard › Keyboard
+Shortcuts › Input Sources, or record another shortcut. A shortcut that cannot be registered is
+shown as "Hotkey in use, pick another" in Settings. The shortcuts can be changed in Settings (a bare key, Shift
 as the only modifier, or Option or Option-Shift as the only modifiers on any key but §, is
 refused). It is registered as a regular global hotkey and needs no Accessibility or Input
 Monitoring permission.

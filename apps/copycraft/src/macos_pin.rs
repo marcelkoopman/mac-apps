@@ -56,7 +56,7 @@ pub(crate) fn pin_status_history(menu: &Menu, pinned: &[bool]) {
 
 /// The shortcut beside the status menu's item titled `title`: `key` with `mods`, set on the
 /// NSMenuItem muda made. For the § key, which muda's accelerators cannot show; AppKit draws it
-/// as ⌥⇧§. Only shown there: the chord itself is the global hotkey.
+/// as a recorded ⌥⇧§. Only shown there: the chord itself is the global hotkey.
 pub(crate) fn show_status_shortcut(menu: &Menu, title: &str, key: &str, mods: Modifiers) {
     let Some(ns_menu) = status_ns_menu(menu) else {
         return;

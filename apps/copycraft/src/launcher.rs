@@ -59,9 +59,6 @@ pub enum UserEvent {
     PasteHint,
     /// The screen locked, the Mac is going to sleep, or the user switched away.
     SessionEnded,
-    /// The Mac woke, Settings opened or the input source changed: the keyboard may be another
-    /// one, so the default hotkeys may move ([`crate::hotkey::detect_board`]).
-    KeyboardMayHaveChanged,
     /// A screenshot is done ([`crate::screenshot`]): its PNG bytes, or why not (`Err(None)`:
     /// the user cancelled). One with a stale `generation` (Wipe, the lock screen) is dropped,
     /// its bytes zeroized.
@@ -192,7 +189,6 @@ pub fn privacy_filter_changed() {
 
 /// Open the Settings window.
 pub fn show_settings() {
-    emit(UserEvent::KeyboardMayHaveChanged);
     #[cfg(target_os = "macos")]
     crate::macos_settings::show();
 }
