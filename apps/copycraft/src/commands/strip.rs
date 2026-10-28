@@ -167,6 +167,11 @@ pub fn link_thumb(text: &str) -> Option<(&'static str, String)> {
         lines.push('\n');
         lines.push_str(&second);
     }
+    // A YouTube video ID on its own line: it tells two video tiles apart.
+    if let Some(id) = link.video_id.as_ref().filter(|_| site.is_some()) {
+        lines.push('\n');
+        lines.push_str(&cut_line(id));
+    }
     Some((link.place.symbol(), lines))
 }
 
@@ -673,9 +678,14 @@ mod tests {
         assert_eq!(symbol, "globe");
         assert!(lines.starts_with("youtube.com\n"), "{lines}");
         assert!(!lines.contains("://") && !lines.contains("www."), "{lines}");
+        // The video ID on its own line, after the site.
+        assert_eq!(lines.lines().nth(2), Some("dQw4w9WgXcQ"), "{lines}");
+        assert!(lines.lines().count() <= super::THUMB_LINES);
+        // Facebook keeps its ID hidden.
         let (_, lines) =
             link_thumb("https://www.facebook.com/reel/1092344577040057").expect("a link");
         assert_eq!(lines.lines().next(), Some("facebook.com"));
+        assert!(!lines.contains("1092344577040057"), "{lines}");
         assert!(lines.lines().count() <= super::THUMB_LINES);
         assert!(
             lines

@@ -27,39 +27,67 @@ fn meanings(text: &str) -> Vec<super::Meaning> {
 }
 
 #[test]
-fn a_youtube_watch_link_says_video_id_not_watch_and_v() {
-    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&t=42s&list=PLfake&index=3";
+fn a_youtube_watch_link_shows_its_video_id_not_watch_and_v() {
+    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&t=42s&list=PLfake&index=3&si=share1";
     assert!(!has_path(text));
-    assert_eq!(
-        meanings(text),
-        [VideoId, StartTime, Playlist, PlaylistPosition]
-    );
+    // The ID is on the site line, so no Video-ID chip.
+    assert_eq!(meanings(text), [StartTime, Playlist, PlaylistPosition]);
     let link = parse(text).unwrap();
-    assert!(link.params.is_empty(), "{:?}", link.params);
+    assert_eq!(link.params, ["si"]);
+    assert_eq!(
+        link.site_line().as_deref(),
+        Some("YouTube · Video · aBcDeFgHiJk")
+    );
     let shown = link.text();
-    for hidden in ["/watch", "aBcDeFgHiJk", "42s", "PLfake"] {
+    // The video ID is the one value shown; t, list, index and si stay hidden.
+    assert!(shown.contains("aBcDeFgHiJk"), "{shown}");
+    for hidden in ["/watch", "42s", "PLfake", "share1", "=3"] {
         assert!(!shown.contains(hidden), "{hidden} in {shown}");
     }
+    assert!(link.ax_label().contains("aBcDeFgHiJk"));
     assert_eq!(chips(text).len(), 4);
+}
+
+#[test]
+fn a_value_without_the_video_id_shape_stays_hidden() {
+    for text in [
+        "https://www.youtube.com/watch?v=tooshort",
+        "https://www.youtube.com/watch?v=aBcDeFgHiJk12",
+        "https://www.youtube.com/watch?v=aBcDe%2FgHiJ",
+    ] {
+        let link = parse(text).unwrap();
+        assert_eq!(link.video_id, None, "{text}");
+        assert_eq!(link.meanings, [VideoId], "{text}");
+        let shown = link.text();
+        for hidden in ["tooshort", "aBcDeFgHiJk12", "aBcDe"] {
+            assert!(!shown.contains(hidden), "{hidden} in {shown}");
+        }
+    }
 }
 
 #[test]
 fn youtu_be_shorts_embed_and_playlist() {
     assert!(!has_path("https://youtu.be/aBcDeFgHiJk?t=10"));
-    assert_eq!(
-        meanings("https://youtu.be/aBcDeFgHiJk?t=10"),
-        [VideoId, StartTime]
-    );
+    assert_eq!(meanings("https://youtu.be/aBcDeFgHiJk?t=10"), [StartTime]);
     let short = "https://www.youtube.com/shorts/aBcDeFgHiJk";
     assert!(!has_path(short));
-    assert_eq!(meanings(short), [Short, VideoId]);
+    assert_eq!(meanings(short), [Short]);
     assert_eq!(
-        parse(short).unwrap().site.as_deref(),
-        Some("YouTube · Short")
+        parse(short).unwrap().site_line().as_deref(),
+        Some("YouTube · Short · aBcDeFgHiJk")
     );
+    for shape in ["embed", "live", "v"] {
+        let text = format!("https://www.youtube.com/{shape}/aBcDeFgHiJk");
+        let link = parse(&text).unwrap();
+        assert!(link.meanings.is_empty(), "{text}");
+        assert_eq!(link.video_id.as_deref(), Some("aBcDeFgHiJk"), "{text}");
+    }
     assert_eq!(
-        meanings("https://www.youtube.com/embed/aBcDeFgHiJk"),
-        [VideoId]
+        parse("https://youtu.be/aBcDeFgHiJk")
+            .unwrap()
+            .video_id
+            .as_deref(),
+        Some("aBcDeFgHiJk")
     );
     let playlist = "https://www.youtube.com/playlist?list=PLfake";
     assert!(!has_path(playlist));
@@ -68,7 +96,7 @@ fn youtu_be_shorts_embed_and_playlist() {
 
 #[test]
 fn unknown_parameters_keep_their_raw_chips_after_the_meanings() {
-    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&feature=share&pp=x&ab=1&cd=2";
+    let text = "https://www.youtube.com/watch?v=aBcDeFgHiJk&t=1&feature=share&pp=x&ab=1&cd=2";
     let chips = chips(text);
     assert_eq!(chips[1..4], ["feature", "pp", "ab"]);
     assert_eq!(chips.last().map(String::as_str), Some("+1"));

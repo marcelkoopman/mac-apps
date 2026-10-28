@@ -87,6 +87,9 @@ pub(crate) struct LinkCard {
     pub path_explained: bool,
     /// The known site and what the link points at there.
     pub site: Option<String>,
+    /// A YouTube link's video ID (11 characters of `A-Z a-z 0-9 _ -`), the one value the card
+    /// shows: it tells two YouTube links apart. Every other value and ID stays hidden.
+    pub video_id: Option<String>,
     /// A parameter that looks like a token, key or signature.
     pub token: bool,
     /// Clean URL would remove tracking parameters.
@@ -114,6 +117,9 @@ impl Drop for LinkCard {
         }
         if let Some(site) = self.site.as_mut() {
             site.zeroize();
+        }
+        if let Some(id) = self.video_id.as_mut() {
+            id.zeroize();
         }
     }
 }
@@ -224,6 +230,17 @@ pub(crate) fn parse(text: &str) -> Option<LinkCard> {
         crate::link_meaning::explain(&host, &segments, &params)
     };
     let mut explained = explained;
+    let video_id = if file {
+        None
+    } else {
+        crate::youtube::video_id(url).map(str::to_string)
+    };
+    if video_id.is_some() {
+        // The ID itself is on the site line.
+        explained
+            .meanings
+            .retain(|meaning| *meaning != crate::link_meaning::Meaning::VideoId);
+    }
     params.retain_mut(|name| {
         let keep = !explained.params.contains(name);
         if !keep {
@@ -253,6 +270,7 @@ pub(crate) fn parse(text: &str) -> Option<LinkCard> {
         meanings: explained.meanings.clone(),
         path_explained: explained.path,
         site,
+        video_id,
         token,
         tracking,
         credentials,
@@ -733,6 +751,16 @@ impl LinkCard {
         (self.place != Place::File).then(|| self.host.clone())
     }
 
+    /// The site line: the known site, and a YouTube link's video ID after it
+    /// (`YouTube · Video · aBcDeFgHiJk`).
+    pub(crate) fn site_line(&self) -> Option<String> {
+        let site = self.site.as_ref()?;
+        Some(match &self.video_id {
+            Some(id) => format!("{site} · {id}"),
+            None => site.clone(),
+        })
+    }
+
     /// The labels, warnings first.
     pub(crate) fn badges(&self) -> Vec<Badge> {
         let mut out = Vec::new();
@@ -769,8 +797,8 @@ impl LinkCard {
     /// The card's lines, top to bottom.
     pub(crate) fn lines(&self) -> Vec<Line> {
         let mut lines = vec![Line::Domain(self.domain())];
-        if let Some(site) = &self.site {
-            lines.push(Line::Site(site.clone()));
+        if let Some(site) = self.site_line() {
+            lines.push(Line::Site(site));
         }
         if !self.path_explained && !self.path.is_empty() && self.path != "/" {
             lines.push(Line::Path(middle_cut(&self.path, MAX_PATH)));
@@ -814,8 +842,8 @@ impl LinkCard {
 
     /// VoiceOver label of the well: the domain and what kind of link it is.
     pub(crate) fn ax_label(&self) -> String {
-        let kind = match (&self.site, self.place) {
-            (Some(site), _) => site.clone(),
+        let kind = match (self.site_line(), self.place) {
+            (Some(site), _) => site,
             (None, Place::Web) => crate::locale::t("link_kind_web").to_string(),
             (None, Place::Local) => crate::locale::t("link_kind_local").to_string(),
             (None, Place::File) => crate::locale::t("link_kind_file").to_string(),
