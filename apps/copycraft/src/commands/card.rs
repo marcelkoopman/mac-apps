@@ -772,6 +772,14 @@ pub fn offers_line_numbers(data: &LaunchData, card: &WorkCard) -> bool {
         && !matches!(data.view, CardView::Diff | CardView::Info | CardView::Qr)
 }
 
+/// Whether a slow card's "Working…" placeholder (`building`) leaves the text card on screen
+/// (`shown_text`: a real text card, not a picture or link page) until the new card is in,
+/// when the next card is text too (`next_text`). The kept card keeps its own mask: a new
+/// entry is masked again as always, and nothing of the new text shows before its card.
+pub fn keeps_shown_card(building: bool, shown_text: bool, next_text: bool) -> bool {
+    building && shown_text && next_text
+}
+
 /// Whether the well's dock shows the numbers button. `offers` is [`offers_line_numbers`] for the
 /// card now; `building` says it is the "Working…" placeholder of the entry already shown
 /// (`same_entry`), as after the numbers button itself rebuilds the card. Then the button

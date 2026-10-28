@@ -347,6 +347,18 @@ fn line_numbers_are_off_by_default_and_the_button_offers_them() {
 }
 
 #[test]
+fn a_slow_text_card_keeps_the_shown_text_instead_of_an_empty_well() {
+    use super::keeps_shown_card;
+    // To JSON or a Text ▾ result built slowly: the YAML card stays until the JSON is in.
+    assert!(keeps_shown_card(true, true, true));
+    // A real card always replaces what is shown.
+    assert!(!keeps_shown_card(false, true, true));
+    // Nothing (or a picture, a link page) shown, or a picture next: the placeholder shows.
+    assert!(!keeps_shown_card(true, false, true));
+    assert!(!keeps_shown_card(true, true, false));
+}
+
+#[test]
 fn the_numbers_button_keeps_its_place_while_its_card_is_rebuilt() {
     use super::{building_card, dock_offers_numbers, is_building_card};
     // A slow YAML card: the numbers button rebuilds it, the "Working…" card comes first.

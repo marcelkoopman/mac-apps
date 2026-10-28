@@ -364,6 +364,17 @@ pub(crate) fn store(data: LaunchData) {
 
 pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     let building = commands::is_building_card(&card);
+    // A slow text card (a view such as To JSON, a Text ▾ result, line numbers) keeps the text
+    // card on screen until it is ready, instead of an empty "Working…" well.
+    let keep_shown = commands::keeps_shown_card(
+        building,
+        !SHOWS_IMAGE.with(Cell::get)
+            && LINK_PAGE.with(|slot| slot.borrow().is_none())
+            && CARD_EXCERPT.with(|slot| !slot.borrow().is_empty()),
+        data.subject_kind == commands::SubjectKind::Text
+            && data.picture.is_none()
+            && data.view != commands::CardView::Diff,
+    );
     PLACEHOLDER.set(building);
     // Another entry is masked again. The same one stays revealed in every view, chip, version
     // and step, and when a rebuilt card or its labels arrive ([`commands::stays_revealed`]).
@@ -375,7 +386,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     let offers_numbers = commands::dock_offers_numbers(
         commands::offers_line_numbers(&data, &card),
         building,
-        shown == key,
+        shown == key || keep_shown,
         OFFERS_NUMBERS.get(),
     );
     REVEALED.set(commands::stays_revealed(
@@ -396,7 +407,6 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     });
     HIDDEN.set(hidden);
     REVEALED.set(revealed);
-    PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
     let diff_lock = data.view == commands::CardView::Diff
         && data.diff.as_ref().is_some_and(|diff| diff.sensitive);
     DIFF_LOCK.set(diff_lock);
@@ -407,16 +417,20 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
         );
     CARD_DIFF.set(columns);
     DIFF_WIDE.set(columns);
-    MASKS.set(commands::masks_content(&card, data.view) || diff_lock);
-    CARD_TITLE.with(|slot| set_secret(slot, card.title));
-    CARD_META.with(|slot| set_secret(slot, card.meta));
-    CARD_EXCERPT.with(|slot| set_secret(slot, card.excerpt));
-    CARD_PLACEHOLDER.with(|slot| set_secret(slot, card.placeholder));
-    CARD_HIGHLIGHT.with(|slot| slot.replace(card.highlight));
-    CARD_ERROR_LINE.set(card.error_line);
-    CARD_SELECTABLE.set(card.selectable);
-    LINK_PAGE.with(|slot| set_secret_opt(slot, card.link_page));
-    SHOWS_IMAGE.set(card.shows_image);
+    // Kept: the shown text card's own text, labels and mask stay until the new card is in.
+    if !keep_shown {
+        PREVIEW_NOTE.with(|slot| slot.replace(card.preview_note.clone().unwrap_or_default()));
+        MASKS.set(commands::masks_content(&card, data.view) || diff_lock);
+        CARD_TITLE.with(|slot| set_secret(slot, card.title));
+        CARD_META.with(|slot| set_secret(slot, card.meta));
+        CARD_EXCERPT.with(|slot| set_secret(slot, card.excerpt));
+        CARD_PLACEHOLDER.with(|slot| set_secret(slot, card.placeholder));
+        CARD_HIGHLIGHT.with(|slot| slot.replace(card.highlight));
+        CARD_ERROR_LINE.set(card.error_line);
+        CARD_SELECTABLE.set(card.selectable);
+        LINK_PAGE.with(|slot| set_secret_opt(slot, card.link_page));
+        SHOWS_IMAGE.set(card.shows_image);
+    }
     PICTURE.with(|slot| slot.replace(data.picture.clone()));
     publish_search_text();
     THEME.set(data.theme);
