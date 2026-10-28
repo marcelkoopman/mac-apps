@@ -18,6 +18,23 @@ ignore = [
     # when Cargo.lock no longer has bincode (polars without bincode, or Cargo no longer locking
     # inactive weak deps).
     "RUSTSEC-2025-0141",
+    # RUSTSEC-2026-0391 (zstd), RUSTSEC-2026-0398 / 0403 (zstd-safe): zstd 0.13.3 / zstd-safe 7.3.0
+    # come only through copycraft's polars `parquet` feature (polars-parquet and polars-io need
+    # zstd ^0.13; polars 0.55.2 is the newest, and no zstd 0.13.x has the fixes, which start at
+    # zstd 0.14.3 / zstd-safe 8.2.0). None of the affected functions is reached:
+    # - 0391 is `stream::raw::{Encoder,Decoder}::with_context` on a reused context. Only
+    #   polars-parquet's page decompression calls it, i.e. reading Parquet, and copycraft
+    #   never reads Parquet outside its tests (it only writes it: Save as Parquet, through
+    #   `bulk::compress_to_buffer`).
+    # - 0398 is `seekable::*::decompress`: the `seekable` feature is off, so the code is not
+    #   compiled at all.
+    # - 0403 is `DCtx::decompress_stream` through `stream::write::Decoder`. polars-io only uses
+    #   `stream::read::Decoder` / `Encoder`, which the advisory names as unaffected.
+    # Recheck when new zstd advisories come in, or if copycraft starts reading Parquet. Drop these
+    # when Cargo.lock has zstd >= 0.14.3 (a polars on zstd 0.14) or polars is gone.
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0403",
 ]
 
 [yanked]
