@@ -318,7 +318,9 @@ impl App {
     }
 
     /// ⌘-click on strip card `index`: compare that copy with the one on screen (the older of the
-    /// two is A). Both must be text; the same card, or a copy that is not text, does nothing.
+    /// two is A). Both must be text: with a picture on the card, or on the card clicked, a toast
+    /// says compare works with text only ([`super::source::compare_wants_text`]); the same card
+    /// does nothing.
     /// A second ⌘-click on a card already in the diff takes it out, as *Remove from Diff*.
     /// A dropped file or a made copy on the card is the marked strip card: compared as that
     /// history entry, it leaves the card for the diff ([`super::source::file_compares_as_shown`]).
@@ -333,7 +335,20 @@ impl App {
             self.toggle_diff(other_id);
             return;
         }
-        if !self.history.is_text_id(shown_id) || !self.history.is_text_id(other_id) {
+        if shown_id == other_id {
+            return;
+        }
+        let picture_on_card = self
+            .opened
+            .as_ref()
+            .is_some_and(|opened| opened.image.is_some());
+        if super::source::compare_wants_text(
+            self.history.is_text_id(shown_id),
+            self.history.is_text_id(other_id),
+            picture_on_card,
+        ) {
+            // The same toast as Copy's confirmation; it names no copy, kind or file.
+            super::state::save_feedback(crate::locale::t("compare_text_only"));
             return;
         }
         // A file not (yet) in history, or another text than the marked entry: nothing to

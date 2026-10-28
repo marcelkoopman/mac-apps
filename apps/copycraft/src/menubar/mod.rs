@@ -66,7 +66,7 @@ mod source;
 #[cfg(test)]
 use source::skip_after_drop;
 #[cfg(test)]
-use source::{drop_cursors, file_compares_as_shown, removal_leaves_file};
+use source::{compare_wants_text, drop_cursors, file_compares_as_shown, removal_leaves_file};
 mod state;
 mod table;
 mod text;

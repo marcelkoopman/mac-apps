@@ -764,3 +764,45 @@ fn command_click_does_nothing_with_a_picture_or_a_file_not_in_history() {
         history.get(1)
     ));
 }
+
+/// ⌘-click compare with a picture on the card (a made QR code, a screenshot) or on the card
+/// clicked: the toast *Compare only works with text*; two texts compare without it.
+#[test]
+fn command_click_with_a_picture_says_compare_works_with_text_only() {
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("plain text".into());
+    let qr = history.record_image_tracking(
+        crate::clipboard::SecretBytes::new(vec![1, 1, 2]).expect("bytes"),
+        0,
+    );
+    assert_eq!(qr, 1);
+    let picture = history.id_at(0).expect("picture");
+    let text = history.id_at(1).expect("text");
+    // The QR code on the card, a text card clicked.
+    assert!(super::compare_wants_text(
+        history.is_text_id(picture),
+        history.is_text_id(text),
+        true
+    ));
+    // Text on the card, the picture card clicked.
+    assert!(super::compare_wants_text(
+        history.is_text_id(text),
+        history.is_text_id(picture),
+        false
+    ));
+    // A picture on the card that history does not hold: still the toast.
+    assert!(super::compare_wants_text(true, true, true));
+    // Two texts: the diff, no toast.
+    assert!(!super::compare_wants_text(true, true, false));
+    // The toast's words, never a copy's text, kind or file name.
+    assert_eq!(
+        crate::locale::t("compare_text_only"),
+        "Compare only works with text"
+    );
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    assert_eq!(
+        crate::locale::t("compare_text_only"),
+        "Vergelijken werkt alleen met tekst"
+    );
+    crate::locale::set_test_language(crate::settings::Language::En);
+}

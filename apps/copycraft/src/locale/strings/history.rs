@@ -21,6 +21,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "copied {0} h ago",
     ),
     (
+        "compare_text_only",
+        "Vergelijken werkt alleen met tekst",
+        "Compare only works with text",
+    ),
+    (
         "strip_action_compare",
         "Vergelijk met getoonde",
         "Compare with Shown",

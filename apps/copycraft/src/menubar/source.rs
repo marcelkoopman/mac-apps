@@ -762,6 +762,17 @@ pub(super) fn file_compares_as_shown(file_text: Option<&str>, shown_text: Option
     matches!((file_text, shown_text), (Some(file), Some(shown)) if file == shown)
 }
 
+/// ⌘-click compare meets a picture: on the card (`picture_on_card`, also one not in history),
+/// or as the copy shown or the copy clicked. The diff compares text only, so a toast says so
+/// instead of nothing happening.
+pub(super) fn compare_wants_text(
+    shown_text: bool,
+    clicked_text: bool,
+    picture_on_card: bool,
+) -> bool {
+    picture_on_card || !shown_text || !clicked_text
+}
+
 pub(super) fn skip_after_drop(
     history: &clipboard::ClipboardHistory,
     current: Option<&str>,
