@@ -187,6 +187,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         decoded_picture: None,
         image_job: None,
         image_note: None,
+        picture_probe: None,
         image_steps: None,
         text_steps: None,
         text_note: None,

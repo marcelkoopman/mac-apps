@@ -192,6 +192,7 @@ impl App {
         }
         let newest = self.history.id_at(0);
         self.show_dropped(crate::open_file::from_image_data(title, png));
+        self.mark_made_picture();
         if self.history.id_at(0) != newest {
             self.clipboard_cursor = Some(0);
         }

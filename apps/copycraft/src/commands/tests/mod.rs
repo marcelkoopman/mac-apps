@@ -86,6 +86,8 @@ fn edited_picture(label: Option<&str>, undo: bool, redo: bool) -> LaunchData {
         can_redo: redo,
         working: false,
         note: None,
+        dropped: false,
+        location: false,
     });
     input
 }

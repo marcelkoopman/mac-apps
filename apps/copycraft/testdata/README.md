@@ -483,6 +483,13 @@ Mac only, no data.
 - [ ] If a text step adds no card (debug build): run the `log stream` command above with `grep "text step kept"`, do the step and send the line: only yes/no flags (source in history, clipboard copy, source kept, admitted, paused, held, kept), never content.
 - [ ] Drop after drop: drop a PNG from Finder onto the card, then drop a second picture right onto the shown picture: the card shows the second one (the outline appears while dragging) and both are in the strip. Then drop a `.txt` onto the picture, then a picture onto that text, and a picture dragged from Safari or Photos: each drop works, every time.
 
+### Strip metadata from a dropped picture
+
+- [ ] Location warning: drag `testdata/images/exif_rotated_gps.jpg` (fake GPS, made for the tests) from Finder onto the card. The meta line ends with *Bevat locatie* / *Contains location*, with no coordinates anywhere on the card. The chips show *Metadata verwijderen* / *Strip Metadata* just before *Afbeelding ▾* / *Image ▾*. Drop a screenshot PNG instead: the chip is there, the warning is not.
+- [ ] Strip: on that JPEG, click *Metadata verwijderen* / *Strip Metadata*. Within a second the card shows the copy upright, with *Metadata verwijderd* / *Metadata removed* on the meta line, and no location warning. The strip has the new card in front. ⌘V in Preview (*Nieuw van klembord* / *New from Clipboard*) pastes it; there, *Extra › Toon inspector* / *Tools › Show Inspector* has no GPS or camera make (no GPS tab). The file in Finder is unchanged: *Toon info* / Get Info still shows its location, and its modification date has not changed.
+- [ ] Not offered: a copied picture (⌃⇧⌘4 to the clipboard) and a QR code made with *Tekst ▾* / *Text ▾* › *QR Code* have no *Strip Metadata* chip (it is still in *Image ▾*). Neither does a dropped PDF. On *Tekst* / *Text* (the recognized text of a dropped picture), the chip is greyed out like *Image ▾*. Search (type *metadata*) lists *Strip Metadata* once.
+- [ ] Debug build: `log stream` (command above) shows no file name, path, coordinates or location for the drop or the step.
+
 ### Pictures show in the strip at once
 
 - [ ] Two in a row: copy a screenshot (⌘⇧⌃4) and right after it a second one: within about a second the strip under the card has both tiles (the strip shows from 2 entries). Do the same with ⌘V of two pictures into the open card, and with two picture files dropped onto it: same.

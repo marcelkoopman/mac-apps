@@ -82,6 +82,42 @@ fn with_orientation(jpeg: &[u8], orientation: u16) -> Vec<u8> {
     out
 }
 
+/// `jpeg` with an EXIF block giving the camera make ("Cam"), orientation 6 and a made-up
+/// location (a GPS block with a latitude). Generated here: no real photo is used.
+fn with_gps(jpeg: &[u8]) -> Vec<u8> {
+    let entry = |tiff: &mut Vec<u8>, tag: u16, kind: u16, count: u32, value: [u8; 4]| {
+        tiff.extend_from_slice(&tag.to_be_bytes());
+        tiff.extend_from_slice(&kind.to_be_bytes());
+        tiff.extend_from_slice(&count.to_be_bytes());
+        tiff.extend_from_slice(&value);
+    };
+    // IFD0 at 8 (3 entries, ends at 50), the GPS IFD at 50 (2 entries, ends at 80), its
+    // latitude's three rationals at 80.
+    let mut tiff = b"MM\0\x2a\0\0\0\x08".to_vec();
+    tiff.extend_from_slice(&3u16.to_be_bytes());
+    entry(&mut tiff, 0x010F, 2, 4, *b"Cam\0"); // Make
+    entry(&mut tiff, 0x0112, 3, 1, [0, 6, 0, 0]); // Orientation
+    entry(&mut tiff, 0x8825, 4, 1, 50u32.to_be_bytes()); // GPSInfo
+    tiff.extend_from_slice(&[0, 0, 0, 0]);
+    tiff.extend_from_slice(&2u16.to_be_bytes());
+    entry(&mut tiff, 0x0001, 2, 2, *b"N\0\0\0"); // GPSLatitudeRef
+    entry(&mut tiff, 0x0002, 5, 3, 80u32.to_be_bytes()); // GPSLatitude
+    tiff.extend_from_slice(&[0, 0, 0, 0]);
+    for (numerator, denominator) in [(12u32, 1u32), (34, 1), (0, 1)] {
+        tiff.extend_from_slice(&numerator.to_be_bytes());
+        tiff.extend_from_slice(&denominator.to_be_bytes());
+    }
+    assert_eq!(tiff.len(), 104);
+    let mut app1 = b"Exif\0\0".to_vec();
+    app1.extend_from_slice(&tiff);
+    let mut out = jpeg[..2].to_vec(); // SOI
+    out.extend_from_slice(&[0xFF, 0xE1]);
+    out.extend_from_slice(&((app1.len() + 2) as u16).to_be_bytes());
+    out.extend_from_slice(&app1);
+    out.extend_from_slice(&jpeg[2..]);
+    out
+}
+
 fn pixel(image: &Rgba, x: usize, y: usize) -> [u8; 4] {
     let at = (y * image.width + x) * 4;
     image.pixels[at..at + 4].try_into().unwrap()
@@ -266,6 +302,40 @@ fn versions_carry_no_metadata_and_stay_upright() {
         let back = decode(&bytes).unwrap();
         assert_eq!((back.width, back.height), (8, 16), "{encoding:?}");
     }
+}
+
+#[test]
+fn a_location_is_found_and_strip_metadata_takes_it_off() {
+    let plain = jpeg(16, 8, &halves(16, 8));
+    let located = with_gps(&plain);
+    assert!(property_keys(&located).contains(&"{GPS}".to_string()));
+    assert!(has_location(&located));
+    assert!(!has_location(&plain));
+    assert!(!has_location(&with_orientation(&plain, 6)));
+    assert!(!has_location(b"not a picture"));
+    assert!(!has_location(&[]));
+    // Strip metadata: a new copy, upright, without EXIF, location, camera or IPTC.
+    let original = SecretBytes::new(located.clone()).unwrap();
+    let done = crate::image_edit::Job::new(ImageOp::RemoveMetadata, &original)
+        .run(&AtomicBool::new(false), &NoScan)
+        .unwrap();
+    let copy = done.picture.with(<[u8]>::to_vec);
+    assert!(!has_location(&copy));
+    let keys = property_keys(&copy);
+    // ImageIO may still report the color space and size (under {Exif}) of any PNG.
+    for gone in ["{GPS}", "{TIFF}.Make", "{IPTC}", "{Exif}.DateTimeOriginal"] {
+        assert!(!keys.contains(&gone.to_string()), "{gone} in {keys:?}");
+    }
+    assert_eq!(orientation(&copy), 1);
+    let back = decode(&copy).unwrap();
+    assert_eq!(
+        (back.width, back.height),
+        (8, 16),
+        "the turn is in the pixels"
+    );
+    assert_eq!(done.label, "Metadata removed");
+    // The original is left as it was.
+    assert_eq!(original.with(<[u8]>::to_vec), located);
 }
 
 #[test]

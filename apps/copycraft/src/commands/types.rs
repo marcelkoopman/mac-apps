@@ -157,6 +157,11 @@ pub struct ImageShown {
     pub working: bool,
     /// Why the last step did nothing, failed or was not kept, for the meta line.
     pub note: Option<String>,
+    /// A dropped or chosen picture file (JPEG, HEIC, PNG or TIFF): *Remove metadata* is a chip
+    /// of its own.
+    pub dropped: bool,
+    /// That file carries a location (GPS): the meta line warns, without the coordinates.
+    pub location: bool,
 }
 
 /// Text ▾ on the text card. A step's result is a new copy (a history entry of its own), like

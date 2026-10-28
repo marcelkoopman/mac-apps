@@ -416,6 +416,8 @@ fn image_menu_is_off_on_the_recognized_text() {
         can_redo: false,
         working: false,
         note: None,
+        dropped: false,
+        location: false,
     });
     let menu = |input: &crate::commands::LaunchData| {
         chips(input)

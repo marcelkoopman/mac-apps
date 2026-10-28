@@ -482,6 +482,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::AgentOutline => "list.bullet.indent",
         CommandId::AgentCheck => "checkmark.seal",
         CommandId::ImageMenu => "photo",
+        CommandId::ImageStep(crate::image_edit::ImageOp::RemoveMetadata) => "eye.slash",
         CommandId::TableMenu | CommandId::TextColumn => "tablecells",
         CommandId::TableOpenWindow => "macwindow",
         CommandId::TableChooseColumns => "checklist",

@@ -666,6 +666,7 @@ impl App {
             .as_ref()
             .filter(|(at, _)| *at == entry)
             .map(|(_, note)| note.clone());
+        let (dropped, location) = self.dropped_picture_file(&bytes);
         let id = self.image_id(&bytes);
         let steps = (id != NOT_IN_HISTORY)
             .then(|| CopySteps::showing(self.image_steps.as_ref(), id))
@@ -687,8 +688,59 @@ impl App {
             }),
             working,
             note,
+            dropped,
+            location,
         });
     }
+
+    /// Whether `bytes` on the card are a dropped or chosen picture file (JPEG, HEIC, PNG or
+    /// TIFF; not a PDF page, a document's picture or a picture CopyCraft made), and whether it
+    /// carries a location. Looked at once per picture ([`App::picture_probe`]); only yes or no
+    /// is kept, never logged.
+    fn dropped_picture_file(&mut self, bytes: &SecretBytes) -> (bool, bool) {
+        let Some(image) = self.opened.as_ref().and_then(|file| {
+            file.image
+                .as_ref()
+                .filter(|image| file.pdf.is_none() && image.pdf_text.is_none())
+        }) else {
+            return (false, false);
+        };
+        if !image.bytes.same_allocation(bytes) {
+            return (false, false);
+        }
+        let at = bytes.allocation_id();
+        if let Some((probed, found)) = self.picture_probe
+            && probed == at
+        {
+            return found;
+        }
+        let found = bytes.with(|raw| {
+            let file = strippable_picture(raw);
+            #[cfg(target_os = "macos")]
+            let location = file && crate::macos_image_edit::has_location(raw);
+            #[cfg(not(target_os = "macos"))]
+            let location = false;
+            (file, location)
+        });
+        self.picture_probe = Some((at, found));
+        found
+    }
+
+    /// A picture CopyCraft made (a QR code) is on the card: it has no metadata to remove.
+    pub(crate) fn mark_made_picture(&mut self) {
+        if let Some(image) = self.opened.as_ref().and_then(|file| file.image.as_ref()) {
+            self.picture_probe = Some((image.bytes.allocation_id(), (false, false)));
+        }
+    }
+}
+
+/// Whether `bytes` are a picture file whose metadata *Remove metadata* takes off: JPEG, HEIC
+/// (or HEIF), PNG or TIFF, by their first bytes. Pure.
+pub(crate) fn strippable_picture(bytes: &[u8]) -> bool {
+    matches!(
+        infer::get(bytes).map(|kind| kind.mime_type()),
+        Some("image/jpeg" | "image/png" | "image/tiff" | "image/heif" | "image/heic")
+    )
 }
 
 /// What Image ▾ looks at for a card that shows no opened or browsed copy.
@@ -876,6 +928,26 @@ mod step_tests {
         assert_eq!(step_keep(true, true), StepKeep::Paused);
         // A copy still being checked for a token is not let in before the check.
         assert!(!keep_step_source(true, false, true, false, false));
+    }
+
+    #[test]
+    fn strip_metadata_is_for_jpeg_heic_png_and_tiff_files() {
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F', b'I', b'F', 0];
+        let tiff = b"MM\0\x2a\0\0\0\x08\0\x01".to_vec();
+        let mut heic = vec![0, 0, 0, 0x18];
+        heic.extend_from_slice(b"ftypheic\0\0\0\0mif1heic");
+        for (name, bytes) in [
+            ("png", &png[..]),
+            ("jpeg", &jpeg),
+            ("tiff", &tiff),
+            ("heic", &heic),
+        ] {
+            assert!(strippable_picture(bytes), "{name}");
+        }
+        assert!(!strippable_picture(b"GIF89a\x01\0\x01\0"));
+        assert!(!strippable_picture(b"%PDF-1.7"));
+        assert!(!strippable_picture(b"plain words"));
     }
 
     #[test]

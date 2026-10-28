@@ -32,6 +32,17 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("image_grayscale", "Grijswaarden", "Grayscale"),
     (
+        "chip_strip_metadata",
+        "Metadata verwijderen",
+        "Strip Metadata",
+    ),
+    (
+        "detail_strip_metadata",
+        "Nieuwe kopie zonder EXIF, locatie, camera en IPTC; het origineel blijft zoals het is",
+        "New copy without EXIF, location, camera and IPTC; the original stays as it is",
+    ),
+    ("image_has_location", "Bevat locatie", "Contains location"),
+    (
         "image_resized_to",
         "Formaat gewijzigd naar {0}×{1}",
         "Resized to {0}×{1}",

@@ -72,15 +72,48 @@ impl Codec for ImageIoCodec {
     }
 }
 
-/// `bytes` decoded upright at full size, as straight RGBA in sRGB.
-pub fn decode(bytes: &[u8]) -> Option<Rgba> {
+/// Call `read` with an image source over `bytes` (read in place, so no copy of the picture is
+/// left in CoreFoundation's memory) and the first picture's properties. `None` when `bytes`
+/// is not a picture ImageIO reads.
+fn with_source<R>(
+    bytes: &[u8],
+    read: impl FnOnce(&CGImageSource, &CFDictionary<CFString, CFType>) -> Option<R>,
+) -> Option<R> {
     let len = isize::try_from(bytes.len()).ok().filter(|len| *len > 0)?;
-    // Read in place, so no copy of the picture is left in CoreFoundation's memory.
     // SAFETY: `bytes` outlives `data` and everything made from it, which stay in this function.
     let data = unsafe { CFData::with_bytes_no_copy(None, bytes.as_ptr(), len, kCFAllocatorNull) }?;
     // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }?;
-    let (width, height) = upright_size(&source)?;
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
+    let properties = unsafe { source.properties_at_index(0, None) }?;
+    // SAFETY: image properties have CFString keys.
+    let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
+    read(&source, properties)
+}
+
+/// Whether the picture `bytes` carries a location (a GPS block in its metadata). Only yes or
+/// no: the coordinates are never read out. `false` for what ImageIO cannot read.
+pub fn has_location(bytes: &[u8]) -> bool {
+    with_source(bytes, |_, properties| {
+        Some(
+            properties
+                .get(&CFString::from_static_str("{GPS}"))
+                .is_some(),
+        )
+    })
+    .unwrap_or(false)
+}
+
+/// `bytes` decoded upright at full size, as straight RGBA in sRGB.
+pub fn decode(bytes: &[u8]) -> Option<Rgba> {
+    with_source(bytes, decode_source)
+}
+
+fn decode_source(
+    source: &CGImageSource,
+    properties: &CFDictionary<CFString, CFType>,
+) -> Option<Rgba> {
+    let (width, height) = upright_size(properties)?;
     if width.checked_mul(height)? > MAX_PIXELS {
         return None;
     }
@@ -121,12 +154,8 @@ pub fn rgba_of(image: &CGImage) -> Option<Rgba> {
     Rgba::new(width, height, pixels)
 }
 
-/// The width and height of the first picture in `source`, its EXIF orientation applied.
-fn upright_size(source: &CGImageSource) -> Option<(usize, usize)> {
-    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
-    let properties = unsafe { source.properties_at_index(0, None) }?;
-    // SAFETY: image properties have CFString keys.
-    let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
+/// The width and height of the first picture (its `properties`), its EXIF orientation applied.
+fn upright_size(properties: &CFDictionary<CFString, CFType>) -> Option<(usize, usize)> {
     let number = |key: &CFString| -> Option<i64> {
         properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64()
     };

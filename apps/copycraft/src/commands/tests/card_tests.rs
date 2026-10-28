@@ -711,3 +711,24 @@ fn the_new_menu_offers_the_colour_sampler() {
         Some(crate::locale::t("new_menu"))
     );
 }
+
+#[test]
+fn a_dropped_picture_with_a_location_says_so_without_coordinates() {
+    let mut dropped = edited_picture(None, false, false);
+    {
+        let edit = dropped.image_edit.as_mut().unwrap();
+        edit.dropped = true;
+        edit.location = true;
+    }
+    assert_eq!(
+        work_card(&dropped).meta,
+        "PNG  1024×768  0.18 MB  ·  Contains location"
+    );
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    let meta = work_card(&dropped).meta;
+    crate::locale::set_test_language(crate::settings::Language::En);
+    assert!(meta.ends_with("Bevat locatie"), "{meta}");
+    // No location: no warning.
+    dropped.image_edit.as_mut().unwrap().location = false;
+    assert_eq!(work_card(&dropped).meta, "PNG  1024×768  0.18 MB");
+}

@@ -552,6 +552,10 @@ pub(crate) fn image_card(data: &LaunchData) -> WorkCard {
         if let Some(label) = &edit.label {
             parts.push(label);
         }
+        // Only that there is one: the coordinates are never shown.
+        if edit.location {
+            parts.push(crate::locale::t("image_has_location"));
+        }
         if edit.working {
             parts.push(crate::locale::t("working"));
         } else if let Some(note) = &edit.note {

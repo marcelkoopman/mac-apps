@@ -743,3 +743,29 @@ fn a_qr_code_is_offered_for_links_and_text_but_never_for_a_secret() {
     assert!(!has(&chips(&secret)));
     assert!(text_shown(&secret).is_none_or(|edit| !edit.qr));
 }
+
+#[test]
+fn a_dropped_picture_file_offers_strip_metadata_before_image_menu() {
+    use crate::image_edit::ImageOp;
+    let strip = CommandId::ImageStep(ImageOp::RemoveMetadata);
+    let mut input = edited_picture(None, false, false);
+    // A copied picture: only in Image ▾.
+    assert!(!ids(&crate::commands::chips(&input)).contains(&strip));
+    input.image_edit.as_mut().unwrap().dropped = true;
+    let chips = crate::commands::chips(&input);
+    let at = chips.iter().position(|c| c.id == strip).unwrap();
+    assert_eq!(chips[at + 1].id, CommandId::ImageMenu);
+    assert_eq!(chips[at].title, "Strip Metadata");
+    assert!(chips[at].enabled);
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    let title = crate::commands::chips(&input)[at].title.clone();
+    crate::locale::set_test_language(crate::settings::Language::En);
+    assert_eq!(title, "Metadata verwijderen");
+    // Found once by search, not again from Image ▾.
+    let pool = crate::commands::search_pool(&input);
+    assert_eq!(pool.iter().filter(|c| c.id == strip).count(), 1);
+    // Off on the recognized text, as Image ▾ is.
+    input.view = CardView::Ocr;
+    let chips = crate::commands::chips(&input);
+    assert!(!chips.iter().find(|c| c.id == strip).unwrap().enabled);
+}

@@ -5,11 +5,19 @@ use super::*;
 /// Actions for the thing on the clipboard. Housekeeping stays in [`overflow`].
 pub fn chips(data: &LaunchData) -> Vec<Command> {
     let mut chips = match data.subject_kind {
-        SubjectKind::Image => image_chips(
-            data.image_scan.as_ref(),
-            data.image_edit.is_some(),
-            data.view == CardView::Ocr,
-        ),
+        SubjectKind::Image => {
+            let on_text = data.view == CardView::Ocr;
+            let mut chips =
+                image_chips(data.image_scan.as_ref(), data.image_edit.is_some(), on_text);
+            if data.image_edit.as_ref().is_some_and(|edit| edit.dropped) {
+                let at = chips
+                    .iter()
+                    .position(|c| c.id == CommandId::ImageMenu)
+                    .unwrap_or(chips.len());
+                chips.insert(at, strip_metadata_chip(on_text));
+            }
+            chips
+        }
         SubjectKind::Text => {
             let mut chips = copied_text_chips(data.subject_text.as_deref().unwrap_or(""));
             // A drawn SVG: one toggle between its picture and its code, like OCR's.
@@ -169,11 +177,14 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         commands.extend(data.table.as_ref().map(table_undo_redo).unwrap_or_default());
     }
     if data.image_edit.is_some() {
+        let chip_ids: Vec<CommandId> = commands.iter().map(|c| c.id.clone()).collect();
         commands.extend(
             image_menu_items()
                 .into_iter()
                 .map(|(command, _)| command)
-                .filter(offered_in_search),
+                .filter(offered_in_search)
+                // *Remove metadata* is a chip of its own on a dropped file: found once.
+                .filter(|command| !chip_ids.contains(&command.id)),
         );
     }
     if let Some(edit) = text_shown(data)
@@ -484,6 +495,23 @@ pub(crate) fn image_chips(scan: Option<&ImageScan>, edits: bool, on_text: bool) 
         modes.push(menu);
     }
     modes
+}
+
+/// *Remove metadata* on a dropped picture file: a new copy without EXIF, GPS, camera or IPTC
+/// data, upright ([`crate::image_edit::ImageOp::RemoveMetadata`]). Off on the recognized
+/// text, as Image ▾ is.
+pub(crate) fn strip_metadata_chip(on_text: bool) -> Command {
+    let mut chip = command(
+        CommandId::ImageStep(crate::image_edit::ImageOp::RemoveMetadata),
+        crate::locale::t("chip_strip_metadata"),
+        crate::locale::t("detail_strip_metadata"),
+        "metadata exif gps location privacy strip remove",
+    );
+    if on_text {
+        chip.enabled = false;
+        chip.detail = crate::locale::t("image_view_only").to_string();
+    }
+    chip
 }
 
 /// The SVG toggle: on the code it goes to the picture (`Original`), on the picture to the
