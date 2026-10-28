@@ -56,9 +56,10 @@ fn fraction(millis: u32) -> Option<u32> {
 fn zoned(secs: i64, millis: u32, env: &Env) -> String {
     let [local, utc] = clock::moment_lines(secs, fraction(millis), env);
     format!(
-        "{}\n\n{local}\n{utc}\n{}\n\n{}",
+        "{}\n\n{local}\n{utc}\n{}{}\n\n{}",
         unix_lines(secs, millis),
         clock::relative(secs, env),
+        clock::world_block(secs, fraction(millis), env),
         env.pick(
             "Unix-tijd in seconden en milliseconden",
             "Unix time in seconds and milliseconds"
@@ -199,6 +200,15 @@ mod tests {
         let out = decode("2026-10-22T14:03:05+02:00", &env(Lang::En)).expect("iso");
         assert!(out.starts_with("1792670585\n1792670585000\n\n"), "{out}");
         assert!(out.contains("22/10/2026 12:03:05  UTC"), "{out}");
+        // The same moment around the world (the test clock's fixed zones).
+        assert!(
+            out.contains("Around the world:\nAmsterdam      22/10/2026 14:03:05 (UTC+02:00)\n"),
+            "{out}"
+        );
+        assert!(
+            out.contains("\nTokyo          22/10/2026 21:03:05 (UTC+09:00)\n\n"),
+            "{out}"
+        );
         for same in [
             "2026-10-22T12:03:05Z",
             "2026-10-22 12:03:05z",

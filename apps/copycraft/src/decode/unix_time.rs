@@ -20,8 +20,9 @@ pub fn decode(text: &str, env: &Env) -> Option<String> {
         (false, crate::locale::Lang::En) => "Unix time in seconds",
     };
     Some(format!(
-        "{local}\n{utc}\n{}\n\nISO 8601: {}\n{unit}",
+        "{local}\n{utc}\n{}{}\n\nISO 8601: {}\n{unit}",
         clock::relative(secs, env),
+        clock::world_block(secs, millis, env),
         iso(secs, millis)
     ))
 }
@@ -65,7 +66,7 @@ mod tests {
         let out = decode(&testdata("unix_seconds.txt"), &env(Lang::Nl)).expect("seconds");
         assert_eq!(
             out,
-            "15/11/2023 00:13:20  lokale tijd (UTC+02:00)\n14/11/2023 22:13:20  UTC\n2 jaar geleden\n\nISO 8601: 2023-11-14T22:13:20Z\nUnix-tijd in seconden"
+            "15/11/2023 00:13:20  lokale tijd (UTC+02:00)\n14/11/2023 22:13:20  UTC\n2 jaar geleden\n\nElders op de wereld:\nAmsterdam      15/11/2023 00:13:20 (UTC+02:00)\nLondon         14/11/2023 23:13:20 (UTC+01:00)\nNew York       14/11/2023 18:13:20 (UTC-04:00)\nSan Francisco  14/11/2023 15:13:20 (UTC-07:00)\nTokyo          15/11/2023 07:13:20 (UTC+09:00)\n\nISO 8601: 2023-11-14T22:13:20Z\nUnix-tijd in seconden"
         );
         let mut month_first = env(Lang::En);
         month_first.month_first = true;

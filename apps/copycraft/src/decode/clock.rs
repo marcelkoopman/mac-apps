@@ -14,6 +14,9 @@ pub struct Env {
     pub month_first: bool,
     /// Seconds east of UTC in the local time zone at a Unix time (DST included).
     pub offset: fn(i64) -> i64,
+    /// Seconds east of UTC in a named time zone (`Europe/London`) at a Unix time, or `None`
+    /// when the system does not know it.
+    pub zone: fn(&str, i64) -> Option<i64>,
 }
 
 impl Env {
@@ -28,6 +31,7 @@ impl Env {
             lang: crate::locale::lang(),
             month_first: crate::settings::load().date_month_first,
             offset: local_offset,
+            zone: zone_offset,
         }
     }
 
@@ -52,6 +56,62 @@ pub(crate) fn local_offset(unix: i64) -> i64 {
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn local_offset(_unix: i64) -> i64 {
     0
+}
+
+/// A named time zone's offset from UTC at `unix` seconds (Foundation's time zone database,
+/// on the device).
+#[cfg(target_os = "macos")]
+pub(crate) fn zone_offset(name: &str, unix: i64) -> Option<i64> {
+    use mac_ui::objc2_foundation::{NSDate, NSString, NSTimeZone};
+    let zone = NSTimeZone::timeZoneWithName(&NSString::from_str(name))?;
+    let date = NSDate::dateWithTimeIntervalSince1970(unix as f64);
+    Some(zone.secondsFromGMTForDate(&date) as i64)
+}
+
+/// Off macOS (the Linux tests) there is no time zone database.
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn zone_offset(_name: &str, _unix: i64) -> Option<i64> {
+    None
+}
+
+/// The cities the decoded times are also shown in, with their time zones.
+pub const WORLD: [(&str, &str); 5] = [
+    ("Amsterdam", "Europe/Amsterdam"),
+    ("London", "Europe/London"),
+    ("New York", "America/New_York"),
+    ("San Francisco", "America/Los_Angeles"),
+    ("Tokyo", "Asia/Tokyo"),
+];
+
+/// The moment in [`WORLD`]'s cities, one `City  date time (UTC+hh:mm)` line each, under a
+/// heading; `None` when no zone is known.
+pub fn world_lines(secs: i64, millis: Option<u32>, env: &Env) -> Option<String> {
+    let width = WORLD.iter().map(|(city, _)| city.len()).max().unwrap_or(0);
+    let lines: Vec<String> = WORLD
+        .iter()
+        .filter_map(|(city, zone)| {
+            let offset = (env.zone)(zone, secs)?;
+            Some(format!(
+                "{city:<width$}  {} ({})",
+                date_time(secs.saturating_add(offset), millis, env.month_first),
+                offset_label(offset)
+            ))
+        })
+        .collect();
+    (!lines.is_empty()).then(|| {
+        format!(
+            "{}\n{}",
+            env.pick("Elders op de wereld:", "Around the world:"),
+            lines.join("\n")
+        )
+    })
+}
+
+/// [`world_lines`] as a block after a blank line, or nothing.
+pub fn world_block(secs: i64, millis: Option<u32>, env: &Env) -> String {
+    world_lines(secs, millis, env)
+        .map(|lines| format!("\n\n{lines}"))
+        .unwrap_or_default()
 }
 
 /// Days since 1970-01-01 to (year, month, day). Howard Hinnant's `civil_from_days`.
@@ -182,13 +242,43 @@ pub(crate) mod tests {
         7200
     }
 
+    /// Fixed offsets for the test clock's date (October, summer time in Europe and the US).
+    fn zones(name: &str, _unix: i64) -> Option<i64> {
+        Some(match name {
+            "Europe/Amsterdam" => 7200,
+            "Europe/London" => 3600,
+            "America/New_York" => -4 * 3600,
+            "America/Los_Angeles" => -7 * 3600,
+            "Asia/Tokyo" => 9 * 3600,
+            _ => return None,
+        })
+    }
+
     pub fn env(lang: Lang) -> Env {
         Env {
             now_ms: NOW_MS,
             lang,
             month_first: false,
             offset: two_hours,
+            zone: zones,
         }
+    }
+
+    #[test]
+    fn the_world_clock_lists_five_cities() {
+        let out = super::world_lines(NOW_MS / 1000, None, &env(Lang::En)).expect("zones");
+        assert_eq!(
+            out,
+            "Around the world:\n\
+             Amsterdam      06/10/2026 10:00:00 (UTC+02:00)\n\
+             London         06/10/2026 09:00:00 (UTC+01:00)\n\
+             New York       06/10/2026 04:00:00 (UTC-04:00)\n\
+             San Francisco  06/10/2026 01:00:00 (UTC-07:00)\n\
+             Tokyo          06/10/2026 17:00:00 (UTC+09:00)"
+        );
+        let mut unknown = env(Lang::Nl);
+        unknown.zone = |_, _| None;
+        assert_eq!(super::world_lines(0, None, &unknown), None);
     }
 
     #[test]

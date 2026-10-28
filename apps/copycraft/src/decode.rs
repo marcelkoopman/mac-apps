@@ -1,10 +1,11 @@
 //! The decoder chip: one chip next to Original, titled with what the copy decodes as (JWT,
-//! UUID, Unix time, ISO 8601, URL, Hash, Base64), that shows the decoded text read-only. Detection is string work only and runs
+//! UUID, Unix time, ISO 8601, Cron, URL, Hash, Base64), that shows the decoded text read-only. Detection is string work only and runs
 //! with the other chips ([`crate::commands::warm_chips`] off the main thread for a large copy).
 //! When several decoders fit, the first in [`DecodeKind`] order wins: one chip, ever.
 
 mod base64;
 pub(crate) mod clock;
+mod cron;
 mod hash;
 mod iso_date;
 mod jwt;
@@ -21,6 +22,7 @@ pub enum DecodeKind {
     Uuid,
     UnixTime,
     IsoDate,
+    Cron,
     Url,
     Hash,
     Base64,
@@ -34,6 +36,7 @@ impl DecodeKind {
             Self::Uuid => "UUID",
             Self::UnixTime => crate::locale::t("decode_unix_time"),
             Self::IsoDate => "ISO 8601",
+            Self::Cron => "Cron",
             Self::Url => "URL",
             Self::Hash => "Hash",
             Self::Base64 => "Base64",
@@ -47,6 +50,7 @@ impl DecodeKind {
             Self::Uuid => "decode uuid guid version",
             Self::UnixTime => "decode unix time timestamp epoch date",
             Self::IsoDate => "decode iso 8601 date time unix timestamp epoch",
+            Self::Cron => "decode cron crontab schedule next times",
             Self::Url => "decode url percent query",
             Self::Hash => "decode hash md5 sha digest",
             Self::Base64 => "decode base64",
@@ -81,6 +85,7 @@ pub fn decode_with(text: &str, env: &Env) -> Option<Decoded> {
         .or_else(|| found(DecodeKind::Uuid, uuid::decode(peeled, env)))
         .or_else(|| found(DecodeKind::UnixTime, unix_time::decode(peeled, env)))
         .or_else(|| found(DecodeKind::IsoDate, iso_date::decode(peeled, env)))
+        .or_else(|| found(DecodeKind::Cron, cron::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Url, url::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Hash, hash::decode(peeled, env)))
         .or_else(|| found(DecodeKind::Base64, base64::decode(peeled, env)))?;
@@ -119,6 +124,7 @@ fn neutral_env() -> Env {
         lang: crate::locale::Lang::En,
         month_first: false,
         offset: utc,
+        zone: |_, _| None,
     }
 }
 
