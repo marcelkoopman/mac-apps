@@ -50,6 +50,7 @@ mod sensitivity;
 mod settings;
 mod settings_tabs;
 mod snippet;
+mod snippet_store;
 mod symbols;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod system_settings;

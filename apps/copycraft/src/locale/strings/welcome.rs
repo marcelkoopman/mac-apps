@@ -111,6 +111,12 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Tab goes to the next field; Return makes the copy.",
     ),
     ("snippet_make", "Maak kopie", "Make Copy"),
+    ("snippet_secret_title", "Niet bewaard", "Not Saved"),
+    (
+        "snippet_secret",
+        "Snippet bevat mogelijk een geheim en wordt niet bewaard",
+        "This snippet may contain a secret and is not saved",
+    ),
     ("snippet_preview", "Wordt", "Becomes"),
     (
         "remove_history",

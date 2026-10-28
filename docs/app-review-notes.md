@@ -42,7 +42,9 @@ see and stop it:
   in the welcome window or in Settings › Privacy; both say in one sentence what it does. (An
   existing install that already watched the clipboard keeps the setting on.)
 - History is kept in memory only (at most 20 unpinned entries plus pins). It is never written to
-  disk and is cleared on quit, Wipe, screen lock, sleep and user switch, and by default 15
+  disk (the one exception: pinned texts the user saves as a named snippet, stored with their
+  name in the app container's Application Support/copycraft, mode 0600, never when they hold a
+  token or key) and is cleared on quit, Wipe, screen lock, sleep and user switch, and by default 15
   minutes after the last copy.
 - With history on, the menu bar menu and the card's ⋯ menu have **Pause Recording** (no copy is read or kept
   until it is turned off again; it is not stored, so a restart turns it off) and **Ignore next

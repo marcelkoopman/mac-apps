@@ -9,7 +9,8 @@
   - UserDefaults CA92.1: the app's own settings (src/settings.rs) and appearance
     (mac_ui::theme), read and written in its own defaults domain only.
   - FileTimestamp C617.1: std::fs::metadata (stat) on its own files in the app container
-    (preview files in the temporary directory, src/macos_open.rs).
+    (preview files in the temporary directory, src/macos_open.rs; the snippets file in
+    Application Support/copycraft, src/snippet_store.rs).
   - FileTimestamp 3B52.1: stat on files the user chose with the open panel, dropped on the
     card or copied (src/open_file.rs, src/macos_pasteboard/).
   - SystemBootTime 35F9.1: std::time::Instant (macOS: monotonic uptime clock) to measure time

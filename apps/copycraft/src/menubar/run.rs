@@ -202,6 +202,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         diffing: None,
         notices: Default::default(),
     };
+    // Snippets kept from an earlier run come back as pinned snippets.
+    app.load_snippets();
     #[cfg(target_os = "macos")]
     crate::macos_notify::init();
     #[cfg(target_os = "macos")]

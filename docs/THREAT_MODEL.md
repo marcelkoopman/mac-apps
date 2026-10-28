@@ -61,5 +61,5 @@ Voor de eerste pagina van een `.docx` vraagt CopyCraft de thumbnail-dienst van h
 
 ## Algemeen
 
-- De geschiedenis staat alleen in geheugen; er wordt niets naar schijf geschreven.
+- De geschiedenis staat alleen in geheugen; er wordt niets naar schijf geschreven, behalve fragmenten die de gebruiker zelf bewaart (naam en tekst, `Application Support/copycraft/snippets.json` in de container, atomisch geschreven met modus 0600). Een fragment met een herkend geheim wordt nooit geschreven en bij het lezen weggegooid; een kapot bestand is een lege lijst.
 - Zie ook [SECURITY.md](../SECURITY.md).

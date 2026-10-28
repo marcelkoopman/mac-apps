@@ -154,6 +154,14 @@ pub enum LogEvent {
     },
     HistoryForgottenLock,
     RestoreHistoryFailed(ErrorKind),
+    /// The snippets file could not be written. Never a name, a text or a path.
+    SnippetsSaveFailed(ErrorKind),
+    /// Snippets were read at start or after a wipe: only whether any came back and whether any
+    /// were dropped (a secret, a full pin list).
+    SnippetsLoaded {
+        any: bool,
+        dropped: bool,
+    },
     TableOpened {
         columns: u64,
         rows: u64,
@@ -307,6 +315,8 @@ impl LogEvent {
             | E::HistoryForgottenIdle { .. }
             | E::HistoryForgottenLock
             | E::RestoreHistoryFailed(_)
+            | E::SnippetsSaveFailed(_)
+            | E::SnippetsLoaded { .. }
             | E::SensitivityNotStarted(_)
             | E::SensitivityChecked { .. }
             | E::HistoryItemTooLarge { .. } => Category::Clipboard,
@@ -376,6 +386,7 @@ impl LogEvent {
             | E::ClearSensitiveFailed(_)
             | E::FormatLinkFailed(_)
             | E::RestoreHistoryFailed(_)
+            | E::SnippetsSaveFailed(_)
             | E::TextStepFailed(_)
             | E::AiFailed(_)
             | E::WorkNotStarted(..)
@@ -416,6 +427,7 @@ impl LogEvent {
             | E::HistoryItemTooLarge { .. } => Level::Info,
             // Routine, per copy or per job.
             E::CopySkipped(_)
+            | E::SnippetsLoaded { .. }
             | E::SensitivityChecked { .. }
             | E::TableJobDone { .. }
             | E::ImageJobDone { .. }
@@ -485,6 +497,10 @@ impl LogEvent {
             }
             E::HistoryForgottenLock => "history forgotten (lock, sleep or user switch)".into(),
             E::RestoreHistoryFailed(k) => format!("restore history failed: {}", k.describe()),
+            E::SnippetsSaveFailed(k) => format!("snippets save failed: {}", k.describe()),
+            E::SnippetsLoaded { any, dropped } => {
+                format!("snippets loaded: any={any} dropped={dropped}")
+            }
             E::TableOpened { columns, rows } => {
                 format!("table opened: {columns} cols, {rows} rows")
             }

@@ -73,6 +73,7 @@ impl App {
             self.table_error = None;
             self.close_table_window();
             self.history.clear();
+            self.load_snippets();
         } else {
             self.history.clear_unpinned();
             if self
@@ -130,8 +131,12 @@ impl App {
             }
         } else {
             self.pin_refused = false;
+            let snippet = self.history.snippet_name(index).is_some();
             if !self.history.unpin(id) && index == self.history_cursor {
                 self.history_cursor = 0;
+            }
+            if snippet {
+                self.save_snippets();
             }
             self.settle_cursor();
             self.sync_diff_picks();
@@ -171,9 +176,13 @@ impl App {
             }
         }
         let shown = self.history_cursor;
+        let snippet = self.history.snippet_name(index).is_some();
         let Some(removed) = self.history.take_id(id) else {
             return;
         };
+        if snippet {
+            self.save_snippets();
+        }
         self.pin_refused = false;
         let len = self.history.len();
         self.history_cursor = clipboard::cursor_after_remove(removed, shown, len);
@@ -198,6 +207,9 @@ impl App {
         let Some(index) = self.history.restore_removed() else {
             return;
         };
+        if self.history.snippet_name(index).is_some() {
+            self.save_snippets();
+        }
         if let Some(text) = self.history.get(index)
             && self
                 .skip_record
@@ -230,7 +242,11 @@ impl App {
 
     pub(crate) fn clear_pins(&mut self) {
         let kept = self.history.id_at(self.history_cursor);
+        let snippets = !self.history.snippets().is_empty();
         self.history.clear_pins();
+        if snippets {
+            self.save_snippets();
+        }
         self.pin_refused = false;
         self.history_cursor = kept.and_then(|id| self.history.index_of(id)).unwrap_or(0);
         self.clipboard_cursor = None;
@@ -349,6 +365,7 @@ impl App {
     pub(crate) fn clear_secrets(&mut self) {
         self.forget_held_state();
         self.history.clear();
+        self.load_snippets();
         self.pin_refused = false;
         self.history_emptied = false;
         self.history_cursor = 0;

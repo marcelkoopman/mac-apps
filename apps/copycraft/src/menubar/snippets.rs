@@ -33,11 +33,27 @@ impl App {
         }
     }
 
-    /// Name (or with a blank name, unname) pinned text entry `id`.
+    /// Name (or with a blank name, unname) pinned text entry `id`, and store the snippets. A
+    /// name or text that holds a secret makes no snippet: it is never written, and an alert
+    /// says so.
     pub(crate) fn name_snippet(&mut self, id: u64, name: &str) {
+        let text = self.history.text_of(id).unwrap_or_default();
+        if !name.trim().is_empty() && crate::snippet_store::holds_secret(name, &text) {
+            #[cfg(target_os = "macos")]
+            if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+                mac_ui::dialog::alert(
+                    mtm,
+                    crate::locale::t("snippet_secret_title"),
+                    crate::locale::t("snippet_secret"),
+                );
+                launcher::order_front();
+            }
+            return;
+        }
         if !self.history.name_snippet(id, name) {
             return;
         }
+        self.save_snippets();
         self.refresh_table_window();
         self.refresh_status_menu();
         if launcher::is_open() {
@@ -103,6 +119,44 @@ impl App {
             let value = Zeroizing::new(crate::snippet::fill(&text, &answers, &auto));
             self.new_value(&title, value);
         }
+    }
+}
+
+impl App {
+    /// Write the snippets now in history to disk ([`crate::snippet_store`]): after naming,
+    /// unpinning, removing, ⌘Z and Clear Pins. Not after a wipe: what is on disk comes back.
+    pub(crate) fn save_snippets(&self) {
+        let Some(dir) = crate::snippet_store::dir() else {
+            return;
+        };
+        let snippets: Vec<crate::snippet_store::Stored> = self
+            .history
+            .snippets()
+            .into_iter()
+            .map(|(name, text)| crate::snippet_store::Stored { name, text })
+            .collect();
+        if let Err(e) = crate::snippet_store::save(&dir, &snippets) {
+            crate::diag::log(crate::diag::LogEvent::SnippetsSaveFailed(
+                crate::diag::ErrorKind::io(&e),
+            ));
+        }
+    }
+
+    /// The snippets on disk become pinned snippets in history again: at start, and after a
+    /// wipe, lock or sleep emptied history (they are on disk anyway).
+    pub(crate) fn load_snippets(&mut self) {
+        let Some(dir) = crate::snippet_store::dir() else {
+            return;
+        };
+        let stored = crate::snippet_store::load(&dir);
+        let mut dropped = false;
+        for snippet in &stored {
+            dropped |= !self.history.restore_snippet(&snippet.name, &snippet.text);
+        }
+        crate::diag::log(crate::diag::LogEvent::SnippetsLoaded {
+            any: !stored.is_empty(),
+            dropped,
+        });
     }
 }
 

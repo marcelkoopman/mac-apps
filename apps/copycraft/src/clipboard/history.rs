@@ -548,6 +548,44 @@ impl ClipboardHistory {
         true
     }
 
+    /// Every snippet, newest first: its name and its text ([`crate::snippet_store`]).
+    pub fn snippets(&self) -> Vec<(Zeroizing<String>, Zeroizing<String>)> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.pinned)
+            .filter_map(|entry| match (&entry.snippet, &entry.body) {
+                (Some(name), HistoryBody::Text(text)) => Some((name.clone(), text.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A snippet read back from disk becomes a pinned entry with its name, after the entries
+    /// there are (so the clipboard's copy stays the newest). Text already in history is pinned
+    /// and named where it is. `false` when it is blank, too large or the pin list is full.
+    pub fn restore_snippet(&mut self, name: &str, text: &str) -> bool {
+        let name = name.trim();
+        if name.is_empty() || text.trim().is_empty() || too_large(text.len(), MAX_TEXT_BYTES, false)
+        {
+            return false;
+        }
+        let id = match self.text_pos(text) {
+            Some(index) => self.entries[index].id,
+            None => {
+                if self.pin_count() >= PIN_MAX {
+                    return false;
+                }
+                let id = self.alloc_id();
+                self.entries.push(HistoryEntry::text(id, text.to_string()));
+                id
+            }
+        };
+        if !self.pin(id) {
+            return false;
+        }
+        self.name_snippet(id, name)
+    }
+
     /// Take one entry out so [`restore_removed`](Self::restore_removed) can put it back at the
     /// same place. The entry taken out before is dropped (zeroized). The index it had.
     pub fn take_id(&mut self, id: u64) -> Option<usize> {
