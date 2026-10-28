@@ -755,6 +755,13 @@ pub(super) fn removal_leaves_file(opened: bool, index: usize, cursor: usize) -> 
     opened && index == cursor
 }
 
+/// ⌘-click compare with a file or a made copy on the card: it is compared as the strip's marked
+/// entry only when that entry holds the very text the card shows (a picture, or a text not in
+/// history: nothing to compare).
+pub(super) fn file_compares_as_shown(file_text: Option<&str>, shown_text: Option<&str>) -> bool {
+    matches!((file_text, shown_text), (Some(file), Some(shown)) if file == shown)
+}
+
 pub(super) fn skip_after_drop(
     history: &clipboard::ClipboardHistory,
     current: Option<&str>,

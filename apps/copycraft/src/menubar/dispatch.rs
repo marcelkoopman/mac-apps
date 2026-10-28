@@ -320,10 +320,9 @@ impl App {
     /// ⌘-click on strip card `index`: compare that copy with the one on screen (the older of the
     /// two is A). Both must be text; the same card, or a copy that is not text, does nothing.
     /// A second ⌘-click on a card already in the diff takes it out, as *Remove from Diff*.
+    /// A dropped file or a made copy on the card is the marked strip card: compared as that
+    /// history entry, it leaves the card for the diff ([`super::source::file_compares_as_shown`]).
     pub(crate) fn compare_tiles(&mut self, index: usize) {
-        if self.opened.is_some() {
-            return;
-        }
         let shown = self.history_cursor;
         let (Some(shown_id), Some(other_id)) =
             (self.history.id_at(shown), self.history.id_at(index))
@@ -337,11 +336,29 @@ impl App {
         if !self.history.is_text_id(shown_id) || !self.history.is_text_id(other_id) {
             return;
         }
+        // A file not (yet) in history, or another text than the marked entry: nothing to
+        // compare it as.
+        if let Some(opened) = self.opened.as_ref()
+            && !super::source::file_compares_as_shown(
+                opened.text.as_ref().map(|text| text.as_str()),
+                self.history.get(shown),
+            )
+        {
+            return;
+        }
         if !self
             .diff_sel
             .compare_tiles((shown, shown_id), (index, other_id))
         {
             return;
+        }
+        if self.opened.is_some() {
+            // The diff takes the card: the file leaves it, as its history entry is compared.
+            let clipboard = self.clipboard_cursor;
+            self.leave_opened();
+            self.history_cursor = shown;
+            self.clipboard_cursor = clipboard;
+            self.browsing = Some(shown_id);
         }
         if !self.strip_compare_used {
             self.strip_compare_used = true;

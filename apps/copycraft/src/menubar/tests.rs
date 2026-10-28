@@ -719,3 +719,48 @@ fn a_drop_recorded_late_leaves_the_card_on_its_entry() {
     assert_eq!(super::drop_cursors(3, false), (3, None));
     assert_eq!(super::drop_cursors(3, true), (0, Some(3)));
 }
+
+/// ⌘-click on a strip card while a made copy (⋯ › New, a step's result) or a dropped text file
+/// is on the card: the file is the marked entry, so it is compared as that entry, the older of
+/// the two as A.
+#[test]
+fn command_click_compares_a_made_copy_on_the_card_with_the_clicked_card() {
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("first draft".into());
+    // The made copy is recorded before it shows on the card ([`App::show_dropped`]).
+    let moved_to = history
+        .record_tracking("second draft".into(), 0)
+        .expect("recorded");
+    let (cursor, _) = super::drop_cursors(moved_to, true);
+    let shown_id = history.id_at(cursor).expect("shown");
+    let other_id = history.id_at(1).expect("other");
+    assert!(history.is_text_id(shown_id) && history.is_text_id(other_id));
+    assert!(super::file_compares_as_shown(
+        Some("second draft"),
+        history.get(cursor)
+    ));
+    let mut picks = crate::diff::Selection::default();
+    assert!(picks.compare_tiles((cursor, shown_id), (1, other_id)));
+    // A is the older copy (the clicked one), B the one that was on the card.
+    assert_eq!(picks.pair(), Some((other_id, shown_id)));
+}
+
+#[test]
+fn command_click_does_nothing_with_a_picture_or_a_file_not_in_history() {
+    let mut history = crate::clipboard::ClipboardHistory::default();
+    history.record("some text".into());
+    // A made QR code on the card: a picture, no text to compare.
+    let moved_to = history.record_image_tracking(
+        crate::clipboard::SecretBytes::new(vec![4, 5, 6]).expect("bytes"),
+        0,
+    );
+    let (cursor, _) = super::drop_cursors(moved_to, true);
+    let shown_id = history.id_at(cursor).expect("qr");
+    assert!(!history.is_text_id(shown_id));
+    assert!(!super::file_compares_as_shown(None, history.get(cursor)));
+    // A dropped file kept out of history (it holds a key): the marked entry is another text.
+    assert!(!super::file_compares_as_shown(
+        Some("dropped file text"),
+        history.get(1)
+    ));
+}
