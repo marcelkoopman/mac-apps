@@ -505,19 +505,36 @@ pub fn mark_ranges(
 
 /// Overwrite the characters of `view` with NULs, then empty it, so the text does not linger
 /// in its storage. Best effort: copies AppKit made earlier are out of reach.
+///
+/// The storage's layout managers are taken off for the overwrite and put back on the empty
+/// storage, so a large text (a 5 MB table) is not laid out again, glyph by glyph, only to be
+/// emptied: the wipe stays quick on the main thread.
 pub fn wipe_text_view(view: &NSTextView) {
     // SAFETY: the storage is used right away, while the text view keeps it alive.
     if let Some(storage) = unsafe { view.textStorage() } {
         let length = storage.length();
         if length > 0 {
+            // Held here while off the storage (the storage owns them otherwise).
+            let managers = storage.layoutManagers();
+            for manager in managers.iter() {
+                storage.removeLayoutManager(&manager);
+            }
+            let all = NSRange {
+                location: 0,
+                length,
+            };
             let zeros = "\0".repeat(length);
+            storage.replaceCharactersInRange_withString(all, &NSString::from_str(&zeros));
             storage.replaceCharactersInRange_withString(
                 NSRange {
                     location: 0,
-                    length,
+                    length: storage.length(),
                 },
-                &NSString::from_str(&zeros),
+                &NSString::from_str(""),
             );
+            for manager in managers.iter() {
+                storage.addLayoutManager(&manager);
+            }
         }
     }
     view.setString(&NSString::from_str(""));

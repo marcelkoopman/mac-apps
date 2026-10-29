@@ -238,4 +238,21 @@ mod tests {
         let state = include_str!("menubar/state.rs");
         assert!(state.contains("mac_ui::panel::hold_windows_for_exit(mtm);"));
     }
+
+    /// Closing a large table answers at once: the window leaves the screen first, keeps its
+    /// window (no release in `windowWillClose:`, see above), and its view and laid-out sheet
+    /// are wiped off the main thread.
+    #[test]
+    fn the_table_window_closes_first_and_wipes_after() {
+        let src = include_str!("macos_table_window/mod.rs");
+        let close = &src[src.find("fn window_will_close").unwrap()..];
+        let close = &close[..close.find("\n        }\n").unwrap()];
+        let out = close.find("order_out();").unwrap();
+        assert!(out < close.find("forget();").unwrap());
+        assert!(!close.contains("VIEWS.with"));
+        let forget = &src[src.find("\nfn forget()").unwrap()..];
+        let forget = &forget[..forget.find("\n}\n").unwrap()];
+        assert!(forget.contains("crate::work::wipe_later((view, sheet));"));
+        assert!(!forget.contains("\n    SHOWN.with(") && !forget.contains("\n    PREPARED.with("));
+    }
 }

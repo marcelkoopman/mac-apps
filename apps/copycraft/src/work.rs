@@ -96,9 +96,33 @@ pub fn within<T: Send + 'static>(
     handoff.take_within(limit)
 }
 
+/// Drop `value` on a thread of its own: its `Drop` wipes it (zeroizes a large table's text and
+/// cells) there, not on the main thread, which goes on at once. When no thread can start it is
+/// dropped (wiped) here instead, so it is wiped either way. `true` when it went to a thread.
+pub fn wipe_later<T: Send + 'static>(value: T) -> bool {
+    std::thread::Builder::new()
+        .name("copycraft-wipe".into())
+        .spawn(move || drop(value))
+        .is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wipe_later_drops_the_value_on_another_thread() {
+        struct Wiped(std::sync::mpsc::Sender<std::thread::ThreadId>);
+        impl Drop for Wiped {
+            fn drop(&mut self) {
+                let _ = self.0.send(std::thread::current().id());
+            }
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        assert!(wipe_later(Wiped(tx)));
+        let on = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_ne!(on, std::thread::current().id());
+    }
 
     #[test]
     fn a_quick_result_is_taken_by_the_main_thread() {

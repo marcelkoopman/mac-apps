@@ -145,6 +145,9 @@ define_class!(
         /// [`close`] orders it out instead, so this is the user's close only.)
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _note: &NSNotification) {
+            // Off the screen first, so the close answers at once; the wipe follows unseen.
+            // The window itself stays in `VIEWS` (it is not released here).
+            order_out();
             forget();
             launcher::emit(UserEvent::TableWindow(TableWindowEvent::Closed));
         }
@@ -467,7 +470,13 @@ pub fn close() {
     if MainThreadMarker::new().is_none() {
         return;
     }
+    // Gone from the screen at once; what it showed is wiped after.
+    order_out();
     forget();
+}
+
+/// Take the window off the screen (when it is on it).
+fn order_out() {
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window
         && window.isVisible()
@@ -481,10 +490,14 @@ fn forget() {
     switching::reset();
     REVEALED.set(false);
     PAINTED.set(false);
-    PREPARED.with(|slot| slot.replace(None));
     SEARCH.with(|slot| slot.borrow_mut().zeroize());
-    // Dropping the view wipes it.
-    SHOWN.with(|slot| slot.replace(None));
+    // Dropping the view and the laid-out sheet wipes them: a large table's text and cells
+    // (65,000 rows), zeroized on a thread of their own so the close does not wait for it.
+    let sheet = PREPARED.with(|slot| slot.replace(None));
+    let view = SHOWN.with(|slot| slot.replace(None));
+    if sheet.is_some() || view.is_some() {
+        crate::work::wipe_later((view, sheet));
+    }
     POPPED.with(|slot| {
         for cmd in slot.borrow_mut().iter_mut() {
             cmd.wipe();

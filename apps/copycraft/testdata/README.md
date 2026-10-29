@@ -584,6 +584,18 @@ Use `/tmp/big.csv` (5 MB, 65,000 rows) from *Switching table versions with a lar
 - [ ] A dropped text or picture that is not a table: the card shows it as before (*Opening file…* only while a large one is read).
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names during the drop. Nothing new is written to disk.
 
+### Closing a large table
+
+Use `/tmp/big.csv` (5 MB, 65,000 rows) from *Switching table versions with a large file*. Run once from a debug build (`cargo run -p copycraft`) and once as the bundled app.
+
+- [ ] Drop `/tmp/big.csv`, wait for the grid, scroll to the middle and close the window with its red button: it is gone at once, no beach ball and no stall of the pointer. Again with ⌘W.
+- [ ] Right after the close the card comes back with the file (as before) and answers at once: click it, move it, copy something new.
+- [ ] Make two versions first (*Verwijder dubbele rijen* / *Remove Duplicate Rows*, then a sort) and close: just as quick.
+- [ ] Open the table again from the card: it opens with its grid (the closed window kept nothing on screen: no old rows flash before the new grid).
+- [ ] *Alles wissen* / *Clear All* (or lock the Mac) while the big table shows: the window closes at once as well and the card answers right away.
+- [ ] Quit with ⌘Q while the big table shows, and right after closing it: CopyCraft quits without a crash report (Console › Crash Reports, nothing new for CopyCraft).
+- [ ] Privacy: the content is still wiped from memory, only off the main thread now. Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names while closing. Nothing new is written to disk.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.
