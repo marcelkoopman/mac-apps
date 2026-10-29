@@ -1,0 +1,113 @@
+use super::*;
+
+fn rows(cells: &[&[&str]]) -> Vec<Vec<String>> {
+    cells
+        .iter()
+        .map(|row| row.iter().map(|cell| cell.to_string()).collect())
+        .collect()
+}
+
+#[test]
+fn an_empty_query_shows_every_row() {
+    let grid = rows(&[&["Jan", "Groningen"], &["Anja", "Utrecht"]]);
+    assert_eq!(crate::commands::matching_rows(&grid, ""), None);
+    assert_eq!(crate::commands::matching_rows(&grid, "   "), None);
+}
+
+#[test]
+fn search_matches_any_cell_ignoring_case() {
+    let grid = rows(&[
+        &["Jan de Vries", "Groningen", "007"],
+        &["Anja", "Utrecht", "012"],
+        &["Émile", "ÜTRECHT", "3"],
+        &["Piet", "Zwolle", "1007"],
+    ]);
+    let found = |query: &str| crate::commands::matching_rows(&grid, query).expect("filter");
+    assert_eq!(found("utrecht"), [1]);
+    assert_eq!(found("UTRECHT"), [1]);
+    assert_eq!(found("trecht"), [1, 2]);
+    assert_eq!(found("ütrecht"), [2]);
+    assert_eq!(found("émile"), [2]);
+    assert_eq!(found("007"), [0, 3]);
+    assert_eq!(found("de v"), [0]);
+    assert_eq!(found("  jan  "), [0]);
+    assert!(found("Amsterdam").is_empty());
+}
+
+#[test]
+fn contains_ignore_case_handles_ascii_and_other_text() {
+    use crate::commands::contains_ignore_case as has;
+    assert!(has("Groningen", "ning"));
+    assert!(has("GRONINGEN", "ning"));
+    assert!(!has("Gro", "groningen"));
+    assert!(has("Straße", "straße"));
+    assert!(has("ÅLESUND", "ålesund"));
+    assert!(has("anything", ""));
+    assert!(!has("", "a"));
+}
+
+#[test]
+fn keep_lines_keeps_the_matching_rows_of_the_body() {
+    let body = "a\tb\nc\td\ne\tf";
+    assert_eq!(crate::commands::keep_lines(body, &[0, 2]), "a\tb\ne\tf");
+    assert_eq!(crate::commands::keep_lines(body, &[1]), "c\td");
+    assert_eq!(crate::commands::keep_lines(body, &[]), "");
+}
+
+#[test]
+fn a_cell_menu_row_maps_back_to_the_table_row() {
+    use crate::commands::table_row_shown;
+    assert_eq!(table_row_shown(None, 4), Some(4));
+    assert_eq!(table_row_shown(Some(&[3, 9]), 1), Some(9));
+    assert_eq!(table_row_shown(Some(&[3, 9]), 2), None);
+}
+
+#[test]
+fn the_meta_line_says_how_many_rows_match() {
+    let meta = "64,659 rows × 8 columns  ·  PII  ·  financial";
+    assert_eq!(
+        crate::commands::filtered_meta(meta, 120, 64_659, 8),
+        "120 of 64,659 rows × 8 columns  ·  PII  ·  financial"
+    );
+    assert_eq!(
+        crate::commands::filtered_meta("1 row × 1 column", 0, 1, 1),
+        "0 of 1 row × 1 column"
+    );
+    crate::locale::set_test_language(crate::settings::Language::Nl);
+    let nl = crate::commands::filtered_meta("64.659 rijen × 8 kolommen  ·  PII", 120, 64_659, 8);
+    let search = crate::locale::t("search_table").to_string();
+    crate::locale::set_test_language(crate::settings::Language::En);
+    assert_eq!(nl, "120 van 64.659 rijen × 8 kolommen  ·  PII");
+    assert_ne!(search, crate::locale::t("search_table"));
+}
+
+#[test]
+fn the_table_window_view_knows_its_row_count() {
+    let src = "naam;plaats\nJan;Groningen\nAnja;Utrecht\n";
+    let table = read(src, crate::dataframe::ReadOptions::default());
+    let mut view = table_window_view(&table, src);
+    assert_eq!(view.rows, 2);
+    view.wipe();
+    assert_eq!(view.rows, 0);
+}
+
+#[test]
+fn the_table_window_toolbar_ends_with_the_search_field() {
+    use crate::commands::TableToolbarItem as Item;
+    let items = crate::commands::table_window_toolbar_items();
+    assert_eq!(items.last(), Some(&Item::Search));
+    assert_eq!(
+        items.iter().filter(|item| **item == Item::Search).count(),
+        1
+    );
+    assert_eq!(
+        &items[..5],
+        &[
+            Item::Table,
+            Item::Copy,
+            Item::CopyJson,
+            Item::CopyCsv,
+            Item::Save
+        ]
+    );
+}

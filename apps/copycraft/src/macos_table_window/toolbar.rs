@@ -1,13 +1,14 @@
 //! The table window's toolbar: a real `NSToolbar` in the unified compact style, not
 //! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Copy*, *Copy as
-//! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, and the version group (↶, the version
-//! shown with its list, ↷) as an `NSToolbarItemGroup`. The items are made once and handed
+//! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, the version group (↶, the version
+//! shown with its list, ↷) as an `NSToolbarItemGroup`, and the search field (⌘F) as an
+//! `NSSearchToolbarItem`, in the order of `commands::table_window_toolbar_items`. The items are made once and handed
 //! out by [`TableWindowDelegate`]'s toolbar methods; their menus are rebuilt on every paint.
 
 use super::*;
 use mac_ui::objc2::runtime::ProtocolObject;
 use mac_ui::objc2_app_kit::{
-    NSImage, NSMenuToolbarItem, NSToolbar, NSToolbarDisplayMode,
+    NSImage, NSMenuToolbarItem, NSSearchToolbarItem, NSToolbar, NSToolbarDisplayMode,
     NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSToolbarItemGroup,
     NSToolbarItemGroupControlRepresentation, NSToolbarItemVisibilityPriorityLow,
     NSWindowToolbarStyle,
@@ -24,6 +25,7 @@ const UNDO_ID: &str = "CopycraftTableUndo";
 const VERSIONS_ID: &str = "CopycraftTableVersions";
 const REDO_ID: &str = "CopycraftTableRedo";
 const GROUP_ID: &str = "CopycraftTableVersionGroup";
+const SEARCH_ID: &str = "CopycraftTableSearch";
 
 /// The toolbar and its items, kept for the life of the window (in `TOOLBAR`).
 pub(super) struct ToolbarItems {
@@ -38,6 +40,8 @@ pub(super) struct ToolbarItems {
     versions: Retained<NSMenuToolbarItem>,
     redo: Retained<NSToolbarItem>,
     group: Retained<NSToolbarItemGroup>,
+    /// Search in the table (⌘F): filters the rows shown, live.
+    search: Retained<NSSearchToolbarItem>,
 }
 
 /// Build the items (`hint` is the label shown while masked) and put the toolbar on `window`.
@@ -99,6 +103,20 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     let subitems: [&NSToolbarItem; 3] = [&undo, &versions, &redo];
     group.setSubitems(&NSArray::from_slice(&subitems));
     group.setControlRepresentation(NSToolbarItemGroupControlRepresentation::Expanded);
+    let search = NSSearchToolbarItem::initWithItemIdentifier(
+        NSSearchToolbarItem::alloc(mtm),
+        &NSString::from_str(SEARCH_ID),
+    );
+    // No recents, never saved. Not sent on every keystroke: AppKit waits for a pause in
+    // the typing, so a big table is filtered once per burst.
+    let field = widgets::search_field(mtm, mac_ui::metrics::FONT_BODY, "");
+    field.setSendsSearchStringImmediately(false);
+    DELEGATE.with(|slot| {
+        if let Some(delegate) = slot.borrow().as_ref() {
+            mac_ui::actions::connect(&field, delegate, sel!(tableWindowSearchChanged:));
+        }
+    });
+    search.setSearchField(&field);
     let items = ToolbarItems {
         table,
         copy,
@@ -110,6 +128,7 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
         versions,
         redo,
         group,
+        search,
     };
     relabel_items(&items);
     TOOLBAR.with(|slot| slot.replace(Some(items)));
@@ -196,6 +215,15 @@ fn relabel_items(items: &ToolbarItems) {
             item.setTitle(&item.label());
         }
     }
+    let search = t("search_table");
+    items.search.setLabel(&s(search));
+    items
+        .search
+        .setToolTip(Some(&s(&commands::keyed_tip(search, "⌘F"))));
+    items
+        .search
+        .searchField()
+        .setPlaceholderString(Some(&s(search)));
     items.versions.setLabel(&s(t("version")));
     items.group.setLabel(&s(t("version")));
 }
@@ -222,6 +250,7 @@ pub(super) fn paint(view: &TableWindowView) {
         // Enabled once the version's grid is there (not while "Working on the table…").
         let ready = !view.grid.is_empty();
         items.copy.setEnabled(ready);
+        items.search.searchField().setEnabled(ready);
         items.save.setEnabled(ready);
         let [(_, json_on), (_, csv_on)] = commands::table_window_copy_buttons(view);
         items.copy_json.setEnabled(json_on);
@@ -272,6 +301,16 @@ pub(super) fn wipe() {
             items.versions.setMenu(&menus::empty_menu(mtm));
             items.versions.setTitle(&NSString::from_str(""));
             items.versions.setToolTip(None);
+            widgets::wipe_text_field(&items.search.searchField());
+        }
+    });
+}
+
+/// ⌘F: put the cursor in the search field (expanded when the toolbar had collapsed it).
+pub(super) fn focus_search() {
+    TOOLBAR.with(|slot| {
+        if let Some(items) = slot.borrow().as_ref() {
+            items.search.beginSearchInteraction();
         }
     });
 }
@@ -290,26 +329,32 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
             SAVE_ID => items.save.clone(),
             HINT_ID => items.hint.clone(),
             GROUP_ID => Retained::into_super(items.group.clone()),
+            SEARCH_ID => Retained::into_super(items.search.clone()),
             _ => return None,
         };
         Some(item)
     })
 }
 
-/// Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the hint centred between flexible spaces, the version group.
+/// The items of `commands::table_window_toolbar_items`, in its order.
 pub(super) fn identifiers() -> Retained<NSArray<NSString>> {
+    use commands::TableToolbarItem as Item;
     // SAFETY: an AppKit constant (an immutable NSString), read on the main thread after
     // AppKit is loaded.
     let flexible: &NSString = unsafe { NSToolbarFlexibleSpaceItemIdentifier };
-    let ids: Vec<Retained<NSString>> = [TABLE_ID, COPY_ID, COPY_JSON_ID, COPY_CSV_ID, SAVE_ID]
+    let ids: Vec<Retained<NSString>> = commands::table_window_toolbar_items()
         .iter()
-        .map(|id| NSString::from_str(id))
-        .chain([
-            flexible.retain(),
-            NSString::from_str(HINT_ID),
-            flexible.retain(),
-        ])
-        .chain([NSString::from_str(GROUP_ID)])
+        .map(|item| match item {
+            Item::Space => flexible.retain(),
+            Item::Table => NSString::from_str(TABLE_ID),
+            Item::Copy => NSString::from_str(COPY_ID),
+            Item::CopyJson => NSString::from_str(COPY_JSON_ID),
+            Item::CopyCsv => NSString::from_str(COPY_CSV_ID),
+            Item::Save => NSString::from_str(SAVE_ID),
+            Item::Hint => NSString::from_str(HINT_ID),
+            Item::Versions => NSString::from_str(GROUP_ID),
+            Item::Search => NSString::from_str(SEARCH_ID),
+        })
         .collect();
     NSArray::from_retained_slice(&ids)
 }

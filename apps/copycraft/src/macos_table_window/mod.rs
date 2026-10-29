@@ -25,8 +25,8 @@ use mac_ui::objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
     NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
     NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode, NSMenu, NSMenuItem,
-    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSScrollView, NSTextAlignment, NSTextField,
-    NSTextTab, NSTextView, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView,
+    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSScrollView, NSSearchField, NSTextAlignment,
+    NSTextField, NSTextTab, NSTextView, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView,
     NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
@@ -78,6 +78,9 @@ thread_local! {
     static OWN_PANEL: Cell<bool> = const { Cell::new(false) };
     /// Checkboxes of the open Choose Columns… alert (All / None toggle these).
     static PICKER_CHECKS: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
+    /// What the toolbar's search field says (never logged); zeroized when it changes and when
+    /// the window is wiped. Filters the rows drawn, not the table.
+    static SEARCH: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 struct Views {
@@ -220,6 +223,15 @@ define_class!(
         #[unsafe(method(tableWindowPickerNone:))]
         fn picker_none_clicked(&self, _sender: Option<&NSButton>) {
             set_picker_checks(false);
+        }
+
+        /// The search field's text changed (after a pause in the typing, or cleared with Esc
+        /// or its ×): draw only the rows that match.
+        #[unsafe(method(tableWindowSearchChanged:))]
+        fn search_changed(&self, sender: Option<&NSSearchField>) {
+            if let Some(field) = sender {
+                set_search(field.stringValue().to_string());
+            }
         }
 
         /// The grid scrolled sideways: slide the header row with it.
@@ -392,6 +404,7 @@ pub fn close() {
 fn forget() {
     REVEALED.set(false);
     PAINTED.set(false);
+    SEARCH.with(|slot| slot.borrow_mut().zeroize());
     // Dropping the view wipes it.
     SHOWN.with(|slot| slot.replace(None));
     POPPED.with(|slot| {
@@ -448,6 +461,8 @@ fn cell_menu(grid: &TableGridView, event: &NSEvent) -> Option<Retained<NSMenu>> 
     let cell = commands::grid_cell_at(&body, at, FIRST_NUMERIC.with(Cell::get));
     body.zeroize();
     let (row, col) = cell?;
+    // A search draws only the matching rows: the menu acts on the table's row.
+    let row = SHOWN_ROWS.with(|rows| commands::table_row_shown(rows.borrow().as_deref(), row))?;
     MENU_CELL.set(Some((row, col)));
     let menu = menus::empty_menu(mtm);
     let delegate = DELEGATE.with(|slot| slot.borrow().clone());
@@ -464,6 +479,25 @@ fn cell_menu(grid: &TableGridView, event: &NSEvent) -> Option<Retained<NSMenu>> 
         menu.addItem(&item);
     }
     Some(menu)
+}
+
+/// The search field says `text`: repaint the grid with the rows that match (when it is drawn;
+/// a blank masked grid is filtered when it is revealed).
+fn set_search(mut text: String) {
+    let changed = SEARCH.with(|slot| {
+        let mut query = slot.borrow_mut();
+        if *query == text {
+            return false;
+        }
+        query.zeroize();
+        std::mem::swap(&mut *query, &mut text);
+        true
+    });
+    text.zeroize();
+    if changed {
+        PAINTED.set(false);
+        apply_mask();
+    }
 }
 
 /// Masked now: the privacy filter setting (read live) is on and the window is not revealed.

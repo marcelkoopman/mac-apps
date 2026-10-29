@@ -454,6 +454,8 @@ pub struct TableWindowView {
     pub menu: Vec<(Command, bool)>,
     /// Name of the chosen file the table comes from, for the window title; `None` for a copy.
     pub source_name: Option<String>,
+    /// The version's row count (the meta line's size), for the search's "120 of 64,659 rows".
+    pub rows: usize,
 }
 
 impl TableWindowView {
@@ -499,6 +501,7 @@ impl TableWindowView {
             name.zeroize();
         }
         self.source_name = None;
+        self.rows = 0;
     }
 }
 
@@ -544,6 +547,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     let classified: &str = if original { source } else { &csv };
     let mut meta = text_meta_from(&csv, classified);
     let (rows, columns) = frame.shape();
+    view.rows = rows;
     let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
     meta.replace_range(
         ..size_end,

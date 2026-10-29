@@ -13,6 +13,8 @@ thread_local! {
     static COLUMN_LINES: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     /// The separators in the header strip, thin boxes on the header text.
     static HEADER_LINES: RefCell<Vec<Retained<NSBox>>> = const { RefCell::new(Vec::new()) };
+    /// While a search filters the sheet: the table row of each drawn row. `None`: all rows.
+    static SHOWN_ROWS: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
 }
 
 const HEADER_STRIP: f64 = 28.0;
@@ -228,7 +230,22 @@ fn place_table_header(views: &Views, shown: bool) {
 fn paint_table_grid(views: &Views, view: &TableWindowView) {
     let mut previous = views.grid.string().to_string();
     if let Some(mut sheet) = crate::dataframe::grid_sheet(&view.grid) {
-        paint_aligned_table(views, &sheet, &previous);
+        // The toolbar's search: only the rows with a cell that matches are drawn.
+        let matches = SEARCH.with(|query| commands::matching_rows(&sheet.rows, &query.borrow()));
+        paint_aligned_table(views, &sheet, &previous, matches.as_deref());
+        let mut meta = match &matches {
+            Some(found) => {
+                let columns = match view.columns.len() {
+                    0 => sheet.headers.len(),
+                    n => n,
+                };
+                commands::filtered_meta(&view.meta, found.len(), view.rows, columns)
+            }
+            None => view.meta.clone(),
+        };
+        paint_meta(&views.meta, &meta);
+        meta.zeroize();
+        SHOWN_ROWS.with(|slot| slot.replace(matches));
         for header in &mut sheet.headers {
             header.zeroize();
         }
@@ -238,17 +255,29 @@ fn paint_table_grid(views: &Views, view: &TableWindowView) {
             }
         }
     } else {
+        SHOWN_ROWS.with(|slot| slot.replace(None));
         paint_boxed_grid(views, view, &previous);
     }
     previous.zeroize();
 }
 
-fn paint_aligned_table(views: &Views, sheet: &crate::dataframe::GridSheet, previous: &str) {
+fn paint_aligned_table(
+    views: &Views,
+    sheet: &crate::dataframe::GridSheet,
+    previous: &str,
+    matches: Option<&[usize]>,
+) {
     let was_sheet = TABLE_STRIPES.with(Cell::get);
     let (body_font, header_font) = table_fonts();
     let em = text_width("M", &header_font);
     let digit = text_width("0", &body_font);
+    // Column widths come from every row, so they hold still while a search narrows the rows.
     let mut layout = crate::dataframe::layout_table(sheet, em, digit);
+    if let Some(keep) = matches {
+        let kept = commands::keep_lines(&layout.body, keep);
+        layout.body.zeroize();
+        layout.body = kept;
+    }
     let body_changed = previous != layout.body;
     let mut header_now = views.header.string().to_string();
     let header_changed = header_now != layout.header;
@@ -436,6 +465,7 @@ fn size_header(views: &Views, content_width: f64) {
 fn clear_sheet_chrome(views: &Views) {
     widgets::wipe_text_view(&views.header);
     place_table_header(views, false);
+    SHOWN_ROWS.with(|slot| slot.replace(None));
     TABLE_STRIPES.set(false);
     COLUMN_LINES.with(|slot| slot.borrow_mut().clear());
     place_header_lines(views, &[]);

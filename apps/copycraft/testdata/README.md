@@ -522,6 +522,17 @@ and `printf '[{"naam": "Jan, de Vries", "n": 3}, {"naam": "Anja", "n": 4}]' > /t
 - [ ] Privacy: `tables/window_payees_iban.csv` dropped opens the window with *financial* on its meta line; with *Use privacy filter* on, the grid is masked until clicked. Put a made-up token (`ghp_` and 36 letters/digits) in a cell of a fake CSV, drop it and *Copy as JSON*: the JSON is on the clipboard but not in history.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows only the column and row counts the table window logged before, never a file name, path or cell.
 
+### Search in the table
+
+Make a fake file first: `printf 'naam;plaats\nJan de Vries;Groningen\nAnja;Utrecht\nÉmile;UTRECHT\n' > /tmp/search.csv`.
+
+- [ ] Drop `/tmp/search.csv`: the toolbar ends with a search field (magnifying glass, placeholder *Zoek in de tabel* / *Search the table*, tooltip with ⌘F). In a narrow window it collapses to the magnifying glass.
+- [ ] ⌘F puts the cursor in the field. Type `utrecht`: after a short pause only *Anja* and *Émile* are left (case does not matter, any column counts); the meta line reads *2 van 3 rijen × 2 kolommen* / *2 of 3 rows × 2 columns*, labels after it as before. `émile` finds *Émile*; `xyz` leaves no rows and *0 van 3 rijen* / *0 of 3 rows*.
+- [ ] Esc (or the field's ×) clears it: all rows again and *3 rijen × 2 kolommen* / *3 rows × 2 columns*. The column widths do not jump while filtering.
+- [ ] A view only: with `utrecht` typed, *Copy*, `{}` *Copy as JSON*, *Copy as CSV* and ⌘S *Save* still give all three rows, and the version stays *v1/1*. Right-click a filtered row › *Copy Row* copies that row (not the first row of the table). Remove duplicate rows or a sort keeps the search and filters the new version.
+- [ ] Big table: `(echo 'id;naam;stad'; seq 1 64659 | awk '{print $1";naam"$1";stad"$1%500}') > /tmp/big.csv` and drop it. Typing `stad42` in the field stays responsive (no beachball per key); the meta line shows *1.420 van 64.659 rijen × 3 kolommen* / *1,420 of 64,659 rows × 3 columns* (`stad42` and `stad420`–`stad429`).
+- [ ] Privacy: close the window and open the table again: the field is empty. Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows nothing of the query, the cells or the number of matches.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.

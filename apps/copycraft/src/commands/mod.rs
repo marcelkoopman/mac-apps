@@ -20,6 +20,7 @@ mod menu_rules;
 mod meta;
 mod strip;
 mod table;
+mod table_search;
 mod text;
 mod types;
 
@@ -34,6 +35,7 @@ pub use menu_rules::*;
 pub use meta::*;
 pub use strip::*;
 pub use table::*;
+pub use table_search::*;
 pub use text::*;
 pub use types::*;
 

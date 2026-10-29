@@ -180,4 +180,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Klik op de tabel om hem te tonen",
         "Click the table to reveal it",
     ),
+    ("search_table", "Zoek in de tabel", "Search the table"),
+    ("table_rows_found", "{0} van {1} {2}", "{0} of {1} {2}"),
 ];

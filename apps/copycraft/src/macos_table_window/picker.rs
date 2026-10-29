@@ -141,11 +141,15 @@ pub(super) fn run(id: CommandId) {
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Run(id)));
 }
 
-/// ⌘O opens a file, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions. ⌘W and ⌘M are
+/// ⌘O opens a file, ⌘F goes to the search field, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions. ⌘W and ⌘M are
 /// the hidden Window menu's (src/macos_main_menu.rs).
 pub(super) fn window_key(event: &NSEvent) -> bool {
     if mac_ui::keys::is_command_chord(event, "o") {
         launcher::emit(UserEvent::Run(CommandId::ChooseFile));
+        return true;
+    }
+    if mac_ui::keys::is_command_chord(event, "f") {
+        toolbar::focus_search();
         return true;
     }
     if mac_ui::keys::is_command_chord(event, "s") {
