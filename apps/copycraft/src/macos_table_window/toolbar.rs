@@ -1,16 +1,16 @@
 //! The table window's toolbar: a real `NSToolbar` in the unified compact style, not
 //! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Copy*, *Copy as
-//! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, the version group (↶, the version
-//! shown with its list, ↷) as an `NSToolbarItemGroup`, and the search field (⌘F) as an
-//! `NSSearchToolbarItem`, in the order of `commands::table_window_toolbar_items`. The items are made once and handed
-//! out by [`TableWindowDelegate`]'s toolbar methods; their menus are rebuilt on every paint.
+//! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, and the search
+//! field (⌘F) as an `NSSearchToolbarItem`, in the order of `commands::table_window_toolbar_items`.
+//! The versions are the strip along the bottom (`strip`), as the history is on the card. The
+//! items are made once and handed out by [`TableWindowDelegate`]'s toolbar methods; Table ▾'s
+//! menu is rebuilt on every paint.
 
 use super::*;
 use mac_ui::objc2::runtime::ProtocolObject;
 use mac_ui::objc2_app_kit::{
     NSImage, NSMenuToolbarItem, NSSearchToolbarItem, NSToolbar, NSToolbarDisplayMode,
-    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSToolbarItemGroup,
-    NSToolbarItemGroupControlRepresentation, NSToolbarItemVisibilityPriorityLow,
+    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSToolbarItemVisibilityPriorityLow,
     NSWindowToolbarStyle,
 };
 
@@ -21,10 +21,6 @@ const COPY_JSON_ID: &str = "CopycraftTableCopyJson";
 const COPY_CSV_ID: &str = "CopycraftTableCopyCsv";
 const SAVE_ID: &str = "CopycraftTableSave";
 const HINT_ID: &str = "CopycraftTableHint";
-const UNDO_ID: &str = "CopycraftTableUndo";
-const VERSIONS_ID: &str = "CopycraftTableVersions";
-const REDO_ID: &str = "CopycraftTableRedo";
-const GROUP_ID: &str = "CopycraftTableVersionGroup";
 const SEARCH_ID: &str = "CopycraftTableSearch";
 
 /// The toolbar and its items, kept for the life of the window (in `TOOLBAR`).
@@ -36,10 +32,6 @@ pub(super) struct ToolbarItems {
     copy_csv: Retained<NSToolbarItem>,
     save: Retained<NSToolbarItem>,
     hint: Retained<NSToolbarItem>,
-    undo: Retained<NSToolbarItem>,
-    versions: Retained<NSMenuToolbarItem>,
-    redo: Retained<NSToolbarItem>,
-    group: Retained<NSToolbarItemGroup>,
     /// Search in the table (⌘F): filters the rows shown, live.
     search: Retained<NSSearchToolbarItem>,
 }
@@ -77,32 +69,7 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     );
     hint_item.setView(Some(hint));
     hint_item.setVisibilityPriority(NSToolbarItemVisibilityPriorityLow);
-    let undo = symbol_item(
-        mtm,
-        UNDO_ID,
-        "arrow.uturn.backward",
-        sel!(tableWindowUndoClicked:),
-    );
-    let redo = symbol_item(
-        mtm,
-        REDO_ID,
-        "arrow.uturn.forward",
-        sel!(tableWindowRedoClicked:),
-    );
-    let versions = NSMenuToolbarItem::initWithItemIdentifier(
-        NSMenuToolbarItem::alloc(mtm),
-        &NSString::from_str(VERSIONS_ID),
-    );
-    versions.setShowsIndicator(false);
-    versions.setAutovalidates(false);
     table.setAutovalidates(false);
-    let group = NSToolbarItemGroup::initWithItemIdentifier(
-        NSToolbarItemGroup::alloc(mtm),
-        &NSString::from_str(GROUP_ID),
-    );
-    let subitems: [&NSToolbarItem; 3] = [&undo, &versions, &redo];
-    group.setSubitems(&NSArray::from_slice(&subitems));
-    group.setControlRepresentation(NSToolbarItemGroupControlRepresentation::Expanded);
     let search = NSSearchToolbarItem::initWithItemIdentifier(
         NSSearchToolbarItem::alloc(mtm),
         &NSString::from_str(SEARCH_ID),
@@ -124,10 +91,6 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
         copy_csv,
         save,
         hint: hint_item,
-        undo,
-        versions,
-        redo,
-        group,
         search,
     };
     relabel_items(&items);
@@ -200,16 +163,6 @@ fn relabel_items(items: &ToolbarItems) {
         .setToolTip(Some(&s(t("detail_table_copy_csv"))));
     items.save.setLabel(&s(t("save_table_a11y")));
     items.save.setToolTip(Some(&s(t("save_table_tip"))));
-    for (item, name, keys) in [
-        (&items.undo, t("undo_table_step"), "⌘Z"),
-        (&items.redo, t("redo_table_step"), "⇧⌘Z"),
-    ] {
-        item.setLabel(&s(name));
-        item.setToolTip(Some(&s(&commands::keyed_tip(name, keys))));
-        if item.image().is_none() {
-            item.setTitle(&s(if keys == "⌘Z" { "↶" } else { "↷" }));
-        }
-    }
     for item in [&items.copy, &items.copy_json, &items.copy_csv, &items.save] {
         if item.image().is_none() {
             item.setTitle(&item.label());
@@ -224,8 +177,6 @@ fn relabel_items(items: &ToolbarItems) {
         .search
         .searchField()
         .setPlaceholderString(Some(&s(search)));
-    items.versions.setLabel(&s(t("version")));
-    items.group.setLabel(&s(t("version")));
 }
 
 /// The toolbar's labels in the current language (Settings › Language).
@@ -237,7 +188,7 @@ pub(super) fn relabel() {
     });
 }
 
-/// Enable the items for `view` and rebuild Table ▾ and the version list from it.
+/// Enable the items for `view` and rebuild Table ▾ from it.
 pub(super) fn paint(view: &TableWindowView) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -255,13 +206,8 @@ pub(super) fn paint(view: &TableWindowView) {
         let [(_, json_on), (_, csv_on)] = commands::table_window_copy_buttons(view);
         items.copy_json.setEnabled(json_on);
         items.copy_csv.setEnabled(csv_on);
-        items.undo.setEnabled(view.can_undo());
-        items.redo.setEnabled(view.can_redo());
         // Never off: an empty menu shows its steps dimmed (`table_window_menu_shown`).
         items.table.setEnabled(true);
-        items
-            .versions
-            .setTitle(&NSString::from_str(&view.version_title()));
         let mut popped = Vec::new();
         let table_menu = menus::build_menu(
             mtm,
@@ -269,28 +215,11 @@ pub(super) fn paint(view: &TableWindowView) {
             &mut popped,
         );
         items.table.setMenu(&table_menu);
-        if view.versions.labels.is_empty() {
-            items.versions.setEnabled(false);
-            items.versions.setMenu(&menus::empty_menu(mtm));
-            items.versions.setToolTip(None);
-        } else {
-            let bar = VersionBar {
-                labels: view.versions.labels.clone(),
-                current: view.versions.current.min(view.versions.labels.len() - 1),
-            };
-            items.versions.setEnabled(true);
-            items
-                .versions
-                .setMenu(&menus::build_menu(mtm, bar.menu(), &mut popped));
-            items
-                .versions
-                .setToolTip(Some(&NSString::from_str(&bar.spoken())));
-        }
         menus::keep_popped(popped);
     });
 }
 
-/// Empty both menus and the version title and tooltip (the window is wiped).
+/// Empty Table ▾ and the search field (the window is wiped).
 pub(super) fn wipe() {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -298,9 +227,6 @@ pub(super) fn wipe() {
     TOOLBAR.with(|slot| {
         if let Some(items) = slot.borrow().as_ref() {
             items.table.setMenu(&menus::empty_menu(mtm));
-            items.versions.setMenu(&menus::empty_menu(mtm));
-            items.versions.setTitle(&NSString::from_str(""));
-            items.versions.setToolTip(None);
             widgets::wipe_text_field(&items.search.searchField());
         }
     });
@@ -328,7 +254,6 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
             COPY_CSV_ID => items.copy_csv.clone(),
             SAVE_ID => items.save.clone(),
             HINT_ID => items.hint.clone(),
-            GROUP_ID => Retained::into_super(items.group.clone()),
             SEARCH_ID => Retained::into_super(items.search.clone()),
             _ => return None,
         };
@@ -352,7 +277,6 @@ pub(super) fn identifiers() -> Retained<NSArray<NSString>> {
             Item::CopyCsv => NSString::from_str(COPY_CSV_ID),
             Item::Save => NSString::from_str(SAVE_ID),
             Item::Hint => NSString::from_str(HINT_ID),
-            Item::Versions => NSString::from_str(GROUP_ID),
             Item::Search => NSString::from_str(SEARCH_ID),
         })
         .collect();

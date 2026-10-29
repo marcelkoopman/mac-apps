@@ -136,6 +136,7 @@ pub(super) fn apply_mask() {
             } else if !PAINTED.get() && !view.grid.is_empty() {
                 paint_content(views, view);
             }
+            strip::paint(views, view, masked);
             view.checking
         });
         let filters = match &filter {

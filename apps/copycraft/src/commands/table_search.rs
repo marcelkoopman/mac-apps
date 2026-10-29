@@ -17,18 +17,16 @@ pub enum TableToolbarItem {
     Space,
     /// The "Click the table to reveal it" hint while masked.
     Hint,
-    /// The version group (↶, the version list, ↷).
-    Versions,
     /// The search field (⌘F), last as in other Mac apps.
     Search,
 }
 
-/// Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the hint between flexible spaces, the
-/// version group and the search field.
-pub fn table_window_toolbar_items() -> [TableToolbarItem; 10] {
+/// Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the hint between flexible spaces and the
+/// search field. The versions are the strip along the bottom ([`super::table_version_tiles`]).
+pub fn table_window_toolbar_items() -> [TableToolbarItem; 9] {
     use TableToolbarItem::*;
     [
-        Table, Copy, CopyJson, CopyCsv, Save, Space, Hint, Space, Versions, Search,
+        Table, Copy, CopyJson, CopyCsv, Save, Space, Hint, Space, Search,
     ]
 }
 
@@ -102,13 +100,11 @@ pub fn filtered_size(shown: usize, rows: usize, columns: usize) -> String {
     } else {
         t("columns")
     };
-    format!(
-        "{} × {columns} {columns_word}",
-        crate::locale::tf(
-            "table_rows_found",
-            &[&group_thousands(shown), &group_thousands(rows), &rows_word]
-        )
-    )
+    let found = crate::locale::tf(
+        "table_rows_found",
+        &[&group_thousands(shown), &group_thousands(rows), &rows_word],
+    );
+    format!("{found} × {columns} {columns_word}")
 }
 
 /// `meta` with its size (before the first separator) said as [`filtered_size`].

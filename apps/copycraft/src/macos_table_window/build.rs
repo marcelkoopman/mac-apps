@@ -216,6 +216,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     cover.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     wire(&cover, sel!(tableWindowRevealClicked:));
     content.addSubview(&cover);
+    let strip = super::strip::build(mtm, &content, width);
 
     VIEWS.with(|slot| {
         slot.replace(Some(Views {
@@ -234,6 +235,7 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
             hint,
             cover,
             shade,
+            strip,
         }))
     });
 }

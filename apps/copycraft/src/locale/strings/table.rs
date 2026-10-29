@@ -181,5 +181,10 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Click the table to reveal it",
     ),
     ("search_table", "Zoek in de tabel", "Search the table"),
+    (
+        "table_versions_group",
+        "Versies van de tabel",
+        "Table versions",
+    ),
     ("table_rows_found", "{0} van {1} {2}", "{0} of {1} {2}"),
 ];

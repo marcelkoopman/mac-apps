@@ -258,6 +258,7 @@ mod menu_tests;
 mod meta_tests;
 
 mod table_search_tests;
+mod table_strip_tests;
 mod table_tests;
 mod text_tests;
 

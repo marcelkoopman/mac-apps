@@ -21,6 +21,7 @@ mod meta;
 mod strip;
 mod table;
 mod table_search;
+mod table_strip;
 mod text;
 mod types;
 
@@ -36,6 +37,7 @@ pub use meta::*;
 pub use strip::*;
 pub use table::*;
 pub use table_search::*;
+pub use table_strip::*;
 pub use text::*;
 pub use types::*;
 

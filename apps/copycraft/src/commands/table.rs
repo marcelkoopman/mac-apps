@@ -456,29 +456,15 @@ pub struct TableWindowView {
     pub source_name: Option<String>,
     /// The version's row count (the meta line's size), for the search's "120 of 64,659 rows".
     pub rows: usize,
+    /// Which table this is (a hash of its copied text, in memory only): the version strip
+    /// keeps the sizes of the versions it has shown for the same table only.
+    pub table_key: u64,
 }
 
 impl TableWindowView {
-    pub fn can_undo(&self) -> bool {
-        self.versions.current > 0
-    }
-
-    pub fn can_redo(&self) -> bool {
-        self.versions.current + 1 < self.versions.labels.len()
-    }
-
     /// The window title: the chosen file's name, else "Table" (no app name, as the HIG asks).
     pub fn window_title(&self) -> String {
         table_window_title(self.source_name.as_deref())
-    }
-
-    /// "v2/3".
-    pub fn version_title(&self) -> String {
-        format!(
-            "v{}/{}",
-            self.versions.current + 1,
-            self.versions.labels.len().max(1)
-        )
     }
 
     pub fn wipe(&mut self) {
@@ -502,6 +488,7 @@ impl TableWindowView {
         }
         self.source_name = None;
         self.rows = 0;
+        self.table_key = 0;
     }
 }
 
@@ -530,6 +517,12 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         current: table.version,
     };
     view.menu = table_window_menu(table);
+    view.table_key = {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        source.hash(&mut hasher);
+        hasher.finish() | 1
+    };
     view.columns = picker_columns(table).unwrap_or_default();
     let Some(frame) = &table.frame else {
         view.placeholder = crate::locale::t("working_on_table").to_string();
@@ -549,23 +542,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     let (rows, columns) = frame.shape();
     view.rows = rows;
     let size_end = meta.find(META_SEPARATOR).unwrap_or(meta.len());
-    meta.replace_range(
-        ..size_end,
-        &format!(
-            "{} {} × {columns} {}",
-            group_thousands(rows),
-            if rows == 1 {
-                crate::locale::t("row")
-            } else {
-                crate::locale::t("rows")
-            },
-            if columns == 1 {
-                crate::locale::t("column")
-            } else {
-                crate::locale::t("columns")
-            }
-        ),
-    );
+    meta.replace_range(..size_end, &super::table_size_text(rows, columns));
     let mut notes: Vec<String> = Vec::new();
     // The step of the version shown reads first, as on the card.
     if table.version > 0

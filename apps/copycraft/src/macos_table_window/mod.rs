@@ -1,8 +1,9 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open Table" on the card): the table of one entry in its own resizable
-// window. A native toolbar (`toolbar`: Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the version group ↶ v2/3 ↷), a sidebar
+// window. A native toolbar (`toolbar`: Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the search field), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
-// tables) and the meta line. A parsed grid is drawn as aligned columns with a fixed header
+// tables), the version strip along the bottom (`strip`, as the history on the card) and the
+// meta line. A parsed grid is drawn as aligned columns with a fixed header
 // (`macos_table_paint`); a grid that does not parse keeps the boxed text and a frozen first
 // column. What it shows comes from `commands::table_window_view`; what it asks for goes to
 // the app as `UserEvent::TableWindow`.
@@ -38,7 +39,7 @@ use mac_ui::text::AttrText;
 use mac_ui::widgets;
 
 use crate::column_picker::ColumnPicker;
-use crate::commands::{self, Command, CommandId, TableWindowView, VersionBar};
+use crate::commands::{self, Command, CommandId, TableWindowView};
 use crate::format::FormatKind;
 use crate::launcher::{self, TableWindowEvent, UserEvent};
 use zeroize::Zeroize;
@@ -101,6 +102,8 @@ struct Views {
     hint: Retained<NSTextField>,
     cover: Retained<NSButton>,
     shade: Retained<NSBox>,
+    /// The versions along the bottom ([`strip`]).
+    strip: strip::StripViews,
 }
 
 define_class!(
@@ -151,14 +154,12 @@ define_class!(
             reveal();
         }
 
-        #[unsafe(method(tableWindowUndoClicked:))]
-        fn undo_clicked(&self, _sender: Option<&AnyObject>) {
-            run(CommandId::StepBack);
-        }
-
-        #[unsafe(method(tableWindowRedoClicked:))]
-        fn redo_clicked(&self, _sender: Option<&AnyObject>) {
-            run(CommandId::StepForward);
+        /// A card in the version strip: show that version (its tag is the version's index).
+        #[unsafe(method(tableWindowVersionClicked:))]
+        fn version_clicked(&self, sender: Option<&NSButton>) {
+            if let Some(index) = sender.and_then(|button| usize::try_from(button.tag()).ok()) {
+                run(commands::version_tile_click(index));
+            }
         }
 
         #[unsafe(method(tableWindowCopyClicked:))]
@@ -419,6 +420,7 @@ fn forget() {
             return;
         };
         wipe_content(views);
+        strip::wipe(views);
         widgets::wipe_text_field(&views.meta);
         widgets::wipe_text_field(&views.placeholder);
     });
@@ -614,6 +616,7 @@ mod build;
 mod menus;
 mod paint;
 mod picker;
+mod strip;
 mod toolbar;
 
 /// The card theme changed: repaint the grid in the new colours (text, header, stripes).

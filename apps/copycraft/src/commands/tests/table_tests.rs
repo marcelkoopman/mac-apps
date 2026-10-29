@@ -84,10 +84,9 @@ fn the_table_window_shows_the_version_with_its_meta_columns_versions_and_menu() 
     assert!(!view.checking);
     let names: Vec<&str> = view.columns.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, ["name", "iban"]);
-    assert_eq!(view.version_title(), "v2/2");
-    assert!(view.can_undo() && !view.can_redo());
+    assert_eq!((view.versions.current, view.versions.labels.len()), (1, 2));
     // Open table is the card chip only; Choose Columns… is in the window menu; undo/redo
-    // stay on ⌘Z and the version capsule.
+    // stay on ⌘Z, the version strip and the version capsule.
     let ids: Vec<&CommandId> = view.menu.iter().map(|(c, _)| &c.id).collect();
     for not_in_menu in [
         CommandId::TableOpenWindow,
