@@ -154,12 +154,29 @@ pub enum TableWindowEvent {
 }
 
 /// Show `view` in the table window, opening it the first time.
-pub fn show_table_window(view: crate::commands::TableWindowView) {
+/// `sheet`: its grid read into columns and laid out on the worker thread, when it reads as one.
+pub(crate) fn show_table_window(
+    view: crate::commands::TableWindowView,
+    sheet: Option<crate::dataframe::PreparedSheet>,
+) {
     #[cfg(target_os = "macos")]
-    crate::macos_table_window::show(view);
+    crate::macos_table_window::show(view, sheet);
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = view;
+        let _ = (view, sheet);
+    }
+}
+
+/// The table window's font widths (a wide letter, a figure), measured on the main thread, for
+/// laying its grid out on a worker ([`crate::dataframe::prepare_sheet`]). `None` off macOS.
+pub fn table_grid_metrics() -> Option<(f64, f64)> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_table_window::grid_metrics()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
     }
 }
 

@@ -67,15 +67,21 @@ pub fn table_size_text(rows: usize, columns: usize) -> String {
 
 /// The cards for `view` (at most [`super::MAX_THUMBS`], around the version shown), each
 /// version's size from `sizes` (rows, columns) when it was seen.
+///
+/// `framed`: the version a switch is on its way to; its card is framed instead of the shown
+/// version's, so a click frames its card at once.
 pub fn table_version_tiles(
     view: &TableWindowView,
     sizes: &[Option<(usize, usize)>],
+    framed: Option<usize>,
 ) -> Vec<VersionTile> {
     let labels = &view.versions.labels;
     if labels.is_empty() {
         return Vec::new();
     }
-    let current = view.versions.current.min(labels.len() - 1);
+    let current = framed
+        .unwrap_or(view.versions.current)
+        .min(labels.len() - 1);
     strip_range(labels.len(), current)
         .map(|index| {
             let label = &labels[index];

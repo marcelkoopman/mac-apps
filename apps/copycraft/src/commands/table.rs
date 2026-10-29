@@ -459,6 +459,9 @@ pub struct TableWindowView {
     /// Which table this is (a hash of its copied text, in memory only): the version strip
     /// keeps the sizes of the versions it has shown for the same table only.
     pub table_key: u64,
+    /// The app is still working on the table (a version, a step, the first read): the window
+    /// shows its switch ([`super::VersionSwitch`]).
+    pub working: bool,
 }
 
 impl TableWindowView {
@@ -489,6 +492,7 @@ impl TableWindowView {
         self.source_name = None;
         self.rows = 0;
         self.table_key = 0;
+        self.working = false;
     }
 }
 
@@ -512,6 +516,7 @@ impl Drop for TableWindowView {
 /// the last error in the meta line.
 pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
     let mut view = TableWindowView::default();
+    view.working = table.working;
     view.versions = VersionBar {
         labels: table.labels.clone(),
         current: table.version,

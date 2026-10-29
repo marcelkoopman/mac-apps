@@ -549,17 +549,77 @@ pub(crate) fn layout_table(sheet: &GridSheet, em: f64, digit: f64) -> TableLayou
         x += column_width + COL_GAP;
     }
     let header = join_tab_row(&headers, &sheet.numeric);
-    let body = clipped_rows
+    let mut lines = clipped_rows
         .iter()
         .map(|row| join_tab_row(row, &sheet.numeric))
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+    let body = lines.join("\n");
+    // The cells are the table's: wiped before they are freed.
+    for line in &mut lines {
+        zeroize::Zeroize::zeroize(line);
+    }
+    for cell in clipped_rows.iter_mut().flatten() {
+        zeroize::Zeroize::zeroize(cell);
+    }
     TableLayout {
         widths,
         stops,
         header,
         body,
     }
+}
+
+/// The table window's grid read into columns and laid out ([`grid_sheet`], [`layout_table`]),
+/// on the worker thread that builds the window's view, so a large table's version shows
+/// without the main thread parsing it. Zeroized when dropped; never logged.
+pub(crate) struct PreparedSheet {
+    pub sheet: GridSheet,
+    pub layout: TableLayout,
+    /// [`body_key`] of `layout.body`: the window sets its text only when this changed.
+    pub body_key: u64,
+}
+
+impl std::fmt::Debug for PreparedSheet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PreparedSheet")
+    }
+}
+
+impl Drop for PreparedSheet {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        for header in &mut self.sheet.headers {
+            header.zeroize();
+        }
+        for cell in self.sheet.rows.iter_mut().flatten() {
+            cell.zeroize();
+        }
+        self.layout.header.zeroize();
+        self.layout.body.zeroize();
+    }
+}
+
+/// [`grid_sheet`] and [`layout_table`] of `grid` with the window's font widths (`em`, a wide
+/// letter; `digit`, a figure). `None` when the grid is not a polars box (the window keeps it
+/// as text).
+pub(crate) fn prepare_sheet(grid: &str, em: f64, digit: f64) -> Option<PreparedSheet> {
+    let sheet = grid_sheet(grid)?;
+    let layout = layout_table(&sheet, em, digit);
+    let body_key = body_key(&layout.body);
+    Some(PreparedSheet {
+        sheet,
+        layout,
+        body_key,
+    })
+}
+
+/// A fingerprint of a grid body, in memory only (never stored or logged); never 0, which
+/// stands for "no body drawn".
+pub(crate) fn body_key(body: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    body.hash(&mut hasher);
+    hasher.finish() | 1
 }
 
 fn split_grid_cells(line: &str) -> Vec<String> {

@@ -154,6 +154,13 @@ define_class!(
             reveal();
         }
 
+        /// A version switch's delayed check: the spinner after a moment, or give up a switch
+        /// the app never started ([`switching`]).
+        #[unsafe(method(tableWindowSwitchTick:))]
+        fn switch_tick(&self, _sender: Option<&AnyObject>) {
+            switching::tick();
+        }
+
         /// A card in the version strip: show that version (its tag is the version's index).
         #[unsafe(method(tableWindowVersionClicked:))]
         fn version_clicked(&self, sender: Option<&NSButton>) {
@@ -303,13 +310,34 @@ impl TableWindowDelegate {
 }
 
 /// Show `view` in the table window, opening (and focusing) it when it is not on screen.
-pub fn show(view: TableWindowView) {
+/// `sheet`: its grid read into columns and laid out on the worker that built it.
+///
+/// A version switch ([`switching`]): while the app still works on it, or the view is from
+/// before the click, the version on screen stays (dimmed under a spinner after a moment) and
+/// only the strip follows; the version asked for fades in when it arrives.
+pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::PreparedSheet>) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
     ensure_views(mtm);
+    let before = SHOWN.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .filter(|old| old.table_key == view.table_key && !old.grid.is_empty())
+            .map(|old| old.versions.current)
+    });
+    let (version, working) = (view.versions.current, view.working);
     SHOWN.with(|slot| slot.replace(Some(view)));
-    paint();
+    PREPARED.with(|slot| slot.replace(sheet));
+    let arrival = switching::arrive(version, working);
+    if arrival == commands::Arrival::Pending && before.is_some() {
+        // Kept for when the switch settles: the grid on screen stays (no new layout of a
+        // large table on every update), the title, toolbar, meta line and strip follow.
+        paint_chrome_only();
+    } else {
+        paint();
+    }
+    switching::after_show(arrival, before, version);
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window
         && !window.isVisible()
@@ -403,8 +431,10 @@ pub fn close() {
 
 /// Wipe the views and what they were made from.
 fn forget() {
+    switching::reset();
     REVEALED.set(false);
     PAINTED.set(false);
+    PREPARED.with(|slot| slot.replace(None));
     SEARCH.with(|slot| slot.borrow_mut().zeroize());
     // Dropping the view wipes it.
     SHOWN.with(|slot| slot.replace(None));
@@ -454,7 +484,8 @@ fn blur_filter() -> Option<Retained<AnyObject>> {
 /// when the grid is masked, not drawn as columns, or the click is below the last row.
 fn cell_menu(grid: &TableGridView, event: &NSEvent) -> Option<Retained<NSMenu>> {
     let mtm = MainThreadMarker::new()?;
-    if masked() || !TABLE_STRIPES.with(Cell::get) {
+    // Not while another version is on its way (the grid is dimmed then).
+    if masked() || !TABLE_STRIPES.with(Cell::get) || switching::busy() {
         return None;
     }
     let point = grid.convertPoint_fromView(event.locationInWindow(), None);
@@ -617,6 +648,7 @@ mod menus;
 mod paint;
 mod picker;
 mod strip;
+mod switching;
 mod toolbar;
 
 /// The card theme changed: repaint the grid in the new colours (text, header, stripes).

@@ -16,7 +16,7 @@ fn a_version_card_says_its_step_and_size_and_marks_the_one_shown() {
     let view = table_window_view(&deduped(SRC), SRC);
     let mut sizes = crate::commands::VersionSizes::default();
     sizes.note(&view);
-    let tiles = crate::commands::table_version_tiles(&view, sizes.sizes());
+    let tiles = crate::commands::table_version_tiles(&view, sizes.sizes(), None);
     assert_eq!(tiles.len(), 2);
     assert_eq!(tiles[0].mark, "v1");
     assert_eq!(tiles[1].mark, "v2");
@@ -96,4 +96,16 @@ fn the_toolbar_has_no_version_group_any_more() {
             Item::Search
         ]
     );
+}
+
+#[test]
+fn the_card_asked_for_is_framed_before_its_version_arrives() {
+    let view = table_window_view(&deduped(SRC), SRC);
+    let sizes = crate::commands::VersionSizes::default();
+    let shown = crate::commands::table_version_tiles(&view, sizes.sizes(), None);
+    assert!(!shown[0].current && shown[1].current);
+    let mut switch = crate::commands::VersionSwitch::default();
+    switch.begin(0);
+    let framed = crate::commands::table_version_tiles(&view, sizes.sizes(), switch.target());
+    assert!(framed[0].current && !framed[1].current);
 }

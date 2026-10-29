@@ -80,7 +80,7 @@ pub(super) fn paint(views: &Views, view: &TableWindowView, masked: bool) {
     let mut tiles = SIZES.with(|sizes| {
         let mut sizes = sizes.borrow_mut();
         sizes.note(view);
-        commands::table_version_tiles(view, sizes.sizes())
+        commands::table_version_tiles(view, sizes.sizes(), super::switching::framed())
     });
     let inner = strip.scroll.frame().size.width;
     let signature = signature_of(&tiles, masked, inner);

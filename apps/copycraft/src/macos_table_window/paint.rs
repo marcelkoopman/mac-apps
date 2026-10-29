@@ -30,6 +30,23 @@ pub(super) fn paint() {
     apply_mask();
 }
 
+/// The toolbar, title, meta line and strip from the view shown, not the grid (a version
+/// switch still on its way, [`switching`]); then the mask.
+pub(super) fn paint_chrome_only() {
+    VIEWS.with(|slot| {
+        let borrowed = slot.borrow();
+        let Some(views) = borrowed.as_ref() else {
+            return;
+        };
+        SHOWN.with(|shown| {
+            if let Some(view) = shown.borrow().as_ref() {
+                paint_chrome(views, view);
+            }
+        });
+    });
+    apply_mask();
+}
+
 pub(super) fn paint_chrome(views: &Views, view: &TableWindowView) {
     views
         .window

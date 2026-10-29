@@ -187,4 +187,5 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Table versions",
     ),
     ("table_rows_found", "{0} van {1} {2}", "{0} of {1} {2}"),
+    ("table_version_loading", "Versie laden…", "Loading version…"),
 ];

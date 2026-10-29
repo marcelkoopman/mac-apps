@@ -138,6 +138,8 @@ pub(super) fn set_picker_checks(kept: bool) {
 }
 
 pub(super) fn run(id: CommandId) {
+    // A version switch frames its card at once and shows its progress ([`switching`]).
+    switching::asked(&id);
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Run(id)));
 }
 

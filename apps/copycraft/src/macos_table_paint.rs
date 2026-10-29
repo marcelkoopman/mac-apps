@@ -15,6 +15,13 @@ thread_local! {
     static HEADER_LINES: RefCell<Vec<Retained<NSBox>>> = const { RefCell::new(Vec::new()) };
     /// While a search filters the sheet: the table row of each drawn row. `None`: all rows.
     static SHOWN_ROWS: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
+    /// The shown view's grid read into columns and laid out (on the worker that built the
+    /// view, or here once); kept for the search. Zeroized when dropped.
+    static PREPARED: RefCell<Option<crate::dataframe::PreparedSheet>> = const { RefCell::new(None) };
+    /// [`crate::dataframe::body_key`] of the sheet body in the grid; 0 when it holds none.
+    static BODY_KEY: Cell<u64> = const { Cell::new(0) };
+    /// The font widths the sheet is laid out with (a wide letter, a figure), measured once.
+    static GRID_METRICS: Cell<Option<(f64, f64)>> = const { Cell::new(None) };
 }
 
 const HEADER_STRIP: f64 = 28.0;
@@ -35,7 +42,28 @@ fn table_grid_view(mtm: MainThreadMarker) -> Retained<NSTextView> {
     text.setDrawsBackground(false);
     text.setRichText(true);
     text.setTextContainerInset(NSSize::new(BODY_INSET_X, 10.0));
+    // A large table is laid out as it scrolls into view, not all at once when it is set: its
+    // rows all have the same height, so the sheet sizes the view itself ([`size_sheet_grid`]).
+    if let Some(manager) = mac_ui::widgets::layout_manager(&text) {
+        manager.setAllowsNonContiguousLayout(true);
+    }
     text
+}
+
+/// The sheet's font widths (a wide letter in the header font, a figure in the body font), for
+/// laying a grid out on a worker ([`crate::dataframe::prepare_sheet`]). Main thread only.
+pub(crate) fn grid_metrics() -> Option<(f64, f64)> {
+    MainThreadMarker::new()?;
+    if let Some(metrics) = GRID_METRICS.with(Cell::get) {
+        return Some(metrics);
+    }
+    let (body_font, header_font) = table_fonts();
+    let metrics = (
+        text_width("M", &header_font),
+        text_width("0", &body_font),
+    );
+    GRID_METRICS.set(Some(metrics));
+    Some(metrics)
 }
 
 fn draw_table_background(view: &NSTextView, dirty: NSRect) {
@@ -228,11 +256,17 @@ fn place_table_header(views: &Views, shown: bool) {
 }
 
 fn paint_table_grid(views: &Views, view: &TableWindowView) {
-    let mut previous = views.grid.string().to_string();
-    if let Some(mut sheet) = crate::dataframe::grid_sheet(&view.grid) {
+    // Read into columns on the worker that built the view; only a view that came without
+    // (or a repaint after the window was wiped) is read here.
+    let prepared = PREPARED.with(|slot| slot.borrow_mut().take()).or_else(|| {
+        let (em, digit) = grid_metrics()?;
+        crate::dataframe::prepare_sheet(&view.grid, em, digit)
+    });
+    if let Some(prepared) = prepared {
+        let sheet = &prepared.sheet;
         // The toolbar's search: only the rows with a cell that matches are drawn.
         let matches = SEARCH.with(|query| commands::matching_rows(&sheet.rows, &query.borrow()));
-        paint_aligned_table(views, &sheet, &previous, matches.as_deref());
+        paint_aligned_table(views, &prepared, matches.as_deref());
         let mut meta = match &matches {
             Some(found) => {
                 let columns = match view.columns.len() {
@@ -246,39 +280,35 @@ fn paint_table_grid(views: &Views, view: &TableWindowView) {
         paint_meta(&views.meta, &meta);
         meta.zeroize();
         SHOWN_ROWS.with(|slot| slot.replace(matches));
-        for header in &mut sheet.headers {
-            header.zeroize();
-        }
-        for row in &mut sheet.rows {
-            for cell in row {
-                cell.zeroize();
-            }
-        }
+        PREPARED.with(|slot| slot.replace(Some(prepared)));
     } else {
         SHOWN_ROWS.with(|slot| slot.replace(None));
+        BODY_KEY.set(0);
+        let mut previous = views.grid.string().to_string();
         paint_boxed_grid(views, view, &previous);
+        previous.zeroize();
     }
-    previous.zeroize();
 }
 
 fn paint_aligned_table(
     views: &Views,
-    sheet: &crate::dataframe::GridSheet,
-    previous: &str,
+    prepared: &crate::dataframe::PreparedSheet,
     matches: Option<&[usize]>,
 ) {
     let was_sheet = TABLE_STRIPES.with(Cell::get);
+    let sheet = &prepared.sheet;
+    let layout = &prepared.layout;
     let (body_font, header_font) = table_fonts();
-    let em = text_width("M", &header_font);
-    let digit = text_width("0", &body_font);
     // Column widths come from every row, so they hold still while a search narrows the rows.
-    let mut layout = crate::dataframe::layout_table(sheet, em, digit);
-    if let Some(keep) = matches {
-        let kept = commands::keep_lines(&layout.body, keep);
-        layout.body.zeroize();
-        layout.body = kept;
-    }
-    let body_changed = previous != layout.body;
+    let filtered =
+        matches.map(|keep| zeroize::Zeroizing::new(commands::keep_lines(&layout.body, keep)));
+    let (body, key) = match &filtered {
+        Some(kept) => (kept.as_str(), crate::dataframe::body_key(kept)),
+        None => (layout.body.as_str(), prepared.body_key),
+    };
+    let rows = matches.map_or(sheet.rows.len(), <[usize]>::len);
+    // Compared by fingerprint: no copy of a large grid's text back out of the view.
+    let body_changed = BODY_KEY.get() != key;
     let mut header_now = views.header.string().to_string();
     let header_changed = header_now != layout.header;
     header_now.zeroize();
@@ -309,7 +339,7 @@ fn paint_aligned_table(
         // Body in the card theme's text colour; column names take its accent (the app
         // accent, the icon blue under Multicolour, with System), like CSV headers.
         let (text_colour, header_colour, _) = crate::appearance::table_grid_colours();
-        set_styled_text(&views.grid, &layout.body, &body_font, &style, &text_colour);
+        set_styled_text(&views.grid, body, &body_font, &style, &text_colour);
         set_styled_text(
             &views.header,
             &layout.header,
@@ -317,8 +347,9 @@ fn paint_aligned_table(
             &style,
             &header_colour,
         );
-        widgets::fit_text_view(&views.grid, None);
+        size_sheet_grid(&views.grid, rows, layout.content_width(), line_h);
         size_header(views, layout.content_width());
+        BODY_KEY.set(key);
         if body_changed {
             views.grid.scrollRangeToVisible(NSRange {
                 location: 0,
@@ -330,8 +361,20 @@ fn paint_aligned_table(
     sync_header_from_views(views);
     views.grid.setNeedsDisplay(true);
     views.header.setNeedsDisplay(true);
-    layout.header.zeroize();
-    layout.body.zeroize();
+}
+
+/// Size the grid to a sheet of `rows` rows without laying all of its text out (a large table
+/// took the main thread for that): every row is `line_h` high (the paragraph style locks it,
+/// as the stripes assume) and the columns end at `content_width`. The text view does not
+/// resize itself to its (estimated) layout.
+fn size_sheet_grid(grid: &NSTextView, rows: usize, content_width: f64, line_h: f64) {
+    widgets::scroll_text_both_ways(grid);
+    grid.setHorizontallyResizable(false);
+    grid.setVerticallyResizable(false);
+    let inset = grid.textContainerInset();
+    let width = content_width + inset.width * 2.0;
+    let height = rows.max(1) as f64 * line_h + inset.height * 2.0;
+    grid.setFrameSize(NSSize::new(width.max(1.0), height.max(1.0)));
 }
 
 fn paint_boxed_grid(views: &Views, view: &TableWindowView, previous: &str) {
@@ -466,6 +509,7 @@ fn clear_sheet_chrome(views: &Views) {
     widgets::wipe_text_view(&views.header);
     place_table_header(views, false);
     SHOWN_ROWS.with(|slot| slot.replace(None));
+    BODY_KEY.set(0);
     TABLE_STRIPES.set(false);
     COLUMN_LINES.with(|slot| slot.borrow_mut().clear());
     place_header_lines(views, &[]);

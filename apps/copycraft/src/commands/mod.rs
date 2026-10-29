@@ -22,6 +22,7 @@ mod strip;
 mod table;
 mod table_search;
 mod table_strip;
+mod table_switch;
 mod text;
 mod types;
 
@@ -38,6 +39,7 @@ pub use strip::*;
 pub use table::*;
 pub use table_search::*;
 pub use table_strip::*;
+pub use table_switch::*;
 pub use text::*;
 pub use types::*;
 

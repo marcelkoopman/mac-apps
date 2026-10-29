@@ -910,6 +910,29 @@ Id;Naam;Salaris
     }
 
     #[test]
+    fn a_sheet_prepared_off_the_window_matches_the_one_laid_out_there() {
+        let grid = "shape: (1, 2)
+┌────────┬────────┐
+│ name   ┆ amount │
+│ ---    ┆ ---    │
+│ str    ┆ f64    │
+╞════════╪════════╡
+│ alice  ┆ 12.5   │
+└────────┴────────┘
+";
+        let prepared = super::prepare_sheet(grid, 10.0, 8.0).expect("prepared");
+        let sheet = super::grid_sheet(grid).expect("sheet");
+        let layout = super::layout_table(&sheet, 10.0, 8.0);
+        assert_eq!(prepared.layout.body, layout.body);
+        assert_eq!(prepared.layout.header, layout.header);
+        assert_eq!(prepared.body_key, super::body_key(&layout.body));
+        // Never 0 (the window's "no sheet"), and another body is another key.
+        assert_ne!(super::body_key(""), 0);
+        assert_ne!(super::body_key("a"), super::body_key("b"));
+        assert!(super::prepare_sheet("just words", 10.0, 8.0).is_none());
+    }
+
+    #[test]
     fn column_separators_sit_mid_gap_between_the_columns() {
         let src = "name,when,amount\nalice,2026-03-09,12.5\nbob,2026-04-01,3";
         let preview = super::try_format_preview(src, 20, None).expect("preview");

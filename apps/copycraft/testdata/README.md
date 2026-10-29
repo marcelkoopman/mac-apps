@@ -545,6 +545,18 @@ Use `/tmp/search.csv` from the step above.
 - [ ] VoiceOver reads the strip as *Versies van de tabel* / *Table versions* and each card as *Versie 2 van 2, …* / *Version 2 of 2, …*, the shown one selected; hovering shows the same as a tooltip. Switch the language: the labels change on the next paint.
 - [ ] Privacy: with the privacy filter on, switch apps and back: the cards show only *v1*, *v2* and dots until the table is revealed. Wipe or close: the strip is gone; reopened, it starts over. Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows nothing of the steps, the cells or the sizes.
 
+### Switching table versions with a large file
+
+Make a fake 5 MB table first (65,000 rows, made-up values): `awk 'BEGIN{print "id,naam,plaats,bedrag,datum,code,status,notitie"; for(i=1;i<=65000;i++) printf "%d,naam%d,plaats%d,%d.%02d,2026-%02d-%02d,C%05d,%s,regel %d met wat tekst\n", i, i%977, i%131, i%5000, i%100, i%12+1, i%28+1, i, (i%3?"open":"dicht"), i}' > /tmp/big.csv`.
+
+- [ ] Drop `/tmp/big.csv` and open the table window. Do a step that keeps two columns (*Kies kolommen…*, or *Verwijder dubbele rijen*): the strip shows two cards.
+- [ ] Click the other card: its frame moves at once. When the switch takes longer than about 0.15 s the grid dims and a spinner shows over it (VoiceOver: *Versie laden…* / *Loading version…*); a quick switch shows no spinner and does not flash. While it runs the window still moves, resizes and scrolls, and the grid takes no selection or right-click.
+- [ ] When the version is there the grid fades in (about 0.2 s) and the meta line shows its size. Click the cards quickly a few times: the grid ends on the last card clicked, never on an older one, and the frame never jumps back.
+- [ ] ⌘Z and ⇧⌘Z do the same (the frame moves first). A step from the card's own version capsule dims the window's grid the same way while it runs.
+- [ ] Reduce Motion on (System Settings › Accessibility › Display): the switch has no fade, the version just shows; the spinner still shows on a slow switch.
+- [ ] Search in the large table, then switch: the search applies to the new version. Scroll to the bottom of the grid: the last row shows with its stripe, nothing is cut off; scroll sideways to the last column.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names while switching. Nothing new is written to disk.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.
