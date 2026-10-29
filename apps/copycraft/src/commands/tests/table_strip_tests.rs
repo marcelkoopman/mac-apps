@@ -12,33 +12,78 @@ fn the_version_strip_shows_with_two_or_more_versions_like_the_history_strip() {
 }
 
 #[test]
-fn a_version_card_says_its_step_and_size_and_marks_the_one_shown() {
-    let view = table_window_view(&deduped(SRC), SRC);
+fn a_version_card_reads_as_a_history_card_of_the_copy() {
+    let mut view = table_window_view(&deduped(SRC), SRC);
+    view.set_kind(crate::format::FormatKind::Csv);
     let mut sizes = crate::commands::VersionSizes::default();
     sizes.note(&view);
-    let tiles = crate::commands::table_version_tiles(&view, sizes.sizes(), None);
+    let tiles = crate::commands::table_version_tiles(&view, &sizes, None);
     assert_eq!(tiles.len(), 2);
-    assert_eq!(tiles[0].mark, "v1");
-    assert_eq!(tiles[1].mark, "v2");
+    // The copy's type mark on every card, as on its history card; no "v1" or "Original".
+    for tile in &tiles {
+        assert_eq!(tile.mark, "csv");
+        assert!(!tile.mark.starts_with('v'));
+        assert!(!tile.lines.contains("Original") && !tile.lines.contains("Origineel"));
+    }
     assert!(!tiles[0].current && tiles[1].current);
-    // The original was not on screen yet: its step only.
-    assert_eq!(tiles[0].lines, view.versions.labels[0]);
-    assert_eq!(
-        tiles[1].lines,
-        format!("{}\n2 rows × 2 columns", view.versions.labels[1])
-    );
+    // The original: the copied text's first lines, exactly as the history card shows them.
+    assert_eq!(tiles[0].lines, crate::commands::thumb_lines(SRC));
+    assert_eq!(tiles[0].lines, "naam;plaats\nJan;Groningen\nJan;Groningen");
+    // The version shown: its own first lines (written as CSV).
+    assert_eq!(tiles[1].lines, view.lines);
+    assert!(tiles[1].lines.starts_with("naam"), "{}", tiles[1].lines);
+    assert!(tiles[1].lines.contains("Anja"));
+    assert!(tiles[1].lines.lines().count() <= crate::commands::THUMB_LINES);
+    // VoiceOver: the version's number and step; masked, the number only.
     assert_eq!(
         tiles[1].spoken,
         format!("Version 2 of 2, {}", view.versions.labels[1])
+    );
+    assert_eq!(tiles[1].spoken_masked, "Version 2 of 2");
+    // The tooltip: the type, the step and the size (a history card's type and age).
+    assert_eq!(tiles[0].tooltip, "CSV");
+    assert_eq!(
+        tiles[1].tooltip,
+        format!("CSV · {} · 2 rows × 2 columns", view.versions.labels[1])
     );
     assert_eq!(
         crate::commands::version_tile_click(0),
         CommandId::TableVersion(0)
     );
-    // No cell values on a card.
+    // No cell values in what VoiceOver or the tooltip say.
     for tile in &tiles {
-        assert!(!tile.lines.contains("Groningen") && !tile.spoken.contains("Anja"));
+        for said in [&tile.spoken, &tile.spoken_masked, &tile.tooltip] {
+            assert!(!said.contains("Groningen") && !said.contains("Anja"));
+        }
     }
+}
+
+#[test]
+fn a_version_not_shown_yet_has_its_step_until_it_was_seen() {
+    let mut view = table_window_view(&deduped(SRC), SRC);
+    let shown_lines = view.lines.clone();
+    // The step was made before the window opened: back on the original, never seen.
+    view.versions.current = 0;
+    view.lines.clear();
+    let mut sizes = crate::commands::VersionSizes::default();
+    sizes.note(&view);
+    let tiles = crate::commands::table_version_tiles(&view, &sizes, None);
+    assert_eq!(tiles[1].lines, view.versions.labels[1]);
+    // Shown once: its lines stay for the card.
+    view.versions.current = 1;
+    view.lines = shown_lines.clone();
+    sizes.note(&view);
+    view.versions.current = 0;
+    view.lines.clear();
+    sizes.note(&view);
+    let tiles = crate::commands::table_version_tiles(&view, &sizes, None);
+    assert_eq!(tiles[1].lines, shown_lines);
+    // Another table: forgotten.
+    let mut other = view.clone();
+    other.table_key ^= 2;
+    sizes.note(&other);
+    let tiles = crate::commands::table_version_tiles(&other, &sizes, None);
+    assert_eq!(tiles[1].lines, view.versions.labels[1]);
 }
 
 #[test]
@@ -102,10 +147,10 @@ fn the_toolbar_has_no_version_group_any_more() {
 fn the_card_asked_for_is_framed_before_its_version_arrives() {
     let view = table_window_view(&deduped(SRC), SRC);
     let sizes = crate::commands::VersionSizes::default();
-    let shown = crate::commands::table_version_tiles(&view, sizes.sizes(), None);
+    let shown = crate::commands::table_version_tiles(&view, &sizes, None);
     assert!(!shown[0].current && shown[1].current);
     let mut switch = crate::commands::VersionSwitch::default();
     switch.begin(0);
-    let framed = crate::commands::table_version_tiles(&view, sizes.sizes(), switch.target());
+    let framed = crate::commands::table_version_tiles(&view, &sizes, switch.target());
     assert!(framed[0].current && !framed[1].current);
 }

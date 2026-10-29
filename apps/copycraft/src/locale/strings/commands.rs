@@ -380,6 +380,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Versie {0} van {1}, {2}",
         "Version {0} of {1}, {2}",
     ),
+    (
+        "version_spoken_masked",
+        "Versie {0} van {1}",
+        "Version {0} of {1}",
+    ),
     ("lines_size", "{0} regels  {1}", "{0} lines  {1}"),
     (
         "lines_columns_size",

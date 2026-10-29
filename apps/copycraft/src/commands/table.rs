@@ -462,9 +462,26 @@ pub struct TableWindowView {
     /// The app is still working on the table (a version, a step, the first read): the window
     /// shows its switch ([`super::VersionSwitch`]).
     pub working: bool,
+    /// The copy's type mark (`csv`, `tsv`, `{}`), as its history card shows it
+    /// ([`TableWindowView::set_kind`]); the version cards wear it.
+    pub mark: String,
+    /// The type's name for a version card's tooltip (*CSV*), as a history card's tooltip.
+    pub kind_name: &'static str,
+    /// The first lines of the copied text ([`super::thumb_lines`]): the original's card, as
+    /// its history card shows them.
+    pub original_lines: String,
+    /// The first lines of the version shown, written as CSV; empty while it is worked out.
+    pub lines: String,
 }
 
 impl TableWindowView {
+    /// The copy's type (from its history entry, or read from the text): the mark and the
+    /// tooltip name the version cards wear.
+    pub fn set_kind(&mut self, kind: crate::format::FormatKind) {
+        self.mark = kind.menu_symbol().to_string();
+        self.kind_name = super::thumb_kind_name(kind);
+    }
+
     /// The window title: the chosen file's name, else "Table" (no app name, as the HIG asks).
     pub fn window_title(&self) -> String {
         table_window_title(self.source_name.as_deref())
@@ -493,6 +510,10 @@ impl TableWindowView {
         self.rows = 0;
         self.table_key = 0;
         self.working = false;
+        self.mark.clear();
+        self.kind_name = "";
+        self.original_lines.zeroize();
+        self.lines.zeroize();
     }
 }
 
@@ -529,6 +550,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         hasher.finish() | 1
     };
     view.columns = picker_columns(table).unwrap_or_default();
+    view.original_lines = super::thumb_lines(source);
     let Some(frame) = &table.frame else {
         view.placeholder = crate::locale::t("working_on_table").to_string();
         return view;
@@ -541,6 +563,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         return view;
     };
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
+    view.lines = super::thumb_lines(&csv);
     let original = table.version == 0 && table.options == dataframe::ReadOptions::default();
     let classified: &str = if original { source } else { &csv };
     let mut meta = text_meta_from(&csv, classified);

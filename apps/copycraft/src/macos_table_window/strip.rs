@@ -80,7 +80,7 @@ pub(super) fn paint(views: &Views, view: &TableWindowView, masked: bool) {
     let mut tiles = SIZES.with(|sizes| {
         let mut sizes = sizes.borrow_mut();
         sizes.note(view);
-        commands::table_version_tiles(view, sizes.sizes(), super::switching::framed())
+        commands::table_version_tiles(view, &sizes, super::switching::framed())
     });
     let inner = strip.scroll.frame().size.width;
     let signature = signature_of(&tiles, masked, inner);
@@ -143,6 +143,8 @@ fn signature_of(tiles: &[commands::VersionTile], masked: bool, width: f64) -> u6
             &tile.mark,
             &tile.lines,
             &tile.spoken,
+            &tile.spoken_masked,
+            &tile.tooltip,
             tile.current,
         )
             .hash(&mut hasher);
@@ -152,8 +154,9 @@ fn signature_of(tiles: &[commands::VersionTile], masked: bool, width: f64) -> u6
     hasher.finish() | 1
 }
 
-/// One card: the history strip's look (fill, accent frame on the version shown, the mark
-/// small above the lines), one button over the whole card.
+/// One card, read and drawn as a history card: the fill, the accent frame on the version
+/// shown, the copy's type mark small above the version's first lines; one button over the
+/// whole card.
 fn build_tile(
     mtm: MainThreadMarker,
     tile: &commands::VersionTile,
@@ -213,15 +216,16 @@ fn build_tile(
     text.zeroize();
     button.setTag(tile.index as isize);
     wire(&button, sel!(tableWindowVersionClicked:));
-    // Masked: the mark only, as a masked history card has its type mark only.
-    let spoken = if masked {
-        tile.mark.as_str()
+    // Masked: the mark and dots on the card, as a masked history card; VoiceOver and the
+    // tooltip say the version's number only, not its step or size.
+    let (spoken, tip) = if masked {
+        (tile.spoken_masked.as_str(), tile.spoken_masked.as_str())
     } else {
-        tile.spoken.as_str()
+        (tile.spoken.as_str(), tile.tooltip.as_str())
     };
     button.setAccessibilityLabel(Some(&NSString::from_str(spoken)));
     button.setAccessibilitySelected(tile.current);
-    button.setToolTip(Some(&NSString::from_str(spoken)));
+    button.setToolTip(Some(&NSString::from_str(tip)));
     card.addSubview(&button);
     card
 }

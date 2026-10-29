@@ -10,18 +10,25 @@ use zeroize::Zeroize;
 use super::table::group_thousands;
 use super::{CommandId, TableWindowView, strip_range, strip_shown, thumb_lines};
 
-/// One small card of the version strip.
+/// One small card of the version strip, read as a history card: the copy's type mark small
+/// above the version's first lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionTile {
     /// The version: 0 is the original. What a click shows.
     pub index: usize,
-    /// "v2", drawn small above the lines like a copy's type mark.
+    /// The copy's type mark (`csv`), as on its history card.
     pub mark: String,
-    /// The step ("Original", "Duplicates removed") and, once known, the size
-    /// ("4 rows × 6 columns"), cut like a history card's lines ([`thumb_lines`]).
+    /// The version's first lines, cut like a history card's ([`thumb_lines`]): the copied
+    /// text for the original, the version written as CSV once it was shown; until then its
+    /// step ("Duplicates removed").
     pub lines: String,
-    /// "Version 2 of 3, Duplicates removed": tooltip and VoiceOver label.
+    /// "Version 2 of 3, Duplicates removed": the VoiceOver label.
     pub spoken: String,
+    /// "Version 2 of 3": the VoiceOver label while the cards are masked.
+    pub spoken_masked: String,
+    /// "CSV · Duplicates removed · 4 rows × 6 columns": the tooltip, a history card's type
+    /// with the step and (once known) the size in place of its age.
+    pub tooltip: String,
     /// The version shown.
     pub current: bool,
 }
@@ -30,6 +37,7 @@ impl VersionTile {
     pub fn wipe(&mut self) {
         self.lines.zeroize();
         self.spoken.zeroize();
+        self.tooltip.zeroize();
     }
 }
 
@@ -66,13 +74,13 @@ pub fn table_size_text(rows: usize, columns: usize) -> String {
 }
 
 /// The cards for `view` (at most [`super::MAX_THUMBS`], around the version shown), each
-/// version's size from `sizes` (rows, columns) when it was seen.
+/// version's lines and size from `seen` once it was shown.
 ///
 /// `framed`: the version a switch is on its way to; its card is framed instead of the shown
 /// version's, so a click frames its card at once.
 pub fn table_version_tiles(
     view: &TableWindowView,
-    sizes: &[Option<(usize, usize)>],
+    seen: &VersionSizes,
     framed: Option<usize>,
 ) -> Vec<VersionTile> {
     let labels = &view.versions.labels;
@@ -82,20 +90,40 @@ pub fn table_version_tiles(
     let current = framed
         .unwrap_or(view.versions.current)
         .min(labels.len() - 1);
-    strip_range(labels.len(), current)
+    let count = labels.len();
+    strip_range(count, current)
         .map(|index| {
             let label = &labels[index];
-            let mut text = match sizes.get(index).copied().flatten() {
-                Some((rows, columns)) => format!("{label}\n{}", table_size_text(rows, columns)),
-                None => label.clone(),
+            let known = match index {
+                0 => Some(&view.original_lines),
+                _ => seen.lines.get(index).and_then(Option::as_ref),
             };
-            let lines = thumb_lines(&text);
-            text.zeroize();
+            // A version not shown yet: its step, as a card without a preview has its title.
+            let lines = known
+                .filter(|lines| !lines.is_empty())
+                .cloned()
+                .unwrap_or_else(|| thumb_lines(label));
+            let mut parts: Vec<String> = Vec::new();
+            if !view.kind_name.is_empty() {
+                parts.push(view.kind_name.to_string());
+            }
+            if index > 0 {
+                parts.push(label.clone());
+            }
+            if let Some((rows, columns)) = seen.sizes.get(index).copied().flatten() {
+                parts.push(table_size_text(rows, columns));
+            }
+            let tooltip = parts.join(" · ");
+            for part in &mut parts {
+                part.zeroize();
+            }
             VersionTile {
                 index,
-                mark: format!("v{}", index + 1),
+                mark: view.mark.clone(),
                 lines,
-                spoken: crate::locale::tf("version_spoken", &[&(index + 1), &labels.len(), label]),
+                spoken: crate::locale::tf("version_spoken", &[&(index + 1), &count, label]),
+                spoken_masked: crate::locale::tf("version_spoken_masked", &[&(index + 1), &count]),
+                tooltip,
                 current: index == current,
             }
         })
@@ -111,6 +139,8 @@ pub struct VersionSizes {
     key: u64,
     labels: Vec<String>,
     sizes: Vec<Option<(usize, usize)>>,
+    /// Each version's first lines once it was shown (the original's are always known).
+    lines: Vec<Option<String>>,
 }
 
 impl VersionSizes {
@@ -130,6 +160,11 @@ impl VersionSizes {
             .count();
         self.sizes.truncate(same);
         self.sizes.resize(labels.len(), None);
+        for gone in self.lines.iter_mut().skip(same).flatten() {
+            gone.zeroize();
+        }
+        self.lines.truncate(same);
+        self.lines.resize(labels.len(), None);
         for label in &mut self.labels {
             label.zeroize();
         }
@@ -139,8 +174,17 @@ impl VersionSizes {
         {
             *slot = Some((view.rows, view.columns.len()));
         }
+        if !view.lines.is_empty()
+            && let Some(slot) = self.lines.get_mut(view.versions.current)
+        {
+            if let Some(old) = slot.as_mut() {
+                old.zeroize();
+            }
+            *slot = Some(view.lines.clone());
+        }
     }
 
+    #[cfg(test)]
     pub fn sizes(&self) -> &[Option<(usize, usize)>] {
         &self.sizes
     }
@@ -151,6 +195,10 @@ impl VersionSizes {
         }
         self.labels.clear();
         self.sizes.clear();
+        for lines in self.lines.iter_mut().flatten() {
+            lines.zeroize();
+        }
+        self.lines.clear();
         self.key = 0;
     }
 }

@@ -278,13 +278,20 @@ impl App {
         // The grid text of a large table takes a while: built on a thread, and read into
         // columns and laid out there too (the window's font widths, measured on main), so the
         // main thread only sets the text.
+        // The copy's type, as its history card has it (read from the text only when it is not
+        // in history, on the thread).
+        let kind = match home {
+            TableHome::History(index) => self.history.kind(index),
+            _ => None,
+        };
         let source = text;
         let metrics = launcher::table_grid_metrics();
         let built = self.start_work(
             work::Lane::TableWindow,
             work::QUICK,
             move || {
-                let view = commands::table_window_view(&shown_table, &source);
+                let mut view = commands::table_window_view(&shown_table, &source);
+                view.set_kind(kind.unwrap_or_else(|| crate::format::detect(&source)));
                 let sheet = metrics
                     .and_then(|(em, digit)| crate::dataframe::prepare_sheet(&view.grid, em, digit));
                 (view, sheet)
