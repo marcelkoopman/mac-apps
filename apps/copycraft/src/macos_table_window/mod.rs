@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open Table" on the card): the table of one entry in its own resizable
-// window. A native toolbar (`toolbar`: Table ▾, Copy, Save, the version group ↶ v2/3 ↷), a sidebar
+// window. A native toolbar (`toolbar`: Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the version group ↶ v2/3 ↷), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
 // tables) and the meta line. A parsed grid is drawn as aligned columns with a fixed header
 // (`macos_table_paint`); a grid that does not parse keeps the boxed text and a frozen first
@@ -161,6 +161,18 @@ define_class!(
         #[unsafe(method(tableWindowCopyClicked:))]
         fn copy_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Copy);
+        }
+
+        /// *Copy as JSON* on the toolbar: what Table ▾'s item does (toast included).
+        #[unsafe(method(tableWindowCopyJsonClicked:))]
+        fn copy_json_clicked(&self, _sender: Option<&AnyObject>) {
+            run(CommandId::TableCopyAs(crate::dataframe::TableCopy::Json));
+        }
+
+        /// *Copy as CSV* on the toolbar: what Table ▾'s item does (toast included).
+        #[unsafe(method(tableWindowCopyCsvClicked:))]
+        fn copy_csv_clicked(&self, _sender: Option<&AnyObject>) {
+            run(CommandId::TableCopyAs(crate::dataframe::TableCopy::Csv));
         }
 
         #[unsafe(method(tableWindowSaveClicked:))]

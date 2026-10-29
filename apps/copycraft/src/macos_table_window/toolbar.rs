@@ -1,6 +1,6 @@
 //! The table window's toolbar: a real `NSToolbar` in the unified compact style, not
-//! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Copy* and *Save*
-//! (symbols), the hint while the grid is masked, and the version group (↶, the version
+//! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Copy*, *Copy as
+//! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, and the version group (↶, the version
 //! shown with its list, ↷) as an `NSToolbarItemGroup`. The items are made once and handed
 //! out by [`TableWindowDelegate`]'s toolbar methods; their menus are rebuilt on every paint.
 
@@ -16,6 +16,8 @@ use mac_ui::objc2_app_kit::{
 const TOOLBAR_ID: &str = "CopycraftTableToolbar";
 const TABLE_ID: &str = "CopycraftTableMenu";
 const COPY_ID: &str = "CopycraftTableCopy";
+const COPY_JSON_ID: &str = "CopycraftTableCopyJson";
+const COPY_CSV_ID: &str = "CopycraftTableCopyCsv";
 const SAVE_ID: &str = "CopycraftTableSave";
 const HINT_ID: &str = "CopycraftTableHint";
 const UNDO_ID: &str = "CopycraftTableUndo";
@@ -27,6 +29,9 @@ const GROUP_ID: &str = "CopycraftTableVersionGroup";
 pub(super) struct ToolbarItems {
     table: Retained<NSMenuToolbarItem>,
     copy: Retained<NSToolbarItem>,
+    /// *Copy as JSON* and *Copy as CSV*, as in Table ▾ (`commands::table_window_copy_buttons`).
+    copy_json: Retained<NSToolbarItem>,
+    copy_csv: Retained<NSToolbarItem>,
     save: Retained<NSToolbarItem>,
     hint: Retained<NSToolbarItem>,
     undo: Retained<NSToolbarItem>,
@@ -44,6 +49,18 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     );
     table.setShowsIndicator(true);
     let copy = symbol_item(mtm, COPY_ID, "doc.on.doc", sel!(tableWindowCopyClicked:));
+    let copy_json = symbol_item(
+        mtm,
+        COPY_JSON_ID,
+        "curlybraces",
+        sel!(tableWindowCopyJsonClicked:),
+    );
+    let copy_csv = symbol_item(
+        mtm,
+        COPY_CSV_ID,
+        "tablecells",
+        sel!(tableWindowCopyCsvClicked:),
+    );
     let save = symbol_item(
         mtm,
         SAVE_ID,
@@ -85,6 +102,8 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     let items = ToolbarItems {
         table,
         copy,
+        copy_json,
+        copy_csv,
         save,
         hint: hint_item,
         undo,
@@ -152,6 +171,14 @@ fn relabel_items(items: &ToolbarItems) {
     items.table.setToolTip(Some(&s(t("table_steps_a11y"))));
     items.copy.setLabel(&s(t("copy_table_a11y")));
     items.copy.setToolTip(Some(&s(t("copy_table_tip"))));
+    items.copy_json.setLabel(&s(t("table_copy_json")));
+    items
+        .copy_json
+        .setToolTip(Some(&s(t("detail_table_copy_json"))));
+    items.copy_csv.setLabel(&s(t("table_copy_csv")));
+    items
+        .copy_csv
+        .setToolTip(Some(&s(t("detail_table_copy_csv"))));
     items.save.setLabel(&s(t("save_table_a11y")));
     items.save.setToolTip(Some(&s(t("save_table_tip"))));
     for (item, name, keys) in [
@@ -164,7 +191,7 @@ fn relabel_items(items: &ToolbarItems) {
             item.setTitle(&s(if keys == "⌘Z" { "↶" } else { "↷" }));
         }
     }
-    for item in [&items.copy, &items.save] {
+    for item in [&items.copy, &items.copy_json, &items.copy_csv, &items.save] {
         if item.image().is_none() {
             item.setTitle(&item.label());
         }
@@ -196,6 +223,9 @@ pub(super) fn paint(view: &TableWindowView) {
         let ready = !view.grid.is_empty();
         items.copy.setEnabled(ready);
         items.save.setEnabled(ready);
+        let [(_, json_on), (_, csv_on)] = commands::table_window_copy_buttons(view);
+        items.copy_json.setEnabled(json_on);
+        items.copy_csv.setEnabled(csv_on);
         items.undo.setEnabled(view.can_undo());
         items.redo.setEnabled(view.can_redo());
         // Never off: an empty menu shows its steps dimmed (`table_window_menu_shown`).
@@ -255,6 +285,8 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
         let item: Retained<NSToolbarItem> = match id.as_str() {
             TABLE_ID => Retained::into_super(items.table.clone()),
             COPY_ID => items.copy.clone(),
+            COPY_JSON_ID => items.copy_json.clone(),
+            COPY_CSV_ID => items.copy_csv.clone(),
             SAVE_ID => items.save.clone(),
             HINT_ID => items.hint.clone(),
             GROUP_ID => Retained::into_super(items.group.clone()),
@@ -264,12 +296,12 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
     })
 }
 
-/// Table ▾, Copy, Save, the hint centred between flexible spaces, the version group.
+/// Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the hint centred between flexible spaces, the version group.
 pub(super) fn identifiers() -> Retained<NSArray<NSString>> {
     // SAFETY: an AppKit constant (an immutable NSString), read on the main thread after
     // AppKit is loaded.
     let flexible: &NSString = unsafe { NSToolbarFlexibleSpaceItemIdentifier };
-    let ids: Vec<Retained<NSString>> = [TABLE_ID, COPY_ID, SAVE_ID]
+    let ids: Vec<Retained<NSString>> = [TABLE_ID, COPY_ID, COPY_JSON_ID, COPY_CSV_ID, SAVE_ID]
         .iter()
         .map(|id| NSString::from_str(id))
         .chain([

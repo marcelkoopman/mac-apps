@@ -602,6 +602,22 @@ pub fn table_window_menu(table: &TableShown) -> Vec<(Command, bool)> {
     menu
 }
 
+/// The table window's *Copy as JSON* and *Copy as CSV* toolbar buttons, in that order, each
+/// with whether it is on: once the version's grid is there and Table ▾ can copy the table
+/// (the same [`table_copy_command`]s, so a click does what the menu item does, toasts included).
+pub fn table_window_copy_buttons(view: &TableWindowView) -> [(Command, bool); 2] {
+    use crate::dataframe::TableCopy;
+    let on = !view.grid.is_empty()
+        && view
+            .menu
+            .iter()
+            .any(|(command, _)| matches!(command.id, CommandId::TableCopyAs(_)));
+    [
+        (table_copy_command(TableCopy::Json), on),
+        (table_copy_command(TableCopy::Csv), on),
+    ]
+}
+
 /// A file name that opens in the table window when dropped: `.csv`, `.tsv` or `.json` (whose
 /// text still has to read as a table).
 pub fn is_table_file_name(name: &str) -> bool {

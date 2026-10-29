@@ -307,3 +307,55 @@ fn the_copy_as_titles_read_differently_in_dutch_and_english() {
         assert_ne!(nl, en);
     }
 }
+
+#[test]
+fn the_table_window_toolbar_has_copy_as_json_and_csv_buttons_like_table_menu() {
+    use crate::dataframe::{ReadOptions, TableCopy};
+    let csv = "naam;plaats\nJan;Groningen\nAnja;Utrecht\n";
+    let json = r#"[{"naam": "Jan"}, {"naam": "Anja"}]"#;
+    for src in [csv, json] {
+        let table = read(src, ReadOptions::default());
+        let view = table_window_view(&table, src);
+        let buttons = crate::commands::table_window_copy_buttons(&view);
+        let ids: Vec<&CommandId> = buttons.iter().map(|(command, _)| &command.id).collect();
+        assert_eq!(
+            ids,
+            [
+                &CommandId::TableCopyAs(TableCopy::Json),
+                &CommandId::TableCopyAs(TableCopy::Csv)
+            ],
+            "{src}"
+        );
+        assert!(buttons.iter().all(|(_, on)| *on), "{src}");
+        // The same commands as Table ▾'s item: same title, so the same action and toasts.
+        let (menu_item, _) = view.menu.last().expect("menu");
+        assert!(
+            buttons.iter().any(|(button, _)| button == menu_item),
+            "{src}"
+        );
+        // Off while the table is worked out, and once the window is wiped.
+        let mut working = table.clone();
+        working.frame = None;
+        let waiting = table_window_view(&working, src);
+        assert!(
+            crate::commands::table_window_copy_buttons(&waiting)
+                .iter()
+                .all(|(_, on)| !on)
+        );
+        let mut wiped = view.clone();
+        wiped.wipe();
+        assert!(
+            crate::commands::table_window_copy_buttons(&wiped)
+                .iter()
+                .all(|(_, on)| !on)
+        );
+    }
+    // A nested JSON array has no CSV form: the button stays on and the app toasts
+    // "This table doesn't fit that form" (`table_copy_failed`).
+    let nested = r#"[{"a": {"b": 1}}, {"a": {"b": 2}}]"#;
+    assert!(crate::dataframe::table_copy(nested, TableCopy::Csv).is_none());
+    assert_ne!(
+        crate::locale::t("table_copy_failed"),
+        crate::locale::t("table_copied_csv")
+    );
+}
