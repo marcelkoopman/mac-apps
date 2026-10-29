@@ -169,6 +169,41 @@ define_class!(
             }
         }
 
+        /// The × on a card in the version strip: take that version out (its tag is the
+        /// version's index; the original has none).
+        #[unsafe(method(tableWindowVersionRemoveClicked:))]
+        fn version_remove_clicked(&self, sender: Option<&NSButton>) {
+            if let Some(id) = sender
+                .and_then(|button| usize::try_from(button.tag()).ok())
+                .and_then(commands::version_remove_click)
+            {
+                run(id);
+            }
+        }
+
+        /// The version strip's tracking area: the pointer came in, moved or left
+        /// ([`strip::pointer_moved`]).
+        #[unsafe(method(mouseEntered:))]
+        fn mouse_entered(&self, event: &NSEvent) {
+            strip::pointer_moved(event.locationInWindow());
+        }
+
+        #[unsafe(method(mouseMoved:))]
+        fn mouse_moved(&self, event: &NSEvent) {
+            strip::pointer_moved(event.locationInWindow());
+        }
+
+        #[unsafe(method(mouseExited:))]
+        fn mouse_exited(&self, _event: &NSEvent) {
+            strip::pointer_left();
+        }
+
+        /// The version strip scrolled: the card under a still pointer may have changed.
+        #[unsafe(method(tableWindowStripScrolled:))]
+        fn strip_scrolled(&self, _note: &NSNotification) {
+            strip::scrolled();
+        }
+
         #[unsafe(method(tableWindowCopyClicked:))]
         fn copy_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Copy);

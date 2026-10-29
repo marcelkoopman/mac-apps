@@ -472,6 +472,9 @@ pub struct TableWindowView {
     pub original_lines: String,
     /// The first lines of the version shown, written as CSV; empty while it is worked out.
     pub lines: String,
+    /// A version was just taken out ([`CommandId::RemoveTableVersion`]): ⌘Z puts it back
+    /// ([`super::table_window_undo_key`]).
+    pub can_restore: bool,
 }
 
 impl TableWindowView {

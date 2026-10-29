@@ -200,6 +200,8 @@ impl App {
             }
             CommandId::StepForward => self.table_goto(TableTarget::Card, |cursor| Some(cursor + 1)),
             CommandId::TableVersion(index) => self.table_goto(TableTarget::Card, |_| Some(index)),
+            CommandId::RemoveTableVersion(index) => self.table_remove(TableTarget::Card, index),
+            CommandId::RestoreTableVersion => self.table_restore(TableTarget::Card),
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),
             CommandId::ChecksumCompare => self.compare_checksum(),

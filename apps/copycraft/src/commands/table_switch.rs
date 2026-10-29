@@ -30,6 +30,11 @@ pub fn switch_target(id: &CommandId, bar: &VersionBar) -> Option<usize> {
         CommandId::TableVersion(index) => *index,
         CommandId::StepBack => bar.current.checked_sub(1)?,
         CommandId::StepForward => bar.current + 1,
+        // The version shown, or one before it, taken out: the one before the version shown
+        // (the same version, one place to the left, without the step).
+        CommandId::RemoveTableVersion(index) if *index > 0 && *index <= bar.current => {
+            bar.current - 1
+        }
         _ => return None,
     };
     (to < len && to != bar.current).then_some(to)

@@ -259,6 +259,19 @@ pub struct TableVersions {
     /// The table window shows this table: its frames stay when the card moves far away
     /// ([`forget_frames`](Self::forget_frames)). They still go with the entry.
     pinned: bool,
+    /// The frame shown is not the version at the cursor any more: a step before it was taken
+    /// out or put back ([`remove_step`](Self::remove_step)); the job for the cursor runs.
+    behind: bool,
+    /// The step [`remove_step`](Self::remove_step) took out last, for ⌘Z
+    /// ([`restore_step`](Self::restore_step)); one, as history keeps one removed copy.
+    removed: Option<RemovedStep>,
+}
+
+/// A step taken out of the chain: the version it made, and the step.
+#[derive(Debug, Clone, PartialEq)]
+struct RemovedStep {
+    version: usize,
+    op: TableOp,
 }
 
 impl Clone for TableVersions {
@@ -273,6 +286,8 @@ impl Clone for TableVersions {
             notes: self.notes,
             overview: self.overview,
             pinned: false,
+            behind: false,
+            removed: None,
         }
     }
 }
@@ -320,15 +335,10 @@ impl TableVersions {
 
     /// The job that works out the version shown, when its frame is not there.
     pub fn load(&mut self, source: &str) -> Option<Job> {
-        if self.frames.is_some() {
+        if self.frames.is_some() && !self.behind {
             return None;
         }
-        Some(self.job(
-            JobBase::Source(Zeroizing::new(source.to_string())),
-            self.steps[..self.cursor].to_vec(),
-            self.cursor,
-            None,
-        ))
+        Some(self.job_to(self.cursor, source))
     }
 
     /// The job for `op` on the version shown. Versions after it are dropped when it is done.
@@ -336,8 +346,13 @@ impl TableVersions {
         if self.cursor + 2 > MAX_VERSIONS {
             return Err(TableError::Full);
         }
+        self.removed = None;
         let (base, ops) = match &self.frames {
-            Some(frames) => (JobBase::Frame(frames.current.clone()), Vec::new()),
+            Some(frames) if !self.behind => (JobBase::Frame(frames.current.clone()), Vec::new()),
+            Some(frames) => (
+                JobBase::Frame(frames.original.clone()),
+                self.steps[..self.cursor].to_vec(),
+            ),
             None => (
                 JobBase::Source(Zeroizing::new(source.to_string())),
                 self.steps[..self.cursor].to_vec(),
@@ -349,11 +364,17 @@ impl TableVersions {
     /// The job that shows version `index` (undo, redo, a pick in the version menu). `None` when
     /// it is shown already or does not exist.
     pub fn goto(&mut self, index: usize, source: &str) -> Option<Job> {
-        if index >= self.len() || (index == self.cursor && self.frames.is_some()) {
+        if index >= self.len() || (index == self.cursor && self.frames.is_some() && !self.behind) {
             return None;
         }
+        Some(self.job_to(index, source))
+    }
+
+    /// The job that shows version `index`: from the frame shown when `index` is after it, else
+    /// from the original (from the copied text when the frames are gone).
+    fn job_to(&mut self, index: usize, source: &str) -> Job {
         let (base, ops) = match &self.frames {
-            Some(frames) if index > self.cursor => (
+            Some(frames) if index > self.cursor && !self.behind => (
                 JobBase::Frame(frames.current.clone()),
                 self.steps[self.cursor..index].to_vec(),
             ),
@@ -366,7 +387,61 @@ impl TableVersions {
                 self.steps[..index].to_vec(),
             ),
         };
-        Some(self.job(base, ops, index, None))
+        self.job(base, ops, index, None)
+    }
+
+    /// Version `version` can be taken out of the chain: any but the original (0).
+    pub fn removable(&self, version: usize) -> bool {
+        version > 0 && version < self.len()
+    }
+
+    /// Take version `version`'s step out of the chain (the × on its card, ⌫); nothing happens
+    /// when it is not [`removable`](Self::removable). The steps after it stay and are replayed
+    /// without it: every step names its columns, and without an earlier step a table has the
+    /// same columns and rows or more, so they still apply. The cursor stays on the version it
+    /// showed; when that was the one taken out, on the one before it. Returns the job for the
+    /// version then shown when its frame changes (it was at or after `version`), `None` when
+    /// only a later version went. ⌘Z puts the step back ([`restore_step`]).
+    ///
+    /// [`restore_step`]: Self::restore_step
+    pub fn remove_step(&mut self, version: usize, source: &str) -> Option<Job> {
+        if !self.removable(version) {
+            return None;
+        }
+        let op = self.steps.remove(version - 1);
+        self.removed = Some(RemovedStep { version, op });
+        if self.cursor < version {
+            return None;
+        }
+        self.cursor -= 1;
+        self.behind = self.frames.is_some();
+        Some(self.job_to(self.cursor, source))
+    }
+
+    /// The step [`remove_step`](Self::remove_step) took out can go back (⌘Z).
+    pub fn can_restore(&self) -> bool {
+        self.removed.is_some()
+    }
+
+    /// Forget the step taken out: another action came after it.
+    pub fn forget_removed(&mut self) {
+        self.removed = None;
+    }
+
+    /// ⌘Z after [`remove_step`](Self::remove_step): the step goes back where it was and its
+    /// version is shown. `None` when no step waits (or there is no room for it).
+    pub fn restore_step(&mut self, source: &str) -> Option<Job> {
+        let removed = self.removed.take()?;
+        if removed.version > self.len() || self.len() >= MAX_VERSIONS {
+            return None;
+        }
+        self.steps.insert(removed.version - 1, removed.op);
+        if self.cursor >= removed.version {
+            // The version shown was replayed without the step: its frame is behind now.
+            self.cursor += 1;
+            self.behind = self.frames.is_some();
+        }
+        Some(self.job_to(removed.version, source))
     }
 
     fn job(
@@ -403,6 +478,7 @@ impl TableVersions {
             self.steps.push(op);
         }
         self.cursor = done.target.min(self.steps.len());
+        self.behind = false;
         if done.notes.is_some() {
             self.notes = done.notes;
         }
@@ -428,6 +504,7 @@ impl TableVersions {
             return;
         }
         self.frames = None;
+        self.behind = false;
         self.generation = next_generation();
     }
 
@@ -458,6 +535,8 @@ impl TableVersions {
         self.steps.clear();
         self.cursor = 0;
         self.frames = None;
+        self.behind = false;
+        self.removed = None;
         self.notes = None;
         self.load(source)
     }
@@ -633,5 +712,151 @@ mod tests {
         assert!(versions.notes().is_some_and(|notes| notes.month_first));
         assert!(versions.reread(options, src).is_none());
         assert_eq!(versions.clone().options(), options);
+    }
+
+    /// The original, then: duplicates removed (v1), the name column only (v2), sorted by name
+    /// descending (v3); v3 shown.
+    fn three_steps() -> TableVersions {
+        let mut versions = TableVersions::default();
+        let steps = [
+            TableOp::Dedupe,
+            TableOp::SelectColumns {
+                columns: vec!["name".into()],
+                kept_of: None,
+            },
+            TableOp::Sort {
+                column: "name".into(),
+                descending: true,
+            },
+        ];
+        for op in steps {
+            let job = versions.push(op, SRC).expect("push");
+            assert!(run(&mut versions, job));
+        }
+        assert_eq!((versions.len(), versions.cursor()), (4, 3));
+        versions
+    }
+
+    fn shape(versions: &TableVersions) -> Option<(usize, usize)> {
+        versions.frame().map(|df| (df.height(), df.width()))
+    }
+
+    #[test]
+    fn the_original_cannot_be_removed() {
+        let mut versions = three_steps();
+        assert!(!versions.removable(0) && !versions.removable(4));
+        assert!(versions.removable(1) && versions.removable(3));
+        assert!(versions.remove_step(0, SRC).is_none());
+        assert!(versions.remove_step(4, SRC).is_none());
+        assert_eq!((versions.len(), versions.cursor()), (4, 3));
+        assert!(!versions.can_restore());
+        let mut alone = TableVersions::default();
+        assert!(!alone.removable(0));
+        assert!(alone.remove_step(0, SRC).is_none());
+    }
+
+    #[test]
+    fn removing_an_earlier_version_replays_the_later_steps_without_it() {
+        let mut versions = three_steps();
+        let labels = versions.labels();
+        let replay = versions.remove_step(1, SRC).expect("replay");
+        // The step goes at once; the version shown stays (one place to the left).
+        assert_eq!((versions.len(), versions.cursor()), (3, 2));
+        assert_eq!(
+            versions.labels(),
+            [labels[0].clone(), labels[2].clone(), labels[3].clone()]
+        );
+        assert!(versions.can_restore());
+        // Until the replay is in, the frame shown is behind: a cancelled replay runs again.
+        drop(replay);
+        assert!(versions.goto(2, SRC).is_some());
+        let job = versions.load(SRC).expect("load while behind");
+        assert!(run(&mut versions, job));
+        // The repeated row is back, the later steps still apply (name only, sorted).
+        assert_eq!(shape(&versions), Some((3, 1)));
+        assert!(versions.goto(2, SRC).is_none());
+        assert!(versions.load(SRC).is_none());
+    }
+
+    #[test]
+    fn removing_the_version_shown_shows_the_one_before_it() {
+        let mut versions = three_steps();
+        let job = versions.remove_step(3, SRC).expect("replay");
+        assert_eq!((versions.len(), versions.cursor()), (3, 2));
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.cursor(), 2);
+        assert_eq!(shape(&versions), Some((2, 1)));
+        // The last step left: only the original remains, and is shown.
+        let job = versions.remove_step(2, SRC).expect("replay");
+        assert!(run(&mut versions, job));
+        let job = versions.remove_step(1, SRC).expect("replay");
+        assert!(run(&mut versions, job));
+        assert_eq!((versions.len(), versions.cursor()), (1, 0));
+        assert_eq!(shape(&versions), Some((3, 2)));
+    }
+
+    #[test]
+    fn removing_a_later_version_keeps_the_frame_shown() {
+        let mut versions = three_steps();
+        let back = versions.goto(1, SRC).expect("goto");
+        assert!(run(&mut versions, back));
+        let id = versions.frame_id();
+        assert!(versions.remove_step(3, SRC).is_none());
+        assert_eq!((versions.len(), versions.cursor()), (3, 1));
+        assert_eq!(versions.frame_id(), id);
+        assert!(versions.load(SRC).is_none());
+        assert_eq!(shape(&versions), Some((2, 2)));
+    }
+
+    #[test]
+    fn undo_puts_the_removed_step_back_and_shows_it() {
+        let mut versions = three_steps();
+        let labels = versions.labels();
+        let job = versions.remove_step(2, SRC).expect("replay");
+        assert!(run(&mut versions, job));
+        assert_eq!(shape(&versions), Some((2, 2)));
+        let job = versions.restore_step(SRC).expect("restore");
+        assert_eq!(versions.labels(), labels);
+        assert!(!versions.can_restore());
+        assert!(versions.restore_step(SRC).is_none());
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.cursor(), 2);
+        assert_eq!(shape(&versions), Some((2, 1)));
+        // A later version taken out while an earlier one shows comes back shown too.
+        let back = versions.goto(1, SRC).expect("goto");
+        assert!(run(&mut versions, back));
+        assert!(versions.remove_step(3, SRC).is_none());
+        let job = versions.restore_step(SRC).expect("restore");
+        assert!(run(&mut versions, job));
+        assert_eq!((versions.len(), versions.cursor()), (4, 3));
+        assert_eq!(versions.labels(), labels);
+    }
+
+    #[test]
+    fn a_new_step_or_reread_forgets_the_removed_step() {
+        let mut versions = three_steps();
+        let job = versions.remove_step(1, SRC).expect("replay");
+        assert!(run(&mut versions, job));
+        assert!(versions.can_restore());
+        let job = versions.push(TableOp::DropEmpty, SRC).expect("push");
+        assert!(!versions.can_restore());
+        drop(job);
+        versions.remove_step(1, SRC);
+        versions.forget_removed();
+        assert!(!versions.can_restore());
+        versions.remove_step(1, SRC);
+        versions.reread(ReadOptions { month_first: true }, SRC);
+        assert!(!versions.can_restore());
+    }
+
+    #[test]
+    fn a_job_from_before_a_removal_is_stale() {
+        let mut versions = three_steps();
+        let before = versions.goto(0, SRC).expect("goto");
+        let job = versions.remove_step(3, SRC).expect("replay");
+        let stale = before.run(&AtomicBool::new(false)).expect("job");
+        assert!(!versions.finish(stale));
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.cursor(), 2);
     }
 }

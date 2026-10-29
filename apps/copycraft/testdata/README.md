@@ -558,6 +558,20 @@ Make a fake 5 MB table first (65,000 rows, made-up values): `awk 'BEGIN{print "i
 - [ ] Search in the large table, then switch: the search applies to the new version. Scroll to the bottom of the grid: the last row shows with its stripe, nothing is cut off; scroll sideways to the last column.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names while switching. Nothing new is written to disk.
 
+### Removing a table version
+
+Use `/tmp/search.csv` from *Search in the table* and `/tmp/big.csv` from the step above.
+
+- [ ] Drop `/tmp/search.csv`, open the table window and make three versions: *Verwijder dubbele rijen* / *Remove Duplicate Rows*, then *Kies kolommen…* / *Choose Columns…* keeping `naam` only, then a sort on `naam`. The strip shows four cards, the last framed. Its card has a × in the top-right corner, the same grey ✕ in the same place and size as on the history cards; the other cards show theirs only while the pointer is over them, and the first card (the original) never has one.
+- [ ] Hover the second card (the duplicates step) and click its ×: that card goes, three are left, and the framed card is still the sorted one, now one place to the left. The grid shows the duplicate row again, still `naam` only and sorted (the later steps are replayed without the removed one; nothing else changes). The meta line and the card's version capsule (*v3/3*) follow. The clipboard is untouched and there is no toast.
+- [ ] ⌘Z right after: the step comes back where it was, four cards again, and that version is shown (framed, duplicates gone). Any other action first (a click on a card, a step, ⇧⌘Z) and ⌘Z steps back through the versions as before.
+- [ ] Click the × of the version shown (the last card): the card before it is framed and shown. With the second card shown, the × on a later card (hover it) takes only that one away; the grid does not change and does not dim.
+- [ ] ⌫ in the window (the grid clicked, not the search field) takes out the version shown, as ⌫ on the card takes the marked history card out; with the original shown ⌫ does nothing. In the search field ⌫ edits the search. (If plain ⌫ does nothing on your Mac, try ⌘⌫ and report which works.)
+- [ ] Take out every step: when only the original is left the strip hides and the grid moves down, as with one version.
+- [ ] VoiceOver: on a version card (not the original) the Actions rotor (VO-⌘-Space) has *Verwijder versie* / *Remove Version*; the × reads the same. Switch the language: both change.
+- [ ] Large file: with `/tmp/big.csv` make two steps (*Verwijder dubbele rijen*, then a sort), show the last version and click the × of the first step's card: the frame moves at once; when it takes longer than about 0.15 s the grid dims with the spinner, then the new version fades in (no fade with Reduce Motion), and the window stays responsive meanwhile.
+- [ ] Privacy: with the cards masked the × still works; debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows nothing of the steps, the cells or the sizes. Nothing new is written to disk.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.

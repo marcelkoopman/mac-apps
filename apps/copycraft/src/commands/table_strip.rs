@@ -2,7 +2,10 @@
 //! of the window, as the history strip shows the copies along the bottom of the card. The
 //! version shown is marked; a click shows that version ([`CommandId::TableVersion`]), ⌘Z and
 //! ⇧⌘Z step as before. Like the history strip it shows with two or more versions only
-//! ([`super::strip_shown`]). Pure logic; `macos_table_window/strip.rs` draws it. Nothing here
+//! ([`super::strip_shown`]). Every card but the original's has a × in its top-right corner, as
+//! a history card, shown on the version shown and the card under the pointer; it, or ⌫, takes
+//! that version's step out ([`CommandId::RemoveTableVersion`]), ⌘Z right after puts it back
+//! ([`CommandId::RestoreTableVersion`]). Pure logic; `macos_table_window/strip.rs` draws it. Nothing here
 //! is logged.
 
 use zeroize::Zeroize;
@@ -31,6 +34,8 @@ pub struct VersionTile {
     pub tooltip: String,
     /// The version shown.
     pub current: bool,
+    /// It has a × ([`version_remove_click`]): every version but the original.
+    pub removable: bool,
 }
 
 impl VersionTile {
@@ -50,6 +55,45 @@ impl Drop for VersionTile {
 /// What a click on version card `index` does: show that version.
 pub fn version_tile_click(index: usize) -> CommandId {
     CommandId::TableVersion(index)
+}
+
+/// What the × on version card `index` does: take that version's step out. The original (0)
+/// has no ×.
+pub fn version_remove_click(index: usize) -> Option<CommandId> {
+    (index > 0).then_some(CommandId::RemoveTableVersion(index))
+}
+
+/// Whether version card `index` shows its ×: as a history card's ([`super::remove_shown`]) on
+/// the version shown (`current`, the card framed) and the one under the pointer; never on the
+/// original's.
+pub fn version_remove_shown(index: usize, current: usize, hovered: Option<usize>) -> bool {
+    index > 0 && super::remove_shown(index, current, hovered)
+}
+
+/// ⌫ in the table window takes the version shown out, as ⌫ on the card takes the copy the
+/// history strip marks. Not while a text field has the keyboard (the search), not on the
+/// original, and only while the strip shows.
+pub fn table_window_delete_key(editing_text: bool, view: &TableWindowView) -> Option<CommandId> {
+    if editing_text || !table_strip_shown(view) {
+        return None;
+    }
+    version_remove_click(view.versions.current)
+}
+
+/// ⌘Z / ⇧⌘Z in the table window: right after a version was taken out, ⌘Z puts it back (as
+/// the history strip's ⌘Z, [`super::restore_key`]); else they step through the versions
+/// ([`super::undo_key`]).
+pub fn table_window_undo_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    view: Option<&TableWindowView>,
+) -> Option<CommandId> {
+    let view = view?;
+    super::restore_key(chars, command, shift, other_modifier, view.can_restore)
+        .map(|_| CommandId::RestoreTableVersion)
+        .or_else(|| super::undo_key(chars, command, shift, other_modifier, Some(&view.versions)))
 }
 
 /// The strip shows with two or more versions, as the history strip does with two or more
@@ -125,6 +169,7 @@ pub fn table_version_tiles(
                 spoken_masked: crate::locale::tf("version_spoken_masked", &[&(index + 1), &count]),
                 tooltip,
                 current: index == current,
+                removable: index > 0,
             }
         })
         .collect()
@@ -169,6 +214,11 @@ impl VersionSizes {
             label.zeroize();
         }
         self.labels = labels.clone();
+        // While the app works on the table the grid on screen can be another version's (a
+        // step before it was just taken out): only a finished view says the version's size.
+        if view.working {
+            return;
+        }
         if !view.grid.is_empty()
             && let Some(slot) = self.sizes.get_mut(view.versions.current)
         {

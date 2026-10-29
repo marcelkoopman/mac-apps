@@ -143,8 +143,9 @@ pub(super) fn run(id: CommandId) {
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Run(id)));
 }
 
-/// ⌘O opens a file, ⌘F goes to the search field, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions. ⌘W and ⌘M are
-/// the hidden Window menu's (src/macos_main_menu.rs).
+/// ⌘O opens a file, ⌘F goes to the search field, ⌘S saves this table, ⌘Z / ⇧⌘Z step through the versions
+/// (⌘Z right after a version was taken out puts it back), ⌫ takes the version shown out. ⌘W
+/// and ⌘M are the hidden Window menu's (src/macos_main_menu.rs).
 pub(super) fn window_key(event: &NSEvent) -> bool {
     if mac_ui::keys::is_command_chord(event, "o") {
         launcher::emit(UserEvent::Run(CommandId::ChooseFile));
@@ -159,18 +160,38 @@ pub(super) fn window_key(event: &NSEvent) -> bool {
         return true;
     }
     let flags = event.modifierFlags();
+    // ⌫ (and ⌘⌫): the version shown leaves the chain, as ⌫ on the card takes the marked copy
+    // out of history. Not while the search field has the keyboard.
+    if mac_ui::keys::Key::from_key_code(event.keyCode()) == Some(mac_ui::keys::Key::Delete)
+        && !flags.intersects(
+            NSEventModifierFlags::Shift
+                | NSEventModifierFlags::Control
+                | NSEventModifierFlags::Option,
+        )
+    {
+        let editing = editing_text(event);
+        let id = SHOWN.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .and_then(|view| commands::table_window_delete_key(editing, view))
+        });
+        if let Some(id) = id {
+            run(id);
+            return true;
+        }
+        return false;
+    }
     let Some(chars) = event.charactersIgnoringModifiers() else {
         return false;
     };
     let chars = chars.to_string();
     let id = SHOWN.with(|slot| {
-        let borrowed = slot.borrow();
-        commands::undo_key(
+        commands::table_window_undo_key(
             &chars,
             flags.contains(NSEventModifierFlags::Command),
             flags.contains(NSEventModifierFlags::Shift),
             flags.intersects(NSEventModifierFlags::Control | NSEventModifierFlags::Option),
-            borrowed.as_ref().map(|view| &view.versions),
+            slot.borrow().as_ref(),
         )
     });
     match id {
@@ -180,4 +201,17 @@ pub(super) fn window_key(event: &NSEvent) -> bool {
         }
         None => false,
     }
+}
+
+/// A text field or text view that edits has the keyboard in `event`'s window (the search
+/// field's field editor): ⌫ is its.
+fn editing_text(event: &NSEvent) -> bool {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    event
+        .window(mtm)
+        .and_then(|window| window.firstResponder())
+        .and_then(|responder| responder.downcast::<NSTextView>().ok())
+        .is_some_and(|text| text.isEditable())
 }

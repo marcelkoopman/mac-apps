@@ -5,6 +5,11 @@
 //! with one version, as the history strip is with one copy. While the table is masked the
 //! cards show their `v` mark and dots only. Built again only when what it shows changes;
 //! nothing is logged.
+//!
+//! Every card but the original's has a × in its top-right corner, as a history card
+//! (`crate::macos_strip_parts`): shown on the version shown and the card under the pointer, it
+//! takes that version's step out ([`commands::version_remove_click`]); ⌘Z right after puts
+//! it back. VoiceOver has it as the card's *Remove Version* action.
 
 use super::*;
 use mac_ui::objc2_app_kit::NSCellImagePosition;
@@ -18,6 +23,14 @@ thread_local! {
     static SIZES: RefCell<commands::VersionSizes> = RefCell::new(commands::VersionSizes::default());
     /// What the cards were last built from ([`signature_of`]).
     static SIGNATURE: Cell<u64> = const { Cell::new(0) };
+    /// The version of each card, left to right (the cards show a range of the versions).
+    static SLOTS: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+    /// Each card's × by version (not the original's).
+    static REMOVES: RefCell<Vec<(usize, Retained<NSButton>)>> = const { RefCell::new(Vec::new()) };
+    /// The card framed (the version shown, or the one a switch goes to).
+    static FRAMED: Cell<usize> = const { Cell::new(0) };
+    /// The version of the card under the pointer.
+    static HOVER: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
 /// The strip's scroll view and the row of cards in it.
@@ -52,6 +65,15 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, width: f64) -> Stri
     scroll.setDocumentView(Some(&document));
     scroll.setHidden(true);
     content.addSubview(&scroll);
+    if let Some(delegate) = DELEGATE.with(|slot| slot.borrow().clone()) {
+        let owner: &AnyObject = &delegate;
+        crate::macos_strip_parts::watch_pointer(
+            owner,
+            &scroll,
+            &document,
+            sel!(tableWindowStripScrolled:),
+        );
+    }
     StripViews { scroll, document }
 }
 
@@ -94,6 +116,7 @@ pub(super) fn paint(views: &Views, view: &TableWindowView, masked: bool) {
                 commands::STRIP_H,
             ),
         ));
+        SLOTS.with(|slots| *slots.borrow_mut() = tiles.iter().map(|tile| tile.index).collect());
         for (slot, tile) in tiles.iter().enumerate() {
             let card = build_tile(mtm, tile, masked);
             card.setFrame(NSRect::new(
@@ -103,6 +126,10 @@ pub(super) fn paint(views: &Views, view: &TableWindowView, masked: bool) {
             strip.document.addSubview(&card);
         }
     }
+    if let Some(tile) = tiles.iter().find(|tile| tile.current) {
+        FRAMED.set(tile.index);
+    }
+    show_remove_buttons();
     // The version shown scrolls into view (only the strip moves).
     if let Some(slot) = tiles.iter().position(|tile| tile.current) {
         let clip = strip.scroll.contentView();
@@ -128,6 +155,9 @@ pub(super) fn wipe(views: &Views) {
 
 fn clear(strip: &StripViews) {
     SIGNATURE.set(0);
+    SLOTS.with(|slots| slots.borrow_mut().clear());
+    REMOVES.with(|removes| removes.borrow_mut().clear());
+    HOVER.set(None);
     for card in strip.document.subviews().iter() {
         card.removeFromSuperview();
     }
@@ -227,7 +257,89 @@ fn build_tile(
     button.setAccessibilitySelected(tile.current);
     button.setToolTip(Some(&NSString::from_str(tip)));
     card.addSubview(&button);
+    if let Some(id) = tile
+        .removable
+        .then(|| commands::version_remove_click(tile.index))
+        .flatten()
+    {
+        let label = crate::locale::t("table_remove_version");
+        // VoiceOver: the same as the ×, on the card.
+        let action = id.clone();
+        mac_ui::a11y::set_custom_actions(
+            &button,
+            vec![(label.to_string(), Box::new(move || run(action.clone())))],
+        );
+        let remove = crate::macos_strip_parts::remove_button(mtm, label);
+        remove.setTag(tile.index as isize);
+        wire(&remove, sel!(tableWindowVersionRemoveClicked:));
+        card.addSubview(&remove);
+        REMOVES.with(|removes| removes.borrow_mut().push((tile.index, remove)));
+    }
     card
+}
+
+/// Show the × on the card framed and the one under the pointer
+/// ([`commands::version_remove_shown`]); hide the others'.
+fn show_remove_buttons() {
+    let framed = FRAMED.get();
+    let hovered = HOVER.get();
+    REMOVES.with(|removes| {
+        for (index, button) in removes.borrow().iter() {
+            button.setHidden(!commands::version_remove_shown(*index, framed, hovered));
+        }
+    });
+}
+
+/// The strip's tracking area saw the pointer come in or move, or the strip scrolled under it:
+/// show the × of the card it is over.
+pub(super) fn pointer_moved(point: NSPoint) {
+    let hovered = VIEWS.with(|slot| {
+        let borrowed = slot.try_borrow().ok()?;
+        let strip = &borrowed.as_ref()?.strip;
+        if strip.scroll.isHidden() {
+            return None;
+        }
+        let clip = strip.scroll.contentView();
+        let in_clip = clip.convertPoint_fromView(point, None);
+        let bounds = clip.bounds();
+        if in_clip.x < bounds.origin.x
+            || in_clip.y < bounds.origin.y
+            || in_clip.x > bounds.origin.x + bounds.size.width
+            || in_clip.y > bounds.origin.y + bounds.size.height
+        {
+            return None;
+        }
+        let local = strip.document.convertPoint_fromView(point, None);
+        let count = SLOTS.with(|slots| slots.borrow().len());
+        let slot = commands::thumb_at(local.x, local.y, count)?;
+        SLOTS.with(|slots| slots.borrow().get(slot).copied())
+    });
+    set_hover(hovered);
+}
+
+/// The strip scrolled: the card under a still pointer may be another.
+pub(super) fn scrolled() {
+    let point = VIEWS.with(|slot| {
+        let borrowed = slot.try_borrow().ok()?;
+        let window = borrowed.as_ref()?.strip.scroll.window()?;
+        Some(window.mouseLocationOutsideOfEventStream())
+    });
+    match point {
+        Some(point) => pointer_moved(point),
+        None => set_hover(None),
+    }
+}
+
+/// The pointer left the strip (or the window): no card is hovered.
+pub(super) fn pointer_left() {
+    set_hover(None);
+}
+
+fn set_hover(hovered: Option<usize>) {
+    if HOVER.get() != hovered {
+        HOVER.set(hovered);
+        show_remove_buttons();
+    }
 }
 
 /// The grid, its well, the sidebar and the cover start `strip_h` above the meta line; their

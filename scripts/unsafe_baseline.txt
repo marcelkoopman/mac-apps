@@ -30,6 +30,8 @@
 # the owner is the process-lived launcher delegate, so no subclass), and the clip view's
 # NSViewBoundsDidChangeNotification observer (addObserver:selector:name:object: and the extern static), so a
 # scroll under a still pointer moves the ✕ too. They replace mouseLocationOutsideOfEventStream on mouseMoved.
+#   (Both moved to apps/copycraft/src/macos_strip_parts.rs watch_pointer, 2026-10-29, and shared with the table
+#   window's version strip for its × on hover: no new blocks.)
 # copycraft blocks 114: +1 for the pin on the status menu's History ▸ rows (icons HIG point 5, approved by
 # Marcel 2026-10-23; macos_pin::pin_status_history): muda's items take only an RGBA icon, not the pin.fill
 # SF Symbol, so `Retained::retain` on muda's `ns_menu()` pointer (the NSMenu tray-icon also retains) to set

@@ -154,3 +154,73 @@ fn the_card_asked_for_is_framed_before_its_version_arrives() {
     let framed = crate::commands::table_version_tiles(&view, &sizes, switch.target());
     assert!(framed[0].current && !framed[1].current);
 }
+
+#[test]
+fn every_card_but_the_original_has_a_remove_button_shown_like_a_history_card() {
+    let view = table_window_view(&deduped(SRC), SRC);
+    let sizes = crate::commands::VersionSizes::default();
+    let tiles = crate::commands::table_version_tiles(&view, &sizes, None);
+    assert!(!tiles[0].removable && tiles[1].removable);
+    assert_eq!(crate::commands::version_remove_click(0), None);
+    assert_eq!(
+        crate::commands::version_remove_click(2),
+        Some(CommandId::RemoveTableVersion(2))
+    );
+    // On the version shown and the card under the pointer, as a history card's ×.
+    use crate::commands::version_remove_shown as shown;
+    assert!(shown(2, 2, None));
+    assert!(shown(1, 2, Some(1)));
+    assert!(!shown(1, 2, None) && !shown(1, 2, Some(3)));
+    // Never on the original, shown or hovered.
+    assert!(!shown(0, 0, None) && !shown(0, 2, Some(0)));
+}
+
+#[test]
+fn delete_takes_the_version_shown_out_but_not_the_original_or_while_typing() {
+    use crate::commands::table_window_delete_key as delete;
+    let mut view = table_window_view(&deduped(SRC), SRC);
+    assert_eq!(delete(false, &view), Some(CommandId::RemoveTableVersion(1)));
+    assert_eq!(delete(true, &view), None);
+    view.versions.current = 0;
+    assert_eq!(delete(false, &view), None);
+    let one = table_window_view(&read(SRC, crate::dataframe::ReadOptions::default()), SRC);
+    assert_eq!(delete(false, &one), None);
+}
+
+#[test]
+fn command_z_right_after_a_removal_puts_it_back_else_steps_back() {
+    use crate::commands::table_window_undo_key as key;
+    let mut view = table_window_view(&deduped(SRC), SRC);
+    assert_eq!(
+        key("z", true, false, false, Some(&view)),
+        Some(CommandId::StepBack)
+    );
+    view.can_restore = true;
+    assert_eq!(
+        key("z", true, false, false, Some(&view)),
+        Some(CommandId::RestoreTableVersion)
+    );
+    // ⇧⌘Z stays the table's; no ⌘ or another modifier: nothing.
+    view.versions.current = 0;
+    assert_eq!(
+        key("z", true, true, false, Some(&view)),
+        Some(CommandId::StepForward)
+    );
+    assert_eq!(key("z", false, false, false, Some(&view)), None);
+    assert_eq!(key("z", true, false, true, Some(&view)), None);
+    assert_eq!(key("z", true, false, false, None), None);
+}
+
+#[test]
+fn a_view_still_worked_on_does_not_size_its_card() {
+    let mut view = table_window_view(&deduped(SRC), SRC);
+    view.working = true;
+    let mut sizes = crate::commands::VersionSizes::default();
+    sizes.note(&view);
+    assert_eq!(sizes.sizes(), &[None, None]);
+    let tiles = crate::commands::table_version_tiles(&view, &sizes, None);
+    assert_eq!(tiles[1].lines, view.versions.labels[1]);
+    view.working = false;
+    sizes.note(&view);
+    assert_eq!(sizes.sizes(), &[None, Some((2, 2))]);
+}

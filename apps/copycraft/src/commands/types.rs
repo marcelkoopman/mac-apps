@@ -449,6 +449,12 @@ pub enum CommandId {
     StepForward,
     /// Show table version `n` (0 is the original), from the version capsule's menu.
     TableVersion(usize),
+    /// The × on table version `n`'s card in the table window's strip, or ⌫ there: its step
+    /// leaves the chain, the later steps stay ([`crate::table::TableVersions::remove_step`]).
+    /// Never the original (0). [`CommandId::RestoreTableVersion`] puts it back.
+    RemoveTableVersion(usize),
+    /// ⌘Z in the table window after [`CommandId::RemoveTableVersion`]: the step goes back.
+    RestoreTableVersion,
     /// Right-click on a cell of the table window's grid › Copy Cell: that cell's value, by
     /// row and column of the version shown.
     TableCopyCell(usize, usize),

@@ -178,6 +178,16 @@ impl App {
             }
             launcher::TableWindowEvent::Run(id) => {
                 let target = TableTarget::Window;
+                // A removed version comes back with ⌘Z right after; anything else forgets it,
+                // as the history strip's ⌘Z.
+                if !matches!(
+                    id,
+                    CommandId::RemoveTableVersion(_) | CommandId::RestoreTableVersion
+                ) && let Some((_, home)) = self.window_source()
+                    && let Some(table) = self.target_table(target, home)
+                {
+                    table.forget_removed();
+                }
                 match id {
                     CommandId::TableStep(op) => self.table_step(target, op),
                     CommandId::StepBack => {
@@ -185,6 +195,8 @@ impl App {
                     }
                     CommandId::StepForward => self.table_goto(target, |cursor| Some(cursor + 1)),
                     CommandId::TableVersion(index) => self.table_goto(target, |_| Some(index)),
+                    CommandId::RemoveTableVersion(index) => self.table_remove(target, index),
+                    CommandId::RestoreTableVersion => self.table_restore(target),
                     CommandId::TableDateOrder(month_first) => {
                         self.table_reread(target, |options| {
                             options.month_first = month_first;
@@ -261,6 +273,7 @@ impl App {
         if shown == Some(key) && !checking && load.is_none() {
             return;
         }
+        let can_restore = table.can_restore();
         let shown_table = commands::TableShown {
             frame: table.frame().cloned(),
             frame_id: table.frame_id(),
@@ -291,6 +304,7 @@ impl App {
             work::QUICK,
             move || {
                 let mut view = commands::table_window_view(&shown_table, &source);
+                view.can_restore = can_restore;
                 view.set_kind(kind.unwrap_or_else(|| crate::format::detect(&source)));
                 let sheet = metrics
                     .and_then(|(em, digit)| crate::dataframe::prepare_sheet(&view.grid, em, digit));
@@ -395,6 +409,42 @@ impl App {
             return;
         };
         if let Some(job) = table.goto(index, &text) {
+            self.set_table_error(target, None);
+            self.run_table_job(job, false, target);
+            self.refresh_popup();
+        }
+    }
+
+    /// Take version `index`'s step out (the × on its card, ⌫): the later steps are replayed
+    /// without it on the table thread when the version shown changes. ⌘Z puts it back
+    /// ([`Self::table_restore`]).
+    pub(crate) fn table_remove(&mut self, target: TableTarget, index: usize) {
+        let Some((text, home)) = self.target_source(target) else {
+            return;
+        };
+        let Some(table) = self.target_table(target, home) else {
+            return;
+        };
+        if !table.removable(index) {
+            return;
+        }
+        let job = table.remove_step(index, &text);
+        self.set_table_error(target, None);
+        if let Some(job) = job {
+            self.run_table_job(job, false, target);
+        }
+        self.refresh_popup();
+    }
+
+    /// ⌘Z after [`Self::table_remove`]: the step goes back and its version is shown.
+    pub(crate) fn table_restore(&mut self, target: TableTarget) {
+        let Some((text, home)) = self.target_source(target) else {
+            return;
+        };
+        let Some(table) = self.target_table(target, home) else {
+            return;
+        };
+        if let Some(job) = table.restore_step(&text) {
             self.set_table_error(target, None);
             self.run_table_job(job, false, target);
             self.refresh_popup();

@@ -16,10 +16,6 @@
 //! its type and how long ago it was copied, never its content.
 
 use super::*;
-use mac_ui::objc2::AnyThread;
-use mac_ui::objc2_app_kit::{
-    NSTrackingArea, NSTrackingAreaOptions, NSViewBoundsDidChangeNotification,
-};
 
 const RADIUS: f64 = 8.0;
 
@@ -282,47 +278,15 @@ fn hovered_at(point: NSPoint) -> Option<usize> {
     })
 }
 
-/// One tracking area on the strip's document view, always active and following its visible
-/// part, sends the pointer's entering, moving and leaving to the launcher delegate
-/// (`mouseEntered:` / `mouseMoved:` / `mouseExited:`); the clip view's bounds changes
-/// (`stripScrolled:`) cover scrolling under a still pointer. So the ✕ follows the pointer
-/// and goes when it leaves the strip or the window.
+/// The pointer over the strip moves the ✕ ([`crate::macos_strip_parts::watch_pointer`]): the
+/// launcher delegate answers `mouseEntered:` / `mouseMoved:` / `mouseExited:` and
+/// `stripScrolled:`.
 fn watch_pointer(scroll: &NSScrollView, document: &NSView) {
     let Some(delegate) = DELEGATE.with(|slot| slot.borrow().clone()) else {
         return;
     };
     let owner: &AnyObject = &delegate;
-    let options = NSTrackingAreaOptions::MouseEnteredAndExited
-        | NSTrackingAreaOptions::MouseMoved
-        | NSTrackingAreaOptions::ActiveAlways
-        | NSTrackingAreaOptions::InVisibleRect;
-    // SAFETY: the owner is the launcher delegate, which DELEGATE keeps for the life of the
-    // process (a tracking area does not retain its owner) and which answers mouseEntered:,
-    // mouseMoved: and mouseExited:. No user info. The rect is ignored with InVisibleRect.
-    let area = unsafe {
-        NSTrackingArea::initWithRect_options_owner_userInfo(
-            NSTrackingArea::alloc(),
-            NSRect::ZERO,
-            options,
-            Some(owner),
-            None,
-        )
-    };
-    document.addTrackingArea(&area);
-    let clip = scroll.contentView();
-    clip.setPostsBoundsChangedNotifications(true);
-    let object: &AnyObject = &clip;
-    // SAFETY: stripScrolled: is a LauncherDelegate method taking the notification; DELEGATE
-    // keeps the observer alive and the clip view lives as long as the strip (STRIP_VIEWS).
-    // NSViewBoundsDidChangeNotification is an immutable AppKit constant.
-    unsafe {
-        NSNotificationCenter::defaultCenter().addObserver_selector_name_object(
-            owner,
-            sel!(stripScrolled:),
-            Some(NSViewBoundsDidChangeNotification),
-            Some(object),
-        );
-    }
+    crate::macos_strip_parts::watch_pointer(owner, scroll, document, sel!(stripScrolled:));
 }
 
 /// Set the tooltip of the small card at history position `index`: type and age.
@@ -1005,24 +969,8 @@ pub(crate) fn thumb_menu_command(tag: isize) -> Option<CommandId> {
 /// The ✕ in the small card's top-right corner (hidden until [`show_remove_buttons`]; its tag
 /// is set by [`bind_tile`]).
 fn remove_button(mtm: MainThreadMarker) -> Retained<NSButton> {
-    let label = crate::locale::t("history_remove_item");
-    let (x, y, side) = commands::remove_frame();
-    let button = NSButton::initWithFrame(
-        NSButton::alloc(mtm),
-        NSRect::new(NSPoint::new(x, y), NSSize::new(side, side)),
-    );
-    button.setBordered(false);
-    if let Some(image) = mac_ui::icon::system_symbol("xmark.circle.fill", label) {
-        button.setImage(Some(&image));
-        button.setImagePosition(mac_ui::objc2_app_kit::NSCellImagePosition::ImageOnly);
-        button.setImageScaling(mac_ui::objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
-        button.setContentTintColor(Some(&crate::appearance::caption_color()));
-    } else {
-        button.setTitle(&NSString::from_str("✕"));
-    }
-    button.setToolTip(Some(&NSString::from_str(label)));
-    button.setAccessibilityLabel(Some(&NSString::from_str(label)));
-    button.setHidden(true);
+    let button =
+        crate::macos_strip_parts::remove_button(mtm, crate::locale::t("history_remove_item"));
     wire_button(&button, sel!(thumbRemoveClicked:));
     button
 }

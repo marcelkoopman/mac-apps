@@ -332,6 +332,8 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::StepBack
             | CommandId::StepForward
             | CommandId::TableVersion(_)
+            | CommandId::RemoveTableVersion(_)
+            | CommandId::RestoreTableVersion
             | CommandId::TableMenu
             | CommandId::ImageMenu
             | CommandId::ImageStep(_)

@@ -26,6 +26,30 @@ fn only_a_different_existing_version_is_a_switch() {
 }
 
 #[test]
+fn removing_the_version_shown_or_one_before_it_frames_the_one_to_its_left() {
+    let shown = bar(2, 4);
+    assert_eq!(
+        switch_target(&CommandId::RemoveTableVersion(2), &shown),
+        Some(1)
+    );
+    assert_eq!(
+        switch_target(&CommandId::RemoveTableVersion(1), &shown),
+        Some(1)
+    );
+    // A later version: the version shown stays.
+    assert_eq!(
+        switch_target(&CommandId::RemoveTableVersion(3), &shown),
+        None
+    );
+    // The original is never taken out.
+    assert_eq!(
+        switch_target(&CommandId::RemoveTableVersion(0), &shown),
+        None
+    );
+    assert_eq!(switch_target(&CommandId::RestoreTableVersion, &shown), None);
+}
+
+#[test]
 fn the_card_asked_for_stays_framed_until_its_version_arrives() {
     let mut switch = VersionSwitch::default();
     assert!(!switch.busy());

@@ -266,6 +266,7 @@ impl TableWindow {
         (table.frame_id(), table.frame().is_some(), table.cursor()).hash(&mut hasher);
         table.labels().hash(&mut hasher);
         (
+            table.can_restore(),
             error,
             working,
             table.notes().map(|notes| notes.meta_notes()),
