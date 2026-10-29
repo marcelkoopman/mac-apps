@@ -514,27 +514,30 @@ pub fn wipe_text_view(view: &NSTextView) {
     if let Some(storage) = unsafe { view.textStorage() } {
         let length = storage.length();
         if length > 0 {
-            // Held here while off the storage (the storage owns them otherwise).
-            let managers = storage.layoutManagers();
-            for manager in managers.iter() {
-                storage.removeLayoutManager(&manager);
-            }
-            let all = NSRange {
-                location: 0,
-                length,
-            };
-            let zeros = "\0".repeat(length);
-            storage.replaceCharactersInRange_withString(all, &NSString::from_str(&zeros));
-            storage.replaceCharactersInRange_withString(
-                NSRange {
-                    location: 0,
-                    length: storage.length(),
+            // A copy of the list, taken before any comes off: the storage may hand out its own
+            // list, which empties as they are removed, and none would be put back (the view
+            // then draws nothing, as the card's preview did after a large table closed).
+            let managers = storage.layoutManagers().to_vec();
+            crate::detach::while_detached(
+                &managers,
+                |manager| storage.removeLayoutManager(manager),
+                || {
+                    let all = NSRange {
+                        location: 0,
+                        length,
+                    };
+                    let zeros = "\0".repeat(length);
+                    storage.replaceCharactersInRange_withString(all, &NSString::from_str(&zeros));
+                    storage.replaceCharactersInRange_withString(
+                        NSRange {
+                            location: 0,
+                            length: storage.length(),
+                        },
+                        &NSString::from_str(""),
+                    );
                 },
-                &NSString::from_str(""),
+                |manager| storage.addLayoutManager(manager),
             );
-            for manager in managers.iter() {
-                storage.addLayoutManager(&manager);
-            }
         }
     }
     view.setString(&NSString::from_str(""));

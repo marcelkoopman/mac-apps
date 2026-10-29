@@ -239,6 +239,29 @@ mod tests {
         assert!(state.contains("mac_ui::panel::hold_windows_for_exit(mtm);"));
     }
 
+    /// The card's preview, the table header and the frozen column are wiped with the shared
+    /// helper and filled again after: it must put the storage's layout managers back from a
+    /// copy taken before any came off, or those views draw nothing any more (the card showed
+    /// an empty preview after a large table closed).
+    #[test]
+    fn the_wipe_helper_puts_the_layout_managers_back() {
+        let src = include_str!("../../../crates/mac-ui/src/widgets.rs");
+        let wipe = &src[src.find("pub fn wipe_text_view").unwrap()..];
+        let wipe = &wipe[..wipe.find("\n}\n").unwrap()];
+        let copy = wipe.find("storage.layoutManagers().to_vec();").unwrap();
+        let detached = wipe.find("crate::detach::while_detached(").unwrap();
+        assert!(copy < detached);
+        assert_eq!(wipe.matches("removeLayoutManager").count(), 1);
+        assert_eq!(wipe.matches("addLayoutManager").count(), 1);
+        assert!(!wipe.contains(".iter()"));
+        for (name, src) in [
+            ("events.rs", include_str!("macos_launcher/events.rs")),
+            ("panels.rs", include_str!("macos_launcher/panels.rs")),
+        ] {
+            assert!(src.contains("widgets::wipe_text_view(view);"), "{name}");
+        }
+    }
+
     /// Closing a large table answers at once: the window leaves the screen first, keeps its
     /// window (no release in `windowWillClose:`, see above), and its view and laid-out sheet
     /// are wiped off the main thread.

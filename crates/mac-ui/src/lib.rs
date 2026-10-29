@@ -62,6 +62,7 @@ pub mod blur;
 #[cfg(all(target_os = "macos", feature = "widgets"))]
 pub mod button;
 pub mod corners;
+pub mod detach;
 #[cfg(all(target_os = "macos", feature = "dialog"))]
 pub mod dialog;
 #[cfg(feature = "drop")]
