@@ -57,9 +57,32 @@ pub(crate) fn apply_capture() {
     });
 }
 
-/// Spin a busy wheel centered over the well (on top of the preview), or take it away.
+/// Spin a busy wheel centered over the well (on top of the preview), or take it away. It
+/// stays while a file is still opening ([`set_opening`]).
 pub fn set_busy(busy: bool) {
-    if !busy {
+    BUSY.set(busy);
+    show_spinner();
+}
+
+/// "Opening file…" under the busy wheel while a dropped or chosen file is on its way, or
+/// take it away (the wheel stays while other work is busy, [`set_busy`]). VoiceOver reads the
+/// wheel as "Opening file…" meanwhile.
+pub fn set_opening(opening: bool) {
+    OPENING.set(opening);
+    show_spinner();
+}
+
+/// The wheel (and the "Opening file…" line under it) as [`BUSY`] and [`OPENING`] ask.
+fn show_spinner() {
+    let (busy, opening) = (BUSY.get(), OPENING.get());
+    if !opening {
+        OPENING_LINE.with(|slot| {
+            if let Some(line) = slot.borrow().as_ref() {
+                line.removeFromSuperview();
+            }
+        });
+    }
+    if !busy && !opening {
         SPINNER.with(|slot| {
             if let Some(spinner) = slot.borrow().as_ref() {
                 spinner.remove();
@@ -76,12 +99,67 @@ pub fn set_busy(busy: bool) {
     let Some(parent) = mac_ui::widgets::superview(&well) else {
         return;
     };
-    SPINNER.with(|slot| {
+    let area = well.frame();
+    let spinner_frame = SPINNER.with(|slot| {
         let mut slot = slot.borrow_mut();
         let spinner = slot.get_or_insert_with(|| progress::Spinner::new(mtm, SpinnerSize::Regular));
-        spinner.add_centered(&parent, well.frame());
+        spinner.set_accessibility_label(if opening {
+            crate::locale::t("opening_file")
+        } else {
+            mac_ui::lang::t("loading")
+        });
+        spinner.add_centered(&parent, area);
         spinner.start();
+        spinner.view().frame()
     });
+    if !opening {
+        return;
+    }
+    OPENING_LINE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let line = slot.get_or_insert_with(|| {
+            let line = mac_ui::widgets::label(
+                mtm,
+                mac_ui::metrics::FONT_CAPTION,
+                &NSColor::secondaryLabelColor(),
+            );
+            line.setAlignment(NSTextAlignment::Center);
+            // The wheel says it already.
+            line.setAccessibilityElement(false);
+            line
+        });
+        line.setStringValue(&NSString::from_str(crate::locale::t("opening_file")));
+        line.sizeToFit();
+        parent.addSubview(line);
+        place_opening_line(line, &parent, area, spinner_frame);
+    });
+}
+
+/// "Opening file…" centered under the wheel at `spinner`, over `area` (the well's frame in
+/// `parent`), whichever way the card's content view counts.
+fn place_opening_line(line: &NSTextField, parent: &NSView, area: NSRect, spinner: NSRect) {
+    let size = line.fittingSize();
+    let gap = 6.0;
+    let width = size.width.min(area.size.width);
+    let x = (area.origin.x + (area.size.width - width) / 2.0).round();
+    let y = if parent.isFlipped() {
+        spinner.origin.y + spinner.size.height + gap
+    } else {
+        spinner.origin.y - gap - size.height
+    };
+    line.setFrame(NSRect::new(
+        NSPoint::new(x, y.round()),
+        NSSize::new(width, size.height),
+    ));
+}
+
+thread_local! {
+    /// Background work asked for the wheel ([`set_busy`]).
+    static BUSY: Cell<bool> = const { Cell::new(false) };
+    /// A file is opening ([`set_opening`]).
+    static OPENING: Cell<bool> = const { Cell::new(false) };
+    /// "Opening file…" under the wheel, made once.
+    static OPENING_LINE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
 }
 
 thread_local! {
@@ -226,6 +304,16 @@ pub(crate) fn place_spinner(well_frame: NSRect) {
         {
             spinner.center_in(well_frame);
             raise_view(spinner.view());
+            if OPENING.get()
+                && let Some(parent) = mac_ui::widgets::superview(spinner.view())
+            {
+                OPENING_LINE.with(|line| {
+                    if let Some(line) = line.borrow().as_ref() {
+                        place_opening_line(line, &parent, well_frame, spinner.view().frame());
+                        raise_view(line);
+                    }
+                });
+            }
         }
     });
 }

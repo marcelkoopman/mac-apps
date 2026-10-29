@@ -49,6 +49,12 @@ impl Lanes {
         &mut self.sequence[lane as usize]
     }
 
+    /// Make the job of `lane` on its way stale (its result is dropped) and stop waiting for it.
+    pub(crate) fn drop_pending(&mut self, lane: Lane) {
+        self.get(lane).next();
+        self.slow[lane as usize] = None;
+    }
+
     /// The start of the oldest slow job, if one is running.
     pub(crate) fn slow_since(&self) -> Option<Instant> {
         self.slow.iter().flatten().min().copied()
@@ -159,6 +165,11 @@ impl App {
         ));
         let first = self.work_error.is_none();
         self.work_error = Some(crate::locale::t("work_failed").to_string());
+        // A file whose read could not start is not on its way: no "Opening file…".
+        if self.opening.phase() == Some(commands::OpeningPhase::Reading) {
+            self.opening.cancel();
+            self.opening_over();
+        }
         self.stop_spinner_when_idle();
         if first {
             let refresh: Finish = Box::new(|app: &mut App| app.refresh_popup());

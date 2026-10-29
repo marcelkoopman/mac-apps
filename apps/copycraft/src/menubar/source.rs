@@ -40,12 +40,20 @@ impl App {
         // promised file goes when both reads are done with it.
         let promised = promised.then(|| super::checksum::PromisedFile::new(path.clone()));
         let checksum = self.start_checksum(path.clone(), promised.clone());
+        // A table from an earlier drop still hidden while it is read gives way to this file.
+        if self.opening.awaits_window() {
+            self.cancel_opening();
+        }
+        // The card says "Opening file…" when this takes a while ([`Self::spin_opening`]).
+        let token = self.opening.begin();
+        self.opening_started = Some((token, Instant::now()));
         let opened = self.start_work(
             work::Lane::File,
             work::QUICK,
             move || {
                 let opened = crate::open_file::load_dropped(&path);
                 drop(promised);
+                warm_card_answers(&opened);
                 opened
             },
             move |app, opened| app.show_dropped_file(opened, Some(checksum)),
@@ -124,13 +132,67 @@ impl App {
         }
         let table_file = commands::is_table_file_name(&opened.name);
         self.show_source(opened);
+        // Read from a path ([`Self::open_path`], the only caller with a checksum): the card has
+        // said "Opening file…" since the drop or ⌘O.
+        let opening =
+            checksum.is_some() && self.opening.phase() == Some(commands::OpeningPhase::Reading);
         // A dropped CSV, TSV or JSON array of objects opens in the table window at once (the
         // card comes back with it when the window closes). Anything else stays on the card.
         if table_file && self.card_shows_opened_table() {
-            self.open_table_window();
+            // The card keeps its spinner until the window has the grid ([`Self::table_view_built`]).
+            self.open_table_window_for(opening);
         } else {
+            if opening {
+                self.opening.read(false);
+                self.opening_over();
+            }
             launcher::order_front();
         }
+    }
+
+    /// The card shows "Opening file…" once the opening going on takes longer than
+    /// [`commands::OPENING_SPINNER_DELAY_MS`]. Returns when to look again.
+    pub(crate) fn spin_opening(&mut self, now: Instant) -> Option<Instant> {
+        let (token, started) = self.opening_started?;
+        if self.opening_shown {
+            return None;
+        }
+        if !self.opening.active() {
+            self.opening_over();
+            return None;
+        }
+        if self.opening.spinner_due(token, now.duration_since(started)) {
+            self.opening_shown = true;
+            launcher::set_opening(true);
+            None
+        } else {
+            Some(started + Duration::from_millis(commands::OPENING_SPINNER_DELAY_MS))
+        }
+    }
+
+    /// The opening is over (or was given up): the card's "Opening file…" goes.
+    pub(crate) fn opening_over(&mut self) {
+        if self.opening.active() {
+            return;
+        }
+        self.opening_started = None;
+        if std::mem::take(&mut self.opening_shown) {
+            launcher::set_opening(false);
+        }
+    }
+
+    /// A new copy came in while a file was on its way: the file is stale. Its read is
+    /// dropped, or the table window still building its grid (not on screen yet) closes.
+    pub(crate) fn cancel_opening(&mut self) {
+        match self.opening.cancel() {
+            Some(commands::OpeningPhase::Reading) => {
+                self.lanes.drop_pending(work::Lane::File);
+                self.stop_spinner_when_idle();
+            }
+            Some(commands::OpeningPhase::Window) => self.close_table_window(),
+            None => {}
+        }
+        self.opening_over();
     }
 
     /// A drop is in history now, at index 0; the entry the card or the clipboard was on is at
@@ -839,4 +901,17 @@ pub(crate) fn waits_for_recognition(image: &crate::open_file::OpenedImage) -> bo
         && image.pdf_source.is_none()
         && image.pdf_text.is_none()
         && image.bytes.byte_len() <= clipboard::MAX_IMAGE_BYTES
+}
+
+/// Work out what the card asks about a dropped file's text on the reading thread, so the main
+/// thread finds the answers remembered ([`crate::memo`]) and does not stall on a large file:
+/// its type, whether it is a table, and its chips. Nothing is kept but the answers.
+pub(crate) fn warm_card_answers(opened: &crate::open_file::OpenedFile) {
+    let Some(text) = opened.text.as_deref().map(|text| text.as_str()) else {
+        return;
+    };
+    let kind = crate::format::detect(text);
+    crate::toolbar_visibility::shows_dataframe_button(kind, text);
+    commands::offers_text_menu(text);
+    commands::copied_text_chips(text);
 }

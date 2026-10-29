@@ -89,6 +89,20 @@ pub(super) fn after_show(arrival: commands::Arrival, before: Option<usize>, afte
     );
 }
 
+/// The first grid of a table: from blank to full over [`commands::SWITCH_FADE_SECS`].
+pub(super) fn fade_in() {
+    let Some(body) = grid_body() else {
+        return;
+    };
+    body.setAlphaValue(0.0);
+    let target = body.clone();
+    mac_ui::motion::animate(
+        commands::SWITCH_FADE_SECS,
+        move || target.animator().setAlphaValue(1.0),
+        None,
+    );
+}
+
 /// The delayed check of the switch going on ([`started`]).
 pub(super) fn tick() {
     let Some(began) = STARTED.get() else {

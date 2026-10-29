@@ -452,6 +452,15 @@ pub fn set_busy(busy: bool) {
     let _ = busy;
 }
 
+/// "Opening file…" with the busy spinner over the card while a dropped or chosen file is on
+/// its way ([`crate::commands::FileOpening`]), or take it away.
+pub fn set_opening(opening: bool) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::set_opening(opening);
+    #[cfg(not(target_os = "macos"))]
+    let _ = opening;
+}
+
 /// The Preview button's spinner (dimmed, no second click) while Preview opens the picture.
 pub fn set_preview_busy(busy: bool) {
     #[cfg(target_os = "macos")]

@@ -373,6 +373,18 @@ pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::Prepar
         paint();
     }
     switching::after_show(arrival, before, version);
+    // A table's grid arriving where none of it was (the window opens, a dropped table comes
+    // in): faded in like a version switch, also when the window opens with it.
+    let has_grid = SHOWN.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .is_some_and(|view| !view.grid.is_empty())
+    });
+    if arrival != commands::Arrival::Pending
+        && commands::grid_fades_in(before.is_some(), has_grid, mac_ui::motion::reduce_motion())
+    {
+        switching::fade_in();
+    }
     let window = VIEWS.with(|slot| slot.borrow().as_ref().map(|views| views.window.clone()));
     if let Some(window) = window
         && !window.isVisible()

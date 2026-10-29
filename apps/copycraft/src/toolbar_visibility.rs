@@ -13,19 +13,37 @@ pub fn shows_dataframe(kind: FormatKind) -> bool {
 
 /// Dataframe is hidden for JSON and XML even when the text also parses as a table.
 pub fn shows_dataframe_button(kind: FormatKind, source: &str) -> bool {
-    kind != FormatKind::Xml
-        && kind != FormatKind::Svg
-        && kind != FormatKind::Html
-        && kind != FormatKind::Json
-        && kind != FormatKind::Markdown
-        && kind != FormatKind::Agent
-        && !crate::format::looks_like_xml(source)
-        && crate::format::detect(source) != FormatKind::Json
-        && !matches!(
-            crate::format::detect(source),
-            FormatKind::Markdown | FormatKind::Agent
-        )
-        && (shows_dataframe(kind) || crate::dataframe::is_table(source))
+    if matches!(
+        kind,
+        FormatKind::Xml
+            | FormatKind::Svg
+            | FormatKind::Html
+            | FormatKind::Json
+            | FormatKind::Markdown
+            | FormatKind::Agent
+    ) || crate::format::looks_like_xml(source)
+    {
+        return false;
+    }
+    // Detected once: a large copy is hashed for every look-up of its remembered type.
+    let detected = crate::format::detect(source);
+    !matches!(
+        detected,
+        FormatKind::Json | FormatKind::Markdown | FormatKind::Agent
+    ) && (shows_dataframe(kind) || reads_as_table(source))
+}
+
+/// [`crate::dataframe::is_table`] (a full read of the text), remembered per text like the
+/// format: the card and the table window ask for it many times.
+fn reads_as_table(source: &str) -> bool {
+    READS_AS_TABLE.get_or_compute(source, crate::dataframe::is_table)
+}
+
+static READS_AS_TABLE: crate::memo::Memo<bool> = crate::memo::Memo::new(8);
+
+/// Drop the remembered answers (Wipe), with the other [`crate::memo`] results.
+pub fn forget_tables() {
+    READS_AS_TABLE.clear();
 }
 
 pub fn shows_decode(kind: FormatKind) -> bool {

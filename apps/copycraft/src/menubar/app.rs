@@ -76,6 +76,11 @@ pub(crate) struct App {
     pub(crate) full_card: Option<Box<launcher::FullCard>>,
     /// The card spinner is showing (some background work ran past [`SPINNER_DELAY`]).
     pub(crate) spinner_on: bool,
+    /// A dropped or chosen file on its way to the card or the table window
+    /// ([`commands::FileOpening`]), when it began, and whether the card shows "Opening file…".
+    pub(crate) opening: commands::FileOpening,
+    pub(crate) opening_started: Option<(u64, Instant)>,
+    pub(crate) opening_shown: bool,
     /// The short blink of the menu bar icon after a copy, and its two template glyphs.
     pub(crate) blink: tray::Blink,
     /// The glyph and its blink frame, both templates, built once.

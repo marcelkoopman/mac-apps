@@ -257,6 +257,7 @@ mod layout_tests;
 mod menu_tests;
 mod meta_tests;
 
+mod file_opening_tests;
 mod table_search_tests;
 mod table_strip_tests;
 mod table_switch_tests;

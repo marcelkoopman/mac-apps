@@ -57,6 +57,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     // Card status, counts
     ("working", "Bezig…", "Working…"),
+    ("opening_file", "Bestand openen…", "Opening file…"),
     (
         "working_on_table",
         "Bezig met de tabel…",

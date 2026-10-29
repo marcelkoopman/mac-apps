@@ -36,6 +36,8 @@ impl App {
     /// (more than two, or a file that is not text) gets the toast. The files are read on a
     /// thread, as one dropped file is.
     pub(crate) fn compare_dropped_files(&mut self, paths: Vec<PathBuf>) {
+        // A file still opening is stale: this drop takes the card.
+        self.cancel_opening();
         let Ok([a, b]) = <[PathBuf; 2]>::try_from(paths) else {
             super::state::save_feedback(crate::locale::t("compare_two_text_files"));
             return;

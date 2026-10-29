@@ -185,6 +185,10 @@ impl ApplicationHandler<UserEvent> for App {
 
         let now = Instant::now();
         let changed = self.note_clipboard(now);
+        if changed && self.opening.active() {
+            // A file still on its way is stale now: the new copy takes the card.
+            self.cancel_opening();
+        }
         if changed && launcher::is_open() {
             let data = self.current_launch_data();
             self.sync_popup(data);
@@ -198,8 +202,10 @@ impl ApplicationHandler<UserEvent> for App {
         let blink_wake = self.show_blink(now);
         let clear_wake = self.clear_sensitive_when_due(now);
         let forget_wake = self.forget_history_when_due(now);
+        let opening_wake = self.spin_opening(now);
         event_loop.set_control_flow(mac_ui::wake::control_flow([
             Some(wake),
+            opening_wake,
             blink_wake,
             clear_wake,
             forget_wake,

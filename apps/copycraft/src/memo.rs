@@ -113,6 +113,7 @@ pub fn forget_all() {
     crate::format::forget_detected();
     crate::sensitivity::forget_labels();
     crate::commands::forget_chips();
+    crate::toolbar_visibility::forget_tables();
 }
 
 #[cfg(test)]

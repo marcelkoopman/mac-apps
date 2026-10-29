@@ -106,8 +106,20 @@ impl App {
     /// "Open Table": the table on the card in the table window (revealed, no blur); the card
     /// may close. The window then stays with that entry.
     pub(crate) fn open_table_window(&mut self) {
+        self.open_table_window_for(false);
+    }
+
+    /// [`Self::open_table_window`]; `opening`: for a dropped or chosen file the card shows
+    /// "Opening file…" for ([`commands::FileOpening`]), so the card stays, and the window stays
+    /// hidden, until the window has the grid ([`Self::table_view_built`]).
+    pub(crate) fn open_table_window_for(&mut self, opening: bool) {
         let Some((text, home)) = self.table_source() else {
             crate::diag::log(crate::diag::LogEvent::TableNotShown);
+            if opening {
+                self.opening.read(false);
+                self.opening_over();
+                launcher::order_front();
+            }
             return;
         };
         if home == TableHome::Loose {
@@ -133,7 +145,14 @@ impl App {
             shown: None,
             checking: false,
         });
+        if opening {
+            self.opening.read(true);
+        }
         self.refresh_table_window();
+        if self.opening.awaits_window() {
+            // The card goes when the grid is there.
+            return;
+        }
         // Only now the card may close: the window holds the entry (and keeps a chosen file).
         // No fade, so the card is not ordered out after the window comes forward.
         launcher::hide_at_once();
@@ -152,6 +171,11 @@ impl App {
         self.table_window = None;
         if had {
             launcher::close_table_window();
+        }
+        // A dropped table whose window closes before it showed: the card stops waiting.
+        if self.opening.awaits_window() {
+            self.opening.cancel();
+            self.opening_over();
         }
     }
 
@@ -332,7 +356,19 @@ impl App {
         };
         window.checking = view.checking;
         view.source_name = window.source_name.clone();
-        launcher::show_table_window(view, sheet);
+        let error = window.error.is_some();
+        match self.opening.window_view(view.working, error) {
+            // A dropped table still being read: no empty window yet, the card keeps its
+            // spinner.
+            commands::WindowView::Hold => {}
+            commands::WindowView::Show => launcher::show_table_window(view, sheet),
+            commands::WindowView::Reveal => {
+                launcher::show_table_window(view, sheet);
+                self.opening_over();
+                launcher::hide_at_once();
+                launcher::bring_table_window_forward();
+            }
+        }
     }
 
     /// Read the table another way (the date order): it starts over from

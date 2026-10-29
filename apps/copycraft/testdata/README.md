@@ -572,6 +572,18 @@ Use `/tmp/search.csv` from *Search in the table* and `/tmp/big.csv` from the ste
 - [ ] Large file: with `/tmp/big.csv` make two steps (*Verwijder dubbele rijen*, then a sort), show the last version and click the × of the first step's card: the frame moves at once; when it takes longer than about 0.15 s the grid dims with the spinner, then the new version fades in (no fade with Reduce Motion), and the window stays responsive meanwhile.
 - [ ] Privacy: with the cards masked the × still works; debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows nothing of the steps, the cells or the sizes. Nothing new is written to disk.
 
+### Dropping a large CSV
+
+Use `/tmp/big.csv` (5 MB, 65,000 rows) from *Switching table versions with a large file*; make it with the `awk` line there if it is gone. Run once from a debug build (`cargo run -p copycraft`, where it was slowest) and once as the bundled app.
+
+- [ ] Open the card and drop `/tmp/big.csv` on it. The card answers at once: after about 0.15 s a spinner shows over the well with *Bestand openen…* / *Opening file…* under it (VoiceOver reads the spinner the same). The card still moves and the pointer never turns into the beach ball.
+- [ ] The card keeps the spinner until the table is there; no empty *Bezig met de tabel…* / *Working on the table…* window shows first. Then the card goes, the table window opens and its grid fades in (about 0.2 s). With Reduce Motion on (System Settings › Accessibility › Display) the grid just shows, no fade; the spinner still shows.
+- [ ] A small CSV (`/tmp/search.csv`): the window opens without the card flashing a spinner or *Opening file…*.
+- [ ] ⌘O (or *Kies bestand…* / *Choose File…* in the card's menu) and choose `/tmp/big.csv`: the same, spinner and line on the card, then the window with the fade.
+- [ ] Stale results: drop `/tmp/big.csv` and, while the spinner shows, copy some text in another app: the card shows the copy, the spinner and line go and no table window opens later. Drop `/tmp/big.csv` and right after a small text file: the card ends on the text file and the big table never opens. Drop a JSON file while the big CSV opens: only the JSON shows.
+- [ ] A dropped text or picture that is not a table: the card shows it as before (*Opening file…* only while a large one is read).
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names during the drop. Nothing new is written to disk.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.
