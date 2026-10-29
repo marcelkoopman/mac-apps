@@ -120,7 +120,7 @@ impl App {
             work::QUICK,
             move || crate::dataframe::frame_copy(&frame, source.as_str()).map(Zeroizing::new),
             |app, body| {
-                if let Err(e) = app.copy_grid(body) {
+                if let Err(e) = app.copy_grid_from(TableTarget::Window, body) {
                     crate::diag::log(crate::diag::LogEvent::CopyFailed(
                         crate::diag::ErrorKind::of(&e),
                     ));
@@ -128,7 +128,7 @@ impl App {
             },
         );
         match body {
-            Some(body) => self.copy_grid(body),
+            Some(body) => self.copy_grid_from(TableTarget::Window, body),
             None => Ok(()),
         }
     }
@@ -165,15 +165,16 @@ impl App {
                 }
                 .map(Zeroizing::new)
             },
-            move |app, body| app.copied_table_as(body, copy),
+            move |app, body| app.copied_table_as(target, body, copy),
         );
         if let Some(body) = body {
-            self.copied_table_as(body, copy);
+            self.copied_table_as(target, body, copy);
         }
     }
 
     fn copied_table_as(
         &mut self,
+        target: TableTarget,
         body: Option<Zeroizing<String>>,
         copy: crate::dataframe::TableCopy,
     ) {
@@ -181,7 +182,7 @@ impl App {
             super::state::save_feedback(crate::locale::t("table_copy_failed"));
             return;
         };
-        if let Err(e) = self.copy_grid(Some(body)) {
+        if let Err(e) = self.copy_grid_from(target, Some(body)) {
             crate::diag::log(crate::diag::LogEvent::CopyFailed(
                 crate::diag::ErrorKind::of(&e),
             ));
@@ -200,11 +201,29 @@ impl App {
             return;
         };
         let body = crate::dataframe::frame_part(&frame, part).map(Zeroizing::new);
-        if let Err(e) = self.copy_grid(body) {
+        if let Err(e) = self.copy_grid_from(TableTarget::Window, body) {
             crate::diag::log(crate::diag::LogEvent::CopyFailed(
                 crate::diag::ErrorKind::of(&e),
             ));
         }
+    }
+
+    /// [`Self::copy_grid`] for `target`. A copy written from the table window marks it, so the
+    /// card shows that copy when the window closes ([`super::state::card_after_window`]).
+    fn copy_grid_from(
+        &mut self,
+        target: TableTarget,
+        body: Option<Zeroizing<String>>,
+    ) -> anyhow::Result<()> {
+        let writes = body.is_some();
+        self.copy_grid(body)?;
+        if writes
+            && target == TableTarget::Window
+            && let Some(window) = self.table_window.as_mut()
+        {
+            window.copied = true;
+        }
+        Ok(())
     }
 
     fn copy_grid(&mut self, body: Option<Zeroizing<String>>) -> anyhow::Result<()> {

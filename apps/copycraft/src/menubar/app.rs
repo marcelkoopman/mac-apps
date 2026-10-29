@@ -263,6 +263,10 @@ pub(crate) struct TableWindow {
     /// when it changes, or while its labels are still being checked.
     pub(crate) shown: Option<u64>,
     pub(crate) checking: bool,
+    /// A copy was made from this window (Copy, Copy as CSV/JSON, a cell, row or column): it is
+    /// the clipboard's newest content, so the card shows it, not the file, when the window
+    /// closes ([`super::state::card_after_window`]).
+    pub(crate) copied: bool,
 }
 
 impl TableWindow {

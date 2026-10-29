@@ -1,8 +1,8 @@
 use super::{
-    ClipSig, ICON_CLICK_GAP, card_returns_after_window, end_session_history, forget_opened_file,
-    history_due, history_forgettable, history_submenu_enabled, icon_click_is_new, icon_tip,
-    removal_skip_ends, screenshot_accelerator, section_shortcut, status_labels, status_rows,
-    tray_label, version_label,
+    CardAfterWindow, ClipSig, ICON_CLICK_GAP, card_after_window, end_session_history,
+    forget_opened_file, history_due, history_forgettable, history_submenu_enabled,
+    icon_click_is_new, icon_tip, removal_skip_ends, screenshot_accelerator, section_shortcut,
+    status_labels, status_rows, tray_label, version_label,
 };
 use crate::clipboard::ClipboardView;
 use crate::format::FormatKind;
@@ -269,16 +269,47 @@ fn chosen_file_survives_open_table_and_returns_when_the_window_closes() {
         true
     ));
     // The window closes: the card comes back with the file, before the file could be dropped.
-    assert!(card_returns_after_window(
-        window_keeps_file,
-        file_open,
-        false
-    ));
+    assert_eq!(
+        card_after_window(window_keeps_file, file_open, false, false),
+        CardAfterWindow::File
+    );
     assert!(!forget_opened_file(true, file_open, false, true));
     // A window opened from a history entry (no file) does not bring the card back.
-    assert!(!card_returns_after_window(false, false, false));
+    assert_eq!(
+        card_after_window(false, false, false, false),
+        CardAfterWindow::Stays
+    );
     // The card already open: nothing to do.
-    assert!(!card_returns_after_window(true, true, true));
+    assert_eq!(
+        card_after_window(true, true, true, false),
+        CardAfterWindow::Stays
+    );
+}
+
+#[test]
+fn a_copy_made_in_the_table_window_is_on_the_card_after_it_closes() {
+    // Drop a CSV, keep two columns in the window, Copy: closing the window shows that copy
+    // (the clipboard's newest content, in history), not the dropped file again.
+    assert_eq!(
+        card_after_window(true, true, false, true),
+        CardAfterWindow::Copy
+    );
+    // Also when the card is open by then: it moves from the file to the copy.
+    assert_eq!(
+        card_after_window(true, true, true, true),
+        CardAfterWindow::Copy
+    );
+    // A window opened from a history entry or the clipboard (no file kept): the card already
+    // follows the clipboard.
+    assert_eq!(
+        card_after_window(false, false, false, true),
+        CardAfterWindow::Stays
+    );
+    // The file left the card meanwhile (a new copy, Wipe): nothing to leave.
+    assert_eq!(
+        card_after_window(true, false, false, true),
+        CardAfterWindow::Stays
+    );
 }
 
 #[test]

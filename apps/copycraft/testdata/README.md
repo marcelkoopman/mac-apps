@@ -596,6 +596,17 @@ Use `/tmp/big.csv` (5 MB, 65,000 rows) from *Switching table versions with a lar
 - [ ] Quit with ⌘Q while the big table shows, and right after closing it: CopyCraft quits without a crash report (Console › Crash Reports, nothing new for CopyCraft).
 - [ ] Privacy: the content is still wiped from memory, only off the main thread now. Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names while closing. Nothing new is written to disk.
 
+### Copy from the table, then close
+
+Use `/tmp/big.csv` (5 MB, 8 columns) from *Switching table versions with a large file*, and a small fake file: `printf 'naam;plaats;leeftijd\nJan de Vries;Groningen;41\nAnja;Utrecht;35\n' > /tmp/three.csv`.
+
+- [ ] Drop `/tmp/three.csv` on the card; the table window opens. *Kies kolommen…* / *Choose Columns…*: keep two columns (a new version). *Kopieer* / *Copy* in the window's toolbar; the toast says it was copied. Close the window: the card comes back showing that two-column copy (title, meta line with 2 columns, the preview with only those two columns), not the dropped file. The strip has the two-column copy as its newest card; the dropped file is still in the strip after it.
+- [ ] ⌘V in TextEdit: the same two columns.
+- [ ] The same with *Kopieer als CSV* / *Copy as CSV* and *Kopieer als JSON* / *Copy as JSON* (the card then shows the JSON), and with a cell, row or column from the grid's right-click menu.
+- [ ] With `/tmp/big.csv`: keep two columns, *Kopieer* / *Copy*, close. The card shows the two-column copy; its meta line may say *Controleren…* / *Checking…* for a moment, and the strip gets the copy as its newest card once that is done.
+- [ ] No copy in the window: closing it brings the card back with the dropped file, as before. With the card open while the window closes after a copy, the card moves from the file to the copy.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names. Nothing new is written to disk.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.

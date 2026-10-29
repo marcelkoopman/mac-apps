@@ -270,14 +270,36 @@ pub(crate) fn forget_opened_file(
     file_open && !card_open && !window_shows_file && superseded
 }
 
-/// The table window closed: show the card again when that window was opened from a chosen
-/// file that is still the card's, and the card is not already open.
-pub(crate) fn card_returns_after_window(
+/// What the card does when the table window closes ([`card_after_window`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CardAfterWindow {
+    /// Nothing changes.
+    Stays,
+    /// The card comes back with the chosen file the window was opened from.
+    File,
+    /// The card leaves that file and shows the copy made in the window (the clipboard's
+    /// newest content), shown again when it was hidden.
+    Copy,
+}
+
+/// The table window closed. It was opened from a chosen file still on the card
+/// (`keeps_file`, `file_open`): the card shows the file again when it is not open, or, when a
+/// copy was made in the window (`copied`), that copy instead, as after a copy on the card.
+pub(crate) fn card_after_window(
     keeps_file: bool,
     file_open: bool,
     card_open: bool,
-) -> bool {
-    keeps_file && file_open && !card_open
+    copied: bool,
+) -> CardAfterWindow {
+    if !(keeps_file && file_open) {
+        CardAfterWindow::Stays
+    } else if copied {
+        CardAfterWindow::Copy
+    } else if card_open {
+        CardAfterWindow::Stays
+    } else {
+        CardAfterWindow::File
+    }
 }
 
 /// When unpinned history is due to be forgotten: `minutes` after the last copy. `None` with

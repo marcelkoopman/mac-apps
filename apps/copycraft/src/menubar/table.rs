@@ -144,6 +144,7 @@ impl App {
             error: None,
             shown: None,
             checking: false,
+            copied: false,
         });
         if opening {
             self.opening.read(true);
@@ -190,16 +191,36 @@ impl App {
                 }
                 let window = self.table_window.take();
                 let keeps_file = window.as_ref().is_some_and(|window| window.keeps_file);
+                let copied = window.as_ref().is_some_and(|window| window.copied);
                 // Its copy of the text is zeroized off the main thread, as the window's own.
                 if let Some(window) = window {
                     crate::work::wipe_later(window);
                 }
-                // A chosen file goes back on the card, with its versions, as a history entry
-                // would.
-                if card_returns_after_window(keeps_file, self.opened.is_some(), launcher::is_open())
-                {
-                    let data = self.launch_for_popup();
-                    self.reveal_card(data);
+                match card_after_window(
+                    keeps_file,
+                    self.opened.is_some(),
+                    launcher::is_open(),
+                    copied,
+                ) {
+                    CardAfterWindow::Stays => {}
+                    // A chosen file goes back on the card, with its versions, as a history
+                    // entry would.
+                    CardAfterWindow::File => {
+                        let data = self.launch_for_popup();
+                        self.reveal_card(data);
+                    }
+                    // A copy made in the window is the clipboard's newest content (and in
+                    // history): the card leaves the file and shows that copy.
+                    CardAfterWindow::Copy => {
+                        self.leave_opened();
+                        if launcher::is_open() {
+                            let data = self.current_launch_data();
+                            self.sync_popup(data);
+                        } else {
+                            let data = self.launch_for_popup();
+                            self.reveal_card(data);
+                        }
+                    }
                 }
             }
             launcher::TableWindowEvent::Run(id) => {
