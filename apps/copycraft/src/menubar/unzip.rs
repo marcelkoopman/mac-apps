@@ -87,8 +87,11 @@ impl App {
                 // an extraction that is gone.
                 let _ended = EndOnDrop(&run);
                 let mut leftovers = crate::zip_archive::Leftovers::default();
-                let result =
-                    crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop, &mut leftovers);
+                // A panic is an error toast, not a card that says "Extracting…" until a
+                // restart (run_detached's result would never come). Its payload is not logged.
+                let result = crate::zip_archive::caught(|| {
+                    crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop, &mut leftovers)
+                });
                 (result, leftovers.trashed)
             },
             |app, (result, trashed)| app.unzip_done(result, trashed),

@@ -980,6 +980,19 @@ fn removing_never_follows_a_folder_swapped_for_a_link() {
 }
 
 #[test]
+fn a_panic_is_a_write_error() {
+    assert_eq!(
+        caught::<()>(|| panic!("fake extraction bug")),
+        Err(ZipError::Write)
+    );
+    assert_eq!(caught(|| Ok(7)), Ok(7));
+    assert_eq!(
+        caught::<()>(|| Err(ZipError::Corrupt)),
+        Err(ZipError::Corrupt)
+    );
+}
+
+#[test]
 fn removing_what_was_extracted_leaves_other_files() {
     let dir = temp_dir("remove-extracted");
     let work = dir.join("w");

@@ -1126,13 +1126,14 @@ fn extract_with(
     let partial = make_partial(dest, zip_name, leftovers)?;
     let mut made = Made::default();
     let mut reader = std::io::BufReader::new(file);
-    let result = listing.entries.iter().try_for_each(|entry| {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ZipError::Cancelled);
-        }
-        extract_entry(&mut reader, entry, &partial, &mut made, stop)
-    });
-    let result = result.and_then(|()| {
+    // A panic (a bug) here is an error like any other, so the work folder is still cleaned up.
+    let result = caught(|| {
+        listing.entries.iter().try_for_each(|entry| {
+            if stop.load(Ordering::Relaxed) {
+                return Err(ZipError::Cancelled);
+            }
+            extract_entry(&mut reader, entry, &partial, &mut made, stop)
+        })?;
         std::fs::remove_file(partial.join(PARTIAL_MARK)).map_err(|_| ZipError::Write)?;
         if stop.load(Ordering::Relaxed) {
             return Err(ZipError::Cancelled);
@@ -1145,6 +1146,14 @@ fn extract_with(
         remove_extracted(&partial, &listing);
     }
     result
+}
+
+/// Run `work` with any panic caught: a bug becomes [`ZipError::Write`] (the toast says it
+/// failed) instead of an extraction that never ends. The panic's payload is dropped unread:
+/// it is never logged or shown.
+pub(crate) fn caught<T>(work: impl FnOnce() -> Result<T, ZipError>) -> Result<T, ZipError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+        .unwrap_or_else(|_payload| Err(ZipError::Write))
 }
 
 /// Move what was extracted into `partial` to where it goes, never over anything: straight
