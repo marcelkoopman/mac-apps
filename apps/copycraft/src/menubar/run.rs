@@ -188,6 +188,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         loose_table: crate::settings::preferred_table(),
         loose_text: None,
         table_job: None,
+        table_count: None,
         table_error: None,
         table_window: None,
         decoded_picture: None,

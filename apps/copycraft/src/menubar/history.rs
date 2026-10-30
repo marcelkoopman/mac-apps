@@ -72,6 +72,7 @@ impl App {
             self.text_generation = self.text_generation.wrapping_add(1);
             self.text_note = None;
             self.cancel_table_job();
+            self.cancel_table_counts();
             self.table_error = None;
             self.close_table_window();
             self.history.clear();
@@ -92,6 +93,7 @@ impl App {
             self.refresh_table_window();
             if self.table_window.is_none() {
                 self.cancel_table_job();
+                self.cancel_table_counts();
                 self.table_error = None;
             }
         }
@@ -357,6 +359,7 @@ impl App {
         self.forget_screenshot();
         self.ai_stop();
         self.cancel_table_job();
+        self.cancel_table_counts();
         self.table_error = None;
         self.full_card = None;
         self.current_image = None;

@@ -397,6 +397,14 @@ impl ClipboardHistory {
             .find(|table| table.awaits(generation))
     }
 
+    /// The table whose newest count job is `generation` ([`TableVersions::awaits_counts`]).
+    pub fn table_awaiting_counts(&mut self, generation: u64) -> Option<&mut TableVersions> {
+        self.entries
+            .iter_mut()
+            .filter_map(|entry| entry.table.as_mut())
+            .find(|table| table.awaits_counts(generation))
+    }
+
     /// The id of the picture entry holding these very bytes.
     pub fn image_id(&self, bytes: &SecretBytes) -> Option<u64> {
         self.image_entry(bytes).map(|index| self.entries[index].id)

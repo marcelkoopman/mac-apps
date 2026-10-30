@@ -159,6 +159,10 @@ pub(crate) struct App {
     pub(crate) loose_text: Option<Zeroizing<String>>,
     /// The table job on its thread. One at a time: a new one cancels it.
     pub(crate) table_job: Option<TableRun>,
+    /// The quiet count job on its thread ([`crate::table::TableVersions::count_job`]): next to
+    /// `table_job`, so it never dims the grid or waits for a switch. Its cancel flag and
+    /// generation.
+    pub(crate) table_count: Option<(u64, Arc<AtomicBool>)>,
     /// Why the last table step failed, shown on the card until the next one.
     pub(crate) table_error: Option<String>,
     /// The entry the table window shows, while it is open.

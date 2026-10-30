@@ -488,10 +488,13 @@ impl App {
             return;
         }
         let job = table.remove_step(index, &text);
+        // Only a later version went: the grid stays, and the count runs quietly.
+        let counts = table.count_job();
         self.set_table_error(target, None);
         if let Some(job) = job {
             self.run_table_job(job, false, target);
         }
+        self.run_table_counts(counts);
         self.refresh_popup();
     }
 
@@ -544,6 +547,61 @@ impl App {
         }
     }
 
+    /// Start the quiet count job (`None`: nothing to count), cancelling the one running. It
+    /// shows no spinner and the window does not wait for it: only the version cards' labels
+    /// change when it is done ([`Self::finish_table_counts`]).
+    pub(crate) fn run_table_counts(&mut self, job: Option<crate::table::Job>) {
+        let Some(job) = job else {
+            return;
+        };
+        self.cancel_table_counts();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancel);
+        let generation = job.generation;
+        let spawned = std::thread::Builder::new()
+            .name("copycraft-table-count".into())
+            .spawn(move || {
+                let result = job.run(&flag);
+                launcher::emit(UserEvent::TableDone(Box::new(launcher::TableDone {
+                    generation,
+                    result,
+                })));
+            });
+        match spawned {
+            Ok(_) => self.table_count = Some((generation, cancel)),
+            Err(e) => self.work_failed(crate::diag::Work::TableJob, &e),
+        }
+    }
+
+    pub(crate) fn cancel_table_counts(&mut self) {
+        if let Some((_, cancel)) = self.table_count.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// A finished count job: the "of N" goes into the table it was for, if the steps are as
+    /// they were. Nothing is shown for a failed or cancelled count (the labels stay).
+    fn finish_table_counts(&mut self, done: launcher::TableDone) {
+        self.table_count = None;
+        let Ok(finished) = done.result else {
+            return;
+        };
+        let generation = finished.generation();
+        let table = if self.opened_table.awaits_counts(generation) {
+            Some(&mut self.opened_table)
+        } else if self.loose_table.awaits_counts(generation) {
+            Some(&mut self.loose_table)
+        } else {
+            self.history.table_awaiting_counts(generation)
+        };
+        if table.is_some_and(|table| table.finish_counts(finished)) {
+            if launcher::is_open() {
+                self.refresh_popup();
+            }
+            self.refresh_table_window();
+        }
+    }
+
     pub(crate) fn cancel_table_job(&mut self) {
         if let Some(run) = self.table_job.take() {
             run.cancel.store(true, Ordering::Relaxed);
@@ -554,6 +612,14 @@ impl App {
     /// Take a finished table job into the table it was made for (if that is still waiting for
     /// it), and show it.
     pub(crate) fn finish_table_job(&mut self, done: launcher::TableDone) {
+        if self
+            .table_count
+            .as_ref()
+            .is_some_and(|(generation, _)| *generation == done.generation)
+        {
+            self.finish_table_counts(done);
+            return;
+        }
         let mut target = TableTarget::Card;
         if let Some(run) = self
             .table_job
@@ -576,9 +642,12 @@ impl App {
                     self.history.table_awaiting(generation)
                 };
                 // No table waits for it when it was wiped meanwhile: the frame is dropped.
-                if let Some(table) = table {
+                // Once the version is shown, the later "of N" are recounted quietly.
+                let counts = table.and_then(|table| {
                     table.finish(finished);
-                }
+                    table.count_job()
+                });
+                self.run_table_counts(counts);
             }
             Err(crate::table::TableError::Cancelled) => {
                 // A window waiting for another job can work its own table out now.
