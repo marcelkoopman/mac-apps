@@ -825,3 +825,13 @@ Run each step twice: once from Terminal or Ghostty with `cargo run -p copycraft`
 - [ ] With history off (or empty) `/` shows the card's chips as before, not the kind chips.
 - [ ] A kind no copy has is dimmed. VoiceOver reads each chip by its name.
 - [ ] Privacy: quit and start CopyCraft: no kind is remembered (`defaults read nl.marcelkoopman.copycraft` has none). The log shows no search text or kinds.
+
+## Picture previews after the typed ImageIO port (Mac only, fake data)
+
+Use made-up pictures: a large PNG and JPEG (e.g. 6000×4000), a HEIC (Preview › Export › HEIC) and a JPEG with EXIF orientation 6 (set it with `exiftool -Orientation=6 -n file.jpg`, or use an iPhone portrait image of a plain wall).
+
+- [ ] Copy each file's contents (open in Preview, ⌘A ⌘C) and also copy each file in Finder (⌘C): the card preview shows the picture upright and sharp, no larger than before, and the size line shows the full size (for the rotated one: height × width swapped, e.g. 3024 × 4032 portrait).
+- [ ] The history table and the strip show the same thumbnails, upright. Memory in Activity Monitor stays about where it was before (no jump of hundreds of MB on the large PNG).
+- [ ] Take a screenshot with the hotkey: its card preview and thumbnail appear as before.
+- [ ] Image ▾ on each picture (rotate, resize, grayscale, export PNG / JPEG / HEIC): the exported files look and measure the same as with the previous build. A PDF page preview (copy a PDF file) still renders.
+- [ ] Copy a text file in Finder and a broken file renamed to `.png`: no preview, no crash.

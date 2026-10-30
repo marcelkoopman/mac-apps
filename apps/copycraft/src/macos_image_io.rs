@@ -1,214 +1,63 @@
 #![cfg(target_os = "macos")]
 
-use std::ffi::c_void;
+//! Previews of pasted and dropped pictures: a thumbnail decoded by ImageIO, no bigger than
+//! [`PREVIEW_MAX_EDGE`], without decoding the whole picture into ImageIO's cache. Built on
+//! objc2-image-io / objc2-core-graphics, with the helpers of [`crate::macos_image_edit`].
+
 use std::path::Path;
 
-use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2_foundation::{NSData, NSString, NSURL};
+use objc2_core_foundation::{
+    CFBoolean, CFData, CFDictionary, CFRetained, CFString, CFType, CFURL, CGPoint, CGRect, CGSize,
+};
+use objc2_core_graphics::{CGColorSpace, CGContext, CGImage};
+use objc2_image_io::{
+    CGImageSource, kCGImageSourceShouldCache, kCGImageSourceShouldCacheImmediately,
+};
 
 use crate::clipboard::ClipboardImage;
 use crate::image_ops::PREVIEW_MAX_EDGE;
-
-type CFStringRef = *const c_void;
-type CFDictionaryRef = *const c_void;
-
-const RGBA_PREMUL: u32 = (4 << 12) | 1;
-const CF_NUMBER_SINT64: i32 = 4;
-
-// SAFETY: these declarations match the signatures in the system framework headers.
-#[link(name = "ImageIO", kind = "framework")]
-unsafe extern "C" {
-    static kCGImageSourceThumbnailMaxPixelSize: CFStringRef;
-    static kCGImageSourceCreateThumbnailFromImageAlways: CFStringRef;
-    static kCGImageSourceCreateThumbnailWithTransform: CFStringRef;
-    static kCGImageSourceShouldCache: CFStringRef;
-    static kCGImageSourceShouldCacheImmediately: CFStringRef;
-    static kCGImagePropertyPixelWidth: CFStringRef;
-    static kCGImagePropertyPixelHeight: CFStringRef;
-    static kCGImagePropertyOrientation: CFStringRef;
-
-    fn CGImageSourceCreateWithData(data: *const c_void, options: CFDictionaryRef) -> *mut c_void;
-    fn CGImageSourceCreateWithURL(url: *const c_void, options: CFDictionaryRef) -> *mut c_void;
-    fn CGImageSourceCopyPropertiesAtIndex(
-        isrc: *mut c_void,
-        index: usize,
-        options: CFDictionaryRef,
-    ) -> CFDictionaryRef;
-    fn CGImageSourceCreateThumbnailAtIndex(
-        isrc: *mut c_void,
-        index: usize,
-        options: CFDictionaryRef,
-    ) -> *mut c_void;
-}
-
-// SAFETY: these declarations match the signatures in the system framework headers.
-#[link(name = "CoreGraphics", kind = "framework")]
-unsafe extern "C" {
-    fn CGColorSpaceCreateDeviceRGB() -> *mut c_void;
-    fn CGBitmapContextCreate(
-        data: *mut c_void,
-        width: usize,
-        height: usize,
-        bits_per_component: usize,
-        bytes_per_row: usize,
-        space: *mut c_void,
-        bitmap_info: u32,
-    ) -> *mut c_void;
-    fn CGContextDrawImage(c: *mut c_void, rect: CGRect, image: *mut c_void);
-    fn CGImageGetWidth(image: *mut c_void) -> usize;
-    fn CGImageGetHeight(image: *mut c_void) -> usize;
-}
-
-// SAFETY: these declarations match the signatures in the system framework headers.
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    static kCFBooleanTrue: *const c_void;
-    static kCFBooleanFalse: *const c_void;
-    fn CFRelease(cf: *const c_void);
-    fn CFNumberCreate(
-        allocator: *const c_void,
-        the_type: i32,
-        value: *const c_void,
-    ) -> *const c_void;
-    fn CFDictionaryCreate(
-        allocator: *const c_void,
-        keys: *const *const c_void,
-        values: *const *const c_void,
-        num_values: isize,
-        key_callbacks: *const CFDictionaryKeyCallBacks,
-        value_callbacks: *const CFDictionaryValueCallBacks,
-    ) -> CFDictionaryRef;
-    fn CFDictionaryGetValue(dict: CFDictionaryRef, key: *const c_void) -> *const c_void;
-    fn CFNumberGetValue(number: *const c_void, the_type: i32, value: *mut c_void) -> u8;
-    static kCFTypeDictionaryKeyCallBacks: CFDictionaryKeyCallBacks;
-    static kCFTypeDictionaryValueCallBacks: CFDictionaryValueCallBacks;
-}
-
-#[repr(C)]
-struct CFDictionaryKeyCallBacks {
-    version: isize,
-    retain: *const c_void,
-    release: *const c_void,
-    copy_description: *const c_void,
-    equal: *const c_void,
-    hash: *const c_void,
-}
-
-#[repr(C)]
-struct CFDictionaryValueCallBacks {
-    version: isize,
-    retain: *const c_void,
-    release: *const c_void,
-    copy_description: *const c_void,
-    equal: *const c_void,
-}
-
-#[repr(C)]
-struct CGPoint {
-    x: f64,
-    y: f64,
-}
-
-#[repr(C)]
-struct CGSize {
-    width: f64,
-    height: f64,
-}
-
-#[repr(C)]
-struct CGRect {
-    origin: CGPoint,
-    size: CGSize,
-}
-
-struct Owned(*const c_void);
-
-impl Owned {
-    fn new(ptr: *const c_void) -> Option<Self> {
-        // `then_some` builds its argument before the check. `Owned(null)`
-        // would then drop through `CFRelease(NULL)`, which traps.
-        if ptr.is_null() { None } else { Some(Self(ptr)) }
-    }
-
-    fn get(&self) -> *const c_void {
-        self.0
-    }
-}
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            // SAFETY: `Owned` holds the only reference from a Create/Copy call and is never null.
-            unsafe { CFRelease(self.0) }
-        }
-    }
-}
+use crate::macos_image_edit::{
+    RGBA_PREMULTIPLIED, bitmap_in, pixel_numbers, properties, thumbnail,
+};
 
 pub(crate) fn preview_from_bytes(bytes: &[u8]) -> Option<ClipboardImage> {
-    let data = NSData::with_bytes(bytes);
+    let data = CFData::from_bytes(bytes);
     let options = source_options();
-    let options_ptr = options.as_ref().map(Owned::get).unwrap_or(std::ptr::null());
-    // SAFETY: the data/URL object is alive for the call and the options pointer is null or a valid
-    // dictionary; a null result is handled.
-    let source =
-        unsafe { CGImageSourceCreateWithData(Retained::as_ptr(&data).cast(), options_ptr) };
-    preview_from_source(source)
+    // SAFETY: `data` is a valid CFData and `options` a dictionary of image source keys with
+    // CFBoolean values; failure gives None.
+    let source = unsafe { CGImageSource::with_data(&data, Some(options.as_opaque())) }?;
+    preview_from_source(&source)
 }
 
 pub(crate) fn preview_from_path(path: &Path) -> Option<ClipboardImage> {
-    let text = path.to_str()?;
-    let url = NSURL::fileURLWithPath(&NSString::from_str(text));
+    // Only UTF-8 paths, as before (`NSString` took the `&str`).
+    let url = CFURL::from_file_path(path.to_str()?)?;
     let options = source_options();
-    let options_ptr = options.as_ref().map(Owned::get).unwrap_or(std::ptr::null());
-    // SAFETY: the data/URL object is alive for the call and the options pointer is null or a valid
-    // dictionary; a null result is handled.
-    let source = unsafe { CGImageSourceCreateWithURL(Retained::as_ptr(&url).cast(), options_ptr) };
-    preview_from_source(source)
+    // SAFETY: `url` is a valid file URL and `options` a dictionary of image source keys with
+    // CFBoolean values; failure gives None.
+    let source = unsafe { CGImageSource::with_url(&url, Some(options.as_opaque())) }?;
+    preview_from_source(&source)
 }
 
 /// Keep ImageIO from decoding a large paste into a full bitmap just to read it.
-fn source_options() -> Option<Owned> {
+fn source_options() -> CFRetained<CFDictionary<CFString, CFType>> {
+    let no = CFBoolean::new(false);
     // SAFETY: reads immutable constants exported by the system frameworks.
-    let (keys, values) = unsafe {
-        (
-            [
-                kCGImageSourceShouldCache,
-                kCGImageSourceShouldCacheImmediately,
-            ],
-            [kCFBooleanFalse, kCFBooleanFalse],
-        )
+    let keys: [&CFString; 2] = unsafe {
+        [
+            kCGImageSourceShouldCache,
+            kCGImageSourceShouldCacheImmediately,
+        ]
     };
-    // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
-    // call.
-    let dict = unsafe {
-        CFDictionaryCreate(
-            std::ptr::null(),
-            keys.as_ptr(),
-            values.as_ptr(),
-            2,
-            &kCFTypeDictionaryKeyCallBacks,
-            &kCFTypeDictionaryValueCallBacks,
-        )
-    };
-    Owned::new(dict)
+    let values: [&CFType; 2] = [no, no];
+    CFDictionary::from_slices(&keys, &values)
 }
 
-fn preview_from_source(source: *mut c_void) -> Option<ClipboardImage> {
-    let source = Owned::new(source.cast())?;
-    let (full_width, full_height) = oriented_size(source.get());
-    let options = thumbnail_options()?;
-    // SAFETY: the pointers are live, non-null CF objects held by `Owned`; a null result is handled.
-    let thumb =
-        unsafe { CGImageSourceCreateThumbnailAtIndex(source.get().cast_mut(), 0, options.get()) };
-    let thumb = Owned::new(thumb.cast())?;
-    // SAFETY: `thumb` is a live, non-null CGImage held by `Owned`.
-    let (width, height) = unsafe {
-        (
-            CGImageGetWidth(thumb.get().cast_mut()),
-            CGImageGetHeight(thumb.get().cast_mut()),
-        )
-    };
-    let mut rgba = rgba_from_image(thumb.get().cast_mut(), width, height)?;
+fn preview_from_source(source: &CGImageSource) -> Option<ClipboardImage> {
+    let (full_width, full_height) = oriented_size(source);
+    let thumb = thumbnail(source, i64::try_from(PREVIEW_MAX_EDGE).ok()?)?;
+    let (width, height) = (CGImage::width(Some(&thumb)), CGImage::height(Some(&thumb)));
+    let mut rgba = rgba_from_image(&thumb, width, height)?;
     unpremultiply(&mut rgba);
     let mut image = ClipboardImage::new(width, height, rgba)?;
     if full_width == 0 || full_height == 0 {
@@ -221,161 +70,54 @@ fn preview_from_source(source: *mut c_void) -> Option<ClipboardImage> {
     Some(image)
 }
 
-fn thumbnail_options() -> Option<Owned> {
-    let max_edge = i64::try_from(PREVIEW_MAX_EDGE).ok()?;
-    // SAFETY: the value pointer points at a live i64, matching CF_NUMBER_SINT64.
-    let max_number = Owned::new(unsafe {
-        CFNumberCreate(
-            std::ptr::null(),
-            CF_NUMBER_SINT64,
-            (&max_edge) as *const i64 as *const c_void,
-        )
-    })?;
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let (keys, values) = unsafe {
-        (
-            [
-                kCGImageSourceThumbnailMaxPixelSize,
-                kCGImageSourceCreateThumbnailFromImageAlways,
-                kCGImageSourceCreateThumbnailWithTransform,
-            ],
-            [max_number.get(), kCFBooleanTrue, kCFBooleanTrue],
-        )
-    };
-    // SAFETY: `keys` and `values` are equally long arrays of valid CF objects that outlive the
-    // call.
-    let dict = unsafe {
-        CFDictionaryCreate(
-            std::ptr::null(),
-            keys.as_ptr(),
-            values.as_ptr(),
-            3,
-            &kCFTypeDictionaryKeyCallBacks,
-            &kCFTypeDictionaryValueCallBacks,
-        )
-    };
-    Owned::new(dict)
-}
-
-fn oriented_size(source: *const c_void) -> (usize, usize) {
-    // SAFETY: `source` is a live image source and no options are passed; a null result is
-    // handled by `Owned::new`.
-    let Some(props) = Owned::new(unsafe {
-        CGImageSourceCopyPropertiesAtIndex(source.cast_mut(), 0, std::ptr::null())
-    }) else {
+/// The full picture's width and height, its EXIF orientation applied; 0 for what is missing.
+fn oriented_size(source: &CGImageSource) -> (usize, usize) {
+    let Some(props) = properties(source) else {
         return (0, 0);
     };
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let (width_key, height_key, orientation_key) = unsafe {
-        (
-            kCGImagePropertyPixelWidth,
-            kCGImagePropertyPixelHeight,
-            kCGImagePropertyOrientation,
-        )
+    let [width, height, orientation] = pixel_numbers(&props);
+    let size = |number: Option<i64>| {
+        number
+            .filter(|number| *number > 0)
+            .and_then(|number| usize::try_from(number).ok())
+            .unwrap_or(0)
     };
-    let mut width = dict_usize(props.get(), width_key);
-    let mut height = dict_usize(props.get(), height_key);
-    let orientation = dict_usize(props.get(), orientation_key);
-    if matches!(orientation, 5..=8) {
+    let (mut width, mut height) = (size(width), size(height));
+    if matches!(size(orientation), 5..=8) {
         std::mem::swap(&mut width, &mut height);
     }
     (width, height)
 }
 
-fn dict_usize(dict: *const c_void, key: *const c_void) -> usize {
-    // SAFETY: `dict` is a live dictionary and `key` a valid CFString; a missing key gives null,
-    // which is checked.
-    let value = unsafe { CFDictionaryGetValue(dict, key) };
-    if value.is_null() {
-        return 0;
-    }
-    let mut number = 0i64;
-    // SAFETY: writes one i64 into a local of that type, matching CF_NUMBER_SINT64.
-    let ok = unsafe {
-        CFNumberGetValue(
-            value,
-            CF_NUMBER_SINT64,
-            &mut number as *mut i64 as *mut c_void,
-        )
-    };
-    if ok == 0 || number <= 0 {
-        0
-    } else {
-        usize::try_from(number).unwrap_or(0)
-    }
-}
-
-/// Run `draw` on a premultiplied RGBA bitmap context over `rgba` (`width` × `height` pixels,
-/// 4 bytes each). The context is released before this returns. `None` when the buffer has the
-/// wrong length or the system makes no context.
+/// Run `draw` on a premultiplied RGBA bitmap context (device RGB) over `rgba` (`width` ×
+/// `height` pixels, 4 bytes each). The context is released before this returns. `None` when
+/// the buffer has the wrong length or the system makes no context.
 pub(crate) fn with_bitmap<R>(
     rgba: &mut [u8],
     width: usize,
     height: usize,
-    draw: impl FnOnce(&objc2_core_graphics::CGContext) -> R,
+    draw: impl FnOnce(&CGContext) -> R,
 ) -> Option<R> {
-    use objc2_core_foundation::CFRetained;
-    let row = width.checked_mul(4)?;
-    if width == 0 || height == 0 || rgba.len() != row.checked_mul(height)? {
-        return None;
-    }
-    let space = objc2_core_graphics::CGColorSpace::new_device_rgb()?;
-    // SAFETY: `rgba` holds `height` rows of `row` bytes (checked above) and outlives the
-    // context, which is released before this function returns; `space` is a live colour space.
-    // The result is a +1 CGContext, owned by the `CFRetained` from here on.
-    let context: CFRetained<objc2_core_graphics::CGContext> = unsafe {
-        let raw = CGBitmapContextCreate(
-            rgba.as_mut_ptr().cast(),
-            width,
-            height,
-            8,
-            row,
-            std::ptr::from_ref(&*space).cast_mut().cast(),
-            RGBA_PREMUL,
-        );
-        CFRetained::from_raw(std::ptr::NonNull::new(raw.cast())?)
-    };
+    let space = CGColorSpace::new_device_rgb()?;
+    let context = bitmap_in(rgba, width, height, RGBA_PREMULTIPLIED, &space)?;
     let result = draw(&context);
     drop(context);
     Some(result)
 }
 
-fn rgba_from_image(image: *mut c_void, width: usize, height: usize) -> Option<Vec<u8>> {
-    let row = width.checked_mul(4)?;
-    let len = row.checked_mul(height)?;
+fn rgba_from_image(image: &CGImage, width: usize, height: usize) -> Option<Vec<u8>> {
+    let len = width.checked_mul(4)?.checked_mul(height)?;
     if len == 0 {
         return None;
     }
     let mut rgba = vec![0u8; len];
-    // SAFETY: takes no arguments; a null result is handled by `Owned::new`.
-    let space = Owned::new(unsafe { CGColorSpaceCreateDeviceRGB() })?;
-    // SAFETY: `rgba` holds `height` rows of `width * 4` bytes and outlives the context.
-    let context = Owned::new(unsafe {
-        CGBitmapContextCreate(
-            rgba.as_mut_ptr().cast(),
-            width,
-            height,
-            8,
-            row,
-            space.get().cast_mut(),
-            RGBA_PREMUL,
-        )
-    })?;
-    // SAFETY: the context and image are live CF objects owned for the duration of the call.
-    unsafe {
-        CGContextDrawImage(
-            context.get().cast_mut(),
-            CGRect {
-                origin: CGPoint { x: 0.0, y: 0.0 },
-                size: CGSize {
-                    width: width as f64,
-                    height: height as f64,
-                },
-            },
-            image,
+    with_bitmap(&mut rgba, width, height, |context| {
+        let rect = CGRect::new(
+            CGPoint::new(0.0, 0.0),
+            CGSize::new(width as f64, height as f64),
         );
-    }
-    drop(context);
+        CGContext::draw_image(Some(context), rect, Some(image));
+    })?;
     Some(rgba)
 }
 
@@ -400,7 +142,7 @@ mod tests {
     use image::ImageEncoder;
     use image::codecs::png::PngEncoder;
 
-    use super::{preview_from_bytes, preview_from_path};
+    use super::{preview_from_bytes, preview_from_path, unpremultiply, with_bitmap};
 
     fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -460,5 +202,21 @@ mod tests {
             (width, height)
         );
         assert!(from_path.width.max(from_path.height) <= 640);
+    }
+
+    #[test]
+    fn with_bitmap_checks_the_buffer_and_draws_into_it() {
+        let mut short = vec![0u8; 15];
+        assert!(with_bitmap(&mut short, 2, 2, |_| ()).is_none());
+        assert!(with_bitmap(&mut [], 0, 0, |_| ()).is_none());
+        let mut rgba = vec![0u8; 16];
+        assert_eq!(with_bitmap(&mut rgba, 2, 2, |_| 7), Some(7));
+    }
+
+    #[test]
+    fn unpremultiply_truncates_and_clears_transparent_pixels() {
+        let mut px = [100, 50, 0, 128, 9, 9, 9, 0, 1, 2, 3, 255];
+        unpremultiply(&mut px);
+        assert_eq!(px, [199, 99, 0, 128, 0, 0, 0, 0, 1, 2, 3, 255]);
     }
 }

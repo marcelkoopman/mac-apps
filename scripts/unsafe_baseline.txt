@@ -42,7 +42,10 @@
 # copycraft blocks 117: +1 for Text ▾ › QR Code (feature F of the six-features plan, approved by Marcel
 # 2026-10-28; macos_qr.rs): one block of msg_send calls to CIFilter (CIQRCodeGenerator) and CIContext, reached
 # by name like mac_ui::blur, as objc2-core-image would be a new crate.
-copycraft blocks 117
+# copycraft blocks 101: -16, macos_image_io.rs ported from hand-written ImageIO/CoreGraphics/CoreFoundation
+# externs (CFRelease wrapper, CFDictionaryCreate) to objc2-image-io/-core-graphics/-core-foundation (approved
+# by Marcel 2026-10-30); thumbnail, properties, pixel numbers and bitmap context shared with macos_image_edit.rs.
+copycraft blocks 101
 copycraft fn 5
 copycraft impl 9
 # mac-ui blocks 84: +1 for mac_ui::widgets::fade_trailing_edge (collections HIG point 7, approved by Marcel

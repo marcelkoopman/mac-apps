@@ -18,12 +18,15 @@ use objc2_image_io::{
     kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceCreateThumbnailWithTransform,
     kCGImageSourceThumbnailMaxPixelSize,
 };
+
+/// Image properties: CFString keys, values of any CF type.
+pub(crate) type Properties = CFDictionary<CFString, CFType>;
 use zeroize::Zeroizing;
 
 use crate::image_edit::{Codec, Rgba};
 
 /// kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big: R, G, B, A in memory.
-const RGBA_PREMULTIPLIED: u32 = (4 << 12) | 1;
+pub(crate) const RGBA_PREMULTIPLIED: u32 = (4 << 12) | 1;
 /// kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big: R, G, B, unused.
 const RGBX: u32 = (4 << 12) | 5;
 /// Larger pictures are not edited (a 4-byte-per-pixel copy of each would be several GB).
@@ -81,18 +84,59 @@ impl Codec for ImageIoCodec {
 /// is not a picture ImageIO reads.
 fn with_source<R>(
     bytes: &[u8],
-    read: impl FnOnce(&CGImageSource, &CFDictionary<CFString, CFType>) -> Option<R>,
+    read: impl FnOnce(&CGImageSource, &Properties) -> Option<R>,
 ) -> Option<R> {
     let len = isize::try_from(bytes.len()).ok().filter(|len| *len > 0)?;
     // SAFETY: `bytes` outlives `data` and everything made from it, which stay in this function.
     let data = unsafe { CFData::with_bytes_no_copy(None, bytes.as_ptr(), len, kCFAllocatorNull) }?;
     // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
     let source = unsafe { CGImageSource::with_data(&data, None) }?;
-    // SAFETY: index 0 of a valid image source, no options; a missing image gives None.
-    let properties = unsafe { source.properties_at_index(0, None) }?;
-    // SAFETY: image properties have CFString keys.
-    let properties: &CFDictionary<CFString, CFType> = unsafe { properties.cast_unchecked() };
-    read(&source, properties)
+    let properties = properties(&source)?;
+    read(&source, &properties)
+}
+
+/// The first picture's properties in `source`; `None` when it has no picture.
+pub(crate) fn properties(source: &CGImageSource) -> Option<CFRetained<Properties>> {
+    // SAFETY: index 0 of a valid image source, no options; a missing image gives None. Image
+    // properties have CFString keys, so the cast holds.
+    unsafe {
+        Some(CFRetained::cast_unchecked(
+            source.properties_at_index(0, None)?,
+        ))
+    }
+}
+
+/// Width, height and EXIF orientation as `properties` give them (each `None` when missing or
+/// not a whole number).
+pub(crate) fn pixel_numbers(properties: &Properties) -> [Option<i64>; 3] {
+    // SAFETY: reads immutable constants exported by the system frameworks.
+    let keys = unsafe {
+        [
+            kCGImagePropertyPixelWidth,
+            kCGImagePropertyPixelHeight,
+            kCGImagePropertyOrientation,
+        ]
+    };
+    keys.map(|key| properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64())
+}
+
+/// The first picture of `source` drawn upright (its EXIF orientation applied), its longest
+/// side at most `max_edge` pixels; made even when the file holds a smaller thumbnail.
+pub(crate) fn thumbnail(source: &CGImageSource, max_edge: i64) -> Option<CFRetained<CGImage>> {
+    let longest = CFNumber::new_i64(max_edge);
+    let yes = CFBoolean::new(true);
+    // SAFETY: reads immutable constants exported by the system frameworks.
+    let keys: [&CFString; 3] = unsafe {
+        [
+            kCGImageSourceCreateThumbnailFromImageAlways,
+            kCGImageSourceCreateThumbnailWithTransform,
+            kCGImageSourceThumbnailMaxPixelSize,
+        ]
+    };
+    let values: [&CFType; 3] = [yes, yes, &longest];
+    let options = CFDictionary::from_slices(&keys, &values);
+    // SAFETY: `options` is a valid dictionary of thumbnail keys; failure gives None.
+    unsafe { source.thumbnail_at_index(0, Some(options.as_opaque())) }
 }
 
 /// Whether the picture `bytes` carries a location (a GPS block in its metadata). Only yes or
@@ -113,28 +157,12 @@ pub fn decode(bytes: &[u8]) -> Option<Rgba> {
     with_source(bytes, decode_source)
 }
 
-fn decode_source(
-    source: &CGImageSource,
-    properties: &CFDictionary<CFString, CFType>,
-) -> Option<Rgba> {
+fn decode_source(source: &CGImageSource, properties: &Properties) -> Option<Rgba> {
     let (width, height) = upright_size(properties)?;
     if width.checked_mul(height)? > MAX_PIXELS {
         return None;
     }
-    let longest = CFNumber::new_i64(i64::try_from(width.max(height)).ok()?);
-    let yes = CFBoolean::new(true);
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys: [&CFString; 3] = unsafe {
-        [
-            kCGImageSourceCreateThumbnailFromImageAlways,
-            kCGImageSourceCreateThumbnailWithTransform,
-            kCGImageSourceThumbnailMaxPixelSize,
-        ]
-    };
-    let values: [&CFType; 3] = [yes, yes, &longest];
-    let options = CFDictionary::from_slices(&keys, &values);
-    // SAFETY: `options` is a valid dictionary of thumbnail keys; failure gives None.
-    let image = unsafe { source.thumbnail_at_index(0, Some(options.as_opaque())) }?;
+    let image = thumbnail(source, i64::try_from(width.max(height)).ok()?)?;
     rgba_of(&image)
 }
 
@@ -159,21 +187,11 @@ pub fn rgba_of(image: &CGImage) -> Option<Rgba> {
 }
 
 /// The width and height of the first picture (its `properties`), its EXIF orientation applied.
-fn upright_size(properties: &CFDictionary<CFString, CFType>) -> Option<(usize, usize)> {
-    let number = |key: &CFString| -> Option<i64> {
-        properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64()
-    };
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let (width_key, height_key, orientation_key) = unsafe {
-        (
-            kCGImagePropertyPixelWidth,
-            kCGImagePropertyPixelHeight,
-            kCGImagePropertyOrientation,
-        )
-    };
-    let width = usize::try_from(number(width_key)?).ok()?;
-    let height = usize::try_from(number(height_key)?).ok()?;
-    let orientation = number(orientation_key).unwrap_or(1);
+fn upright_size(properties: &Properties) -> Option<(usize, usize)> {
+    let [width, height, orientation] = pixel_numbers(properties);
+    let width = usize::try_from(width?).ok()?;
+    let height = usize::try_from(height?).ok()?;
+    let orientation = orientation.unwrap_or(1);
     // 5 to 8 are a quarter turn (with or without a mirror image).
     Some(if (5..=8).contains(&orientation) {
         (height, width)
@@ -245,21 +263,35 @@ fn bitmap(
     height: usize,
     info: u32,
 ) -> Option<CFRetained<CGContext>> {
-    if pixels.len() != width.checked_mul(height)?.checked_mul(4)? {
-        return None;
-    }
     // SAFETY: reads immutable constants exported by the system frameworks.
     let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
-    // SAFETY: `pixels` holds `height` rows of `width * 4` bytes and outlives the context,
-    // which callers drop before they read `pixels`.
+    bitmap_in(pixels, width, height, info, &space)
+}
+
+/// A bitmap context drawing into `pixels` in `space` (8 bits per channel, 4 bytes per
+/// pixel, `info` the pixel layout). `None` when `pixels` is not `width` × `height` × 4 bytes
+/// or the system makes no context. Callers drop the context before they read `pixels`.
+pub(crate) fn bitmap_in(
+    pixels: &mut [u8],
+    width: usize,
+    height: usize,
+    info: u32,
+    space: &CGColorSpace,
+) -> Option<CFRetained<CGContext>> {
+    let row = width.checked_mul(4)?;
+    if width == 0 || height == 0 || pixels.len() != row.checked_mul(height)? {
+        return None;
+    }
+    // SAFETY: `pixels` holds `height` rows of `row` bytes (checked above) and outlives the
+    // context, which callers drop before they read `pixels`.
     unsafe {
         CGBitmapContextCreate(
             pixels.as_mut_ptr().cast::<c_void>(),
             width,
             height,
             8,
-            width * 4,
-            Some(&space),
+            row,
+            Some(space),
             info,
         )
     }
