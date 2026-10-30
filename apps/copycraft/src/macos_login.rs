@@ -1,26 +1,25 @@
-//! Open at Login through `SMAppService` (macOS 13+), without a helper or a new crate.
+//! Open at Login through `SMAppService` (macOS 13+), without a helper, typed through
+//! objc2-service-management.
 //!
-//! Swift calls the class property `mainApp` (`NS_SWIFT_NAME`). The Objective-C getter is
-//! `+mainAppService`. Sending `mainApp` makes objc2 panic in debug builds ("method not found")
-//! while Settings is opening. If the class or selector is missing, Open at Login is unavailable
-//! and the Settings window still opens.
-//!
-//! Called at runtime so older SDKs and the Linux clippy target still build. No network: the
+//! Swift calls the class property `mainApp` (`NS_SWIFT_NAME`); the Objective-C getter (and the
+//! binding) is `+mainAppService`. The class and its selectors are checked at run time first:
+//! if one is missing, Open at Login is unavailable and the Settings window still opens.
+//! No network: the
 //! deep link only opens System Settings › Login Items when approval is required.
 
-// Loads ServiceManagement so `SMAppService` is registered. No direct symbol refs: those are
-// absent from older SDKs. `#[link]` here has no `+weak` modifier (rustc rejects it); a missing
+// Loads ServiceManagement so `SMAppService` is registered (the crate's own link covers only its
+// statics, which are not used). `#[link]` here has no `+weak` modifier (rustc rejects it); a missing
 // class or `+mainAppService` is handled at runtime instead of aborting.
 // SAFETY: an empty block: it only links the framework and declares no symbols.
 #[link(name = "ServiceManagement", kind = "framework")]
 unsafe extern "C" {}
 
 use mac_ui::objc2::encode::{EncodeArguments, EncodeReturn};
-use mac_ui::objc2::msg_send;
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::runtime::{AnyClass, AnyObject, Bool, Sel};
 use mac_ui::objc2::sel;
 use mac_ui::objc2_foundation::NSError;
+use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
 /// Status of the main app as a login item ([`SMAppServiceStatus`](https://developer.apple.com/documentation/servicemanagement/smappservice/status-swift.property)).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,15 +56,14 @@ where
     object.class().verify_sel::<A, R>(selector).is_ok()
 }
 
-fn main_app() -> Option<Retained<AnyObject>> {
+fn main_app() -> Option<Retained<SMAppService>> {
     let class = AnyClass::get(c"SMAppService")?;
     // `+mainAppService` returns an autoreleased `SMAppService *` (`@`).
     if !class_selector::<(), *mut AnyObject>(class, sel!(mainAppService)) {
         return None;
     }
-    // SAFETY: selector and `@` return were verified above. Not a +1 method family,
-    // so `Option<Retained<_>>` retains the autoreleased object and accepts NULL.
-    unsafe { msg_send![class, mainAppService] }
+    // SAFETY: the class and selector were verified above; the binding retains the result.
+    Some(unsafe { SMAppService::mainAppService() })
 }
 
 /// Current Open at Login status.
@@ -78,12 +76,11 @@ pub fn status() -> LoginStatus {
         return LoginStatus::Unavailable;
     }
     // SAFETY: `-status` was verified above and takes no arguments.
-    let raw: isize = unsafe { msg_send![&service, status] };
-    match raw {
-        0 => LoginStatus::NotRegistered,
-        1 => LoginStatus::Enabled,
-        2 => LoginStatus::RequiresApproval,
-        3 => LoginStatus::NotFound,
+    match unsafe { service.status() } {
+        SMAppServiceStatus::NotRegistered => LoginStatus::NotRegistered,
+        SMAppServiceStatus::Enabled => LoginStatus::Enabled,
+        SMAppServiceStatus::RequiresApproval => LoginStatus::RequiresApproval,
+        SMAppServiceStatus::NotFound => LoginStatus::NotFound,
         _ => LoginStatus::Unavailable,
     }
 }
@@ -103,23 +100,22 @@ pub fn set_enabled(on: bool) -> Result<LoginStatus, String> {
     if !instance_selector::<(&mut *mut NSError,), Bool>(&service, selector) {
         return Err(crate::locale::t("login_unavailable").into());
     }
-    let mut error: *mut NSError = std::ptr::null_mut();
-    let ok: Bool = if on {
-        // SAFETY: `-[SMAppService registerAndReturnError:]` was verified above.
-        unsafe { msg_send![&service, registerAndReturnError: &mut error] }
-    } else {
-        // SAFETY: `-[SMAppService unregisterAndReturnError:]` was verified above.
-        unsafe { msg_send![&service, unregisterAndReturnError: &mut error] }
+    // SAFETY: `-registerAndReturnError:` / `-unregisterAndReturnError:` were verified above; the
+    // binding turns NO plus the out-error into `Err`.
+    let changed = unsafe {
+        if on {
+            service.registerAndReturnError()
+        } else {
+            service.unregisterAndReturnError()
+        }
     };
-    if !ok.as_bool() {
-        let message = if error.is_null() {
+    if let Err(error) = changed {
+        // NO without an NSError: objc2 hands over its placeholder error, shown as before.
+        return Err(if error.domain().to_string() == "__objc2.missingError" {
             crate::locale::t("login_change_failed").into()
         } else {
-            // SAFETY: error is a non-null NSError* from the call above.
-            let err: &NSError = unsafe { &*error };
-            err.localizedDescription().to_string()
-        };
-        return Err(message);
+            error.localizedDescription().to_string()
+        });
     }
     let now = status();
     if on && now == LoginStatus::RequiresApproval {
@@ -137,5 +133,5 @@ pub fn open_login_items_settings() {
         return;
     }
     // SAFETY: `+[SMAppService openSystemSettingsLoginItems]` was verified above.
-    let _: () = unsafe { msg_send![class, openSystemSettingsLoginItems] };
+    unsafe { SMAppService::openSystemSettingsLoginItems() };
 }

@@ -881,3 +881,12 @@ Put only made-up content on screen (e.g. a TextEdit window with `testscherm`).
 - [ ] A window screenshot of a left-out window is refused as before; one on a second display, if there is one, works.
 - [ ] Screen Recording off (System Settings › Privacy): the same notice as before, no crash; after allowing it, the next screenshot works.
 - [ ] No file appears (`ls -t ~/Desktop ~/Pictures ~/Library/Containers/nl.marcelkoopman.copycraft/Data/tmp | head`): the picture stays in memory.
+
+## Open at Login through objc2-service-management (Mac only, no data)
+
+Use the bundled, signed app from /Applications (SMAppService needs a real bundle).
+
+- [ ] Settings › *Openen bij inloggen* / *Open at Login*: turn it on: CopyCraft appears in System Settings › General › Login Items (or System Settings opens there when approval is needed); the checkbox stays on after closing and reopening Settings. Log out and in: CopyCraft starts.
+- [ ] Turn it off: it leaves Login Items, the checkbox stays off; after a restart it does not start at login.
+- [ ] Run once from Terminal (`cargo run -p copycraft`, not a bundle): Settings opens without a crash; switching the option shows the same message as the previous build (unavailable or an error text), not an empty or English-only placeholder.
+- [ ] The Welcome window's Open at Login choice behaves the same.

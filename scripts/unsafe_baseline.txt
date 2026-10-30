@@ -53,7 +53,10 @@
 # main.rs stays: polars 0.55 reads those limits only from the environment.
 # copycraft blocks 89: -4, reuses mac-ui helpers (2026-10-30): text::add_attr for the card marks (2),
 # actions::checkbox in the column picker, pasteboard_types::read_objects for pasted images.
-copycraft blocks 89
+# copycraft blocks 87: -2, macos_login.rs typed through objc2-service-management 0.3 (approved by Marcel
+# 2026-10-30): SMAppService's typed register/unregister in one block, returning the NSError, so the
+# raw NSError read is gone. The run-time class and selector checks stay.
+copycraft blocks 87
 copycraft fn 5
 # copycraft impl 3: -6, About, Settings and Welcome lost their delegates' NSObjectProtocol and
 # NSWindowDelegate impls (approved by Marcel 2026-10-30): mac_ui::panel::on_close is their window delegate.
