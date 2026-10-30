@@ -18,6 +18,8 @@ mod decode;
 mod diag;
 mod diff;
 mod docx;
+#[cfg(test)]
+mod error_display_tests;
 mod format;
 mod generate;
 mod highlight;

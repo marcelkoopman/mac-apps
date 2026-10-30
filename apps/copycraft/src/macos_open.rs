@@ -56,14 +56,17 @@ pub fn open_web_url(url: &str) -> bool {
     NSWorkspace::sharedWorkspace().openURL(&nsurl)
 }
 
-/// Why a `mailto:` link was not opened.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a `mailto:` link was not opened. Display is a fixed English text, never the link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum MailtoError {
     /// The link could not be parsed.
+    #[error("the mail link is not valid")]
     Invalid,
     /// No app is set up to handle `mailto:` links.
+    #[error("no mail app is set up")]
     NoMailApp,
     /// The system found an app but could not open the link.
+    #[error("the mail app could not open the link")]
     NotOpened,
 }
 

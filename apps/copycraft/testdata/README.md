@@ -891,3 +891,13 @@ Use the bundled, signed app from /Applications (SMAppService needs a real bundle
 - [ ] Run once from Terminal (`cargo run -p copycraft`, not a bundle): Settings opens without a crash; switching the option shows the same message as the previous build (unavailable or an error text), not an empty or English-only placeholder.
 - [ ] The Welcome window's Open at Login choice behaves the same.
 - [ ] (Split unsafe blocks in the capture, 2026-10-30) Repeat the area, window and whole-screen screenshot from "Screenshots through objc2-screen-capture-kit" once more, on a Retina and a non-Retina display if there is one: same size and sharpness, own windows and the pointer still left out.
+
+## Error texts through thiserror (Mac only, fake data)
+
+The error enums derive `thiserror::Error`; the texts the user sees must be exactly as before.
+
+- [ ] A table step on a CSV card with 20 versions already: the same "max versions" note (NL and EN). A table step on made-up text that is no table: the same "not a table" text.
+- [ ] An Image ▾ step that changes nothing (e.g. rotate 0, or strip metadata from a picture without any): the same note as before.
+- [ ] Drop a made-up password protected `.docx` and a made-up broken `.zip`: the same NL/EN notes as before, no file name in Console (`log stream --predicate 'subsystem == "nl.marcelkoopman.copycraft"'`).
+- [ ] JSON ▾ restyle on made-up broken JSON (`{"test": 1,}`): the same "line, column" note; with a duplicate key the same duplicate-key note.
+- [ ] Feedback › copy the mail text, and copy a symbol from the symbol window: both still land on the clipboard; Help › mail with no mail app set up shows the same message as before.

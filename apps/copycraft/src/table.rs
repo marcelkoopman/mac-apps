@@ -134,31 +134,25 @@ impl TableOp {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Display is the card's text (NL/EN), unchanged from the hand-written impl.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TableError {
     /// [`MAX_VERSIONS`] already.
+    #[error("{}", crate::locale::tf("max_versions", &[&MAX_VERSIONS]))]
     Full,
     /// The copied text is not a table (any more).
+    #[error("{}", crate::locale::t("not_a_table"))]
     NotATable,
     /// A newer job took over.
+    #[error("{}", crate::locale::t("cancelled"))]
     Cancelled,
     /// Polars refused the step (message for the card).
+    #[error("{0}")]
     Failed(String),
     /// The step would change nothing, so it makes no version (a note for the card, not an
     /// error): [`TableOp::unchanged_note`].
+    #[error("{0}")]
     Unchanged(&'static str),
-}
-
-impl std::fmt::Display for TableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Full => write!(f, "{}", crate::locale::tf("max_versions", &[&MAX_VERSIONS])),
-            Self::NotATable => write!(f, "{}", crate::locale::t("not_a_table")),
-            Self::Cancelled => write!(f, "{}", crate::locale::t("cancelled")),
-            Self::Failed(message) => write!(f, "{message}"),
-            Self::Unchanged(note) => write!(f, "{note}"),
-        }
-    }
 }
 
 /// What a job starts from.

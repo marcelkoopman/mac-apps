@@ -19,14 +19,18 @@ pub struct JsonStyle {
     pub sort: bool,
 }
 
-/// Why the JSON is not restyled.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Why the JSON is not restyled. Display is a fixed English text without the problem's
+/// position or message; the card's NL/EN text is [`JsonStyleError::note`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum JsonStyleError {
     /// It does not parse: 1-based line and column in the copied text, and what is wrong.
+    #[error("the JSON does not parse")]
     Broken(crate::validate::JsonProblem),
     /// A key appears twice in one object; restyling would keep only the last.
+    #[error("the JSON has a duplicate key")]
     DuplicateKeys,
     /// A number would come back with another value (too big or too precise).
+    #[error("a JSON number would change")]
     LossyNumbers,
 }
 

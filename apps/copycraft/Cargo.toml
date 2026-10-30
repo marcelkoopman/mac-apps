@@ -72,6 +72,8 @@ sha2 = { version = "0.11", default-features = false, features = ["zeroize"] }
 serde_norway = "0.9.42"
 # Line diff of two history copies (src/diff.rs). Pure Rust: no network crates.
 similar = "3.2"
+# Error enums (Display + std::error::Error); the strings hold no content.
+thiserror = { workspace = true }
 zeroize = "1.9.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]

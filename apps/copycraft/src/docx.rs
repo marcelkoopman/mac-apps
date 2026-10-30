@@ -27,20 +27,27 @@ pub const MAX_TEXT_BYTES: usize = 8_000_000;
 
 const DOCUMENT_XML: &[u8] = b"word/document.xml";
 
-/// Why a docx gave no text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a docx gave no text. Display is a fixed English text without content; the card's
+/// NL/EN text comes from `open_file`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DocxError {
     /// Not a zip with `word/document.xml`: not a Word document.
+    #[error("not a Word document")]
     NotDocx,
     /// Password protected (zip encryption, or an encrypted Office container).
+    #[error("the Word document is password protected")]
     Locked,
     /// Damaged, or a zip feature this reader does not do (zip64, other compression methods).
+    #[error("the Word document cannot be read")]
     Unreadable,
     /// Unpacks larger than the limits allow.
+    #[error("the Word document unpacks too large")]
     Bomb,
     /// The text is larger than the card takes.
+    #[error("the text is too large")]
     TooLarge,
     /// A document without any text.
+    #[error("the Word document has no text")]
     NoText,
 }
 

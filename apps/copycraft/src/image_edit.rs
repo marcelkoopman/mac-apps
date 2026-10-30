@@ -480,24 +480,18 @@ pub trait Codec {
     fn encode_jpeg(&self, image: &Rgba, quality: f64) -> Option<Vec<u8>>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Display is the card's text (NL/EN), unchanged from the hand-written impl.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ImageError {
     /// A newer job took over.
+    #[error("{}", crate::locale::t("cancelled"))]
     Cancelled,
     /// The picture could not be read or written (message for the card).
+    #[error("{0}")]
     Failed(String),
     /// The step would change nothing, so it makes no copy (a note, not an error).
+    #[error("{0}")]
     Unchanged(&'static str),
-}
-
-impl std::fmt::Display for ImageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cancelled => write!(f, "{}", crate::locale::t("cancelled")),
-            Self::Failed(message) => write!(f, "{message}"),
-            Self::Unchanged(note) => write!(f, "{note}"),
-        }
-    }
 }
 
 /// One Image ▾ step on the picture on the card. Send it to a thread and [`run`](Self::run) it.

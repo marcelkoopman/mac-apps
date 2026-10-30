@@ -10,6 +10,9 @@ edition = "2024"
 arboard = "3"
 polars = { version = "0.55.2", default-features = false }
 serde_json = "1.0"
+# Error enums (#[derive(Error)]). 2.0 resolves to the 2.0.x already in the lock (polars,
+# tray-icon): no second copy. Approved by Marcel (2026-10-30).
+thiserror = "2.0"
 
 # UI frameworks, used only by `crates/mac-ui`; apps import them via its re-exports (`mac_ui::objc2`
 # etc.). objc2-foundation/objc2-app-kit have default features off and only what mac-ui itself

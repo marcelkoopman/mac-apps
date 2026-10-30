@@ -370,7 +370,7 @@ pub fn hidden_content() -> &'static str {
 pub fn write_clipboard(text: &str, concealed: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        crate::macos_pasteboard::write_text(text, concealed)
+        crate::macos_pasteboard::write_text(text, concealed).map_err(|e| e.to_string())
     }
     #[cfg(not(target_os = "macos"))]
     {

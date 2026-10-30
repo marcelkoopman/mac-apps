@@ -59,32 +59,45 @@ pub const SHOWN_LINES: usize = 1_000;
 /// Folder names tried for the zip's own folder ("Archive", "Archive 2", … "Archive 999").
 const MAX_FOLDER_TRIES: u32 = 999;
 
-/// Why a zip cannot be listed or extracted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a zip cannot be listed or extracted. Display is a fixed English text without names or
+/// contents; the card's NL/EN text is [`ZipError::message`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ZipError {
     /// No end of central directory: not a zip.
+    #[error("not a zip archive")]
     NotZip,
     /// Damaged: the directory or an entry does not add up.
+    #[error("the zip archive is damaged")]
     Corrupt,
     /// Password protected (encrypted entries).
+    #[error("the zip archive is password protected")]
     Locked,
     /// A compression method this reader does not do (only stored and deflate).
+    #[error("the zip archive uses an unsupported compression method")]
     Unsupported,
     /// An entry would land outside the chosen folder, is a link, or is there twice.
+    #[error("the zip archive has an unsafe entry")]
     Unsafe,
     /// No entries (besides `__MACOSX/`).
+    #[error("the zip archive is empty")]
     Empty,
     /// More entries, or more unpacked bytes, than the limits allow.
+    #[error("the zip archive is too large")]
     TooLarge,
     /// The zip could not be read (gone, no access).
+    #[error("the zip archive cannot be read")]
     Read,
     /// Writing to the chosen folder failed (no access, disk full, a name appeared meanwhile).
+    #[error("writing to the chosen folder failed")]
     Write,
     /// Not enough free space on the chosen folder's disk ([`fits`]); nothing was written.
+    #[error("not enough free space")]
     NoSpace,
     /// Stopped by the user (⌘. or the chip again); nothing is left behind.
+    #[error("unpacking was stopped")]
     Cancelled,
     /// A top-level name is that of this zip's own work folder ([`Listing::plants_work_folder`]).
+    #[error("an entry has the work folder name")]
     WorkFolderName,
 }
 
