@@ -66,6 +66,12 @@ if grep -rnE 'URLSession|NWConnection|URLRequest|import Network' crates/mac-ai/s
   die "Netwerkcode in de Swift-bridge van crates/mac-ai (AGENTS.md)"
 fi
 
+# The table chart's Swift (apps/copycraft/swift, SwiftUI and Swift Charts) is offline and quiet:
+# no network, no subprocess, no logging, nothing stored.
+if grep -rnE 'URLSession|NWConnection|URLRequest|import Network|Process\(|NSTask|print\(|os_log|import os|Logger\(|NSLog|UserDefaults|FileManager' apps/copycraft/swift; then
+  die "Netwerk-, subprocess-, log- of opslagcode in apps/copycraft/swift (AGENTS.md)"
+fi
+
 # Bundle ids: ticker is com.github.marcelkoopman.mac-apps.ticker, copycraft became
 # nl.marcelkoopman.copycraft before the first Store submission. The old ids (no "mac-apps."
 # segment, and copycraft's com.github.marcelkoopman.mac-apps.copycraft) must not come back in the

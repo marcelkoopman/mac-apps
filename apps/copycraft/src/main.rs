@@ -83,8 +83,12 @@ static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 
 #[cfg(target_os = "macos")]
 mod macos_about;
+// The Chart button uses it (next commit).
 #[cfg(target_os = "macos")]
 mod macos_card_text;
+#[allow(dead_code)]
+#[cfg(target_os = "macos")]
+mod macos_chart;
 #[cfg(target_os = "macos")]
 mod macos_color_pick;
 #[cfg(target_os = "macos")]
