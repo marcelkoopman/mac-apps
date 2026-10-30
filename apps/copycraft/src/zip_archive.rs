@@ -304,21 +304,20 @@ impl Listing {
     /// Whether a top-level name is one of the work folders extracting the zip called
     /// `zip_name` makes ([`partial_name`]: "docs (onvolledig)", "docs 2 (incomplete)", …, either
     /// language). Such a folder would pass for a leftover of ours; any other "… (onvolledig)"
-    /// ("Rapport (onvolledig)" in docs.zip) is just a name.
+    /// ("Rapport (onvolledig)" in docs.zip) is just a name. One comparison per name and
+    /// language ([`is_work_folder_stem`]), however many names the zip has.
     pub fn plants_work_folder(&self, zip_name: &str) -> bool {
         use crate::locale::Lang;
         let suffixes: Vec<String> = [Lang::Nl, Lang::En]
             .into_iter()
             .map(|lang| name_key(&crate::locale::tf_in(lang, "zip_incomplete", &[&""])))
             .collect();
+        let first = name_key(&folder_name(zip_name, 1));
         self.top_names().iter().any(|top| {
             let key = name_key(top);
             suffixes.iter().any(|suffix| {
-                let Some(stem) = key.strip_suffix(suffix.as_str()) else {
-                    return false;
-                };
-                (1..=MAX_FOLDER_TRIES)
-                    .any(|number| name_key(&folder_name(zip_name, number)) == stem)
+                key.strip_suffix(suffix.as_str())
+                    .is_some_and(|stem| is_work_folder_stem(stem, &first, zip_name))
             })
         })
     }
@@ -1051,6 +1050,28 @@ fn real_dirs_to(root: &Path, at: &Path) -> bool {
         dir.push(part);
         real(&dir)
     })
+}
+
+/// Whether `stem` (by [`name_key`]) is [`folder_name`]`(zip_name, n)` for some try `n` in
+/// `1..=MAX_FOLDER_TRIES`, `first` being the key for try 1. A later try only adds " n" (ASCII,
+/// no leading zero), so that number is read from the end and compared once.
+fn is_work_folder_stem(stem: &str, first: &str, zip_name: &str) -> bool {
+    if stem == first {
+        return true;
+    }
+    let Some((_, digits)) = stem.rsplit_once(' ') else {
+        return false;
+    };
+    let canonical = !digits.is_empty()
+        && digits.len() <= 3
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && !digits.starts_with('0');
+    match digits.parse::<u32>() {
+        Ok(number) if canonical && (2..=MAX_FOLDER_TRIES).contains(&number) => {
+            name_key(&folder_name(zip_name, number)) == stem
+        }
+        _ => false,
+    }
 }
 
 /// Make a new work folder in `dest`, named in the language of the moment and marked with

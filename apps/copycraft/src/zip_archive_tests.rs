@@ -860,6 +860,44 @@ fn a_zip_cannot_plant_a_work_folder_or_its_mark() {
 }
 
 #[test]
+fn a_work_folder_number_is_read_once_with_the_same_result() {
+    // Try numbers at the edges, compared with the old way (all of 1..=MAX_FOLDER_TRIES).
+    let old = |stem: &str, zip: &str| {
+        (1..=MAX_FOLDER_TRIES).any(|number| name_key(&folder_name(zip, number)) == stem)
+    };
+    for zip in ["docs.zip", "docs 5.zip", "Ärger 2.ZIP", " .zip", "a b"] {
+        let first = name_key(&folder_name(zip, 1));
+        let mut stems: Vec<String> = (1..=12)
+            .chain([99, 100, 500, MAX_FOLDER_TRIES - 1, MAX_FOLDER_TRIES])
+            .chain([MAX_FOLDER_TRIES + 1])
+            .map(|number| name_key(&folder_name(zip, number)))
+            .collect();
+        let base = first.clone();
+        for extra in [
+            " 0", " 02", " 1", " 1000", " -2", " 2 ", "  2", " ²", " 2x", "", " ",
+        ] {
+            stems.push(format!("{base}{extra}"));
+        }
+        stems.push("rapport".into());
+        stems.push("rapport 2".into());
+        for stem in &stems {
+            assert_eq!(
+                is_work_folder_stem(stem, &first, zip),
+                old(stem, zip),
+                "{zip:?} {stem:?}"
+            );
+        }
+    }
+    // A zip with many such names is still listed by one comparison each.
+    let names: Vec<String> = (0..2_000)
+        .map(|n| format!("x{n} 7 (onvolledig)/a"))
+        .collect();
+    let entries: Vec<_> = names.iter().map(|name| e(name, b"")).collect();
+    let listed = listing(&build(&entries, false)).unwrap();
+    assert!(!listed.plants_work_folder("docs.zip"));
+}
+
+#[test]
 fn only_this_zips_own_work_folder_name_is_refused() {
     let named = |names: &[&str], zip: &str| {
         let entries: Vec<_> = names.iter().map(|name| e(name, b"x")).collect();
