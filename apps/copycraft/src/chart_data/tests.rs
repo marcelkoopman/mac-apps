@@ -148,6 +148,32 @@ fn dates_group_per_month_and_year() {
 }
 
 #[test]
+fn weeks_start_on_monday() {
+    // 2026-03-02 is a Monday; 2026-03-08 the Sunday of that week.
+    let monday = days_from_civil(2026, 3, 2);
+    for day in monday..monday + 7 {
+        assert_eq!(bucket_start(day, Bucket::Week), monday);
+    }
+    assert_eq!(bucket_start(monday - 1, Bucket::Week), monday - 7);
+    // Before 1970 too: 1969-12-29 was a Monday.
+    assert_eq!(
+        bucket_start(-1, Bucket::Week),
+        days_from_civil(1969, 12, 29)
+    );
+    assert_eq!(date_label(monday, Bucket::Week), "2026-03-02");
+    let mut by_week = request(ChartKind::Line, 1, Some(2), Aggregate::Sum);
+    by_week.bucket = Bucket::Week;
+    let week = build(&shop(), &by_week, Lang::En).expect("chart");
+    assert_eq!(week.unit, Some(Bucket::Week));
+    assert_eq!(Bucket::Week.code(), "week");
+    let Points::Bars(points) = &week.points else {
+        panic!("bars");
+    };
+    let total: f64 = points.iter().map(|bar| bar.value).sum();
+    assert_eq!(total, 77.0);
+}
+
+#[test]
 fn civil_dates_round_trip() {
     for day in [-800_000, -1, 0, 59, 365, 19_782, 20_454, 2_000_000] {
         let (year, month, date) = civil_from_days(day);

@@ -155,7 +155,8 @@ struct ChartView: View {
         let fallback = point.label ?? ""
         guard let text = point.date, let date = day(text) else { return fallback }
         switch unit {
-        case "day":
+        case "day", "week":
+            // A week is labelled by its Monday.
             return date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
         case "month":
             return date.formatted(.dateTime.month(.abbreviated).year().locale(locale))

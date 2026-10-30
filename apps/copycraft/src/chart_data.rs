@@ -83,18 +83,21 @@ impl Aggregate {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Bucket {
     Day,
+    /// Monday to Sunday (ISO weeks), labelled by the Monday.
+    Week,
     #[default]
     Month,
     Year,
 }
 
 impl Bucket {
-    pub const ALL: [Bucket; 3] = [Bucket::Day, Bucket::Month, Bucket::Year];
+    pub const ALL: [Bucket; 4] = [Bucket::Day, Bucket::Week, Bucket::Month, Bucket::Year];
 
-    /// "day", "month", "year": the JSON's `unit` (how Swift formats the dates).
+    /// "day", "week", "month", "year": the JSON's `unit` (how Swift formats the dates).
     pub fn code(self) -> &'static str {
         match self {
             Bucket::Day => "day",
+            Bucket::Week => "week",
             Bucket::Month => "month",
             Bucket::Year => "year",
         }
@@ -103,6 +106,7 @@ impl Bucket {
     pub fn title(self, lang: Lang) -> &'static str {
         match self {
             Bucket::Day => t_in(lang, "chart_by_day"),
+            Bucket::Week => t_in(lang, "chart_by_week"),
             Bucket::Month => t_in(lang, "chart_by_month"),
             Bucket::Year => t_in(lang, "chart_by_year"),
         }
@@ -717,16 +721,18 @@ fn bucket_start(day: i32, bucket: Bucket) -> i32 {
     let (year, month, _) = civil_from_days(day);
     match bucket {
         Bucket::Day => day,
+        // 1970-01-01 was a Thursday: back to the Monday of the week.
+        Bucket::Week => day - (day + 3).rem_euclid(7),
         Bucket::Month => days_from_civil(year, month, 1),
         Bucket::Year => days_from_civil(year, 1, 1),
     }
 }
 
-/// `yyyy-mm-dd`, `yyyy-mm` or `yyyy` of `day`.
+/// `yyyy-mm-dd` (a day, a week's Monday), `yyyy-mm` or `yyyy` of `day`.
 fn date_label(day: i32, bucket: Bucket) -> String {
     let (year, month, date) = civil_from_days(day);
     match bucket {
-        Bucket::Day => format!("{year:04}-{month:02}-{date:02}"),
+        Bucket::Day | Bucket::Week => format!("{year:04}-{month:02}-{date:02}"),
         Bucket::Month => format!("{year:04}-{month:02}"),
         Bucket::Year => format!("{year:04}"),
     }

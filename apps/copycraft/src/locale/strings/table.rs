@@ -199,6 +199,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("chart_min", "Kleinste", "Minimum"),
     ("chart_max", "Grootste", "Maximum"),
     ("chart_by_day", "Per dag", "By Day"),
+    ("chart_by_week", "Per week", "By Week"),
     ("chart_by_month", "Per maand", "By Month"),
     ("chart_by_year", "Per jaar", "By Year"),
     ("chart_other", "Overig", "Other"),

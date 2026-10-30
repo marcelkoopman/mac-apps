@@ -919,7 +919,7 @@ Toys,2026-03-09,,2
 ```
 
 - [ ] The toolbar shows a chart symbol (*Grafiek* / *Chart* as its tooltip and in the overflow menu) right after *Tabel ▾* / *Table ▾*. Click it: a bar chart of the sum of revenue per category (Games 50, Books 20, Toys 7), largest first, legend at the bottom, numbers in the language's format (NL `20,5`-style decimals); the note reads *1 waarde overgeslagen* / *1 value skipped*.
-- [ ] Pop-ups above the chart: type (bar, line, scatter), the column on the x-axis, the date step (only for the month column), the calculation (count, sum, average, smallest, largest) and the value column (hidden for count). Each change redraws; month gives Jan–Mar, year gives 2026; scatter plots revenue against units without grouping.
+- [ ] Pop-ups above the chart: type (bar, line, scatter), the column on the x-axis, the date step (only for the month column), the calculation (count, sum, average, smallest, largest) and the value column (hidden for count). Each change redraws; month gives Jan–Mar, week (*Per week* / *By Week*) gives one bar per Monday labelled with that Monday's date, year gives 2026; scatter plots revenue against units without grouping.
 - [ ] Esc, and the *Tabel* / *Table* button, go back to the grid; the Chart button again brings the chart back. Esc in the search field still clears the search there.
 - [ ] VoiceOver (⌘F5): each bar or point reads its label and value; the pop-ups read their names (*Soort grafiek*, *Kolom op de x-as*, … / *Chart Type*, *X-Axis Column*, …).
 - [ ] Switch Settings › Language while the chart is up: the pop-ups, labels and legend follow.
