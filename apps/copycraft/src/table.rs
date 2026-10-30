@@ -168,6 +168,23 @@ enum JobBase {
     Source(Zeroizing<String>),
 }
 
+/// How many of `steps` must be replayed to recount every column choice with an "of N" in them:
+/// up to and including the last such choice.
+fn counted_after(steps: &[TableOp]) -> usize {
+    steps
+        .iter()
+        .rposition(|op| {
+            matches!(
+                op,
+                TableOp::SelectColumns {
+                    kept_of: Some(_),
+                    ..
+                }
+            )
+        })
+        .map_or(0, |last| last + 1)
+}
+
 /// Work for one version: replay `ops` on the base. Send it to a thread and [`run`](Self::run).
 pub struct Job {
     pub generation: u64,
@@ -181,6 +198,10 @@ pub struct Job {
     target: usize,
     /// A new step (`target` is then the version it makes).
     new_step: Option<TableOp>,
+    /// The steps after `target` (`count[0]` is step `target`), replayed on a scratch frame
+    /// only to recount their column choices ("Kept 2 of N") after a step was taken out or put
+    /// back. Empty for most jobs.
+    count: Vec<TableOp>,
 }
 
 /// A finished [`Job`], for [`TableVersions::finish`].
@@ -193,8 +214,9 @@ pub struct JobDone {
     frame: DataFrame,
     /// What reading the copied text found (a job from the text).
     notes: Option<crate::dataframe::ReadNotes>,
-    /// The column count each replayed column choice saw, by step index: "Kept 3 of N" is
-    /// right again after an earlier step was taken out ([`TableVersions::remove_step`]).
+    /// The column count each replayed or recounted column choice saw, by step index:
+    /// "Kept 3 of N" is right again after an earlier step was taken out or put back
+    /// ([`TableVersions::remove_step`], [`TableVersions::restore_step`]).
     kept_of: Vec<(usize, usize)>,
 }
 
@@ -239,6 +261,26 @@ impl Job {
                 None if new => return Err(TableError::Unchanged(op.unchanged_note())),
                 // A step replayed on the same frame as before changes it the same way.
                 None => {}
+            }
+        }
+        // The later versions are not shown: only their column counts are wanted.
+        let mut scratch: Option<DataFrame> = None;
+        for (i, op) in self.count.iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(TableError::Cancelled);
+            }
+            let seen = scratch.as_ref().unwrap_or(&frame);
+            if let TableOp::SelectColumns {
+                kept_of: Some(_), ..
+            } = op
+            {
+                kept_of.push((self.target + i, seen.width()));
+            }
+            match op.apply(seen) {
+                Ok(Some(next)) => scratch = Some(next),
+                Ok(None) => {}
+                // It fails the same way when that version is shown; the rest keep their count.
+                Err(_) => break,
             }
         }
         Ok(JobDone {
@@ -421,7 +463,8 @@ impl TableVersions {
     /// same columns and rows or more, so they still apply. The cursor stays on the version it
     /// showed; when that was the one taken out, on the one before it. Returns the job for the
     /// version then shown when its frame changes (it was at or after `version`), `None` when
-    /// only a later version went. ⌘Z puts the step back ([`restore_step`]).
+    /// only a later version went and no later column choice needs its "of N" recounted. ⌘Z
+    /// puts the step back ([`restore_step`]).
     ///
     /// [`restore_step`]: Self::restore_step
     pub fn remove_step(&mut self, version: usize, source: &str) -> Option<Job> {
@@ -431,11 +474,31 @@ impl TableVersions {
         let op = self.steps.remove(version - 1);
         self.removed = Some(RemovedStep { version, op });
         if self.cursor < version {
-            return None;
+            // The version shown stays; only the later column choices are recounted.
+            if counted_after(&self.steps[version - 1..]) == 0 {
+                return None;
+            }
+            let job = match &self.frames {
+                Some(frames) if !self.behind => {
+                    let base = JobBase::Frame(frames.current.clone());
+                    self.job(base, (self.cursor, Vec::new()), self.cursor, None)
+                }
+                _ => self.job_to(self.cursor, source),
+            };
+            return Some(self.with_counts(job));
         }
         self.cursor -= 1;
         self.behind = self.frames.is_some();
-        Some(self.job_to(self.cursor, source))
+        let job = self.job_to(self.cursor, source);
+        Some(self.with_counts(job))
+    }
+
+    /// `job` with the steps after its version that [`Job::run`] replays only to recount the
+    /// later column choices' "of N".
+    fn with_counts(&self, mut job: Job) -> Job {
+        let later = &self.steps[job.target.min(self.steps.len())..];
+        job.count = later[..counted_after(later)].to_vec();
+        job
     }
 
     /// The step [`remove_step`](Self::remove_step) took out can go back (⌘Z).
@@ -461,7 +524,8 @@ impl TableVersions {
             self.cursor += 1;
             self.behind = self.frames.is_some();
         }
-        Some(self.job_to(removed.version, source))
+        let job = self.job_to(removed.version, source);
+        Some(self.with_counts(job))
     }
 
     fn job(
@@ -480,6 +544,7 @@ impl TableVersions {
             first_step,
             target,
             new_step,
+            count: Vec::new(),
         }
     }
 
@@ -839,13 +904,37 @@ mod tests {
             versions.labels()[1],
             crate::locale::tf("table_label_kept", &[&2, &4])
         );
-        // ⌘Z puts the first choice back: 3 of 4, then 2 of 3 again.
+        // ⌘Z puts the first choice back and shows it: the later choice, not replayed, is
+        // recounted to 2 of 3 at once.
         let job = versions.restore_step(src).expect("restore");
         assert!(run(&mut versions, job));
         assert_eq!(versions.cursor(), 1);
+        assert_eq!(kept(&versions), Some(3));
+        assert_eq!(
+            versions.labels()[2],
+            crate::locale::tf("table_label_kept", &[&2, &3])
+        );
         let job = versions.goto(2, src).expect("goto");
         assert!(run(&mut versions, job));
         assert_eq!(kept(&versions), Some(3));
+        // Taking out the first choice while it is shown (the later one is not): recounted too.
+        let job = versions.goto(1, src).expect("goto");
+        assert!(run(&mut versions, job));
+        let job = versions.remove_step(1, src).expect("recount");
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.cursor(), 0);
+        assert_eq!(kept(&versions), Some(4));
+        // A later version going while an earlier one shows: the one after it is recounted.
+        let job = versions.restore_step(src).expect("restore");
+        assert!(run(&mut versions, job));
+        let job = versions.goto(0, src).expect("goto");
+        assert!(run(&mut versions, job));
+        let job = versions
+            .remove_step(1, src)
+            .expect("recount with the original shown");
+        assert!(run(&mut versions, job));
+        assert_eq!((versions.cursor(), kept(&versions)), (0, Some(4)));
+        assert!(versions.frame().is_some());
     }
 
     #[test]
