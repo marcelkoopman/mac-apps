@@ -901,3 +901,4 @@ The error enums derive `thiserror::Error`; the texts the user sees must be exact
 - [ ] Drop a made-up password protected `.docx` and a made-up broken `.zip`: the same NL/EN notes as before, no file name in Console (`log stream --predicate 'subsystem == "nl.marcelkoopman.copycraft"'`).
 - [ ] JSON ▾ restyle on made-up broken JSON (`{"test": 1,}`): the same "line, column" note; with a duplicate key the same duplicate-key note.
 - [ ] Feedback › copy the mail text, and copy a symbol from the symbol window: both still land on the clipboard; Help › mail with no mail app set up shows the same message as before.
+- [ ] (mac-ui and mac-ai, same change) The menu bar icon looks as before; Open… (file panel) and Save… still work and Cancel changes nothing; an AI step with Apple Intelligence off shows the same "unavailable" message as before.

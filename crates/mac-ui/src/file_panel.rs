@@ -12,7 +12,6 @@
 //! The default button (`Open` / `Bewaar`) and the format label follow [`crate::lang`]. The
 //! panel's Cancel button stays the system button: `NSSavePanel` has no title for it.
 
-use std::fmt;
 use std::path::PathBuf;
 
 use objc2::rc::Retained;
@@ -27,22 +26,13 @@ use objc2_uniform_type_identifiers::UTType;
 use crate::lang;
 
 /// Why [`choose_file`] or [`choose_save_path`] failed.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum FilePanelError {
     /// The panel was confirmed but returned no file URL, or a URL without a file path.
+    #[error("the file panel returned no file path")]
     NoPath,
 }
-
-impl fmt::Display for FilePanelError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoPath => f.write_str("the file panel returned no file path"),
-        }
-    }
-}
-
-impl std::error::Error for FilePanelError {}
 
 /// Ask for one existing file (no directories, no multiple selection) in an open panel titled
 /// `title`. Returns `Ok(None)` when the panel is cancelled.
@@ -337,6 +327,14 @@ fn normalize_extensions<'a>(extensions: &[&'a str]) -> Vec<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_panel_error_display_is_unchanged() {
+        assert_eq!(
+            FilePanelError::NoPath.to_string(),
+            "the file panel returned no file path"
+        );
+    }
 
     #[test]
     fn plain_extensions_pass_through() {

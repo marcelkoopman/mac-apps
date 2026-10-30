@@ -236,6 +236,8 @@ notify = ["dep:block2", "dep:objc2-user-notifications", "objc2-foundation/NSBund
 # Not inherited from the workspace: default-features = false (same reason as copycraft). PNG only,
 # for `icon::from_image_file`; apps that need more formats enable them on their own `image` dep.
 image = { version = "0.25", default-features = false, features = ["png"] }
+# `IconError` and `FilePanelError` (#[derive(Error)]); the 2.0.x already in the lock.
+thiserror = { workspace = true }
 tray-icon = { workspace = true }
 winit = { workspace = true }
 

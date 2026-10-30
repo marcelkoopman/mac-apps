@@ -8,8 +8,6 @@
 //! Privacy: this crate never logs, prints or caches text. An [`Error`] holds no text, only its
 //! kind ([`Error::kind`]), which is all a caller may log.
 
-use std::fmt;
-
 #[cfg(mac_ai_swift)]
 #[path = "bridge.rs"]
 mod bridge;
@@ -201,18 +199,26 @@ pub fn truncate(text: &str) -> (&str, bool) {
 }
 
 /// Why a run gave no result. Holds no text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Display is [`Error::kind`] (a test checks every variant).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum Error {
+    #[error("unavailable")]
     Unavailable,
+    #[error("cancelled")]
     Cancelled,
     /// The model's safety guardrails refused the text or its answer.
+    #[error("guardrail")]
     Guardrail,
     /// The text does not fit the model's context window.
+    #[error("too-long")]
     TooLong,
     /// The model does not support the language of the text.
+    #[error("language")]
     Language,
     /// The model declined to answer (its own refusal, not the guardrails).
+    #[error("refusal")]
     Refusal,
+    #[error("failed")]
     Failed,
 }
 
@@ -245,17 +251,26 @@ impl Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.kind())
-    }
-}
-
-impl std::error::Error for Error {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn error_display_is_its_kind() {
+        let all = [
+            (Error::Unavailable, "unavailable"),
+            (Error::Cancelled, "cancelled"),
+            (Error::Guardrail, "guardrail"),
+            (Error::TooLong, "too-long"),
+            (Error::Language, "language"),
+            (Error::Refusal, "refusal"),
+            (Error::Failed, "failed"),
+        ];
+        for (error, text) in all {
+            assert_eq!(error.to_string(), text);
+            assert_eq!(error.to_string(), error.kind());
+        }
+    }
 
     #[test]
     fn availability_codes_map_to_reasons() {

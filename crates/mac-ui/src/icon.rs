@@ -1,6 +1,5 @@
 //! Menu bar icon helpers: RGBA rasterizing, image files and SF Symbols.
 
-use std::fmt;
 use std::path::Path;
 
 use tray_icon::{BadIcon, Icon};
@@ -119,59 +118,22 @@ fn inside_round_rect(px: i32, py: i32, x: i32, y: i32, w: i32, h: i32, r: i32) -
     cx.saturating_mul(cx).saturating_add(cy.saturating_mul(cy)) <= r * r
 }
 
-/// Why [`from_image_file`], [`Canvas::new`] or [`Canvas::filled`] failed.
-#[derive(Debug)]
+/// Why [`from_image_file`], [`Canvas::new`] or [`Canvas::filled`] failed. `#[from]` gives the
+/// `From` impls and `source()` (the inner error), as the hand-written impls did.
+#[derive(Debug, thiserror::Error)]
 pub enum IconError {
     /// The image file could not be opened or read.
-    Io(std::io::Error),
+    #[error("cannot open icon: {0}")]
+    Io(#[from] std::io::Error),
     /// The image file could not be decoded.
-    Image(image::ImageError),
+    #[error("cannot decode icon: {0}")]
+    Image(#[from] image::ImageError),
     /// `tray_icon` rejected the pixels.
-    Icon(BadIcon),
+    #[error("invalid icon: {0}")]
+    Icon(#[from] BadIcon),
     /// A [`Canvas`] of `width`×`height` RGBA8 pixels does not fit in memory (`usize`).
+    #[error("icon canvas {width}x{height} is too large")]
     TooLarge { width: u32, height: u32 },
-}
-
-impl fmt::Display for IconError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(e) => write!(f, "cannot open icon: {e}"),
-            Self::Image(e) => write!(f, "cannot decode icon: {e}"),
-            Self::Icon(e) => write!(f, "invalid icon: {e}"),
-            Self::TooLarge { width, height } => {
-                write!(f, "icon canvas {width}x{height} is too large")
-            }
-        }
-    }
-}
-
-impl std::error::Error for IconError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Io(e) => Some(e),
-            Self::Image(e) => Some(e),
-            Self::Icon(e) => Some(e),
-            Self::TooLarge { .. } => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for IconError {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
-impl From<image::ImageError> for IconError {
-    fn from(e: image::ImageError) -> Self {
-        Self::Image(e)
-    }
-}
-
-impl From<BadIcon> for IconError {
-    fn from(e: BadIcon) -> Self {
-        Self::Icon(e)
-    }
 }
 
 /// Decode an image file (format from the extension) into a tray icon at its own size.
@@ -338,6 +300,36 @@ mod tests {
         from_image_file_or_plain, pixel_count, template_from_image_file,
         template_from_image_file_or_plain, template_mask, trim_clear,
     };
+
+    #[test]
+    fn icon_error_display_and_source_are_unchanged() {
+        use std::error::Error as _;
+        let io = IconError::from(std::io::Error::other("fake io"));
+        assert_eq!(io.to_string(), "cannot open icon: fake io");
+        assert_eq!(
+            io.source().map(ToString::to_string).as_deref(),
+            Some("fake io")
+        );
+
+        let decode = image::load_from_memory(b"not a picture").unwrap_err();
+        let text = format!("cannot decode icon: {decode}");
+        let image = IconError::from(decode);
+        assert_eq!(image.to_string(), text);
+        assert!(image.source().is_some());
+
+        let bad = tray_icon::Icon::from_rgba(vec![0; 3], 1, 1).unwrap_err();
+        let text = format!("invalid icon: {bad}");
+        let icon = IconError::from(bad);
+        assert_eq!(icon.to_string(), text);
+        assert!(icon.source().is_some());
+
+        let large = IconError::TooLarge {
+            width: 7,
+            height: 9,
+        };
+        assert_eq!(large.to_string(), "icon canvas 7x9 is too large");
+        assert!(large.source().is_none());
+    }
 
     #[test]
     fn missing_icon_files_fall_back_to_a_plain_square_and_report_why() {

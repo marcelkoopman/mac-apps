@@ -9,5 +9,9 @@ build = "build.rs"
 # script do not reach the final binary): copycraft's build.rs adds the Swift runtime rpath.
 links = "mac_ai"
 
-# No dependencies: a small Swift bridge around Apple's Foundation Models framework (on-device,
-# offline) and a safe Rust API on top. All `unsafe` of the AI feature lives in this crate.
+# A small Swift bridge around Apple's Foundation Models framework (on-device, offline) and a
+# safe Rust API on top. All `unsafe` of the AI feature lives in this crate.
+[dependencies]
+# Only for `#[derive(Error)]` on `Error` (Display is the fixed kind). Approved by Marcel
+# (2026-10-30); the 2.0.x already in the lock.
+thiserror = { workspace = true }

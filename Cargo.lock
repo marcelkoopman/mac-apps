@@ -1864,6 +1864,9 @@ dependencies = [
 [[package]]
 name = "mac-ai"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "mac-ui"
@@ -1882,6 +1885,7 @@ dependencies = [
  "objc2-screen-capture-kit",
  "objc2-uniform-type-identifiers 0.3.2",
  "objc2-user-notifications 0.3.2",
+ "thiserror 2.0.21",
  "tray-icon",
  "winit",
  "zeroize",
