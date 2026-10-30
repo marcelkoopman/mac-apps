@@ -559,6 +559,15 @@ impl App {
         }
         // Still in history (not wiped, trimmed or deleted meanwhile).
         let kept = recorded.filter(|bytes| self.history.holds_image(bytes));
+        // A screenshot that waited for this scan: told once, now or never.
+        let waited = self
+            .shot_secret_after_scan
+            .take_if(|shot| *shot == change)
+            .is_some();
+        if crate::screenshot::late_secret_notice(waited, crate::capture::history_paused(), recheck)
+        {
+            super::shot::tell_screenshot_secret();
+        }
         if recheck.retract {
             // A screenshot's thumbnail goes too: no drag of it to another app.
             if self.shot_change.take_if(|shot| *shot == change).is_some() {

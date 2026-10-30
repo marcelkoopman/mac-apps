@@ -272,6 +272,18 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
       the same screenshot: also not in history.
 - [ ] With history on, an ordinary screenshot (no token) is in History a few seconds after
       copying, dropping or pasting it, also `images/ocr_text.png`.
+- [ ] Secret notice on CopyCraft's own screenshot: show that fake `ghp_` line in Terminal
+      (`echo "gh""p_aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5"`), take a screenshot of it with
+      *Take Screenshot…* (⌃⌥4): once, near the pointer, an orange triangle with *Screenshot
+      bevat mogelijk een geheim* / *Screenshot may contain a secret* and below it *Op het
+      klembord gemarkeerd als privé en niet in de geschiedenis bewaard* / *Marked private on
+      the clipboard and not kept in history*, gone after about 3 s; no thumbnail, no History
+      entry, and the notice never shows the token or the text. With VoiceOver on it says both
+      lines. Console.app (process CopyCraft) and the log file have no token, text or kind.
+      A screenshot of plain text (`images/ocr_text.png` opened in Preview): no notice. With
+      *Pause Recording* on, the token screenshot again: no notice (only *Copied*). The same
+      line tiny or turned on its side (so the 1 s check reads nothing and the full scan finds
+      it): the thumbnail goes and the notice shows once, a few seconds later.
 - [ ] ⌘V in the search field (type `/` on the card) and in the column picker's filter pastes
       the clipboard text into the field; ⌘V with search closed still pastes onto the card.
 - [ ] Hidden Edit menu: in Settings › AI's prompt fields and the card's search field, ⌘X ⌘C ⌘V

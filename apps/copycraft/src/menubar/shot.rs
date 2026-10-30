@@ -170,7 +170,9 @@ impl App {
                 admitted: shot.verdict.admitted,
             });
         }
-        let keep = crate::screenshot::keep(crate::capture::history_paused(), shot);
+        let paused = crate::capture::history_paused();
+        let keep = crate::screenshot::keep(paused, shot);
+        let notice = crate::screenshot::secret_notice(paused, shot, scan.is_some());
         // Straight from the one copy; another only for the thumbnail and a later check.
         if png
             .with(|bytes| self.write_own_image(bytes, shot.mark_concealed))
@@ -190,6 +192,9 @@ impl App {
         }
         let change = crate::macos_pasteboard::change_count();
         self.shot_change = Some(change);
+        // Only this screenshot's scan may still tell; an older one's never does.
+        self.shot_secret_after_scan =
+            (notice == crate::screenshot::SecretNotice::AfterScan).then_some(change);
         self.last_copy = Some(Instant::now());
         // The new copy is the clipboard's: the card follows it again.
         self.browsing = None;
@@ -221,6 +226,10 @@ impl App {
         if launcher::is_open() {
             self.refresh_popup();
         }
+        // After the copied toast, which it replaces.
+        if notice == crate::screenshot::SecretNotice::Now {
+            tell_screenshot_secret();
+        }
         if let Some(thumbnail) = thumbnail
             && let Some(mtm) = mac_ui::objc2::MainThreadMarker::new()
         {
@@ -247,12 +256,27 @@ impl App {
     pub(crate) fn forget_screenshot(&mut self) {
         self.shot_generation = self.shot_generation.wrapping_add(1);
         self.shot_change = None;
+        self.shot_secret_after_scan = None;
         launcher::set_screenshot_includes(false);
         #[cfg(target_os = "macos")]
         {
             mac_ui::screenshot::cancel_selection();
             mac_ui::screenshot::close_thumbnail();
         }
+    }
+}
+
+/// The *may contain a secret* notice for a screenshot: two fixed lines, never its text, the
+/// secret or what kind it is, and nothing logged. A warning, so VoiceOver always says it.
+#[cfg(target_os = "macos")]
+pub(crate) fn tell_screenshot_secret() {
+    if let Some(mtm) = mac_ui::objc2::MainThreadMarker::new() {
+        mac_ui::toast::show_warning(
+            mtm,
+            crate::locale::t("screenshot_secret_notice"),
+            crate::locale::t("screenshot_secret_notice_detail"),
+            true,
+        );
     }
 }
 

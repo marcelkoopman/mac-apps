@@ -87,6 +87,43 @@ pub fn keep(paused: bool, verdict: ShotVerdict) -> StepKeep {
     crate::menubar::step_keep(paused, verdict.verdict.admitted)
 }
 
+/// When a screenshot's *may contain a secret* notice shows. It is one fixed message: never the
+/// text, the secret or what kind it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretNotice {
+    /// Its text is in and shows a token or key: show it now.
+    Now,
+    /// Its text is not in yet: show it if the full scan finds one ([`late_secret_notice`]).
+    AfterScan,
+    /// No secret, or recording is paused: nothing.
+    Never,
+}
+
+/// [`SecretNotice`] for a screenshot with `verdict`, with recording `paused` or not. Pause adds
+/// nothing: a screenshot then goes to the clipboard only, as without a secret. Pure.
+pub fn secret_notice(paused: bool, verdict: ShotVerdict, text_in: bool) -> SecretNotice {
+    if paused {
+        SecretNotice::Never
+    } else if !text_in {
+        SecretNotice::AfterScan
+    } else if verdict.verdict.admitted {
+        SecretNotice::Never
+    } else {
+        SecretNotice::Now
+    }
+}
+
+/// Whether the full scan of a screenshot that waited for it ([`SecretNotice::AfterScan`],
+/// `waited`) shows the notice: only when it takes the screenshot out (a token or key), and not
+/// while recording is paused by then. At most once: the caller forgets `waited` here. Pure.
+pub fn late_secret_notice(
+    waited: bool,
+    paused: bool,
+    recheck: crate::sensitivity::Recheck,
+) -> bool {
+    waited && !paused && recheck.retract
+}
+
 /// Why a screenshot failed, for the log: a kind, never what was on the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Failure {
@@ -113,8 +150,66 @@ impl Failure {
 
 #[cfg(test)]
 mod tests {
-    use super::{Next, after_question, keep, next, verdict};
+    use super::{
+        Next, SecretNotice, after_question, keep, late_secret_notice, next, secret_notice, verdict,
+    };
     use crate::menubar::StepKeep;
+
+    /// A made-up token, split so no scanner takes the source for a real one.
+    fn fake_token_text() -> String {
+        format!(
+            "$ gh auth token\n{}",
+            concat!("gh", "p_", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5")
+        )
+    }
+
+    #[test]
+    fn a_secret_on_a_screenshot_is_told_once_and_never_while_paused() {
+        let secret = fake_token_text();
+        let token = verdict(Some(Some(&secret)));
+        assert_eq!(secret_notice(false, token, true), SecretNotice::Now);
+        // Paused: to the clipboard only, nothing extra.
+        assert_eq!(secret_notice(true, token, true), SecretNotice::Never);
+        // No secret: nothing, with or without text.
+        let plain = verdict(Some(Some("Meeting notes for Tuesday")));
+        assert_eq!(secret_notice(false, plain, true), SecretNotice::Never);
+        assert_eq!(
+            secret_notice(false, verdict(Some(None)), true),
+            SecretNotice::Never
+        );
+        // An e-mail address is concealed but no secret: nothing.
+        let mail = verdict(Some(Some("write to jan.jansen@example.com")));
+        assert_eq!(secret_notice(false, mail, true), SecretNotice::Never);
+        // Text not in: the full scan decides.
+        let late = verdict(None);
+        assert_eq!(secret_notice(false, late, false), SecretNotice::AfterScan);
+        assert_eq!(secret_notice(true, late, false), SecretNotice::Never);
+    }
+
+    #[test]
+    fn a_late_scan_tells_only_when_it_takes_the_screenshot_out() {
+        use crate::sensitivity::picture_recheck;
+        let late = verdict(None).verdict;
+        let secret = fake_token_text();
+        // The mocked full scan finds the fake token: told, unless paused by then.
+        let found = picture_recheck(late, Some(&secret));
+        assert!(late_secret_notice(true, false, found));
+        assert!(!late_secret_notice(true, true, found));
+        // Not waited for (told already, another screenshot, or forgotten): not again.
+        assert!(!late_secret_notice(false, false, found));
+        // Plain text, an e-mail address, no text: nothing.
+        for text in [
+            Some("Meeting notes for Tuesday"),
+            Some("write to jan.jansen@example.com"),
+            None,
+        ] {
+            assert!(!late_secret_notice(
+                true,
+                false,
+                picture_recheck(late, text)
+            ));
+        }
+    }
 
     #[test]
     fn the_permission_is_explained_once_then_refusals_point_to_system_settings() {

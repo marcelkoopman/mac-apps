@@ -19,6 +19,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("screenshot_hotkey", "Schermafbeelding", "Screenshot"),
     (
+        "screenshot_secret_notice",
+        "Screenshot bevat mogelijk een geheim",
+        "Screenshot may contain a secret",
+    ),
+    (
+        "screenshot_secret_notice_detail",
+        "Op het klembord gemarkeerd als privé en niet in de geschiedenis bewaard",
+        "Marked private on the clipboard and not kept in history",
+    ),
+    (
         "screenshot_thumbnail_a11y",
         "Schermafbeelding — klik om te openen, sleep om te delen",
         "Screenshot — click to open, drag to share",

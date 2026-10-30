@@ -165,6 +165,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         screenshot_hotkey,
         shot_generation: 0,
         shot_change: None,
+        shot_secret_after_scan: None,
         sensitive_clear: None,
         conceal_when_checked: None,
         polled_change: None,

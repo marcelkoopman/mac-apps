@@ -29,6 +29,8 @@ pub const CROSSFADE_SECS: f64 = 0.12;
 pub const TOAST_FADE_SECS: f64 = 0.15;
 /// How long the toast stays before it fades out.
 pub const TOAST_HOLD_SECS: f64 = 1.2;
+/// How long a warning toast (two lines to read) stays before it fades out.
+pub const TOAST_WARNING_HOLD_SECS: f64 = 3.0;
 
 /// The one accent colour: the navy of the app icon (sRGB, 0 to 1). Everything else uses
 /// system colours.
@@ -169,6 +171,7 @@ mod tests {
         assert_eq!(CARD_OUT_SECS, 0.10);
         assert_eq!(CROSSFADE_SECS, 0.12);
         assert_eq!(TOAST_HOLD_SECS, 1.2);
+        const { assert!(TOAST_HOLD_SECS < TOAST_WARNING_HOLD_SECS) };
         const { assert!(CARD_OUT_SECS < CARD_IN_SECS) };
         assert!(
             [CARD_IN_SECS, CARD_OUT_SECS, CROSSFADE_SECS, TOAST_FADE_SECS]
