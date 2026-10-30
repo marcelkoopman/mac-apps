@@ -3,12 +3,15 @@
 use std::sync::{Arc, Mutex};
 
 use block2::RcBlock;
-use objc2::rc::{Allocated, Retained, autoreleasepool};
-use objc2::runtime::{AnyClass, AnyObject};
-use objc2::{AnyThread, msg_send};
+use objc2::AnyThread;
+use objc2::rc::{Retained, autoreleasepool};
+use objc2::runtime::AnyClass;
 use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep};
 use objc2_core_graphics::CGImage;
 use objc2_foundation::{NSArray, NSDictionary, NSError, NSPoint, NSRect, NSSize};
+use objc2_screen_capture_kit::{
+    SCContentFilter, SCScreenshotManager, SCShareableContent, SCStreamConfiguration, SCWindow,
+};
 use zeroize::Zeroizing;
 
 use crate::shot_area::{LeaveOut, Rect, pixels};
@@ -69,129 +72,113 @@ pub fn capture(
     let leave_out = leave_out
         .with(super::select::overlay_windows())
         .with(super::thumbnail::thumbnail_windows());
-    let Some(content_class) = AnyClass::get(c"SCShareableContent") else {
+    // Looked up first: the typed classes below need ScreenCaptureKit's screenshot API (macOS 14).
+    if AnyClass::get(c"SCShareableContent").is_none() {
         finish(&done, Err(Failed::Unavailable));
         return;
-    };
-    let on_content = done.clone();
-    let handler = RcBlock::new(move |content: *mut AnyObject, error: *mut NSError| {
-        // SAFETY: `content` and `error` are null or objects the system keeps alive for the
-        // duration of this call; nothing is kept past it except the retained filter and
-        // configuration.
-        let (content, code) = unsafe { (content.as_ref(), error.as_ref().map(|e| e.code())) };
-        match content.and_then(|content| prepare(content, target, &leave_out)) {
-            Some((filter, config)) => shoot(&filter, &config, on_content.clone()),
-            None => finish(&on_content, Err(failure(code))),
-        }
-    });
-    // SAFETY: `+[SCShareableContent getShareableContentExcludingDesktopWindows:
-    // onScreenWindowsOnly:completionHandler:]` takes two BOOLs and a block of
-    // `(SCShareableContent *, NSError *)`, which `handler` is; the system copies the block.
-    unsafe {
-        let _: () = msg_send![
-            content_class,
-            getShareableContentExcludingDesktopWindows: false,
-            onScreenWindowsOnly: true,
-            completionHandler: &*handler
-        ];
     }
-}
-
-/// The content filter and stream configuration for `target` from the shareable `content`.
-fn prepare(
-    content: &AnyObject,
-    target: Target,
-    leave_out: &LeaveOut,
-) -> Option<(Retained<AnyObject>, Retained<AnyObject>)> {
-    let filter_class = AnyClass::get(c"SCContentFilter")?;
-    let config_class = AnyClass::get(c"SCStreamConfiguration")?;
-    // SAFETY: documented ScreenCaptureKit selectors (macOS 14 and later) with their argument and
-    // return types: `displays`/`windows` are arrays of SCDisplay/SCWindow, `displayID` and
-    // `windowID` are 32-bit ids, `owningApplication` is a nullable SCRunningApplication whose
-    // `processID` is a pid_t. The filter is made with SCContentFilter's initialisers on a fresh
-    // allocation; `pointPixelScale` is a float and `contentRect` a CGRect. The configuration
-    // takes size_t sizes, a CGRect source rect and a BOOL.
+    let on_content = done.clone();
+    let handler = RcBlock::new(
+        move |content: *mut SCShareableContent, error: *mut NSError| {
+            // SAFETY: `content` and `error` are null or objects the system keeps alive for the
+            // duration of this call; nothing is kept past it except the retained filter and
+            // configuration. The ScreenCaptureKit calls are the typed bindings of documented
+            // selectors (macOS 14 and later) on the live `content`; `owningApplication` is
+            // nullable. SCContentFilter's initialisers get a fresh allocation; the configuration
+            // takes pixel sizes, a source rect in points and a BOOL.
+            let (prepared, code) = unsafe {
+                let code = error.as_ref().map(|e| e.code());
+                // The content filter and stream configuration for `target`.
+                let prepared =
+                    content.as_ref().and_then(
+                        |content| -> Option<(
+                            Retained<SCContentFilter>,
+                            Retained<SCStreamConfiguration>,
+                        )> {
+                            let owner = |window: &SCWindow| {
+                                window.owningApplication().map(|app| app.processID())
+                            };
+                            let windows = content.windows();
+                            let (filter, source) = match target {
+                                Target::Window { id } => {
+                                    let window =
+                                        windows.iter().find(|window| window.windowID() == id)?;
+                                    if leave_out.leaves_out(owner(&window), id) {
+                                        return None;
+                                    }
+                                    let filter = SCContentFilter::initWithDesktopIndependentWindow(
+                                        SCContentFilter::alloc(),
+                                        &window,
+                                    );
+                                    (filter, None)
+                                }
+                                Target::Area { display, .. } | Target::Screen { display } => {
+                                    let screen = content
+                                        .displays()
+                                        .iter()
+                                        .find(|candidate| candidate.displayID() == display)?;
+                                    let excluded: Vec<Retained<SCWindow>> = windows
+                                        .iter()
+                                        .filter(|window| {
+                                            leave_out.leaves_out(owner(window), window.windowID())
+                                        })
+                                        .collect();
+                                    let excluded = NSArray::from_retained_slice(&excluded);
+                                    let filter = SCContentFilter::initWithDisplay_excludingWindows(
+                                        SCContentFilter::alloc(),
+                                        &screen,
+                                        &excluded,
+                                    );
+                                    let source = match target {
+                                        Target::Area { rect, .. } => Some(rect),
+                                        _ => None,
+                                    };
+                                    (filter, source)
+                                }
+                            };
+                            let scale = filter.pointPixelScale();
+                            let scale = if scale > 0.0 { f64::from(scale) } else { 1.0 };
+                            let whole = filter.contentRect();
+                            let config = SCStreamConfiguration::new();
+                            let (width, height) = match source {
+                                Some(rect) => {
+                                    let rect = NSRect::new(
+                                        NSPoint::new(rect.x, rect.y),
+                                        NSSize::new(rect.width, rect.height),
+                                    );
+                                    config.setSourceRect(rect);
+                                    (rect.size.width, rect.size.height)
+                                }
+                                None => (whole.size.width, whole.size.height),
+                            };
+                            config.setWidth(pixels(width, scale));
+                            config.setHeight(pixels(height, scale));
+                            config.setShowsCursor(false);
+                            Some((filter, config))
+                        },
+                    );
+                (prepared, code)
+            };
+            match prepared {
+                Some((filter, config)) => shoot(&filter, &config, on_content.clone()),
+                None => finish(&on_content, Err(failure(code))),
+            }
+        },
+    );
+    // SAFETY: the handler is a block of `(SCShareableContent *, NSError *)`; the system copies it.
     unsafe {
-        let displays: Retained<NSArray<AnyObject>> = msg_send![content, displays];
-        let windows: Retained<NSArray<AnyObject>> = msg_send![content, windows];
-        let allocated: Allocated<AnyObject> = msg_send![filter_class, alloc];
-        let (filter, source): (Retained<AnyObject>, Option<Rect>) = match target {
-            Target::Window { id } => {
-                let window = windows.iter().find(|window| {
-                    let window_id: u32 = msg_send![&**window, windowID];
-                    window_id == id
-                })?;
-                let app: Option<Retained<AnyObject>> = msg_send![&*window, owningApplication];
-                let owner = app.map(|app| {
-                    let pid: i32 = msg_send![&*app, processID];
-                    pid
-                });
-                if leave_out.leaves_out(owner, id) {
-                    return None;
-                }
-                let filter: Retained<AnyObject> =
-                    msg_send![allocated, initWithDesktopIndependentWindow: &*window];
-                (filter, None)
-            }
-            Target::Area { display, .. } | Target::Screen { display } => {
-                let screen = displays.iter().find(|candidate| {
-                    let display_id: u32 = msg_send![&**candidate, displayID];
-                    display_id == display
-                })?;
-                let excluded: Vec<Retained<AnyObject>> = windows
-                    .iter()
-                    .filter(|window| {
-                        let window_id: u32 = msg_send![&**window, windowID];
-                        let app: Option<Retained<AnyObject>> =
-                            msg_send![&**window, owningApplication];
-                        let owner = app.map(|app| {
-                            let pid: i32 = msg_send![&*app, processID];
-                            pid
-                        });
-                        leave_out.leaves_out(owner, window_id)
-                    })
-                    .collect();
-                let excluded = NSArray::from_retained_slice(&excluded);
-                let filter: Retained<AnyObject> = msg_send![
-                    allocated,
-                    initWithDisplay: &*screen,
-                    excludingWindows: &*excluded
-                ];
-                let source = match target {
-                    Target::Area { rect, .. } => Some(rect),
-                    _ => None,
-                };
-                (filter, source)
-            }
-        };
-        let scale: f32 = msg_send![&*filter, pointPixelScale];
-        let scale = if scale > 0.0 { f64::from(scale) } else { 1.0 };
-        let whole: NSRect = msg_send![&*filter, contentRect];
-        let config: Retained<AnyObject> = msg_send![config_class, new];
-        let (width, height) = match source {
-            Some(rect) => {
-                let rect = NSRect::new(
-                    NSPoint::new(rect.x, rect.y),
-                    NSSize::new(rect.width, rect.height),
-                );
-                let _: () = msg_send![&*config, setSourceRect: rect];
-                (rect.size.width, rect.size.height)
-            }
-            None => (whole.size.width, whole.size.height),
-        };
-        let _: () = msg_send![&*config, setWidth: pixels(width, scale)];
-        let _: () = msg_send![&*config, setHeight: pixels(height, scale)];
-        let _: () = msg_send![&*config, setShowsCursor: false];
-        Some((filter, config))
+        SCShareableContent::getShareableContentExcludingDesktopWindows_onScreenWindowsOnly_completionHandler(
+            false, true, &handler,
+        );
     }
 }
 
 /// Take the picture and hand its PNG bytes to `done`.
-fn shoot(filter: &AnyObject, config: &AnyObject, done: Done) {
-    let Some(manager) = AnyClass::get(c"SCScreenshotManager") else {
+fn shoot(filter: &SCContentFilter, config: &SCStreamConfiguration, done: Done) {
+    if AnyClass::get(c"SCScreenshotManager").is_none() {
         finish(&done, Err(Failed::Unavailable));
         return;
-    };
+    }
     let handler = RcBlock::new(move |image: *mut CGImage, error: *mut NSError| {
         // The bitmap and the PNG AppKit makes cannot be wiped: in a pool of their own, so they
         // are freed as soon as the bytes are copied out (into the one buffer that is wiped and
@@ -215,15 +202,13 @@ fn shoot(filter: &AnyObject, config: &AnyObject, done: Done) {
         });
         finish(&done, result);
     });
-    // SAFETY: `+[SCScreenshotManager captureImageWithFilter:configuration:completionHandler:]`
-    // takes an SCContentFilter, an SCStreamConfiguration and a block of `(CGImageRef, NSError *)`,
-    // which `handler` is; the system copies the block.
+    // SAFETY: a filter and configuration built from the shareable content, and a block of `(CGImageRef, NSError *)`,
+    // which the system copies.
     unsafe {
-        let _: () = msg_send![
-            manager,
-            captureImageWithFilter: filter,
-            configuration: config,
-            completionHandler: &*handler
-        ];
+        SCScreenshotManager::captureImageWithFilter_configuration_completionHandler(
+            filter,
+            config,
+            Some(&handler),
+        );
     }
 }

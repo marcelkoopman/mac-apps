@@ -8,9 +8,10 @@
 //! copy, which [`close_thumbnail`] zeroizes. Window ids and frames are read to find the window
 //! under the pointer; names and titles never are.
 //!
-//! ScreenCaptureKit has no crate in the tree: its classes are looked up at run time and sent
-//! documented selectors, and the framework is linked below. [`available`] is `false` when the
-//! classes are missing, so a caller can grey out its command instead of failing.
+//! ScreenCaptureKit is reached through objc2-screen-capture-kit's typed bindings; the crate does
+//! not link the framework, so it is linked below. [`available`] is `false` when the classes are
+//! missing (before macOS 14), so a caller can grey out its command instead of failing, and
+//! [`capture`] checks again before it touches them.
 
 mod capture;
 mod select;

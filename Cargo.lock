@@ -1877,6 +1877,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-image-io",
  "objc2-quick-look-thumbnailing",
+ "objc2-screen-capture-kit",
  "objc2-uniform-type-identifiers 0.3.2",
  "objc2-user-notifications 0.3.2",
  "tray-icon",
@@ -2415,6 +2416,20 @@ checksum = "ac8e00da1ca87ffe3ea8d20981026f013df91072a140432f0f88da9a356d9b3c"
 dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-screen-capture-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74b7c5390f477482f001bc354d6571a70db7e4f8d5288e860c45521fbce11394"
+dependencies = [
+ "block2 0.6.2",
+ "libc",
  "objc2 0.6.5",
  "objc2-core-foundation",
  "objc2-core-graphics",

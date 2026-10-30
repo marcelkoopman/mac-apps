@@ -872,3 +872,12 @@ Run once from Terminal (`cargo run -p copycraft`, a crash shows there) and once 
 - [ ] Turn on *Vervagen* / *Blur* in Settings and copy a made-up secret (e.g. `testwachtwoord-123`) and a made-up picture: the card's text and picture are blurred as strongly as in the previous build; Reveal removes the blur, masking again brings it back. With blur off the opaque shade shows instead, as before.
 - [ ] A CSV card with a masked column: the table window and the frozen column are blurred the same way.
 - [ ] Make a QR code of made-up text (`https://example.com/test`) from the card: the picture looks as before and the iPhone camera reads the same text. Very long text (over 3000 characters) gives no QR code and no crash.
+
+## Screenshots through objc2-screen-capture-kit (Mac only, made-up screen content)
+
+Put only made-up content on screen (e.g. a TextEdit window with `testscherm`).
+
+- [ ] Area, window and whole-screen screenshot (menu bar icon and the screenshot hotkey): each thumbnail shows the right part at full sharpness (Retina: twice the points), without the pointer, the selection overlay or an earlier thumbnail; CopyCraft's own windows are left out unless included in Settings.
+- [ ] A window screenshot of a left-out window is refused as before; one on a second display, if there is one, works.
+- [ ] Screen Recording off (System Settings › Privacy): the same notice as before, no crash; after allowing it, the next screenshot works.
+- [ ] No file appears (`ls -t ~/Desktop ~/Pictures ~/Library/Containers/nl.marcelkoopman.copycraft/Data/tmp | head`): the picture stays in memory.

@@ -87,7 +87,10 @@ copycraft impl 3
 # one NSButton constructor in actions.rs, kCIInputRadiusKey read once in blur.rs.
 # mac-ui blocks 70: -6, blur.rs typed through objc2-core-image 0.3 (approved by Marcel 2026-10-30): one block
 # for filterWithName / setDefaults / the kCIInputRadiusKey value; NSView's setContentFilters is safe there.
-mac-ui blocks 70
+# mac-ui blocks 69: -1, screenshot/capture.rs typed through objc2-screen-capture-kit 0.3 (approved by Marcel
+# 2026-10-30): SCShareableContent / SCContentFilter / SCStreamConfiguration / SCScreenshotManager instead of
+# msg_send; the content handler reads its arguments and builds the filter and configuration in one block.
+mac-ui blocks 69
 mac-ui fn 4
 # mac-ui impl 8: +2, mac_ui::panel::CloseDelegate's NSObjectProtocol and NSWindowDelegate impls, shared
 # by CopyCraft's About, Settings and Welcome (copycraft impl -6, so -3 across both crates).

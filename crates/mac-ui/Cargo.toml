@@ -187,6 +187,7 @@ quicklook = [
 # objc2-core-foundation are already in the tree: no new crate.
 screenshot = [
     "dep:block2",
+    "dep:objc2-screen-capture-kit",
     "dep:objc2-core-foundation",
     "dep:objc2-core-graphics",
     "dep:objc2-image-io",
@@ -267,6 +268,18 @@ objc2-uniform-type-identifiers = { workspace = true, optional = true }
 # `blur` only: typed Core Image (CIFilter, kCIInputRadiusKey, NSView content filters), approved by
 # Marcel 2026-10-30 (crates better than own unsafe). Same 0.3 line as the other objc2-* crates.
 objc2-core-image = { workspace = true, optional = true }
+# `screenshot` only: typed ScreenCaptureKit (SCShareableContent, SCContentFilter,
+# SCStreamConfiguration, SCScreenshotManager), approved by Marcel 2026-10-30. Same 0.3 line.
+objc2-screen-capture-kit = { version = "0.3.2", default-features = false, optional = true, features = [
+    "std",
+    "block2",
+    "libc",
+    "objc2-core-foundation",
+    "objc2-core-graphics",
+    "SCScreenshotManager",
+    "SCShareableContent",
+    "SCStream",
+] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 # Tests read the running macOS version (`glass::running_macos_major`).
