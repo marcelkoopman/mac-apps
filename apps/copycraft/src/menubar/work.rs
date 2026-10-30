@@ -166,8 +166,7 @@ impl App {
         let first = self.work_error.is_none();
         self.work_error = Some(crate::locale::t("work_failed").to_string());
         // A file whose read could not start is not on its way: no "Opening file…".
-        if self.opening.phase() == Some(commands::OpeningPhase::Reading) {
-            self.opening.cancel();
+        if self.opening.cancel() {
             self.opening_over();
         }
         self.stop_spinner_when_idle();

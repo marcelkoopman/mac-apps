@@ -634,19 +634,6 @@ pub fn table_window_copy_buttons(view: &TableWindowView) -> [(Command, bool); 2]
     ]
 }
 
-/// A file name that opens in the table window when dropped: `.csv`, `.tsv` or `.json` (whose
-/// text still has to read as a table).
-pub fn is_table_file_name(name: &str) -> bool {
-    std::path::Path::new(name)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            ["csv", "tsv", "json"]
-                .iter()
-                .any(|known| ext.eq_ignore_ascii_case(known))
-        })
-}
-
 /// The other form of the window's table: JSON for a delimited one, CSV for one read from JSON.
 pub fn window_copy(table: &TableShown) -> crate::dataframe::TableCopy {
     match table.notes.and_then(|notes| notes.start) {

@@ -247,17 +247,6 @@ fn a_json_array_of_objects_copies_as_csv_quoted_where_needed() {
 }
 
 #[test]
-fn csv_tsv_and_json_files_open_as_a_table() {
-    use crate::commands::is_table_file_name;
-    for name in ["rows.csv", "Rows.CSV", "rows.tsv", "rows.json"] {
-        assert!(is_table_file_name(name), "{name}");
-    }
-    for name in ["rows.txt", "rows.xlsx", "csv", "rows.csv.png", "notes"] {
-        assert!(!is_table_file_name(name), "{name}");
-    }
-}
-
-#[test]
 fn table_cards_offer_the_other_form_and_the_window_too() {
     use crate::dataframe::TableCopy;
     let copy = |copy| CommandId::TableCopyAs(copy);

@@ -40,10 +40,6 @@ impl App {
         // promised file goes when both reads are done with it.
         let promised = promised.then(|| super::checksum::PromisedFile::new(path.clone()));
         let checksum = self.start_checksum(path.clone(), promised.clone());
-        // A table from an earlier drop still hidden while it is read gives way to this file.
-        if self.opening.awaits_window() {
-            self.cancel_opening();
-        }
         // The card says "Opening file…" when this takes a while ([`Self::spin_opening`]).
         let token = self.opening.begin();
         self.opening_started = Some((token, Instant::now()));
@@ -137,24 +133,14 @@ impl App {
                 image.pdf_text.clone(),
             );
         }
-        let table_file = commands::is_table_file_name(&opened.name);
         self.show_source(opened);
         // Read from a path ([`Self::open_path`], the only caller with a checksum): the card has
-        // said "Opening file…" since the drop or ⌘O.
-        let opening =
-            checksum.is_some() && self.opening.phase() == Some(commands::OpeningPhase::Reading);
-        // A dropped CSV, TSV or JSON array of objects opens in the table window at once (the
-        // card comes back with it when the window closes). Anything else stays on the card.
-        if table_file && self.card_shows_opened_table() {
-            // The card keeps its spinner until the window has the grid ([`Self::table_view_built`]).
-            self.open_table_window_for(opening);
-        } else {
-            if opening {
-                self.opening.read(false);
-                self.opening_over();
-            }
-            launcher::order_front();
+        // said "Opening file…" since the drop or ⌘O; now it shows the file. A CSV, TSV or JSON
+        // table stays on the card too: its Open Table button opens the table window.
+        if checksum.is_some() && self.opening.read() {
+            self.opening_over();
         }
+        launcher::order_front();
     }
 
     /// The card shows "Opening file…" once the opening going on takes longer than
@@ -189,15 +175,11 @@ impl App {
     }
 
     /// A new copy came in while a file was on its way: the file is stale. Its read is
-    /// dropped, or the table window still building its grid (not on screen yet) closes.
+    /// dropped.
     pub(crate) fn cancel_opening(&mut self) {
-        match self.opening.cancel() {
-            Some(commands::OpeningPhase::Reading) => {
-                self.lanes.drop_pending(work::Lane::File);
-                self.stop_spinner_when_idle();
-            }
-            Some(commands::OpeningPhase::Window) => self.close_table_window(),
-            None => {}
+        if self.opening.cancel() {
+            self.lanes.drop_pending(work::Lane::File);
+            self.stop_spinner_when_idle();
         }
         self.opening_over();
     }

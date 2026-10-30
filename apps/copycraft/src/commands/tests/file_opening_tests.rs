@@ -1,42 +1,16 @@
 use std::time::Duration;
 
-use crate::commands::{
-    FileOpening, OPENING_SPINNER_DELAY_MS, OpeningPhase, WindowView, grid_fades_in,
-};
+use crate::commands::{FileOpening, OPENING_SPINNER_DELAY_MS, grid_fades_in};
 
 #[test]
-fn a_file_that_is_not_a_table_ends_the_opening_once_it_is_read() {
+fn a_read_file_ends_the_opening_table_or_not() {
+    // A CSV, TSV or JSON table too: it is on the card with Open Table, no window waits.
     let mut opening = FileOpening::default();
     opening.begin();
-    assert_eq!(opening.phase(), Some(OpeningPhase::Reading));
-    assert!(!opening.read(false));
+    assert!(opening.active());
+    assert!(opening.read());
     assert!(!opening.active());
-    // Views of a window opened another way are shown as always.
-    assert_eq!(opening.window_view(true, false), WindowView::Show);
-}
-
-#[test]
-fn the_card_waits_for_the_table_windows_grid() {
-    let mut opening = FileOpening::default();
-    opening.begin();
-    assert!(opening.read(true));
-    assert!(opening.awaits_window());
-    // The table is still being read: no empty window, the card keeps its spinner.
-    assert_eq!(opening.window_view(true, false), WindowView::Hold);
-    assert!(opening.awaits_window());
-    // The grid is there: the window shows and the card goes.
-    assert_eq!(opening.window_view(false, false), WindowView::Reveal);
-    assert!(!opening.active());
-    assert_eq!(opening.window_view(false, false), WindowView::Show);
-}
-
-#[test]
-fn a_table_that_cannot_be_read_still_shows_the_window_with_its_error() {
-    let mut opening = FileOpening::default();
-    opening.begin();
-    opening.read(true);
-    assert_eq!(opening.window_view(true, true), WindowView::Reveal);
-    assert!(!opening.active());
+    assert_eq!(opening.token(), None);
 }
 
 #[test]
@@ -51,25 +25,20 @@ fn the_spinner_shows_only_for_a_slow_opening_still_going_on() {
     let second = opening.begin();
     assert!(!opening.spinner_due(first, due));
     assert!(opening.spinner_due(second, due));
-    // Also while the card waits for the window.
-    opening.read(true);
-    assert!(opening.spinner_due(second, due));
-    opening.window_view(false, false);
+    // Read: the spinner does not come (back) late, so "Opening file…" cannot stay up.
+    opening.read();
     assert!(!opening.spinner_due(second, due));
 }
 
 #[test]
-fn a_new_copy_cancels_the_opening_in_either_phase() {
+fn a_new_copy_cancels_the_opening() {
     let mut opening = FileOpening::default();
     opening.begin();
-    assert_eq!(opening.cancel(), Some(OpeningPhase::Reading));
-    assert_eq!(opening.cancel(), None);
-    // A read that arrives after the cancel opens no window and waits for nothing.
-    assert!(!opening.read(true));
-    opening.begin();
-    opening.read(true);
-    assert_eq!(opening.cancel(), Some(OpeningPhase::Window));
-    assert_eq!(opening.window_view(true, false), WindowView::Show);
+    assert!(opening.cancel());
+    assert!(!opening.cancel());
+    // A read that arrives after the cancel finds nothing going on.
+    assert!(!opening.read());
+    assert!(!opening.active());
 }
 
 #[test]
