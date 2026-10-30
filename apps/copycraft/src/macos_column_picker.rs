@@ -501,15 +501,7 @@ fn rebuild_picker_rows(mtm: MainThreadMarker) {
         for (position, &index) in visible.iter().enumerate() {
             let column = &picker.columns()[index];
             let y = height - (position as f64 + 1.0) * PICKER_ROW_H;
-            // SAFETY: no target or action is passed, so no weak reference has to stay valid.
-            let check = unsafe {
-                NSButton::checkboxWithTitle_target_action(
-                    &NSString::from_str(&column.shown),
-                    None,
-                    None,
-                    mtm,
-                )
-            };
+            let check = mac_ui::actions::checkbox(mtm, &column.shown);
             wire_button(&check, sel!(pickerToggled:));
             check.setTag(index as isize);
             check.setFont(Some(&NSFont::systemFontOfSize(13.0)));

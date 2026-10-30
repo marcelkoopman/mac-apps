@@ -208,18 +208,15 @@ mod appkit {
 
     use block2::RcBlock;
     use objc2::rc::{Retained, autoreleasepool};
-    use objc2::runtime::{AnyClass, AnyObject, NSObjectProtocol, ProtocolObject};
-    use objc2::{
-        ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send,
-    };
+    use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+    use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
     use objc2_app_kit::{
         NSAccessibility, NSBox, NSBoxType, NSColor, NSDragOperation, NSDraggingDestination,
-        NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard, NSPasteboardType,
-        NSPasteboardURLReadingFileURLsOnlyKey, NSText, NSTextView, NSTitlePosition, NSView,
+        NSDraggingInfo, NSFilePromiseReceiver, NSPasteboard, NSPasteboardType, NSText, NSTextView,
+        NSTitlePosition, NSView,
     };
     use objc2_foundation::{
-        NSArray, NSDictionary, NSError, NSNumber, NSOperationQueue, NSPoint, NSRect, NSSize,
-        NSString, NSURL,
+        NSArray, NSDictionary, NSError, NSOperationQueue, NSPoint, NSRect, NSSize, NSString, NSURL,
     };
     use objc2_uniform_type_identifiers::UTType;
 
@@ -583,38 +580,12 @@ mod appkit {
     /// The drag's file URLs (no other URLs). Reading the URLs is what gives a sandboxed app
     /// access to the files.
     fn file_urls(pasteboard: &NSPasteboard) -> Vec<Retained<NSURL>> {
-        let classes: Retained<NSArray<AnyClass>> = NSArray::from_slice(&[NSURL::class()]);
-        let yes = NSNumber::numberWithBool(true);
-        let yes: &AnyObject = &yes;
-        // SAFETY: an immutable AppKit constant, read for the life of the process.
-        let options =
-            NSDictionary::from_slices(&[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }], &[yes]);
-        // SAFETY: NSURL reads from the pasteboard, and the option takes an NSNumber boolean.
-        let objects = unsafe { pasteboard.readObjectsForClasses_options(&classes, Some(&options)) };
-        objects
-            .map(|objects| {
-                objects
-                    .iter()
-                    .filter_map(|object| object.downcast::<NSURL>().ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+        crate::pasteboard_types::read_objects::<NSURL>(pasteboard, true)
     }
 
     /// The drag's file promises.
     fn promises(pasteboard: &NSPasteboard) -> Vec<Retained<NSFilePromiseReceiver>> {
-        let classes: Retained<NSArray<AnyClass>> =
-            NSArray::from_slice(&[NSFilePromiseReceiver::class()]);
-        // SAFETY: NSFilePromiseReceiver reads from the pasteboard; no options.
-        let objects = unsafe { pasteboard.readObjectsForClasses_options(&classes, None) };
-        objects
-            .map(|objects| {
-                objects
-                    .iter()
-                    .filter_map(|object| object.downcast::<NSFilePromiseReceiver>().ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+        crate::pasteboard_types::read_objects::<NSFilePromiseReceiver>(pasteboard, false)
     }
 
     /// One [`FileKind`] per file `promise` declares, judged by its declared type.

@@ -1,9 +1,8 @@
 #![cfg(target_os = "macos")]
 
+use mac_ui::objc2::AnyThread;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::{AnyThread, ClassType};
 use mac_ui::objc2_app_kit::{NSImage, NSPasteboard};
-use mac_ui::objc2_foundation::NSArray;
 
 use crate::clipboard::ClipboardImage;
 
@@ -13,19 +12,14 @@ use crate::clipboard::ClipboardImage;
 /// or PNG bytes ImageIO will not thumbnail). The well stays the empty fill, and
 /// Original has no picture to return to. This reads the pasteboard the way Preview does.
 pub(crate) fn nsimage_from_pasteboard(pasteboard: &NSPasteboard) -> Option<Retained<NSImage>> {
-    let classes = NSArray::from_slice(&[NSImage::class()]);
-    // SAFETY: `classes` holds only NSImage, so the returned objects are images; no options.
-    let read = unsafe { pasteboard.readObjectsForClasses_options(&classes, None) };
-    if let Some(objects) = read
-        && objects.count() > 0
+    // Only NSImage is asked for, so the first object read is the first image on the pasteboard.
+    if let Some(image) = mac_ui::pasteboard_types::read_objects::<NSImage>(pasteboard, false)
+        .into_iter()
+        .next()
+        && mac_ui::image::pixel_size(&image) != (0, 0)
     {
-        let object = objects.objectAtIndex(0);
-        if let Ok(image) = object.downcast::<NSImage>()
-            && mac_ui::image::pixel_size(&image) != (0, 0)
-        {
-            image.setTemplate(false);
-            return Some(image);
-        }
+        image.setTemplate(false);
+        return Some(image);
     }
     let image = NSImage::initWithPasteboard(NSImage::alloc(), pasteboard)?;
     image.setTemplate(false);

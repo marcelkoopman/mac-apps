@@ -858,3 +858,11 @@ Run once from Terminal (`cargo run -p copycraft`, a crash shows there) and once 
 - [ ] In Settings change: card theme, language (NL ↔ EN), the card hotkey, the screenshot hotkey, the symbol list (type `→ ✓ €`, close), and add a made-up ignored app. Insert a symbol from the card once. Quit and start CopyCraft: every value is as you left it, and `defaults read nl.marcelkoopman.copycraft` shows them (no clipboard content among them).
 - [ ] The app appearance (System / Light / Dark, where Settings offers it) is also kept after a restart.
 - [ ] A CSV card's table preview looks as before (all columns, no `…` column, the card's own row limit).
+
+## Fewer unsafe blocks in mac-ui: text, pasteboard, buttons, blur (Mac only, fake data)
+
+- [ ] Card text: copy made-up text with a long line and a URL; the card shows it with the same fonts, colours and wrapping as the previous build. Search in the card for a word that occurs three times: all three are highlighted, the current one stands out (its own text colour), ↑/↓ move it; clearing the search removes every highlight.
+- [ ] Drop onto the card: a made-up file from Finder, two files at once, a message from Mail and a picture from Photos (file promises): each arrives as before; a folder and a web link behave as in the previous build.
+- [ ] Paste into the card: plain text, a PNG and a TIFF (copied in Preview) and a file copied in Finder (file URL): each shows the same card and preview as before.
+- [ ] Buttons: the checkboxes in the column picker of a CSV card toggle columns; the push buttons on the card and in Settings still respond.
+- [ ] The blur behind the card looks the same in light and dark mode (Reduce transparency on: no blur, as before).

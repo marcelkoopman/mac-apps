@@ -9,11 +9,40 @@ use std::ops::Range;
 
 use objc2::AnyThread;
 use objc2::rc::Retained;
+use objc2::runtime::AnyObject;
 use objc2_app_kit::{
     NSBackgroundColorAttributeName, NSColor, NSFont, NSFontAttributeName,
     NSForegroundColorAttributeName, NSParagraphStyle, NSParagraphStyleAttributeName,
 };
 use objc2_foundation::{NSMutableAttributedString, NSRange, NSString};
+
+/// A text attribute with the value AppKit expects for its key.
+#[derive(Clone, Copy)]
+pub enum Attr<'a> {
+    /// `NSFontAttributeName`.
+    Font(&'a NSFont),
+    /// `NSForegroundColorAttributeName`.
+    Color(&'a NSColor),
+    /// `NSBackgroundColorAttributeName`.
+    Background(&'a NSColor),
+    /// `NSParagraphStyleAttributeName`.
+    Paragraph(&'a NSParagraphStyle),
+}
+
+/// Set `attr` on `range` (UTF-16) of `text`.
+pub fn add_attr(text: &NSMutableAttributedString, attr: Attr<'_>, range: NSRange) {
+    // SAFETY: the keys are immutable AppKit constants, each paired with the value type it takes
+    // (NSFont, NSColor, NSColor, NSParagraphStyle).
+    unsafe {
+        let (key, value): (_, &AnyObject) = match attr {
+            Attr::Font(font) => (NSFontAttributeName, font),
+            Attr::Color(color) => (NSForegroundColorAttributeName, color),
+            Attr::Background(color) => (NSBackgroundColorAttributeName, color),
+            Attr::Paragraph(style) => (NSParagraphStyleAttributeName, style),
+        };
+        text.addAttribute_value_range(key, value, range);
+    }
+}
 
 /// The UTF-16 range of the byte range `range` in `text`. `range` must lie on char boundaries.
 pub fn utf16_range(text: &str, range: &Range<usize>) -> NSRange {
@@ -71,31 +100,19 @@ impl<'a> AttrText<'a> {
     /// [`font`](Self::font) for a range already in UTF-16 units, for callers that walk the text
     /// once and keep their own offsets.
     pub fn font_utf16(&self, range: NSRange, font: &NSFont) -> &Self {
-        // SAFETY: NSFontAttributeName takes an NSFont value.
-        unsafe {
-            self.attr
-                .addAttribute_value_range(NSFontAttributeName, font, range)
-        };
+        add_attr(&self.attr, Attr::Font(font), range);
         self
     }
 
     /// [`color`](Self::color) for a range already in UTF-16 units.
     pub fn color_utf16(&self, range: NSRange, color: &NSColor) -> &Self {
-        // SAFETY: NSForegroundColorAttributeName takes an NSColor value.
-        unsafe {
-            self.attr
-                .addAttribute_value_range(NSForegroundColorAttributeName, color, range)
-        };
+        add_attr(&self.attr, Attr::Color(color), range);
         self
     }
 
     /// [`background`](Self::background) for a range already in UTF-16 units.
     pub fn background_utf16(&self, range: NSRange, color: &NSColor) -> &Self {
-        // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
-        unsafe {
-            self.attr
-                .addAttribute_value_range(NSBackgroundColorAttributeName, color, range)
-        };
+        add_attr(&self.attr, Attr::Background(color), range);
         self
     }
 
@@ -111,9 +128,7 @@ pub fn set_paragraph_style(
     style: &NSParagraphStyle,
     range: NSRange,
 ) {
-    // SAFETY: NSParagraphStyleAttributeName is an immutable AppKit constant and takes an
-    // NSParagraphStyle value.
-    unsafe { text.addAttribute_value_range(NSParagraphStyleAttributeName, style, range) };
+    add_attr(text, Attr::Paragraph(style), range);
 }
 
 #[cfg(test)]

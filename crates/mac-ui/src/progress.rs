@@ -90,8 +90,7 @@ impl Spinner {
 
     /// Whether the spinner is currently in a view.
     pub fn is_added(&self) -> bool {
-        // SAFETY: only checked for presence; the reference is dropped right away.
-        unsafe { self.view.superview() }.is_some()
+        crate::layer::superview(&self.view).is_some()
     }
 
     /// Show the spinner and start spinning.

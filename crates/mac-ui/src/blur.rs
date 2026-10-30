@@ -17,9 +17,10 @@ unsafe extern "C" {
 
 /// A `CIGaussianBlur` at `radius` points, or `None` when Core Image cannot build it.
 pub fn gaussian(radius: f64) -> Option<Retained<AnyObject>> {
-    // Referencing the key keeps the Core Image link. The symbol is the filter's radius input.
-    // SAFETY: reads the address of an immutable Core Image constant; nothing is dereferenced.
-    let _linked = unsafe { kCIInputRadiusKey };
+    // Read first: referencing the key keeps the Core Image link (CIFilter is looked up by
+    // name below). The symbol is the filter's radius input.
+    // SAFETY: reads the pointer value of an immutable Core Image constant; checked below.
+    let key = unsafe { kCIInputRadiusKey };
     let cls = AnyClass::get(c"CIFilter")?;
     let name = NSString::from_str("CIGaussianBlur");
     // SAFETY: `+[CIFilter filterWithName:]` takes an NSString and returns an autoreleased
@@ -37,8 +38,6 @@ pub fn gaussian(radius: f64) -> Option<Retained<AnyObject>> {
         let ptr: *mut AnyObject = msg_send![number_cls, numberWithDouble: radius];
         Retained::retain_autoreleased(ptr)
     }?;
-    // SAFETY: reads the pointer value of an immutable Core Image constant; checked below.
-    let key = unsafe { kCIInputRadiusKey };
     if key.is_null() {
         return None;
     }

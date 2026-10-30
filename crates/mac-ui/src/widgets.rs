@@ -177,17 +177,12 @@ pub fn menu_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
 
 /// Move the view to the front of its siblings. Does nothing without a superview.
 pub fn raise_view(view: &NSView) {
-    // SAFETY: the superview is used right away, while the view hierarchy keeps it alive.
-    if let Some(parent) = unsafe { view.superview() } {
+    if let Some(parent) = superview(view) {
         parent.addSubview(view);
     }
 }
 
-/// The view's superview, if it has one.
-pub fn superview(view: &NSView) -> Option<Retained<NSView>> {
-    // SAFETY: AppKit returns the superview or nil; the `Retained` keeps it alive for the caller.
-    unsafe { view.superview() }
-}
+pub use crate::layer::superview;
 
 /// The text view's text storage, if it has one.
 pub fn text_storage(text: &NSTextView) -> Option<Retained<NSTextStorage>> {
@@ -386,8 +381,7 @@ pub fn scroll_text_both_ways(text: &NSTextView) {
     text.setHorizontallyResizable(true);
     text.setVerticallyResizable(true);
     text.setMaxSize(NSSize::new(LARGE, LARGE));
-    // SAFETY: the container is used right away, while the text view keeps it alive.
-    if let Some(container) = unsafe { text.textContainer() } {
+    if let Some(container) = text_container(text) {
         container.setWidthTracksTextView(false);
         container.setHeightTracksTextView(false);
         container.setContainerSize(NSSize::new(LARGE, LARGE));
@@ -398,11 +392,10 @@ pub fn scroll_text_both_ways(text: &NSTextView) {
 /// `wrap_width` the lines wrap at that width (prose); without, long lines are kept and scroll
 /// sideways as well as down.
 pub fn fit_text_view(text: &NSTextView, wrap_width: Option<f64>) {
-    // SAFETY (both): used right away, while the text view keeps them alive.
-    let Some(container) = (unsafe { text.textContainer() }) else {
+    let Some(container) = text_container(text) else {
         return;
     };
-    let Some(manager) = (unsafe { text.layoutManager() }) else {
+    let Some(manager) = layout_manager(text) else {
         return;
     };
     const LARGE: f64 = 10_000_000.0;
@@ -441,8 +434,7 @@ pub fn mark_ranges(
     current: Option<usize>,
     scroll: bool,
 ) {
-    // SAFETY: the layout manager is used right away, while the text view keeps it alive.
-    let Some(manager) = (unsafe { view.layoutManager() }) else {
+    let Some(manager) = layout_manager(view) else {
         return;
     };
     let length = view.string().length();
@@ -451,11 +443,8 @@ pub fn mark_ranges(
             location: 0,
             length,
         };
-        // SAFETY: removing attributes takes no value.
-        unsafe {
-            manager.removeTemporaryAttribute_forCharacterRange(NSBackgroundColorAttributeName, all);
-            manager.removeTemporaryAttribute_forCharacterRange(NSForegroundColorAttributeName, all);
-        }
+        temporary_color(&manager, Paint::Background, None, all);
+        temporary_color(&manager, Paint::Text, None, all);
     }
     if ranges.is_empty() {
         return;
@@ -476,20 +465,9 @@ pub fn mark_ranges(
         };
         let is_current = current == Some(index);
         let color = if is_current { &hot } else { &wash };
-        // SAFETY: both background and foreground colour attributes take an NSColor value.
-        unsafe {
-            manager.addTemporaryAttribute_value_forCharacterRange(
-                NSBackgroundColorAttributeName,
-                color,
-                range,
-            );
-            if is_current {
-                manager.addTemporaryAttribute_value_forCharacterRange(
-                    NSForegroundColorAttributeName,
-                    &hot_text,
-                    range,
-                );
-            }
+        temporary_color(&manager, Paint::Background, Some(color), range);
+        if is_current {
+            temporary_color(&manager, Paint::Text, Some(&hot_text), range);
         }
     }
     if scroll
@@ -503,6 +481,35 @@ pub fn mark_ranges(
     }
 }
 
+/// Which colour a temporary (layout-only) attribute paints.
+#[derive(Clone, Copy)]
+enum Paint {
+    Background,
+    Text,
+}
+
+/// Paint `range` of `manager`'s text with `color` as a temporary attribute, or remove that
+/// attribute from `range` with `None`.
+fn temporary_color(
+    manager: &NSLayoutManager,
+    paint: Paint,
+    color: Option<&NSColor>,
+    range: NSRange,
+) {
+    // SAFETY: the keys are immutable AppKit constants; both colour attributes take an NSColor
+    // value, and removing one takes none.
+    unsafe {
+        let key = match paint {
+            Paint::Background => NSBackgroundColorAttributeName,
+            Paint::Text => NSForegroundColorAttributeName,
+        };
+        match color {
+            Some(color) => manager.addTemporaryAttribute_value_forCharacterRange(key, color, range),
+            None => manager.removeTemporaryAttribute_forCharacterRange(key, range),
+        }
+    }
+}
+
 /// Overwrite the characters of `view` with NULs, then empty it, so the text does not linger
 /// in its storage. Best effort: copies AppKit made earlier are out of reach.
 ///
@@ -510,8 +517,7 @@ pub fn mark_ranges(
 /// storage, so a large text (a 5 MB table) is not laid out again, glyph by glyph, only to be
 /// emptied: the wipe stays quick on the main thread.
 pub fn wipe_text_view(view: &NSTextView) {
-    // SAFETY: the storage is used right away, while the text view keeps it alive.
-    if let Some(storage) = unsafe { view.textStorage() } {
+    if let Some(storage) = text_storage(view) {
         let length = storage.length();
         if length > 0 {
             // A copy of the list, taken before any comes off: the storage may hand out its own

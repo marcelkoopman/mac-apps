@@ -51,7 +51,9 @@
 # copycraft blocks 93: -1, settings.rs store_string uses mac_ui::defaults::store_string (approved by Marcel
 # 2026-10-30), which mac_ui::theme::store now also uses (mac-ui unchanged). The polars display set_var in
 # main.rs stays: polars 0.55 reads those limits only from the environment.
-copycraft blocks 93
+# copycraft blocks 89: -4, reuses mac-ui helpers (2026-10-30): text::add_attr for the card marks (2),
+# actions::checkbox in the column picker, pasteboard_types::read_objects for pasted images.
+copycraft blocks 89
 copycraft fn 5
 # copycraft impl 3: -6, About, Settings and Welcome lost their delegates' NSObjectProtocol and
 # NSWindowDelegate impls (approved by Marcel 2026-10-30): mac_ui::panel::on_close is their window delegate.
@@ -78,7 +80,12 @@ copycraft impl 3
 # mac-ui blocks 93: -1, mac_ui::keys::board removed (2026-10-28): the defaults are ⌃⌥Space / ⌃⌥4 on every
 # keyboard, so CopyCraft no longer asks HIToolbox (LMGetKbdType / KBGetLayoutType) which keyboard it is.
 # mac-ui blocks 94: +1, mac_ui::panel::on_close's init of the shared CloseDelegate (copycraft impl -6).
-mac-ui blocks 94
+# mac-ui blocks 76: -18, fewer blocks through shared helpers (approved by Marcel 2026-10-30): superview /
+# text_storage / layout_manager / text_container used everywhere (progress.rs too), text::add_attr and
+# widgets' temporary_color (one block each for the attribute keys), the four pasteboard types and
+# NSPasteboardURLReadingFileURLsOnlyKey read in one block, pasteboard_types::read_objects for drop.rs,
+# one NSButton constructor in actions.rs, kCIInputRadiusKey read once in blur.rs.
+mac-ui blocks 76
 mac-ui fn 4
 # mac-ui impl 8: +2, mac_ui::panel::CloseDelegate's NSObjectProtocol and NSWindowDelegate impls, shared
 # by CopyCraft's About, Settings and Welcome (copycraft impl -6, so -3 across both crates).

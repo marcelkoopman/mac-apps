@@ -62,14 +62,11 @@ pub(crate) fn paint(
         };
         if let Some(range) = error_line.and_then(|line| crate::commands::line_range(body, line)) {
             let mark = NSColor::systemRedColor().colorWithAlphaComponent(0.22);
-            // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
-            unsafe {
-                attr.addAttribute_value_range(
-                    mac_ui::objc2_app_kit::NSBackgroundColorAttributeName,
-                    &mark,
-                    mac_ui::text::utf16_range(body, &range),
-                );
-            }
+            mac_ui::text::add_attr(
+                &attr,
+                mac_ui::text::Attr::Background(&mark),
+                mac_ui::text::utf16_range(body, &range),
+            );
         }
         if numbers {
             insert_gutters(&attr, body);
@@ -136,14 +133,7 @@ pub(crate) fn paint_diff(text: &NSTextView, body: &str) {
     let red_bg = srgb(|p| p.diff_remove_bg).unwrap_or_else(|| red.colorWithAlphaComponent(0.16));
     for (range, added) in &marks {
         let bg: &NSColor = if *added { &green_bg } else { &red_bg };
-        // SAFETY: NSBackgroundColorAttributeName takes an NSColor value.
-        unsafe {
-            attr.addAttribute_value_range(
-                mac_ui::objc2_app_kit::NSBackgroundColorAttributeName,
-                bg,
-                *range,
-            );
-        }
+        mac_ui::text::add_attr(&attr, mac_ui::text::Attr::Background(bg), *range);
     }
     if let Some(storage) = mac_ui::widgets::text_storage(text) {
         storage.setAttributedString(&attr);

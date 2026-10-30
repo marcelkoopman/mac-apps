@@ -68,16 +68,24 @@ pub fn menu_item_with_action(
 
 /// A checkbox with `title` and no target or action yet (see [`connect`]).
 pub fn checkbox(mtm: MainThreadMarker, title: &str) -> Retained<NSButton> {
-    // SAFETY: no target or action is passed, so no weak reference has to stay valid.
-    unsafe {
-        NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
-    }
+    titled_button(mtm, title, true)
 }
 
 /// A push button with `title` and no target or action yet (see [`connect`]).
 pub fn push_button(mtm: MainThreadMarker, title: &str) -> Retained<NSButton> {
+    titled_button(mtm, title, false)
+}
+
+fn titled_button(mtm: MainThreadMarker, title: &str, checkbox: bool) -> Retained<NSButton> {
+    let title = NSString::from_str(title);
     // SAFETY: no target or action is passed, so no weak reference has to stay valid.
-    unsafe { NSButton::buttonWithTitle_target_action(&NSString::from_str(title), None, None, mtm) }
+    unsafe {
+        if checkbox {
+            NSButton::checkboxWithTitle_target_action(&title, None, None, mtm)
+        } else {
+            NSButton::buttonWithTitle_target_action(&title, None, None, mtm)
+        }
+    }
 }
 
 /// Send `selector` (with a nil argument) to `target` after `delay` seconds on this run loop.
