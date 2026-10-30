@@ -662,7 +662,7 @@ fn column_is_numeric(rows: &[Vec<String>], index: usize) -> bool {
     any
 }
 
-fn plain_number(cell: &str) -> bool {
+pub(crate) fn plain_number(cell: &str) -> bool {
     let mut chars = cell.chars().peekable();
     if matches!(chars.peek(), Some('+' | '-')) {
         chars.next();
