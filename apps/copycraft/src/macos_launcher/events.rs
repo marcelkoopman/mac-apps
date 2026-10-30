@@ -567,6 +567,9 @@ pub(crate) fn on_key(event: &NSEvent) {
         let _ = picker_key(event);
         return;
     }
+    if stop_unzip_key(event) {
+        return;
+    }
     if is_item_find_chord(event) {
         if item_find_on() {
             focus_item_field();

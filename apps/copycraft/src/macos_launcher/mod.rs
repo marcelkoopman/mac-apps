@@ -582,6 +582,13 @@ define_class!(
                 activate_selected();
                 true
             } else if command == sel!(cancelOperation:)
+                && MainThreadMarker::new()
+                    .and_then(|mtm| NSApplication::sharedApplication(mtm).currentEvent())
+                    .is_some_and(|event| stop_unzip_key(&event))
+            {
+                // ⌘. in the search field (the text system sends it as cancelOperation:).
+                true
+            } else if command == sel!(cancelOperation:)
                 || (command == sel!(deleteBackward:) && current_query().is_empty())
             {
                 close_search();

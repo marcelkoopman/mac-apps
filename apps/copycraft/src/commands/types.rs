@@ -481,6 +481,8 @@ pub enum CommandId {
     ChecksumCompare,
     /// Extract the zip on the card into a folder the user chooses ([`crate::zip_archive`]).
     Unzip,
+    /// ⌘. while a zip is extracted: stop it ([`crate::zip_archive::ZipError::Cancelled`]).
+    UnzipStop,
     /// The "Text ▾" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
     /// Text ▾ › Complexity: cognitive complexity per function, in a menu.

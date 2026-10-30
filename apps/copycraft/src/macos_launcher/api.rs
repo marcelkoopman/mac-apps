@@ -78,6 +78,21 @@ pub fn set_unzipping(unzipping: bool) {
     show_spinner();
 }
 
+/// The card says "Extracting…" (so ⌘. stops it).
+pub(crate) fn unzipping() -> bool {
+    UNZIPPING.get()
+}
+
+/// ⌘. while the card says "Extracting…" ([`unzipping`]): stop the extraction. True when the
+/// key was that.
+pub(crate) fn stop_unzip_key(event: &NSEvent) -> bool {
+    if !unzipping() || !mac_ui::keys::is_command_chord(event, ".") {
+        return false;
+    }
+    launcher::emit(UserEvent::Run(CommandId::UnzipStop));
+    true
+}
+
 /// The line under the wheel: "Opening file…" before "Extracting…".
 fn spinner_line() -> Option<&'static str> {
     if OPENING.get() {

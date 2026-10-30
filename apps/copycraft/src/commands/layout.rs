@@ -321,6 +321,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Checksums
             | CommandId::ChecksumCompare
             | CommandId::Unzip
+            | CommandId::UnzipStop
             | CommandId::Ocr
             | CommandId::Qr
             | CommandId::Diff

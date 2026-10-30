@@ -206,6 +206,7 @@ impl App {
             CommandId::ImageResizeCustom => self.custom_resize(),
             CommandId::ChecksumCompare => self.compare_checksum(),
             CommandId::Unzip => self.unzip_opened(),
+            CommandId::UnzipStop => self.unzip_stop(),
             // The card pops the menu itself.
             CommandId::TableMenu
             | CommandId::ImageMenu

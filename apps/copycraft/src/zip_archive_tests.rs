@@ -1,5 +1,8 @@
 use super::*;
 use std::io::Cursor;
+use std::sync::atomic::AtomicBool;
+
+static NO_STOP: AtomicBool = AtomicBool::new(false);
 
 /// One entry for [`build`]: name, data, deflate, unix mode (0 = none), flags.
 struct E<'a> {
@@ -279,7 +282,10 @@ fn unsafe_zips_list_but_do_not_extract() {
     let out = dir.join("out");
     std::fs::create_dir(&out).unwrap();
     let zip = write_zip(&dir, "slip.zip", &slip);
-    assert_eq!(extract(&zip, "slip.zip", &out), Err(ZipError::Unsafe));
+    assert_eq!(
+        extract(&zip, "slip.zip", &out, &NO_STOP),
+        Err(ZipError::Unsafe)
+    );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     assert!(!dir.join("evil.txt").exists());
     std::fs::remove_dir_all(&dir).unwrap();
@@ -320,7 +326,7 @@ fn extracts_into_the_folder_and_never_overwrites() {
     let zip = write_zip(&dir, "Archive.zip", &bytes);
 
     // Nothing in the way: right into the folder.
-    let first = extract(&zip, "Archive.zip", &out).unwrap();
+    let first = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
     assert_eq!(
         first,
         Extracted {
@@ -342,7 +348,7 @@ fn extracts_into_the_folder_and_never_overwrites() {
 
     // Again: "docs" is there now, so a new folder named after the zip.
     std::fs::write(out.join("docs/a.txt"), b"changed").unwrap();
-    let second = extract(&zip, "Archive.zip", &out).unwrap();
+    let second = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
     assert_eq!(
         second,
         Extracted {
@@ -357,8 +363,15 @@ fn extracts_into_the_folder_and_never_overwrites() {
     );
 
     // And again: "Archive 2".
-    let third = extract(&zip, "Archive.zip", &out).unwrap();
+    let third = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
     assert_eq!(third.folder, out.join("Archive 2"));
+    // No hidden .partial folder stays behind.
+    let mut names: Vec<String> = std::fs::read_dir(&out)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Archive", "Archive 2", "bin", "docs"]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -374,7 +387,10 @@ fn a_damaged_entry_takes_back_what_was_made() {
     let at = bytes.windows(10).position(|w| w == b"last entry").unwrap();
     bytes[at] ^= 0xFF;
     let zip = write_zip(&dir, "bad.zip", &bytes);
-    assert_eq!(extract(&zip, "bad.zip", &out), Err(ZipError::Corrupt));
+    assert_eq!(
+        extract(&zip, "bad.zip", &out, &NO_STOP),
+        Err(ZipError::Corrupt)
+    );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -398,7 +414,10 @@ fn a_bomb_stops_at_the_declared_size() {
     let out = dir.join("out");
     std::fs::create_dir(&out).unwrap();
     let zip = write_zip(&dir, "bomb.zip", &bytes);
-    assert_eq!(extract(&zip, "bomb.zip", &out), Err(ZipError::Corrupt));
+    assert_eq!(
+        extract(&zip, "bomb.zip", &out, &NO_STOP),
+        Err(ZipError::Corrupt)
+    );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -409,7 +428,10 @@ fn locked_zips_are_not_extracted() {
     let mut locked = e("secret.txt", b"x");
     locked.flags = 1;
     let zip = write_zip(&dir, "l.zip", &build(&[locked], false));
-    assert_eq!(extract(&zip, "l.zip", &dir), Err(ZipError::Locked));
+    assert_eq!(
+        extract(&zip, "l.zip", &dir, &NO_STOP),
+        Err(ZipError::Locked)
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -512,4 +534,107 @@ fn nfc_and_nfd_forms_of_one_name_are_unsafe() {
         listing(&zip).unwrap().facts().blocker(),
         Some(ZipError::Unsafe)
     );
+}
+
+fn names_in(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn too_little_free_space_writes_nothing() {
+    let dir = temp_dir("space");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    let zip = write_zip(&dir, "s.zip", &build(&[e("a.txt", b"hello")], false));
+    assert_eq!(
+        extract_with(&zip, "s.zip", &out, &NO_STOP, Some(1_000)),
+        Err(ZipError::NoSpace)
+    );
+    assert!(names_in(&out).is_empty());
+    assert!(extract_with(&zip, "s.zip", &out, &NO_STOP, Some(100_000_000)).is_ok());
+    let facts = ZipFacts {
+        files: 2,
+        unpacked: 10,
+        ..ZipFacts::default()
+    };
+    assert!(fits(&facts, None));
+    assert!(fits(&facts, Some(SPACE_MARGIN + 10 + 2 * BLOCK)));
+    assert!(!fits(&facts, Some(SPACE_MARGIN + 9 + 2 * BLOCK)));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_stopped_extraction_leaves_nothing() {
+    let dir = temp_dir("stop");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    let zip = write_zip(&dir, "s.zip", &build(&[e("a/b.txt", b"hello")], false));
+    let stop = AtomicBool::new(true);
+    assert_eq!(
+        extract(&zip, "s.zip", &out, &stop),
+        Err(ZipError::Cancelled)
+    );
+    assert!(names_in(&out).is_empty());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
+    let dir = temp_dir("partial");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    // A quit halfway: our marked .partial with a half file.
+    let ours = out.join(".s.partial");
+    std::fs::create_dir(&ours).unwrap();
+    std::fs::write(ours.join(PARTIAL_MARK), b"").unwrap();
+    std::fs::write(ours.join("half.txt"), b"ha").unwrap();
+    // Someone else's folder with a .partial name of the next try: not ours, kept.
+    let theirs = out.join(".s 2.partial");
+    std::fs::create_dir(&theirs).unwrap();
+    std::fs::write(theirs.join("keep.txt"), b"keep").unwrap();
+
+    let zip = write_zip(&dir, "s.zip", &build(&[e("a.txt", b"hello")], false));
+    let done = extract(&zip, "s.zip", &out, &NO_STOP).unwrap();
+    assert_eq!(done.folder, out);
+    assert_eq!(names_in(&out), [".s 2.partial", "a.txt"]);
+    assert_eq!(std::fs::read(theirs.join("keep.txt")).unwrap(), b"keep");
+
+    // Only someone else's .partial with the first name: the next name is used, theirs kept.
+    std::fs::remove_dir_all(&theirs).unwrap();
+    let other = out.join(".t.partial");
+    std::fs::create_dir(&other).unwrap();
+    std::fs::write(other.join("keep.txt"), b"keep").unwrap();
+    let zip = write_zip(&dir, "t.zip", &build(&[e("t.txt", b"t")], false));
+    extract(&zip, "t.zip", &out, &NO_STOP).unwrap();
+    assert_eq!(names_in(&out), [".t.partial", "a.txt", "t.txt"]);
+    assert_eq!(std::fs::read(other.join("keep.txt")).unwrap(), b"keep");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn moving_into_place_never_replaces_a_name_that_appeared() {
+    let dir = temp_dir("appeared");
+    let out = dir.join("out");
+    let partial = dir.join("p");
+    std::fs::create_dir_all(partial.join("docs")).unwrap();
+    std::fs::create_dir(&out).unwrap();
+    std::fs::write(partial.join("docs/a.txt"), b"new").unwrap();
+    std::fs::write(partial.join("b.txt"), b"new").unwrap();
+    // "b.txt" appeared in the chosen folder after the plan: everything goes into "Z" instead.
+    std::fs::write(out.join("b.txt"), b"theirs").unwrap();
+    let top = vec!["docs".to_string(), "b.txt".to_string()];
+    assert_eq!(move_each(&partial, &top, &out), None);
+    // What was moved went back.
+    assert_eq!(names_in(&out), ["b.txt"]);
+    assert_eq!(std::fs::read(out.join("b.txt")).unwrap(), b"theirs");
+    let done = move_into_place(&partial, &top, &out, "Z.zip").unwrap();
+    assert_eq!(done.folder, out.join("Z"));
+    assert_eq!(std::fs::read(out.join("Z/docs/a.txt")).unwrap(), b"new");
+    assert_eq!(std::fs::read(out.join("b.txt")).unwrap(), b"theirs");
+    std::fs::remove_dir_all(&dir).unwrap();
 }

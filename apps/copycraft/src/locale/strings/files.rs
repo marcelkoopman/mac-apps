@@ -169,7 +169,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Kies waar de bestanden komen",
         "Choose where the files go",
     ),
-    ("unzipping", "Uitpakken…", "Extracting…"),
+    (
+        "unzipping",
+        "Uitpakken… (⌘. stopt)",
+        "Extracting… (⌘. to stop)",
+    ),
     ("zip_extracted", "Uitgepakt in {0}", "Extracted to {0}"),
     (
         "zip_corrupt",
@@ -205,6 +209,16 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "zip_write_failed",
         "Uitpakken mislukt; wat al was uitgepakt is weer weggehaald",
         "Extracting failed; what was already extracted has been removed",
+    ),
+    (
+        "zip_no_space",
+        "Niet uitgepakt: er is te weinig vrije ruimte op die schijf",
+        "Not extracted: there is not enough free space on that disk",
+    ),
+    (
+        "zip_cancelled",
+        "Uitpakken gestopt; er is niets achtergebleven",
+        "Extracting stopped; nothing was left behind",
     ),
     // Checksums of a dropped or chosen file
     ("chip_checksums", "Controlegetallen", "Checksums"),

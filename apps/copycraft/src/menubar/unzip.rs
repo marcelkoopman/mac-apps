@@ -1,7 +1,8 @@
 //! *Uitpakken*: the zip on the card extracted into a folder the user chooses, on a thread of
 //! its own ([`crate::zip_archive::extract`]). The card says "Extracting…" under the wheel once
 //! that takes longer than [`commands::OPENING_SPINNER_DELAY_MS`]; a toast says where the files
-//! went or what went wrong. Nothing is logged: no names, paths or counts.
+//! went or what went wrong. ⌘. or *Uitpakken* again stops it ([`App::unzip_stop`]); nothing
+//! is left behind then. Nothing is logged: no names, paths or counts.
 
 use super::*;
 
@@ -20,13 +21,22 @@ impl App {
             super::state::save_feedback(blocker.message());
             return;
         }
-        // One at a time: a second click while one runs does nothing.
+        // One at a time: a second click while one runs stops it.
         if self.unzip_started.is_some() {
+            self.unzip_stop();
             return;
         }
         let Some(dest) = choose_folder() else {
             return;
         };
+        // Too little room: say so now, before anything is written (checked again in the
+        // extraction, which also sees the exact counts).
+        if !crate::zip_archive::fits(&zip.facts, crate::zip_archive::free_space(&dest)) {
+            super::state::save_feedback(crate::zip_archive::ZipError::NoSpace.message());
+            return;
+        }
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.unzip_stop = Some(stop.clone());
         self.unzip_started = Some(Instant::now());
         self.unzip_shown = false;
         let started = self.run_detached(
@@ -34,12 +44,13 @@ impl App {
             move || {
                 // A promised zip stays on disk until this is done.
                 let _keep = zip.keep;
-                crate::zip_archive::extract(&zip.path, &name, &dest)
+                crate::zip_archive::extract(&zip.path, &name, &dest, &stop)
             },
             |app, result| app.unzip_done(result),
         );
         if !started {
             self.unzip_started = None;
+            self.unzip_stop = None;
             super::state::save_feedback(crate::locale::t("work_failed"));
         }
     }
@@ -49,6 +60,7 @@ impl App {
         result: Result<crate::zip_archive::Extracted, crate::zip_archive::ZipError>,
     ) {
         self.unzip_started = None;
+        self.unzip_stop = None;
         if std::mem::take(&mut self.unzip_shown) {
             launcher::set_unzipping(false);
         }
@@ -64,6 +76,13 @@ impl App {
             Err(error) => error.message().to_string(),
         };
         super::state::save_feedback(&message);
+    }
+
+    /// Stop the running extraction (⌘., or *Uitpakken* again). Its result says so.
+    pub(crate) fn unzip_stop(&mut self) {
+        if let Some(stop) = self.unzip_stop.as_ref() {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 
     /// The card says "Extracting…" once the extraction takes longer than

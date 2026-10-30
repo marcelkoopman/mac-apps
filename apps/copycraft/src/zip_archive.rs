@@ -25,13 +25,18 @@
 //!
 //! Never overwrites ([`plan_target`]): when none of the zip's top-level names exists in the
 //! chosen folder the zip is extracted right into it; otherwise into a new folder named after
-//! the zip ("Archive", "Archive 2", …). Every folder is made with `create_dir` and every file
-//! with `create_new`, so a name that appears meanwhile fails the extraction instead of being
-//! replaced. A failed extraction removes what it made, and only that.
+//! the zip ("Archive", "Archive 2", …). The files are first extracted into a hidden
+//! `.<name>.partial` folder in the chosen folder and moved into place at the end
+//! ([`move_into_place`]: each name is claimed with `create_dir` / `create_new` before the rename,
+//! so nothing is replaced), so a quit or crash leaves no half files under their real names. A
+//! failed or stopped extraction removes the `.partial` folder; one left by a quit is removed on
+//! the next try (only a folder with CopyCraft's mark inside). Before anything is written, the
+//! disk must have room for the unpacked size ([`fits`]).
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use zeroize::Zeroizing;
 
@@ -67,6 +72,10 @@ pub enum ZipError {
     Read,
     /// Writing to the chosen folder failed (no access, disk full, a name appeared meanwhile).
     Write,
+    /// Not enough free space on the chosen folder's disk ([`fits`]); nothing was written.
+    NoSpace,
+    /// Stopped by the user (⌘. or the chip again); nothing is left behind.
+    Cancelled,
 }
 
 impl ZipError {
@@ -82,6 +91,8 @@ impl ZipError {
             Self::TooLarge => t("zip_too_large"),
             Self::Read => t("file_unreadable"),
             Self::Write => t("zip_write_failed"),
+            Self::NoSpace => t("zip_no_space"),
+            Self::Cancelled => t("zip_cancelled"),
         }
     }
 }
@@ -614,24 +625,11 @@ pub fn folder_name(zip_name: &str, try_number: u32) -> String {
     }
 }
 
-/// What was made, so a failed extraction can take it away again (and nothing else).
+/// What was made inside the `.partial` folder: the folders, by [`name_key`], so a folder of
+/// the zip is made once and a folder that was not ours is never written into.
 #[derive(Default)]
 struct Made {
-    files: Vec<PathBuf>,
-    dirs: Vec<PathBuf>,
-    /// Folders made, by their lowercased path inside the target.
     dir_keys: HashSet<String>,
-}
-
-impl Made {
-    fn undo(&mut self) {
-        for file in self.files.drain(..).rev() {
-            let _ = std::fs::remove_file(file);
-        }
-        for dir in self.dirs.drain(..).rev() {
-            let _ = std::fs::remove_dir(dir);
-        }
-    }
 }
 
 /// Where the zip went: the folder it was extracted into (the chosen one or the zip's own),
@@ -642,56 +640,223 @@ pub struct Extracted {
     pub own_folder: bool,
 }
 
+/// Room kept free on the disk besides the unpacked bytes: 64 MB, plus a 4 KB block per file.
+const SPACE_MARGIN: u64 = 64_000_000;
+const BLOCK: u64 = 4_096;
+
+/// Whether `free` bytes hold the zip's files, with [`SPACE_MARGIN`]. `None` (unknown) fits.
+pub fn fits(facts: &ZipFacts, free: Option<u64>) -> bool {
+    let needed = facts
+        .unpacked
+        .saturating_add((facts.files as u64).saturating_mul(BLOCK))
+        .saturating_add(SPACE_MARGIN);
+    free.is_none_or(|free| free >= needed)
+}
+
+/// The bytes free for `folder`'s disk ("important usage": what macOS can make free too),
+/// through Foundation; `None` when unknown. Off the Mac: unknown.
+#[cfg(target_os = "macos")]
+pub fn free_space(folder: &Path) -> Option<u64> {
+    use mac_ui::objc2_foundation::{NSArray, NSNumber, NSString, NSURL};
+    let folder = folder.to_str()?;
+    mac_ui::objc2::rc::autoreleasepool(|_| {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(folder));
+        // The value of NSURLVolumeAvailableCapacityForImportantUsageKey is its own name; the
+        // string avoids reading the extern static (unsafe).
+        let key = NSString::from_str("NSURLVolumeAvailableCapacityForImportantUsageKey");
+        let values = url
+            .resourceValuesForKeys_error(&NSArray::from_slice(&[&*key]))
+            .ok()?;
+        let value = values.objectForKey(&key)?;
+        let number = value.downcast_ref::<NSNumber>()?;
+        u64::try_from(number.longLongValue()).ok()
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn free_space(_folder: &Path) -> Option<u64> {
+    None
+}
+
+/// Inside every `.partial` folder CopyCraft makes, so only such a folder is ever removed as a
+/// leftover (a quit or crash during an earlier extraction).
+const PARTIAL_MARK: &str = ".copycraft-partial";
+
+/// The hidden folder the zip is first extracted into: `.<name>.partial` in `dest`.
+fn partial_name(zip_name: &str, try_number: u32) -> String {
+    format!(".{}.partial", folder_name(zip_name, try_number))
+}
+
+/// Remove a leftover `.partial` folder, but only one CopyCraft made (it holds [`PARTIAL_MARK`]).
+fn remove_leftover(path: &Path) -> bool {
+    let ours = std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
+        && std::fs::symlink_metadata(path.join(PARTIAL_MARK)).is_ok_and(|meta| meta.is_file());
+    // remove_dir_all does not follow links inside.
+    ours && std::fs::remove_dir_all(path).is_ok()
+}
+
+/// Make a new `.partial` folder in `dest` (a leftover of ours with the same name goes first),
+/// marked with [`PARTIAL_MARK`].
+fn make_partial(dest: &Path, zip_name: &str) -> Result<PathBuf, ZipError> {
+    for number in 1..=MAX_FOLDER_TRIES {
+        let path = dest.join(partial_name(zip_name, number));
+        if std::fs::symlink_metadata(&path).is_ok() && !remove_leftover(&path) {
+            // Someone else's: leave it and try the next name.
+            continue;
+        }
+        match std::fs::create_dir(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err(ZipError::Write),
+        }
+        let mark = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path.join(PARTIAL_MARK));
+        if mark.is_err() {
+            let _ = std::fs::remove_dir_all(&path);
+            return Err(ZipError::Write);
+        }
+        return Ok(path);
+    }
+    Err(ZipError::Write)
+}
+
 /// Extract the zip at `zip` (called `zip_name`) into the folder `dest`, by the rules above.
-pub fn extract(zip: &Path, zip_name: &str, dest: &Path) -> Result<Extracted, ZipError> {
+/// `stop` cancels it (checked between blocks of 64 KB); nothing is left behind then.
+pub fn extract(
+    zip: &Path,
+    zip_name: &str,
+    dest: &Path,
+    stop: &AtomicBool,
+) -> Result<Extracted, ZipError> {
+    extract_with(zip, zip_name, dest, stop, free_space(dest))
+}
+
+fn extract_with(
+    zip: &Path,
+    zip_name: &str,
+    dest: &Path,
+    stop: &AtomicBool,
+    free: Option<u64>,
+) -> Result<Extracted, ZipError> {
     let mut file = std::fs::File::open(zip).map_err(|_| ZipError::Read)?;
     let len = file.metadata().map_err(|_| ZipError::Read)?.len();
     let listing = list(&mut file, len)?;
-    if let Some(blocker) = listing.facts().blocker() {
+    let facts = listing.facts();
+    if let Some(blocker) = facts.blocker() {
         return Err(blocker);
     }
     if !std::fs::metadata(dest).is_ok_and(|meta| meta.is_dir()) {
         return Err(ZipError::Write);
     }
-    let top = listing.top_names();
-    let mut made = Made::default();
-    let (root, own_folder) = match plan_target(&top, |name| {
-        std::fs::symlink_metadata(dest.join(name)).is_ok()
-    }) {
-        Target::Direct => (dest.to_path_buf(), false),
-        Target::Folder => (own_folder(dest, zip_name, &mut made)?, true),
-    };
-    let mut reader = std::io::BufReader::new(file);
-    let result = listing
-        .entries
-        .iter()
-        .try_for_each(|entry| extract_entry(&mut reader, entry, &root, &mut made));
-    match result {
-        Ok(()) => Ok(Extracted {
-            folder: root,
-            own_folder,
-        }),
-        Err(error) => {
-            made.undo();
-            Err(error)
-        }
+    if !fits(&facts, free) {
+        return Err(ZipError::NoSpace);
     }
+    let partial = make_partial(dest, zip_name)?;
+    let mut made = Made::default();
+    let mut reader = std::io::BufReader::new(file);
+    let result = listing.entries.iter().try_for_each(|entry| {
+        if stop.load(Ordering::Relaxed) {
+            return Err(ZipError::Cancelled);
+        }
+        extract_entry(&mut reader, entry, &partial, &mut made, stop)
+    });
+    let result = result.and_then(|()| {
+        std::fs::remove_file(partial.join(PARTIAL_MARK)).map_err(|_| ZipError::Write)?;
+        if stop.load(Ordering::Relaxed) {
+            return Err(ZipError::Cancelled);
+        }
+        move_into_place(&partial, &listing.top_names(), dest, zip_name)
+    });
+    if result.is_err() {
+        // Ours only: the .partial folder was made above (with its mark) and nothing outside
+        // it has been touched.
+        let _ = std::fs::remove_dir_all(&partial);
+    }
+    result
 }
 
-/// A new folder in `dest` named after the zip ([`folder_name`]); made, never reused.
-fn own_folder(dest: &Path, zip_name: &str, made: &mut Made) -> Result<PathBuf, ZipError> {
+/// Move what was extracted into `partial` to where it goes, never over anything: straight
+/// into `dest` when none of the zip's top-level names is there, otherwise the `partial`
+/// folder becomes a new folder named after the zip. Each name is claimed first with
+/// `create_dir` / `create_new` (which fail when it exists) and only then renamed onto, so
+/// a name that appears meanwhile is never replaced.
+fn move_into_place(
+    partial: &Path,
+    top: &[String],
+    dest: &Path,
+    zip_name: &str,
+) -> Result<Extracted, ZipError> {
+    let direct = matches!(
+        plan_target(top, |name| std::fs::symlink_metadata(dest.join(name))
+            .is_ok()),
+        Target::Direct
+    );
+    if direct && let Some(()) = move_each(partial, top, dest) {
+        let _ = std::fs::remove_dir(partial);
+        return Ok(Extracted {
+            folder: dest.to_path_buf(),
+            own_folder: false,
+        });
+    }
     for number in 1..=MAX_FOLDER_TRIES {
         let path = dest.join(folder_name(zip_name, number));
         match std::fs::create_dir(&path) {
-            Ok(()) => {
-                made.dirs.push(path.clone());
-                return Ok(path);
-            }
+            Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(_) => return Err(ZipError::Write),
         }
+        // Onto the empty folder just made: rename replaces an empty folder only, so if it
+        // was filled meanwhile this fails instead of overwriting.
+        return match std::fs::rename(partial, &path) {
+            Ok(()) => Ok(Extracted {
+                folder: path,
+                own_folder: true,
+            }),
+            Err(_) => {
+                let _ = std::fs::remove_dir(&path);
+                Err(ZipError::Write)
+            }
+        };
     }
     Err(ZipError::Write)
+}
+
+/// Move each top-level name from `partial` into `dest`. `None` (and everything moved back)
+/// when a name is taken.
+fn move_each(partial: &Path, top: &[String], dest: &Path) -> Option<()> {
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for name in top {
+        let from = partial.join(name);
+        let to = dest.join(name);
+        let is_dir = std::fs::symlink_metadata(&from).is_ok_and(|meta| meta.is_dir());
+        let claimed = if is_dir {
+            std::fs::create_dir(&to).is_ok()
+        } else {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&to)
+                .is_ok()
+        };
+        let ok = claimed && std::fs::rename(&from, &to).is_ok();
+        if !ok {
+            if claimed {
+                let _ = if is_dir {
+                    std::fs::remove_dir(&to)
+                } else {
+                    std::fs::remove_file(&to)
+                };
+            }
+            for (from, to) in moved.into_iter().rev() {
+                let _ = std::fs::rename(&to, &from);
+            }
+            return None;
+        }
+        moved.push((from, to));
+    }
+    Some(())
 }
 
 /// Make the folder `parts` inside `root` (and the ones above it), unless this extraction made
@@ -706,7 +871,6 @@ fn make_dirs(root: &Path, parts: &[String], made: &mut Made) -> Result<PathBuf, 
         }
         match std::fs::create_dir(&path) {
             Ok(()) => {
-                made.dirs.push(path.clone());
                 made.dir_keys.insert(key);
             }
             // Not ours: never write into a folder that was there (or appeared) before.
@@ -721,6 +885,7 @@ fn extract_entry<R: Read + Seek>(
     entry: &Entry,
     root: &Path,
     made: &mut Made,
+    stop: &AtomicBool,
 ) -> Result<(), ZipError> {
     let parts = entry.parts.as_deref().ok_or(ZipError::Unsafe)?;
     if entry.dir {
@@ -759,11 +924,13 @@ fn extract_entry<R: Read + Seek>(
         options.mode(if entry.executable() { 0o755 } else { 0o644 });
     }
     let mut out = options.open(&path).map_err(|_| ZipError::Write)?;
-    made.files.push(path);
     let mut buf = Zeroizing::new(vec![0u8; 64 * 1024]);
     let mut crc = flate2::Crc::new();
     let mut written: u64 = 0;
     loop {
+        if stop.load(Ordering::Relaxed) {
+            return Err(ZipError::Cancelled);
+        }
         let n = source.read(&mut buf).map_err(|_| ZipError::Corrupt)?;
         if n == 0 {
             break;
