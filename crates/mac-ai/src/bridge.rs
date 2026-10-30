@@ -3,7 +3,7 @@
 use std::ffi::{CStr, c_char, c_void};
 use std::ptr::{self, NonNull};
 
-use crate::{Action, Availability, Error, decode_availability};
+use crate::{Action, Availability, Error, FactTask, Language, decode_availability};
 
 unsafe extern "C" {
     fn mac_ai_availability() -> i32;
@@ -55,6 +55,20 @@ impl Job {
     pub fn run(&self, action: Action, text: &str) -> Result<String, Error> {
         // Only an [`Action`]'s own task goes in: there is no way to pass a free instruction.
         self.run_raw(&crate::instructions(action.task()), &crate::prompt(text))
+    }
+
+    /// Run a [`FactTask`] on `facts` (numbers the app worked out) and wait for the answer, in
+    /// `language`. Blocks: call it from a background thread.
+    pub fn run_facts(
+        &self,
+        task: FactTask,
+        language: Language,
+        facts: &str,
+    ) -> Result<String, Error> {
+        self.run_raw(
+            &crate::fact_instructions(task, language),
+            &crate::prompt(facts),
+        )
     }
 
     fn run_raw(&self, instructions: &str, input: &str) -> Result<String, Error> {
