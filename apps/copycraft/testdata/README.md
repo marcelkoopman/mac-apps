@@ -633,6 +633,33 @@ mkdir -p /tmp/unzip-here
 - [ ] A larger zip: `mkdir -p /tmp/zt/many && for i in $(seq 1 1500); do printf 'x%.0s' $(seq 1 100) > /tmp/zt/many/f$i.txt; done && mkfile -n 300m /tmp/zt/many/big.bin && ditto -c -k --keepParent /tmp/zt/many /tmp/many.zip`. The card lists the first 1000 lines, then *… en nog N* / *… and N more*. *Uitpakken* into a new folder: after 150 ms *Uitpakken…* / *Extracting…* under the wheel; the card stays usable and the toast comes when it is done.
 - [ ] Sandbox (signed build): extracting into a folder chosen in the panel works (Desktop, Documents, an external disk). A zip attachment dragged from Mail (a promised file) can be extracted while its card is shown.
 - [ ] Quarantine (signed, sandboxed build): download a small zip with Safari (or give a fake one the attribute: `xattr -w com.apple.quarantine '0083;00000000;Safari;' /tmp/docs.zip`), extract it, then `xattr -p com.apple.quarantine /tmp/unzip-here/docs/a.txt` prints a value (set by the sandbox, naming CopyCraft), also for a file from a zip that had no attribute. An extracted script with the `x` bit (`chmod +x /tmp/zt/docs/run.sh` before zipping) is `-rwxr-xr-x` and still quarantined. If no attribute is there, report it: the zip's attribute would then have to be copied.
+- [ ] Unsafe zips (fake, made with `python3`):
+
+  ```sh
+  mkdir -p /tmp/zt/ln && ln -sf /etc/hosts /tmp/zt/ln/link && (cd /tmp/zt/ln && zip -qy /tmp/link.zip link)   # a symlink
+  python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/case.zip","w"); z.writestr("Readme.txt","a"); z.writestr("README.TXT","b"); z.close()'
+  python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/bidi.zip","w"); z.writestr("invoice\u202etxt.exe","a"); z.writestr("two\nlines.txt","b"); z.close()'
+  python3 -c 'import zipfile,unicodedata as u; z=zipfile.ZipFile("/tmp/nfd.zip","w"); z.writestr(u.normalize("NFC","caf\u00e9.txt"),"a"); z.writestr(u.normalize("NFD","caf\u00e9.txt"),"b"); z.close()'
+  ```
+
+  Each card's meta line ends with *onveilige namen* / *unsafe names*, and *Uitpakken* / *Extract* gives the *Niet uitgepakt…* / *Not extracted…* toast without a panel; nothing is written. `/tmp/link.zip` lists `link`. `/tmp/case.zip` lists both names. `/tmp/bidi.zip` lists `invoice\u{202E}txt.exe` and `two\u{000A}lines.txt` on one line each, so the name cannot pass for `invoiceexe.txt`. `/tmp/nfd.zip` lists `café.txt` twice (the two Unicode forms of one name).
+- [ ] Small zip bomb: a zip whose header says 1000 bytes but holds 50 MB of zeros:
+
+  ```sh
+  python3 - <<'EOF'
+  import struct, zipfile
+  z = zipfile.ZipFile("/tmp/bomb.zip", "w", zipfile.ZIP_DEFLATED); z.writestr("zeros.bin", b"\0" * 50_000_000); z.close()
+  b = bytearray(open("/tmp/bomb.zip", "rb").read())
+  struct.pack_into("<I", b, 22, 1000)                                # local header: unpacked size
+  struct.pack_into("<I", b, b.rfind(b"PK\x01\x02") + 24, 1000)      # directory: the same lie
+  open("/tmp/bomb.zip", "wb").write(b)
+  EOF
+  ```
+
+  The card shows the lie (about 1 KB *uitgepakt* / *unpacked*); *Uitpakken* into `/tmp/unzip-here` gives *Dit zip-bestand is beschadigd* / *This zip file is damaged*. `ls -a /tmp/unzip-here` shows no `zeros.bin` and no `.bomb.partial`.
+- [ ] Free space: make a small disk with `hdiutil create -size 20m -fs APFS -volname Small /tmp/small.dmg && hdiutil attach /tmp/small.dmg`, then extract `/tmp/many.zip` (300 MB) and choose `/Volumes/Small`: at once the toast *Niet uitgepakt: er is te weinig vrije ruimte op die schijf* / *Not extracted: there is not enough free space on that disk*; `ls -a /Volumes/Small` shows nothing new. `/tmp/docs.zip` into `/Volumes/Small` still works. Afterwards `hdiutil detach /Volumes/Small`.
+- [ ] Stop: extract `/tmp/many.zip` into a new folder; when *Uitpakken… (⌘. stopt)* / *Extracting… (⌘. to stop)* shows, press ⌘. (or click *Uitpakken* again): the toast *Uitpakken gestopt; er is niets achtergebleven* / *Extracting stopped; nothing was left behind*, and `ls -a` of that folder shows no `many` and no `.many.partial`. ⌘. without an extraction running does nothing.
+- [ ] Half-done folder: extract `/tmp/many.zip` into a new folder and quit CopyCraft (status menu › *Quit*) while it extracts: `ls -a` shows only the hidden `.many.partial` (with a `.copycraft-partial` file in it), never a half `many`. Open CopyCraft and extract it into the same folder again: `many` appears and `.many.partial` is gone. A folder you name `.many.partial` yourself (without that file) is left alone; ours then goes to `.many 2.partial`.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no zip names, paths, sizes or counts. Nothing is written besides the chosen folder.
 
 ### Compare two dropped text files
