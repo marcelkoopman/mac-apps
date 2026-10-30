@@ -984,7 +984,9 @@ fn trash_leftover(path: &Path, leftovers: &mut Leftovers) -> bool {
 /// Empty the work folder `path` of what `listing` extracts into it, then remove it when only
 /// the mark is left. Only the zip's own names go (files, then folders that are empty then);
 /// anything else (a file someone put there) stays, and so does the folder then. Links are
-/// never followed.
+/// never followed: before each removal every folder from `path` down to the name is checked
+/// to be a real folder ([`real_dirs_to`]), so a folder swapped for a link meanwhile never
+/// leads a removal outside the work folder.
 fn remove_extracted(path: &Path, listing: &Listing) -> bool {
     let mut dirs: Vec<PathBuf> = Vec::new();
     for entry in &listing.entries {
@@ -998,7 +1000,10 @@ fn remove_extracted(path: &Path, listing: &Listing) -> bool {
                 dirs.push(at.clone());
             }
         }
-        if !entry.dir && std::fs::symlink_metadata(&at).is_ok_and(|meta| meta.is_file()) {
+        if !entry.dir
+            && real_dirs_to(path, &at)
+            && std::fs::symlink_metadata(&at).is_ok_and(|meta| meta.is_file())
+        {
             let _ = std::fs::remove_file(&at);
         }
     }
@@ -1011,7 +1016,9 @@ fn remove_extracted(path: &Path, listing: &Listing) -> bool {
     });
     dirs.dedup();
     for dir in &dirs {
-        let _ = std::fs::remove_dir(dir);
+        if real_dirs_to(path, dir) {
+            let _ = std::fs::remove_dir(dir);
+        }
     }
     let only_mark = std::fs::read_dir(path).is_ok_and(|mut names| {
         names.all(|name| name.is_ok_and(|name| name.file_name() == PARTIAL_MARK))
@@ -1020,10 +1027,30 @@ fn remove_extracted(path: &Path, listing: &Listing) -> bool {
         return false;
     }
     let mark = path.join(PARTIAL_MARK);
-    if std::fs::symlink_metadata(&mark).is_ok() {
+    if real_dirs_to(path, &mark) && std::fs::symlink_metadata(&mark).is_ok() {
         let _ = std::fs::remove_file(&mark);
     }
     std::fs::remove_dir(path).is_ok()
+}
+
+/// Every folder from the work folder `root` down to `at`'s parent (`root` included) is a real
+/// folder, not a link (`symlink_metadata`, so nothing is followed). `false` when one is not, or
+/// `at` is not inside `root`.
+fn real_dirs_to(root: &Path, at: &Path) -> bool {
+    let Ok(rest) = at.strip_prefix(root) else {
+        return false;
+    };
+    let real = |dir: &Path| std::fs::symlink_metadata(dir).is_ok_and(|meta| meta.is_dir());
+    let mut dir = root.to_path_buf();
+    if !real(&dir) {
+        return false;
+    }
+    let mut parts: Vec<_> = rest.components().collect();
+    parts.pop();
+    parts.into_iter().all(|part| {
+        dir.push(part);
+        real(&dir)
+    })
 }
 
 /// Make a new work folder in `dest`, named in the language of the moment and marked with

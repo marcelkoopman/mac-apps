@@ -948,6 +948,37 @@ fn a_leftover_with_files_of_someone_else_goes_to_the_trash_whole() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn removing_never_follows_a_folder_swapped_for_a_link() {
+    let dir = temp_dir("remove-link");
+    let work = dir.join("w");
+    let outside = dir.join("outside");
+    std::fs::create_dir_all(outside.join("b")).unwrap();
+    std::fs::write(outside.join("b/c.txt"), b"keep").unwrap();
+    std::fs::write(outside.join("top.txt"), b"keep").unwrap();
+    std::fs::create_dir(&work).unwrap();
+    std::fs::write(work.join(PARTIAL_MARK), b"").unwrap();
+    // The zip's folder `a` was swapped for a link to a folder outside the work folder.
+    std::os::unix::fs::symlink(&outside, work.join("a")).unwrap();
+    let zip = build(&[e("a/b/c.txt", b"x"), e("a/top.txt", b"x")], false);
+    let listed = listing(&zip).unwrap();
+    assert!(!real_dirs_to(&work, &work.join("a/b/c.txt")));
+    assert!(real_dirs_to(&work, &work.join("a")));
+    assert!(!real_dirs_to(&work, &dir.join("elsewhere.txt")));
+
+    assert!(!remove_extracted(&work, &listed));
+    assert_eq!(std::fs::read(outside.join("b/c.txt")).unwrap(), b"keep");
+    assert_eq!(std::fs::read(outside.join("top.txt")).unwrap(), b"keep");
+    // The work folder itself as a link: nothing in it is touched either.
+    let linked = dir.join("linked");
+    std::os::unix::fs::symlink(&outside, &linked).unwrap();
+    let flat = build(&[e("top.txt", b"x")], false);
+    assert!(!remove_extracted(&linked, &listing(&flat).unwrap()));
+    assert!(outside.join("top.txt").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn removing_what_was_extracted_leaves_other_files() {
     let dir = temp_dir("remove-extracted");
