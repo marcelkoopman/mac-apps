@@ -188,6 +188,11 @@ impl App {
             ));
             return;
         }
+        // From the card: the new copy is what the card shows now, also over a dropped or
+        // chosen file. The table window's copy is shown when the window closes.
+        if target == TableTarget::Card {
+            self.follow_made_copy();
+        }
         super::state::save_feedback(match copy {
             crate::dataframe::TableCopy::Json => crate::locale::t("table_copied_json"),
             crate::dataframe::TableCopy::Csv => crate::locale::t("table_copied_csv"),
@@ -733,6 +738,19 @@ impl App {
             return;
         }
         self.record_own_copy(&value);
+        self.follow_made_copy();
+    }
+
+    /// A new copy made from what the card shows (Copy as JSON or CSV, Copy cleaned link or
+    /// domain) is on the clipboard: the card shows it, as the strip marks it, leaving a dropped
+    /// or chosen file or a browsed entry, as a step's copy does ([`Self::commit_step`]).
+    pub(crate) fn follow_made_copy(&mut self) {
+        if self.opened.is_some() {
+            self.leave_opened();
+        }
+        self.browsing = None;
+        self.reset_view();
+        self.refresh_popup();
     }
 }
 

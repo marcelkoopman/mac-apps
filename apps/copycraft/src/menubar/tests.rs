@@ -581,6 +581,26 @@ fn wipe_and_lock_forget_the_steps_and_the_card_alike() {
 }
 
 #[test]
+fn a_copy_made_from_the_card_is_what_the_card_shows_next() {
+    let save = include_str!("save.rs");
+    // Copy as JSON / CSV from the card, and Copy cleaned link / domain, over a dropped file too.
+    let table = method_body(save, "copied_table_as");
+    assert!(
+        table.contains("if target == TableTarget::Card {\n            self.follow_made_copy();")
+    );
+    assert!(method_body(save, "copy_link_part").contains("self.follow_made_copy();"));
+    let follow = method_body(save, "follow_made_copy");
+    for part in [
+        "self.leave_opened()",
+        "self.browsing = None",
+        "self.reset_view()",
+        "self.refresh_popup()",
+    ] {
+        assert!(follow.contains(part), "{part}");
+    }
+}
+
+#[test]
 fn text_and_image_steps_end_alike() {
     let text = method_body(include_str!("text.rs"), "text_stepped");
     let image = method_body(include_str!("image.rs"), "image_stepped");
