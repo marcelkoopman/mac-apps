@@ -39,6 +39,16 @@ impl UnzipRun {
     }
 }
 
+/// Marks its [`UnzipRun`] ended when dropped: after the extraction returns, and also when it
+/// panics.
+struct EndOnDrop<'a>(&'a UnzipRun);
+
+impl Drop for EndOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.end();
+    }
+}
+
 impl App {
     /// Ask for a folder, then extract the zip on the card into it.
     pub(crate) fn unzip_opened(&mut self) {
@@ -73,9 +83,10 @@ impl App {
             move || {
                 // A promised zip stays on disk until this is done.
                 let _keep = zip.keep;
-                let result = crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop);
-                run.end();
-                result
+                // Ended when this closure is left, a panic included, so Quit never waits for
+                // an extraction that is gone.
+                let _ended = EndOnDrop(&run);
+                crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop)
             },
             |app, result| app.unzip_done(result),
         );
@@ -199,6 +210,18 @@ mod tests {
         run.stop.store(true, Ordering::Relaxed);
         assert!(run.wait(Duration::from_secs(10)));
         thread.join().unwrap();
+        assert!(run.wait(Duration::ZERO));
+    }
+
+    #[test]
+    fn a_panicking_extraction_still_ends_its_run() {
+        let run = std::sync::Arc::new(UnzipRun::default());
+        let worker = run.clone();
+        let thread = std::thread::spawn(move || {
+            let _ended = EndOnDrop(&worker);
+            panic!("fake extraction failure");
+        });
+        assert!(thread.join().is_err());
         assert!(run.wait(Duration::ZERO));
     }
 }
