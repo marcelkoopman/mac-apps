@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # utf8_iter is pinned to 1.0.4 in Cargo.lock (e15c038): 1.1 pulls in the utf_types crate.
+      - dependency-name: utf8_iter
+        versions: [">=1.1"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
