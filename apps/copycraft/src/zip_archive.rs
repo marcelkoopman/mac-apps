@@ -183,8 +183,9 @@ impl Listing {
             if entry.is_symlink() {
                 facts.unsafe_names = true;
             }
-            // The same path twice, also in another case, would overwrite the first one.
-            let key = parts.join("/").to_lowercase();
+            // The same path twice, also in another case or Unicode form (é as one character
+            // or as e + accent), would overwrite the first one: APFS treats them as one name.
+            let key = name_key(&parts.join("/"));
             if !paths.insert(key) && !entry.dir {
                 facts.unsafe_names = true;
             }
@@ -259,7 +260,7 @@ impl Listing {
         let mut names = Vec::new();
         for parts in self.entries.iter().filter_map(|e| e.parts.as_ref()) {
             if let Some(first) = parts.first()
-                && seen.insert(first.to_lowercase())
+                && seen.insert(name_key(first))
             {
                 names.push(first.clone());
             }
@@ -506,6 +507,32 @@ pub fn visible(name: &str) -> String {
     out
 }
 
+/// The key under which the Mac's file system sees `name` as the same name: Unicode NFC, then
+/// lower case (APFS and HFS+ ignore case and normalisation by default).
+pub fn name_key(name: &str) -> String {
+    if name.is_ascii() {
+        return name.to_ascii_lowercase();
+    }
+    nfc(name).to_lowercase()
+}
+
+/// `text` in Unicode NFC, through Foundation (no extra crate). Off the Mac (Linux tests) the
+/// text as is: only the case is folded there.
+#[cfg(target_os = "macos")]
+fn nfc(text: &str) -> String {
+    use mac_ui::objc2_foundation::NSString;
+    mac_ui::objc2::rc::autoreleasepool(|_| {
+        NSString::from_str(text)
+            .precomposedStringWithCanonicalMapping()
+            .to_string()
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn nfc(text: &str) -> String {
+    text.to_string()
+}
+
 /// The path parts of an entry name, when it stays inside the folder it is extracted to:
 /// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no control or bidirectional
 /// characters ([`is_deceptive`], NUL included), each part at most 255 bytes. Empty and `.`
@@ -665,7 +692,7 @@ fn make_dirs(root: &Path, parts: &[String], made: &mut Made) -> Result<PathBuf, 
     let mut path = root.to_path_buf();
     for end in 1..=parts.len() {
         path.push(&parts[end - 1]);
-        let key = parts[..end].join("/").to_lowercase();
+        let key = name_key(&parts[..end].join("/"));
         if made.dir_keys.contains(&key) {
             continue;
         }

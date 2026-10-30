@@ -488,3 +488,28 @@ fn control_and_bidi_characters_are_unsafe_and_shown() {
     assert!(!text.chars().any(|c| c == '\u{202E}'));
     assert_eq!(text.lines().count(), 3);
 }
+
+#[test]
+fn names_that_differ_only_in_case_are_unsafe() {
+    let zip = build(&[e("Readme.txt", b"a"), e("README.TXT", b"b")], false);
+    assert_eq!(
+        listing(&zip).unwrap().facts().blocker(),
+        Some(ZipError::Unsafe)
+    );
+    assert_eq!(name_key("Map/É.TXT"), name_key("map/é.txt"));
+}
+
+/// NFC (é as one character) and NFD (e + combining accent) are one name on APFS. Foundation does
+/// the normalisation, so this runs on the Mac only.
+#[cfg(target_os = "macos")]
+#[test]
+fn nfc_and_nfd_forms_of_one_name_are_unsafe() {
+    let nfc = "caf\u{E9}.txt";
+    let nfd = "cafe\u{301}.txt";
+    assert_eq!(name_key(nfc), name_key(nfd));
+    let zip = build(&[e(nfc, b"a"), e(nfd, b"b")], false);
+    assert_eq!(
+        listing(&zip).unwrap().facts().blocker(),
+        Some(ZipError::Unsafe)
+    );
+}
