@@ -525,6 +525,10 @@ fn control_and_bidi_characters_are_unsafe_and_shown() {
         "\u{1F469}\u{1F3FD}\u{200D}\u{1F4BB}",
         "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}",
         "\u{1F3F4}\u{200D}\u{2620}\u{FE0F}",
+        "1\u{FE0F}\u{20E3} notities.txt",
+        "#\u{FE0F}\u{20E3}",
+        "*\u{20E3}",
+        "map 0\u{FE0F}\u{20E3}/9\u{20E3}.txt",
         "dir \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}/file \u{1F44D}\u{1F3FF}.txt",
     ] {
         assert!(safe_parts(good).is_some(), "{good:?}");
@@ -546,6 +550,17 @@ fn control_and_bidi_characters_are_unsafe_and_shown() {
         "x\u{1F3FD}",
         "\u{1F44D}\u{1F3FD}\u{1F3FD}",
         "\u{1F3FD}",
+        "1\u{FE0F}",
+        "1\u{FE0F}x\u{20E3}",
+        "a\u{FE0F}\u{20E3}",
+        "1\u{FE0F}\u{FE0F}\u{20E3}",
+        "\u{FE0F}\u{20E3}",
+        "a\u{3164}.txt",
+        "\u{3164}",
+        "x\u{115F}y",
+        "x\u{1160}y",
+        "x\u{FFA0}y",
+        "tag flag \u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
     ] {
         assert_eq!(safe_parts(bad), None, "{bad:?}");
     }

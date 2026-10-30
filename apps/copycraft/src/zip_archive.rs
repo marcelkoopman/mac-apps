@@ -510,15 +510,22 @@ fn decode_name(raw: &[u8], utf8: bool) -> String {
 /// a control character (Cc: C0 such as a newline, DEL, C1), an invisible format character
 /// (Cf: bidirectional controls such as U+202E, `factuur\u{202E}fdp.app` shows as
 /// `factuurppa.pdf`; zero-width spaces and joiners, U+FEFF, the tag characters), or a line or
-/// paragraph separator (Zl, Zp: U+2028, U+2029). In a name use [`deceptive_at`], which lets
-/// the joiner through between two emoji.
+/// paragraph separator (Zl, Zp: U+2028, U+2029), or a letter that shows as nothing
+/// ([`BLANK_LETTERS`]). In a name use [`deceptive_at`], which lets the joiner through between
+/// two emoji.
 pub fn is_deceptive(c: char) -> bool {
     let code = u32::from(c);
     c.is_control()
+        || BLANK_LETTERS.contains(&c)
         || FORMAT_AND_SEPARATORS
             .iter()
             .any(|&(first, last)| (first..=last).contains(&code))
 }
+
+/// The Hangul fillers: letters (Lo) by their category, but drawn as blank space, so
+/// `a\u{3164}.txt` passes for `a .txt` or a name looks empty. Hangul text never needs them in
+/// a file name (a filler only pads an incomplete syllable).
+const BLANK_LETTERS: [char; 4] = ['\u{115F}', '\u{1160}', '\u{3164}', '\u{FFA0}'];
 
 /// The Unicode general categories Cf, Zl and Zp, as ranges (from Unicode 15.1
 /// `extracted/DerivedGeneralCategory.txt`; the whole tag block U+E0000–E007F, unassigned
@@ -552,6 +559,15 @@ const ZWJ: char = '\u{200D}';
 /// Asks for the emoji look of the character before it (❤️).
 const EMOJI_PRESENTATION: char = '\u{FE0F}';
 
+/// Draws a key around the character before it: `1\u{FE0F}\u{20E3}` is 1️⃣.
+const KEYCAP: char = '\u{20E3}';
+
+/// The characters a keycap emoji is made of: the digits, `#` and `*` (Unicode
+/// `emoji/emoji-sequences.txt`, `Emoji_Keycap_Sequence`).
+fn is_keycap_base(c: char) -> bool {
+    c.is_ascii_digit() || c == '#' || c == '*'
+}
+
 /// A skin tone (🏻 to 🏿, Emoji_Modifier), colouring the emoji before it (👍🏽).
 fn is_skin_tone(c: char) -> bool {
     ('\u{1F3FB}'..='\u{1F3FF}').contains(&c)
@@ -566,8 +582,9 @@ fn is_emoji(c: char) -> bool {
 }
 
 /// Whether the character at `index` of `chars` makes the name deceptive: [`is_deceptive`],
-/// except for what emoji are made of. U+FE0F and a skin tone pass only straight after an emoji;
-/// U+200D (zero-width joiner) only between two emoji, the first with at most one U+FE0F or skin
+/// except for what emoji are made of. U+FE0F and a skin tone pass only straight after an emoji,
+/// and U+FE0F also in a keycap (`[0-9#*]`, U+FE0F, U+20E3: 1️⃣, #️⃣; the form without U+FE0F has
+/// nothing to check); U+200D (zero-width joiner) only between two emoji, the first with at most one U+FE0F or skin
 /// tone of its own (👨‍💻, 👩🏽‍💻, 🏳️‍🌈). A joiner after or before a letter, a `/`, the start
 /// or the end of the name, or another joiner stays deceptive (`a\u{200D}b` reads as `ab`).
 pub fn deceptive_at(chars: &[char], index: usize) -> bool {
@@ -582,7 +599,14 @@ pub fn deceptive_at(chars: &[char], index: usize) -> bool {
                     && emoji_at(index.checked_sub(2)));
             !(emoji_ends_before && emoji_at(Some(index + 1)))
         }
-        c if c == EMOJI_PRESENTATION || is_skin_tone(c) => !emoji_at(before),
+        EMOJI_PRESENTATION => {
+            let keycap = before
+                .and_then(|i| chars.get(i))
+                .is_some_and(|&c| is_keycap_base(c))
+                && chars.get(index + 1) == Some(&KEYCAP);
+            !(keycap || emoji_at(before))
+        }
+        c if is_skin_tone(c) => !emoji_at(before),
         c => is_deceptive(c),
     }
 }
