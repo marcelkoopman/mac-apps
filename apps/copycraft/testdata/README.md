@@ -638,11 +638,11 @@ mkdir -p /tmp/unzip-here
   ```sh
   mkdir -p /tmp/zt/ln && ln -sf /etc/hosts /tmp/zt/ln/link && (cd /tmp/zt/ln && zip -qy /tmp/link.zip link)   # a symlink
   python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/case.zip","w"); z.writestr("Readme.txt","a"); z.writestr("README.TXT","b"); z.close()'
-  python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/bidi.zip","w"); z.writestr("invoice\u202etxt.exe","a"); z.writestr("two\nlines.txt","b"); z.close()'
+  python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/bidi.zip","w"); z.writestr("invoice\u202etxt.exe","a"); z.writestr("two\nlines.txt","b"); z.writestr("zero\u200bwidth.txt","c"); z.writestr("line\u2028sep.txt","d"); z.writestr("bom\ufeff.txt","e"); z.writestr("tag\U000e0041.txt","f"); z.close()'
   python3 -c 'import zipfile,unicodedata as u; z=zipfile.ZipFile("/tmp/nfd.zip","w"); z.writestr(u.normalize("NFC","caf\u00e9.txt"),"a"); z.writestr(u.normalize("NFD","caf\u00e9.txt"),"b"); z.close()'
   ```
 
-  Each card's meta line ends with *onveilige namen* / *unsafe names*, and *Uitpakken* / *Extract* gives the *Niet uitgepakt…* / *Not extracted…* toast without a panel; nothing is written. `/tmp/link.zip` lists `link`. `/tmp/case.zip` lists both names. `/tmp/bidi.zip` lists `invoice\u{202E}txt.exe` and `two\u{000A}lines.txt` on one line each, so the name cannot pass for `invoiceexe.txt`. `/tmp/nfd.zip` lists `café.txt` twice (the two Unicode forms of one name).
+  Each card's meta line ends with *onveilige namen* / *unsafe names*, and *Uitpakken* / *Extract* gives the *Niet uitgepakt…* / *Not extracted…* toast without a panel; nothing is written. `/tmp/link.zip` lists `link`. `/tmp/case.zip` lists both names. `/tmp/bidi.zip` lists `invoice\u{202E}txt.exe` `two\u{000A}lines.txt`, `zero\u{200B}width.txt`, `line\u{2028}sep.txt`, `bom\u{FEFF}.txt` and `tag\u{E0041}.txt` on one line each, so the name cannot pass for `invoiceexe.txt`. `/tmp/nfd.zip` lists `café.txt` twice (the two Unicode forms of one name).
 - [ ] Small zip bomb: a zip whose header says 1000 bytes but holds 50 MB of zeros:
 
   ```sh

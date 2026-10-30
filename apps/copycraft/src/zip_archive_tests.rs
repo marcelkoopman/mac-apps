@@ -486,10 +486,37 @@ fn control_and_bidi_characters_are_unsafe_and_shown() {
         "x\u{2069}y",
         "x\u{200F}y",
         "dir\u{202A}/file",
+        "line\u{2028}sep",
+        "para\u{2029}sep",
+        "zero\u{200B}width",
+        "join\u{200C}er",
+        "join\u{200D}er",
+        "word\u{2060}joiner",
+        "\u{FEFF}bom.txt",
+        "soft\u{AD}hyphen",
+        "tag\u{E0041}\u{E007F}",
+        "tag\u{E0001}",
     ] {
         assert_eq!(safe_parts(bad), None, "{bad:?}");
     }
     assert!(safe_parts("gewoon é ü 漢字.txt").is_some());
+    // Every end of the Cf/Zl/Zp table, and the characters just outside it.
+    for &(first, last) in &FORMAT_AND_SEPARATORS {
+        for c in [first, last] {
+            assert!(is_deceptive(char::from_u32(c).unwrap()), "{c:X}");
+        }
+    }
+    for c in [
+        '\u{AC}',
+        '\u{AE}',
+        '\u{2027}',
+        '\u{2030}',
+        '\u{E0080}',
+        '\u{FE0F}',
+    ] {
+        assert!(!is_deceptive(c), "{c:?}");
+    }
+    assert_eq!(visible("a\u{200B}b\u{E0041}"), "a\\u{200B}b\\u{E0041}");
     let zip = build(
         &[
             e("ok.txt", b"ok"),

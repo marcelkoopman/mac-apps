@@ -502,15 +502,44 @@ fn decode_name(raw: &[u8], utf8: bool) -> String {
 }
 
 /// A character that can make a name look like another one, or break the list on the card:
-/// a control character (C0 such as a newline, DEL, C1) or a bidirectional control (U+200E/F,
-/// U+061C, U+202A–202E, U+2066–2069: `factuur\u{202E}fdp.app` shows as `factuurppa.pdf`).
+/// a control character (Cc: C0 such as a newline, DEL, C1), an invisible format character
+/// (Cf: bidirectional controls such as U+202E, `factuur\u{202E}fdp.app` shows as
+/// `factuurppa.pdf`; zero-width spaces and joiners, U+FEFF, the tag characters), or a line or
+/// paragraph separator (Zl, Zp: U+2028, U+2029).
 pub fn is_deceptive(c: char) -> bool {
+    let code = u32::from(c);
     c.is_control()
-        || matches!(
-            c,
-            '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
-        )
+        || FORMAT_AND_SEPARATORS
+            .iter()
+            .any(|&(first, last)| (first..=last).contains(&code))
 }
+
+/// The Unicode general categories Cf, Zl and Zp, as ranges (from Unicode 15.1
+/// `extracted/DerivedGeneralCategory.txt`; the whole tag block U+E0000–E007F, unassigned
+/// code points in it included). No crate in the tree offers the categories.
+const FORMAT_AND_SEPARATORS: [(u32, u32); 21] = [
+    (0x00AD, 0x00AD),
+    (0x0600, 0x0605),
+    (0x061C, 0x061C),
+    (0x06DD, 0x06DD),
+    (0x070F, 0x070F),
+    (0x0890, 0x0891),
+    (0x08E2, 0x08E2),
+    (0x180E, 0x180E),
+    (0x200B, 0x200F),
+    (0x2028, 0x202E),
+    (0x2060, 0x2064),
+    (0x2066, 0x206F),
+    (0xFEFF, 0xFEFF),
+    (0xFFF9, 0xFFFB),
+    (0x110BD, 0x110BD),
+    (0x110CD, 0x110CD),
+    (0x13430, 0x1343F),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0001),
+    (0xE0020, 0xE007F),
+];
 
 /// `name` with every [`is_deceptive`] character written out (`\u{202E}`), so the list shows
 /// what is really there.
