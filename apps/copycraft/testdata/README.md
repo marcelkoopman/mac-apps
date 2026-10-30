@@ -835,3 +835,9 @@ Use made-up pictures: a large PNG and JPEG (e.g. 6000×4000), a HEIC (Preview �
 - [ ] Take a screenshot with the hotkey: its card preview and thumbnail appear as before.
 - [ ] Image ▾ on each picture (rotate, resize, grayscale, export PNG / JPEG / HEIC): the exported files look and measure the same as with the previous build. A PDF page preview (copy a PDF file) still renders.
 - [ ] Copy a text file in Finder and a broken file renamed to `.png`: no preview, no crash.
+
+## Image ▾ export after the shared ImageIO helpers (Mac only, fake data)
+
+- [ ] With the previous build, export one made-up picture (a PNG with transparency, a JPEG with EXIF orientation 6, a HEIC) via Image ▾ as PNG, as JPEG at 80 % and as HEIC, rotated once. Do the same with this build: the files have the same pixel size, look the same (transparent corners white in the JPEG, the rotated picture upright before the turn), and are about the same file size (`ls -l`).
+- [ ] The card says *Bevat locatie* / *Contains location* only for a made-up picture with a GPS block (`exiftool -GPSLatitude=52 -GPSLatitudeRef=N file.jpg`), not for one without; the exported file has no location (`mdls -name kMDItemLatitude`).
+- [ ] Card previews of the same pictures (pasted and copied in Finder) are unchanged; a renamed text file gives no preview and no crash.

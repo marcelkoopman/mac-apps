@@ -5,7 +5,7 @@
 use std::ffi::c_void;
 
 use objc2_core_foundation::{
-    CFBoolean, CFData, CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CFType,
+    CFBoolean, CFData, CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CFType, CFURL,
     CGPoint, CGRect, CGSize, kCFAllocatorNull,
 };
 use objc2_core_graphics::{
@@ -16,12 +16,68 @@ use objc2_image_io::{
     CGImageDestination, CGImageSource, kCGImageDestinationLossyCompressionQuality,
     kCGImagePropertyOrientation, kCGImagePropertyPixelHeight, kCGImagePropertyPixelWidth,
     kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceCreateThumbnailWithTransform,
+    kCGImageSourceShouldCache, kCGImageSourceShouldCacheImmediately,
     kCGImageSourceThumbnailMaxPixelSize,
 };
-
-/// Image properties: CFString keys, values of any CF type.
-pub(crate) type Properties = CFDictionary<CFString, CFType>;
 use zeroize::Zeroizing;
+
+/// Image properties and options: CFString keys, values of any CF type.
+pub(crate) type Properties = CFDictionary<CFString, CFType>;
+
+/// The ImageIO and CoreGraphics constants used here and in [`crate::macos_image_io`].
+pub(crate) struct Keys {
+    pub pixel_width: &'static CFString,
+    pub pixel_height: &'static CFString,
+    pub orientation: &'static CFString,
+    pub thumbnail_always: &'static CFString,
+    pub thumbnail_transform: &'static CFString,
+    pub thumbnail_max: &'static CFString,
+    pub lossy_quality: &'static CFString,
+    pub should_cache: &'static CFString,
+    pub should_cache_immediately: &'static CFString,
+    pub srgb: &'static CFString,
+}
+
+pub(crate) fn keys() -> Keys {
+    // SAFETY: reads immutable constants exported by the system frameworks.
+    unsafe {
+        Keys {
+            pixel_width: kCGImagePropertyPixelWidth,
+            pixel_height: kCGImagePropertyPixelHeight,
+            orientation: kCGImagePropertyOrientation,
+            thumbnail_always: kCGImageSourceCreateThumbnailFromImageAlways,
+            thumbnail_transform: kCGImageSourceCreateThumbnailWithTransform,
+            thumbnail_max: kCGImageSourceThumbnailMaxPixelSize,
+            lossy_quality: kCGImageDestinationLossyCompressionQuality,
+            should_cache: kCGImageSourceShouldCache,
+            should_cache_immediately: kCGImageSourceShouldCacheImmediately,
+            srgb: kCGColorSpaceSRGB,
+        }
+    }
+}
+
+/// Where an image source reads from.
+pub(crate) enum SourceOf<'a> {
+    Data(&'a CFData),
+    Url(&'a CFURL),
+}
+
+/// An image source over `input` with `options` (image source keys); `None` when ImageIO
+/// makes none.
+pub(crate) fn image_source(
+    input: SourceOf<'_>,
+    options: Option<&Properties>,
+) -> Option<CFRetained<CGImageSource>> {
+    let options = options.map(|options| options.as_opaque());
+    // SAFETY: `input` is a valid CFData or CFURL and `options` None or a dictionary with
+    // CFString keys, as ImageIO expects; failure gives None.
+    unsafe {
+        match input {
+            SourceOf::Data(data) => CGImageSource::with_data(data, options),
+            SourceOf::Url(url) => CGImageSource::with_url(url, options),
+        }
+    }
+}
 
 use crate::image_edit::{Codec, Rgba};
 
@@ -89,8 +145,7 @@ fn with_source<R>(
     let len = isize::try_from(bytes.len()).ok().filter(|len| *len > 0)?;
     // SAFETY: `bytes` outlives `data` and everything made from it, which stay in this function.
     let data = unsafe { CFData::with_bytes_no_copy(None, bytes.as_ptr(), len, kCFAllocatorNull) }?;
-    // SAFETY: `data` is a valid CFData for the call and no options are passed; failure gives None.
-    let source = unsafe { CGImageSource::with_data(&data, None) }?;
+    let source = image_source(SourceOf::Data(&data), None)?;
     let properties = properties(&source)?;
     read(&source, &properties)
 }
@@ -109,15 +164,9 @@ pub(crate) fn properties(source: &CGImageSource) -> Option<CFRetained<Properties
 /// Width, height and EXIF orientation as `properties` give them (each `None` when missing or
 /// not a whole number).
 pub(crate) fn pixel_numbers(properties: &Properties) -> [Option<i64>; 3] {
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys = unsafe {
-        [
-            kCGImagePropertyPixelWidth,
-            kCGImagePropertyPixelHeight,
-            kCGImagePropertyOrientation,
-        ]
-    };
-    keys.map(|key| properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64())
+    let keys = keys();
+    [keys.pixel_width, keys.pixel_height, keys.orientation]
+        .map(|key| properties.get(key)?.downcast_ref::<CFNumber>()?.as_i64())
 }
 
 /// The first picture of `source` drawn upright (its EXIF orientation applied), its longest
@@ -125,14 +174,12 @@ pub(crate) fn pixel_numbers(properties: &Properties) -> [Option<i64>; 3] {
 pub(crate) fn thumbnail(source: &CGImageSource, max_edge: i64) -> Option<CFRetained<CGImage>> {
     let longest = CFNumber::new_i64(max_edge);
     let yes = CFBoolean::new(true);
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys: [&CFString; 3] = unsafe {
-        [
-            kCGImageSourceCreateThumbnailFromImageAlways,
-            kCGImageSourceCreateThumbnailWithTransform,
-            kCGImageSourceThumbnailMaxPixelSize,
-        ]
-    };
+    let keys = keys();
+    let keys: [&CFString; 3] = [
+        keys.thumbnail_always,
+        keys.thumbnail_transform,
+        keys.thumbnail_max,
+    ];
     let values: [&CFType; 3] = [yes, yes, &longest];
     let options = CFDictionary::from_slices(&keys, &values);
     // SAFETY: `options` is a valid dictionary of thumbnail keys; failure gives None.
@@ -220,30 +267,40 @@ pub fn encode(image: &Rgba, encoding: Encoding) -> Option<Vec<u8>> {
     };
     let out = CFMutableData::new(None, 0)?;
     let uti = CFString::from_static_str(encoding.uti());
-    // SAFETY: `out` is a valid mutable CFData and `uti` a valid type identifier; failure gives
-    // None.
-    let destination = unsafe { CGImageDestination::with_data(&out, &uti, 1, None) }?;
     let properties = match encoding {
         Encoding::Png => None,
         Encoding::Jpeg(quality) | Encoding::Heic(quality) => {
             let quality = CFNumber::new_f64(quality.clamp(0.0, 1.0));
-            // SAFETY: reads immutable constants exported by the system frameworks.
-            let keys: [&CFString; 1] = [unsafe { kCGImageDestinationLossyCompressionQuality }];
+            let keys: [&CFString; 1] = [keys().lossy_quality];
             let values: [&CFType; 1] = [&quality];
             Some(CFDictionary::from_slices(&keys, &values))
         }
     };
-    // SAFETY: `picture` is a valid image and `properties` a valid dictionary or None; finalize runs
-    // once, after the only image.
-    let finished = unsafe {
-        destination.add_image(&picture, properties.as_deref().map(|dict| dict.as_opaque()));
-        destination.finalize()
-    };
-    drop(destination);
+    let finished = write_one(&out, &uti, &picture, properties.as_deref());
     drop(picture);
     let bytes = finished.then(|| out.to_vec());
     wipe(&out);
     bytes.filter(|bytes| !bytes.is_empty())
+}
+
+/// Write `picture` into `out` as the type `uti` with `properties` (destination keys); whether
+/// ImageIO finished. The destination is released before this returns.
+fn write_one(
+    out: &CFMutableData,
+    uti: &CFString,
+    picture: &CGImage,
+    properties: Option<&Properties>,
+) -> bool {
+    // SAFETY: `out` is a valid mutable CFData, `uti` a type identifier, `picture` a valid image
+    // and `properties` None or a dictionary with CFString keys, as ImageIO expects. A failed
+    // destination gives false; finalize runs once, after the only image.
+    unsafe {
+        let Some(destination) = CGImageDestination::with_data(out, uti, 1, None) else {
+            return false;
+        };
+        destination.add_image(picture, properties.map(|dict| dict.as_opaque()));
+        destination.finalize()
+    }
 }
 
 /// Overwrite the encoded picture in CoreFoundation's memory before it is released.
@@ -263,8 +320,7 @@ fn bitmap(
     height: usize,
     info: u32,
 ) -> Option<CFRetained<CGContext>> {
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
+    let space = CGColorSpace::with_name(Some(keys().srgb))?;
     bitmap_in(pixels, width, height, info, &space)
 }
 

@@ -10,45 +10,33 @@ use objc2_core_foundation::{
     CFBoolean, CFData, CFDictionary, CFRetained, CFString, CFType, CFURL, CGPoint, CGRect, CGSize,
 };
 use objc2_core_graphics::{CGColorSpace, CGContext, CGImage};
-use objc2_image_io::{
-    CGImageSource, kCGImageSourceShouldCache, kCGImageSourceShouldCacheImmediately,
-};
+use objc2_image_io::CGImageSource;
 
 use crate::clipboard::ClipboardImage;
 use crate::image_ops::PREVIEW_MAX_EDGE;
 use crate::macos_image_edit::{
-    RGBA_PREMULTIPLIED, bitmap_in, pixel_numbers, properties, thumbnail,
+    Properties, RGBA_PREMULTIPLIED, SourceOf, bitmap_in, image_source, keys, pixel_numbers,
+    properties, thumbnail,
 };
 
 pub(crate) fn preview_from_bytes(bytes: &[u8]) -> Option<ClipboardImage> {
     let data = CFData::from_bytes(bytes);
-    let options = source_options();
-    // SAFETY: `data` is a valid CFData and `options` a dictionary of image source keys with
-    // CFBoolean values; failure gives None.
-    let source = unsafe { CGImageSource::with_data(&data, Some(options.as_opaque())) }?;
+    let source = image_source(SourceOf::Data(&data), Some(&source_options()))?;
     preview_from_source(&source)
 }
 
 pub(crate) fn preview_from_path(path: &Path) -> Option<ClipboardImage> {
     // Only UTF-8 paths, as before (`NSString` took the `&str`).
     let url = CFURL::from_file_path(path.to_str()?)?;
-    let options = source_options();
-    // SAFETY: `url` is a valid file URL and `options` a dictionary of image source keys with
-    // CFBoolean values; failure gives None.
-    let source = unsafe { CGImageSource::with_url(&url, Some(options.as_opaque())) }?;
+    let source = image_source(SourceOf::Url(&url), Some(&source_options()))?;
     preview_from_source(&source)
 }
 
 /// Keep ImageIO from decoding a large paste into a full bitmap just to read it.
-fn source_options() -> CFRetained<CFDictionary<CFString, CFType>> {
+fn source_options() -> CFRetained<Properties> {
     let no = CFBoolean::new(false);
-    // SAFETY: reads immutable constants exported by the system frameworks.
-    let keys: [&CFString; 2] = unsafe {
-        [
-            kCGImageSourceShouldCache,
-            kCGImageSourceShouldCacheImmediately,
-        ]
-    };
+    let keys = keys();
+    let keys: [&CFString; 2] = [keys.should_cache, keys.should_cache_immediately];
     let values: [&CFType; 2] = [no, no];
     CFDictionary::from_slices(&keys, &values)
 }

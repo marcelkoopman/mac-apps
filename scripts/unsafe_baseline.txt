@@ -45,7 +45,10 @@
 # copycraft blocks 101: -16, macos_image_io.rs ported from hand-written ImageIO/CoreGraphics/CoreFoundation
 # externs (CFRelease wrapper, CFDictionaryCreate) to objc2-image-io/-core-graphics/-core-foundation (approved
 # by Marcel 2026-10-30); thumbnail, properties, pixel numbers and bitmap context shared with macos_image_edit.rs.
-copycraft blocks 101
+# copycraft blocks 94: -7, macos_image_edit.rs (approved by Marcel 2026-10-30): the framework constants read
+# in one keys() helper, image sources (data or URL) made in one image_source() helper also used by
+# macos_image_io.rs (now without unsafe), and the destination add/finalize in one write_one() helper.
+copycraft blocks 94
 copycraft fn 5
 copycraft impl 9
 # mac-ui blocks 84: +1 for mac_ui::widgets::fade_trailing_edge (collections HIG point 7, approved by Marcel
