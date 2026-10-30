@@ -30,6 +30,7 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::Reopen => self.reopen_card(),
             UserEvent::ShowWelcome => launcher::show_welcome(),
             UserEvent::AiChecked(availability) => self.ai_startup_checked(availability),
+            UserEvent::TableChart(outcome) => launcher::show_table_chart(outcome),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::PreviewReady { generation, result } => {

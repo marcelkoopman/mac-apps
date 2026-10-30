@@ -475,6 +475,8 @@ pub struct TableWindowView {
     /// A version was just taken out ([`CommandId::RemoveTableVersion`]): ⌘Z puts it back
     /// ([`super::table_window_undo_key`]).
     pub can_restore: bool,
+    /// What each column can be in a chart (by index, no names); empty without a frame.
+    pub chart_columns: Vec<crate::chart_data::ChartColumn>,
 }
 
 impl TableWindowView {
@@ -499,6 +501,7 @@ impl TableWindowView {
             column.shown.zeroize();
         }
         self.columns.clear();
+        self.chart_columns.clear();
         for label in &mut self.versions.labels {
             label.zeroize();
         }
@@ -565,6 +568,7 @@ pub fn table_window_view(table: &TableShown, source: &str) -> TableWindowView {
         view.placeholder = crate::locale::t("table_empty").to_string();
         return view;
     };
+    view.chart_columns = crate::chart_data::chart_columns(frame);
     let csv = Zeroizing::new(dataframe::frame_csv(frame).unwrap_or_default());
     view.lines = super::thumb_lines(&csv);
     let original = table.version == 0 && table.options == dataframe::ReadOptions::default();

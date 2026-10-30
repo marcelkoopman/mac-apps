@@ -1,5 +1,6 @@
 //! The table window's toolbar: a real `NSToolbar` in the unified compact style, not
-//! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Copy*, *Copy as
+//! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Chart* (only in a
+//! build with Swift Charts), *Copy*, *Copy as
 //! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, and the search
 //! field (⌘F) as an `NSSearchToolbarItem`, in the order of `commands::table_window_toolbar_items`.
 //! The versions are the strip along the bottom (`strip`), as the history is on the card. The
@@ -16,6 +17,7 @@ use mac_ui::objc2_app_kit::{
 
 const TOOLBAR_ID: &str = "CopycraftTableToolbar";
 const TABLE_ID: &str = "CopycraftTableMenu";
+const CHART_ID: &str = "CopycraftTableChart";
 const COPY_ID: &str = "CopycraftTableCopy";
 const COPY_JSON_ID: &str = "CopycraftTableCopyJson";
 const COPY_CSV_ID: &str = "CopycraftTableCopyCsv";
@@ -26,6 +28,8 @@ const SEARCH_ID: &str = "CopycraftTableSearch";
 /// The toolbar and its items, kept for the life of the window (in `TOOLBAR`).
 pub(super) struct ToolbarItems {
     table: Retained<NSMenuToolbarItem>,
+    /// *Chart*: the version shown as a chart, or back to the table (`super::chart`).
+    chart: Retained<NSToolbarItem>,
     copy: Retained<NSToolbarItem>,
     /// *Copy as JSON* and *Copy as CSV*, as in Table ▾ (`commands::table_window_copy_buttons`).
     copy_json: Retained<NSToolbarItem>,
@@ -44,6 +48,12 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
         &NSString::from_str(TABLE_ID),
     );
     table.setShowsIndicator(true);
+    let chart = symbol_item(
+        mtm,
+        CHART_ID,
+        "chart.bar.xaxis",
+        sel!(tableWindowChartClicked:),
+    );
     let copy = symbol_item(mtm, COPY_ID, "doc.on.doc", sel!(tableWindowCopyClicked:));
     let copy_json = symbol_item(
         mtm,
@@ -86,6 +96,7 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     search.setSearchField(&field);
     let items = ToolbarItems {
         table,
+        chart,
         copy,
         copy_json,
         copy_csv,
@@ -151,6 +162,8 @@ fn relabel_items(items: &ToolbarItems) {
     items.table.setTitle(&s(t("table_window_title")));
     items.table.setLabel(&s(t("table_steps_a11y")));
     items.table.setToolTip(Some(&s(t("table_steps_a11y"))));
+    items.chart.setLabel(&s(t("table_chart")));
+    items.chart.setToolTip(Some(&s(t("table_chart_tip"))));
     items.copy.setLabel(&s(t("copy_table_a11y")));
     items.copy.setToolTip(Some(&s(t("copy_table_tip"))));
     items.copy_json.setLabel(&s(t("table_copy_json")));
@@ -163,7 +176,13 @@ fn relabel_items(items: &ToolbarItems) {
         .setToolTip(Some(&s(t("detail_table_copy_csv"))));
     items.save.setLabel(&s(t("save_table_a11y")));
     items.save.setToolTip(Some(&s(t("save_table_tip"))));
-    for item in [&items.copy, &items.copy_json, &items.copy_csv, &items.save] {
+    for item in [
+        &items.chart,
+        &items.copy,
+        &items.copy_json,
+        &items.copy_csv,
+        &items.save,
+    ] {
         if item.image().is_none() {
             item.setTitle(&item.label());
         }
@@ -201,6 +220,9 @@ pub(super) fn paint(view: &TableWindowView) {
         // Enabled once the version's grid is there (not while "Working on the table…").
         let ready = !view.grid.is_empty();
         items.copy.setEnabled(ready);
+        items
+            .chart
+            .setEnabled(commands::table_window_chart_on(view));
         items.search.searchField().setEnabled(ready);
         items.save.setEnabled(ready);
         let [(_, json_on), (_, csv_on)] = commands::table_window_copy_buttons(view);
@@ -249,6 +271,7 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
         let items = borrowed.as_ref()?;
         let item: Retained<NSToolbarItem> = match id.as_str() {
             TABLE_ID => Retained::into_super(items.table.clone()),
+            CHART_ID => items.chart.clone(),
             COPY_ID => items.copy.clone(),
             COPY_JSON_ID => items.copy_json.clone(),
             COPY_CSV_ID => items.copy_csv.clone(),
@@ -269,9 +292,12 @@ pub(super) fn identifiers() -> Retained<NSArray<NSString>> {
     let flexible: &NSString = unsafe { NSToolbarFlexibleSpaceItemIdentifier };
     let ids: Vec<Retained<NSString>> = commands::table_window_toolbar_items()
         .iter()
+        // Without Swift Charts in the build there is no Chart button.
+        .filter(|item| **item != Item::Chart || crate::macos_chart::AVAILABLE)
         .map(|item| match item {
             Item::Space => flexible.retain(),
             Item::Table => NSString::from_str(TABLE_ID),
+            Item::Chart => NSString::from_str(CHART_ID),
             Item::Copy => NSString::from_str(COPY_ID),
             Item::CopyJson => NSString::from_str(COPY_JSON_ID),
             Item::CopyCsv => NSString::from_str(COPY_CSV_ID),

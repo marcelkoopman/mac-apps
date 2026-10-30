@@ -6,8 +6,7 @@ mod brackets;
 mod capture;
 mod card_layout;
 mod card_theme;
-// Used by the table window's chart once its button is in (next commits).
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod chart_data;
 mod checksum;
 mod clipboard;
@@ -83,10 +82,8 @@ static ALLOC: wipe_alloc::WipeOnFree = wipe_alloc::WipeOnFree;
 
 #[cfg(target_os = "macos")]
 mod macos_about;
-// The Chart button uses it (next commit).
 #[cfg(target_os = "macos")]
 mod macos_card_text;
-#[allow(dead_code)]
 #[cfg(target_os = "macos")]
 mod macos_chart;
 #[cfg(target_os = "macos")]

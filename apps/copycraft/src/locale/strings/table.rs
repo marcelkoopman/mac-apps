@@ -215,4 +215,32 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Geen getallen om te tekenen",
         "No numbers to draw",
     ),
+    ("table_chart", "Grafiek", "Chart"),
+    (
+        "table_chart_tip",
+        "Toon de tabel als grafiek",
+        "Show the table as a chart",
+    ),
+    ("chart_back_tip", "Terug naar de tabel", "Back to the table"),
+    ("chart_working", "Grafiek maken…", "Making the chart…"),
+    (
+        "chart_skipped",
+        "{0} waarden overgeslagen",
+        "{0} values skipped",
+    ),
+    (
+        "chart_one_skipped",
+        "1 waarde overgeslagen",
+        "1 value skipped",
+    ),
+    (
+        "chart_unavailable",
+        "De grafiek kan niet worden getekend",
+        "The chart cannot be drawn",
+    ),
+    ("chart_type", "Soort grafiek", "Chart Type"),
+    ("chart_x_column", "Kolom op de x-as", "X-Axis Column"),
+    ("chart_y_column", "Kolom met waarden", "Value Column"),
+    ("chart_bucket", "Datumstap", "Date Step"),
+    ("chart_aggregate", "Berekening", "Calculation"),
 ];

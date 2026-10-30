@@ -92,6 +92,38 @@ fn the_table_window_view_knows_its_row_count() {
 }
 
 #[test]
+fn the_chart_button_needs_a_grid_and_columns_that_fit() {
+    let src = "shop;sales\nA;3\nB;4\n";
+    let table = read(src, crate::dataframe::ReadOptions::default());
+    let mut view = table_window_view(&table, src);
+    assert_eq!(view.chart_columns.len(), 2);
+    assert!(crate::commands::table_window_chart_on(&view));
+    view.wipe();
+    assert!(view.chart_columns.is_empty());
+    assert!(!crate::commands::table_window_chart_on(&view));
+}
+
+#[test]
+fn the_chart_button_follows_the_frame_not_the_format() {
+    // Pasted TSV, a JSON table and semicolon CSV: one frame each, so a chart each.
+    for src in [
+        "shop\tsales\nA\t3\nB\t4\n",
+        r#"[{"shop":"A","sales":3},{"shop":"B","sales":4}]"#,
+        "shop;sales\nA;3\nB;4\n",
+    ] {
+        let table = read(src, crate::dataframe::ReadOptions::default());
+        let view = table_window_view(&table, src);
+        assert_eq!(view.chart_columns.len(), 2, "{src}");
+        assert!(crate::commands::table_window_chart_on(&view), "{src}");
+        let request = crate::chart_data::ChartRequest::first(&view.chart_columns).expect("chart");
+        let frame = table.frame.as_ref().expect("frame");
+        let data =
+            crate::chart_data::build(frame, &request, crate::locale::Lang::En).expect("chart data");
+        assert_eq!(data.skipped, 0, "{src}");
+    }
+}
+
+#[test]
 fn the_table_window_toolbar_ends_with_the_search_field() {
     use crate::commands::TableToolbarItem as Item;
     let items = crate::commands::table_window_toolbar_items();
@@ -101,9 +133,10 @@ fn the_table_window_toolbar_ends_with_the_search_field() {
         1
     );
     assert_eq!(
-        &items[..5],
+        &items[..6],
         &[
             Item::Table,
+            Item::Chart,
             Item::Copy,
             Item::CopyJson,
             Item::CopyCsv,

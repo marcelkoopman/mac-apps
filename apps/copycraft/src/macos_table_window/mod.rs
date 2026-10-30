@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open Table" on the card): the table of one entry in its own resizable
-// window. A native toolbar (`toolbar`: Table ▾, Copy, Copy as JSON, Copy as CSV, Save, the search field), a sidebar
+// window. A native toolbar (`toolbar`: Table ▾, Chart (`chart`), Copy, Copy as JSON, Copy as CSV, Save, the search field), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
 // tables), the version strip along the bottom (`strip`, as the history on the card) and the
 // meta line. A parsed grid is drawn as aligned columns with a fixed header
@@ -26,9 +26,10 @@ use mac_ui::objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep, NSBezierPath, NSBorderType, NSBox,
     NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSEventGestureAxis,
     NSEventModifierFlags, NSFocusRingType, NSFont, NSLineBreakMode, NSMenu, NSMenuItem,
-    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSScrollView, NSSearchField, NSTextAlignment,
-    NSTextField, NSTextTab, NSTextView, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView,
-    NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask, NSWindowTabbingMode,
+    NSModalPanelWindowLevel, NSMutableParagraphStyle, NSPopUpButton, NSScrollView, NSSearchField,
+    NSTextAlignment, NSTextField, NSTextTab, NSTextView, NSToolbar, NSToolbarDelegate,
+    NSToolbarItem, NSView, NSViewBoundsDidChangeNotification, NSWindow, NSWindowStyleMask,
+    NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
     NSArray, NSDictionary, NSNotification, NSNotificationCenter, NSObjectProtocol, NSPoint,
@@ -205,6 +206,26 @@ define_class!(
         #[unsafe(method(tableWindowStripScrolled:))]
         fn strip_scrolled(&self, _note: &NSNotification) {
             strip::scrolled();
+        }
+
+        /// *Chart* on the toolbar: the chart of the version shown, or back to the table.
+        #[unsafe(method(tableWindowChartClicked:))]
+        fn chart_clicked(&self, _sender: Option<&AnyObject>) {
+            chart::toggle();
+        }
+
+        /// A pop-up above the chart (its tag says which).
+        #[unsafe(method(tableWindowChartChanged:))]
+        fn chart_changed(&self, sender: Option<&NSPopUpButton>) {
+            if let Some(popup) = sender {
+                chart::changed(popup.tag(), popup.indexOfSelectedItem());
+            }
+        }
+
+        /// *Table* above the chart: back to the table.
+        #[unsafe(method(tableWindowChartBack:))]
+        fn chart_back(&self, _sender: Option<&NSButton>) {
+            chart::leave();
         }
 
         #[unsafe(method(tableWindowCopyClicked:))]
@@ -400,6 +421,11 @@ pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::Prepar
     }
 }
 
+/// Draw the chart the app worked out (dropped when it is for an older request).
+pub(crate) fn show_chart(outcome: crate::chart_data::ChartOutcome) {
+    chart::show(outcome);
+}
+
 /// Activate the app and put the table window in front and key, also when it was already open.
 pub fn bring_forward() {
     let Some(mtm) = MainThreadMarker::new() else {
@@ -432,6 +458,7 @@ pub fn relabel() {
         });
         views.window.setTitle(&NSString::from_str(&title));
         toolbar::relabel();
+        chart::relabel();
         views
             .sidebar
             .setAccessibilityLabel(Some(&NSString::from_str(t("columns_title"))));
@@ -487,6 +514,7 @@ fn order_out() {
 
 /// Wipe the views and what they were made from.
 fn forget() {
+    chart::wipe();
     switching::reset();
     REVEALED.set(false);
     PAINTED.set(false);
@@ -705,6 +733,7 @@ pub fn open_column_picker() {
 include!("../macos_table_paint.rs");
 
 mod build;
+mod chart;
 mod menus;
 mod paint;
 mod picker;

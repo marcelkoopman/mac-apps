@@ -19,6 +19,8 @@ pub enum UserEvent {
     Reopen,
     /// The startup check of Apple Intelligence is done (off the main thread).
     AiChecked(mac_ai::Availability),
+    /// The chart thread worked out the table window's chart (or why there is none).
+    TableChart(crate::chart_data::ChartOutcome),
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,
@@ -150,7 +152,23 @@ pub enum NotificationEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableWindowEvent {
     Run(CommandId),
+    /// Work out a chart of the version shown (columns by index, no names), as request
+    /// `generation` of the window.
+    Chart {
+        request: crate::chart_data::ChartRequest,
+        generation: u64,
+    },
     Closed,
+}
+
+/// Draw `outcome` in the table window's chart, unless a newer request is on its way.
+pub(crate) fn show_table_chart(outcome: crate::chart_data::ChartOutcome) {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::show_chart(outcome);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = outcome;
+    }
 }
 
 /// Show `view` in the table window, opening it the first time.

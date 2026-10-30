@@ -172,6 +172,127 @@ impl ChartRequest {
     }
 }
 
+/// The kinds `columns` allow: bar and line need a text or date column, a scatter two number
+/// columns.
+pub fn kinds(columns: &[ChartColumn]) -> Vec<ChartKind> {
+    let groups = columns.iter().any(|c| c.role != ColumnRole::Number);
+    let numbers = columns
+        .iter()
+        .filter(|c| c.role == ColumnRole::Number)
+        .count();
+    ChartKind::ALL
+        .into_iter()
+        .filter(|kind| match kind {
+            ChartKind::Bar | ChartKind::Line => groups,
+            ChartKind::Scatter => numbers >= 2,
+        })
+        .collect()
+}
+
+/// The columns the x pop-up offers for `kind`: the text and date columns (bar, line) or the
+/// number columns (scatter).
+pub fn x_choices(columns: &[ChartColumn], kind: ChartKind) -> Vec<usize> {
+    columns
+        .iter()
+        .filter(|c| (c.role == ColumnRole::Number) == (kind == ChartKind::Scatter))
+        .map(|c| c.index)
+        .collect()
+}
+
+/// The columns the value (or y) pop-up offers: the number columns.
+pub fn y_choices(columns: &[ChartColumn]) -> Vec<usize> {
+    columns
+        .iter()
+        .filter(|c| c.role == ColumnRole::Number)
+        .map(|c| c.index)
+        .collect()
+}
+
+/// The role of the column at `index`.
+pub fn role_of(columns: &[ChartColumn], index: usize) -> Option<ColumnRole> {
+    columns.iter().find(|c| c.index == index).map(|c| c.role)
+}
+
+impl ChartRequest {
+    /// This request made to fit `columns` (after a pop-up changed, or another version): a kind
+    /// they allow, an x and y they offer for it (a scatter's y not its x), counting when there
+    /// is no value column. `None` when no chart fits.
+    pub fn fitted(self, columns: &[ChartColumn]) -> Option<ChartRequest> {
+        let kinds = kinds(columns);
+        let kind = if kinds.contains(&self.kind) {
+            self.kind
+        } else {
+            *kinds.first()?
+        };
+        let xs = x_choices(columns, kind);
+        let x = if xs.contains(&self.x) {
+            self.x
+        } else {
+            *xs.first()?
+        };
+        let ys = y_choices(columns);
+        let fits = |y: &usize| kind != ChartKind::Scatter || *y != x;
+        let y = match self.y {
+            Some(y) if ys.contains(&y) && fits(&y) => Some(y),
+            _ => ys.iter().copied().find(fits),
+        };
+        if kind == ChartKind::Scatter && y.is_none() {
+            return None;
+        }
+        let aggregate = if y.is_none() {
+            Aggregate::Count
+        } else {
+            self.aggregate
+        };
+        Some(ChartRequest {
+            kind,
+            x,
+            y,
+            aggregate,
+            bucket: self.bucket,
+        })
+    }
+}
+
+/// A chart worked out on a worker, for the table window: the JSON to draw (with the count of
+/// skipped values) or why there is none. `generation` is the window's number of the request:
+/// an older one is dropped. Its `Debug` shows no labels or values.
+pub struct ChartOutcome {
+    pub generation: u64,
+    pub result: Result<(Zeroizing<String>, usize), ChartProblem>,
+}
+
+impl ChartOutcome {
+    /// [`build`] and [`ChartData::to_json`] for the window's request number `generation`.
+    pub fn build(df: &DataFrame, request: &ChartRequest, lang: Lang, generation: u64) -> Self {
+        ChartOutcome {
+            generation,
+            result: build(df, request, lang).map(|data| (data.to_json(), data.skipped)),
+        }
+    }
+}
+
+impl Clone for ChartOutcome {
+    fn clone(&self) -> Self {
+        ChartOutcome {
+            generation: self.generation,
+            result: match &self.result {
+                Ok((json, skipped)) => Ok((Zeroizing::new(json.as_str().to_string()), *skipped)),
+                Err(problem) => Err(*problem),
+            },
+        }
+    }
+}
+
+impl std::fmt::Debug for ChartOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChartOutcome")
+            .field("generation", &self.generation)
+            .field("drawn", &self.result.is_ok())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Why no chart could be drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChartProblem {

@@ -902,3 +902,30 @@ The error enums derive `thiserror::Error`; the texts the user sees must be exact
 - [ ] JSON ▾ restyle on made-up broken JSON (`{"test": 1,}`): the same "line, column" note; with a duplicate key the same duplicate-key note.
 - [ ] Feedback › copy the mail text, and copy a symbol from the symbol window: both still land on the clipboard; Help › mail with no mail app set up shows the same message as before.
 - [ ] (mac-ui and mac-ai, same change) The menu bar icon looks as before; Open… (file panel) and Save… still work and Cancel changes nothing; an AI step with Apple Intelligence off shows the same "unavailable" message as before.
+
+## Chart in the table window (Mac only, fake data)
+
+Build on the Mac (`cargo build -p copycraft`): the build log must not show `copycraft: swiftc not found` (then the Chart button is hidden on purpose). Copy this made-up table and open it in the table window (Open table):
+
+```
+category,month,revenue,units
+Books,2026-01-05,10.5,1
+Games,2026-01-20,20,2
+Books,2026-02-03,4.5,3
+Toys,2026-02-14,7,1
+Games,2026-02-28,30,4
+Books,2026-03-01,5,2
+Toys,2026-03-09,,2
+```
+
+- [ ] The toolbar shows a chart symbol (*Grafiek* / *Chart* as its tooltip and in the overflow menu) right after *Tabel ▾* / *Table ▾*. Click it: a bar chart of the sum of revenue per category (Games 50, Books 20, Toys 7), largest first, legend at the bottom, numbers in the language's format (NL `20,5`-style decimals); the note reads *1 waarde overgeslagen* / *1 value skipped*.
+- [ ] Pop-ups above the chart: type (bar, line, scatter), the column on the x-axis, the date step (only for the month column), the calculation (count, sum, average, smallest, largest) and the value column (hidden for count). Each change redraws; month gives Jan–Mar, year gives 2026; scatter plots revenue against units without grouping.
+- [ ] Esc, and the *Tabel* / *Table* button, go back to the grid; the Chart button again brings the chart back. Esc in the search field still clears the search there.
+- [ ] VoiceOver (⌘F5): each bar or point reads its label and value; the pop-ups read their names (*Soort grafiek*, *Kolom op de x-as*, … / *Chart Type*, *X-Axis Column*, …).
+- [ ] Switch Settings › Language while the chart is up: the pop-ups, labels and legend follow.
+- [ ] Click another app: the window masks; the chart is hidden under the cover and the pop-ups are off; clicking reveals it again.
+- [ ] A step (e.g. remove a column) or another version in the strip: the chart follows; a version with no columns that fit goes back to the grid. Close the window and open it again: the grid shows, not the chart.
+- [ ] Not tied to CSV: copy the same table as TSV (tabs, e.g. pasted from Numbers or Excel), as a JSON table (`[{"category":"Books","revenue":10.5},{"category":"Games","revenue":20}]`) and with `;` separators: Open table shows the Chart button each time and the chart gives the same sums. A drop of a made-up `.tsv` or `.json` file does too.
+- [ ] A table with 60 categories (`printf 'c,v\n'; for i in $(seq 1 60); do echo "k$i,$i"; done`, copied): at most 50 bars, the last *Overig* / *Other*.
+- [ ] Nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value or chart label; no new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data` (`ls -lt … | head`).
+- [ ] `codesign -d --entitlements - /Applications/CopyCraft.app` shows the same entitlements as the previous build; `otool -L` on the binary lists only system libraries and `/usr/lib/swift/…`.

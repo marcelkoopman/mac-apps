@@ -322,3 +322,80 @@ fn json_snapshot() {
         )
     );
 }
+
+#[test]
+fn the_pop_ups_offer_what_fits() {
+    let columns = chart_columns(&shop());
+    assert_eq!(
+        kinds(&columns),
+        [ChartKind::Bar, ChartKind::Line, ChartKind::Scatter]
+    );
+    assert_eq!(x_choices(&columns, ChartKind::Bar), [0, 1]);
+    assert_eq!(x_choices(&columns, ChartKind::Scatter), [2, 3]);
+    assert_eq!(y_choices(&columns), [2, 3]);
+    assert_eq!(role_of(&columns, 1), Some(ColumnRole::Date));
+    assert_eq!(role_of(&columns, 9), None);
+    // One number column: no scatter.
+    let one = chart_columns(&parse_table("category,revenue\nBooks,1\nGames,2\n").expect("table"));
+    assert_eq!(kinds(&one), [ChartKind::Bar, ChartKind::Line]);
+}
+
+#[test]
+fn a_request_is_fitted_to_the_columns() {
+    let columns = chart_columns(&shop());
+    // Bar to scatter: the x becomes a number column, the y another one.
+    let scatter = request(ChartKind::Scatter, 0, Some(2), Aggregate::Sum)
+        .fitted(&columns)
+        .expect("fits");
+    assert_eq!((scatter.x, scatter.y), (2, Some(3)));
+    // Back to a bar: a text column again, the value column kept.
+    let bar = request(ChartKind::Bar, 2, Some(3), Aggregate::Mean)
+        .fitted(&columns)
+        .expect("fits");
+    assert_eq!((bar.x, bar.y, bar.aggregate), (0, Some(3), Aggregate::Mean));
+    // A request that fits stays as it is.
+    let line = request(ChartKind::Line, 1, Some(2), Aggregate::Max);
+    assert_eq!(line.fitted(&columns), Some(line));
+    // Without number columns: counting; no columns at all: nothing.
+    let text = chart_columns(&parse_table("category,shop\nBooks,A\nGames,B\n").expect("table"));
+    let counted = request(ChartKind::Bar, 0, Some(2), Aggregate::Sum)
+        .fitted(&text)
+        .expect("fits");
+    assert_eq!((counted.y, counted.aggregate), (None, Aggregate::Count));
+    assert_eq!(
+        request(ChartKind::Scatter, 0, None, Aggregate::Sum).fitted(&text),
+        Some(counted)
+    );
+    assert_eq!(
+        request(ChartKind::Bar, 0, None, Aggregate::Sum).fitted(&[]),
+        None
+    );
+}
+
+#[test]
+fn an_outcome_shows_no_content() {
+    let outcome = ChartOutcome::build(
+        &shop(),
+        &request(ChartKind::Bar, 0, Some(2), Aggregate::Sum),
+        Lang::En,
+        7,
+    );
+    let (json, skipped) = outcome.result.as_ref().expect("chart");
+    assert!(json.contains("Books"));
+    assert_eq!(*skipped, 0);
+    let shown = format!("{outcome:?}");
+    assert!(
+        !shown.contains("Books") && !shown.contains("revenue"),
+        "{shown}"
+    );
+    assert!(shown.contains('7'));
+    let copy = outcome.clone();
+    assert_eq!(copy.generation, 7);
+    let problem = ChartOutcome::build(
+        &shop(),
+        &request(ChartKind::Bar, 2, Some(0), Aggregate::Sum),
+        Lang::En,
+        8,
+    );
+    assert!(problem.result.is_err());
+}

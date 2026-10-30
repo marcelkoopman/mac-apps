@@ -160,6 +160,25 @@ impl App {
         launcher::bring_table_window_forward();
     }
 
+    /// The table window's chart: worked out from the version shown on a thread (the frame is
+    /// shared, not copied), and sent back as [`UserEvent::TableChart`]. Nothing is logged.
+    fn table_chart(&mut self, request: crate::chart_data::ChartRequest, generation: u64) {
+        use crate::chart_data::{ChartOutcome, ChartProblem};
+        let lang = crate::locale::lang();
+        let Some(frame) = self.window_table_frame() else {
+            launcher::show_table_chart(ChartOutcome {
+                generation,
+                result: Err(ChartProblem::Columns),
+            });
+            return;
+        };
+        std::thread::spawn(move || {
+            let outcome = ChartOutcome::build(&frame, &request, lang, generation);
+            drop(frame);
+            launcher::emit(UserEvent::TableChart(outcome));
+        });
+    }
+
     /// Close the table window (Wipe, Clear History, lock, its entry gone): its table may forget
     /// its frames again, and the window wipes what it showed.
     pub(crate) fn close_table_window(&mut self) {
@@ -223,6 +242,10 @@ impl App {
                     }
                 }
             }
+            launcher::TableWindowEvent::Chart {
+                request,
+                generation,
+            } => self.table_chart(request, generation),
             launcher::TableWindowEvent::Run(id) => {
                 let target = TableTarget::Window;
                 // A removed version comes back with ⌘Z right after; anything else forgets it,

@@ -359,6 +359,9 @@ fn place_body(views: &Views, strip_h: f64) {
     place(&views.well);
     place(&views.cover);
     place(&views.shade);
+    if let Some(pane) = super::chart::pane() {
+        place(&pane);
+    }
     if let Some(scroll) = views.grid.enclosingScrollView()
         && let Some(clip) = mac_ui::widgets::superview(&scroll)
     {
