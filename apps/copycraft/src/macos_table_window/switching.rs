@@ -20,6 +20,34 @@ thread_local! {
     static SPINNER: RefCell<Option<Spinner>> = const { RefCell::new(None) };
     /// The grid is dimmed under the spinner.
     static DIMMED: Cell<bool> = const { Cell::new(false) };
+    /// A large table's search is on its thread: the grid drawn is the one before it.
+    static SEARCHING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// A large table's search is on its way (`true`) or drawn (`false`). While it is on its way the
+/// grid on screen is the old one: it is dimmed under the spinner, takes no clicks and has no
+/// row menu ([`searching`]), so nothing acts on a row of it.
+pub(super) fn search_pending(pending: bool) {
+    let was = SEARCHING.replace(pending);
+    if pending {
+        // Again after every paint: a switch that ended meanwhile undimmed the grid.
+        set_grid_selectable(false);
+        show_busy();
+        return;
+    }
+    if !was || busy() {
+        // Nothing to undo, or a version switch still runs and ends the dimming itself.
+        return;
+    }
+    finish();
+    if let Some(body) = grid_body() {
+        body.setAlphaValue(1.0);
+    }
+}
+
+/// A large table's search is on its way ([`search_pending`]).
+pub(super) fn searching() -> bool {
+    SEARCHING.get()
 }
 
 /// A switch is going on: the grid takes no clicks.
@@ -134,6 +162,7 @@ pub(super) fn tick() {
 
 /// The window was wiped or closed: no switch, no spinner, the grid at full again.
 pub(super) fn reset() {
+    SEARCHING.set(false);
     SWITCH.with(|switch| switch.borrow_mut().reset());
     finish();
     if let Some(body) = grid_body() {

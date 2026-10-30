@@ -203,6 +203,30 @@ mod tests {
         assert!(!body.contains("<false/>") && !body.contains("<array>"));
     }
 
+    /// While a large table's search runs on its thread, the grid on screen may be of the
+    /// version before (a switch, a × remove): no row may be read from it. The wait forgets the
+    /// drawn rows' mapping and dims the grid, the row menu stays shut, and the drawn result
+    /// (or a closed window) ends the wait.
+    #[test]
+    fn a_pending_table_search_maps_no_rows() {
+        let paint = include_str!("macos_table_paint.rs");
+        let grid = &paint[paint.find("fn paint_table_grid").unwrap()..];
+        let wait = &grid[grid.find("let Ok(filtered) = search_sheet").unwrap()..];
+        let wait = &wait[..wait.find("return;").unwrap()];
+        assert!(wait.contains("SHOWN_ROWS.with(|slot| slot.replace(None));"));
+        assert!(wait.contains("switching::search_pending(true);"));
+        assert!(grid.contains("switching::search_pending(false);"));
+        let forget = &paint[paint.find("fn forget_thread_search").unwrap()..];
+        assert!(forget[..forget.find("\n}\n").unwrap()].contains("search_pending(false)"));
+        let window = include_str!("macos_table_window/mod.rs");
+        let menu = &window[window.find("fn cell_menu").unwrap()..];
+        let menu = &menu[..menu.find("SHOWN_ROWS").unwrap()];
+        assert!(menu.contains("switching::searching()"));
+        let switching = include_str!("macos_table_window/switching.rs");
+        let reset = &switching[switching.find("pub(super) fn reset()").unwrap()..];
+        assert!(reset[..reset.find("\n}\n").unwrap()].contains("SEARCHING.set(false);"));
+    }
+
     /// Quit must not crash (EXC_BAD_ACCESS in `-[NSThemeFrame dealloc]` on ⌘Q): the titled
     /// windows hand their last reference to `release_after_close` instead of dropping it in
     /// `windowWillClose:`, and ⌘Q and the quit Apple event quit through the event loop, not

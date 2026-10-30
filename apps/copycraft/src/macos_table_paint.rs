@@ -309,8 +309,14 @@ fn search_sheet(
             .as_ref()
             .is_some_and(|(_, pending_key, pending)| *pending_key == key && **pending == query)
     });
-    if !running {
-        start_thread_search(prepared.clone(), query);
+    if !running && !start_thread_search(prepared.clone(), query) {
+        // No thread to be had: search here, slow but right.
+        return Ok(commands::filter_sheet(
+            &sheet.rows,
+            &prepared.layout.body,
+            query,
+            || true,
+        ));
     }
     Err(())
 }
@@ -323,7 +329,10 @@ fn bump_search_generation() -> u64 {
 /// still the newest search ([`commands::SearchGeneration`]). A newer search, closing the window
 /// or Clear stops it within [`commands::SEARCH_CHECK_ROWS`] rows, and the sheet it holds goes.
 /// Nothing is logged.
-fn start_thread_search(prepared: std::sync::Arc<crate::dataframe::PreparedSheet>, query: &str) {
+fn start_thread_search(
+    prepared: std::sync::Arc<crate::dataframe::PreparedSheet>,
+    query: &str,
+) -> bool {
     let generation = bump_search_generation();
     let counter = SEARCH_GENERATION.with(Clone::clone);
     let key = prepared.body_key;
@@ -348,12 +357,16 @@ fn start_thread_search(prepared: std::sync::Arc<crate::dataframe::PreparedSheet>
             });
             mac_ui::actions::run_on_main(move || thread_search_done(generation, done));
         });
-    if let Err(e) = spawned {
-        SEARCH_PENDING.with(|slot| slot.replace(None));
-        crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
-            crate::diag::Work::Lane,
-            crate::diag::ErrorKind::io(&e),
-        ));
+    match spawned {
+        Ok(_) => true,
+        Err(e) => {
+            SEARCH_PENDING.with(|slot| slot.replace(None));
+            crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
+                crate::diag::Work::Lane,
+                crate::diag::ErrorKind::io(&e),
+            ));
+            false
+        }
     }
 }
 
@@ -374,6 +387,7 @@ fn thread_search_done(generation: u64, done: Option<ThreadSearch>) {
 /// Forget the searches on a thread (the window is wiped): a result still on its way is dropped.
 fn forget_thread_search() {
     bump_search_generation();
+    switching::search_pending(false);
     SEARCH_PENDING.with(|slot| slot.replace(None));
     SEARCH_DONE.with(|slot| slot.replace(None));
 }
@@ -390,10 +404,14 @@ fn paint_table_grid(views: &Views, view: &TableWindowView) {
         // The toolbar's search: only the rows with a cell that matches are drawn.
         let query = SEARCH.with(|query| zeroize::Zeroizing::new(query.borrow().clone()));
         let Ok(filtered) = search_sheet(&prepared, &query) else {
-            // A large sheet's search is on a thread: what is drawn stays until it is done.
+            // A large sheet's search is on a thread: the grid drawn (perhaps of the version
+            // before) stays, dimmed, until it is done. Its rows no longer map to this sheet.
+            SHOWN_ROWS.with(|slot| slot.replace(None));
+            switching::search_pending(true);
             PREPARED.with(|slot| slot.replace(Some(prepared)));
             return;
         };
+        switching::search_pending(false);
         paint_aligned_table(views, &prepared, filtered.as_ref());
         let mut meta = match &filtered {
             Some((found, _)) => {

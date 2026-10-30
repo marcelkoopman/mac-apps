@@ -545,8 +545,8 @@ fn blur_filter() -> Option<Retained<AnyObject>> {
 /// when the grid is masked, not drawn as columns, or the click is below the last row.
 fn cell_menu(grid: &TableGridView, event: &NSEvent) -> Option<Retained<NSMenu>> {
     let mtm = MainThreadMarker::new()?;
-    // Not while another version is on its way (the grid is dimmed then).
-    if masked() || !TABLE_STRIPES.with(Cell::get) || switching::busy() {
+    // Not while another version or a search is on its way (the grid is dimmed then).
+    if masked() || !TABLE_STRIPES.with(Cell::get) || switching::busy() || switching::searching() {
         return None;
     }
     let point = grid.convertPoint_fromView(event.locationInWindow(), None);

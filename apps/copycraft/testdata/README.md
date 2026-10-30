@@ -555,6 +555,8 @@ Make a fake 5 MB table first (65,000 rows, made-up values): `awk 'BEGIN{print "i
 - [ ] When the version is there the grid fades in (about 0.2 s) and the meta line shows its size. Click the cards quickly a few times: the grid ends on the last card clicked, never on an older one, and the frame never jumps back.
 - [ ] ⌘Z and ⇧⌘Z do the same (the frame moves first). A step from the card's own version capsule dims the window's grid the same way while it runs.
 - [ ] Reduce Motion on (System Settings › Accessibility › Display): the switch has no fade, the version just shows; the spinner still shows on a slow switch.
+- [ ] Search waits without stale rows: type `naam9` in the search field, then at once click the other version card (or its ×). Until the search of the new version is drawn, the grid is dimmed under the spinner, takes no clicks and a right-click gives no *Copy Row* menu. When it is drawn, right-click a row › *Copy Row* and paste in TextEdit: it is the row shown, of the version framed, and the meta line says that version's *… van … rijen* / *… of … rows*.
+- [ ] Stale searches stop: type `n`, `na`, `naa` quickly, then close the window right away. Activity Monitor › CopyCraft › *Sample Process* a moment later shows no `copycraft-table-search` thread still busy, and the memory drops back within a second or so.
 - [ ] Search in the large table, then switch: the search applies to the new version. Scroll to the bottom of the grid: the last row shows with its stripe, nothing is cut off; scroll sideways to the last column.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names while switching. Nothing new is written to disk.
 
