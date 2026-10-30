@@ -13,6 +13,7 @@
 //! most deviating rows ([`NumberStats::extremes`]).
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use polars::prelude::{Column, DataFrame, DataType};
 use zeroize::{Zeroize, Zeroizing};
@@ -88,7 +89,8 @@ pub enum LooksLike {
 }
 
 /// A row outside the IQR fences: its row in the table (0-based), its value and on which side.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// No `Debug`: the value is a cell's.
+#[derive(Clone, Copy, PartialEq)]
 pub struct Extreme {
     pub row: usize,
     pub value: f64,
@@ -96,8 +98,8 @@ pub struct Extreme {
     pub high: bool,
 }
 
-/// The numbers of a number column (its values, empty ones aside).
-#[derive(Debug, Clone, PartialEq)]
+/// The numbers of a number column (its values, empty ones aside). No `Debug` (cell values).
+#[derive(Clone, PartialEq)]
 pub struct NumberStats {
     pub count: usize,
     pub min: f64,
@@ -128,8 +130,8 @@ impl NumberStats {
     }
 }
 
-/// One column of the profile.
-#[derive(Debug, Clone, PartialEq)]
+/// One column of the profile. No `Debug` (its name and numbers).
+#[derive(Clone, PartialEq)]
 pub struct ColumnProfile {
     /// The column's place in the table.
     pub index: usize,
@@ -168,8 +170,8 @@ pub enum Finding {
     },
 }
 
-/// The profile of one table version.
-#[derive(Debug, Clone, PartialEq)]
+/// The profile of one table version. No `Debug`: nothing of it may reach a log.
+#[derive(Clone, PartialEq)]
 pub struct TableProfile {
     pub rows: usize,
     pub columns: Vec<ColumnProfile>,
@@ -177,6 +179,35 @@ pub struct TableProfile {
     pub duplicate_rows: Option<usize>,
     /// Every finding, the most serious first ([`Finding::score`]).
     pub findings: Vec<Finding>,
+}
+
+/// What the profile thread sends back for request `generation` of the table window: the
+/// profile, or `None` when the window had no table. Shared, not copied: the app keeps it for
+/// *Copy Profile*, the window shows it; the last one to let go zeroizes it.
+#[derive(Clone)]
+pub struct ProfileOutcome {
+    pub generation: u64,
+    pub profile: Option<Arc<TableProfile>>,
+}
+
+/// Without the profile: its names and numbers stay out of any log.
+impl std::fmt::Debug for ProfileOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileOutcome")
+            .field("generation", &self.generation)
+            .field("profile", &self.profile.is_some())
+            .finish()
+    }
+}
+
+impl ProfileOutcome {
+    /// Work out the profile of `df` (on a thread of its own: a big table takes a moment).
+    pub fn build(df: &DataFrame, generation: u64) -> Self {
+        Self {
+            generation,
+            profile: Some(Arc::new(profile(df))),
+        }
+    }
 }
 
 impl Drop for TableProfile {

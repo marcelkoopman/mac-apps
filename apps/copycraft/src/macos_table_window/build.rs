@@ -199,8 +199,10 @@ pub(super) fn ensure_views(mtm: MainThreadMarker) {
     // The cover over the sidebar and the grid: a click reveals them. Its shade stands in for
     // a blur that cannot be installed.
     let cover_frame = NSRect::new(NSPoint::new(0.0, META_H), NSSize::new(width, body_h));
-    // The chart (when the build has it) goes under the shade and cover, as the grid.
+    // The chart (when the build has it) and the profile go under the shade and cover, as the
+    // grid.
     chart::build(mtm, &content, cover_frame);
+    profile::build(mtm, &content, cover_frame);
     let shade = widgets::filled_box(mtm, WELL_RADIUS, &NSColor::windowBackgroundColor());
     shade.setFrame(cover_frame);
     shade.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));

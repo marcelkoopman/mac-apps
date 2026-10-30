@@ -21,6 +21,8 @@ pub enum UserEvent {
     AiChecked(mac_ai::Availability),
     /// The chart thread worked out the table window's chart (or why there is none).
     TableChart(crate::chart_data::ChartOutcome),
+    /// The profile thread worked out the table window's profile.
+    TableProfile(crate::table_profile::ProfileOutcome),
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,
@@ -158,6 +160,14 @@ pub enum TableWindowEvent {
         request: crate::chart_data::ChartRequest,
         generation: u64,
     },
+    /// Work out the profile of the version shown, as request `generation` of the window.
+    Profile {
+        generation: u64,
+    },
+    /// *Copy Profile*: the profile of request `generation` on the clipboard (as any copy).
+    CopyProfile {
+        generation: u64,
+    },
     Closed,
 }
 
@@ -165,6 +175,16 @@ pub enum TableWindowEvent {
 pub(crate) fn show_table_chart(outcome: crate::chart_data::ChartOutcome) {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::show_chart(outcome);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = outcome;
+    }
+}
+
+/// Show `outcome` in the table window's profile, unless a newer request is on its way.
+pub(crate) fn show_table_profile(outcome: crate::table_profile::ProfileOutcome) {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::show_profile(outcome);
     #[cfg(not(target_os = "macos"))]
     {
         let _ = outcome;

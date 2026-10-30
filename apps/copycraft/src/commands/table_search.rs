@@ -11,6 +11,8 @@ pub enum TableToolbarItem {
     Table,
     /// *Chart*: the version shown as a chart (hidden without Swift Charts in the build).
     Chart,
+    /// *Profile*: missing values, duplicates, types and outliers of the version shown.
+    Profile,
     Copy,
     CopyJson,
     CopyCsv,
@@ -23,18 +25,24 @@ pub enum TableToolbarItem {
     Search,
 }
 
-/// Table ▾, Chart, Copy, Copy as JSON, Copy as CSV, Save, the hint between flexible spaces and the
+/// Table ▾, Chart, Profile, Copy, Copy as JSON, Copy as CSV, Save, the hint between flexible spaces and the
 /// search field. The versions are the strip along the bottom ([`super::table_version_tiles`]).
-pub fn table_window_toolbar_items() -> [TableToolbarItem; 10] {
+pub fn table_window_toolbar_items() -> [TableToolbarItem; 11] {
     use TableToolbarItem::*;
     [
-        Table, Chart, Copy, CopyJson, CopyCsv, Save, Space, Hint, Space, Search,
+        Table, Chart, Profile, Copy, CopyJson, CopyCsv, Save, Space, Hint, Space, Search,
     ]
 }
 
 /// Whether *Chart* is on for `view`: its grid is there and its columns allow a chart.
 pub fn table_window_chart_on(view: &super::TableWindowView) -> bool {
     !view.grid.is_empty() && crate::chart_data::ChartRequest::first(&view.chart_columns).is_some()
+}
+
+/// Whether *Profile* is on for `view`: its grid is there and read as a table (any frame: CSV,
+/// TSV, a JSON table, a pasted grid).
+pub fn table_window_profile_on(view: &super::TableWindowView) -> bool {
+    !view.grid.is_empty() && !view.chart_columns.is_empty()
 }
 
 /// The query as it is matched: trimmed and lower-cased; `None` when nothing is left (all rows).

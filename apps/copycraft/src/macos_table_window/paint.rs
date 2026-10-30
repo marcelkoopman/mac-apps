@@ -53,6 +53,7 @@ pub(super) fn paint_chrome(views: &Views, view: &TableWindowView) {
         .setTitle(&NSString::from_str(&view.window_title()));
     toolbar::paint(view);
     chart::view_changed(view);
+    profile::view_changed(view);
     paint_meta(&views.meta, &view.meta);
     let columns = view.columns.len();
     views
@@ -166,6 +167,7 @@ pub(super) fn apply_mask() {
             text.setAccessibilityElement(!masked);
         }
         chart::apply_mask(masked);
+        profile::apply_mask(masked);
         views.shade.setHidden(!(masked && filter.is_none()));
         views.cover.setHidden(!masked);
         let hint = if !masked {

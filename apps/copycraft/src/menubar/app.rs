@@ -280,6 +280,9 @@ pub(crate) struct TableWindow {
     /// the clipboard's newest content, so the card shows it, not the file, when the window
     /// closes ([`super::state::card_after_window`]).
     pub(crate) copied: bool,
+    /// The profile last shown in the window, with its request number: memory only, never in
+    /// history or on disk, zeroized when the window goes ([`crate::table_profile`]).
+    pub(crate) profile: Option<(u64, std::sync::Arc<crate::table_profile::TableProfile>)>,
 }
 
 impl TableWindow {

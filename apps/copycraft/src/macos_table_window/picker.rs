@@ -147,10 +147,11 @@ pub(super) fn run(id: CommandId) {
 /// (⌘Z right after a version was taken out puts it back), ⌫ takes the version shown out. ⌘W
 /// and ⌘M are the hidden Window menu's (src/macos_main_menu.rs).
 pub(super) fn window_key(event: &NSEvent) -> bool {
-    // Esc: from the chart back to the table (not while the search field has the keyboard).
+    // Esc: from the chart or the profile back to the table (not while the search field has
+    // the keyboard).
     if mac_ui::keys::Key::from_key_code(event.keyCode()) == Some(mac_ui::keys::Key::Escape)
         && !editing_text(event)
-        && chart::escape()
+        && (chart::escape() || profile::escape())
     {
         return true;
     }

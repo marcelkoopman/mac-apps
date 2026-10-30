@@ -104,6 +104,24 @@ fn the_chart_button_needs_a_grid_and_columns_that_fit() {
 }
 
 #[test]
+fn the_profile_button_is_on_for_any_table_frame() {
+    // Pasted TSV, a JSON table, semicolon CSV and text only: one frame each.
+    for src in [
+        "name\tcity\nAlpha\tUtrecht\nBeta\tLeiden\n",
+        r#"[{"shop":"A","sales":3},{"shop":"B","sales":4}]"#,
+        "shop;sales\nA;3\nB;4\n",
+    ] {
+        let table = read(src, crate::dataframe::ReadOptions::default());
+        let mut view = table_window_view(&table, src);
+        assert!(crate::commands::table_window_profile_on(&view), "{src}");
+        let profile = crate::table_profile::profile(table.frame.as_ref().expect("frame"));
+        assert_eq!((profile.rows, profile.columns.len()), (2, 2), "{src}");
+        view.wipe();
+        assert!(!crate::commands::table_window_profile_on(&view), "{src}");
+    }
+}
+
+#[test]
 fn the_chart_button_follows_the_frame_not_the_format() {
     // Pasted TSV, a JSON table and semicolon CSV: one frame each, so a chart each.
     for src in [
@@ -133,10 +151,11 @@ fn the_table_window_toolbar_ends_with_the_search_field() {
         1
     );
     assert_eq!(
-        &items[..6],
+        &items[..7],
         &[
             Item::Table,
             Item::Chart,
+            Item::Profile,
             Item::Copy,
             Item::CopyJson,
             Item::CopyCsv,

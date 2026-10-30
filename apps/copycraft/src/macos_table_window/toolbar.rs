@@ -1,6 +1,6 @@
 //! The table window's toolbar: a real `NSToolbar` in the unified compact style, not
 //! customisable. *Table ▾* (an `NSMenuToolbarItem`, the one text button), *Chart* (only in a
-//! build with Swift Charts), *Copy*, *Copy as
+//! build with Swift Charts), *Profile*, *Copy*, *Copy as
 //! JSON*, *Copy as CSV* and *Save* (symbols), the hint while the grid is masked, and the search
 //! field (⌘F) as an `NSSearchToolbarItem`, in the order of `commands::table_window_toolbar_items`.
 //! The versions are the strip along the bottom (`strip`), as the history is on the card. The
@@ -18,6 +18,7 @@ use mac_ui::objc2_app_kit::{
 const TOOLBAR_ID: &str = "CopycraftTableToolbar";
 const TABLE_ID: &str = "CopycraftTableMenu";
 const CHART_ID: &str = "CopycraftTableChart";
+const PROFILE_ID: &str = "CopycraftTableProfile";
 const COPY_ID: &str = "CopycraftTableCopy";
 const COPY_JSON_ID: &str = "CopycraftTableCopyJson";
 const COPY_CSV_ID: &str = "CopycraftTableCopyCsv";
@@ -30,6 +31,8 @@ pub(super) struct ToolbarItems {
     table: Retained<NSMenuToolbarItem>,
     /// *Chart*: the version shown as a chart, or back to the table (`super::chart`).
     chart: Retained<NSToolbarItem>,
+    /// *Profile*: the profile of the version shown, or back to the table (`super::profile`).
+    profile: Retained<NSToolbarItem>,
     copy: Retained<NSToolbarItem>,
     /// *Copy as JSON* and *Copy as CSV*, as in Table ▾ (`commands::table_window_copy_buttons`).
     copy_json: Retained<NSToolbarItem>,
@@ -53,6 +56,12 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
         CHART_ID,
         "chart.bar.xaxis",
         sel!(tableWindowChartClicked:),
+    );
+    let profile = symbol_item(
+        mtm,
+        PROFILE_ID,
+        "list.bullet.rectangle",
+        sel!(tableWindowProfileClicked:),
     );
     let copy = symbol_item(mtm, COPY_ID, "doc.on.doc", sel!(tableWindowCopyClicked:));
     let copy_json = symbol_item(
@@ -97,6 +106,7 @@ pub(super) fn install(mtm: MainThreadMarker, window: &NSWindow, hint: &NSTextFie
     let items = ToolbarItems {
         table,
         chart,
+        profile,
         copy,
         copy_json,
         copy_csv,
@@ -164,6 +174,8 @@ fn relabel_items(items: &ToolbarItems) {
     items.table.setToolTip(Some(&s(t("table_steps_a11y"))));
     items.chart.setLabel(&s(t("table_chart")));
     items.chart.setToolTip(Some(&s(t("table_chart_tip"))));
+    items.profile.setLabel(&s(t("table_profile")));
+    items.profile.setToolTip(Some(&s(t("table_profile_tip"))));
     items.copy.setLabel(&s(t("copy_table_a11y")));
     items.copy.setToolTip(Some(&s(t("copy_table_tip"))));
     items.copy_json.setLabel(&s(t("table_copy_json")));
@@ -178,6 +190,7 @@ fn relabel_items(items: &ToolbarItems) {
     items.save.setToolTip(Some(&s(t("save_table_tip"))));
     for item in [
         &items.chart,
+        &items.profile,
         &items.copy,
         &items.copy_json,
         &items.copy_csv,
@@ -223,6 +236,9 @@ pub(super) fn paint(view: &TableWindowView) {
         items
             .chart
             .setEnabled(commands::table_window_chart_on(view));
+        items
+            .profile
+            .setEnabled(commands::table_window_profile_on(view));
         items.search.searchField().setEnabled(ready);
         items.save.setEnabled(ready);
         let [(_, json_on), (_, csv_on)] = commands::table_window_copy_buttons(view);
@@ -272,6 +288,7 @@ pub(super) fn item(id: &NSString) -> Option<Retained<NSToolbarItem>> {
         let item: Retained<NSToolbarItem> = match id.as_str() {
             TABLE_ID => Retained::into_super(items.table.clone()),
             CHART_ID => items.chart.clone(),
+            PROFILE_ID => items.profile.clone(),
             COPY_ID => items.copy.clone(),
             COPY_JSON_ID => items.copy_json.clone(),
             COPY_CSV_ID => items.copy_csv.clone(),
@@ -298,6 +315,7 @@ pub(super) fn identifiers() -> Retained<NSArray<NSString>> {
             Item::Space => flexible.retain(),
             Item::Table => NSString::from_str(TABLE_ID),
             Item::Chart => NSString::from_str(CHART_ID),
+            Item::Profile => NSString::from_str(PROFILE_ID),
             Item::Copy => NSString::from_str(COPY_ID),
             Item::CopyJson => NSString::from_str(COPY_JSON_ID),
             Item::CopyCsv => NSString::from_str(COPY_CSV_ID),

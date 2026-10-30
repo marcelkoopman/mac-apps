@@ -181,6 +181,10 @@ fn enter() {
         NSBeep();
         return;
     }
+    // One overlay at a time: the profile goes.
+    if profile::active() {
+        profile::leave();
+    }
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             pane.pane.setHidden(false);

@@ -929,3 +929,26 @@ Toys,2026-03-09,,2
 - [ ] A table with 60 categories (`printf 'c,v\n'; for i in $(seq 1 60); do echo "k$i,$i"; done`, copied): at most 50 bars, the last *Overig* / *Other*.
 - [ ] Nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value or chart label; no new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data` (`ls -lt … | head`).
 - [ ] `codesign -d --entitlements - /Applications/CopyCraft.app` shows the same entitlements as the previous build; `otool -L` on the binary lists only system libraries and `/usr/lib/swift/…`.
+
+## Table profile in the table window (Mac only, fake data)
+
+Make the made-up order table of the unit tests (50 rows: every 8th e-mail empty, three outlying amounts, two dates written as `later`, orders 1 and 2 twice) and copy it:
+
+```
+{ echo order_id,email,amount,order_date,shop
+  for i in $(seq 1 48) 1 2; do
+    e=buyer$i@example.test; [ $((i % 8)) -eq 0 ] && e=
+    case $i in 10) a=900.5;; 20) a=950.5;; 30) a=5.5;; *) a=$((100 + i % 10)).25;; esac
+    d=$(printf '2026-01-%02d' $((i % 28 + 1))); [ $i -eq 25 ] || [ $i -eq 40 ] && d=later
+    echo "$(printf 'ORD-%04d' $i),$e,$a,$d,Webwinkel"
+  done; } | pbcopy
+```
+
+- [ ] Open table: the toolbar shows a list symbol (*Profiel* / *Profile* as its tooltip and in the overflow menu) after the chart symbol (after *Tabel ▾* / *Table ▾* in a build without Swift Charts). Click it: *Profiel maken…* / *Making the profile…* briefly, then the top three: *order_date is niet als datum herkend*, *email heeft 12% missende waarden*, *2 dubbele rijen (4%)* (EN: *order_date was not recognised as a date*, *email has 12% missing values*, *2 duplicate rows (4%)*).
+- [ ] Under them *50 rijen × 5 kolommen · 2 dubbele rijen (4%)* and one entry per column: type, missing, unique; order_id *mogelijk ID*, order_date *lijkt op datums*; amount *3 uitschieters* and min 5,5 · max 950,5 · … (NL decimal comma, EN point).
+- [ ] *Kopieer profiel* / *Copy Profile*: the usual toast; paste in TextEdit: a Markdown heading, the three findings and a table *Kolom | Type | Missend | Uniek | Uitschieters | Opmerking* with counts only — no e-mail address, amount, date or `ORD-` id, and no min/max/median. The copy follows the usual copy rules (history when history is on), like Copy as CSV.
+- [ ] Esc, and *Tabel* / *Table*, go back to the grid; the Profile button again works it out anew. The Chart button while the profile is up shows the chart (one at a time), and the other way round.
+- [ ] A step while the profile is up (Remove Duplicates, sort, Choose Columns…, another version in the strip): *Profiel maken…* and the new profile (after Remove Duplicates no duplicate-row finding).
+- [ ] A clean table (`printf 'name\tsize\nalpha\t3\nbeta\t4\ngamma\t5\n' | pbcopy`, pasted TSV): *Geen opvallende punten* / *Nothing stands out*. A JSON table (`[{"shop":"A","sales":3},{"shop":"B","sales":null},{"shop":"B","sales":4}]`) and a `;` CSV also get the Profile button.
+- [ ] Switch Settings › Language while the profile is up: buttons and text follow. Click another app: the window masks, the profile text is hidden and Copy Profile is off; clicking reveals it.
+- [ ] Close the window and open it again: the grid shows, not the profile; History has no profile entry (only a copy you made with Copy Profile). No new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data`; nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value or finding.

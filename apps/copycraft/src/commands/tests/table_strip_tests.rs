@@ -132,6 +132,7 @@ fn the_toolbar_has_no_version_group_any_more() {
         [
             Item::Table,
             Item::Chart,
+            Item::Profile,
             Item::Copy,
             Item::CopyJson,
             Item::CopyCsv,

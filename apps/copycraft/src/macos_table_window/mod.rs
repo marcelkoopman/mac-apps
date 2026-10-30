@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 // The table window ("Open Table" on the card): the table of one entry in its own resizable
-// window. A native toolbar (`toolbar`: Table ▾, Chart (`chart`), Copy, Copy as JSON, Copy as CSV, Save, the search field), a sidebar
+// window. A native toolbar (`toolbar`: Table ▾, Chart (`chart`), Profile (`profile`), Copy, Copy as JSON, Copy as CSV, Save, the search field), a sidebar
 // with the columns (names and types), the grid (every row, soft-capped only for huge
 // tables), the version strip along the bottom (`strip`, as the history on the card) and the
 // meta line. A parsed grid is drawn as aligned columns with a fixed header
@@ -228,6 +228,24 @@ define_class!(
             chart::leave();
         }
 
+        /// *Profile* on the toolbar: the profile of the version shown, or back to the table.
+        #[unsafe(method(tableWindowProfileClicked:))]
+        fn profile_clicked(&self, _sender: Option<&AnyObject>) {
+            profile::toggle();
+        }
+
+        /// *Copy Profile* above the profile.
+        #[unsafe(method(tableWindowProfileCopy:))]
+        fn profile_copy(&self, _sender: Option<&NSButton>) {
+            profile::copy();
+        }
+
+        /// *Table* above the profile: back to the table.
+        #[unsafe(method(tableWindowProfileBack:))]
+        fn profile_back(&self, _sender: Option<&NSButton>) {
+            profile::leave();
+        }
+
         #[unsafe(method(tableWindowCopyClicked:))]
         fn copy_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Copy);
@@ -426,6 +444,11 @@ pub(crate) fn show_chart(outcome: crate::chart_data::ChartOutcome) {
     chart::show(outcome);
 }
 
+/// Show the profile the app worked out (dropped when it is for an older request).
+pub(crate) fn show_profile(outcome: crate::table_profile::ProfileOutcome) {
+    profile::show(outcome);
+}
+
 /// Activate the app and put the table window in front and key, also when it was already open.
 pub fn bring_forward() {
     let Some(mtm) = MainThreadMarker::new() else {
@@ -459,6 +482,7 @@ pub fn relabel() {
         views.window.setTitle(&NSString::from_str(&title));
         toolbar::relabel();
         chart::relabel();
+        profile::relabel();
         views
             .sidebar
             .setAccessibilityLabel(Some(&NSString::from_str(t("columns_title"))));
@@ -515,6 +539,7 @@ fn order_out() {
 /// Wipe the views and what they were made from.
 fn forget() {
     chart::wipe();
+    profile::wipe();
     switching::reset();
     REVEALED.set(false);
     PAINTED.set(false);
@@ -737,6 +762,7 @@ mod chart;
 mod menus;
 mod paint;
 mod picker;
+mod profile;
 mod strip;
 mod switching;
 mod toolbar;

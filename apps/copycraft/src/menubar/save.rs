@@ -213,6 +213,27 @@ impl App {
         }
     }
 
+    /// *Copy Profile* in the table window: the profile shown (request `generation`) as a
+    /// Markdown table on the clipboard, through the same checks as any copy from the window
+    /// (sensitivity, history rules). Column names and numbers only, no cell values.
+    pub(crate) fn copy_table_profile(&mut self, generation: u64) {
+        let Some(body) = self
+            .table_window
+            .as_ref()
+            .and_then(|window| window.profile.as_ref())
+            .filter(|(shown, _)| *shown == generation)
+            .map(|(_, profile)| profile.markdown(crate::locale::lang()))
+        else {
+            return;
+        };
+        let feedback = match self.copy_grid_from(TableTarget::Window, Some(body)) {
+            Ok(()) => crate::locale::t("profile_copied"),
+            // No log: the message says enough, and holds nothing of the table.
+            Err(_) => crate::locale::t("table_copy_failed"),
+        };
+        super::state::save_feedback(feedback);
+    }
+
     /// [`Self::copy_grid`] for `target`. A copy written from the table window marks it, so the
     /// card shows that copy when the window closes ([`super::state::card_after_window`]).
     fn copy_grid_from(

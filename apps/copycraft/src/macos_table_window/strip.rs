@@ -359,7 +359,10 @@ fn place_body(views: &Views, strip_h: f64) {
     place(&views.well);
     place(&views.cover);
     place(&views.shade);
-    if let Some(pane) = super::chart::pane() {
+    for pane in [super::chart::pane(), super::profile::pane()]
+        .into_iter()
+        .flatten()
+    {
         place(&pane);
     }
     if let Some(scroll) = views.grid.enclosingScrollView()

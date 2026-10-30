@@ -145,6 +145,7 @@ impl App {
             shown: None,
             checking: false,
             copied: false,
+            profile: None,
         });
         if opening {
             self.opening.read(true);
@@ -177,6 +178,37 @@ impl App {
             drop(frame);
             launcher::emit(UserEvent::TableChart(outcome));
         });
+    }
+
+    /// The table window's profile: worked out from the version shown on a thread (the frame is
+    /// shared, not copied), and sent back as [`UserEvent::TableProfile`]. Nothing is logged.
+    fn table_profile(&mut self, generation: u64) {
+        use crate::table_profile::ProfileOutcome;
+        let Some(frame) = self.window_table_frame() else {
+            self.table_profile_done(ProfileOutcome {
+                generation,
+                profile: None,
+            });
+            return;
+        };
+        std::thread::spawn(move || {
+            let outcome = ProfileOutcome::build(&frame, generation);
+            drop(frame);
+            launcher::emit(UserEvent::TableProfile(outcome));
+        });
+    }
+
+    /// The profile is there: kept with the window (memory only, for *Copy Profile*; dropped
+    /// with the window) and shown in it.
+    pub(crate) fn table_profile_done(&mut self, outcome: crate::table_profile::ProfileOutcome) {
+        let Some(window) = self.table_window.as_mut() else {
+            return;
+        };
+        window.profile = outcome
+            .profile
+            .clone()
+            .map(|profile| (outcome.generation, profile));
+        launcher::show_table_profile(outcome);
     }
 
     /// Close the table window (Wipe, Clear History, lock, its entry gone): its table may forget
@@ -246,6 +278,10 @@ impl App {
                 request,
                 generation,
             } => self.table_chart(request, generation),
+            launcher::TableWindowEvent::Profile { generation } => self.table_profile(generation),
+            launcher::TableWindowEvent::CopyProfile { generation } => {
+                self.copy_table_profile(generation);
+            }
             launcher::TableWindowEvent::Run(id) => {
                 let target = TableTarget::Window;
                 // A removed version comes back with ⌘Z right after; anything else forgets it,

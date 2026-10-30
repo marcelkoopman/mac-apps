@@ -61,7 +61,7 @@ mod symbols;
 mod system_settings;
 mod table;
 mod table_ops;
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod table_profile;
 #[cfg(test)]
 mod testdata_manifest;
