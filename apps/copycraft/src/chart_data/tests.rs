@@ -47,7 +47,40 @@ fn columns_get_their_roles() {
         ]
     );
     let first = ChartRequest::first(&chart_columns(&shop())).expect("a chart");
-    assert_eq!(first, request(ChartKind::Bar, 0, Some(2), Aggregate::Sum));
+    // The average by default, not the sum: a sum per group runs far past the column's values.
+    assert_eq!(first, request(ChartKind::Bar, 0, Some(2), Aggregate::Mean));
+    // Without a number column: the row count.
+    let text = parse_table("city,name\nUtrecht,Anja\nGouda,Jan\n").expect("fake table");
+    let counted = ChartRequest::first(&chart_columns(&text)).expect("a chart");
+    assert_eq!(counted.aggregate, Aggregate::Count);
+    assert_eq!(counted.y, None);
+}
+
+#[test]
+fn the_value_axis_says_what_it_measures() {
+    let ages = parse_table("city,age\nUtrecht,30\nUtrecht,40\nGouda,50\n").expect("fake table");
+    let first = ChartRequest::first(&chart_columns(&ages)).expect("a chart");
+    let mean = build(&ages, &first, Lang::Nl).expect("chart");
+    assert_eq!(mean.y_label, "Gemiddelde van age");
+    assert_eq!(mean.series, mean.y_label);
+    assert_eq!(
+        bars(&mean),
+        [("Gouda".to_string(), 50.0), ("Utrecht".to_string(), 35.0)]
+    );
+    let sum = build(
+        &ages,
+        &request(ChartKind::Bar, 0, Some(1), Aggregate::Sum),
+        Lang::En,
+    )
+    .expect("chart");
+    assert_eq!(sum.y_label, "Sum of age");
+    let count = build(
+        &ages,
+        &request(ChartKind::Bar, 0, None, Aggregate::Count),
+        Lang::En,
+    )
+    .expect("chart");
+    assert_eq!(count.y_label, "Count");
 }
 
 #[test]
@@ -326,7 +359,7 @@ fn json_snapshot() {
     assert_eq!(
         data.to_json().as_str(),
         concat!(
-            r#"{"kind":"bar","locale":"nl","x_label":"month","y_label":"revenue","#,
+            r#"{"kind":"bar","locale":"nl","x_label":"month","y_label":"Som van revenue","#,
             r#""series":"Som van revenue","unit":"month","skipped":0,"points":["#,
             r#"{"label":"2026-01","value":30.5,"date":"2026-01-01","other":false},"#,
             r#"{"label":"2026-02","value":41.5,"date":"2026-02-01","other":false},"#,

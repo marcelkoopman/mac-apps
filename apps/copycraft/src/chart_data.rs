@@ -149,8 +149,9 @@ pub struct ChartRequest {
 
 impl ChartRequest {
     /// The first chart `columns` allow: a bar per group of the first text or date column, the
-    /// sum of the first number column (else the row count); without a group column, a scatter
-    /// of the first two number columns. `None` when neither fits.
+    /// average of the first number column (else the row count); without a group column, a
+    /// scatter of the first two number columns. `None` when neither fits. The average, not the
+    /// sum: a sum per group runs up to totals far from any value in the column.
     pub fn first(columns: &[ChartColumn]) -> Option<ChartRequest> {
         let group = columns.iter().find(|c| c.role != ColumnRole::Number);
         let mut numbers = columns.iter().filter(|c| c.role == ColumnRole::Number);
@@ -161,7 +162,7 @@ impl ChartRequest {
                 x: group.index,
                 y: first_number,
                 aggregate: if first_number.is_some() {
-                    Aggregate::Sum
+                    Aggregate::Mean
                 } else {
                     Aggregate::Count
                 },
@@ -173,7 +174,8 @@ impl ChartRequest {
             kind: ChartKind::Scatter,
             x: first_number?,
             y: Some(second),
-            aggregate: Aggregate::Sum,
+            // Kept when the kind changes to bar or line.
+            aggregate: Aggregate::Mean,
             bucket: Bucket::Month,
         })
     }
@@ -353,6 +355,8 @@ pub struct ChartData {
     pub kind: ChartKind,
     pub lang: Lang,
     pub x_label: String,
+    /// The value axis: the legend's text for a bar or line chart ("Gemiddelde van age"),
+    /// "Aantal" / "Count" for a count, the column's name for a scatter.
     pub y_label: String,
     /// The legend's one entry.
     pub series: String,
@@ -647,13 +651,14 @@ fn grouped(
     let x_label = x.name().to_string();
     let (y_label, series) = match (counting, y) {
         (false, Some(column)) => {
-            let name = column.name().to_string();
+            let name = Zeroizing::new(column.name().to_string());
+            // The value axis says what it measures, as the legend does ("Sum of age").
             let series = tf_in(
                 lang,
                 "chart_series",
-                &[&request.aggregate.title(lang), &name],
+                &[&request.aggregate.title(lang), &name.as_str()],
             );
-            (name, series)
+            (series.clone(), series)
         }
         _ => (
             t_in(lang, "chart_count").to_string(),
