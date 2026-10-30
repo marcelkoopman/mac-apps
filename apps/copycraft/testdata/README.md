@@ -852,3 +852,9 @@ Run once from Terminal (`cargo run -p copycraft`, a crash shows there) and once 
 - [ ] With the card open, open each window above the card, then close it: the card keeps its level and stays usable.
 - [ ] Change the language in Settings with About and Welcome open: they close and open again in the new language, without a crash; close them afterwards.
 - [ ] Quit while open: with About, Settings and Welcome each open (and all three together), quit from the menu bar icon and with ⌘Q: no *CopyCraft quit unexpectedly* report and no new entry in Console › Crash Reports.
+
+## Settings kept after a restart, through mac_ui::defaults (Mac only, fake data)
+
+- [ ] In Settings change: card theme, language (NL ↔ EN), the card hotkey, the screenshot hotkey, the symbol list (type `→ ✓ €`, close), and add a made-up ignored app. Insert a symbol from the card once. Quit and start CopyCraft: every value is as you left it, and `defaults read nl.marcelkoopman.copycraft` shows them (no clipboard content among them).
+- [ ] The app appearance (System / Light / Dark, where Settings offers it) is also kept after a restart.
+- [ ] A CSV card's table preview looks as before (all columns, no `…` column, the card's own row limit).

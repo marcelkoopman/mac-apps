@@ -48,7 +48,10 @@
 # copycraft blocks 94: -7, macos_image_edit.rs (approved by Marcel 2026-10-30): the framework constants read
 # in one keys() helper, image sources (data or URL) made in one image_source() helper also used by
 # macos_image_io.rs (now without unsafe), and the destination add/finalize in one write_one() helper.
-copycraft blocks 94
+# copycraft blocks 93: -1, settings.rs store_string uses mac_ui::defaults::store_string (approved by Marcel
+# 2026-10-30), which mac_ui::theme::store now also uses (mac-ui unchanged). The polars display set_var in
+# main.rs stays: polars 0.55 reads those limits only from the environment.
+copycraft blocks 93
 copycraft fn 5
 # copycraft impl 3: -6, About, Settings and Welcome lost their delegates' NSObjectProtocol and
 # NSWindowDelegate impls (approved by Marcel 2026-10-30): mac_ui::panel::on_close is their window delegate.

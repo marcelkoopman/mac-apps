@@ -741,21 +741,12 @@ fn store_int(key: &str, value: i64) {
 
 #[cfg(all(target_os = "macos", not(test)))]
 fn load_string(key: &str) -> Option<String> {
-    use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
-    let defaults = NSUserDefaults::standardUserDefaults();
-    let key = NSString::from_str(key);
-    let value = defaults.stringForKey(&key)?;
-    Some(value.to_string())
+    mac_ui::defaults::load_string(key)
 }
 
 #[cfg(all(target_os = "macos", not(test)))]
 fn store_string(key: &str, value: &str) {
-    use mac_ui::objc2_foundation::{NSString, NSUserDefaults};
-    // SAFETY: NSString is a valid NSObject for the defaults dictionary.
-    unsafe {
-        NSUserDefaults::standardUserDefaults()
-            .setObject_forKey(Some(&*NSString::from_str(value)), &NSString::from_str(key));
-    }
+    mac_ui::defaults::store_string(key, value);
 }
 
 #[cfg(all(not(target_os = "macos"), not(test)))]

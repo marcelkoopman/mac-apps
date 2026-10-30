@@ -35,11 +35,7 @@ impl Appearance {
 pub fn load(defaults_key: &str) -> Option<Appearance> {
     #[cfg(target_os = "macos")]
     {
-        use objc2_foundation::{NSString, NSUserDefaults};
-        let defaults = NSUserDefaults::standardUserDefaults();
-        let key = NSString::from_str(defaults_key);
-        let value = defaults.stringForKey(&key)?;
-        Appearance::parse(value.to_string().as_str())
+        Appearance::parse(crate::defaults::load_string(defaults_key)?.as_str())
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -52,13 +48,7 @@ pub fn load(defaults_key: &str) -> Option<Appearance> {
 pub fn store(defaults_key: &str, appearance: Appearance) {
     #[cfg(target_os = "macos")]
     {
-        use objc2_foundation::{NSString, NSUserDefaults};
-        let defaults = NSUserDefaults::standardUserDefaults();
-        let key = NSString::from_str(defaults_key);
-        // SAFETY: an NSString is a valid property-list value for the user defaults.
-        unsafe {
-            defaults.setObject_forKey(Some(&NSString::from_str(appearance.as_str())), &key);
-        }
+        crate::defaults::store_string(defaults_key, appearance.as_str());
     }
     #[cfg(not(target_os = "macos"))]
     {
