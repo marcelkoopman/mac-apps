@@ -261,7 +261,7 @@ thread_local! {
     static FIND_CACHE: RefCell<Option<FindCache>> = const { RefCell::new(None) };
     static BLUR_ON: Cell<bool> = const { Cell::new(false) };
     /// The text and picture blurs ([`gaussian_blurs`]), built the first time the well is masked.
-    static BLUR_FILTERS: RefCell<Option<(Retained<AnyObject>, Retained<AnyObject>)>> =
+    static BLUR_FILTERS: RefCell<Option<(Retained<mac_ui::blur::CIFilter>, Retained<mac_ui::blur::CIFilter>)>> =
         const { RefCell::new(None) };
     static SHADE_ON: Cell<bool> = const { Cell::new(false) };
     static MASKS: Cell<bool> = const { Cell::new(false) };

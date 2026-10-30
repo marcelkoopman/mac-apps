@@ -144,7 +144,14 @@ drop = [
 # `mac_ui::progress`: indeterminate spinning NSProgressIndicator (busy wheel).
 progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "objc2-app-kit/NSProgressIndicator"]
 # `mac_ui::blur`: a CIGaussianBlur content filter on a view.
-blur = ["objc2-foundation/NSArray"]
+blur = [
+    "dep:objc2-core-image",
+    "objc2-core-image/CIFilter",
+    "objc2-app-kit/objc2-core-image",
+    "objc2-foundation/NSArray",
+    "objc2-foundation/NSKeyValueCoding",
+    "objc2-foundation/NSValue",
+]
 # `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
 image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep", "objc2-foundation/NSDictionary"]
 # `mac_ui::trash`: a file or folder to the Trash (NSFileManager trashItemAtURL) instead of deleting it.
@@ -257,6 +264,9 @@ objc2-core-graphics = { version = "0.3.2", default-features = false, optional = 
 objc2-image-io = { version = "0.3.2", default-features = false, optional = true, features = ["std", "objc2", "CGImageSource", "objc2-core-graphics"] }
 # `file_panel` and `drop` only.
 objc2-uniform-type-identifiers = { workspace = true, optional = true }
+# `blur` only: typed Core Image (CIFilter, kCIInputRadiusKey, NSView content filters), approved by
+# Marcel 2026-10-30 (crates better than own unsafe). Same 0.3 line as the other objc2-* crates.
+objc2-core-image = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 # Tests read the running macOS version (`glass::running_macos_major`).

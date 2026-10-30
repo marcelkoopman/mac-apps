@@ -77,7 +77,7 @@ fn hide_frozen_column() {
 }
 
 /// The well's blur (`filters`) on the frozen column too; empty clears it.
-fn blur_frozen_column(filters: &NSArray<AnyObject>) {
+fn blur_frozen_column(filters: &NSArray<mac_ui::blur::CIFilter>) {
     FROZEN.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             mac_ui::blur::set_content_filters(view, filters);

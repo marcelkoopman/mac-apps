@@ -72,7 +72,7 @@ thread_local! {
     /// The commands behind the toolbar's menus (Table ▾ and the versions), by item tag.
     static POPPED: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
     /// The blur filter, built once; `None` inside when Core Image cannot build it.
-    static BLUR: RefCell<Option<Option<Retained<AnyObject>>>> = const { RefCell::new(None) };
+    static BLUR: RefCell<Option<Option<Retained<mac_ui::blur::CIFilter>>>> = const { RefCell::new(None) };
     /// Choose Columns… modal is up: do not blur on resign-key (the alert takes key).
     static COLUMN_PICKER_OPEN: Cell<bool> = const { Cell::new(false) };
     /// Our save or open panel is up. It takes key; a revealed grid stays sharp.
@@ -530,7 +530,7 @@ fn wipe_content(views: &Views) {
 
 /// The blur for a masked table, or `None` (a blank, shaded table) when the blur setting is off
 /// (the default) or Core Image cannot build it.
-fn blur_filter() -> Option<Retained<AnyObject>> {
+fn blur_filter() -> Option<Retained<mac_ui::blur::CIFilter>> {
     if !crate::settings::load().blur {
         return None;
     }

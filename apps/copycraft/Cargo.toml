@@ -83,6 +83,8 @@ dispatch2 = "0.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFData", "CFDictionary", "CFNumber", "CFString", "CFURL"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage", "CGPDFDocument", "CGPDFPage"] }
 objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "CGImageDestination", "CGImageProperties", "CGImageSource", "objc2-core-graphics"] }
+# Core Image's QR code generator (macos_qr.rs), typed (approved by Marcel 2026-10-30).
+objc2-core-image = { workspace = true, features = ["CIContext", "CIFilter", "CIImage", "objc2-core-foundation", "objc2-core-graphics"] }
 objc2-vision = { version = "0.3.2", default-features = false, features = ["std", "VNRecognizeTextRequest", "VNDetectBarcodesRequest", "VNRequestHandler", "VNObservation", "VNRequest", "VNTypes"] }
 # PDF card (src/macos_pdf.rs): text layer through PDFKit, pages rendered with CoreGraphics for OCR. Approved by Marcel (2026-10-15).
 objc2-pdf-kit = { version = "0.3.2", default-features = false, features = ["std", "PDFDocument", "PDFPage", "objc2-core-graphics"] }

@@ -204,7 +204,10 @@ pub fn privacy_filter_changed() {
 
 /// The blurs for the well's text and its picture, or `None` when Core Image cannot build them.
 /// Built once and reused: every card update (each step through history) masks the well again.
-pub(crate) fn gaussian_blurs() -> Option<(Retained<AnyObject>, Retained<AnyObject>)> {
+pub(crate) fn gaussian_blurs() -> Option<(
+    Retained<mac_ui::blur::CIFilter>,
+    Retained<mac_ui::blur::CIFilter>,
+)> {
     #[cfg(test)]
     if FAIL_BLUR.with(Cell::get) {
         return None;
@@ -284,7 +287,10 @@ pub(crate) fn clear_blur() {
 }
 
 /// Install `text` on the well's text and `image` on its picture (empty arrays clear them).
-pub(crate) fn blur_both(text: &NSArray<AnyObject>, image: &NSArray<AnyObject>) {
+pub(crate) fn blur_both(
+    text: &NSArray<mac_ui::blur::CIFilter>,
+    image: &NSArray<mac_ui::blur::CIFilter>,
+) {
     PREVIEW_TEXT.with(|slot| {
         if let Some(view) = slot.borrow().as_ref() {
             mac_ui::blur::set_content_filters(view, text);

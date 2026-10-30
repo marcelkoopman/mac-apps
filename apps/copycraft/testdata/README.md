@@ -866,3 +866,9 @@ Run once from Terminal (`cargo run -p copycraft`, a crash shows there) and once 
 - [ ] Paste into the card: plain text, a PNG and a TIFF (copied in Preview) and a file copied in Finder (file URL): each shows the same card and preview as before.
 - [ ] Buttons: the checkboxes in the column picker of a CSV card toggle columns; the push buttons on the card and in Settings still respond.
 - [ ] The blur behind the card looks the same in light and dark mode (Reduce transparency on: no blur, as before).
+
+## Blur and QR code through objc2-core-image (Mac only, fake data)
+
+- [ ] Turn on *Vervagen* / *Blur* in Settings and copy a made-up secret (e.g. `testwachtwoord-123`) and a made-up picture: the card's text and picture are blurred as strongly as in the previous build; Reveal removes the blur, masking again brings it back. With blur off the opaque shade shows instead, as before.
+- [ ] A CSV card with a masked column: the table window and the frozen column are blurred the same way.
+- [ ] Make a QR code of made-up text (`https://example.com/test`) from the card: the picture looks as before and the iPhone camera reads the same text. Very long text (over 3000 characters) gives no QR code and no crash.

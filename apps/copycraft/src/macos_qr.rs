@@ -1,15 +1,12 @@
 //! Core Image's `CIQRCodeGenerator` for [`crate::qr_code`]: the text's QR code at one pixel per
 //! module, read back as pixels, then drawn large and written as PNG. On the device, offline;
-//! the text and the picture are never logged. Core Image has no binding among CopyCraft's
-//! crates (objc2-core-image would be a new one), so it is reached by name, as the blur is
+//! the text and the picture are never logged. Typed through objc2-core-image, as the blur is
 //! ([`mac_ui::blur`]).
 
-use mac_ui::objc2::msg_send;
 use mac_ui::objc2::rc::Retained;
-use mac_ui::objc2::runtime::{AnyClass, AnyObject};
-use mac_ui::objc2_foundation::{NSData, NSRect, NSString};
-use objc2_core_foundation::CFRetained;
+use mac_ui::objc2_foundation::{NSData, NSObjectNSKeyValueCoding, NSString};
 use objc2_core_graphics::CGImage;
+use objc2_core_image::{CIContext, CIFilter};
 
 use crate::macos_image_edit::{Encoding, encode, rgba_of};
 
@@ -28,36 +25,26 @@ pub fn png(text: &str) -> Option<Vec<u8>> {
 }
 
 /// The generator's picture: one pixel per module.
-fn generated(text: &str) -> Option<CFRetained<CGImage>> {
-    let filter_class = AnyClass::get(c"CIFilter")?;
-    let context_class = AnyClass::get(c"CIContext")?;
+fn generated(text: &str) -> Option<Retained<CGImage>> {
     let name = NSString::from_str("CIQRCodeGenerator");
     let message = NSData::with_bytes(text.as_bytes());
     let level = NSString::from_str("M");
     let message_key = NSString::from_str("inputMessage");
     let level_key = NSString::from_str("inputCorrectionLevel");
-    let output_key = NSString::from_str("outputImage");
-    // SAFETY: `+[CIFilter filterWithName:]` takes an NSString and returns an autoreleased
-    // CIFilter or nil. Key-value coding sets the generator's two inputs (an NSData message and
-    // an NSString level, as Core Image documents them) and reads its CIImage output, nil when
-    // the message is too long. `+[CIContext contextWithOptions:]` takes a nil dictionary.
-    // `-extent` returns a CGRect, and `-createCGImage:fromRect:` a +1 CGImage (released by
-    // `CFRetained`) or NULL.
+    // SAFETY: `filterWithName:` returns the generator or nil. Key-value coding sets its two inputs
+    // with the types Core Image documents (an NSData message, an NSString level); its output is
+    // nil when the message is too long. `contextWithOptions:` takes no options. `extent` is the
+    // image's CGRect, and `createCGImage:fromRect:` returns an owned CGImage or nil.
     unsafe {
-        let filter: *mut AnyObject = msg_send![filter_class, filterWithName: &*name];
-        let filter = Retained::retain_autoreleased(filter)?;
-        let _: () = msg_send![&*filter, setValue: &*message, forKey: &*message_key];
-        let _: () = msg_send![&*filter, setValue: &*level, forKey: &*level_key];
-        let image: *mut AnyObject = msg_send![&*filter, valueForKey: &*output_key];
-        let image = Retained::retain_autoreleased(image)?;
-        let none: *const AnyObject = std::ptr::null();
-        let context: *mut AnyObject = msg_send![context_class, contextWithOptions: none];
-        let context = Retained::retain_autoreleased(context)?;
-        let extent: NSRect = msg_send![&*image, extent];
+        let filter = CIFilter::filterWithName(&name)?;
+        filter.setValue_forKey(Some(&message), &message_key);
+        filter.setValue_forKey(Some(&level), &level_key);
+        let image = filter.outputImage()?;
+        let context = CIContext::contextWithOptions(None);
+        let extent = image.extent();
         if !(extent.size.width >= 1.0 && extent.size.height >= 1.0 && extent.size.width <= 4096.0) {
             return None;
         }
-        let picture: *mut CGImage = msg_send![&*context, createCGImage: &*image, fromRect: extent];
-        std::ptr::NonNull::new(picture).map(|raw| CFRetained::from_raw(raw))
+        context.createCGImage_fromRect(&image, extent)
     }
 }

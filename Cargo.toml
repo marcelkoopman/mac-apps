@@ -44,6 +44,8 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNUserNotificationCenter",
 ] }
 # mac-ui `file_panel` only: `UTType`s for `NSSavePanel::setAllowedContentTypes`.
+# Core Image: mac-ui's blur and CopyCraft's QR code generator (approved by Marcel 2026-10-30).
+objc2-core-image = { version = "0.3.2", default-features = false, features = ["std"] }
 objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTType"] }
 # mac-ui `quicklook` only: QLThumbnailGenerator (the first page of an office document, in memory).
 objc2-quick-look-thumbnailing = { version = "0.3.2", default-features = false, features = [

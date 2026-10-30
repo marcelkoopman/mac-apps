@@ -85,7 +85,9 @@ copycraft impl 3
 # widgets' temporary_color (one block each for the attribute keys), the four pasteboard types and
 # NSPasteboardURLReadingFileURLsOnlyKey read in one block, pasteboard_types::read_objects for drop.rs,
 # one NSButton constructor in actions.rs, kCIInputRadiusKey read once in blur.rs.
-mac-ui blocks 76
+# mac-ui blocks 70: -6, blur.rs typed through objc2-core-image 0.3 (approved by Marcel 2026-10-30): one block
+# for filterWithName / setDefaults / the kCIInputRadiusKey value; NSView's setContentFilters is safe there.
+mac-ui blocks 70
 mac-ui fn 4
 # mac-ui impl 8: +2, mac_ui::panel::CloseDelegate's NSObjectProtocol and NSWindowDelegate impls, shared
 # by CopyCraft's About, Settings and Welcome (copycraft impl -6, so -3 across both crates).
