@@ -50,7 +50,9 @@
 # macos_image_io.rs (now without unsafe), and the destination add/finalize in one write_one() helper.
 copycraft blocks 94
 copycraft fn 5
-copycraft impl 9
+# copycraft impl 3: -6, About, Settings and Welcome lost their delegates' NSObjectProtocol and
+# NSWindowDelegate impls (approved by Marcel 2026-10-30): mac_ui::panel::on_close is their window delegate.
+copycraft impl 3
 # mac-ui blocks 84: +1 for mac_ui::widgets::fade_trailing_edge (collections HIG point 7, approved by Marcel
 # 2026-10-23): the history strip's 12 pt right-edge fade is a CAGradientLayer mask on the scroll view's layer
 # (msg_send!: no QuartzCore crate, none added). A mask, not a covering view, so it works over Liquid Glass
@@ -72,9 +74,12 @@ copycraft impl 9
 # and an extra unwiped NSData copy of the picture.
 # mac-ui blocks 93: -1, mac_ui::keys::board removed (2026-10-28): the defaults are ⌃⌥Space / ⌃⌥4 on every
 # keyboard, so CopyCraft no longer asks HIToolbox (LMGetKbdType / KBGetLayoutType) which keyboard it is.
-mac-ui blocks 93
+# mac-ui blocks 94: +1, mac_ui::panel::on_close's init of the shared CloseDelegate (copycraft impl -6).
+mac-ui blocks 94
 mac-ui fn 4
-mac-ui impl 6
+# mac-ui impl 8: +2, mac_ui::panel::CloseDelegate's NSObjectProtocol and NSWindowDelegate impls, shared
+# by CopyCraft's About, Settings and Welcome (copycraft impl -6, so -3 across both crates).
+mac-ui impl 8
 # mac-ai has its own floor: all unsafe of the Foundation Models bridge (crates/mac-ai/src/bridge.rs):
 # 6 blocks (availability, Job::new/cancel/run (2)/drop) and 2 `unsafe impl` (Job: Send + Sync).
 # copycraft and mac-ui stay as they were: the AI code in copycraft adds no unsafe.

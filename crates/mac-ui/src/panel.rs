@@ -7,10 +7,11 @@ use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 
 use objc2::rc::{Allocated, Retained};
-use objc2::{MainThreadMarker, Message, msg_send};
+use objc2::runtime::{NSObject, NSObjectProtocol, ProtocolObject};
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send};
 use objc2_app_kit::{
     NSApplication, NSBackingStoreType, NSColor, NSEvent, NSFloatingWindowLevel, NSScreen, NSView,
-    NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
@@ -114,6 +115,48 @@ pub fn configure_floating(window: &NSWindow) {
             | NSWindowCollectionBehavior::FullScreenAuxiliary
             | NSWindowCollectionBehavior::IgnoresCycle,
     );
+}
+
+/// What a [`CloseDelegate`] calls.
+pub struct CloseIvars {
+    on_close: fn(),
+}
+
+define_class!(
+    /// A window delegate that only answers `windowWillClose:`, by calling a function. Shared by
+    /// the apps' plain windows (About, Settings, Welcome) instead of a delegate class each.
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "MacUiCloseDelegate"]
+    #[ivars = CloseIvars]
+    pub struct CloseDelegate;
+
+    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
+    unsafe impl NSObjectProtocol for CloseDelegate {}
+
+    // SAFETY: the method below uses the NSWindowDelegate selector and signature.
+    unsafe impl NSWindowDelegate for CloseDelegate {
+        #[unsafe(method(windowWillClose:))]
+        fn window_will_close(&self, _notification: &NSObject) {
+            (self.ivars().on_close)();
+        }
+    }
+);
+
+/// Make a [`CloseDelegate`] calling `on_close` from `windowWillClose:` the delegate of
+/// `window`. The window does not retain its delegate: keep the returned one for as long as the
+/// window may close (as the apps kept their own delegates).
+pub fn on_close(
+    mtm: MainThreadMarker,
+    window: &NSWindow,
+    on_close: fn(),
+) -> Retained<CloseDelegate> {
+    let this = CloseDelegate::alloc(mtm).set_ivars(CloseIvars { on_close });
+    // SAFETY: NSObject's `init` on the freshly allocated instance; the class declares no other
+    // initializer.
+    let delegate: Retained<CloseDelegate> = unsafe { msg_send![super(this), init] };
+    window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+    delegate
 }
 
 /// Set `delegate` as the window delegate. It receives the `NSWindowDelegate` messages it

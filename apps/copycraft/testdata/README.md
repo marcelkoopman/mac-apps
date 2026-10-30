@@ -841,3 +841,14 @@ Use made-up pictures: a large PNG and JPEG (e.g. 6000×4000), a HEIC (Preview �
 - [ ] With the previous build, export one made-up picture (a PNG with transparency, a JPEG with EXIF orientation 6, a HEIC) via Image ▾ as PNG, as JPEG at 80 % and as HEIC, rotated once. Do the same with this build: the files have the same pixel size, look the same (transparent corners white in the JPEG, the rotated picture upright before the turn), and are about the same file size (`ls -l`).
 - [ ] The card says *Bevat locatie* / *Contains location* only for a made-up picture with a GPS block (`exiftool -GPSLatitude=52 -GPSLatitudeRef=N file.jpg`), not for one without; the exported file has no location (`mdls -name kMDItemLatitude`).
 - [ ] Card previews of the same pictures (pasted and copied in Finder) are unchanged; a renamed text file gives no preview and no crash.
+
+## About, Settings and Welcome with the shared window delegate (Mac only, no data)
+
+Run once from Terminal (`cargo run -p copycraft`, a crash shows there) and once as the bundled app.
+
+- [ ] About (`⋯` › About): open, close with the red button; open, close with ⌘W; open, press Esc (nothing or close, as in the previous build). Open it five times in a row this way: no crash, it opens each time. Its buttons (suggest a feature, report a problem, privacy, support) still work.
+- [ ] Settings: the same with the red button and ⌘W. Type a list in the symbols or ignored apps field and close the window without pressing Return: after opening again the list is kept. Start recording a hotkey, then close: recording has stopped (the next keys do nothing in Settings).
+- [ ] Welcome (`defaults delete nl.marcelkoopman.copycraft hasSeenWelcome`, restart): close with the red button, ⌘W and Esc: it does not come back after a restart (marked seen). *Aan de slag* / *Get started* closes it the same way.
+- [ ] With the card open, open each window above the card, then close it: the card keeps its level and stays usable.
+- [ ] Change the language in Settings with About and Welcome open: they close and open again in the new language, without a crash; close them afterwards.
+- [ ] Quit while open: with About, Settings and Welcome each open (and all three together), quit from the menu bar icon and with ⌘Q: no *CopyCraft quit unexpectedly* report and no new entry in Console › Crash Reports.

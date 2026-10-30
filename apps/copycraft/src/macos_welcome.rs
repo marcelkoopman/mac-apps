@@ -12,10 +12,10 @@ use mac_ui::objc2_app_kit::{
     NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor,
     NSControlStateValueOff, NSControlStateValueOn, NSEvent, NSFont, NSLayoutAttribute, NSStackView,
     NSStackViewDistribution, NSTextAlignment, NSTextField, NSUserInterfaceLayoutOrientation,
-    NSView, NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSView, NSWindow, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
 use mac_ui::objc2_foundation::{
-    NSArray, NSEdgeInsets, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+    NSArray, NSEdgeInsets, NSObject, NSPoint, NSRect, NSSize, NSString,
 };
 use mac_ui::{panel, widgets};
 
@@ -40,6 +40,12 @@ const ICON_ICNS: &[u8] = include_bytes!("../assets/icon.icns");
 const INNER_W: f64 = WIDTH - PAD * 2.0;
 /// Escape (`kVK_Escape`).
 const ESCAPE_KEY_CODE: u16 = 53;
+
+thread_local! {
+    /// The window's delegate ([`mac_ui::panel::on_close`]); the window does not retain it.
+    static CLOSER: RefCell<Option<Retained<mac_ui::panel::CloseDelegate>>> =
+        const { RefCell::new(None) };
+}
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<WelcomeWindow>>> = const { RefCell::new(None) };
@@ -87,25 +93,6 @@ define_class!(
     #[name = "CopycraftWelcomeDelegate"]
     #[ivars = DelegateIvars]
     struct WelcomeDelegate;
-
-    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
-    unsafe impl NSObjectProtocol for WelcomeDelegate {}
-
-    // SAFETY: the methods below use the NSWindowDelegate selectors and signatures.
-    unsafe impl NSWindowDelegate for WelcomeDelegate {
-        #[unsafe(method(windowWillClose:))]
-        fn window_will_close(&self, _notification: &NSObject) {
-            crate::settings::mark_welcome_seen();
-            let window = WINDOW.with(|slot| slot.borrow_mut().take());
-            if let Some(window) = window {
-                restore_level(&window);
-                // Not released while it is still closing.
-                panel::release_after_close(Retained::into_super(window));
-            }
-            LOGIN_BOX.with(|slot| *slot.borrow_mut() = None);
-            HISTORY_BOX.with(|slot| *slot.borrow_mut() = None);
-        }
-    }
 
     impl WelcomeDelegate {
         #[unsafe(method(welcomeStart:))]
@@ -156,6 +143,20 @@ impl WelcomeDelegate {
         // initializer.
         unsafe { msg_send![super(this), init] }
     }
+}
+
+/// `windowWillClose:`: mark Welcome seen, restore the level, release the window once it has
+/// closed and forget the controls.
+fn window_will_close() {
+    crate::settings::mark_welcome_seen();
+    let window = WINDOW.with(|slot| slot.borrow_mut().take());
+    if let Some(window) = window {
+        restore_level(&window);
+        // Not released while it is still closing.
+        panel::release_after_close(Retained::into_super(window));
+    }
+    LOGIN_BOX.with(|slot| *slot.borrow_mut() = None);
+    HISTORY_BOX.with(|slot| *slot.borrow_mut() = None);
 }
 
 /// Open (or bring to front) the welcome window.
@@ -243,11 +244,10 @@ fn build(mtm: MainThreadMarker) {
     window.setSharingType(crate::macos_launcher::sharing_type());
 
     let delegate = WelcomeDelegate::new(mtm);
-    // The delegate is stored in DELEGATE right below and outlives the window.
-    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
-        &*delegate,
-    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
+    // Kept in CLOSER, cleared with DELEGATE, so it outlives the window's closing.
+    let closer = mac_ui::panel::on_close(mtm, &window, window_will_close);
+    CLOSER.with(|slot| *slot.borrow_mut() = Some(closer));
 
     // The window matches the icon's dark navy, so it always uses the dark appearance (light
     // text and controls) and the title bar blends into the same colour.

@@ -17,11 +17,9 @@ use mac_ui::objc2_app_kit::{
     NSAccessibility, NSBackingStoreType, NSBox, NSButton, NSColor, NSControlStateValueOff,
     NSControlStateValueOn, NSEvent, NSEventModifierFlags, NSMenuItem, NSPopUpButton,
     NSSegmentDistribution, NSSegmentSwitchTracking, NSSegmentedControl, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
+    NSWindow, NSWindowLevel, NSWindowStyleMask, NSWindowTabbingMode,
 };
-use mac_ui::objc2_foundation::{
-    NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
-};
+use mac_ui::objc2_foundation::{NSNotification, NSObject, NSPoint, NSRect, NSSize, NSString};
 use mac_ui::{panel, widgets};
 
 use crate::commands::CommandId;
@@ -54,6 +52,12 @@ const LABEL_W: f64 = 136.0;
 /// How far a setting that depends on the one above it is indented.
 const INDENT: f64 = 20.0;
 const RADIUS: f64 = mac_ui::metrics::PANEL_RADIUS;
+
+thread_local! {
+    /// The window's delegate ([`mac_ui::panel::on_close`]); the window does not retain it.
+    static CLOSER: RefCell<Option<Retained<mac_ui::panel::CloseDelegate>>> =
+        const { RefCell::new(None) };
+}
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<SettingsWindow>>> = const { RefCell::new(None) };
@@ -164,27 +168,6 @@ define_class!(
     #[name = "CopycraftSettingsDelegate"]
     #[ivars = DelegateIvars]
     struct SettingsDelegate;
-
-    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
-    unsafe impl NSObjectProtocol for SettingsDelegate {}
-
-    // SAFETY: the methods below use the NSWindowDelegate selectors and signatures.
-    unsafe impl NSWindowDelegate for SettingsDelegate {
-        #[unsafe(method(windowWillClose:))]
-        fn window_will_close(&self, _notification: &NSObject) {
-            // Closing ends editing, but save here too so a list left in the field is kept.
-            save_symbols_field();
-            save_ignored_field();
-            RECORDING.set(false);
-            let window = WINDOW.with(|slot| slot.borrow_mut().take());
-            if let Some(window) = window {
-                restore_level(&window);
-                // Not released while it is still closing.
-                mac_ui::panel::release_after_close(Retained::into_super(window));
-            }
-            clear_controls();
-        }
-    }
 
     impl SettingsDelegate {
         #[unsafe(method(changeHotkey:))]
@@ -436,6 +419,22 @@ impl SettingsDelegate {
     }
 }
 
+/// `windowWillClose:`: keep edited lists, stop recording, restore the level, release the
+/// window once it has closed and forget the controls.
+fn window_will_close() {
+    // Closing ends editing, but save here too so a list left in the field is kept.
+    save_symbols_field();
+    save_ignored_field();
+    RECORDING.set(false);
+    let window = WINDOW.with(|slot| slot.borrow_mut().take());
+    if let Some(window) = window {
+        restore_level(&window);
+        // Not released while it is still closing.
+        mac_ui::panel::release_after_close(Retained::into_super(window));
+    }
+    clear_controls();
+}
+
 fn clear_controls() {
     TABS.with(|s| *s.borrow_mut() = None);
     PANES.with(|s| s.borrow_mut().clear());
@@ -522,11 +521,10 @@ fn build(mtm: MainThreadMarker) {
     window.center();
 
     let delegate = SettingsDelegate::new(mtm);
-    // The delegate is stored in DELEGATE right below and outlives the window.
-    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
-        &*delegate,
-    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
+    // Kept in CLOSER, cleared with DELEGATE, so it outlives the window's closing.
+    let closer = mac_ui::panel::on_close(mtm, &window, window_will_close);
+    CLOSER.with(|slot| *slot.borrow_mut() = Some(closer));
 
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
     window.setContentView(Some(&content));
@@ -767,4 +765,5 @@ pub fn close() {
     }
     clear_controls();
     DELEGATE.with(|slot| *slot.borrow_mut() = None);
+    CLOSER.with(|slot| *slot.borrow_mut() = None);
 }

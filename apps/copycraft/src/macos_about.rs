@@ -8,12 +8,10 @@ use mac_ui::button::{ButtonSize, GlassButton};
 use mac_ui::objc2::rc::Retained;
 use mac_ui::objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use mac_ui::objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSEvent, NSView, NSWindow, NSWindowDelegate, NSWindowLevel,
-    NSWindowStyleMask, NSWindowTabbingMode,
+    NSBackingStoreType, NSColor, NSEvent, NSView, NSWindow, NSWindowLevel, NSWindowStyleMask,
+    NSWindowTabbingMode,
 };
-use mac_ui::objc2_foundation::{
-    NSBundle, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
-};
+use mac_ui::objc2_foundation::{NSBundle, NSObject, NSPoint, NSRect, NSSize, NSString};
 use mac_ui::{panel, widgets};
 
 use crate::commands::CommandId;
@@ -29,6 +27,12 @@ const RADIUS: f64 = 16.0;
 
 /// Shown as plain text; the user may copy or open it themselves. CopyCraft does not.
 pub const GITHUB_URL: &str = "https://github.com/marcelkoopman/mac-apps";
+
+thread_local! {
+    /// The window's delegate ([`mac_ui::panel::on_close`]); the window does not retain it.
+    static CLOSER: RefCell<Option<Retained<mac_ui::panel::CloseDelegate>>> =
+        const { RefCell::new(None) };
+}
 
 thread_local! {
     static WINDOW: RefCell<Option<Retained<AboutWindow>>> = const { RefCell::new(None) };
@@ -72,22 +76,6 @@ define_class!(
     #[ivars = DelegateIvars]
     struct AboutDelegate;
 
-    // SAFETY: NSObject conforms to NSObjectProtocol and this subclass changes nothing about it.
-    unsafe impl NSObjectProtocol for AboutDelegate {}
-
-    // SAFETY: the methods below use the NSWindowDelegate selectors and signatures.
-    unsafe impl NSWindowDelegate for AboutDelegate {
-        #[unsafe(method(windowWillClose:))]
-        fn window_will_close(&self, _notification: &NSObject) {
-            let window = WINDOW.with(|slot| slot.borrow_mut().take());
-            if let Some(window) = window {
-                restore_level(&window);
-                // Not released while it is still closing.
-                mac_ui::panel::release_after_close(Retained::into_super(window));
-            }
-        }
-    }
-
     impl AboutDelegate {
         #[unsafe(method(suggestFeature:))]
         fn suggest_feature(&self, _sender: Option<&NSObject>) {
@@ -130,6 +118,16 @@ impl AboutDelegate {
         // SAFETY: NSObject's `init` on the freshly allocated instance; the class declares no other
         // initializer.
         unsafe { msg_send![super(this), init] }
+    }
+}
+
+/// `windowWillClose:`: restore the level and release the window once it has closed.
+fn window_will_close() {
+    let window = WINDOW.with(|slot| slot.borrow_mut().take());
+    if let Some(window) = window {
+        restore_level(&window);
+        // Not released while it is still closing.
+        mac_ui::panel::release_after_close(Retained::into_super(window));
     }
 }
 
@@ -178,11 +176,10 @@ fn build(mtm: MainThreadMarker) {
     window.center();
 
     let delegate = AboutDelegate::new(mtm);
-    // The delegate is stored in DELEGATE right below and outlives the window.
-    window.setDelegate(Some(mac_ui::objc2::runtime::ProtocolObject::from_ref(
-        &*delegate,
-    )));
     DELEGATE.with(|slot| *slot.borrow_mut() = Some(delegate));
+    // Kept in CLOSER, cleared with DELEGATE, so it outlives the window's closing.
+    let closer = mac_ui::panel::on_close(mtm, &window, window_will_close);
+    CLOSER.with(|slot| *slot.borrow_mut() = Some(closer));
 
     let content = NSView::initWithFrame(NSView::alloc(mtm), frame);
     window.setContentView(Some(&content));
@@ -338,4 +335,5 @@ pub fn close() {
         window.close();
     }
     DELEGATE.with(|slot| *slot.borrow_mut() = None);
+    CLOSER.with(|slot| *slot.borrow_mut() = None);
 }
