@@ -326,6 +326,27 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("search", "Zoeken", "Search"),
     ("search_commands", "Zoek opdrachten", "Search commands"),
+    // ⌘K: the card's actions in one list
+    (
+        "action_panel",
+        "Acties voor deze kaart",
+        "Actions for this card",
+    ),
+    (
+        "action_panel_open",
+        "{0} acties voor deze kaart, typ om te filteren",
+        "{0} actions for this card, type to filter",
+    ),
+    (
+        "panel_copy_detail",
+        "Zet wat de kaart toont op het klembord",
+        "Put what the card shows on the clipboard",
+    ),
+    (
+        "panel_save_detail",
+        "Bewaar wat de kaart toont in een bestand",
+        "Save what the card shows to a file",
+    ),
     ("find", "Zoek", "Find"),
     ("find_in_item", "Zoek in item", "Find in item"),
     (

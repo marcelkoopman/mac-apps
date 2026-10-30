@@ -446,7 +446,10 @@ pub(crate) fn layout(fresh_place: bool) {
     } else {
         zeroize::Zeroizing::new(String::new())
     };
-    let shown = if searching && !query.trim().is_empty() {
+    let panel = searching && ACTION_SCOPE.with(Cell::get);
+    let shown = if panel {
+        PANEL.with(|slot| commands::panel_matching(&slot.borrow(), query.as_str()))
+    } else if searching && !query.trim().is_empty() {
         POOL.with(|slot| commands::matching(&slot.borrow(), query.as_str()))
     } else {
         ACTIONS.with(|slot| slot.borrow().clone())
@@ -470,9 +473,15 @@ pub(crate) fn layout(fresh_place: bool) {
     // The buttons are reused: a search hides and shows them (see `CHIP_POOL`).
     ACTIONS.with(|actions| {
         POOL.with(|pool| {
-            let (actions, pool) = (actions.borrow(), pool.borrow());
-            let offered: Vec<&Command> = actions.iter().chain(pool.iter()).collect();
-            prune_chip_pool(&offered);
+            PANEL.with(|panel| {
+                let (actions, pool, panel) = (actions.borrow(), pool.borrow(), panel.borrow());
+                let offered: Vec<&Command> = actions
+                    .iter()
+                    .chain(pool.iter())
+                    .chain(panel.iter())
+                    .collect();
+                prune_chip_pool(&offered);
+            });
         });
     });
     let chips: Vec<Rc<GlassButton>> = shown.iter().map(|cmd| chip_for(mtm, cmd)).collect();
@@ -491,7 +500,7 @@ pub(crate) fn layout(fresh_place: bool) {
     } else {
         commands::layout_chips(&widths, inner, reserve)
     };
-    let show_empty = shown.is_empty() && searching && !query.trim().is_empty();
+    let show_empty = shown.is_empty() && (panel || searching && !query.trim().is_empty());
     // The field is hidden while the well is masked. The row stays, so a click to reveal does
     // not grow the card (and blurring it again does not shrink it).
     let find_shown = !well_is_masked();

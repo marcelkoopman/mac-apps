@@ -314,6 +314,10 @@ pub(crate) fn activate_selected() {
     let Some(cmd) = cmd else {
         return;
     };
+    if SEARCHING.with(Cell::get) && ACTION_SCOPE.with(Cell::get) {
+        // An action from ⌘K's list closes the list first.
+        close_search();
+    }
     run_command(cmd);
 }
 
@@ -655,11 +659,58 @@ pub(crate) fn is_search_text(text: &str) -> bool {
 }
 
 pub(crate) fn open_search(initial: &str) {
+    open_search_in(initial, false);
+}
+
+fn open_search_in(initial: &str, panel: bool) {
     SEARCHING.set(true);
+    set_action_scope(panel);
     set_query(initial);
     SELECTION.set(0);
     layout(false);
     focus_field();
+}
+
+/// ⌘K: the search row lists the card's actions ([`commands::card_actions`]), typed to filter;
+/// ↑ ↓ and Return run one, Esc (or ⌘K again) closes the list. A beep when the card has none.
+pub(crate) fn toggle_action_panel() {
+    if SEARCHING.with(Cell::get) && ACTION_SCOPE.with(Cell::get) {
+        close_search();
+        return;
+    }
+    let count = PANEL.with(|slot| slot.borrow().len());
+    if count == 0 {
+        NSBeep();
+        return;
+    }
+    open_search_in("", true);
+    FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            mac_ui::a11y::announce(field, &crate::locale::tf("action_panel_open", &[&count]));
+        }
+    });
+}
+
+/// The search field says what it searches: the card's actions (⌘K) or everything.
+pub(crate) fn set_action_scope(panel: bool) {
+    ACTION_SCOPE.set(panel);
+    let (placeholder, label) = if panel {
+        (
+            crate::locale::t("action_panel"),
+            crate::locale::t("action_panel"),
+        )
+    } else {
+        (
+            crate::locale::t("search"),
+            crate::locale::t("search_commands"),
+        )
+    };
+    FIELD.with(|slot| {
+        if let Some(field) = slot.borrow().as_ref() {
+            field.setPlaceholderString(Some(&NSString::from_str(placeholder)));
+            field.setAccessibilityLabel(Some(&NSString::from_str(label)));
+        }
+    });
 }
 
 pub(crate) fn close_search() {
@@ -668,6 +719,7 @@ pub(crate) fn close_search() {
         return;
     }
     SEARCHING.set(false);
+    set_action_scope(false);
     set_query("");
     SELECTION.set(0);
     layout(false);
@@ -685,7 +737,7 @@ pub fn wipe_shown() {
     CARD_EXCERPT.with(wipe_string_slot);
     CARD_PLACEHOLDER.with(wipe_string_slot);
     LINK_PAGE.with(|slot| set_secret_opt(slot, None));
-    for slot in [&ACTIONS, &POOL, &OVERFLOW, &SHOWN] {
+    for slot in [&ACTIONS, &POOL, &PANEL, &OVERFLOW, &SHOWN] {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
     clear_painted();
@@ -695,6 +747,7 @@ pub fn wipe_shown() {
     DIFF_WIDE.set(false);
     wipe_shown_views();
     SEARCHING.set(false);
+    ACTION_SCOPE.set(false);
 }
 
 pub(crate) fn wipe_string_slot(slot: &RefCell<String>) {

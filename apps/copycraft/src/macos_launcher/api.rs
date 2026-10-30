@@ -430,6 +430,7 @@ fn prepare(mtm: MainThreadMarker, fresh: bool) {
     if fresh {
         set_query("");
         SEARCHING.set(false);
+        set_action_scope(false);
         SELECTION.set(0);
         REVEALED.set(false);
     }
@@ -592,7 +593,9 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     ACTIONS.with(|slot| set_commands(slot, shown));
     AI_ACTIONS.set(commands::ai_actions(&data));
     AI_FNS.with(|slot| slot.replace(commands::ai_functions(&data)));
-    POOL.with(|slot| set_commands(slot, commands::search_pool(&data)));
+    let pool = commands::search_pool(&data);
+    PANEL.with(|slot| set_commands(slot, commands::card_actions(&data, &pool)));
+    POOL.with(|slot| set_commands(slot, pool));
     OVERFLOW.with(|slot| {
         set_commands(
             slot,

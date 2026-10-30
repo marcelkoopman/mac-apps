@@ -298,6 +298,26 @@ mod tests {
     }
 
     #[test]
+    fn action_panel_keys_are_in_both_languages() {
+        for key in [
+            "action_panel",
+            "action_panel_open",
+            "panel_copy_detail",
+            "panel_save_detail",
+        ] {
+            let (_, nl, en) = all()
+                .find(|(k, _, _)| *k == key)
+                .unwrap_or_else(|| panic!("{key} is missing"));
+            assert!(!nl.is_empty() && nl != en, "{key}");
+        }
+        assert_eq!(
+            tf_in(Lang::Nl, "action_panel_open", &[&12]),
+            "12 acties voor deze kaart, typ om te filteren"
+        );
+        assert_eq!(t_in(Lang::En, "action_panel"), "Actions for this card");
+    }
+
+    #[test]
     fn welcome_keys_are_in_both_languages() {
         for key in [
             "welcome_menu",

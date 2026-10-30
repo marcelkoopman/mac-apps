@@ -299,6 +299,15 @@ thread_local! {
     static FIELD_EDITOR: RefCell<Option<Retained<NSTextView>>> = const { RefCell::new(None) };
 }
 
+// ⌘K's list of the card's actions (one more block: one `thread_local!` hits the recursion
+// limit).
+thread_local! {
+    /// The search row lists the card's actions (⌘K, [`commands::card_actions`]).
+    static ACTION_SCOPE: Cell<bool> = const { Cell::new(false) };
+    /// What ⌘K lists for the card on screen.
+    static PANEL: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
+}
+
 // Its own block: one `thread_local!` this long hits the macro's recursion limit.
 thread_local! {
     /// The PDF on the card in its Beeld view: the page shown and the pages that can be turned to
@@ -428,6 +437,10 @@ define_class!(
                     focus_item_field();
                 }
                 true
+            } else if mac_ui::keys::is_command_chord(event, "k") {
+                // ⌘K lists the card's actions; again (or Esc) closes the list.
+                toggle_action_panel();
+                true
             } else if mac_ui::keys::is_command_chord(event, "o") {
                 // ⌘O opens a file, also while a search field has the caret.
                 launcher::emit(UserEvent::Run(CommandId::ChooseFile));
@@ -548,7 +561,7 @@ define_class!(
                 return;
             }
             let query = current_query();
-            if query.as_str() == "/" {
+            if query.as_str() == "/" && !ACTION_SCOPE.with(Cell::get) {
                 set_query("");
                 SEARCHING.set(true);
             } else if !query.is_empty() {

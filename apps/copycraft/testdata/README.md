@@ -806,3 +806,12 @@ Run each step twice: once from Terminal or Ghostty with `cargo run -p copycraft`
 - [ ] After Settings, About and Welcome (Welcome via `defaults delete nl.marcelkoopman.copycraft hasSeenWelcome` and a restart): with each one open, and after closing it by its red button, quit from the menu bar icon.
 - [ ] ⌘Q: with the card or a CopyCraft window in front, press ⌘Q (the app menu's *Stop CopyCraft* / *Quit CopyCraft*): it quits the same way, without a crash report. Also from Activity Monitor (*Stop* / *Quit*, not *Force Quit*) and the table window (*Open table* on a CSV) open.
 - [ ] Closing is still safe: open and close Settings, About and Welcome five times each (red button, ⌘W), wait 30 s: CopyCraft keeps running and each opens again normally.
+
+## ⌘K: the card's actions (Mac only, fake data)
+
+- [ ] Copy `{"naam": "Voorbeeld"}` and open the card. ⌘K: the search field says *Acties voor deze kaart* / *Actions for this card* and the row shows *Kopieer*, *Bewaar…  ⌘S* and the card's actions (Format, Minify, convert, Tekst… rows); no history rows, *Thema*, *Pauzeer opname* or *Maak schermafbeelding…*.
+- [ ] Type `min`: only the matching actions stay. ↓ / ↑ move the accent, Return runs it, and the list closes. Esc (also with typed text) closes the list; ⌘K again closes it too. Typing on the card afterwards opens the normal search (*Zoeken* / *Search*).
+- [ ] On a picture, a link, a CSV and a colour (`#336699`) ⌘K lists only that card's actions (Image ▾ rows, link parts, table rows, colour tools). On an empty clipboard ⌘K beeps.
+- [ ] On a CSV, sort a column (one table step): ⌘K shows *Maak tabelstap ongedaan  ⌘Z*; after ⌘Z the redo row with *⇧⌘Z*.
+- [ ] VoiceOver: ⌘K says *N acties voor deze kaart, typ om te filteren* / *N actions for this card, type to filter*; the field is read as *Acties voor deze kaart*, each row as a button with its title. In English the same in English.
+- [ ] Privacy: the log (Console, process CopyCraft) shows no typed text, action names or content.
