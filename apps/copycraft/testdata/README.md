@@ -890,3 +890,4 @@ Use the bundled, signed app from /Applications (SMAppService needs a real bundle
 - [ ] Turn it off: it leaves Login Items, the checkbox stays off; after a restart it does not start at login.
 - [ ] Run once from Terminal (`cargo run -p copycraft`, not a bundle): Settings opens without a crash; switching the option shows the same message as the previous build (unavailable or an error text), not an empty or English-only placeholder.
 - [ ] The Welcome window's Open at Login choice behaves the same.
+- [ ] (Split unsafe blocks in the capture, 2026-10-30) Repeat the area, window and whole-screen screenshot from "Screenshots through objc2-screen-capture-kit" once more, on a Retina and a non-Retina display if there is one: same size and sharpness, own windows and the pointer still left out.

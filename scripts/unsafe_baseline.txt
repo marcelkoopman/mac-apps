@@ -93,7 +93,10 @@ copycraft impl 3
 # mac-ui blocks 69: -1, screenshot/capture.rs typed through objc2-screen-capture-kit 0.3 (approved by Marcel
 # 2026-10-30): SCShareableContent / SCContentFilter / SCStreamConfiguration / SCScreenshotManager instead of
 # msg_send; the content handler reads its arguments and builds the filter and configuration in one block.
-mac-ui blocks 69
+# mac-ui blocks 71: +2, the ScreenCaptureKit content handler's one large block split up (approved by Marcel
+# 2026-10-30): the handler only reads the pointers and the shareable windows/displays; prepare() picks the
+# target in safe code and has one block for the filter (initialiser + scale/rect) and one for the configuration.
+mac-ui blocks 71
 mac-ui fn 4
 # mac-ui impl 8: +2, mac_ui::panel::CloseDelegate's NSObjectProtocol and NSWindowDelegate impls, shared
 # by CopyCraft's About, Settings and Welcome (copycraft impl -6, so -3 across both crates).
