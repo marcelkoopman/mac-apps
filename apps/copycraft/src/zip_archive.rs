@@ -81,6 +81,8 @@ pub enum ZipError {
     NoSpace,
     /// Stopped by the user (⌘. or the chip again); nothing is left behind.
     Cancelled,
+    /// A top-level name is that of this zip's own work folder ([`Listing::plants_work_folder`]).
+    WorkFolderName,
 }
 
 impl ZipError {
@@ -98,6 +100,7 @@ impl ZipError {
             Self::Write => t("zip_write_failed"),
             Self::NoSpace => t("zip_no_space"),
             Self::Cancelled => t("zip_cancelled"),
+            Self::WorkFolderName => t("zip_work_folder_name"),
         }
     }
 }
@@ -142,6 +145,8 @@ pub struct ZipFacts {
     pub unsafe_names: bool,
     /// A compression method this reader does not do.
     pub unsupported: bool,
+    /// A top-level name is this zip's own work folder ([`ZipError::WorkFolderName`]).
+    pub work_folder_name: bool,
 }
 
 impl ZipFacts {
@@ -151,6 +156,8 @@ impl ZipFacts {
             Some(ZipError::Locked)
         } else if self.unsafe_names {
             Some(ZipError::Unsafe)
+        } else if self.work_folder_name {
+            Some(ZipError::WorkFolderName)
         } else if self.unsupported {
             Some(ZipError::Unsupported)
         } else {
@@ -180,6 +187,9 @@ impl ZipFacts {
         match self.blocker() {
             Some(ZipError::Locked) => parts.push(t("zip_meta_locked").to_string()),
             Some(ZipError::Unsafe) => parts.push(t("zip_meta_unsafe").to_string()),
+            Some(ZipError::WorkFolderName) => {
+                parts.push(t("zip_meta_work_folder_name").to_string());
+            }
             Some(_) => parts.push(t("zip_meta_unsupported").to_string()),
             None => {}
         }
@@ -279,6 +289,37 @@ impl Listing {
     }
 
     /// The first part of every safe entry, without repeats, in order.
+    /// [`Listing::facts`] for the zip called `zip_name`, with
+    /// [`ZipFacts::work_folder_name`] filled in.
+    pub fn facts_named(&self, zip_name: &str) -> ZipFacts {
+        ZipFacts {
+            work_folder_name: self.plants_work_folder(zip_name),
+            ..self.facts()
+        }
+    }
+
+    /// Whether a top-level name is one of the work folders extracting the zip called
+    /// `zip_name` makes ([`partial_name`]: "docs (onvolledig)", "docs 2 (incomplete)", …, either
+    /// language). Such a folder would pass for a leftover of ours; any other "… (onvolledig)"
+    /// ("Rapport (onvolledig)" in docs.zip) is just a name.
+    pub fn plants_work_folder(&self, zip_name: &str) -> bool {
+        use crate::locale::Lang;
+        let suffixes: Vec<String> = [Lang::Nl, Lang::En]
+            .into_iter()
+            .map(|lang| name_key(&crate::locale::tf_in(lang, "zip_incomplete", &[&""])))
+            .collect();
+        self.top_names().iter().any(|top| {
+            let key = name_key(top);
+            suffixes.iter().any(|suffix| {
+                let Some(stem) = key.strip_suffix(suffix.as_str()) else {
+                    return false;
+                };
+                (1..=MAX_FOLDER_TRIES)
+                    .any(|number| name_key(&folder_name(zip_name, number)) == stem)
+            })
+        })
+    }
+
     pub fn top_names(&self) -> Vec<String> {
         let mut seen = HashSet::new();
         let mut names = Vec::new();
@@ -745,9 +786,10 @@ fn nfc(text: &str) -> String {
 /// The path parts of an entry name, when it stays inside the folder it is extracted to:
 /// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no control or bidirectional
 /// characters ([`deceptive_at`], NUL included), each part at most 255 bytes, no part named
-/// like CopyCraft's work-folder mark ([`PARTIAL_MARK`]) and no top-level name of a work folder
-/// ([`looks_like_work_folder`]): a zip cannot plant what makes a folder look like a leftover of
-/// ours. Empty and `.` parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
+/// like CopyCraft's work-folder mark ([`PARTIAL_MARK`]) and no top-level `.….partial` (the
+/// work folders of earlier versions): a zip cannot plant what makes a folder look like a
+/// leftover of ours. A top-level name of this zip's own work folder depends on the zip's name:
+/// [`Listing::plants_work_folder`]. Empty and `.` parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
 pub fn safe_parts(name: &str) -> Option<Vec<String>> {
     if name.is_empty() || has_deceptive(name) {
         return None;
@@ -773,7 +815,7 @@ pub fn safe_parts(name: &str) -> Option<Vec<String>> {
         if part.len() > 255 || part.eq_ignore_ascii_case(PARTIAL_MARK) {
             return None;
         }
-        if parts.is_empty() && looks_like_work_folder(part) {
+        if parts.is_empty() && looks_like_old_work_folder(part) {
             return None;
         }
         parts.push(part.to_string());
@@ -781,18 +823,10 @@ pub fn safe_parts(name: &str) -> Option<Vec<String>> {
     Some(parts)
 }
 
-/// A name like one of CopyCraft's work folders: "docs (onvolledig)" / "docs (incomplete)"
-/// ([`partial_name`], either language), or the hidden `.docs.partial` of earlier versions.
-fn looks_like_work_folder(name: &str) -> bool {
-    use crate::locale::Lang;
+/// The hidden work folder of earlier versions: `.docs.partial`.
+fn looks_like_old_work_folder(name: &str) -> bool {
     let lower = name_key(name);
-    if lower.starts_with('.') && lower.ends_with(".partial") {
-        return true;
-    }
-    [Lang::Nl, Lang::En].into_iter().any(|lang| {
-        let suffix = name_key(&crate::locale::tf_in(lang, "zip_incomplete", &[&""]));
-        lower.ends_with(&suffix) && lower.len() > suffix.len()
-    })
+    lower.starts_with('.') && lower.ends_with(".partial")
 }
 
 /// Where to extract: `Direct` (right into the chosen folder) when none of `top_names`
@@ -1007,7 +1041,7 @@ fn extract_with(
     let mut file = std::fs::File::open(zip).map_err(|_| ZipError::Read)?;
     let len = file.metadata().map_err(|_| ZipError::Read)?.len();
     let listing = list(&mut file, len)?;
-    let facts = listing.facts();
+    let facts = listing.facts_named(zip_name);
     if let Some(blocker) = facts.blocker() {
         return Err(blocker);
     }

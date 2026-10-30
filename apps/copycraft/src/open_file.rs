@@ -152,16 +152,16 @@ fn load_zip(path: &Path) -> OpenedFile {
     };
     match crate::zip_archive::list(&mut file, len) {
         Ok(listing) => OpenedFile {
+            zip: Some(ZipFile {
+                path: path.to_path_buf(),
+                facts: listing.facts_named(&name),
+                keep: None,
+            }),
             name,
             text: Some(listing.text(|more| crate::locale::tf("zip_more", &[&more]))),
             note: None,
             image: None,
             pdf: None,
-            zip: Some(ZipFile {
-                path: path.to_path_buf(),
-                facts: listing.facts(),
-                keep: None,
-            }),
         },
         Err(error) => noted(name, error.message()),
     }

@@ -469,6 +469,9 @@ fn every_error_has_a_message() {
         ZipError::TooLarge,
         ZipError::Read,
         ZipError::Write,
+        ZipError::NoSpace,
+        ZipError::Cancelled,
+        ZipError::WorkFolderName,
     ] {
         assert_ne!(error.message(), "?");
     }
@@ -749,14 +752,12 @@ fn a_zip_cannot_plant_a_work_folder_or_its_mark() {
         "docs/.COPYCRAFT-Partial/x",
         ".docs.partial/a.txt",
         ".Docs.PARTIAL",
-        "docs (onvolledig)/a.txt",
-        "docs (incomplete)",
-        "Docs (Incomplete)/a.txt",
     ] {
         assert_eq!(safe_parts(bad), None, "{bad:?}");
     }
     // Deeper down, or without a name before it, such names are only names.
     for fine in [
+        "docs (onvolledig)/a.txt",
         "a/.docs.partial/x",
         "a/docs (incomplete)/x",
         " (incomplete)",
@@ -764,6 +765,64 @@ fn a_zip_cannot_plant_a_work_folder_or_its_mark() {
     ] {
         assert!(safe_parts(fine).is_some(), "{fine:?}");
     }
+}
+
+#[test]
+fn only_this_zips_own_work_folder_name_is_refused() {
+    let named = |names: &[&str], zip: &str| {
+        let entries: Vec<_> = names.iter().map(|name| e(name, b"x")).collect();
+        listing(&build(&entries, false)).unwrap().facts_named(zip)
+    };
+    for (name, zip) in [
+        ("docs (onvolledig)/a.txt", "docs.zip"),
+        ("docs (incomplete)/a.txt", "docs.zip"),
+        ("Docs (Incomplete)/a.txt", "docs.ZIP"),
+        ("docs 2 (onvolledig)/a.txt", "docs.zip"),
+        ("docs (onvolledig)", "docs"),
+    ] {
+        let facts = named(&[name], zip);
+        assert_eq!(facts.blocker(), Some(ZipError::WorkFolderName), "{name:?}");
+        assert!(
+            facts
+                .label()
+                .contains(crate::locale::t("zip_meta_work_folder_name"))
+        );
+    }
+    for (name, zip) in [
+        ("Rapport (onvolledig)/a.txt", "docs.zip"),
+        ("Rapport (incomplete).txt", "docs.zip"),
+        ("docs (onvolledig)/a.txt", "docs2.zip"),
+        ("a/docs (onvolledig)/x", "docs.zip"),
+        ("docs/a.txt", "docs.zip"),
+        ("docs 0 (incomplete)/a.txt", "docs.zip"),
+    ] {
+        assert_eq!(named(&[name], zip).blocker(), None, "{name:?}");
+    }
+    assert_ne!(
+        ZipError::WorkFolderName.message(),
+        ZipError::Unsafe.message()
+    );
+    // Extracting refuses it too, writing nothing.
+    let dir = temp_dir("own-work-folder");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    let zip = write_zip(
+        &dir,
+        "docs.zip",
+        &build(&[e("docs (incomplete)/a.txt", b"x")], false),
+    );
+    assert_eq!(
+        extract(&zip, "docs.zip", &out, &NO_STOP),
+        Err(ZipError::WorkFolderName)
+    );
+    assert!(names_in(&out).is_empty());
+    let zip = write_zip(
+        &dir,
+        "other.zip",
+        &build(&[e("Rapport (onvolledig)/a.txt", b"x")], false),
+    );
+    assert!(extract(&zip, "other.zip", &out, &NO_STOP).is_ok());
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]

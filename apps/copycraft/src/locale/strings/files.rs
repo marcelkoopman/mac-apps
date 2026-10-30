@@ -159,6 +159,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("zip_meta_locked", "met wachtwoord", "password protected"),
     ("zip_meta_unsafe", "onveilige namen", "unsafe names"),
     (
+        "zip_meta_work_folder_name",
+        "naam van een werkmap",
+        "name of a work folder",
+    ),
+    (
         "zip_meta_unsupported",
         "onbekende compressie",
         "unknown compression",
@@ -216,6 +221,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Not extracted: there is not enough free space on that disk",
     ),
     ("zip_incomplete", "{0} (onvolledig)", "{0} (incomplete)"),
+    (
+        "zip_work_folder_name",
+        "Niet uitgepakt: een map in dit zip-bestand heeft de naam van de werkmap die CopyCraft bij het uitpakken maakt",
+        "Not extracted: a folder in this zip file has the name of the work folder CopyCraft makes while extracting",
+    ),
     (
         "zip_cancelled",
         "Uitpakken gestopt; er is niets achtergebleven",
