@@ -128,7 +128,7 @@ impl App {
             },
         );
         match body {
-            Some(body) => self.copy_grid_from(TableTarget::Window, body),
+            Some(body) => self.copy_grid_from(TableTarget::Window, body).map(|_| ()),
             None => Ok(()),
         }
     }
@@ -182,16 +182,20 @@ impl App {
             super::state::save_feedback(crate::locale::t("table_copy_failed"));
             return;
         };
-        if let Err(e) = self.copy_grid_from(target, Some(body)) {
-            crate::diag::log(crate::diag::LogEvent::CopyFailed(
-                crate::diag::ErrorKind::of(&e),
-            ));
-            return;
-        }
+        let made = match self.copy_grid_from(target, Some(body)) {
+            Ok(made) => made,
+            Err(e) => {
+                crate::diag::log(crate::diag::LogEvent::CopyFailed(
+                    crate::diag::ErrorKind::of(&e),
+                ));
+                return;
+            }
+        };
         // From the card: the new copy is what the card shows now, also over a dropped or
-        // chosen file. The table window's copy is shown when the window closes.
+        // chosen file, which is kept for Origineel and ⌘Z. The table window's copy is shown
+        // when the window closes.
         if target == TableTarget::Card {
-            self.follow_made_copy();
+            self.follow_made_copy(made);
         }
         super::state::save_feedback(match copy {
             crate::dataframe::TableCopy::Json => crate::locale::t("table_copied_json"),
@@ -227,7 +231,7 @@ impl App {
             return;
         };
         let feedback = match self.copy_grid_from(TableTarget::Window, Some(body)) {
-            Ok(()) => crate::locale::t("profile_copied"),
+            Ok(_) => crate::locale::t("profile_copied"),
             // No log: the message says enough, and holds nothing of the table.
             Err(_) => crate::locale::t("table_copy_failed"),
         };
@@ -252,29 +256,31 @@ impl App {
 
     /// [`Self::copy_grid`] for `target`. A copy written from the table window marks it, so the
     /// card shows that copy when the window closes ([`super::state::card_after_window`]).
+    /// Returns the copy's [`hash_text`] when one was written.
     fn copy_grid_from(
         &mut self,
         target: TableTarget,
         body: Option<Zeroizing<String>>,
-    ) -> anyhow::Result<()> {
-        let writes = body.is_some();
-        self.copy_grid(body)?;
-        if writes
+    ) -> anyhow::Result<Option<u64>> {
+        let made = self.copy_grid(body)?;
+        if made.is_some()
             && target == TableTarget::Window
             && let Some(window) = self.table_window.as_mut()
         {
-            window.copied = true;
+            window.copied = made;
         }
-        Ok(())
+        Ok(made)
     }
 
-    fn copy_grid(&mut self, body: Option<Zeroizing<String>>) -> anyhow::Result<()> {
+    /// `body` on the clipboard and in history (by the usual rules); its [`hash_text`], so the
+    /// file it was made from can be kept for that copy ([`MadeSource`]).
+    fn copy_grid(&mut self, body: Option<Zeroizing<String>>) -> anyhow::Result<Option<u64>> {
         let Some(body) = body else {
-            return Ok(());
+            return Ok(None);
         };
         self.write_own(body.as_str())?;
         self.record_own_copy(body.as_str());
-        Ok(())
+        Ok(Some(hash_text(body.as_str())))
     }
 
     /// Save the table version shown in the table window (as CSV, as on the card).
@@ -775,14 +781,24 @@ impl App {
             return;
         }
         self.record_own_copy(&value);
-        self.follow_made_copy();
+        self.follow_made_copy(Some(hash_text(&value)));
     }
 
-    /// A new copy made from what the card shows (Copy as JSON or CSV, Copy cleaned link or
-    /// domain) is on the clipboard: the card shows it, as the strip marks it, leaving a dropped
-    /// or chosen file or a browsed entry, as a step's copy does ([`Self::commit_step`]).
-    pub(crate) fn follow_made_copy(&mut self) {
+    /// A new copy (`made`, its [`hash_text`]) made from what the card shows (Copy as JSON or
+    /// CSV, Copy cleaned link or domain) is on the clipboard: the card shows it, as the strip
+    /// marks it, leaving a dropped or chosen file or a browsed entry, as a step's copy does
+    /// ([`Self::commit_step`]). A file is kept, with its name and versions, for *Origineel* and
+    /// ⌘Z ([`Self::keep_made_source`]); a table window on it closes first.
+    pub(crate) fn follow_made_copy(&mut self, made: Option<u64>) {
         if self.opened.is_some() {
+            if self
+                .table_window
+                .as_ref()
+                .is_some_and(|window| window.opened)
+            {
+                self.close_table_window();
+            }
+            self.keep_made_source(made);
             self.leave_opened();
         }
         self.browsing = None;

@@ -123,7 +123,7 @@ impl App {
             error: None,
             shown: None,
             checking: false,
-            copied: false,
+            copied: None,
             profile: None,
         });
         self.refresh_table_window();
@@ -210,7 +210,7 @@ impl App {
                 }
                 let window = self.table_window.take();
                 let keeps_file = window.as_ref().is_some_and(|window| window.keeps_file);
-                let copied = window.as_ref().is_some_and(|window| window.copied);
+                let copied = window.as_ref().and_then(|window| window.copied);
                 // Its copy of the text is zeroized off the main thread, as the window's own.
                 if let Some(window) = window {
                     crate::work::wipe_later(window);
@@ -219,7 +219,7 @@ impl App {
                     keeps_file,
                     self.opened.is_some(),
                     launcher::is_open(),
-                    copied,
+                    copied.is_some(),
                 ) {
                     CardAfterWindow::Stays => {}
                     // A chosen file goes back on the card, with its versions, as a history
@@ -229,8 +229,10 @@ impl App {
                         self.reveal_card(data);
                     }
                     // A copy made in the window is the clipboard's newest content (and in
-                    // history): the card leaves the file and shows that copy.
+                    // history): the card leaves the file and shows that copy. The file is kept
+                    // for Origineel and ⌘Z, as after a copy from the card.
                     CardAfterWindow::Copy => {
+                        self.keep_made_source(copied);
                         self.leave_opened();
                         if launcher::is_open() {
                             let data = self.current_launch_data();

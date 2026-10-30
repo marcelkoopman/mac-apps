@@ -92,7 +92,22 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     if data.checksum.is_some() {
         chips.extend(checksum_chips());
     }
+    // A copy made from a file the card still keeps: *Origineel* puts that file back, first.
+    if data.back_to_source {
+        chips.insert(0, back_to_source_chip());
+    }
     chips
+}
+
+/// *Origineel* on a copy made from a dropped, chosen or pasted file: the file back on the card,
+/// with its table versions (also ⌘Z).
+pub(crate) fn back_to_source_chip() -> Command {
+    command(
+        CommandId::BackToSource,
+        crate::locale::t("original"),
+        crate::locale::t("detail_back_to_source"),
+        "original back source file undo csv origineel terug bron bestand",
+    )
 }
 
 /// *Uitpakken* on a zip's card: choose a folder, then the zip is extracted there.

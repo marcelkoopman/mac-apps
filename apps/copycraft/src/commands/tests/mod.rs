@@ -56,6 +56,7 @@ pub(crate) fn data(kind: SubjectKind, text: Option<&str>) -> LaunchData {
         diff_picks: Vec::new(),
         diff: None,
         checksum: None,
+        back_to_source: false,
     }
 }
 

@@ -112,6 +112,7 @@ fn data(text: &str, view: CardView) -> LaunchData {
         diff_picks: Vec::new(),
         diff: None,
         checksum: None,
+        back_to_source: false,
     }
 }
 

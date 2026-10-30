@@ -40,6 +40,8 @@ impl App {
     /// only unpinned entries go; pins stay and diff picks whose entry remains stay too.
     pub(crate) fn forget_entries(&mut self, full: bool) {
         discard_preview_files();
+        // Clear History (and history forgotten after its time) lets the kept file go too.
+        self.release_made_source();
         // A running extraction stops; its work folder is removed on its thread.
         self.unzip_stop();
         self.forget_decoded_picture();
@@ -340,6 +342,7 @@ impl App {
         self.close_table_window();
         self.opened = None;
         self.drop_checksum();
+        self.release_made_source();
         self.dropped_text_wait.clear();
         self.dropped_image_wait.clear();
         self.polled_image_wait = None;
@@ -470,6 +473,7 @@ impl App {
         let Some(id) = self.history.id_at(index) else {
             return false;
         };
+        self.browse_releases_source(index);
         self.browsing = Some(id);
         self.reset_view();
         self.opened = None;
@@ -481,6 +485,7 @@ impl App {
     }
 
     pub(crate) fn restore_history(&mut self, index: usize) -> anyhow::Result<()> {
+        self.browse_releases_source(index);
         self.reset_view();
         self.clipboard_cursor = None;
         if let Some(bytes) = self.history.image(index) {
@@ -694,6 +699,7 @@ impl App {
         let mut data = self.launch_data(&view);
         self.attach_image(&mut data);
         self.attach_text(&mut data);
+        self.attach_made_source(&mut data);
         if launcher::is_open() {
             self.sync_card(data);
         } else {

@@ -474,6 +474,8 @@ impl App {
     /// file gets onto the card goes through here, and the card labels and blurs it like the
     /// clipboard. A drop and Kies bestand are recorded in history first ([`Self::show_dropped`]).
     pub(crate) fn show_source(&mut self, opened: crate::open_file::OpenedFile) {
+        // Another file on the card: the one a copy was made from is let go.
+        self.release_made_source();
         if self
             .table_window
             .as_ref()
@@ -697,6 +699,7 @@ impl App {
             diff_picks: Vec::new(),
             diff: None,
             checksum: None,
+            back_to_source: false,
         }
     }
 

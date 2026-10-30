@@ -100,8 +100,10 @@ impl App {
             if let Some(text) = view.text() {
                 self.note_secret_copy(text, crate::macos_pasteboard::change_count());
             }
-            // New clipboard content: a file on the card may give way to it when the card closes.
+            // New clipboard content: a file on the card may give way to it when the card closes,
+            // and a file a copy was made from is let go.
             self.opened_superseded = self.opened.is_some();
+            self.release_made_source();
         }
         // A chosen file stays on the card while the clipboard keeps its own history.
         if self.opened.is_none() {

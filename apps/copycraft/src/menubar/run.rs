@@ -183,6 +183,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         last_copy: None,
         history_minutes: crate::settings::load().history_minutes,
         opened_table: crate::settings::preferred_table(),
+        made_source: None,
         card_text: None,
         browsing: None,
         history_emptied: false,

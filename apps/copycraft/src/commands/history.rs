@@ -165,6 +165,20 @@ pub fn restore_key(
         .then_some(CommandId::RestoreHistory)
 }
 
+/// ⌘Z on a copy made from a file the card still keeps (`back`): that file back on the card
+/// ([`CommandId::BackToSource`]). It comes after the table's, picture's and text's own undo;
+/// there is no ⇧⌘Z for it.
+pub fn source_undo_key(
+    chars: &str,
+    command: bool,
+    shift: bool,
+    other_modifier: bool,
+    back: bool,
+) -> Option<CommandId> {
+    (back && command && !shift && !other_modifier && chars.eq_ignore_ascii_case("z"))
+        .then_some(CommandId::BackToSource)
+}
+
 /// ⌫ on the card takes the copy the strip marks (history position `cursor`) out of history.
 /// Not while the search field is open (it edits the search), and only while the strip shows.
 pub fn delete_key(searching: bool, strip_shown: bool, cursor: usize) -> Option<CommandId> {

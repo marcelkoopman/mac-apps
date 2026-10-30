@@ -512,7 +512,8 @@ pub(crate) fn header_symbol(
 
 /// ⌘Z right after a copy was removed from history puts it back ([`commands::restore_key`]);
 /// else ⌘Z or ⇧⌘Z while the table has a version to go to ([`commands::undo_key`]), or a
-/// picture or text a step's copy ([`commands::image_undo_key`], [`commands::text_undo_key`]). Typed
+/// picture or text a step's copy ([`commands::image_undo_key`], [`commands::text_undo_key`]), or
+/// last a copy made from a file the card keeps ([`commands::source_undo_key`]). Typed
 /// search text keeps the keys.
 pub(crate) fn undo_chord(event: &NSEvent) -> Option<CommandId> {
     if SEARCHING.with(Cell::get) && !current_query().is_empty() {
@@ -543,6 +544,15 @@ pub(crate) fn undo_chord(event: &NSEvent) -> Option<CommandId> {
             TEXT_STEPS.with(|slot| {
                 commands::text_undo_key(&chars, command, shift, other, slot.borrow().as_ref())
             })
+        })
+        .or_else(|| {
+            commands::source_undo_key(
+                &chars,
+                command,
+                shift,
+                other,
+                BACK_TO_SOURCE.with(Cell::get),
+            )
         })
 }
 

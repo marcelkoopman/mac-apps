@@ -47,6 +47,13 @@ fn next_generation() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
+impl ChecksumRun {
+    /// Its checksums are in (or the read failed): nothing is reading the file any more.
+    pub(crate) fn finished(&self) -> bool {
+        self.result.is_some()
+    }
+}
+
 impl App {
     /// Start reading the file at `path` for its checksums (the run before is cancelled). The
     /// file is the drop `generation` returned here; [`Self::show_dropped_file`] ties the two.

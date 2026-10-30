@@ -281,6 +281,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::HistoryView(_)
             | CommandId::RemoveHistory(_)
             | CommandId::RestoreHistory
+            | CommandId::BackToSource
             | CommandId::StripCompare(_)
             | CommandId::StripPin(_)
             | CommandId::EndCompare
@@ -381,6 +382,7 @@ pub fn split_chips(chips: Vec<Command>) -> (Vec<Command>, Vec<Command>) {
         matches!(
             cmd.id,
             CommandId::Original
+                | CommandId::BackToSource
                 | CommandId::AiMenu
                 | CommandId::TextMenu
                 | CommandId::ImageMenu
@@ -442,7 +444,7 @@ pub fn menu_shows_icons(ids: &[CommandId]) -> bool {
 
 pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
     Some(match id {
-        CommandId::Original => "arrow.uturn.backward",
+        CommandId::Original | CommandId::BackToSource => "arrow.uturn.backward",
         CommandId::Visit | CommandId::OpenLink => "safari",
         CommandId::CopyCleanLink => "wand.and.rays",
         CommandId::CopyDomain => "globe",

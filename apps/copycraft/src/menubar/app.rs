@@ -149,6 +149,9 @@ pub(crate) struct App {
     /// Table versions for a file on the card whose text is not in history. A drop, Kies bestand
     /// and a copied file are recorded, and then use that history entry's table.
     pub(crate) opened_table: TableVersions,
+    /// The file a copy on the card was made from, for *Origineel* and ⌘Z ([`MadeSource`]).
+    /// Memory only; wiped when let go.
+    pub(crate) made_source: Option<MadeSource>,
     /// The text the card shows (the text Open table and the card's table steps work on).
     pub(crate) card_text: Option<Zeroizing<String>>,
     /// The history entry (id) a Text ▾ version step shows instead of the clipboard: going
@@ -276,10 +279,11 @@ pub(crate) struct TableWindow {
     /// when it changes, or while its labels are still being checked.
     pub(crate) shown: Option<u64>,
     pub(crate) checking: bool,
-    /// A copy was made from this window (Copy, Copy as CSV/JSON, a cell, row or column): it is
-    /// the clipboard's newest content, so the card shows it, not the file, when the window
-    /// closes ([`super::state::card_after_window`]).
-    pub(crate) copied: bool,
+    /// A copy was made from this window (Copy, Copy as CSV/JSON, a cell, row or column), the
+    /// last one's [`hash_text`]: it is the clipboard's newest content, so the card shows it, not
+    /// the file, when the window closes ([`super::state::card_after_window`]), and keeps the
+    /// file for *Origineel* and ⌘Z ([`MadeSource`]).
+    pub(crate) copied: Option<u64>,
     /// The profile last shown in the window, with its request number: memory only, never in
     /// history or on disk, zeroized when the window goes ([`crate::table_profile`]).
     pub(crate) profile: Option<(u64, std::sync::Arc<crate::table_profile::TableProfile>)>,

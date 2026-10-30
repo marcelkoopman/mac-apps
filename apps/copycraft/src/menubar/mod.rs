@@ -56,6 +56,7 @@ mod dropped_diff;
 mod handler;
 mod history;
 mod image;
+mod made_source;
 mod menu;
 mod notice;
 mod pdf_pages;
@@ -80,6 +81,7 @@ pub(crate) use work::WorkDone;
 
 use ai::*;
 use app::*;
+use made_source::*;
 use menu::*;
 pub use run::*;
 use state::*;

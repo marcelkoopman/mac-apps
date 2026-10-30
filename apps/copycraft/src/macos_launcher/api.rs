@@ -609,6 +609,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     CONTENT_ACTIONS.set(commands::content_actions(&data));
     OFFERS_NUMBERS.set(offers_numbers);
     VERSION_BAR.with(|slot| slot.replace(commands::VersionBar::of(&data)));
+    BACK_TO_SOURCE.set(data.back_to_source);
     TEXT_STEPS.with(|slot| {
         slot.replace(
             data.text_edit

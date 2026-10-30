@@ -26,6 +26,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Show the drawn SVG",
     ),
     (
+        "detail_back_to_source",
+        "Terug naar het bestand waarvan deze kopie is gemaakt, met zijn versies (⌘Z)",
+        "Back to the file this copy was made from, with its versions (⌘Z)",
+    ),
+    (
         "detail_original_image",
         "Toon de afbeelding zoals gekopieerd",
         "Show the image as copied",

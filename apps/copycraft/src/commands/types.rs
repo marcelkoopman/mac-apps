@@ -135,6 +135,9 @@ pub struct LaunchData {
     pub diff: Option<DiffShown>,
     /// The checksums of the dropped or chosen file on the card. Absent for anything else.
     pub checksum: Option<ChecksumShown>,
+    /// The card shows a copy made from a file that is still kept in memory: *Origineel* and ⌘Z
+    /// put that file back ([`CommandId::BackToSource`]).
+    pub back_to_source: bool,
 }
 
 /// The checksums of the file on the card ([`crate::checksum`]): only for a dropped or chosen
@@ -364,6 +367,10 @@ pub struct HistoryNav {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandId {
     Original,
+    /// *Origineel* (or ⌘Z) on a copy made from a dropped, chosen or pasted file (Copy as JSON or
+    /// CSV, Copy cleaned link or domain, a copy from its table window): that file, with its
+    /// table versions, back on the card ([`LaunchData::back_to_source`]).
+    BackToSource,
     Visit,
     /// Link card: the link without tracking parameters and `user:password@` on the clipboard.
     CopyCleanLink,

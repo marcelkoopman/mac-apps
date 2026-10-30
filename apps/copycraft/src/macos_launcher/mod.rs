@@ -157,6 +157,12 @@ thread_local! {
 }
 
 thread_local! {
+    /// The card shows a copy made from a file still kept: ⌘Z puts it back
+    /// ([`commands::source_undo_key`]).
+    static BACK_TO_SOURCE: Cell<bool> = const { Cell::new(false) };
+}
+
+thread_local! {
     static OPEN: Cell<bool> = const { Cell::new(false) };
     /// Set while the menu bar icon opens the card, which then opens under it.
     static ICON_FRAME: Cell<Option<NSRect>> = const { Cell::new(None) };

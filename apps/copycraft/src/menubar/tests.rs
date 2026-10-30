@@ -586,9 +586,15 @@ fn a_copy_made_from_the_card_is_what_the_card_shows_next() {
     // Copy as JSON / CSV from the card, and Copy cleaned link / domain, over a dropped file too.
     let table = method_body(save, "copied_table_as");
     assert!(
-        table.contains("if target == TableTarget::Card {\n            self.follow_made_copy();")
+        table
+            .contains("if target == TableTarget::Card {\n            self.follow_made_copy(made);")
     );
-    assert!(method_body(save, "copy_link_part").contains("self.follow_made_copy();"));
+    assert!(
+        method_body(save, "copy_link_part")
+            .contains("self.follow_made_copy(Some(hash_text(&value)));")
+    );
+    // The copy's hash comes from what was written.
+    assert!(method_body(save, "copy_grid").contains("Ok(Some(hash_text(body.as_str())))"));
     let follow = method_body(save, "follow_made_copy");
     for part in [
         "self.leave_opened()",
@@ -598,6 +604,196 @@ fn a_copy_made_from_the_card_is_what_the_card_shows_next() {
     ] {
         assert!(follow.contains(part), "{part}");
     }
+    // The file is not dropped: it is kept (after a table window on it closed, which unpins
+    // its table) before the card leaves it.
+    let close = follow.find("self.close_table_window()").expect("window");
+    let keep = follow.find("self.keep_made_source(made)").expect("kept");
+    let leave = follow.find("self.leave_opened()").expect("left");
+    assert!(close < keep && keep < leave);
+}
+
+#[test]
+fn origineel_and_cmd_z_put_the_file_and_its_versions_back() {
+    use crate::commands::{CommandId, SubjectKind, source_undo_key};
+    let made = include_str!("made_source.rs");
+    let keep = method_body(made, "keep_made_source");
+    for part in [
+        "self.opened.take()",
+        "std::mem::replace(&mut self.opened_table",
+        "self.checksum.take()",
+        "view: self.card_view",
+    ] {
+        assert!(keep.contains(part), "{part}");
+    }
+    let back = method_body(made, "back_to_source");
+    for part in [
+        "self.made_source.take()",
+        "self.opened = Some(opened)",
+        "self.opened_table = table",
+        "self.checksum = checksum",
+        "self.card_view = view",
+        "self.browsing = None",
+        "self.refresh_popup()",
+    ] {
+        assert!(back.contains(part), "{part}");
+    }
+    // Both the chip and ⌘Z come in as one command.
+    assert!(
+        include_str!("dispatch.rs").contains("CommandId::BackToSource => self.back_to_source(),")
+    );
+    assert_eq!(
+        source_undo_key("z", true, false, false, true),
+        Some(CommandId::BackToSource)
+    );
+    assert_eq!(
+        source_undo_key("Z", true, false, false, true),
+        Some(CommandId::BackToSource)
+    );
+    assert_eq!(
+        source_undo_key("z", true, true, false, true),
+        None,
+        "no ⇧⌘Z"
+    );
+    assert_eq!(source_undo_key("z", true, false, true, true), None);
+    assert_eq!(source_undo_key("z", false, false, false, true), None);
+    assert_eq!(source_undo_key("z", true, false, false, false), None);
+    // On the card: Origineel first and always in sight, on a JSON copy and on an empty card
+    // (the copy cleared from the clipboard).
+    for (kind, text) in [
+        (SubjectKind::Text, Some("[{\"a\":\"1\"}]")),
+        (SubjectKind::Empty, None),
+    ] {
+        let mut data = crate::commands::tests::data(kind, text);
+        assert!(
+            !crate::commands::chips(&data)
+                .iter()
+                .any(|c| c.id == CommandId::BackToSource)
+        );
+        data.back_to_source = true;
+        let chips = crate::commands::chips(&data);
+        assert_eq!(chips[0].id, CommandId::BackToSource);
+        assert_eq!(chips[0].title, crate::locale::t("original"));
+        let (shown, _) = crate::commands::split_chips(chips);
+        assert!(shown.iter().any(|c| c.id == CommandId::BackToSource));
+    }
+    // The card offers it while a file is kept and no file is on the card.
+    assert!(super::offers_back_to_source(true, false));
+    assert!(!super::offers_back_to_source(true, true));
+    assert!(!super::offers_back_to_source(false, false));
+    for (body, name) in [
+        (
+            method_body(include_str!("popup.rs"), "current_launch_data"),
+            "current",
+        ),
+        (
+            method_body(include_str!("history.rs"), "show_restored"),
+            "restored",
+        ),
+    ] {
+        assert!(
+            body.contains("self.attach_made_source(&mut data);"),
+            "{name}"
+        );
+    }
+    // ⌘Z on the card asks for it last, after the table's, picture's and text's own undo.
+    let controls = include_str!("../macos_launcher/controls.rs");
+    let chord = &controls[controls.find("fn undo_chord(").expect("chord")..];
+    let chord = &chord[..chord.find("\n}\n").expect("end")];
+    let text = chord.find("commands::text_undo_key").expect("text");
+    let source = chord.find("commands::source_undo_key").expect("source");
+    assert!(text < source);
+}
+
+#[test]
+fn a_file_history_does_not_keep_is_kept_for_its_copy_too() {
+    use crate::clipboard::{ClipboardHistory, MAX_TEXT_BYTES};
+    use crate::sensitivity::{Record, admission, labeling, record_when};
+    // Fake files history does not take: larger than 5 MB, and one holding a (fake) key.
+    let mut history = ClipboardHistory::default();
+    let large = "a,b\n1,2\n".repeat(MAX_TEXT_BYTES / 8 + 1);
+    assert!(large.len() > MAX_TEXT_BYTES);
+    assert!(!history.record(large));
+    let secret = "name,key\nfake,AKIAIOSFODNN7EXAMPLE\n";
+    assert_eq!(record_when(admission(&labeling(secret))), Record::Never);
+    // Keeping the file does not ask history or the labels: it takes the file off the card as
+    // it is, so these are kept like any other, and put back from memory.
+    let made = include_str!("made_source.rs");
+    for name in ["keep_made_source", "back_to_source"] {
+        let body = method_body(made, name);
+        for part in ["record", "admission", "labeling", "capture::", "write_own"] {
+            assert!(!body.contains(part), "{name}: {part}");
+        }
+    }
+    // Only finding the entry the strip marks reads history, and nothing else does.
+    assert!(method_body(made, "back_to_source").contains("self.history.text_index("));
+    // Memory only: no file, no log, and the text is zeroized when it goes.
+    for part in ["std::fs", "diag::log", "println", "eprintln"] {
+        assert!(!made.contains(part), "{part}");
+    }
+    assert!(method_body(made, "release_made_source").contains("crate::work::wipe_later(source);"));
+    assert!(include_str!("../open_file.rs").contains("pub text: Option<Zeroizing<String>>,"));
+}
+
+#[test]
+fn the_kept_file_goes_when_the_card_moves_on() {
+    use super::browse_keeps_source;
+    use super::state::hash_text;
+    let copy = hash_text("[{\"a\":\"1\"}]");
+    // Browsing to the copy itself keeps it; another entry or a picture lets it go.
+    assert!(browse_keeps_source(Some(copy), copy));
+    assert!(!browse_keeps_source(Some(hash_text("a\n1")), copy));
+    assert!(!browse_keeps_source(None, copy));
+    let history = include_str!("history.rs");
+    for name in ["show_history", "restore_history"] {
+        assert!(
+            method_body(history, name).contains("self.browse_releases_source(index);"),
+            "{name}"
+        );
+    }
+    // A new file, Wipe and the lock, Clear History, a copy from another app.
+    for (body, name) in [
+        (
+            method_body(include_str!("source.rs"), "show_source"),
+            "show_source",
+        ),
+        (
+            method_body(history, "forget_held_state"),
+            "forget_held_state",
+        ),
+        (method_body(history, "forget_entries"), "forget_entries"),
+        (
+            method_body(include_str!("state.rs"), "note_clipboard"),
+            "note_clipboard",
+        ),
+    ] {
+        assert!(body.contains("self.release_made_source();"), "{name}");
+    }
+    // A new copy from another file replaces the one kept, wiped.
+    assert!(
+        method_body(include_str!("made_source.rs"), "keep_made_source")
+            .contains("self.release_made_source();")
+    );
+}
+
+#[test]
+fn a_copy_from_the_table_toolbar_keeps_the_file_when_the_window_closes() {
+    // Copy as JSON in the table window marks it with the copy's hash.
+    let save = include_str!("save.rs");
+    assert!(method_body(save, "copy_grid_from").contains("window.copied = made;"));
+    // Closing it: the card shows the copy, and the file is kept for Origineel and ⌘Z first.
+    assert_eq!(
+        card_after_window(true, true, false, true),
+        CardAfterWindow::Copy
+    );
+    assert_eq!(
+        card_after_window(true, true, true, true),
+        CardAfterWindow::Copy
+    );
+    let closed = method_body(include_str!("table.rs"), "table_window_event");
+    let keep = closed.find("self.keep_made_source(copied);").expect("kept");
+    let leave = closed[keep..].find("self.leave_opened();").expect("left");
+    assert!(leave > 0);
+    assert!(closed.contains("copied.is_some(),"));
 }
 
 #[test]
