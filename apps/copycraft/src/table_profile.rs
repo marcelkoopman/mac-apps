@@ -655,7 +655,7 @@ fn cell(text: &str) -> String {
 }
 
 /// `n` with the thousands mark of `lang` (`1.234` / `1,234`).
-fn whole(n: usize, lang: Lang) -> String {
+pub(crate) fn whole(n: usize, lang: Lang) -> String {
     let separator = match lang {
         Lang::Nl => '.',
         Lang::En => ',',
@@ -686,13 +686,13 @@ fn percent(part: usize, total: usize, lang: Lang) -> String {
 }
 
 /// `value` with at most two decimals, the decimal mark of `lang` (no thousands marks).
-fn number(value: f64, lang: Lang) -> String {
+pub(crate) fn number(value: f64, lang: Lang) -> String {
     let text = format!("{value:.2}");
     let text = text.trim_end_matches('0').trim_end_matches('.');
     decimal_mark(if text == "-0" { "0" } else { text }, lang)
 }
 
-fn decimal_mark(text: &str, lang: Lang) -> String {
+pub(crate) fn decimal_mark(text: &str, lang: Lang) -> String {
     match lang {
         Lang::Nl => text.replace('.', ","),
         Lang::En => text.to_string(),

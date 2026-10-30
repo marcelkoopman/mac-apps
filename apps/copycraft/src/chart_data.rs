@@ -658,6 +658,47 @@ fn grouped(
     })
 }
 
+/// The values of a bar or line chart grouped per week or month of a date column, in time order,
+/// with every group (none folded into "Other"): `(first day of the step, value)`. `None` for
+/// any other chart. Feeds the trend summary ([`crate::table_insight::TrendFacts`]).
+pub fn date_series(df: &DataFrame, request: &ChartRequest) -> Option<Vec<(i32, f64)>> {
+    if request.kind == ChartKind::Scatter || !matches!(request.bucket, Bucket::Week | Bucket::Month)
+    {
+        return None;
+    }
+    let x = df.columns().get(request.x)?;
+    if role(x.dtype()) != Some(ColumnRole::Date) {
+        return None;
+    }
+    let values = match request.aggregate {
+        Aggregate::Count => None,
+        _ => Some(numbers(df.columns().get(request.y?)?).ok()?),
+    };
+    let days = bucket_days(x, request.bucket).ok()?;
+    let days = days.i32().ok()?;
+    let mut tallies: std::collections::BTreeMap<i32, Tally> = std::collections::BTreeMap::new();
+    for (row, day) in days.iter().enumerate() {
+        let Some(day) = day else { continue };
+        match &values {
+            Some(values) => match values.get(row) {
+                Some(value) if !value.is_nan() => {
+                    let tally = tallies.entry(day).or_insert(Tally::EMPTY);
+                    tally.rows += 1;
+                    tally.add(*value);
+                }
+                _ => {}
+            },
+            None => tallies.entry(day).or_insert(Tally::EMPTY).rows += 1,
+        }
+    }
+    Some(
+        tallies
+            .into_iter()
+            .map(|(day, tally)| (day, tally.value(request.aggregate)))
+            .collect(),
+    )
+}
+
 /// The row numbers of one group.
 fn group_rows(group: &GroupsIndicator<'_>) -> Vec<usize> {
     match group {
@@ -740,7 +781,7 @@ fn date_label(day: i32, bucket: Bucket) -> String {
 
 /// Year, month and day of `days` since 1970-01-01 (proleptic Gregorian; H. Hinnant's
 /// `civil_from_days`).
-fn civil_from_days(days: i32) -> (i64, u32, u32) {
+pub(crate) fn civil_from_days(days: i32) -> (i64, u32, u32) {
     let z = i64::from(days) + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
