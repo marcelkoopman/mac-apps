@@ -130,6 +130,7 @@ impl ApplicationHandler<UserEvent> for App {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
                 tray::QUIT_ID => {
+                    self.end_unzip_for_quit();
                     before_quit();
                     event_loop.exit();
                     return;

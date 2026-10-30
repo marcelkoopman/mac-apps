@@ -25,13 +25,15 @@
 //!
 //! Never overwrites ([`plan_target`]): when none of the zip's top-level names exists in the
 //! chosen folder the zip is extracted right into it; otherwise into a new folder named after
-//! the zip ("Archive", "Archive 2", …). The files are first extracted into a hidden
-//! `.<name>.partial` folder in the chosen folder and moved into place at the end
-//! ([`move_into_place`]: each name is claimed with `create_dir` / `create_new` before the rename,
-//! so nothing is replaced), so a quit or crash leaves no half files under their real names. A
-//! failed or stopped extraction removes the `.partial` folder; one left by a quit is removed on
-//! the next try (only a folder with CopyCraft's mark inside). Before anything is written, the
-//! disk must have room for the unpacked size ([`fits`]).
+//! the zip ("Archive", "Archive 2", …). The files are first extracted into a work folder in
+//! the chosen folder, named so it shows what it is ("Archive (onvolledig)" / "Archive
+//! (incomplete)", never hidden: a crash cannot leave gigabytes nobody sees), and moved into
+//! place at the end ([`move_into_place`]: each name is claimed with `create_dir` /
+//! `create_new` before the rename, so nothing is replaced), so a quit or crash leaves no half
+//! files under their real names. A failed or stopped extraction removes the work folder; Quit,
+//! Clear History, Wipe and the screen lock stop a running extraction first. One left by a crash
+//! is removed on the next try (only a folder with CopyCraft's mark inside). Before anything is
+//! written, the disk must have room for the unpacked size ([`fits`]).
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -707,16 +709,21 @@ pub fn free_space(_folder: &Path) -> Option<u64> {
     None
 }
 
-/// Inside every `.partial` folder CopyCraft makes, so only such a folder is ever removed as a
-/// leftover (a quit or crash during an earlier extraction).
+/// Inside every work folder CopyCraft makes, so only such a folder is ever removed as a
+/// leftover (a crash during an earlier extraction).
 const PARTIAL_MARK: &str = ".copycraft-partial";
 
-/// The hidden folder the zip is first extracted into: `.<name>.partial` in `dest`.
-fn partial_name(zip_name: &str, try_number: u32) -> String {
-    format!(".{}.partial", folder_name(zip_name, try_number))
+/// The work folder the zip is first extracted into, visible in `dest`: "docs (onvolledig)" /
+/// "docs (incomplete)" in `lang`.
+fn partial_name(zip_name: &str, try_number: u32, lang: crate::locale::Lang) -> String {
+    crate::locale::tf_in(
+        lang,
+        "zip_incomplete",
+        &[&folder_name(zip_name, try_number)],
+    )
 }
 
-/// Remove a leftover `.partial` folder, but only one CopyCraft made (it holds [`PARTIAL_MARK`]).
+/// Remove a leftover work folder, but only one CopyCraft made (it holds [`PARTIAL_MARK`]).
 fn remove_leftover(path: &Path) -> bool {
     let ours = std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
         && std::fs::symlink_metadata(path.join(PARTIAL_MARK)).is_ok_and(|meta| meta.is_file());
@@ -724,15 +731,20 @@ fn remove_leftover(path: &Path) -> bool {
     ours && std::fs::remove_dir_all(path).is_ok()
 }
 
-/// Make a new `.partial` folder in `dest` (a leftover of ours with the same name goes first),
-/// marked with [`PARTIAL_MARK`].
+/// Make a new work folder in `dest`, named in the language of the moment and marked with
+/// [`PARTIAL_MARK`]. A leftover of ours with the same number goes first, in either language
+/// (the language may have changed since the crash); someone else's is left and the next
+/// number tried.
 fn make_partial(dest: &Path, zip_name: &str) -> Result<PathBuf, ZipError> {
+    use crate::locale::Lang;
     for number in 1..=MAX_FOLDER_TRIES {
-        let path = dest.join(partial_name(zip_name, number));
-        if std::fs::symlink_metadata(&path).is_ok() && !remove_leftover(&path) {
-            // Someone else's: leave it and try the next name.
-            continue;
+        for lang in [Lang::Nl, Lang::En] {
+            let old = dest.join(partial_name(zip_name, number, lang));
+            if std::fs::symlink_metadata(&old).is_ok() {
+                remove_leftover(&old);
+            }
         }
+        let path = dest.join(partial_name(zip_name, number, crate::locale::lang()));
         match std::fs::create_dir(&path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -799,8 +811,8 @@ fn extract_with(
         move_into_place(&partial, &listing.top_names(), dest, zip_name)
     });
     if result.is_err() {
-        // Ours only: the .partial folder was made above (with its mark) and nothing outside
-        // it has been touched.
+        // Ours only: the work folder was made above (with its mark) and nothing outside it has
+        // been touched.
         let _ = std::fs::remove_dir_all(&partial);
     }
     result

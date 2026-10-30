@@ -215,6 +215,7 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Niet uitgepakt: er is te weinig vrije ruimte op die schijf",
         "Not extracted: there is not enough free space on that disk",
     ),
+    ("zip_incomplete", "{0} (onvolledig)", "{0} (incomplete)"),
     (
         "zip_cancelled",
         "Uitpakken gestopt; er is niets achtergebleven",

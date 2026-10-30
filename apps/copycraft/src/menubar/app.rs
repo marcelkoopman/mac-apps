@@ -86,7 +86,7 @@ pub(crate) struct App {
     pub(crate) unzip_started: Option<Instant>,
     pub(crate) unzip_shown: bool,
     /// Stops the running extraction (⌘. or *Uitpakken* again, [`App::unzip_stop`]).
-    pub(crate) unzip_stop: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    pub(crate) unzip_stop: Option<std::sync::Arc<super::unzip::UnzipRun>>,
     /// The short blink of the menu bar icon after a copy, and its two template glyphs.
     pub(crate) blink: tray::Blink,
     /// The glyph and its blink frame, both templates, built once.

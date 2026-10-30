@@ -615,30 +615,38 @@ fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
     let dir = temp_dir("partial");
     let out = dir.join("out");
     std::fs::create_dir(&out).unwrap();
-    // A quit halfway: our marked .partial with a half file.
-    let ours = out.join(".s.partial");
+    // A crash halfway, in Dutch: our marked work folder with a half file.
+    let ours = out.join(partial_name("s.zip", 1, crate::locale::Lang::Nl));
+    assert_eq!(ours, out.join("s (onvolledig)"));
     std::fs::create_dir(&ours).unwrap();
     std::fs::write(ours.join(PARTIAL_MARK), b"").unwrap();
     std::fs::write(ours.join("half.txt"), b"ha").unwrap();
-    // Someone else's folder with a .partial name of the next try: not ours, kept.
-    let theirs = out.join(".s 2.partial");
+    // Someone else's folder with a work folder name of the next try: not ours, kept.
+    let theirs = out.join(partial_name("s.zip", 2, crate::locale::lang()));
     std::fs::create_dir(&theirs).unwrap();
     std::fs::write(theirs.join("keep.txt"), b"keep").unwrap();
 
     let zip = write_zip(&dir, "s.zip", &build(&[e("a.txt", b"hello")], false));
     let done = extract(&zip, "s.zip", &out, &NO_STOP).unwrap();
     assert_eq!(done.folder, out);
-    assert_eq!(names_in(&out), [".s 2.partial", "a.txt"]);
+    assert_eq!(
+        names_in(&out),
+        [
+            "a.txt".into(),
+            partial_name("s.zip", 2, crate::locale::lang())
+        ]
+    );
     assert_eq!(std::fs::read(theirs.join("keep.txt")).unwrap(), b"keep");
 
-    // Only someone else's .partial with the first name: the next name is used, theirs kept.
+    // Only someone else's folder with the first name: the next name is used, theirs kept.
     std::fs::remove_dir_all(&theirs).unwrap();
-    let other = out.join(".t.partial");
+    let other_name = partial_name("t.zip", 1, crate::locale::lang());
+    let other = out.join(&other_name);
     std::fs::create_dir(&other).unwrap();
     std::fs::write(other.join("keep.txt"), b"keep").unwrap();
     let zip = write_zip(&dir, "t.zip", &build(&[e("t.txt", b"t")], false));
     extract(&zip, "t.zip", &out, &NO_STOP).unwrap();
-    assert_eq!(names_in(&out), [".t.partial", "a.txt", "t.txt"]);
+    assert_eq!(names_in(&out), ["a.txt".into(), other_name, "t.txt".into()]);
     assert_eq!(std::fs::read(other.join("keep.txt")).unwrap(), b"keep");
     std::fs::remove_dir_all(&dir).unwrap();
 }

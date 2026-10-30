@@ -290,6 +290,7 @@ impl App {
             CommandId::DeleteHistory => self.remove_from_history(self.history_cursor),
             CommandId::ClearPins => self.clear_pins(),
             CommandId::Quit => {
+                self.end_unzip_for_quit();
                 before_quit();
                 event_loop.exit();
             }

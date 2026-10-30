@@ -40,6 +40,8 @@ impl App {
     /// only unpinned entries go; pins stay and diff picks whose entry remains stay too.
     pub(crate) fn forget_entries(&mut self, full: bool) {
         discard_preview_files();
+        // A running extraction stops; its work folder is removed on its thread.
+        self.unzip_stop();
         self.forget_decoded_picture();
         let view = ClipboardView::from_os();
         self.skip_record = view.text().map(|text| Zeroizing::new(text.to_string()));
@@ -329,6 +331,8 @@ impl App {
     /// showed. The one routine for both, so neither can miss a part.
     pub(crate) fn forget_held_state(&mut self) {
         discard_preview_files();
+        // Wipe and the lock stop a running extraction (Clear History in forget_entries).
+        self.unzip_stop();
         self.clear_diff();
         self.forget_decoded_picture();
         self.close_table_window();
