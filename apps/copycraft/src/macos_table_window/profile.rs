@@ -3,7 +3,8 @@
 //! with *Copy Profile* and *Table* to go back (as Esc). The app works it out on a thread; a
 //! result for an older request is dropped, and a new version (sorted, deduplicated, other
 //! columns) is profiled again. Memory only: never in history or on disk. Masked like the grid:
-//! hidden under the cover. Closing the window wipes the text. Nothing here is logged.
+//! hidden under the cover. Closing the window wipes the text. Nothing here is logged. Under
+//! the text, *Explain* puts a column's outliers into words ([`super::insight`]).
 
 use std::sync::Arc;
 
@@ -88,6 +89,7 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
     scroll.setFrame(text_frame(&pane));
     scroll.setAutoresizingMask(mask(&[A::ViewWidthSizable, A::ViewHeightSizable]));
     pane.addSubview(&scroll);
+    insight::build(mtm, &pane, insight::Place::Profile);
     content.addSubview(&pane);
     let built = Pane {
         pane,
@@ -165,6 +167,7 @@ pub(super) fn leave() {
     GENERATION.set(GENERATION.get().wrapping_add(1));
     SIGNATURE.set(None);
     SHOWN_PROFILE.with(|slot| slot.replace(None));
+    insight::reset(insight::Place::Profile);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             pane.pane.setHidden(true);
@@ -214,7 +217,9 @@ pub(super) fn show(outcome: ProfileOutcome) {
         leave();
         return;
     };
-    SHOWN_PROFILE.with(|slot| slot.replace(Some(profile)));
+    SHOWN_PROFILE.with(|slot| slot.replace(Some(Arc::clone(&profile))));
+    // Explain, under the text, for its number columns with outliers.
+    insight::set_profile(Some(profile));
     paint_profile();
 }
 
@@ -227,6 +232,7 @@ pub(super) fn apply_mask(masked: bool) {
             pane.copy.setEnabled(!masked && ready);
         }
     });
+    insight::apply_mask(insight::Place::Profile, masked);
 }
 
 /// The labels in the current language; an open profile is written again in it.
@@ -236,6 +242,7 @@ pub(super) fn relabel() {
             relabel_pane(pane);
         }
     });
+    insight::relabel(insight::Place::Profile);
     if ACTIVE.get() && SHOWN_PROFILE.with(|slot| slot.borrow().is_some()) {
         paint_profile();
     }
@@ -260,6 +267,7 @@ fn paint_profile() {
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             widgets::wipe_text_view(&pane.text);
+            pane.scroll.setFrame(text_frame(&pane.pane));
             pane.text.setString(&NSString::from_str(&text));
             widgets::fit_text_view(&pane.text, Some(pane.scroll.contentSize().width));
             widgets::wipe_text_field(&pane.note);
@@ -286,6 +294,7 @@ fn ask() {
     let generation = GENERATION.get().wrapping_add(1);
     GENERATION.set(generation);
     SHOWN_PROFILE.with(|slot| slot.replace(None));
+    insight::reset(insight::Place::Profile);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             widgets::wipe_text_view(&pane.text);
@@ -324,12 +333,13 @@ fn layout(pane: &Pane) {
     ));
 }
 
-/// Where the text goes in the pane: under the buttons.
+/// Where the text goes in the pane: under the buttons, above Explain's bar when it shows.
 fn text_frame(pane: &NSView) -> NSRect {
     let size = pane.frame().size;
-    let height = (size.height - PAD - ROW_H - GAP - PAD).max(0.0);
+    let bar = insight::reserved(insight::Place::Profile);
+    let height = (size.height - PAD - ROW_H - GAP - PAD - bar).max(0.0);
     NSRect::new(
-        NSPoint::new(PAD, PAD),
+        NSPoint::new(PAD, PAD + bar),
         NSSize::new((size.width - PAD * 2.0).max(0.0), height),
     )
 }

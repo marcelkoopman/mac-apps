@@ -346,6 +346,41 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ("profile_head_unique", "Uniek", "Unique"),
     ("profile_head_outliers", "Uitschieters", "Outliers"),
     ("profile_head_note", "Opmerking", "Note"),
+    // Explain and Summarize in the table window.
+    ("insight_explain", "Leg uit", "Explain"),
+    (
+        "insight_explain_tip",
+        "Laat het Apple-model op dit apparaat de uitschieters van deze kolom uitleggen",
+        "Let the Apple model on this device explain this column's outliers",
+    ),
+    ("insight_summarize", "Vat samen", "Summarize"),
+    (
+        "insight_summarize_tip",
+        "Laat het Apple-model op dit apparaat de trend in woorden samenvatten",
+        "Let the Apple model on this device sum up the trend in words",
+    ),
+    (
+        "insight_column",
+        "Kolom om uit te leggen",
+        "Column to Explain",
+    ),
+    (
+        "insight_copy_tip",
+        "Kopieer de uitleg met de feiten (niet in de geschiedenis)",
+        "Copy the explanation with the facts (not into history)",
+    ),
+    (
+        "insight_working",
+        "Apple-model is bezig… Esc stopt",
+        "Apple model working… Esc stops",
+    ),
+    (
+        "insight_left_out",
+        "Antwoord van het model weggelaten: de getallen klopten niet",
+        "The model's answer was left out: its numbers did not match",
+    ),
+    ("insight_facts", "Feiten: {0}", "Facts: {0}"),
+    ("insight_copied", "Uitleg gekopieerd", "Explanation copied"),
     // Explain and Summarize: the facts for the model and the Rust fact sentences.
     ("insight_p_column", "Kolom: {0}", "Column: {0}"),
     ("insight_p_count", "Waarden: {0}", "Values: {0}"),

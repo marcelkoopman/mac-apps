@@ -32,6 +32,8 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::AiChecked(availability) => self.ai_startup_checked(availability),
             UserEvent::TableChart(outcome) => launcher::show_table_chart(outcome),
             UserEvent::TableProfile(outcome) => self.table_profile_done(outcome),
+            UserEvent::TableInsight(outcome) => launcher::show_table_insight(outcome),
+            UserEvent::CopyTableInsight(text) => self.copy_table_insight(text),
             UserEvent::ImageScanned { change, scan } => self.finish_image_scan(change, scan),
             UserEvent::SaveFinished(result) => self.finish_save(result),
             UserEvent::PreviewReady { generation, result } => {

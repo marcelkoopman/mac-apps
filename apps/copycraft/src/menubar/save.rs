@@ -234,6 +234,22 @@ impl App {
         super::state::save_feedback(feedback);
     }
 
+    /// *Copy* under Explain or Summarize in the table window: the text shown on the clipboard
+    /// through the sensitivity checks of any own copy (a credential is concealed and cleared
+    /// later), but not into history: the answer lives only in the window. Nothing is logged.
+    pub(crate) fn copy_table_insight(&mut self, text: crate::table_insight::InsightText) {
+        if self.table_window.is_none() {
+            return;
+        }
+        let feedback = match self.write_own(text.0.as_str()) {
+            Ok(()) => crate::locale::t("insight_copied"),
+            // No log: the message says enough, and holds nothing of the table.
+            Err(_) => crate::locale::t("table_copy_failed"),
+        };
+        drop(text);
+        super::state::save_feedback(feedback);
+    }
+
     /// [`Self::copy_grid`] for `target`. A copy written from the table window marks it, so the
     /// card shows that copy when the window closes ([`super::state::card_after_window`]).
     fn copy_grid_from(

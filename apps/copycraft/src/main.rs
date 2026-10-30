@@ -60,8 +60,7 @@ mod symbols;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod system_settings;
 mod table;
-// Wired into the table window in the next commit.
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod table_insight;
 mod table_ops;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

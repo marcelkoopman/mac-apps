@@ -23,6 +23,10 @@ pub enum UserEvent {
     TableChart(crate::chart_data::ChartOutcome),
     /// The profile thread worked out the table window's profile.
     TableProfile(crate::table_profile::ProfileOutcome),
+    /// The model put the table window's facts into words (Explain, Summarize), or did not.
+    TableInsight(crate::table_insight::InsightOutcome),
+    /// *Copy* under an explanation in the table window: its text, for the app's copy.
+    CopyTableInsight(crate::table_insight::InsightText),
     ImageScanned {
         change: isize,
         scan: Option<crate::commands::ImageScan>,
@@ -185,6 +189,16 @@ pub(crate) fn show_table_chart(outcome: crate::chart_data::ChartOutcome) {
 pub(crate) fn show_table_profile(outcome: crate::table_profile::ProfileOutcome) {
     #[cfg(target_os = "macos")]
     crate::macos_table_window::show_profile(outcome);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = outcome;
+    }
+}
+
+/// Show what the model said in the table window, unless that run was stopped.
+pub(crate) fn show_table_insight(outcome: crate::table_insight::InsightOutcome) {
+    #[cfg(target_os = "macos")]
+    crate::macos_table_window::show_insight(outcome);
     #[cfg(not(target_os = "macos"))]
     {
         let _ = outcome;

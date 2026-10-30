@@ -11,7 +11,10 @@
 use polars::prelude::{Column, DataFrame, DataType, GroupsIndicator};
 use zeroize::{Zeroize, Zeroizing};
 
+use std::sync::Arc;
+
 use crate::locale::{Lang, t_in, tf_in};
+use crate::table_insight::TrendFacts;
 
 /// At most this many bars or line points; the groups with the fewest rows go into "Other".
 pub const MAX_GROUPS: usize = 50;
@@ -264,14 +267,23 @@ impl ChartRequest {
 pub struct ChartOutcome {
     pub generation: u64,
     pub result: Result<(Zeroizing<String>, usize), ChartProblem>,
+    /// The series for Summarize: a drawn bar or line chart per week or month.
+    pub trend: Option<Arc<TrendFacts>>,
 }
 
 impl ChartOutcome {
     /// [`build`] and [`ChartData::to_json`] for the window's request number `generation`.
     pub fn build(df: &DataFrame, request: &ChartRequest, lang: Lang, generation: u64) -> Self {
+        let result = build(df, request, lang).map(|data| (data.to_json(), data.skipped));
+        let trend = if result.is_ok() {
+            TrendFacts::build(df, request).map(Arc::new)
+        } else {
+            None
+        };
         ChartOutcome {
             generation,
-            result: build(df, request, lang).map(|data| (data.to_json(), data.skipped)),
+            result,
+            trend,
         }
     }
 }
@@ -284,6 +296,7 @@ impl Clone for ChartOutcome {
                 Ok((json, skipped)) => Ok((Zeroizing::new(json.as_str().to_string()), *skipped)),
                 Err(problem) => Err(*problem),
             },
+            trend: self.trend.clone(),
         }
     }
 }
@@ -293,6 +306,7 @@ impl std::fmt::Debug for ChartOutcome {
         f.debug_struct("ChartOutcome")
             .field("generation", &self.generation)
             .field("drawn", &self.result.is_ok())
+            .field("trend", &self.trend.is_some())
             .finish_non_exhaustive()
     }
 }

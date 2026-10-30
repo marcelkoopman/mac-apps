@@ -170,6 +170,7 @@ impl App {
             launcher::show_table_chart(ChartOutcome {
                 generation,
                 result: Err(ChartProblem::Columns),
+                trend: None,
             });
             return;
         };

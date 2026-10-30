@@ -4,7 +4,8 @@
 //! *Table* to go back (as Esc). Rust works the chart out on a thread
 //! ([`crate::chart_data`]); a result for an older request is dropped. Masked like the grid:
 //! the chart is hidden under the cover. Nothing here is logged; closing the window drops the
-//! chart and empties the pop-ups.
+//! chart and empties the pop-ups. Under a series per week or month, *Summarize* puts its trend
+//! into words ([`super::insight`]).
 
 use super::*;
 use crate::chart_data::{self, Aggregate, Bucket, ChartKind, ChartOutcome, ChartRequest};
@@ -112,6 +113,7 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
     note.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
     note.setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewWidthSizable]));
     pane.addSubview(&note);
+    insight::build(mtm, &pane, insight::Place::Chart);
     content.addSubview(&pane);
     let built = Pane {
         pane,
@@ -200,6 +202,7 @@ pub(super) fn leave() {
     // An outcome still on its way is dropped.
     GENERATION.set(GENERATION.get().wrapping_add(1));
     SIGNATURE.set(None);
+    insight::reset(insight::Place::Chart);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow_mut().as_mut() {
             drop_host(pane);
@@ -283,6 +286,8 @@ pub(super) fn show(outcome: ChartOutcome) {
     }
     let lang = crate::locale::lang();
     let hidden = masked();
+    // Summarize, under the chart, for a series per week or month.
+    insight::set_trend(outcome.trend.clone());
     PANE.with(|slot| {
         let mut borrowed = slot.borrow_mut();
         let Some(pane) = borrowed.as_mut() else {
@@ -291,7 +296,10 @@ pub(super) fn show(outcome: ChartOutcome) {
         let note = match &outcome.result {
             Ok((json, skipped)) => {
                 let drawn = match &pane.host {
-                    Some(host) => host.update(json),
+                    Some(host) => {
+                        host.view().setFrame(host_frame(&pane.pane));
+                        host.update(json)
+                    }
                     None => match ChartHost::new(mtm, json) {
                         Some(host) => {
                             use NSAutoresizingMaskOptions as A;
@@ -339,6 +347,7 @@ pub(super) fn apply_mask(masked: bool) {
             }
         }
     });
+    insight::apply_mask(insight::Place::Chart, masked);
 }
 
 /// The labels in the current language; an open chart is worked out again (its labels are
@@ -349,6 +358,7 @@ pub(super) fn relabel() {
             relabel_pane(pane);
         }
     });
+    insight::relabel(insight::Place::Chart);
     if !ACTIVE.get() {
         return;
     }
@@ -407,6 +417,8 @@ fn ask() {
     };
     let generation = GENERATION.get().wrapping_add(1);
     GENERATION.set(generation);
+    // The series asked for is new: Summarize waits for it.
+    insight::reset(insight::Place::Chart);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             pane.note
@@ -541,12 +553,13 @@ fn layout(pane: &Pane) {
     ));
 }
 
-/// Where the chart goes in the pane: under the note.
+/// Where the chart goes in the pane: under the note, above Summarize's bar when it shows.
 fn host_frame(pane: &NSView) -> NSRect {
     let size = pane.frame().size;
-    let height = (size.height - PAD - ROW_H - NOTE_H - 8.0 - PAD).max(0.0);
+    let bar = insight::reserved(insight::Place::Chart);
+    let height = (size.height - PAD - ROW_H - NOTE_H - 8.0 - PAD - bar).max(0.0);
     NSRect::new(
-        NSPoint::new(PAD, PAD),
+        NSPoint::new(PAD, PAD + bar),
         NSSize::new((size.width - PAD * 2.0).max(0.0), height),
     )
 }

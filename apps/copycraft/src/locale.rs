@@ -617,6 +617,8 @@ mod tests {
         "image_resize",
         "image_rotate_left",
         "image_rotate_right",
+        "insight_explain",
+        "insight_summarize",
         "keep_history_forever",
         "keep_history_menu",
         "keep_history_minutes",

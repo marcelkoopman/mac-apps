@@ -246,6 +246,30 @@ define_class!(
             profile::leave();
         }
 
+        /// *Explain* (profile) or *Summarize* (chart): the tag says which.
+        #[unsafe(method(tableWindowInsightRun:))]
+        fn insight_run(&self, sender: Option<&NSButton>) {
+            if let Some(place) = sender.and_then(|button| insight::Place::from_tag(button.tag())) {
+                insight::ask(place);
+            }
+        }
+
+        /// *Copy* under an explanation.
+        #[unsafe(method(tableWindowInsightCopy:))]
+        fn insight_copy(&self, sender: Option<&NSButton>) {
+            if let Some(place) = sender.and_then(|button| insight::Place::from_tag(button.tag())) {
+                insight::copy(place);
+            }
+        }
+
+        /// The column to explain.
+        #[unsafe(method(tableWindowInsightColumn:))]
+        fn insight_column(&self, sender: Option<&NSPopUpButton>) {
+            if let Some(popup) = sender {
+                insight::column_changed(popup.indexOfSelectedItem());
+            }
+        }
+
         #[unsafe(method(tableWindowCopyClicked:))]
         fn copy_clicked(&self, _sender: Option<&AnyObject>) {
             run(CommandId::Copy);
@@ -442,6 +466,11 @@ pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::Prepar
 /// Draw the chart the app worked out (dropped when it is for an older request).
 pub(crate) fn show_chart(outcome: crate::chart_data::ChartOutcome) {
     chart::show(outcome);
+}
+
+/// Show what the model said under the profile or chart (dropped when that run was stopped).
+pub(crate) fn show_insight(outcome: crate::table_insight::InsightOutcome) {
+    insight::show(outcome);
 }
 
 /// Show the profile the app worked out (dropped when it is for an older request).
@@ -759,6 +788,7 @@ include!("../macos_table_paint.rs");
 
 mod build;
 mod chart;
+mod insight;
 mod menus;
 mod paint;
 mod picker;
