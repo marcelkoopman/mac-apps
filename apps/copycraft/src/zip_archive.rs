@@ -10,6 +10,9 @@
 //!   (`C:`), no NUL or other control character, no bidirectional control (U+202E …). A
 //!   backslash counts as a separator (old Windows zips). One unsafe entry makes the whole zip
 //!   refuse to extract ([`ZipError::Unsafe`]); the names still show.
+//! - A name cannot look like CopyCraft's own work folder (`docs (incomplete)`, `.docs.partial`
+//!   at the top) or hold its mark file ([`safe_parts`]), and a leftover work folder loses only
+//!   the zip's own names ([`remove_extracted`]): a folder with someone's files is never removed.
 //! - Symbolic links are refused the same way, and so are two entries with the same path (also
 //!   when they differ only in case or Unicode form: the Mac's disk usually does not tell them
 //!   apart, see [`name_key`]).
@@ -585,8 +588,10 @@ fn nfc(text: &str) -> String {
 
 /// The path parts of an entry name, when it stays inside the folder it is extracted to:
 /// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no control or bidirectional
-/// characters ([`is_deceptive`], NUL included), each part at most 255 bytes. Empty and `.`
-/// parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
+/// characters ([`is_deceptive`], NUL included), each part at most 255 bytes, no part named
+/// like CopyCraft's work-folder mark ([`PARTIAL_MARK`]) and no top-level name of a work folder
+/// ([`looks_like_work_folder`]): a zip cannot plant what makes a folder look like a leftover of
+/// ours. Empty and `.` parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
 pub fn safe_parts(name: &str) -> Option<Vec<String>> {
     if name.is_empty() || name.chars().any(is_deceptive) {
         return None;
@@ -609,12 +614,29 @@ pub fn safe_parts(name: &str) -> Option<Vec<String>> {
         {
             return None;
         }
-        if part.len() > 255 {
+        if part.len() > 255 || part.eq_ignore_ascii_case(PARTIAL_MARK) {
+            return None;
+        }
+        if parts.is_empty() && looks_like_work_folder(part) {
             return None;
         }
         parts.push(part.to_string());
     }
     Some(parts)
+}
+
+/// A name like one of CopyCraft's work folders: "docs (onvolledig)" / "docs (incomplete)"
+/// ([`partial_name`], either language), or the hidden `.docs.partial` of earlier versions.
+fn looks_like_work_folder(name: &str) -> bool {
+    use crate::locale::Lang;
+    let lower = name_key(name);
+    if lower.starts_with('.') && lower.ends_with(".partial") {
+        return true;
+    }
+    [Lang::Nl, Lang::En].into_iter().any(|lang| {
+        let suffix = name_key(&crate::locale::tf_in(lang, "zip_incomplete", &[&""]));
+        lower.ends_with(&suffix) && lower.len() > suffix.len()
+    })
 }
 
 /// Where to extract: `Direct` (right into the chosen folder) when none of `top_names`
@@ -723,25 +745,70 @@ fn partial_name(zip_name: &str, try_number: u32, lang: crate::locale::Lang) -> S
     )
 }
 
-/// Remove a leftover work folder, but only one CopyCraft made (it holds [`PARTIAL_MARK`]).
-fn remove_leftover(path: &Path) -> bool {
+/// Remove a leftover work folder of this zip, but only one CopyCraft made (it holds
+/// [`PARTIAL_MARK`]), through [`remove_extracted`]. `true` when it is gone.
+fn remove_leftover(path: &Path, listing: &Listing) -> bool {
     let ours = std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
         && std::fs::symlink_metadata(path.join(PARTIAL_MARK)).is_ok_and(|meta| meta.is_file());
-    // remove_dir_all does not follow links inside.
-    ours && std::fs::remove_dir_all(path).is_ok()
+    ours && remove_extracted(path, listing)
+}
+
+/// Empty the work folder `path` of what `listing` extracts into it, then remove it when only
+/// the mark is left. Only the zip's own names go (files, then folders that are empty then);
+/// anything else (a file someone put there) stays, and so does the folder then. Links are
+/// never followed.
+fn remove_extracted(path: &Path, listing: &Listing) -> bool {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for entry in &listing.entries {
+        let Some(parts) = entry.parts.as_deref() else {
+            continue;
+        };
+        let mut at = path.to_path_buf();
+        for (index, part) in parts.iter().enumerate() {
+            at.push(part);
+            if index + 1 < parts.len() || entry.dir {
+                dirs.push(at.clone());
+            }
+        }
+        if !entry.dir && std::fs::symlink_metadata(&at).is_ok_and(|meta| meta.is_file()) {
+            let _ = std::fs::remove_file(&at);
+        }
+    }
+    // Deepest first; remove_dir takes only an empty folder.
+    dirs.sort_by(|a, b| {
+        b.components()
+            .count()
+            .cmp(&a.components().count())
+            .then_with(|| a.cmp(b))
+    });
+    dirs.dedup();
+    for dir in &dirs {
+        let _ = std::fs::remove_dir(dir);
+    }
+    let only_mark = std::fs::read_dir(path).is_ok_and(|mut names| {
+        names.all(|name| name.is_ok_and(|name| name.file_name() == PARTIAL_MARK))
+    });
+    if !only_mark {
+        return false;
+    }
+    let mark = path.join(PARTIAL_MARK);
+    if std::fs::symlink_metadata(&mark).is_ok() {
+        let _ = std::fs::remove_file(&mark);
+    }
+    std::fs::remove_dir(path).is_ok()
 }
 
 /// Make a new work folder in `dest`, named in the language of the moment and marked with
 /// [`PARTIAL_MARK`]. A leftover of ours with the same number goes first, in either language
 /// (the language may have changed since the crash); someone else's is left and the next
 /// number tried.
-fn make_partial(dest: &Path, zip_name: &str) -> Result<PathBuf, ZipError> {
+fn make_partial(dest: &Path, zip_name: &str, listing: &Listing) -> Result<PathBuf, ZipError> {
     use crate::locale::Lang;
     for number in 1..=MAX_FOLDER_TRIES {
         for lang in [Lang::Nl, Lang::En] {
             let old = dest.join(partial_name(zip_name, number, lang));
             if std::fs::symlink_metadata(&old).is_ok() {
-                remove_leftover(&old);
+                remove_leftover(&old, listing);
             }
         }
         let path = dest.join(partial_name(zip_name, number, crate::locale::lang()));
@@ -755,7 +822,7 @@ fn make_partial(dest: &Path, zip_name: &str) -> Result<PathBuf, ZipError> {
             .create_new(true)
             .open(path.join(PARTIAL_MARK));
         if mark.is_err() {
-            let _ = std::fs::remove_dir_all(&path);
+            let _ = std::fs::remove_dir(&path);
             return Err(ZipError::Write);
         }
         return Ok(path);
@@ -794,7 +861,7 @@ fn extract_with(
     if !fits(&facts, free) {
         return Err(ZipError::NoSpace);
     }
-    let partial = make_partial(dest, zip_name)?;
+    let partial = make_partial(dest, zip_name, &listing)?;
     let mut made = Made::default();
     let mut reader = std::io::BufReader::new(file);
     let result = listing.entries.iter().try_for_each(|entry| {
@@ -812,8 +879,8 @@ fn extract_with(
     });
     if result.is_err() {
         // Ours only: the work folder was made above (with its mark) and nothing outside it has
-        // been touched.
-        let _ = std::fs::remove_dir_all(&partial);
+        // been touched. Only the zip's names in it go.
+        remove_extracted(&partial, &listing);
     }
     result
 }

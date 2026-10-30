@@ -620,7 +620,7 @@ fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
     assert_eq!(ours, out.join("s (onvolledig)"));
     std::fs::create_dir(&ours).unwrap();
     std::fs::write(ours.join(PARTIAL_MARK), b"").unwrap();
-    std::fs::write(ours.join("half.txt"), b"ha").unwrap();
+    std::fs::write(ours.join("a.txt"), b"ha").unwrap();
     // Someone else's folder with a work folder name of the next try: not ours, kept.
     let theirs = out.join(partial_name("s.zip", 2, crate::locale::lang()));
     std::fs::create_dir(&theirs).unwrap();
@@ -671,5 +671,78 @@ fn moving_into_place_never_replaces_a_name_that_appeared() {
     assert_eq!(done.folder, out.join("Z"));
     assert_eq!(std::fs::read(out.join("Z/docs/a.txt")).unwrap(), b"new");
     assert_eq!(std::fs::read(out.join("b.txt")).unwrap(), b"theirs");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_zip_cannot_plant_a_work_folder_or_its_mark() {
+    for bad in [
+        ".copycraft-partial",
+        "docs/.copycraft-partial",
+        "docs/.COPYCRAFT-Partial/x",
+        ".docs.partial/a.txt",
+        ".Docs.PARTIAL",
+        "docs (onvolledig)/a.txt",
+        "docs (incomplete)",
+        "Docs (Incomplete)/a.txt",
+    ] {
+        assert_eq!(safe_parts(bad), None, "{bad:?}");
+    }
+    // Deeper down, or without a name before it, such names are only names.
+    for fine in [
+        "a/.docs.partial/x",
+        "a/docs (incomplete)/x",
+        " (incomplete)",
+        "docs.partial",
+    ] {
+        assert!(safe_parts(fine).is_some(), "{fine:?}");
+    }
+}
+
+#[test]
+fn a_leftover_with_files_of_someone_else_keeps_them() {
+    let dir = temp_dir("leftover-user");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    // A crash halfway, then someone put a file of their own in the work folder.
+    let ours = out.join(partial_name("u.zip", 1, crate::locale::lang()));
+    std::fs::create_dir_all(ours.join("d")).unwrap();
+    std::fs::write(ours.join(PARTIAL_MARK), b"").unwrap();
+    std::fs::write(ours.join("d/a.txt"), b"ha").unwrap();
+    std::fs::write(ours.join("d/mine.txt"), b"mine").unwrap();
+
+    let zip = write_zip(&dir, "u.zip", &build(&[e("d/a.txt", b"hello")], false));
+    let done = extract(&zip, "u.zip", &out, &NO_STOP).unwrap();
+    assert_eq!(done.folder, out);
+    assert_eq!(std::fs::read(out.join("d/a.txt")).unwrap(), b"hello");
+    // Only the zip's own file went from the leftover; theirs and the folder stay.
+    assert_eq!(names_in(&ours.join("d")), ["mine.txt"]);
+    assert_eq!(std::fs::read(ours.join("d/mine.txt")).unwrap(), b"mine");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn removing_what_was_extracted_leaves_other_files() {
+    let dir = temp_dir("remove-extracted");
+    let work = dir.join("w");
+    std::fs::create_dir_all(work.join("a/b")).unwrap();
+    std::fs::write(work.join(PARTIAL_MARK), b"").unwrap();
+    std::fs::write(work.join("a/b/c.txt"), b"x").unwrap();
+    std::fs::write(work.join("top.txt"), b"x").unwrap();
+    let zip = build(&[e("a/b/c.txt", b"x"), e("top.txt", b"x")], false);
+    let listed = listing(&zip).unwrap();
+    assert!(remove_extracted(&work, &listed));
+    assert!(!work.exists());
+
+    std::fs::create_dir_all(work.join("a/b")).unwrap();
+    std::fs::write(work.join("a/b/c.txt"), b"x").unwrap();
+    std::fs::write(work.join("a/other.txt"), b"keep").unwrap();
+    assert!(!remove_extracted(&work, &listed));
+    assert_eq!(names_in(&work), ["a"]);
+    assert_eq!(names_in(&work.join("a")), ["other.txt"]);
+    // Not ours without the mark: nothing is touched.
+    std::fs::write(work.join("top.txt"), b"x").unwrap();
+    assert!(!remove_leftover(&work, &listed));
+    assert!(work.join("top.txt").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
