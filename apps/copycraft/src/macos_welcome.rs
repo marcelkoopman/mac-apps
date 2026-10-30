@@ -1,4 +1,4 @@
-//! The first-run welcome window: the hotkey, paste-first (⌘V or a drop), the offline promise, what
+//! The first-run welcome window: the hotkey, the screenshot hotkey, paste-first (⌘V or a drop), the offline promise, what
 //! stays out of history, "Keep clipboard history" (off on a new install), Open at Login, and buttons for Settings and "Get Started". Shown once (see
 //! [`crate::settings::should_show_welcome`]) and again from the status menu.
 
@@ -283,6 +283,11 @@ fn build(mtm: MainThreadMarker) {
     let body_font = NSFont::systemFontOfSize(NSFont::systemFontSize());
     let points = [
         crate::locale::tf("welcome_hotkey", &[&crate::settings::hotkey_label()]),
+        // The chord as stored (changed in Settings › General), like the card's above.
+        crate::locale::tf(
+            "welcome_screenshot",
+            &[&crate::settings::screenshot_hotkey_label()],
+        ),
         crate::locale::t("welcome_history").to_string(),
         crate::locale::t("welcome_local").to_string(),
         crate::locale::t("welcome_sensitive").to_string(),

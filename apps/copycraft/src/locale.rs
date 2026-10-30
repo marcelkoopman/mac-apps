@@ -303,6 +303,7 @@ mod tests {
             "welcome_menu",
             "welcome_title",
             "welcome_hotkey",
+            "welcome_screenshot",
             "welcome_history",
             "welcome_local",
             "welcome_sensitive",
@@ -320,6 +321,14 @@ mod tests {
         assert_eq!(
             tf_in(Lang::En, "welcome_hotkey", &[&"⌃⌥Space"]),
             "Open CopyCraft from any app with ⌃⌥Space."
+        );
+        assert_eq!(
+            tf_in(Lang::En, "welcome_screenshot", &[&"⌃⌥4"]),
+            "Take a screenshot with ⌃⌥4: its text is recognised, secrets flagged."
+        );
+        assert_eq!(
+            tf_in(Lang::Nl, "welcome_screenshot", &[&"⌃⌥4"]),
+            "Maak een schermafbeelding met ⌃⌥4: de tekst wordt herkend, geheimen gemarkeerd."
         );
     }
 

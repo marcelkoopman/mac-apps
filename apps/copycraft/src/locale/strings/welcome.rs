@@ -17,6 +17,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Open CopyCraft from any app with {0}.",
     ),
     (
+        "welcome_screenshot",
+        "Maak een schermafbeelding met {0}: de tekst wordt herkend, geheimen gemarkeerd.",
+        "Take a screenshot with {0}: its text is recognised, secrets flagged.",
+    ),
+    (
         "welcome_history",
         "Standaard leest CopyCraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
         "By default CopyCraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",

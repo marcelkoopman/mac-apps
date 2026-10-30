@@ -293,6 +293,13 @@ The copy on screen has *Voeg toe aan diff* / *Add to Diff* in the `⋯` menu, ab
       double-click CopyCraft in Finder (or open it from Launchpad): the card opens in the middle
       of the screen. The welcome screen's last line says *Menu bar icon hidden? Open CopyCraft
       again from the Finder or with ⌃⌥Space.* (Dutch: *Is het menubalkpictogram verborgen? …*).
+- [ ] Welcome screenshot line: open the welcome screen (status menu, or `defaults delete
+      nl.marcelkoopman.copycraft hasSeenWelcome` and a restart): right under the open-hotkey
+      line it says *Take a screenshot with ⌃⌥4: its text is recognised, secrets flagged.*
+      (Dutch: *Maak een schermafbeelding met ⌃⌥4: de tekst wordt herkend, geheimen
+      gemarkeerd.*), wrapped and not cut off; the window grows to fit. Set another screenshot
+      hotkey in Settings › General (say ⌃⌥5), close and reopen the welcome screen: the line
+      shows ⌃⌥5. Same with a changed open hotkey: both lines show the stored chords.
 - [ ] Window menu: ⌘W closes and ⌘M minimises Settings, the welcome screen and About (each
       now has an active yellow button); ⌘, on the card opens Settings.
 - [ ] History is wiped when the Mac locks or sleeps: copy a few items, lock (⌃⌘Q) or sleep,
