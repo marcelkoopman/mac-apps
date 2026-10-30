@@ -58,7 +58,7 @@ fn columns_get_their_roles() {
 
 #[test]
 fn the_value_axis_says_what_it_measures() {
-    let ages = parse_table("city,age\nUtrecht,30\nUtrecht,40\nGouda,50\n").expect("fake table");
+    let ages = parse_table("city,age\nUtrecht,40\nUtrecht,30\nGouda,50\n").expect("fake table");
     let first = ChartRequest::first(&chart_columns(&ages)).expect("a chart");
     let mean = build(&ages, &first, Lang::Nl).expect("chart");
     assert_eq!(mean.y_label, "Gemiddelde van age");
@@ -224,13 +224,17 @@ fn civil_dates_round_trip() {
 }
 
 #[test]
-fn groups_beyond_fifty_go_to_other() {
-    let mut csv = String::from("shop,sales\n");
-    // 60 shops; shop 0 has three rows, the others one.
+fn date_steps_beyond_fifty_go_to_other() {
+    let mut csv = String::from("day,sales\n");
+    // 60 months; the first month has three rows, the others one.
     for row in 0..60 {
-        csv.push_str(&format!("shop{row},{row}\n"));
+        csv.push_str(&format!(
+            "{}-{:02}-01,{row}\n",
+            2020 + row / 12,
+            row % 12 + 1
+        ));
     }
-    csv.push_str("shop0,100\nshop0,200\n");
+    csv.push_str("2020-01-15,100\n2020-01-20,200\n");
     let df = parse_table(&csv).expect("fake table");
     let data = build(
         &df,
@@ -240,9 +244,8 @@ fn groups_beyond_fifty_go_to_other() {
     .expect("chart");
     let points = bars(&data);
     assert_eq!(points.len(), MAX_GROUPS);
-    assert_eq!(points[0], ("shop0".to_string(), 300.0));
-    // Kept: shop0 to shop48 (the most rows, then the first ones). Other: shop49 to shop59.
-    assert_eq!(points[48].0, "shop48");
+    assert_eq!(points[0].1, 300.0);
+    // Kept: the first month (most rows), then the first 48 others. Other: the last eleven.
     let other: f64 = (49..60).map(f64::from).sum();
     assert_eq!(points[49], ("Overig".to_string(), other));
     let Points::Bars(raw) = &data.points else {
@@ -257,6 +260,243 @@ fn groups_beyond_fifty_go_to_other() {
     )
     .expect("chart");
     assert_eq!(bars(&mean)[49], ("Other".to_string(), other / 11.0));
+}
+
+#[test]
+fn a_text_column_shows_its_ten_values_with_the_most_rows() {
+    let mut csv = String::from("shop,sales\n");
+    // 60 shops; shop0 has three rows, shop59 two, the others one.
+    for row in 0..60 {
+        csv.push_str(&format!("shop{row},{row}\n"));
+    }
+    csv.push_str("shop0,100\nshop0,200\nshop59,1\n");
+    let df = parse_table(&csv).expect("fake table");
+    for lang in [Lang::Nl, Lang::En] {
+        let data = build(
+            &df,
+            &request(ChartKind::Line, 0, Some(1), Aggregate::Sum),
+            lang,
+        )
+        .expect("chart");
+        let points = bars(&data);
+        assert_eq!(points.len(), MAX_CATEGORIES);
+        // Most rows first picked, then the first ones; lines keep the table's order.
+        let labels: Vec<&str> = points.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "shop0", "shop1", "shop2", "shop3", "shop4", "shop5", "shop6", "shop7", "shop8",
+                "shop59"
+            ]
+        );
+        assert_eq!(points[0].1, 300.0);
+        assert_eq!(points[9].1, 60.0);
+        // No "Other": the rest is left out.
+        let Points::Bars(raw) = &data.points else {
+            panic!("bars");
+        };
+        assert!(raw.iter().all(|bar| !bar.other));
+        assert!(!labels.contains(&"Overig") && !labels.contains(&"Other"));
+    }
+    // Ten values or fewer: all of them.
+    let shop = build(
+        &shop(),
+        &request(ChartKind::Bar, 0, None, Aggregate::Count),
+        Lang::En,
+    )
+    .expect("chart");
+    assert_eq!(bars(&shop).len(), 3);
+}
+
+/// Made-up people like those of a large sample CSV: unique ids counting up, first and last
+/// names, e-mail addresses, ages and twelve cities, one with more rows than the next.
+fn people() -> DataFrame {
+    const FIRST: [&str; 7] = ["Anja", "Bram", "Cor", "Dirk", "Eva", "Fenna", "Gijs"];
+    const LAST: [&str; 5] = ["Jansen", "de Vries", "Bakker", "Visser", "Smit"];
+    let mut csv = String::from("id,first_name,last_name,email,age,city\n");
+    let mut id = 0;
+    for city in 0..12 {
+        // City 0 has 13 rows, city 1 12, … city 11 two.
+        for _ in 0..13 - city {
+            id += 1;
+            csv.push_str(&format!(
+                "{id},{},{},person{id}@example.test,{},City{city}\n",
+                FIRST[id % 7],
+                LAST[id % 5],
+                20 + (id * 7) % 50,
+            ));
+        }
+    }
+    parse_table(&csv).expect("fake people table")
+}
+
+#[test]
+fn the_first_chart_is_the_mean_age_per_city() {
+    let df = people();
+    let columns = chart_columns(&df);
+    let flags: Vec<(bool, bool, bool)> = columns
+        .iter()
+        .map(|c| (c.category, c.personal, c.id))
+        .collect();
+    assert_eq!(
+        flags,
+        [
+            (false, false, true),
+            // Seven first names over many rows: few values, but a name.
+            (true, true, false),
+            (true, true, false),
+            (false, true, false),
+            (false, false, false),
+            (true, false, false),
+        ]
+    );
+    let first = ChartRequest::first(&columns).expect("a chart");
+    assert_eq!(first, request(ChartKind::Bar, 5, Some(4), Aggregate::Mean));
+    let data = build(&df, &first, Lang::Nl).expect("chart");
+    assert_eq!(data.x_label, "city");
+    assert_eq!(data.y_label, "Gemiddelde van age");
+    let points = bars(&data);
+    // The ten cities with the most rows, City10 and City11 left out, no Overig.
+    assert_eq!(points.len(), 10);
+    let mut cities: Vec<String> = points.iter().map(|(label, _)| label.clone()).collect();
+    cities.sort_by_key(|city| city[4..].parse::<u32>().expect("number"));
+    let expected: Vec<String> = (0..10).map(|city| format!("City{city}")).collect();
+    assert_eq!(cities, expected);
+    // Bars from the highest average; each the mean of that city's ages.
+    assert!(points.windows(2).all(|pair| pair[0].1 >= pair[1].1));
+    let ages = df.column("age").expect("age").i64().expect("numbers");
+    let towns = df.column("city").expect("city").str().expect("text");
+    for (city, mean) in &points {
+        let of_city: Vec<f64> = towns
+            .iter()
+            .zip(ages.iter())
+            .filter(|(town, _)| *town == Some(city.as_str()))
+            .filter_map(|(_, age)| age.map(|age| age as f64))
+            .collect();
+        let expected = of_city.iter().sum::<f64>() / of_city.len() as f64;
+        assert!((mean - expected).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn ids_and_names_are_spotted() {
+    for name in [
+        "id",
+        "ID",
+        "Id",
+        "user_id",
+        "userId",
+        "order-id",
+        "Customer ID",
+    ] {
+        assert!(id_name(name), "{name}");
+    }
+    for name in ["valid", "idea", "age", "paid", "width"] {
+        assert!(!id_name(name), "{name}");
+    }
+    for name in [
+        "first_name",
+        "last_name",
+        "FirstName",
+        "lastname",
+        "name",
+        "Naam",
+        "voornaam",
+        "achternaam",
+        "customer_name",
+        "email",
+        "E-mail",
+        "e_mail_address",
+        "phone",
+        "postcode",
+    ] {
+        assert!(personal_name(name), "{name}");
+    }
+    for name in [
+        "city",
+        "category",
+        "product_name",
+        "country",
+        "status",
+        "zipper",
+    ] {
+        assert!(!personal_name(name), "{name}");
+    }
+    // Unique whole numbers counting up are an id, whatever the name; floats or repeats not.
+    let table = parse_table(
+        "nr,score,price,addr\n3,5,1.5,a@example.test\n7,5,2.5,b@example.test\n9,6,3.5,x\n",
+    )
+    .expect("fake table");
+    let columns = chart_columns(&table);
+    let ids: Vec<bool> = columns.iter().map(|c| c.id).collect();
+    assert_eq!(ids, [true, false, false, false]);
+    // Mostly values with an @: e-mail addresses, whatever the name.
+    assert!(columns[3].personal);
+}
+
+#[test]
+fn without_a_good_category_the_first_chart_falls_back() {
+    let first =
+        |csv: &str| ChartRequest::first(&chart_columns(&parse_table(csv).expect("fake table")));
+    // Only ids for numbers: the row count per city.
+    assert_eq!(
+        first("id,city\n1,Utrecht\n2,Gouda\n3,Utrecht\n"),
+        Some(request(ChartKind::Bar, 1, None, Aggregate::Count))
+    );
+    // A different city on every row: a date column instead.
+    let mut unique = String::from("city,day,amount\n");
+    for row in 0..30 {
+        unique.push_str(&format!(
+            "Town{row},2026-01-{:02},{}\n",
+            row % 28 + 1,
+            row % 4
+        ));
+    }
+    assert_eq!(
+        first(&unique),
+        Some(request(ChartKind::Bar, 1, Some(2), Aggregate::Mean))
+    );
+    // Only names and two numbers: a scatter, the id last.
+    let mut names = String::from("id,first_name,email,age,height\n");
+    for row in 0..30 {
+        names.push_str(&format!(
+            "{row},Name{row},p{row}@example.test,{},{}\n",
+            20 + row % 9,
+            150 + row % 7
+        ));
+    }
+    let scatter = first(&names).expect("a chart");
+    assert_eq!(
+        (scatter.kind, scatter.x, scatter.y),
+        (ChartKind::Scatter, 3, Some(4))
+    );
+    // The people without their city: no text but names, so age against the id.
+    let mut people = people();
+    let _ = people.drop_in_place("city").expect("city");
+    let columns = chart_columns(&people);
+    let chosen = ChartRequest::first(&columns).expect("a chart");
+    assert_eq!(
+        (chosen.kind, chosen.x, chosen.y),
+        (ChartKind::Scatter, 4, Some(0))
+    );
+    // Without age as well: the row count per first name, ten bars at most.
+    let _ = people.drop_in_place("age").expect("age");
+    let counted = ChartRequest::first(&chart_columns(&people)).expect("a chart");
+    assert_eq!(counted, request(ChartKind::Bar, 1, None, Aggregate::Count));
+    assert!(bars(&build(&people, &counted, Lang::En).expect("chart")).len() <= MAX_CATEGORIES);
+    // Only names and an id: the id is the only number, so no scatter; the names it is.
+    assert_eq!(
+        first("id,first_name\n1,Anja\n2,Bram\n"),
+        Some(request(ChartKind::Bar, 1, None, Aggregate::Count))
+    );
+    // Text with one value only, beside a name: the text that is not a name.
+    assert_eq!(
+        first("first_name,shop\nAnja,Webwinkel\nBram,Webwinkel\n"),
+        Some(request(ChartKind::Bar, 1, None, Aggregate::Count))
+    );
+    // Nothing to draw: an id and true/false only.
+    assert_eq!(first("id,paid\n1,true\n2,false\n"), None);
+    assert_eq!(ChartRequest::first(&[]), None);
 }
 
 #[test]

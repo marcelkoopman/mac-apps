@@ -3,8 +3,9 @@
 //! Charts view draws (`swift/CopyCraftCharts`).
 //!
 //! Bar and line: a text or date column groups the rows (dates per day, month or year), a number
-//! column gives the values, counted, summed, averaged or taken the least or the most of. At most
-//! [`MAX_GROUPS`] groups: the rest are folded into "Other". Scatter: two number columns, no
+//! column gives the values, counted, summed, averaged or taken the least or the most of. A text
+//! column gives the [`MAX_CATEGORIES`] values with the most rows (the rest are left out); dates
+//! at most [`MAX_GROUPS`] steps, the rest folded into "Other". Scatter: two number columns, no
 //! groups, at most [`MAX_POINTS`] points sampled evenly. Empty and non-numeric values are
 //! skipped and counted. Every label comes translated from here; the JSON is wiped when dropped.
 
@@ -16,8 +17,11 @@ use std::sync::Arc;
 use crate::locale::{Lang, t_in, tf_in};
 use crate::table_insight::TrendFacts;
 
-/// At most this many bars or line points; the groups with the fewest rows go into "Other".
+/// At most this many date steps; the ones with the fewest rows go into "Other".
 pub const MAX_GROUPS: usize = 50;
+/// At most this many text values: the ones with the most rows. The rest are left out, without
+/// an "Other" bar.
+pub const MAX_CATEGORIES: usize = 10;
 /// At most this many scatter points, taken evenly from the rows.
 pub const MAX_POINTS: usize = 2000;
 
@@ -127,12 +131,32 @@ pub enum ColumnRole {
     Number,
 }
 
-/// A column the chart can use: its place in the frame and its role. Columns of other types
-/// (lists, booleans) are left out.
+/// A column the chart can use: its place in the frame, its role and what makes it a good first
+/// choice. Columns of other types (lists, booleans) are left out. Only flags: no names or values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChartColumn {
     pub index: usize,
     pub role: ColumnRole,
+    /// Text with few different values for its rows, not one per person: a good group column.
+    pub category: bool,
+    /// Text such as first or last names or e-mail addresses: never the first group column.
+    pub personal: bool,
+    /// Numbers that only number the rows (named id, `*_id`, or unique whole numbers counting
+    /// up): never the first value column.
+    pub id: bool,
+}
+
+impl ChartColumn {
+    /// A column with only its role (none of the first-choice flags).
+    pub fn plain(index: usize, role: ColumnRole) -> ChartColumn {
+        ChartColumn {
+            index,
+            role,
+            category: false,
+            personal: false,
+            id: false,
+        }
+    }
 }
 
 /// The chart asked for: column places and choices, never names or values.
@@ -148,36 +172,62 @@ pub struct ChartRequest {
 }
 
 impl ChartRequest {
-    /// The first chart `columns` allow: a bar per group of the first text or date column, the
-    /// average of the first number column (else the row count); without a group column, a
-    /// scatter of the first two number columns. `None` when neither fits. The average, not the
-    /// sum: a sum per group runs up to totals far from any value in the column.
+    /// The first chart `columns` allow, as a person would pick it: a bar per value of a text
+    /// column with few values (never names or e-mail addresses), the average of a number column
+    /// that is not an id (else the row count). Without such a text column: a date column, a
+    /// scatter of two number columns that are not ids, any text column but names, a scatter with
+    /// an id, and last a text column of names. `None` when nothing fits. The average, not the sum: a sum per group runs up to totals far from any
+    /// value in the column.
     pub fn first(columns: &[ChartColumn]) -> Option<ChartRequest> {
-        let group = columns.iter().find(|c| c.role != ColumnRole::Number);
-        let mut numbers = columns.iter().filter(|c| c.role == ColumnRole::Number);
-        let first_number = numbers.next().map(|c| c.index);
-        if let Some(group) = group {
-            return Some(ChartRequest {
-                kind: ChartKind::Bar,
-                x: group.index,
-                y: first_number,
-                aggregate: if first_number.is_some() {
-                    Aggregate::Mean
-                } else {
-                    Aggregate::Count
-                },
-                bucket: Bucket::Month,
-            });
-        }
-        let second = numbers.next().map(|c| c.index)?;
-        Some(ChartRequest {
-            kind: ChartKind::Scatter,
-            x: first_number?,
-            y: Some(second),
-            // Kept when the kind changes to bar or line.
-            aggregate: Aggregate::Mean,
+        let text = |c: &&ChartColumn| c.role == ColumnRole::Text;
+        let group = columns
+            .iter()
+            .find(|c| text(c) && c.category && !c.personal)
+            .or_else(|| columns.iter().find(|c| c.role == ColumnRole::Date));
+        let mut numbers: Vec<usize> = columns
+            .iter()
+            .filter(|c| c.role == ColumnRole::Number && !c.id)
+            .map(|c| c.index)
+            .collect();
+        let value = numbers.first().copied();
+        let bar = |x: usize, y: Option<usize>| ChartRequest {
+            kind: ChartKind::Bar,
+            x,
+            y,
+            aggregate: if y.is_some() {
+                Aggregate::Mean
+            } else {
+                Aggregate::Count
+            },
             bucket: Bucket::Month,
-        })
+        };
+        if let Some(group) = group {
+            return Some(bar(group.index, value));
+        }
+        let scatter = |numbers: &[usize]| match numbers {
+            [x, y, ..] => Some(ChartRequest {
+                kind: ChartKind::Scatter,
+                x: *x,
+                y: Some(*y),
+                // Kept when the kind changes to bar or line.
+                aggregate: Aggregate::Mean,
+                bucket: Bucket::Month,
+            }),
+            _ => None,
+        };
+        if let Some(request) = scatter(&numbers) {
+            return Some(request);
+        }
+        if let Some(group) = columns.iter().find(|c| text(c) && !c.personal) {
+            return Some(bar(group.index, value));
+        }
+        numbers.extend(
+            columns
+                .iter()
+                .filter(|c| c.role == ColumnRole::Number && c.id)
+                .map(|c| c.index),
+        );
+        scatter(&numbers).or_else(|| Some(bar(columns.iter().find(text)?.index, value)))
     }
 }
 
@@ -387,16 +437,170 @@ impl Drop for ChartData {
     }
 }
 
-/// The columns of `df` a chart can use, in order.
+/// The columns of `df` a chart can use, in order, with what makes each a good first choice.
 pub fn chart_columns(df: &DataFrame) -> Vec<ChartColumn> {
+    let rows = df.height();
     df.columns()
         .iter()
         .enumerate()
         .filter_map(|(index, column)| {
             let role = role(column.dtype())?;
-            Some(ChartColumn { index, role })
+            let mut chart = ChartColumn::plain(index, role);
+            match role {
+                ColumnRole::Text => {
+                    chart.personal = personal_name(column.name()) || mostly_addresses(column);
+                    chart.category = few_values(column, rows);
+                }
+                ColumnRole::Number => {
+                    chart.id = id_name(column.name()) || counts_up(column);
+                }
+                ColumnRole::Date => {}
+            }
+            Some(chart)
         })
         .collect()
+}
+
+/// The words of a column name, lower case: split at anything not a letter or digit and where
+/// a capital follows a small letter (`userId` is "user", "id").
+fn name_words(name: &str) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    let mut word = String::new();
+    let mut after_small = false;
+    for c in name.chars() {
+        let boundary = !c.is_alphanumeric() || (c.is_uppercase() && after_small);
+        if boundary && !word.is_empty() {
+            words.push(std::mem::take(&mut word));
+        }
+        if c.is_alphanumeric() {
+            word.extend(c.to_lowercase());
+        }
+        after_small = c.is_lowercase();
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    words
+}
+
+/// Words that make a column one value per person (e-mail, phone, address and the like).
+const PERSONAL_WORDS: [&str; 22] = [
+    "email",
+    "mail",
+    "phone",
+    "telephone",
+    "telefoon",
+    "tel",
+    "mobile",
+    "mobiel",
+    "address",
+    "adres",
+    "street",
+    "straat",
+    "postcode",
+    "zip",
+    "iban",
+    "uuid",
+    "guid",
+    "url",
+    "ip",
+    "firstname",
+    "lastname",
+    "fullname",
+];
+
+/// Words a person's name column is made of (`first_name`, `achternaam`, `customer name`).
+const NAME_WORDS: [&str; 20] = [
+    "name",
+    "naam",
+    "first",
+    "last",
+    "full",
+    "given",
+    "family",
+    "middle",
+    "sur",
+    "surname",
+    "user",
+    "username",
+    "voornaam",
+    "achternaam",
+    "voor",
+    "achter",
+    "tussenvoegsel",
+    "customer",
+    "klant",
+    "contact",
+];
+
+/// A column name for names, e-mail addresses and the like: `first_name`, `lastName`, `email`,
+/// `e-mail`, `phone`. `product_name` is not (only `name`/`naam` with person words).
+fn personal_name(name: &str) -> bool {
+    let words = name_words(name);
+    words.iter().any(|w| PERSONAL_WORDS.contains(&w.as_str()))
+        || (!words.is_empty()
+            && words
+                .iter()
+                .any(|w| w.contains("name") || w.contains("naam"))
+            && words.iter().all(|w| NAME_WORDS.contains(&w.as_str())))
+}
+
+/// More than half of the first values (at most 100 filled ones) hold an `@`: e-mail addresses.
+fn mostly_addresses(column: &Column) -> bool {
+    let Ok(values) = column.str() else {
+        return false;
+    };
+    let (mut filled, mut at) = (0usize, 0usize);
+    for value in values
+        .iter()
+        .flatten()
+        .filter(|v| !v.trim().is_empty())
+        .take(100)
+    {
+        filled += 1;
+        if value.contains('@') {
+            at += 1;
+        }
+    }
+    filled > 0 && at * 2 > filled
+}
+
+/// At least two different values, and few of them for the rows: at most [`MAX_CATEGORIES`], or
+/// on average two rows or more per value.
+fn few_values(column: &Column, rows: usize) -> bool {
+    let Ok(distinct) = column.as_materialized_series().n_unique() else {
+        return false;
+    };
+    // Empty cells count as a value in `n_unique`.
+    let distinct = distinct.saturating_sub(usize::from(column.null_count() > 0));
+    distinct >= 2 && (distinct <= MAX_CATEGORIES || distinct * 2 <= rows)
+}
+
+/// `id`, `ID`, `user_id`, `userId`, `order-id`: the name of a row number.
+fn id_name(name: &str) -> bool {
+    name_words(name).last().is_some_and(|w| w == "id")
+}
+
+/// Whole numbers, at least two, each larger than the one before (so all different): a row number.
+fn counts_up(column: &Column) -> bool {
+    if !column.dtype().is_integer() || column.null_count() > 0 {
+        return false;
+    }
+    let Ok(cast) = column.cast(&DataType::Int64) else {
+        return false;
+    };
+    let Ok(values) = cast.i64() else {
+        return false;
+    };
+    let mut last: Option<i64> = None;
+    for value in values.iter() {
+        let Some(value) = value else { return false };
+        if last.is_some_and(|last| value <= last) {
+            return false;
+        }
+        last = Some(value);
+    }
+    values.len() >= 2
 }
 
 fn role(dtype: &DataType) -> Option<ColumnRole> {
@@ -566,9 +770,12 @@ fn grouped(
         .map_err(|_| ChartProblem::Columns)?;
     let keys = by.keys().into_iter().next().ok_or(ChartProblem::Columns)?;
     let mut groups: Vec<(Key, Tally)> = Vec::new();
+    // Each group's rows, values or not: the text values with the most are kept.
+    let mut sizes: Vec<usize> = Vec::new();
     let mut skipped = 0;
     for (place, group) in by.get_groups().iter().enumerate() {
         let rows = group_rows(&group);
+        let size = rows.len();
         let key = if dates {
             keys.i32()
                 .map_err(|_| ChartProblem::Columns)?
@@ -600,6 +807,7 @@ fn grouped(
         }
         if tally.rows > 0 {
             groups.push((key, tally));
+            sizes.push(size);
         } else if let Key::Text(mut text) = key {
             text.zeroize();
         }
@@ -607,7 +815,12 @@ fn grouped(
     if groups.is_empty() {
         return Err(ChartProblem::NoValues);
     }
-    let other = fold_other(&mut groups);
+    let other = if dates {
+        fold_other(&mut groups)
+    } else {
+        keep_most(&mut groups, &sizes);
+        None
+    };
     // Dates in time order; text bars from the largest value, text lines as they come.
     if dates {
         groups.sort_by_key(|(key, _)| match key {
@@ -727,6 +940,29 @@ fn group_rows(group: &GroupsIndicator<'_>) -> Vec<usize> {
             (first..first + *len as usize).collect()
         }
     }
+}
+
+/// Above [`MAX_CATEGORIES`]: keep the text values with the most rows (`sizes`; the first ones
+/// on a tie), in their order, and leave the rest out, wiped.
+fn keep_most(groups: &mut Vec<(Key, Tally)>, sizes: &[usize]) {
+    if groups.len() <= MAX_CATEGORIES {
+        return;
+    }
+    let mut order: Vec<usize> = (0..groups.len()).collect();
+    order.sort_by(|&a, &b| sizes[b].cmp(&sizes[a]).then(a.cmp(&b)));
+    let mut keep = vec![false; groups.len()];
+    for &place in order.iter().take(MAX_CATEGORIES) {
+        keep[place] = true;
+    }
+    let mut place = 0;
+    groups.retain_mut(|(key, _)| {
+        let kept = keep[place];
+        place += 1;
+        if !kept && let Key::Text(text) = key {
+            text.zeroize();
+        }
+        kept
+    });
 }
 
 /// Above [`MAX_GROUPS`]: keep the groups with the most rows (the first ones on a tie) and fold

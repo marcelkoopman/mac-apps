@@ -939,7 +939,17 @@ Toys,2026-03-09,,2
 - [ ] Click another app: the window masks; the chart is hidden under the cover and the pop-ups are off; clicking reveals it again.
 - [ ] A step (e.g. remove a column) or another version in the strip: the chart follows; a version with no columns that fit goes back to the grid. Close the window and open it again: the grid shows, not the chart.
 - [ ] Not tied to CSV: copy the same table as TSV (tabs, e.g. pasted from Numbers or Excel), as a JSON table (`[{"category":"Books","revenue":10.5},{"category":"Games","revenue":20}]`) and with `;` separators: Open table shows the Chart button each time and the chart gives the same sums. A drop of a made-up `.tsv` or `.json` file does too.
-- [ ] A table with 60 categories (`printf 'c,v\n'; for i in $(seq 1 60); do echo "k$i,$i"; done`, copied): at most 50 bars, the last *Overig* / *Other*.
+- [ ] A table with 60 categories (`printf 'c,v\n'; for i in $(seq 1 60); do echo "k$i,$i"; done`, copied): 10 bars and no *Overig* / *Other* bar; the other 50 values are left out. A date column with more than 50 months (`printf 'd,v\n'; for y in 2020 2021 2022 2023 2024; do for m in 01 02 03 04 05 06 07 08 09 10 11 12; do echo "$y-$m-01,1"; done; done`, copied, *Lijn* / *Line*): at most 50 points, the last *Overig* / *Other*.
+- [ ] Smart first chart on a made-up table like a large sample CSV (unique ids, first and last names, e-mail addresses, ages and 12 cities; City0 has 13 rows down to City11 with 2), copied:
+
+  ```
+  { echo id,first_name,last_name,email,age,city; n=0
+    for c in $(seq 0 11); do for r in $(seq 1 $((13 - c))); do n=$((n + 1))
+      echo "$n,Name$((n % 7)),Last$((n % 5)),person$n@example.test,$((20 + n * 7 % 50)),City$c"
+    done; done; } | pbcopy
+  ```
+
+  Open table, Chart: a bar chart of *city* on the x-axis (not *first_name*, *last_name* or *email*), the calculation *Gemiddelde* / *Average*, the value column *age* (not *id*), the value axis *Gemiddelde van age* / *Average of age*; 10 bars, City0 to City9 (City10 and City11 left out), no *Overig* / *Other*. The x-axis pop-up still offers every text column. Fallbacks, no crash: delete the *city* column (a step) and go back to the chart: a scatter of *age* against *id* (no text column but names is left; names are never the first choice). Then also delete *age*: a bar per first name with the row count (*Aantal* / *Count*), at most 10 bars. Delete the three text columns too, leaving only *id*: the chart goes back to the grid (no chart fits).
 - [ ] Nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value or chart label; no new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data` (`ls -lt … | head`).
 - [ ] `codesign -d --entitlements - /Applications/CopyCraft.app` shows the same entitlements as the previous build; `otool -L` on the binary lists only system libraries and `/usr/lib/swift/…`.
 
