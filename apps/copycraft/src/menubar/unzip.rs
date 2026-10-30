@@ -29,12 +29,8 @@ impl App {
         let Some(dest) = choose_folder() else {
             return;
         };
-        // Too little room: say so now, before anything is written (checked again in the
-        // extraction, which also sees the exact counts).
-        if !crate::zip_archive::fits(&zip.facts, crate::zip_archive::free_space(&dest)) {
-            super::state::save_feedback(crate::zip_archive::ZipError::NoSpace.message());
-            return;
-        }
+        // Free space is checked on the extraction's thread (a slow or sleeping disk never
+        // holds up the main thread); too little gives the NoSpace toast, nothing written.
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         self.unzip_stop = Some(stop.clone());
         self.unzip_started = Some(Instant::now());
