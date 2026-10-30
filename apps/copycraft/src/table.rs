@@ -175,6 +175,8 @@ pub struct Job {
     /// How the copied text is read, when the job starts from it.
     options: crate::dataframe::ReadOptions,
     ops: Vec<TableOp>,
+    /// The index in the steps of `ops[0]`.
+    first_step: usize,
     /// The version shown when done.
     target: usize,
     /// A new step (`target` is then the version it makes).
@@ -191,6 +193,9 @@ pub struct JobDone {
     frame: DataFrame,
     /// What reading the copied text found (a job from the text).
     notes: Option<crate::dataframe::ReadNotes>,
+    /// The column count each replayed column choice saw, by step index: "Kept 3 of N" is
+    /// right again after an earlier step was taken out ([`TableVersions::remove_step`]).
+    kept_of: Vec<(usize, usize)>,
 }
 
 impl JobDone {
@@ -212,10 +217,21 @@ impl Job {
                 (Some(frame.clone()), frame)
             }
         };
-        let steps = self.ops.iter().map(|op| (op, false));
-        for (op, new) in steps.chain(self.new_step.iter().map(|op| (op, true))) {
+        let mut kept_of = Vec::new();
+        let steps = self.ops.iter().enumerate().map(|(i, op)| (op, Some(i)));
+        for (op, replayed) in steps.chain(self.new_step.iter().map(|op| (op, None))) {
+            let new = replayed.is_none();
             if cancel.load(Ordering::Relaxed) {
                 return Err(TableError::Cancelled);
+            }
+            if let (
+                Some(i),
+                TableOp::SelectColumns {
+                    kept_of: Some(_), ..
+                },
+            ) = (replayed, op)
+            {
+                kept_of.push((self.first_step + i, frame.width()));
             }
             match op.apply(&frame).map_err(TableError::Failed)? {
                 Some(next) => frame = next,
@@ -232,6 +248,7 @@ impl Job {
             original,
             frame,
             notes: read,
+            kept_of,
         })
     }
 }
@@ -348,14 +365,17 @@ impl TableVersions {
         }
         self.removed = None;
         let (base, ops) = match &self.frames {
-            Some(frames) if !self.behind => (JobBase::Frame(frames.current.clone()), Vec::new()),
+            Some(frames) if !self.behind => (
+                JobBase::Frame(frames.current.clone()),
+                (self.cursor, Vec::new()),
+            ),
             Some(frames) => (
                 JobBase::Frame(frames.original.clone()),
-                self.steps[..self.cursor].to_vec(),
+                (0, self.steps[..self.cursor].to_vec()),
             ),
             None => (
                 JobBase::Source(Zeroizing::new(source.to_string())),
-                self.steps[..self.cursor].to_vec(),
+                (0, self.steps[..self.cursor].to_vec()),
             ),
         };
         Ok(self.job(base, ops, self.cursor + 1, Some(op)))
@@ -376,15 +396,15 @@ impl TableVersions {
         let (base, ops) = match &self.frames {
             Some(frames) if index > self.cursor && !self.behind => (
                 JobBase::Frame(frames.current.clone()),
-                self.steps[self.cursor..index].to_vec(),
+                (self.cursor, self.steps[self.cursor..index].to_vec()),
             ),
             Some(frames) => (
                 JobBase::Frame(frames.original.clone()),
-                self.steps[..index].to_vec(),
+                (0, self.steps[..index].to_vec()),
             ),
             None => (
                 JobBase::Source(Zeroizing::new(source.to_string())),
-                self.steps[..index].to_vec(),
+                (0, self.steps[..index].to_vec()),
             ),
         };
         self.job(base, ops, index, None)
@@ -447,7 +467,7 @@ impl TableVersions {
     fn job(
         &mut self,
         base: JobBase,
-        ops: Vec<TableOp>,
+        (first_step, ops): (usize, Vec<TableOp>),
         target: usize,
         new_step: Option<TableOp>,
     ) -> Job {
@@ -457,6 +477,7 @@ impl TableVersions {
             options: self.options,
             base,
             ops,
+            first_step,
             target,
             new_step,
         }
@@ -476,6 +497,15 @@ impl TableVersions {
         if let Some(op) = done.new_step {
             self.steps.truncate(self.cursor);
             self.steps.push(op);
+        }
+        for (index, width) in done.kept_of {
+            if let Some(TableOp::SelectColumns {
+                kept_of: Some(total),
+                ..
+            }) = self.steps.get_mut(index)
+            {
+                *total = width;
+            }
         }
         self.cursor = done.target.min(self.steps.len());
         self.behind = false;
@@ -776,6 +806,46 @@ mod tests {
         assert_eq!(shape(&versions), Some((3, 1)));
         assert!(versions.goto(2, SRC).is_none());
         assert!(versions.load(SRC).is_none());
+    }
+
+    #[test]
+    fn removing_an_earlier_column_choice_recounts_kept_of() {
+        let src = "a,b,c,d\n1,2,3,4\n5,6,7,8";
+        let mut versions = TableVersions::default();
+        let picks = [
+            TableOp::SelectColumns {
+                columns: vec!["a".into(), "b".into(), "c".into()],
+                kept_of: Some(4),
+            },
+            TableOp::SelectColumns {
+                columns: vec!["a".into(), "c".into()],
+                kept_of: Some(3),
+            },
+        ];
+        for op in picks {
+            let job = versions.push(op, src).expect("push");
+            assert!(run(&mut versions, job));
+        }
+        let kept = |versions: &TableVersions| match versions.steps.last() {
+            Some(TableOp::SelectColumns { kept_of, .. }) => *kept_of,
+            _ => None,
+        };
+        assert_eq!(kept(&versions), Some(3));
+        // Without the first choice, the second one picks from all 4 columns.
+        let job = versions.remove_step(1, src).expect("replay");
+        assert!(run(&mut versions, job));
+        assert_eq!(kept(&versions), Some(4));
+        assert_eq!(
+            versions.labels()[1],
+            crate::locale::tf("table_label_kept", &[&2, &4])
+        );
+        // ⌘Z puts the first choice back: 3 of 4, then 2 of 3 again.
+        let job = versions.restore_step(src).expect("restore");
+        assert!(run(&mut versions, job));
+        assert_eq!(versions.cursor(), 1);
+        let job = versions.goto(2, src).expect("goto");
+        assert!(run(&mut versions, job));
+        assert_eq!(kept(&versions), Some(3));
     }
 
     #[test]
