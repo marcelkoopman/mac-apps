@@ -129,6 +129,13 @@ mod macos_vision;
 #[cfg(target_os = "macos")]
 mod macos_welcome;
 
+/// The app's panic hook: silent. Rust's default hook writes the panic's message and its
+/// source location to stderr, and a message can quote copied text (an index into a string, a
+/// value that did not parse). This one writes nothing at all, nowhere: no stderr, no log. Where
+/// a panic is caught ([`std::panic::catch_unwind`]) the caller logs its own content-free event
+/// and shows its own message. Installed by `main` only, so `cargo test` keeps its panic output.
+fn silent_panic(_info: &std::panic::PanicHookInfo<'_>) {}
+
 fn main() {
     // Polars prints 10 rows and 8 columns of a table, in at most 100 characters, by default.
     // The card limits rows itself (`commands::PREVIEW_ROWS`) and wants every column.
@@ -138,6 +145,8 @@ fn main() {
             unsafe { std::env::set_var(name, value) };
         }
     }
+    // Before any other thread exists: no panic of the app ever writes its message.
+    std::panic::set_hook(Box::new(silent_panic));
     if let Err(e) = menubar::run() {
         crate::diag::log(crate::diag::LogEvent::StartFailed(
             crate::diag::ErrorKind::from_text(&e.to_string()),
@@ -148,6 +157,25 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    /// `main` installs the silent hook before it starts the app, and the hook writes nothing:
+    /// its body is empty. Tests never install it (they need their panic messages).
+    #[test]
+    fn main_installs_a_silent_panic_hook() {
+        let source = include_str!("main.rs");
+        let main_at = source.find("\nfn main() {").expect("fn main");
+        let main_body = &source[main_at..];
+        let hook = main_body
+            .find("std::panic::set_hook(Box::new(silent_panic));")
+            .expect("main installs the hook");
+        assert!(hook < main_body.find("menubar::run()").expect("the app starts"));
+        assert!(
+            source.contains("\nfn silent_panic(_info: &std::panic::PanicHookInfo<'_>) {}\n"),
+            "the hook is empty"
+        );
+        // It has the signature set_hook takes.
+        let _: fn(&std::panic::PanicHookInfo<'_>) = super::silent_panic;
+    }
+
     #[test]
     fn crate_name() {
         assert_eq!(env!("CARGO_PKG_NAME"), "copycraft");

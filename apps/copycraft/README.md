@@ -164,7 +164,10 @@ Only counts are logged, never the instructions.
 
 CopyCraft logs events only: what happened, counts, sizes, types and error kinds. It never
 logs clipboard or history text, file contents, file names or paths, decoder input or output,
-regex patterns or table data.
+regex patterns or table data. A panic (a bug) prints nothing either: the app's panic hook is
+silent (no message, no source location, not to stderr and not to the log), because a panic
+message can quote copied text. Where a panic is caught, the work fails with its normal message
+and a content-free event.
 
 **View the log in Console.** Open Console.app, select your Mac, click Start streaming and
 search for `subsystem:nl.marcelkoopman.copycraft`. The categories are
