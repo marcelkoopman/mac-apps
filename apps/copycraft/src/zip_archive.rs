@@ -510,7 +510,8 @@ fn decode_name(raw: &[u8], utf8: bool) -> String {
 /// a control character (Cc: C0 such as a newline, DEL, C1), an invisible format character
 /// (Cf: bidirectional controls such as U+202E, `factuur\u{202E}fdp.app` shows as
 /// `factuurppa.pdf`; zero-width spaces and joiners, U+FEFF, the tag characters), or a line or
-/// paragraph separator (Zl, Zp: U+2028, U+2029).
+/// paragraph separator (Zl, Zp: U+2028, U+2029). In a name use [`deceptive_at`], which lets
+/// the joiner through between two emoji.
 pub fn is_deceptive(c: char) -> bool {
     let code = u32::from(c);
     c.is_control()
@@ -546,12 +547,143 @@ const FORMAT_AND_SEPARATORS: [(u32, u32); 21] = [
     (0xE0020, 0xE007F),
 ];
 
-/// `name` with every [`is_deceptive`] character written out (`\u{202E}`), so the list shows
+/// Joins two emoji into one (👨‍💻); a format character ([`is_deceptive`]) anywhere else.
+const ZWJ: char = '\u{200D}';
+/// Asks for the emoji look of the character before it (❤️).
+const EMOJI_PRESENTATION: char = '\u{FE0F}';
+
+/// A skin tone (🏻 to 🏿, Emoji_Modifier), colouring the emoji before it (👍🏽).
+fn is_skin_tone(c: char) -> bool {
+    ('\u{1F3FB}'..='\u{1F3FF}').contains(&c)
+}
+
+/// An emoji as Unicode defines it for joining: Extended_Pictographic ([`EXTENDED_PICTOGRAPHIC`]).
+fn is_emoji(c: char) -> bool {
+    let code = u32::from(c);
+    EXTENDED_PICTOGRAPHIC
+        .iter()
+        .any(|&(first, last)| (first..=last).contains(&code))
+}
+
+/// Whether the character at `index` of `chars` makes the name deceptive: [`is_deceptive`],
+/// except for what emoji are made of. U+FE0F and a skin tone pass only straight after an emoji;
+/// U+200D (zero-width joiner) only between two emoji, the first with at most one U+FE0F or skin
+/// tone of its own (👨‍💻, 👩🏽‍💻, 🏳️‍🌈). A joiner after or before a letter, a `/`, the start
+/// or the end of the name, or another joiner stays deceptive (`a\u{200D}b` reads as `ab`).
+pub fn deceptive_at(chars: &[char], index: usize) -> bool {
+    let emoji_at = |i: Option<usize>| i.and_then(|i| chars.get(i)).is_some_and(|&c| is_emoji(c));
+    let before = index.checked_sub(1);
+    match chars[index] {
+        ZWJ => {
+            let emoji_ends_before = emoji_at(before)
+                || (before
+                    .and_then(|i| chars.get(i))
+                    .is_some_and(|&c| c == EMOJI_PRESENTATION || is_skin_tone(c))
+                    && emoji_at(index.checked_sub(2)));
+            !(emoji_ends_before && emoji_at(Some(index + 1)))
+        }
+        c if c == EMOJI_PRESENTATION || is_skin_tone(c) => !emoji_at(before),
+        c => is_deceptive(c),
+    }
+}
+
+/// Whether any character of `name` is deceptive ([`deceptive_at`]).
+pub fn has_deceptive(name: &str) -> bool {
+    let chars: Vec<char> = name.chars().collect();
+    (0..chars.len()).any(|index| deceptive_at(&chars, index))
+}
+
+/// Extended_Pictographic as ranges (from Unicode 15.1 `emoji/emoji-data.txt`, the same version
+/// as [`FORMAT_AND_SEPARATORS`]; adjacent ranges merged, the reserved code points the file
+/// lists included). It holds no skin tone, no U+FE0F and no letter or digit.
+const EXTENDED_PICTOGRAPHIC: [(u32, u32); 78] = [
+    (0x00A9, 0x00A9),
+    (0x00AE, 0x00AE),
+    (0x203C, 0x203C),
+    (0x2049, 0x2049),
+    (0x2122, 0x2122),
+    (0x2139, 0x2139),
+    (0x2194, 0x2199),
+    (0x21A9, 0x21AA),
+    (0x231A, 0x231B),
+    (0x2328, 0x2328),
+    (0x2388, 0x2388),
+    (0x23CF, 0x23CF),
+    (0x23E9, 0x23F3),
+    (0x23F8, 0x23FA),
+    (0x24C2, 0x24C2),
+    (0x25AA, 0x25AB),
+    (0x25B6, 0x25B6),
+    (0x25C0, 0x25C0),
+    (0x25FB, 0x25FE),
+    (0x2600, 0x2605),
+    (0x2607, 0x2612),
+    (0x2614, 0x2685),
+    (0x2690, 0x2705),
+    (0x2708, 0x2712),
+    (0x2714, 0x2714),
+    (0x2716, 0x2716),
+    (0x271D, 0x271D),
+    (0x2721, 0x2721),
+    (0x2728, 0x2728),
+    (0x2733, 0x2734),
+    (0x2744, 0x2744),
+    (0x2747, 0x2747),
+    (0x274C, 0x274C),
+    (0x274E, 0x274E),
+    (0x2753, 0x2755),
+    (0x2757, 0x2757),
+    (0x2763, 0x2767),
+    (0x2795, 0x2797),
+    (0x27A1, 0x27A1),
+    (0x27B0, 0x27B0),
+    (0x27BF, 0x27BF),
+    (0x2934, 0x2935),
+    (0x2B05, 0x2B07),
+    (0x2B1B, 0x2B1C),
+    (0x2B50, 0x2B50),
+    (0x2B55, 0x2B55),
+    (0x3030, 0x3030),
+    (0x303D, 0x303D),
+    (0x3297, 0x3297),
+    (0x3299, 0x3299),
+    (0x1F000, 0x1F0FF),
+    (0x1F10D, 0x1F10F),
+    (0x1F12F, 0x1F12F),
+    (0x1F16C, 0x1F171),
+    (0x1F17E, 0x1F17F),
+    (0x1F18E, 0x1F18E),
+    (0x1F191, 0x1F19A),
+    (0x1F1AD, 0x1F1E5),
+    (0x1F201, 0x1F20F),
+    (0x1F21A, 0x1F21A),
+    (0x1F22F, 0x1F22F),
+    (0x1F232, 0x1F23A),
+    (0x1F23C, 0x1F23F),
+    (0x1F249, 0x1F3FA),
+    (0x1F400, 0x1F53D),
+    (0x1F546, 0x1F64F),
+    (0x1F680, 0x1F6FF),
+    (0x1F774, 0x1F77F),
+    (0x1F7D5, 0x1F7FF),
+    (0x1F80C, 0x1F80F),
+    (0x1F848, 0x1F84F),
+    (0x1F85A, 0x1F85F),
+    (0x1F888, 0x1F88F),
+    (0x1F8AE, 0x1F8FF),
+    (0x1F90C, 0x1F93A),
+    (0x1F93C, 0x1F945),
+    (0x1F947, 0x1FAFF),
+    (0x1FC00, 0x1FFFD),
+];
+
+/// `name` with every deceptive character ([`deceptive_at`]) written out (`\u{202E}`), so the list shows
 /// what is really there.
 pub fn visible(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
-    for c in name.chars() {
-        if is_deceptive(c) {
+    let chars: Vec<char> = name.chars().collect();
+    for (index, &c) in chars.iter().enumerate() {
+        if deceptive_at(&chars, index) {
             out.push_str(&format!("\\u{{{:04X}}}", c as u32));
         } else {
             out.push(c);
@@ -588,12 +720,12 @@ fn nfc(text: &str) -> String {
 
 /// The path parts of an entry name, when it stays inside the folder it is extracted to:
 /// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no control or bidirectional
-/// characters ([`is_deceptive`], NUL included), each part at most 255 bytes, no part named
+/// characters ([`deceptive_at`], NUL included), each part at most 255 bytes, no part named
 /// like CopyCraft's work-folder mark ([`PARTIAL_MARK`]) and no top-level name of a work folder
 /// ([`looks_like_work_folder`]): a zip cannot plant what makes a folder look like a leftover of
 /// ours. Empty and `.` parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
 pub fn safe_parts(name: &str) -> Option<Vec<String>> {
-    if name.is_empty() || name.chars().any(is_deceptive) {
+    if name.is_empty() || has_deceptive(name) {
         return None;
     }
     let name = name.replace('\\', "/");

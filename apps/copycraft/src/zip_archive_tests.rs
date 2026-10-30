@@ -517,6 +517,58 @@ fn control_and_bidi_characters_are_unsafe_and_shown() {
         assert!(!is_deceptive(c), "{c:?}");
     }
     assert_eq!(visible("a\u{200B}b\u{E0041}"), "a\\u{200B}b\\u{E0041}");
+    // Emoji: a joiner between two, U+FE0F or a skin tone straight after one.
+    for good in [
+        "\u{1F468}\u{200D}\u{1F4BB}.txt",
+        "\u{1F44D}\u{1F3FD}",
+        "\u{2764}\u{FE0F}",
+        "\u{1F469}\u{1F3FD}\u{200D}\u{1F4BB}",
+        "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}",
+        "\u{1F3F4}\u{200D}\u{2620}\u{FE0F}",
+        "dir \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}/file \u{1F44D}\u{1F3FF}.txt",
+    ] {
+        assert!(safe_parts(good).is_some(), "{good:?}");
+        assert_eq!(visible(good), good);
+    }
+    for bad in [
+        "a\u{200D}b",
+        "\u{200D}\u{1F4BB}",
+        "\u{1F468}\u{200D}",
+        "\u{1F468}\u{200D}/\u{1F4BB}",
+        "dir/\u{200D}\u{1F4BB}",
+        "\u{1F468}\u{200D}\u{200D}\u{1F4BB}",
+        "a\u{200D}\u{1F4BB}",
+        "\u{1F468}\u{200D}b",
+        "\u{1F468}\u{FE0F}\u{1F3FD}\u{200D}\u{1F4BB}",
+        "a\u{FE0F}",
+        "\u{FE0F}.txt",
+        "\u{1F44D}\u{FE0F}\u{FE0F}",
+        "x\u{1F3FD}",
+        "\u{1F44D}\u{1F3FD}\u{1F3FD}",
+        "\u{1F3FD}",
+    ] {
+        assert_eq!(safe_parts(bad), None, "{bad:?}");
+    }
+    assert_eq!(visible("a\u{200D}b\u{FE0F}"), "a\\u{200D}b\\u{FE0F}");
+    // The emoji table's ends are emoji, the characters around them are not.
+    for &(first, last) in &EXTENDED_PICTOGRAPHIC {
+        for c in [first, last] {
+            assert!(is_emoji(char::from_u32(c).unwrap()), "{c:X}");
+        }
+    }
+    for c in [
+        'a',
+        '1',
+        '#',
+        '\u{A8}',
+        '\u{AA}',
+        '\u{1F3FB}',
+        '\u{1F3FF}',
+        '\u{FE0F}',
+        '\u{200D}',
+    ] {
+        assert!(!is_emoji(c), "{c:?}");
+    }
     let zip = build(
         &[
             e("ok.txt", b"ok"),
