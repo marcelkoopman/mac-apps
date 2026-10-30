@@ -72,6 +72,7 @@ use source::{compare_wants_text, drop_cursors, file_compares_as_shown, removal_l
 mod state;
 mod table;
 mod text;
+mod unzip;
 mod work;
 
 pub(crate) use image::{StepKeep, step_keep};

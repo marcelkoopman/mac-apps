@@ -44,6 +44,19 @@ pub struct OpenedFile {
     pub image: Option<OpenedImage>,
     /// A PDF: its text (or, without a text layer, the picture of its first page) is above.
     pub pdf: Option<crate::pdf::PdfFacts>,
+    /// A zip archive: the card's text is the list of names in it ([`crate::zip_archive`]).
+    pub zip: Option<ZipFile>,
+}
+
+/// A dropped or chosen zip: where it is (to extract it later) and what the card says about
+/// it. Only counts; the names are the card's text.
+#[derive(Clone)]
+pub struct ZipFile {
+    pub path: std::path::PathBuf,
+    pub facts: crate::zip_archive::ZipFacts,
+    /// Keeps a promised file (dragged from Mail, …) on disk while the card shows the zip, so
+    /// it can still be extracted; it goes when the card moves on.
+    pub keep: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 /// A picture from a drop or the open panel: its encoded bytes (shared with its history entry
@@ -110,6 +123,9 @@ impl OpenedImage {
 /// the card ([`unreadable_image`]). Kies bestand uses this too; the app then records it in
 /// history the same way as a drop.
 pub fn load_dropped(path: &Path) -> OpenedFile {
+    if crate::zip_archive::is_zip_file(path) {
+        return load_zip(path);
+    }
     if is_pdf_file(path) {
         return load_pdf(path, true);
     }
@@ -122,6 +138,33 @@ pub fn load_dropped(path: &Path) -> OpenedFile {
         return load_image(path);
     }
     opened
+}
+
+/// A zip (`.zip`): the names in it as the card's text, read from its central directory only
+/// (nothing is unpacked). A damaged, encrypted-only or empty zip is a note.
+fn load_zip(path: &Path) -> OpenedFile {
+    let name = file_name(path);
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return noted(name, unreadable());
+    };
+    let Ok(len) = file.metadata().map(|meta| meta.len()) else {
+        return noted(name, unreadable());
+    };
+    match crate::zip_archive::list(&mut file, len) {
+        Ok(listing) => OpenedFile {
+            name,
+            text: Some(listing.text(|more| crate::locale::tf("zip_more", &[&more]))),
+            note: None,
+            image: None,
+            pdf: None,
+            zip: Some(ZipFile {
+                path: path.to_path_buf(),
+                facts: listing.facts(),
+                keep: None,
+            }),
+        },
+        Err(error) => noted(name, error.message()),
+    }
 }
 
 fn load_image(path: &Path) -> OpenedFile {
@@ -175,6 +218,7 @@ fn from_image_bytes(name: String, mut bytes: Vec<u8>) -> OpenedFile {
                 zoomed: None,
             }),
             pdf: None,
+            zip: None,
         },
         None => noted(name, unreadable_image()),
     }
@@ -277,6 +321,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                         read,
                         scanned: false,
                     }),
+                    zip: None,
                 };
             }
             crate::format::hint_by_name(&name, &text);
@@ -290,6 +335,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                     read,
                     scanned: false,
                 }),
+                zip: None,
             }
         }
         Read::Pages {
@@ -326,6 +372,7 @@ fn load_pdf(path: &Path, ocr: bool) -> OpenedFile {
                     read: pages.min(crate::pdf::OCR_MAX_PAGES),
                     scanned: true,
                 }),
+                zip: None,
             }
         }
     }
@@ -381,6 +428,7 @@ fn load_file(path: &Path, preview: bool) -> OpenedFile {
                 note: None,
                 image: None,
                 pdf: None,
+                zip: None,
             }
         }
         Classified::NotText => noted(name, not_text()),
@@ -423,6 +471,7 @@ fn load_docx(path: &Path, name: &str, len: u64, preview: bool) -> Option<OpenedF
                 note: None,
                 image: None,
                 pdf: None,
+                zip: None,
             }
         }
         Err(DocxError::NotDocx) => return None,
@@ -465,6 +514,7 @@ fn document_with_picture(
             zoomed: None,
         }),
         pdf: None,
+        zip: None,
     }
 }
 
@@ -518,6 +568,7 @@ pub fn from_text(name: &str, text: Zeroizing<String>) -> OpenedFile {
         note: None,
         image: None,
         pdf: None,
+        zip: None,
     }
 }
 
@@ -544,6 +595,7 @@ pub fn noted(name: String, note: &str) -> OpenedFile {
         note: Some(note.to_string()),
         image: None,
         pdf: None,
+        zip: None,
     }
 }
 

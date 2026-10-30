@@ -203,9 +203,11 @@ impl ApplicationHandler<UserEvent> for App {
         let clear_wake = self.clear_sensitive_when_due(now);
         let forget_wake = self.forget_history_when_due(now);
         let opening_wake = self.spin_opening(now);
+        let unzip_wake = self.spin_unzip(now);
         event_loop.set_control_flow(mac_ui::wake::control_flow([
             Some(wake),
             opening_wake,
+            unzip_wake,
             blink_wake,
             clear_wake,
             forget_wake,

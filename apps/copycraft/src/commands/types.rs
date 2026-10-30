@@ -93,6 +93,9 @@ pub struct LaunchData {
     pub image_scan: Option<ImageScan>,
     /// The card shows a PDF (its text, or the first page of a scan): the footer counts pages.
     pub pdf: Option<crate::pdf::PdfFacts>,
+    /// The card shows a zip's list of names: the footer counts files and folders, and the
+    /// row offers Uitpakken.
+    pub zip: Option<crate::zip_archive::ZipFacts>,
     /// The page of that PDF the Beeld view shows (0-based).
     pub pdf_page: usize,
     /// The zoom of that page (percent; [`crate::pdf::ZOOM_FIT`]: fit in the well), and, above fit,
@@ -476,6 +479,8 @@ pub enum CommandId {
     Checksums,
     /// Compare a hex hash on the clipboard with the file's checksums: ✓ or ✗.
     ChecksumCompare,
+    /// Extract the zip on the card into a folder the user chooses ([`crate::zip_archive`]).
+    Unzip,
     /// The "Text ▾" chip on a text or code card: the card pops [`text_menu_items`].
     TextMenu,
     /// Text ▾ › Complexity: cognitive complexity per function, in a menu.

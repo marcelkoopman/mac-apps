@@ -72,9 +72,27 @@ pub fn set_opening(opening: bool) {
     show_spinner();
 }
 
-/// The wheel (and the "Opening file…" line under it) as [`BUSY`] and [`OPENING`] ask.
+/// "Extracting…" under the busy wheel while a zip is extracted, or take it away.
+pub fn set_unzipping(unzipping: bool) {
+    UNZIPPING.set(unzipping);
+    show_spinner();
+}
+
+/// The line under the wheel: "Opening file…" before "Extracting…".
+fn spinner_line() -> Option<&'static str> {
+    if OPENING.get() {
+        Some(crate::locale::t("opening_file"))
+    } else if UNZIPPING.get() {
+        Some(crate::locale::t("unzipping"))
+    } else {
+        None
+    }
+}
+
+/// The wheel (and the line under it) as [`BUSY`], [`OPENING`] and [`UNZIPPING`] ask.
 fn show_spinner() {
-    let (busy, opening) = (BUSY.get(), OPENING.get());
+    let (busy, line_text) = (BUSY.get(), spinner_line());
+    let opening = line_text.is_some();
     if !opening {
         OPENING_LINE.with(|slot| {
             if let Some(line) = slot.borrow().as_ref() {
@@ -103,11 +121,7 @@ fn show_spinner() {
     let spinner_frame = SPINNER.with(|slot| {
         let mut slot = slot.borrow_mut();
         let spinner = slot.get_or_insert_with(|| progress::Spinner::new(mtm, SpinnerSize::Regular));
-        spinner.set_accessibility_label(if opening {
-            crate::locale::t("opening_file")
-        } else {
-            mac_ui::lang::t("loading")
-        });
+        spinner.set_accessibility_label(line_text.unwrap_or_else(|| mac_ui::lang::t("loading")));
         spinner.add_centered(&parent, area);
         spinner.start();
         spinner.view().frame()
@@ -128,7 +142,7 @@ fn show_spinner() {
             line.setAccessibilityElement(false);
             line
         });
-        line.setStringValue(&NSString::from_str(crate::locale::t("opening_file")));
+        line.setStringValue(&NSString::from_str(line_text.unwrap_or_default()));
         line.sizeToFit();
         parent.addSubview(line);
         place_opening_line(line, &parent, area, spinner_frame);
@@ -158,6 +172,8 @@ thread_local! {
     static BUSY: Cell<bool> = const { Cell::new(false) };
     /// A file is opening ([`set_opening`]).
     static OPENING: Cell<bool> = const { Cell::new(false) };
+    /// A zip is being extracted ([`set_unzipping`]).
+    static UNZIPPING: Cell<bool> = const { Cell::new(false) };
     /// "Opening file…" under the wheel, made once.
     static OPENING_LINE: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
 }
@@ -304,7 +320,7 @@ pub(crate) fn place_spinner(well_frame: NSRect) {
         {
             spinner.center_in(well_frame);
             raise_view(spinner.view());
-            if OPENING.get()
+            if spinner_line().is_some()
                 && let Some(parent) = mac_ui::widgets::superview(spinner.view())
             {
                 OPENING_LINE.with(|line| {

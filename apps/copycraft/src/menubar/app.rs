@@ -81,6 +81,10 @@ pub(crate) struct App {
     pub(crate) opening: commands::FileOpening,
     pub(crate) opening_started: Option<(u64, Instant)>,
     pub(crate) opening_shown: bool,
+    /// A zip being extracted ([`App::unzip_opened`]): since when, and whether the card shows
+    /// "Extracting…".
+    pub(crate) unzip_started: Option<Instant>,
+    pub(crate) unzip_shown: bool,
     /// The short blink of the menu bar icon after a copy, and its two template glyphs.
     pub(crate) blink: tray::Blink,
     /// The glyph and its blink frame, both templates, built once.

@@ -51,7 +51,13 @@ impl App {
             work::Lane::File,
             work::QUICK,
             move || {
-                let opened = crate::open_file::load_dropped(&path);
+                let mut opened = crate::open_file::load_dropped(&path);
+                // A promised zip stays on disk while its card is shown, for Uitpakken.
+                if let Some(zip) = opened.zip.as_mut() {
+                    zip.keep = promised
+                        .clone()
+                        .map(|file| file as std::sync::Arc<dyn std::any::Any + Send + Sync>);
+                }
                 drop(promised);
                 warm_card_answers(&opened);
                 opened
@@ -94,8 +100,9 @@ impl App {
                 self.dropped_image_wait.push(image.bytes.clone());
             }
             Some(moved_to)
-        } else if let Some(text) = opened.text.as_deref() {
-            // A file that holds a token, key or URL password is shown, not kept in history. A
+        } else if let Some(text) = opened.text.as_deref().filter(|_| opened.zip.is_none()) {
+            // A zip's list of names is not kept in history: it is what the zip holds, not a
+            // copy. A file that holds a token, key or URL password is shown, not kept in history. A
             // long one is checked in the background first: `labels_checked` decides then.
             use crate::sensitivity::Record;
             match crate::sensitivity::record_when(crate::sensitivity::admission(
@@ -535,12 +542,21 @@ impl App {
         let text = self.opened_text();
         let note = self.opened.as_ref().and_then(|file| file.note.clone());
         let image = self.opened.as_ref().and_then(|file| file.image.clone());
-        if let Some(text) = text.as_deref() {
+        let zip = self
+            .opened
+            .as_ref()
+            .and_then(|file| file.zip.as_ref())
+            .map(|zip| zip.facts);
+        if zip.is_some() {
+            // A zip's list of names is not a table or code to format: it shows as it is.
+            self.card_view = CardView::Original;
+        } else if let Some(text) = text.as_deref() {
             self.card_view = commands::presented_view(text, self.card_view);
         }
         let mut data = self.launch_shell();
         data.source_name = Some(name);
         data.pdf = self.opened.as_ref().and_then(|file| file.pdf);
+        data.zip = zip;
         data.pdf_page = image.as_ref().map_or(0, |image| image.page);
         if let Some(image) = image.as_ref() {
             data.pdf_zoom = image.shown_zoom();
@@ -678,6 +694,7 @@ impl App {
             view: self.card_view,
             image_scan: self.image_scan.clone(),
             pdf: None,
+            zip: None,
             pdf_page: 0,
             pdf_zoom: crate::pdf::ZOOM_FIT,
             pdf_zoom_picture: None,

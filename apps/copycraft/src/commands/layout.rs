@@ -320,6 +320,7 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Info
             | CommandId::Checksums
             | CommandId::ChecksumCompare
+            | CommandId::Unzip
             | CommandId::Ocr
             | CommandId::Qr
             | CommandId::Diff
@@ -452,6 +453,7 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::Info => "info",
         CommandId::Checksums => "number.square",
         CommandId::ChecksumCompare => "checkmark.circle",
+        CommandId::Unzip => "archivebox",
         CommandId::Ocr => "text.viewfinder",
         CommandId::Qr => "qrcode",
         CommandId::Diff => "arrow.left.arrow.right",

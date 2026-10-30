@@ -155,6 +155,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         opening: commands::FileOpening::default(),
         opening_started: None,
         opening_shown: false,
+        unzip_started: None,
+        unzip_shown: false,
         blink: tray::Blink::default(),
         icons,
         hotkeys,

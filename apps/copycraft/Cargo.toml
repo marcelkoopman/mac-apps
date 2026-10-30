@@ -38,6 +38,7 @@ infer = "0.22"
 # Word documents (src/docx.rs): inflating `word/document.xml` from the docx zip, in memory. Already
 # in the tree (polars); pure Rust backend (miniz_oxide), no zlib/C. No zip crate: the zip
 # directory is read by hand. Approved by Marcel (2026-10-16).
+# Also inflates dropped .zip archives for Uitpakken (src/zip_archive.rs), same reader approach.
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 leakguard = "1.0.0"
 memchr = "2.8"

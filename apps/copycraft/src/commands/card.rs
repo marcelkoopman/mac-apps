@@ -336,6 +336,11 @@ pub fn work_card(data: &LaunchData) -> WorkCard {
             format!("{pages}  ·  {}", card.meta)
         };
     }
+    // A zip: its name, then what is in it (the text is the list of names).
+    if let Some(zip) = &data.zip {
+        card.title = crate::locale::t("zip_title").to_string();
+        card.meta = zip.label();
+    }
     // A document's picture is its first page only.
     if data.document_preview && data.view == CardView::Original {
         let first = crate::locale::t("document_first_page");

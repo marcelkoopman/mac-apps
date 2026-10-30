@@ -143,6 +143,69 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Kan deze afbeelding niet lezen",
         "Can't read this image",
     ),
+    // A dropped or chosen zip
+    ("chip_unzip", "Uitpakken", "Extract"),
+    (
+        "detail_unzip",
+        "Kies een map; bestaat er al iets met dezelfde naam, dan komt de inhoud in een nieuwe map",
+        "Choose a folder; if something with the same name is already there, the contents go into a new folder",
+    ),
+    ("zip_one_file", "1 bestand", "1 file"),
+    ("zip_n_files", "{0} bestanden", "{0} files"),
+    ("zip_one_folder", "1 map", "1 folder"),
+    ("zip_n_folders", "{0} mappen", "{0} folders"),
+    ("zip_unpacked", "{0} uitgepakt", "{0} unpacked"),
+    ("zip_more", "… en nog {0}", "… and {0} more"),
+    ("zip_meta_locked", "met wachtwoord", "password protected"),
+    ("zip_meta_unsafe", "onveilige namen", "unsafe names"),
+    (
+        "zip_meta_unsupported",
+        "onbekende compressie",
+        "unknown compression",
+    ),
+    ("zip_title", "Zip-archief", "Zip Archive"),
+    (
+        "zip_choose_folder",
+        "Kies waar de bestanden komen",
+        "Choose where the files go",
+    ),
+    ("unzipping", "Uitpakken…", "Extracting…"),
+    ("zip_extracted", "Uitgepakt in {0}", "Extracted to {0}"),
+    (
+        "zip_corrupt",
+        "Dit zip-bestand is beschadigd",
+        "This zip file is damaged",
+    ),
+    (
+        "zip_locked",
+        "Dit zip-bestand is met een wachtwoord beveiligd; uitpakken kan hier niet",
+        "This zip file is protected with a password; it cannot be extracted here",
+    ),
+    (
+        "zip_unsupported",
+        "Dit zip-bestand gebruikt een compressie die hier niet uitgepakt kan worden",
+        "This zip file uses a compression that cannot be extracted here",
+    ),
+    (
+        "zip_unsafe",
+        "Niet uitgepakt: een naam in dit zip-bestand wijst buiten de map, is een link of staat er twee keer in",
+        "Not extracted: a name in this zip file points outside the folder, is a link, or is in it twice",
+    ),
+    (
+        "zip_empty",
+        "Dit zip-bestand is leeg",
+        "This zip file is empty",
+    ),
+    (
+        "zip_too_large",
+        "Dit zip-bestand heeft te veel bestanden of is uitgepakt te groot",
+        "This zip file has too many files or is too large once extracted",
+    ),
+    (
+        "zip_write_failed",
+        "Uitpakken mislukt; wat al was uitgepakt is weer weggehaald",
+        "Extracting failed; what was already extracted has been removed",
+    ),
     // Checksums of a dropped or chosen file
     ("chip_checksums", "Controlegetallen", "Checksums"),
     (

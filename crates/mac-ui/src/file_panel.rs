@@ -65,6 +65,29 @@ pub fn choose_file(
     run(&panel)
 }
 
+/// Ask for one folder (no files, no multiple selection) in an open panel titled `title`, with
+/// `prompt` on the default button. The panel can create folders. Returns `Ok(None)` when the
+/// panel is cancelled. In a sandboxed app the chosen folder may be written to afterwards.
+///
+/// # Errors
+///
+/// [`FilePanelError::NoPath`] when the panel is confirmed without a path.
+pub fn choose_directory(
+    mtm: MainThreadMarker,
+    title: &str,
+    prompt: &str,
+) -> Result<Option<PathBuf>, FilePanelError> {
+    let panel = NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseFiles(false);
+    panel.setCanChooseDirectories(true);
+    panel.setCanCreateDirectories(true);
+    panel.setAllowsMultipleSelection(false);
+    panel.setTitle(Some(&NSString::from_str(title)));
+    panel.setMessage(Some(&NSString::from_str(title)));
+    panel.setPrompt(Some(&NSString::from_str(prompt)));
+    run(&panel)
+}
+
 /// Ask where to save a file in a save panel titled `title`, with `suggested_name` in the name
 /// field (give it with its extension). Only extensions with a declared content type restrict the
 /// panel. The panel can create directories and shows the extension. Returns `Ok(None)` when the

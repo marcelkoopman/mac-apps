@@ -63,6 +63,10 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         | SubjectKind::Pending
         | SubjectKind::PasteAsk => Vec::new(),
     };
+    // A zip's list of names: Uitpakken only; the text steps are for text, not for names.
+    if data.zip.is_some() && data.subject_kind == SubjectKind::Text {
+        chips = vec![unzip_chip()];
+    }
     // Not part of the text memo: the chip follows the two chosen copies, not the text.
     if data.diff.is_some() {
         insert_diff_chip(&mut chips);
@@ -89,6 +93,16 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         chips.extend(checksum_chips());
     }
     chips
+}
+
+/// *Uitpakken* on a zip's card: choose a folder, then the zip is extracted there.
+pub(crate) fn unzip_chip() -> Command {
+    command(
+        CommandId::Unzip,
+        crate::locale::t("chip_unzip"),
+        crate::locale::t("detail_unzip"),
+        "unzip extract zip archive uitpakken",
+    )
 }
 
 /// The Checksums view toggle and *Check Hash from Clipboard*, last on the row.

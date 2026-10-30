@@ -69,6 +69,7 @@ mod wipe_alloc;
 mod work;
 mod xsd_schema;
 mod youtube;
+mod zip_archive;
 
 /// Freed heap memory is zeroed first ([`wipe_alloc`]), so copied text left in buffers of
 /// Polars, AppKit or any other library does not stay readable after use.

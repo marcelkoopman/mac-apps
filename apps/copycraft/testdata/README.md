@@ -607,6 +607,33 @@ Use `/tmp/big.csv` (5 MB, 8 columns) from *Switching table versions with a large
 - [ ] No copy in the window: closing it brings the card back with the dropped file, as before. With the card open while the window closes after a copy, the card moves from the file to the copy.
 - [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no cells, sizes or file names. Nothing new is written to disk.
 
+### Dropping a zip
+
+Make fake test zips in Terminal (nothing real in them):
+
+```sh
+mkdir -p /tmp/zt/docs/sub && printf 'hallo\n' > /tmp/zt/docs/a.txt && printf 'wereld\n' > /tmp/zt/docs/sub/b.txt
+ditto -c -k --sequesterRsrc --keepParent /tmp/zt/docs /tmp/docs.zip   # as Finder's Compress makes it
+(cd /tmp/zt && zip -qr /tmp/loose.zip docs)                              # the same with zip
+python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/slip.zip","w"); z.writestr("ok.txt","ok"); z.writestr("../evil.txt","evil"); z.close()'
+(cd /tmp/zt && zip -qe -P test /tmp/locked.zip docs/a.txt)              # password protected
+printf 'PK\003\004 not really a zip' > /tmp/broken.zip
+python3 -c 'import zipfile; zipfile.ZipFile("/tmp/empty.zip","w").close()'
+mkdir -p /tmp/unzip-here
+```
+
+`python3` comes with the Xcode command line tools; without them skip the slip and empty zips (the unit tests cover them).
+
+- [ ] Drop `/tmp/docs.zip` on the card. *Bestand openen…* / *Opening file…* shows only if reading takes over 150 ms. The card is titled *Zip-archief* / *Zip Archive*; the meta line says `docs.zip  ·  2 bestanden  ·  2 mappen  ·  0.013 KB uitgepakt` (EN: *files*, *folders*, *unpacked*). The text lists `docs/  (2)`, `docs/a.txt`, `docs/sub/  (1)`, `docs/sub/b.txt`; no `__MACOSX`. The chip row is *Uitpakken* / *Extract* and the two checksum chips; no Text ▾, no table. The zip's names are not added to the history strip.
+- [ ] ⌘O and choose `/tmp/loose.zip`: the same listing.
+- [ ] *Uitpakken* / *Extract*: a panel *Kies waar de bestanden komen* / *Choose where the files go* that picks folders (with *New Folder*), button *Uitpakken* / *Extract*. Choose `/tmp/unzip-here`. A toast *Uitgepakt in unzip-here* / *Extracted to unzip-here*; `ls -R /tmp/unzip-here` shows `docs/a.txt` and `docs/sub/b.txt` with the right contents. Cancel in the panel does nothing.
+- [ ] Never overwrite: extract `/tmp/docs.zip` into `/tmp/unzip-here` again. The rule: when any top-level name of the zip already exists in the chosen folder, everything goes into a new folder named after the zip (`docs`, else `docs 2`, `docs 3`, …); otherwise straight into the chosen folder. Here `docs` exists, so the toast says *Uitgepakt in docs 2* / *Extracted to docs 2*, and `/tmp/unzip-here/docs` is untouched (`cat /tmp/unzip-here/docs/a.txt` still says `hallo`).
+- [ ] `/tmp/slip.zip`: the listing shows `../evil.txt` and `ok.txt`, the meta line ends with *onveilige namen* / *unsafe names*. *Uitpakken* shows no panel but the toast *Niet uitgepakt: een naam in dit zip-bestand wijst buiten de map…* / *Not extracted: a name in this zip file points outside the folder…*. Nothing appears in `/tmp` or `/tmp/unzip-here`.
+- [ ] `/tmp/locked.zip`: the names show, meta *met wachtwoord* / *password protected*; *Uitpakken* says it is protected with a password. `/tmp/broken.zip`: the card says *Dit zip-bestand is beschadigd* / *This zip file is damaged*. `/tmp/empty.zip`: *Dit zip-bestand is leeg* / *This zip file is empty*.
+- [ ] A larger zip: `mkdir -p /tmp/zt/many && for i in $(seq 1 1500); do printf 'x%.0s' $(seq 1 100) > /tmp/zt/many/f$i.txt; done && mkfile -n 300m /tmp/zt/many/big.bin && ditto -c -k --keepParent /tmp/zt/many /tmp/many.zip`. The card lists the first 1000 lines, then *… en nog N* / *… and N more*. *Uitpakken* into a new folder: after 150 ms *Uitpakken…* / *Extracting…* under the wheel; the card stays usable and the toast comes when it is done.
+- [ ] Sandbox (signed build): extracting into a folder chosen in the panel works (Desktop, Documents, an external disk). A zip attachment dragged from Mail (a promised file) can be extracted while its card is shown.
+- [ ] Debug build: `log stream --level debug --predicate 'subsystem == "nl.marcelkoopman.copycraft"'` shows no zip names, paths, sizes or counts. Nothing is written besides the chosen folder.
+
 ### Compare two dropped text files
 
 Make two fake files first: `printf 'alpha\nbeta\ngamma\n' > /tmp/a.txt` and `printf 'alpha\nBETA\ngamma\ndelta\n' > /tmp/b.txt`.

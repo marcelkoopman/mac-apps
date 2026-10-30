@@ -461,6 +461,14 @@ pub fn set_opening(opening: bool) {
     let _ = opening;
 }
 
+/// "Extracting…" with the busy spinner over the card while a zip is extracted, or take it away.
+pub fn set_unzipping(unzipping: bool) {
+    #[cfg(target_os = "macos")]
+    crate::macos_launcher::set_unzipping(unzipping);
+    #[cfg(not(target_os = "macos"))]
+    let _ = unzipping;
+}
+
 /// The Preview button's spinner (dimmed, no second click) while Preview opens the picture.
 pub fn set_preview_busy(busy: bool) {
     #[cfg(target_os = "macos")]
