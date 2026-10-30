@@ -57,7 +57,7 @@ impl App {
                 let folder = extracted
                     .folder
                     .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
+                    .map(|name| crate::zip_archive::visible(&name.to_string_lossy()))
                     .unwrap_or_default();
                 crate::locale::tf("zip_extracted", &[&folder])
             }

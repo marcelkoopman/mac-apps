@@ -451,3 +451,40 @@ fn every_error_has_a_message() {
         assert_ne!(error.message(), "?");
     }
 }
+
+#[test]
+fn control_and_bidi_characters_are_unsafe_and_shown() {
+    for bad in [
+        "factuur\u{202E}fdp.app",
+        "a\nb.txt",
+        "tab\there",
+        "del\u{7F}",
+        "c1\u{85}x",
+        "x\u{2066}y",
+        "x\u{2069}y",
+        "x\u{200F}y",
+        "dir\u{202A}/file",
+    ] {
+        assert_eq!(safe_parts(bad), None, "{bad:?}");
+    }
+    assert!(safe_parts("gewoon é ü 漢字.txt").is_some());
+    let zip = build(
+        &[
+            e("ok.txt", b"ok"),
+            e("factuur\u{202E}fdp.app", b"x"),
+            e("two\nlines", b"y"),
+        ],
+        false,
+    );
+    let listed = listing(&zip).unwrap();
+    assert_eq!(listed.facts().blocker(), Some(ZipError::Unsafe));
+    let text = listed.text(|_| String::new());
+    assert!(
+        text.contains("factuur\\u{202E}fdp.app"),
+        "{:?}",
+        text.as_str()
+    );
+    assert!(text.contains("two\\u{000A}lines"));
+    assert!(!text.chars().any(|c| c == '\u{202E}'));
+    assert_eq!(text.lines().count(), 3);
+}

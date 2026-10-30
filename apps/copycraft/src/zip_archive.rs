@@ -7,7 +7,7 @@
 //!
 //! Safety:
 //! - Every entry name must be a plain relative path: no leading `/`, no `..`, no drive
-//!   (`C:`), no NUL. A backslash counts as a separator (old Windows zips). One unsafe entry
+//!   (`C:`), no NUL or other control character, no bidirectional control (U+202E …). A backslash counts as a separator (old Windows zips). One unsafe entry
 //!   makes the whole zip refuse to extract ([`ZipError::Unsafe`]); the names still show.
 //! - Symbolic links are refused the same way, and so are two entries with the same path (also
 //!   when they differ only in case: the Mac's disk usually does not tell them apart).
@@ -205,14 +205,15 @@ impl Listing {
 
     /// The listing as the card's text: every file and folder by its path, sorted, a folder
     /// with a trailing `/` and the number of entries right in it ("docs/  (3)"). At most
-    /// [`SHOWN_LINES`] lines, then `more(n)`. Unsafe names show as stored.
+    /// [`SHOWN_LINES`] lines, then `more(n)`. Unsafe names show as stored, control and
+    /// bidirectional characters written out ([`visible`]).
     pub fn text(&self, more: impl Fn(usize) -> String) -> Zeroizing<String> {
         // path → (is folder, entries right in it)
         let mut lines: std::collections::BTreeMap<String, (bool, usize)> = Default::default();
         let mut children: HashMap<String, HashSet<String>> = HashMap::new();
         for entry in &self.entries {
             let Some(parts) = entry.parts.as_ref().filter(|parts| !parts.is_empty()) else {
-                lines.insert(entry.name.clone(), (entry.dir, 0));
+                lines.insert(visible(&entry.name), (entry.dir, 0));
                 continue;
             };
             for end in 1..=parts.len() {
@@ -480,11 +481,37 @@ fn decode_name(raw: &[u8], utf8: bool) -> String {
     }
 }
 
+/// A character that can make a name look like another one, or break the list on the card:
+/// a control character (C0 such as a newline, DEL, C1) or a bidirectional control (U+200E/F,
+/// U+061C, U+202A–202E, U+2066–2069: `factuur\u{202E}fdp.app` shows as `factuurppa.pdf`).
+pub fn is_deceptive(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+        )
+}
+
+/// `name` with every [`is_deceptive`] character written out (`\u{202E}`), so the list shows
+/// what is really there.
+pub fn visible(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        if is_deceptive(c) {
+            out.push_str(&format!("\\u{{{:04X}}}", c as u32));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// The path parts of an entry name, when it stays inside the folder it is extracted to:
-/// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no NUL, each part at most 255
-/// bytes. Empty and `.` parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
+/// relative (no leading `/` or `\`), no `..`, no drive (`C:`), no control or bidirectional
+/// characters ([`is_deceptive`], NUL included), each part at most 255 bytes. Empty and `.`
+/// parts are skipped (`a//b`, `./a`). `None` for an unsafe name.
 pub fn safe_parts(name: &str) -> Option<Vec<String>> {
-    if name.is_empty() || name.contains('\0') {
+    if name.is_empty() || name.chars().any(is_deceptive) {
         return None;
     }
     let name = name.replace('\\', "/");
