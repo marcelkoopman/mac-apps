@@ -6,6 +6,9 @@ mod brackets;
 mod capture;
 mod card_layout;
 mod card_theme;
+// Used by the table window's chart once its button is in (next commits).
+#[allow(dead_code)]
+mod chart_data;
 mod checksum;
 mod clipboard;
 mod color;
