@@ -219,6 +219,7 @@ fn at_most_four_chips_show_and_text_stays_visible() {
         keywords: String::new(),
         enabled: true,
         pinned: false,
+        kinds: Default::default(),
     };
     let ids = [
         CommandId::Convert,

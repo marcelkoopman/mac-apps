@@ -266,6 +266,7 @@ pub fn search_pool(data: &LaunchData) -> Vec<Command> {
         let keywords = history_keywords(item);
         commands.push(Command {
             pinned: item.pinned,
+            kinds: history_kinds(item),
             ..command(
                 CommandId::History(item.index),
                 &history_chip_title(item, data.settings.privacy_filter),

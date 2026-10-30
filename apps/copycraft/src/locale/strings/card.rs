@@ -326,6 +326,33 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("search", "Zoeken", "Search"),
     ("search_commands", "Zoek opdrachten", "Search commands"),
+    // Search by kind: the chips and the word after `soort:` / `type:`
+    ("kind_prefix", "soort:", "type:"),
+    ("kind_token_text", "tekst", "text"),
+    ("kind_token_link", "link", "link"),
+    ("kind_token_code", "code", "code"),
+    ("kind_token_table", "tabel", "table"),
+    ("kind_token_image", "afbeelding", "image"),
+    ("kind_token_colour", "kleur", "colour"),
+    ("kind_token_pinned", "vastgepind", "pinned"),
+    ("kind_chip_all", "Alles", "All"),
+    ("kind_chip_text", "Tekst", "Text"),
+    ("kind_chip_link", "Link", "Link"),
+    ("kind_chip_code", "Code", "Code"),
+    ("kind_chip_table", "Tabel", "Table"),
+    ("kind_chip_image", "Afbeelding", "Image"),
+    ("kind_chip_colour", "Kleur", "Colour"),
+    ("kind_chip_pinned", "Vastgepind", "Pinned"),
+    (
+        "kind_filter_detail",
+        "Zoek alleen in kopieën van deze soort",
+        "Search only copies of this kind",
+    ),
+    (
+        "kind_filter_all_detail",
+        "Zoek weer in alles",
+        "Search everything again",
+    ),
     // ⌘K: the card's actions in one list
     (
         "action_panel",

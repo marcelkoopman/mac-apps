@@ -201,6 +201,11 @@ mod tests {
             "code_menu",
             // "Help" is Dutch too (`⋯` › Help ›).
             "help_menu",
+            // Search by kind: "link" and "code" are Dutch too.
+            "kind_token_link",
+            "kind_token_code",
+            "kind_chip_link",
+            "kind_chip_code",
             // "Link" is Dutch too (the pending copy's hint).
             "paste_hint_link",
             // Case style names are written in the style itself.
@@ -295,6 +300,33 @@ mod tests {
             t_in(Lang::Nl, "paste_here_hint"),
             "Plak hier (⌘V) of zet geschiedenis aan in Instellingen"
         );
+    }
+
+    #[test]
+    fn kind_filter_keys_are_in_both_languages() {
+        for kind in ["text", "link", "code", "table", "image", "colour", "pinned"] {
+            for key in [format!("kind_token_{kind}"), format!("kind_chip_{kind}")] {
+                let (_, nl, en) = all()
+                    .find(|(k, _, _)| *k == key)
+                    .unwrap_or_else(|| panic!("{key} is missing"));
+                assert!(!nl.is_empty() && !en.is_empty(), "{key}");
+            }
+        }
+        for key in [
+            "kind_prefix",
+            "kind_chip_all",
+            "kind_filter_detail",
+            "kind_filter_all_detail",
+        ] {
+            let (_, nl, en) = all()
+                .find(|(k, _, _)| *k == key)
+                .unwrap_or_else(|| panic!("{key} is missing"));
+            assert!(!nl.is_empty() && nl != en, "{key}");
+        }
+        assert_eq!(t_in(Lang::Nl, "kind_prefix"), "soort:");
+        assert_eq!(t_in(Lang::En, "kind_prefix"), "type:");
+        // Glossary: a picture is an Afbeelding / Image.
+        assert_eq!(t_in(Lang::Nl, "kind_chip_image"), "Afbeelding");
     }
 
     #[test]

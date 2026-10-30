@@ -212,7 +212,9 @@ impl App {
             | CommandId::ImageMenu
             | CommandId::TextMenu
             | CommandId::AiMenu
-            | CommandId::TableChooseColumns => {}
+            | CommandId::TableChooseColumns
+            // Search by kind is the card's own (it edits the search field).
+            | CommandId::SearchKind(_) => {}
             // The table window's grid menu; they come in as the window's commands.
             CommandId::TableCopyCell(..)
             | CommandId::TableCopyRow(_)

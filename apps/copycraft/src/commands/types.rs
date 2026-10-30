@@ -45,6 +45,8 @@ pub struct Hist {
     pub pinned: bool,
     /// A pinned text's snippet name ([`crate::snippet`]).
     pub snippet: Option<String>,
+    /// The type detected when it was copied, for search by kind ([`super::history_kinds`]).
+    pub kind: FormatKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -589,6 +591,9 @@ pub enum CommandId {
     DeleteHistory,
     /// Drop every pin. Unpinned entries stay.
     ClearPins,
+    /// Search by kind: the chip writes `soort:…` in the field; `None` is *Alles*. Run in the
+    /// card, not by the app.
+    SearchKind(Option<super::KindFilter>),
     Quit,
 }
 
@@ -603,6 +608,8 @@ pub struct Command {
     /// A pinned history row: its menu item and chip show the pin ([`crate::commands::PIN_SYMBOL`]),
     /// and VoiceOver reads [`crate::commands::pinned_label`]. The title has no mark.
     pub pinned: bool,
+    /// A history row's kinds, for search by kind ([`super::search_shown`]). Empty otherwise.
+    pub(crate) kinds: super::KindSet,
 }
 
 impl Command {

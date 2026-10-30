@@ -815,3 +815,13 @@ Run each step twice: once from Terminal or Ghostty with `cargo run -p copycraft`
 - [ ] On a CSV, sort a column (one table step): ⌘K shows *Maak tabelstap ongedaan  ⌘Z*; after ⌘Z the redo row with *⇧⌘Z*.
 - [ ] VoiceOver: ⌘K says *N acties voor deze kaart, typ om te filteren* / *N actions for this card, type to filter*; the field is read as *Acties voor deze kaart*, each row as a button with its title. In English the same in English.
 - [ ] Privacy: the log (Console, process CopyCraft) shows no typed text, action names or content.
+
+## Search by kind (Mac only, fake data)
+
+- [ ] Turn history on, then copy `https://example.com/docs`, `{"naam": "Voorbeeld"}`, `a,b` + newline + `1,2`, `#336699`, `boodschappen voor morgen` (pin it) and take a screenshot. Open the card and press `/`: the row shows *Alles*, *Tekst*, *Link*, *Code*, *Tabel*, *Afbeelding*, *Kleur*, *Vastgepind* (EN *All*, … *Pinned*).
+- [ ] Click *Link*: the field says `soort:link ` (EN `type:link `) and only the link copy shows, after *Alles*. Type `docs`: it stays; type `zzz`: only *Alles*. Click *Alles*: the prefix goes, the typed text stays.
+- [ ] Type `type:afbeelding` and `soort:image`: only the screenshot. `soort:kleur`: only `#336699`. `type:pinned morgen`: only the pinned text. `soort:onbekend` searches the text as typed.
+- [ ] Choose *Code*, close the card with the hotkey (not Esc), open it and type `n`: the field says `soort:code n` (check that the caret is at the end). Esc, open again and type `n`: no prefix.
+- [ ] With history off (or empty) `/` shows the card's chips as before, not the kind chips.
+- [ ] A kind no copy has is dimmed. VoiceOver reads each chip by its name.
+- [ ] Privacy: quit and start CopyCraft: no kind is remembered (`defaults read nl.marcelkoopman.copycraft` has none). The log shows no search text or kinds.

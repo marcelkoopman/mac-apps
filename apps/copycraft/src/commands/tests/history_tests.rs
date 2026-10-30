@@ -197,6 +197,7 @@ fn query_finds_appearance_and_history_but_not_quit() {
         search: Zeroizing::new(String::new()),
         pinned: false,
         snippet: None,
+        kind: crate::format::FormatKind::Plain,
     });
     let pool = search_pool(&input);
     assert!(matching(&pool, "quit").is_empty());
@@ -228,6 +229,7 @@ fn default_chips_leave_history_for_search() {
             search: Zeroizing::new(String::new()),
             pinned: false,
             snippet: None,
+            kind: crate::format::FormatKind::Plain,
         });
     }
     input.can_clear_history = true;
@@ -267,6 +269,7 @@ fn search_hits_the_body_while_a_masked_title_stays_a_label() {
         search: Zeroizing::new(phrase.into()),
         pinned: true,
         snippet: None,
+        kind: crate::format::FormatKind::Plain,
     });
     input.settings.privacy_filter = true;
     let masked = matching(&search_pool(&input), "phrase");
@@ -404,6 +407,7 @@ fn swap_lives_under_more_also_with_a_full_chip_row() {
         keywords: String::new(),
         enabled: true,
         pinned: false,
+        kinds: Default::default(),
     };
     let row = [
         CommandId::Convert,

@@ -449,8 +449,14 @@ pub(crate) fn layout(fresh_place: bool) {
     let panel = searching && ACTION_SCOPE.with(Cell::get);
     let shown = if panel {
         PANEL.with(|slot| commands::panel_matching(&slot.borrow(), query.as_str()))
-    } else if searching && !query.trim().is_empty() {
-        POOL.with(|slot| commands::matching(&slot.borrow(), query.as_str()))
+    } else if searching
+        && (!query.trim().is_empty() || KIND_CHIPS.with(|slot| !slot.borrow().is_empty()))
+    {
+        POOL.with(|pool| {
+            KIND_CHIPS.with(|chips| {
+                commands::search_shown(&pool.borrow(), &chips.borrow(), query.as_str())
+            })
+        })
     } else {
         ACTIONS.with(|slot| slot.borrow().clone())
     };
@@ -474,13 +480,17 @@ pub(crate) fn layout(fresh_place: bool) {
     ACTIONS.with(|actions| {
         POOL.with(|pool| {
             PANEL.with(|panel| {
-                let (actions, pool, panel) = (actions.borrow(), pool.borrow(), panel.borrow());
-                let offered: Vec<&Command> = actions
-                    .iter()
-                    .chain(pool.iter())
-                    .chain(panel.iter())
-                    .collect();
-                prune_chip_pool(&offered);
+                KIND_CHIPS.with(|kinds| {
+                    let (actions, pool) = (actions.borrow(), pool.borrow());
+                    let (panel, kinds) = (panel.borrow(), kinds.borrow());
+                    let offered: Vec<&Command> = actions
+                        .iter()
+                        .chain(pool.iter())
+                        .chain(panel.iter())
+                        .chain(kinds.iter())
+                        .collect();
+                    prune_chip_pool(&offered);
+                });
             });
         });
     });

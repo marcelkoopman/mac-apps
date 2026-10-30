@@ -664,6 +664,10 @@ impl App {
                 search: self.history.search_text(index),
                 pinned: self.history.is_pinned(index),
                 snippet: self.history.snippet_name(index).map(str::to_string),
+                kind: self
+                    .history
+                    .kind(index)
+                    .unwrap_or(crate::format::FormatKind::Plain),
             })
             .collect();
         LaunchData {

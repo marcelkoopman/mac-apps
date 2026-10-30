@@ -357,6 +357,10 @@ pub(crate) fn activate_overflow(index: usize) {
 }
 
 pub(crate) fn run_command(cmd: Command) {
+    if let CommandId::SearchKind(kind) = cmd.id {
+        apply_kind(kind);
+        return;
+    }
     if cmd.id == CommandId::AiMenu {
         pop_ai_menu();
         return;
@@ -665,7 +669,11 @@ pub(crate) fn open_search(initial: &str) {
 fn open_search_in(initial: &str, panel: bool) {
     SEARCHING.set(true);
     set_action_scope(panel);
-    set_query(initial);
+    // A search goes on with the kind last chosen this session.
+    let kind = LAST_KIND.with(Cell::get).filter(|_| !panel);
+    set_query(&zeroize::Zeroizing::new(commands::kind_query(
+        kind, initial,
+    )));
     SELECTION.set(0);
     layout(false);
     focus_field();
@@ -689,6 +697,33 @@ pub(crate) fn toggle_action_panel() {
             mac_ui::a11y::announce(field, &crate::locale::tf("action_panel_open", &[&count]));
         }
     });
+}
+
+/// A kind chip: `soort:link` (EN `type:link`) leads the search text, *Alles* takes it away.
+fn apply_kind(kind: Option<commands::KindFilter>) {
+    let query = current_query();
+    let rest = commands::split_kind(query.as_str()).1;
+    let next = zeroize::Zeroizing::new(commands::kind_query(kind, rest));
+    LAST_KIND.set(kind);
+    set_query(&next);
+    SELECTION.set(0);
+    layout(false);
+    focus_field();
+}
+
+/// The search text changed: remember its kind. A search typed anew goes on with the last one.
+pub(crate) fn note_kind(was_searching: bool) {
+    let query = current_query();
+    let kind = commands::split_kind(query.as_str()).0;
+    match LAST_KIND.with(Cell::get) {
+        Some(last) if !was_searching && kind.is_none() => {
+            set_query(&zeroize::Zeroizing::new(commands::kind_query(
+                Some(last),
+                query.as_str(),
+            )));
+        }
+        _ => LAST_KIND.set(kind),
+    }
 }
 
 /// The search field says what it searches: the card's actions (⌘K) or everything.
@@ -719,6 +754,10 @@ pub(crate) fn close_search() {
         return;
     }
     SEARCHING.set(false);
+    if !ACTION_SCOPE.with(Cell::get) {
+        // Esc forgets the kind searched by.
+        LAST_KIND.set(None);
+    }
     set_action_scope(false);
     set_query("");
     SELECTION.set(0);
@@ -737,7 +776,7 @@ pub fn wipe_shown() {
     CARD_EXCERPT.with(wipe_string_slot);
     CARD_PLACEHOLDER.with(wipe_string_slot);
     LINK_PAGE.with(|slot| set_secret_opt(slot, None));
-    for slot in [&ACTIONS, &POOL, &PANEL, &OVERFLOW, &SHOWN] {
+    for slot in [&ACTIONS, &POOL, &PANEL, &KIND_CHIPS, &OVERFLOW, &SHOWN] {
         slot.with(|slot| set_commands(slot, Vec::new()));
     }
     clear_painted();
@@ -748,6 +787,7 @@ pub fn wipe_shown() {
     wipe_shown_views();
     SEARCHING.set(false);
     ACTION_SCOPE.set(false);
+    LAST_KIND.set(None);
 }
 
 pub(crate) fn wipe_string_slot(slot: &RefCell<String>) {

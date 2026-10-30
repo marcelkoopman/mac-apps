@@ -306,6 +306,11 @@ thread_local! {
     static ACTION_SCOPE: Cell<bool> = const { Cell::new(false) };
     /// What ⌘K lists for the card on screen.
     static PANEL: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
+    /// The chips of an open search: *Alles*, *Tekst*, *Link*, … ([`commands::kind_chips`]).
+    static KIND_CHIPS: RefCell<Vec<Command>> = const { RefCell::new(Vec::new()) };
+    /// The kind last searched by, for this session only (in memory, never stored); Esc and
+    /// *Alles* forget it.
+    static LAST_KIND: Cell<Option<commands::KindFilter>> = const { Cell::new(None) };
 }
 
 // Its own block: one `thread_local!` this long hits the macro's recursion limit.
@@ -560,12 +565,16 @@ define_class!(
                 item_query_changed(self);
                 return;
             }
+            let was_searching = SEARCHING.with(Cell::get);
             let query = current_query();
             if query.as_str() == "/" && !ACTION_SCOPE.with(Cell::get) {
                 set_query("");
                 SEARCHING.set(true);
             } else if !query.is_empty() {
                 SEARCHING.set(true);
+            }
+            if SEARCHING.with(Cell::get) && !ACTION_SCOPE.with(Cell::get) {
+                note_kind(was_searching);
             }
             SELECTION.set(0);
             layout(false);

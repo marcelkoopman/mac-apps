@@ -246,6 +246,7 @@ fn history_item(index: usize, title: &str, text: bool) -> Hist {
         search: Zeroizing::new(String::new()),
         pinned: false,
         snippet: None,
+        kind: crate::format::FormatKind::Plain,
     }
 }
 
@@ -254,6 +255,7 @@ mod card_table_tests;
 mod card_tests;
 mod chips_tests;
 mod history_tests;
+mod kind_filter_tests;
 mod layout_tests;
 mod menu_tests;
 mod meta_tests;

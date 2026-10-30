@@ -596,6 +596,7 @@ pub(crate) fn store_with_card(data: LaunchData, card: commands::WorkCard) {
     let pool = commands::search_pool(&data);
     PANEL.with(|slot| set_commands(slot, commands::card_actions(&data, &pool)));
     POOL.with(|slot| set_commands(slot, pool));
+    KIND_CHIPS.with(|slot| set_commands(slot, commands::kind_chips(&data)));
     OVERFLOW.with(|slot| {
         set_commands(
             slot,

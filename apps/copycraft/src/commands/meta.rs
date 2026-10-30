@@ -283,5 +283,6 @@ pub(crate) fn command_enabled(
         keywords: keywords.to_string(),
         enabled,
         pinned: false,
+        kinds: KindSet::default(),
     }
 }
