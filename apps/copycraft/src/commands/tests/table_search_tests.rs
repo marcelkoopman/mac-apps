@@ -119,7 +119,7 @@ fn large_tables_search_on_a_thread_and_only_the_newest_result_counts() {
     assert!(search_on_thread(2_001, 10));
     assert!(search_on_thread(SEARCH_ON_THREAD_CELLS + 1, 0));
     assert!(!search_on_thread(0, 50));
-    let mut generation = SearchGeneration::default();
+    let generation = SearchGeneration::default();
     let first = generation.start();
     let second = generation.start();
     // The first search ends last: its result is dropped.
@@ -131,6 +131,40 @@ fn large_tables_search_on_a_thread_and_only_the_newest_result_counts() {
 }
 
 #[test]
+fn a_stale_search_stops_within_a_thousand_rows() {
+    use crate::commands::{SEARCH_CHECK_ROWS, SearchGeneration, filter_sheet, matching_rows_while};
+    use std::cell::Cell;
+    let grid: Vec<Vec<String>> = (0..5_000).map(|i| vec![format!("rij {i}")]).collect();
+    let body = grid
+        .iter()
+        .map(|row| row[0].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let generation = SearchGeneration::default();
+    let mine = generation.start();
+    // Still the newest: every row is looked at.
+    let all = matching_rows_while(&grid, "rij", || generation.current(mine)).expect("all");
+    assert_eq!(all.len(), 5_000);
+    // A newer search (or a closed window) after the first block: it stops at the next look.
+    let asked = Cell::new(0);
+    let thread_side = generation.clone();
+    let stopped = matching_rows_while(&grid, "rij", || {
+        asked.set(asked.get() + 1);
+        if asked.get() == 2 {
+            generation.start();
+        }
+        thread_side.current(mine)
+    });
+    assert_eq!(stopped, None);
+    assert_eq!(
+        asked.get(),
+        2,
+        "looked again after {SEARCH_CHECK_ROWS} rows"
+    );
+    assert!(filter_sheet(&grid, &body, "rij", || false).is_none());
+}
+
+#[test]
 fn filter_sheet_keeps_the_lines_of_the_matching_rows() {
     let grid = rows(&[
         &["Jan", "Groningen"],
@@ -138,8 +172,9 @@ fn filter_sheet_keeps_the_lines_of_the_matching_rows() {
         &["Piet", "Utrecht"],
     ]);
     let body = "Jan\tGroningen\nAnja\tUtrecht\nPiet\tUtrecht";
-    let (found, kept) = crate::commands::filter_sheet(&grid, body, "utrecht").expect("filter");
+    let (found, kept) =
+        crate::commands::filter_sheet(&grid, body, "utrecht", || true).expect("filter");
     assert_eq!(found, [1, 2]);
     assert_eq!(kept.as_str(), "Anja\tUtrecht\nPiet\tUtrecht");
-    assert!(crate::commands::filter_sheet(&grid, body, " ").is_none());
+    assert!(crate::commands::filter_sheet(&grid, body, " ", || true).is_none());
 }

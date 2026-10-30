@@ -20,8 +20,7 @@ thread_local! {
     static PREPARED: RefCell<Option<std::sync::Arc<crate::dataframe::PreparedSheet>>> =
         const { RefCell::new(None) };
     /// Numbers the searches of a large sheet on a thread ([`commands::SearchGeneration`]).
-    static SEARCH_GENERATION: Cell<commands::SearchGeneration> =
-        Cell::new(commands::SearchGeneration::default());
+    static SEARCH_GENERATION: commands::SearchGeneration = commands::SearchGeneration::default();
     /// The search on its way on a thread: its generation, the sheet's body key and the query.
     static SEARCH_PENDING: RefCell<Option<(u64, u64, zeroize::Zeroizing<String>)>> =
         const { RefCell::new(None) };
@@ -291,7 +290,12 @@ fn search_sheet(
         // A search here makes any on a thread stale.
         bump_search_generation();
         SEARCH_PENDING.with(|slot| slot.replace(None));
-        return Ok(commands::filter_sheet(&sheet.rows, &prepared.layout.body, query));
+        return Ok(commands::filter_sheet(
+            &sheet.rows,
+            &prepared.layout.body,
+            query,
+            || true,
+        ));
     }
     let done = SEARCH_DONE.with(|slot| slot.borrow_mut().take());
     if let Some(done) = done.filter(|done| done.body_key == key && *done.query == query) {
@@ -312,24 +316,28 @@ fn search_sheet(
 }
 
 fn bump_search_generation() -> u64 {
-    let mut generation = SEARCH_GENERATION.get();
-    let number = generation.start();
-    SEARCH_GENERATION.set(generation);
-    number
+    SEARCH_GENERATION.with(commands::SearchGeneration::start)
 }
 
 /// Search `prepared` for `query` on a thread; the window repaints with the result when it is
-/// still the newest search ([`commands::SearchGeneration`]). Nothing is logged.
+/// still the newest search ([`commands::SearchGeneration`]). A newer search, closing the window
+/// or Clear stops it within [`commands::SEARCH_CHECK_ROWS`] rows, and the sheet it holds goes.
+/// Nothing is logged.
 fn start_thread_search(prepared: std::sync::Arc<crate::dataframe::PreparedSheet>, query: &str) {
     let generation = bump_search_generation();
+    let counter = SEARCH_GENERATION.with(Clone::clone);
     let key = prepared.body_key;
     let query = zeroize::Zeroizing::new(query.to_string());
     SEARCH_PENDING.with(|slot| slot.replace(Some((generation, key, query.clone()))));
     let spawned = std::thread::Builder::new()
         .name("copycraft-table-search".into())
         .spawn(move || {
-            let found =
-                commands::filter_sheet(&prepared.sheet.rows, &prepared.layout.body, &query);
+            let found = commands::filter_sheet(
+                &prepared.sheet.rows,
+                &prepared.layout.body,
+                &query,
+                || counter.current(generation),
+            );
             // The sheet goes before the main thread is asked: the window may have dropped it.
             drop(prepared);
             let done = found.map(|(matches, kept)| ThreadSearch {
@@ -351,7 +359,7 @@ fn start_thread_search(prepared: std::sync::Arc<crate::dataframe::PreparedSheet>
 
 /// A search on a thread is done: drawn when it is still the newest, else dropped (wiped).
 fn thread_search_done(generation: u64, done: Option<ThreadSearch>) {
-    if !SEARCH_GENERATION.get().current(generation) {
+    if !SEARCH_GENERATION.with(|counter| counter.current(generation)) {
         return;
     }
     SEARCH_PENDING.with(|slot| slot.replace(None));

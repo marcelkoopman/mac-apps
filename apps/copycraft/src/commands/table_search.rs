@@ -57,19 +57,38 @@ pub fn contains_ignore_case(hay: &str, needle: &str) -> bool {
 
 /// The indices of `rows` with a cell (its shown text) that contains `query`, ignoring case.
 /// `None` for an empty query: every row shows.
+#[cfg(test)]
 pub fn matching_rows<S: AsRef<str>>(rows: &[Vec<S>], query: &str) -> Option<Vec<usize>> {
+    matching_rows_while(rows, query, || true)
+}
+
+/// Rows between two looks at whether a search on a thread is still wanted.
+pub const SEARCH_CHECK_ROWS: usize = 1_000;
+
+/// [`matching_rows`] that asks `wanted` every [`SEARCH_CHECK_ROWS`] rows and stops (`None`)
+/// once it says no: a search on a thread that a newer one replaced, or a closed window.
+pub fn matching_rows_while<S: AsRef<str>>(
+    rows: &[Vec<S>],
+    query: &str,
+    wanted: impl Fn() -> bool,
+) -> Option<Vec<usize>> {
     let mut needle = table_search_needle(query)?;
-    let found = rows
-        .iter()
-        .enumerate()
-        .filter(|(_, row)| {
-            row.iter()
-                .any(|cell| contains_ignore_case(cell.as_ref(), &needle))
-        })
-        .map(|(index, _)| index)
-        .collect();
+    let mut found = Vec::new();
+    let mut stopped = false;
+    for (index, row) in rows.iter().enumerate() {
+        if index % SEARCH_CHECK_ROWS == 0 && !wanted() {
+            stopped = true;
+            break;
+        }
+        if row
+            .iter()
+            .any(|cell| contains_ignore_case(cell.as_ref(), &needle))
+        {
+            found.push(index);
+        }
+    }
     zeroize::Zeroize::zeroize(&mut needle);
-    Some(found)
+    (!stopped).then_some(found)
 }
 
 /// Above this many cells (rows × columns) the search runs on a thread of its own, so typing
@@ -82,32 +101,38 @@ pub fn search_on_thread(rows: usize, columns: usize) -> bool {
 }
 
 /// The rows matching `query` and the body with only their lines: what the table window
-/// draws while a search filters it. `None` for an empty query.
+/// draws while a search filters it. `None` for an empty query, or when `wanted` stopped it
+/// ([`matching_rows_while`]).
 pub fn filter_sheet<S: AsRef<str>>(
     rows: &[Vec<S>],
     body: &str,
     query: &str,
+    wanted: impl Fn() -> bool,
 ) -> Option<(Vec<usize>, zeroize::Zeroizing<String>)> {
-    let matches = matching_rows(rows, query)?;
+    let matches = matching_rows_while(rows, query, &wanted)?;
+    if !wanted() {
+        return None;
+    }
     let kept = zeroize::Zeroizing::new(keep_lines(body, &matches));
     Some((matches, kept))
 }
 
 /// Numbers the table window's searches on a thread, so an older result never replaces a
 /// newer one: only the result of the newest [`start`](Self::start) is
-/// [`current`](Self::current). A search done on the main thread also [`start`](Self::start)s
-/// (and so makes any on a thread stale).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct SearchGeneration(u64);
+/// [`current`](Self::current). A search done on the main thread, closing the window or
+/// Clear also [`start`](Self::start) (and so make any on a thread stale). Shared with the
+/// search threads (a clone is the same counter), which stop once theirs is no longer current.
+#[derive(Debug, Default, Clone)]
+pub struct SearchGeneration(std::sync::Arc<std::sync::atomic::AtomicU64>);
 
 impl SearchGeneration {
-    pub fn start(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(1);
-        self.0
+    pub fn start(&self) -> u64 {
+        use std::sync::atomic::Ordering;
+        self.0.fetch_add(1, Ordering::AcqRel).wrapping_add(1)
     }
 
     pub fn current(&self, generation: u64) -> bool {
-        self.0 == generation
+        self.0.load(std::sync::atomic::Ordering::Acquire) == generation
     }
 }
 
