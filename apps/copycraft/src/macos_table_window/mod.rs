@@ -366,7 +366,7 @@ pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::Prepar
     });
     let (version, working) = (view.versions.current, view.working);
     SHOWN.with(|slot| slot.replace(Some(view)));
-    PREPARED.with(|slot| slot.replace(sheet));
+    PREPARED.with(|slot| slot.replace(sheet.map(std::sync::Arc::new)));
     let arrival = switching::arrive(version, working);
     if arrival == commands::Arrival::Pending && before.is_some() {
         // Kept for when the switch settles: the grid on screen stays (no new layout of a
@@ -491,6 +491,7 @@ fn forget() {
     REVEALED.set(false);
     PAINTED.set(false);
     SEARCH.with(|slot| slot.borrow_mut().zeroize());
+    forget_thread_search();
     // Dropping the view and the laid-out sheet wipes them: a large table's text and cells
     // (65,000 rows), zeroized on a thread of their own so the close does not wait for it.
     let sheet = PREPARED.with(|slot| slot.replace(None));

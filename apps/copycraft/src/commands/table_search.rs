@@ -72,6 +72,45 @@ pub fn matching_rows<S: AsRef<str>>(rows: &[Vec<S>], query: &str) -> Option<Vec<
     Some(found)
 }
 
+/// Above this many cells (rows × columns) the search runs on a thread of its own, so typing
+/// in the search field never waits for a large table.
+pub const SEARCH_ON_THREAD_CELLS: usize = 20_000;
+
+/// Whether a search of `rows` × `columns` runs on a thread ([`SEARCH_ON_THREAD_CELLS`]).
+pub fn search_on_thread(rows: usize, columns: usize) -> bool {
+    rows.saturating_mul(columns.max(1)) > SEARCH_ON_THREAD_CELLS
+}
+
+/// The rows matching `query` and the body with only their lines: what the table window
+/// draws while a search filters it. `None` for an empty query.
+pub fn filter_sheet<S: AsRef<str>>(
+    rows: &[Vec<S>],
+    body: &str,
+    query: &str,
+) -> Option<(Vec<usize>, zeroize::Zeroizing<String>)> {
+    let matches = matching_rows(rows, query)?;
+    let kept = zeroize::Zeroizing::new(keep_lines(body, &matches));
+    Some((matches, kept))
+}
+
+/// Numbers the table window's searches on a thread, so an older result never replaces a
+/// newer one: only the result of the newest [`start`](Self::start) is
+/// [`current`](Self::current). A search done on the main thread also [`start`](Self::start)s
+/// (and so makes any on a thread stale).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SearchGeneration(u64);
+
+impl SearchGeneration {
+    pub fn start(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(1);
+        self.0
+    }
+
+    pub fn current(&self, generation: u64) -> bool {
+        self.0 == generation
+    }
+}
+
 /// The lines of `body` (one per row) at `keep` (increasing), joined again.
 pub fn keep_lines(body: &str, keep: &[usize]) -> String {
     let mut out = String::with_capacity(body.len().min(keep.len().saturating_mul(64)));

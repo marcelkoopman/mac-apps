@@ -17,7 +17,16 @@ thread_local! {
     static SHOWN_ROWS: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
     /// The shown view's grid read into columns and laid out (on the worker that built the
     /// view, or here once); kept for the search. Zeroized when dropped.
-    static PREPARED: RefCell<Option<crate::dataframe::PreparedSheet>> = const { RefCell::new(None) };
+    static PREPARED: RefCell<Option<std::sync::Arc<crate::dataframe::PreparedSheet>>> =
+        const { RefCell::new(None) };
+    /// Numbers the searches of a large sheet on a thread ([`commands::SearchGeneration`]).
+    static SEARCH_GENERATION: Cell<commands::SearchGeneration> =
+        Cell::new(commands::SearchGeneration::default());
+    /// The search on its way on a thread: its generation, the sheet's body key and the query.
+    static SEARCH_PENDING: RefCell<Option<(u64, u64, zeroize::Zeroizing<String>)>> =
+        const { RefCell::new(None) };
+    /// The search a thread finished, for the next paint (see [`SEARCH_PENDING`]).
+    static SEARCH_DONE: RefCell<Option<ThreadSearch>> = const { RefCell::new(None) };
     /// [`crate::dataframe::body_key`] of the sheet body in the grid; 0 when it holds none.
     static BODY_KEY: Cell<u64> = const { Cell::new(0) };
     /// The font widths the sheet is laid out with (a wide letter, a figure), measured once.
@@ -255,20 +264,131 @@ fn place_table_header(views: &Views, shown: bool) {
     ));
 }
 
+/// A search of a large sheet done on a thread: for the sheet with `body_key` and `query`, the
+/// matching rows and the body with only their lines. Zeroized when dropped.
+struct ThreadSearch {
+    body_key: u64,
+    query: zeroize::Zeroizing<String>,
+    matches: Vec<usize>,
+    kept: zeroize::Zeroizing<String>,
+}
+
+/// What a search leaves to draw: the matching rows and their lines (with the body key).
+type Filtered = (Vec<usize>, zeroize::Zeroizing<String>);
+
+/// The search's rows for `prepared`: done here for a small sheet, on a thread for a large one
+/// ([`commands::search_on_thread`]). `Err(())` while that thread is still at it: the grid on
+/// screen stays until its result comes.
+fn search_sheet(
+    prepared: &std::sync::Arc<crate::dataframe::PreparedSheet>,
+    query: &str,
+) -> Result<Option<Filtered>, ()> {
+    let sheet = &prepared.sheet;
+    let key = prepared.body_key;
+    if commands::table_search_needle(query).is_none()
+        || !commands::search_on_thread(sheet.rows.len(), sheet.headers.len())
+    {
+        // A search here makes any on a thread stale.
+        bump_search_generation();
+        SEARCH_PENDING.with(|slot| slot.replace(None));
+        return Ok(commands::filter_sheet(&sheet.rows, &prepared.layout.body, query));
+    }
+    let done = SEARCH_DONE.with(|slot| slot.borrow_mut().take());
+    if let Some(done) = done.filter(|done| done.body_key == key && *done.query == query) {
+        // Kept for repaints of the same search (a resize, the privacy filter).
+        let filtered = (done.matches.clone(), done.kept.clone());
+        SEARCH_DONE.with(|slot| slot.replace(Some(done)));
+        return Ok(Some(filtered));
+    }
+    let running = SEARCH_PENDING.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .is_some_and(|(_, pending_key, pending)| *pending_key == key && **pending == query)
+    });
+    if !running {
+        start_thread_search(prepared.clone(), query);
+    }
+    Err(())
+}
+
+fn bump_search_generation() -> u64 {
+    let mut generation = SEARCH_GENERATION.get();
+    let number = generation.start();
+    SEARCH_GENERATION.set(generation);
+    number
+}
+
+/// Search `prepared` for `query` on a thread; the window repaints with the result when it is
+/// still the newest search ([`commands::SearchGeneration`]). Nothing is logged.
+fn start_thread_search(prepared: std::sync::Arc<crate::dataframe::PreparedSheet>, query: &str) {
+    let generation = bump_search_generation();
+    let key = prepared.body_key;
+    let query = zeroize::Zeroizing::new(query.to_string());
+    SEARCH_PENDING.with(|slot| slot.replace(Some((generation, key, query.clone()))));
+    let spawned = std::thread::Builder::new()
+        .name("copycraft-table-search".into())
+        .spawn(move || {
+            let found =
+                commands::filter_sheet(&prepared.sheet.rows, &prepared.layout.body, &query);
+            // The sheet goes before the main thread is asked: the window may have dropped it.
+            drop(prepared);
+            let done = found.map(|(matches, kept)| ThreadSearch {
+                body_key: key,
+                query,
+                matches,
+                kept,
+            });
+            mac_ui::actions::run_on_main(move || thread_search_done(generation, done));
+        });
+    if let Err(e) = spawned {
+        SEARCH_PENDING.with(|slot| slot.replace(None));
+        crate::diag::log(crate::diag::LogEvent::WorkNotStarted(
+            crate::diag::Work::Lane,
+            crate::diag::ErrorKind::io(&e),
+        ));
+    }
+}
+
+/// A search on a thread is done: drawn when it is still the newest, else dropped (wiped).
+fn thread_search_done(generation: u64, done: Option<ThreadSearch>) {
+    if !SEARCH_GENERATION.get().current(generation) {
+        return;
+    }
+    SEARCH_PENDING.with(|slot| slot.replace(None));
+    let Some(done) = done else {
+        return;
+    };
+    SEARCH_DONE.with(|slot| slot.replace(Some(done)));
+    PAINTED.set(false);
+    apply_mask();
+}
+
+/// Forget the searches on a thread (the window is wiped): a result still on its way is dropped.
+fn forget_thread_search() {
+    bump_search_generation();
+    SEARCH_PENDING.with(|slot| slot.replace(None));
+    SEARCH_DONE.with(|slot| slot.replace(None));
+}
+
 fn paint_table_grid(views: &Views, view: &TableWindowView) {
     // Read into columns on the worker that built the view; only a view that came without
     // (or a repaint after the window was wiped) is read here.
     let prepared = PREPARED.with(|slot| slot.borrow_mut().take()).or_else(|| {
         let (em, digit) = grid_metrics()?;
-        crate::dataframe::prepare_sheet(&view.grid, em, digit)
+        crate::dataframe::prepare_sheet(&view.grid, em, digit).map(std::sync::Arc::new)
     });
     if let Some(prepared) = prepared {
         let sheet = &prepared.sheet;
         // The toolbar's search: only the rows with a cell that matches are drawn.
-        let matches = SEARCH.with(|query| commands::matching_rows(&sheet.rows, &query.borrow()));
-        paint_aligned_table(views, &prepared, matches.as_deref());
-        let mut meta = match &matches {
-            Some(found) => {
+        let query = SEARCH.with(|query| zeroize::Zeroizing::new(query.borrow().clone()));
+        let Ok(filtered) = search_sheet(&prepared, &query) else {
+            // A large sheet's search is on a thread: what is drawn stays until it is done.
+            PREPARED.with(|slot| slot.replace(Some(prepared)));
+            return;
+        };
+        paint_aligned_table(views, &prepared, filtered.as_ref());
+        let mut meta = match &filtered {
+            Some((found, _)) => {
                 let columns = match view.columns.len() {
                     0 => sheet.headers.len(),
                     n => n,
@@ -279,7 +399,7 @@ fn paint_table_grid(views: &Views, view: &TableWindowView) {
         };
         paint_meta(&views.meta, &meta);
         meta.zeroize();
-        SHOWN_ROWS.with(|slot| slot.replace(matches));
+        SHOWN_ROWS.with(|slot| slot.replace(filtered.map(|(found, _)| found)));
         PREPARED.with(|slot| slot.replace(Some(prepared)));
     } else {
         SHOWN_ROWS.with(|slot| slot.replace(None));
@@ -293,20 +413,18 @@ fn paint_table_grid(views: &Views, view: &TableWindowView) {
 fn paint_aligned_table(
     views: &Views,
     prepared: &crate::dataframe::PreparedSheet,
-    matches: Option<&[usize]>,
+    filtered: Option<&Filtered>,
 ) {
     let was_sheet = TABLE_STRIPES.with(Cell::get);
     let sheet = &prepared.sheet;
     let layout = &prepared.layout;
     let (body_font, header_font) = table_fonts();
     // Column widths come from every row, so they hold still while a search narrows the rows.
-    let filtered =
-        matches.map(|keep| zeroize::Zeroizing::new(commands::keep_lines(&layout.body, keep)));
-    let (body, key) = match &filtered {
-        Some(kept) => (kept.as_str(), crate::dataframe::body_key(kept)),
+    let (body, key) = match filtered {
+        Some((_, kept)) => (kept.as_str(), crate::dataframe::body_key(kept)),
         None => (layout.body.as_str(), prepared.body_key),
     };
-    let rows = matches.map_or(sheet.rows.len(), <[usize]>::len);
+    let rows = filtered.map_or(sheet.rows.len(), |(found, _)| found.len());
     // Compared by fingerprint: no copy of a large grid's text back out of the view.
     let body_changed = BODY_KEY.get() != key;
     let mut header_now = views.header.string().to_string();

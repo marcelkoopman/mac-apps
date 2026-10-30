@@ -111,3 +111,35 @@ fn the_table_window_toolbar_ends_with_the_search_field() {
         ]
     );
 }
+
+#[test]
+fn large_tables_search_on_a_thread_and_only_the_newest_result_counts() {
+    use crate::commands::{SEARCH_ON_THREAD_CELLS, SearchGeneration, search_on_thread};
+    assert!(!search_on_thread(2_000, 10));
+    assert!(search_on_thread(2_001, 10));
+    assert!(search_on_thread(SEARCH_ON_THREAD_CELLS + 1, 0));
+    assert!(!search_on_thread(0, 50));
+    let mut generation = SearchGeneration::default();
+    let first = generation.start();
+    let second = generation.start();
+    // The first search ends last: its result is dropped.
+    assert!(generation.current(second));
+    assert!(!generation.current(first));
+    // A quick search on the main thread makes the one on the thread stale too.
+    generation.start();
+    assert!(!generation.current(second));
+}
+
+#[test]
+fn filter_sheet_keeps_the_lines_of_the_matching_rows() {
+    let grid = rows(&[
+        &["Jan", "Groningen"],
+        &["Anja", "Utrecht"],
+        &["Piet", "Utrecht"],
+    ]);
+    let body = "Jan\tGroningen\nAnja\tUtrecht\nPiet\tUtrecht";
+    let (found, kept) = crate::commands::filter_sheet(&grid, body, "utrecht").expect("filter");
+    assert_eq!(found, [1, 2]);
+    assert_eq!(kept.as_str(), "Anja\tUtrecht\nPiet\tUtrecht");
+    assert!(crate::commands::filter_sheet(&grid, body, " ").is_none());
+}
