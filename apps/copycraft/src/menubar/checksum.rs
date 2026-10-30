@@ -136,7 +136,7 @@ impl App {
             .is_some_and(|run| run.generation == generation && run.shown)
     }
 
-    /// *Compare with Clipboard*: a hex hash on the clipboard (case and spaces do not count)
+    /// *Check Hash from Clipboard*: a hex hash on the clipboard (case and spaces do not count)
     /// against the file's SHA-256 and MD5. The card shows ✓ or ✗ in its checksum view, and a
     /// toast says it too. The clipboard is read once, as for ⌘V; neither it nor the result is
     /// logged.

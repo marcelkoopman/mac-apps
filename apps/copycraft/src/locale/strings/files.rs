@@ -152,13 +152,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "chip_checksum_compare",
-        "Vergelijk met klembord",
-        "Compare with Clipboard",
+        "Controleer hash van klembord",
+        "Check Hash from Clipboard",
     ),
     (
         "detail_checksum_compare",
-        "Kijk of de hash op het klembord bij dit bestand hoort",
-        "Check whether the hash on the clipboard matches this file",
+        "Kopieer eerst de SHA-256 of MD5 van de downloadsite; dan zie je of dit bestand klopt",
+        "Copy the SHA-256 or MD5 from the download site first to see whether this file is genuine",
     ),
     ("checksum_meta", "SHA-256 en MD5", "SHA-256 and MD5"),
     ("checksum_working", "Berekenen…", "Calculating…"),

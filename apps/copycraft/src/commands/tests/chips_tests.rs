@@ -789,10 +789,10 @@ fn a_dropped_file_offers_checksums_and_compare_last_and_a_copy_does_not() {
     noted.checksum = Some(crate::commands::ChecksumShown::default());
     assert_eq!(
         titles(&crate::commands::chips(&noted)),
-        ["Checksums", "Compare with Clipboard"]
+        ["Checksums", "Check Hash from Clipboard"]
     );
     crate::locale::set_test_language(crate::settings::Language::Nl);
     let nl = titles(&crate::commands::chips(&noted));
     crate::locale::set_test_language(crate::settings::Language::En);
-    assert_eq!(nl, ["Controlegetallen", "Vergelijk met klembord"]);
+    assert_eq!(nl, ["Controlegetallen", "Controleer hash van klembord"]);
 }

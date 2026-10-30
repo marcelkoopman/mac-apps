@@ -142,7 +142,7 @@ pub struct ChecksumShown {
     pub digests: Option<crate::checksum::Digests>,
     /// The file could not be read.
     pub failed: bool,
-    /// What *Compare with Clipboard* found, until another file is on the card.
+    /// What *Check Hash from Clipboard* found, until another file is on the card.
     pub verdict: Option<crate::checksum::Verdict>,
 }
 

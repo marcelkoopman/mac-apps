@@ -91,7 +91,7 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
     chips
 }
 
-/// The Checksums view toggle and *Compare with Clipboard*, last on the row.
+/// The Checksums view toggle and *Check Hash from Clipboard*, last on the row.
 pub(crate) fn checksum_chips() -> [Command; 2] {
     [
         command(

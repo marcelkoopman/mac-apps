@@ -1,5 +1,5 @@
 //! Checksums of a dropped or chosen file: SHA-256 and MD5, read in chunks (never the whole
-//! file in memory), on a worker thread ([`crate::menubar`]). *Compare with Clipboard* checks a
+//! file in memory), on a worker thread ([`crate::menubar`]). *Check Hash from Clipboard* checks a
 //! hex hash on the clipboard against them. Nothing here is logged: no name, path or hash.
 
 use std::io::Read;

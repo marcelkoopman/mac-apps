@@ -202,7 +202,7 @@ pub fn content_key(data: &LaunchData) -> u64 {
 }
 
 /// The checksum view of a dropped or chosen file: SHA-256 first, then MD5, selectable; what
-/// *Compare with Clipboard* found on the meta line. While the file is read, "Calculating…"
+/// *Check Hash from Clipboard* found on the meta line. While the file is read, "Calculating…"
 /// (with the percent read for a large file).
 pub(crate) fn checksum_card(data: &LaunchData, checksum: &ChecksumShown) -> WorkCard {
     let title = data
@@ -241,7 +241,7 @@ pub(crate) fn checksum_card(data: &LaunchData, checksum: &ChecksumShown) -> Work
     card
 }
 
-/// What *Compare with Clipboard* found, with ✓ or ✗: the toast and the checksum card's meta.
+/// What *Check Hash from Clipboard* found, with ✓ or ✗: the toast and the checksum card's meta.
 pub fn checksum_verdict(verdict: crate::checksum::Verdict) -> &'static str {
     use crate::checksum::Verdict;
     match verdict {
