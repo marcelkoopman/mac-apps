@@ -7,10 +7,18 @@
 //!
 //! Safety:
 //! - Every entry name must be a plain relative path: no leading `/`, no `..`, no drive
-//!   (`C:`), no NUL or other control character, no bidirectional control (U+202E …). A backslash counts as a separator (old Windows zips). One unsafe entry
-//!   makes the whole zip refuse to extract ([`ZipError::Unsafe`]); the names still show.
+//!   (`C:`), no NUL or other control character, no bidirectional control (U+202E …). A
+//!   backslash counts as a separator (old Windows zips). One unsafe entry makes the whole zip
+//!   refuse to extract ([`ZipError::Unsafe`]); the names still show.
 //! - Symbolic links are refused the same way, and so are two entries with the same path (also
-//!   when they differ only in case: the Mac's disk usually does not tell them apart).
+//!   when they differ only in case or Unicode form: the Mac's disk usually does not tell them
+//!   apart, see [`name_key`]).
+//! - Quarantine: every file CopyCraft makes gets `com.apple.quarantine` from the App Sandbox
+//!   itself (a sandboxed app's files are always quarantined; no `LSFileQuarantineEnabled`
+//!   needed), so an extracted app or script is checked by Gatekeeper on first open, like one
+//!   Archive Utility extracts. The zip's own quarantine attribute is therefore not copied (that
+//!   would need `getxattr`/`setxattr`, i.e. new unsafe). An unsandboxed `cargo run` build does
+//!   not quarantine. Executable entries keep their `x` bit (0o755) for that reason only.
 //! - `__MACOSX/` (Finder's resource forks) is left out of the listing and not extracted.
 //! - Sizes are checked: an entry that unpacks to more or other bytes than its header says
 //!   (CRC-32) fails the extraction.
@@ -743,6 +751,8 @@ fn extract_entry<R: Read + Seek>(
     };
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
+    // 0o755 for an entry marked executable: safe because the sandbox quarantines the file
+    // (module docs), so Gatekeeper still checks it before it runs.
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
