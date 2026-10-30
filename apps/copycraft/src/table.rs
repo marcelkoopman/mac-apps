@@ -535,12 +535,14 @@ impl TableVersions {
     }
 
     /// Take a finished count job: the later column choices' "of N". `false` (and nothing
-    /// changes) when the steps changed since.
+    /// changes) when the steps changed since. Setting the counts is not a change of the steps:
+    /// no other count is asked for after it (the next frame job counts nothing).
     pub fn finish_counts(&mut self, done: JobDone) -> bool {
         if done.generation != self.count_generation {
             return false;
         }
         self.set_kept_of(&done.kept_of);
+        self.counts_stale = false;
         true
     }
 
@@ -1055,6 +1057,11 @@ mod tests {
                 kept_of: Some(3),
             })
         );
+        // Counted once: neither the counts nor the next frame job ask for another.
+        assert!(!count(&mut versions));
+        let job = versions.goto(1, src).expect("goto");
+        assert!(run(&mut versions, job));
+        assert!(!count(&mut versions));
     }
 
     #[test]
