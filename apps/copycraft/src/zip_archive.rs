@@ -11,8 +11,10 @@
 //!   backslash counts as a separator (old Windows zips). One unsafe entry makes the whole zip
 //!   refuse to extract ([`ZipError::Unsafe`]); the names still show.
 //! - A name cannot look like CopyCraft's own work folder (`docs (incomplete)`, `.docs.partial`
-//!   at the top) or hold its mark file ([`safe_parts`]), and a leftover work folder loses only
-//!   the zip's own names ([`remove_extracted`]): a folder with someone's files is never removed.
+//!   at the top) or hold its mark file ([`safe_parts`]). A leftover work folder of a crash goes
+//!   to the Trash whole ([`trash_leftover`]), never deleted; a failed or stopped extraction
+//!   removes only the zip's own names from its own work folder ([`remove_extracted`]): a
+//!   folder with someone's files is never removed.
 //! - Symbolic links are refused the same way, and so are two entries with the same path (also
 //!   when they differ only in case or Unicode form: the Mac's disk usually does not tell them
 //!   apart, see [`name_key`]).
@@ -35,7 +37,8 @@
 //! `create_new` before the rename, so nothing is replaced), so a quit or crash leaves no half
 //! files under their real names. A failed or stopped extraction removes the work folder; Quit,
 //! Clear History, Wipe and the screen lock stop a running extraction first. One left by a crash
-//! is removed on the next try (only a folder with CopyCraft's mark inside). Before anything is
+//! goes to the Trash on the next try (only a folder with CopyCraft's mark inside; where there is
+//! no Trash it stays and the next name is used). Before anything is
 //! written, the disk must have room for the unpacked size ([`fits`]).
 
 use std::collections::{HashMap, HashSet};
@@ -935,12 +938,47 @@ fn partial_name(zip_name: &str, try_number: u32, lang: crate::locale::Lang) -> S
     )
 }
 
-/// Remove a leftover work folder of this zip, but only one CopyCraft made (it holds
-/// [`PARTIAL_MARK`]), through [`remove_extracted`]. `true` when it is gone.
-fn remove_leftover(path: &Path, listing: &Listing) -> bool {
+/// Where a leftover work folder of an earlier try goes: to the Trash, whole, never deleted (a
+/// file someone put in it can be got back), and whether one went.
+pub struct Leftovers<'a> {
+    /// Moves a folder to the Trash; `true` when it went. [`system_trash`] in the app.
+    trash: &'a dyn Fn(&Path) -> bool,
+    /// A leftover went to the Trash during this extraction (the toast says so).
+    pub trashed: bool,
+}
+
+impl Default for Leftovers<'_> {
+    fn default() -> Self {
+        Self {
+            trash: &system_trash,
+            trashed: false,
+        }
+    }
+}
+
+/// The Finder's Trash (`NSFileManager trashItemAtURL`, through [`mac_ui::trash`]). Elsewhere
+/// (the tests on Linux) there is none: `false`, and a leftover stays where it is.
+fn system_trash(path: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        mac_ui::trash::move_to_trash(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// Move a leftover work folder of this zip to the Trash, whole, but only one CopyCraft made (it
+/// holds [`PARTIAL_MARK`]). `true` when it went; otherwise it stays as it is (someone else's
+/// folder, or a volume without a Trash) and the next work folder name is used.
+fn trash_leftover(path: &Path, leftovers: &mut Leftovers) -> bool {
     let ours = std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir())
         && std::fs::symlink_metadata(path.join(PARTIAL_MARK)).is_ok_and(|meta| meta.is_file());
-    ours && remove_extracted(path, listing)
+    let gone = ours && (leftovers.trash)(path);
+    leftovers.trashed |= gone;
+    gone
 }
 
 /// Empty the work folder `path` of what `listing` extracts into it, then remove it when only
@@ -989,16 +1027,20 @@ fn remove_extracted(path: &Path, listing: &Listing) -> bool {
 }
 
 /// Make a new work folder in `dest`, named in the language of the moment and marked with
-/// [`PARTIAL_MARK`]. A leftover of ours with the same number goes first, in either language
-/// (the language may have changed since the crash); someone else's is left and the next
-/// number tried.
-fn make_partial(dest: &Path, zip_name: &str, listing: &Listing) -> Result<PathBuf, ZipError> {
+/// [`PARTIAL_MARK`]. A leftover of ours with the same number goes to the Trash first, in either
+/// language (the language may have changed since the crash); someone else's, or one that
+/// cannot go to the Trash, is left and the next number tried.
+fn make_partial(
+    dest: &Path,
+    zip_name: &str,
+    leftovers: &mut Leftovers,
+) -> Result<PathBuf, ZipError> {
     use crate::locale::Lang;
     for number in 1..=MAX_FOLDER_TRIES {
         for lang in [Lang::Nl, Lang::En] {
             let old = dest.join(partial_name(zip_name, number, lang));
             if std::fs::symlink_metadata(&old).is_ok() {
-                remove_leftover(&old, listing);
+                trash_leftover(&old, leftovers);
             }
         }
         let path = dest.join(partial_name(zip_name, number, crate::locale::lang()));
@@ -1021,14 +1063,16 @@ fn make_partial(dest: &Path, zip_name: &str, listing: &Listing) -> Result<PathBu
 }
 
 /// Extract the zip at `zip` (called `zip_name`) into the folder `dest`, by the rules above.
-/// `stop` cancels it (checked between blocks of 64 KB); nothing is left behind then.
+/// `stop` cancels it (checked between blocks of 64 KB); nothing is left behind then. A
+/// leftover work folder of an earlier try goes to the Trash ([`Leftovers::trashed`] says so).
 pub fn extract(
     zip: &Path,
     zip_name: &str,
     dest: &Path,
     stop: &AtomicBool,
+    leftovers: &mut Leftovers,
 ) -> Result<Extracted, ZipError> {
-    extract_with(zip, zip_name, dest, stop, free_space(dest))
+    extract_with(zip, zip_name, dest, stop, free_space(dest), leftovers)
 }
 
 fn extract_with(
@@ -1037,6 +1081,7 @@ fn extract_with(
     dest: &Path,
     stop: &AtomicBool,
     free: Option<u64>,
+    leftovers: &mut Leftovers,
 ) -> Result<Extracted, ZipError> {
     let mut file = std::fs::File::open(zip).map_err(|_| ZipError::Read)?;
     let len = file.metadata().map_err(|_| ZipError::Read)?.len();
@@ -1051,7 +1096,7 @@ fn extract_with(
     if !fits(&facts, free) {
         return Err(ZipError::NoSpace);
     }
-    let partial = make_partial(dest, zip_name, &listing)?;
+    let partial = make_partial(dest, zip_name, leftovers)?;
     let mut made = Made::default();
     let mut reader = std::io::BufReader::new(file);
     let result = listing.entries.iter().try_for_each(|entry| {

@@ -181,6 +181,11 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     ("zip_extracted", "Uitgepakt in {0}", "Extracted to {0}"),
     (
+        "zip_and_trashed",
+        "{0}. Een onvolledige map van een eerdere poging staat in de Prullenmand",
+        "{0}. An incomplete folder from an earlier try is in the Trash",
+    ),
+    (
         "zip_corrupt",
         "Dit zip-bestand is beschadigd",
         "This zip file is damaged",

@@ -31,6 +31,7 @@
 //!   run time, no crate): the Screen Recording permission, the selection overlay (area, window
 //!   or screen), the capture as PNG bytes in memory and the thumbnail afterwards. Its
 //!   arithmetic (`shot_area`) builds on every platform.
+//! - `trash`: `trash::move_to_trash`, a file or folder to the Trash instead of deleting it.
 //! - `wake`: `wake::observe_sleep_wake`, a callback when the Mac goes to sleep and wakes up.
 //! - `appkit-full`: all objc2-app-kit and objc2-foundation default features.
 //!
@@ -105,6 +106,8 @@ pub mod text;
 pub mod theme;
 #[cfg(all(target_os = "macos", feature = "widgets", feature = "panel"))]
 pub mod toast;
+#[cfg(all(target_os = "macos", feature = "trash"))]
+pub mod trash;
 pub mod tray;
 pub mod wake;
 #[cfg(all(target_os = "macos", feature = "widgets"))]

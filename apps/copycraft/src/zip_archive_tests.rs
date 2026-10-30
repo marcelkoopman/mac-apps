@@ -283,7 +283,7 @@ fn unsafe_zips_list_but_do_not_extract() {
     std::fs::create_dir(&out).unwrap();
     let zip = write_zip(&dir, "slip.zip", &slip);
     assert_eq!(
-        extract(&zip, "slip.zip", &out, &NO_STOP),
+        extract(&zip, "slip.zip", &out, &NO_STOP, &mut Leftovers::default()),
         Err(ZipError::Unsafe)
     );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
@@ -326,7 +326,14 @@ fn extracts_into_the_folder_and_never_overwrites() {
     let zip = write_zip(&dir, "Archive.zip", &bytes);
 
     // Nothing in the way: right into the folder.
-    let first = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
+    let first = extract(
+        &zip,
+        "Archive.zip",
+        &out,
+        &NO_STOP,
+        &mut Leftovers::default(),
+    )
+    .unwrap();
     assert_eq!(
         first,
         Extracted {
@@ -348,7 +355,14 @@ fn extracts_into_the_folder_and_never_overwrites() {
 
     // Again: "docs" is there now, so a new folder named after the zip.
     std::fs::write(out.join("docs/a.txt"), b"changed").unwrap();
-    let second = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
+    let second = extract(
+        &zip,
+        "Archive.zip",
+        &out,
+        &NO_STOP,
+        &mut Leftovers::default(),
+    )
+    .unwrap();
     assert_eq!(
         second,
         Extracted {
@@ -363,7 +377,14 @@ fn extracts_into_the_folder_and_never_overwrites() {
     );
 
     // And again: "Archive 2".
-    let third = extract(&zip, "Archive.zip", &out, &NO_STOP).unwrap();
+    let third = extract(
+        &zip,
+        "Archive.zip",
+        &out,
+        &NO_STOP,
+        &mut Leftovers::default(),
+    )
+    .unwrap();
     assert_eq!(third.folder, out.join("Archive 2"));
     // No hidden .partial folder stays behind.
     let mut names: Vec<String> = std::fs::read_dir(&out)
@@ -388,7 +409,7 @@ fn a_damaged_entry_takes_back_what_was_made() {
     bytes[at] ^= 0xFF;
     let zip = write_zip(&dir, "bad.zip", &bytes);
     assert_eq!(
-        extract(&zip, "bad.zip", &out, &NO_STOP),
+        extract(&zip, "bad.zip", &out, &NO_STOP, &mut Leftovers::default()),
         Err(ZipError::Corrupt)
     );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
@@ -415,7 +436,7 @@ fn a_bomb_stops_at_the_declared_size() {
     std::fs::create_dir(&out).unwrap();
     let zip = write_zip(&dir, "bomb.zip", &bytes);
     assert_eq!(
-        extract(&zip, "bomb.zip", &out, &NO_STOP),
+        extract(&zip, "bomb.zip", &out, &NO_STOP, &mut Leftovers::default()),
         Err(ZipError::Corrupt)
     );
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
@@ -429,7 +450,7 @@ fn locked_zips_are_not_extracted() {
     locked.flags = 1;
     let zip = write_zip(&dir, "l.zip", &build(&[locked], false));
     assert_eq!(
-        extract(&zip, "l.zip", &dir, &NO_STOP),
+        extract(&zip, "l.zip", &dir, &NO_STOP, &mut Leftovers::default()),
         Err(ZipError::Locked)
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -649,11 +670,28 @@ fn too_little_free_space_writes_nothing() {
     std::fs::create_dir(&out).unwrap();
     let zip = write_zip(&dir, "s.zip", &build(&[e("a.txt", b"hello")], false));
     assert_eq!(
-        extract_with(&zip, "s.zip", &out, &NO_STOP, Some(1_000)),
+        extract_with(
+            &zip,
+            "s.zip",
+            &out,
+            &NO_STOP,
+            Some(1_000),
+            &mut Leftovers::default()
+        ),
         Err(ZipError::NoSpace)
     );
     assert!(names_in(&out).is_empty());
-    assert!(extract_with(&zip, "s.zip", &out, &NO_STOP, Some(100_000_000)).is_ok());
+    assert!(
+        extract_with(
+            &zip,
+            "s.zip",
+            &out,
+            &NO_STOP,
+            Some(100_000_000),
+            &mut Leftovers::default()
+        )
+        .is_ok()
+    );
     let facts = ZipFacts {
         files: 2,
         unpacked: 10,
@@ -673,15 +711,25 @@ fn a_stopped_extraction_leaves_nothing() {
     let zip = write_zip(&dir, "s.zip", &build(&[e("a/b.txt", b"hello")], false));
     let stop = AtomicBool::new(true);
     assert_eq!(
-        extract(&zip, "s.zip", &out, &stop),
+        extract(&zip, "s.zip", &out, &stop, &mut Leftovers::default()),
         Err(ZipError::Cancelled)
     );
     assert!(names_in(&out).is_empty());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A Trash for the tests (the system one is Mac-only): the folder is renamed into `bin`.
+fn test_trash(bin: &Path) -> impl Fn(&Path) -> bool + '_ {
+    move |path| {
+        std::fs::create_dir_all(bin).is_ok()
+            && path
+                .file_name()
+                .is_some_and(|name| std::fs::rename(path, bin.join(name)).is_ok())
+    }
+}
+
 #[test]
-fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
+fn a_leftover_work_folder_of_ours_goes_to_the_trash_and_others_stay() {
     let dir = temp_dir("partial");
     let out = dir.join("out");
     std::fs::create_dir(&out).unwrap();
@@ -697,8 +745,20 @@ fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
     std::fs::write(theirs.join("keep.txt"), b"keep").unwrap();
 
     let zip = write_zip(&dir, "s.zip", &build(&[e("a.txt", b"hello")], false));
-    let done = extract(&zip, "s.zip", &out, &NO_STOP).unwrap();
+    let bin = dir.join("bin");
+    let trash = test_trash(&bin);
+    let mut leftovers = Leftovers {
+        trash: &trash,
+        trashed: false,
+    };
+    let done = extract(&zip, "s.zip", &out, &NO_STOP, &mut leftovers).unwrap();
     assert_eq!(done.folder, out);
+    assert!(leftovers.trashed);
+    // Whole, with its half file: nothing of it was deleted.
+    assert_eq!(
+        std::fs::read(bin.join("s (onvolledig)/a.txt")).unwrap(),
+        b"ha"
+    );
     assert_eq!(
         names_in(&out),
         [
@@ -715,9 +775,41 @@ fn a_leftover_partial_folder_of_ours_is_removed_and_others_are_left() {
     std::fs::create_dir(&other).unwrap();
     std::fs::write(other.join("keep.txt"), b"keep").unwrap();
     let zip = write_zip(&dir, "t.zip", &build(&[e("t.txt", b"t")], false));
-    extract(&zip, "t.zip", &out, &NO_STOP).unwrap();
+    let mut leftovers = Leftovers {
+        trash: &|_: &Path| panic!("someone else's folder never goes to the Trash"),
+        trashed: false,
+    };
+    extract(&zip, "t.zip", &out, &NO_STOP, &mut leftovers).unwrap();
+    assert!(!leftovers.trashed);
     assert_eq!(names_in(&out), ["a.txt".into(), other_name, "t.txt".into()]);
     assert_eq!(std::fs::read(other.join("keep.txt")).unwrap(), b"keep");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_leftover_that_cannot_go_to_the_trash_stays_and_the_next_name_is_used() {
+    let dir = temp_dir("no-trash");
+    let out = dir.join("out");
+    std::fs::create_dir(&out).unwrap();
+    let lang = crate::locale::lang();
+    let ours = out.join(partial_name("n.zip", 1, lang));
+    std::fs::create_dir(&ours).unwrap();
+    std::fs::write(ours.join(PARTIAL_MARK), b"").unwrap();
+    std::fs::write(ours.join("a.txt"), b"ha").unwrap();
+
+    // No Trash (a volume without one; Linux): nothing is deleted.
+    let zip = write_zip(&dir, "n.zip", &build(&[e("b.txt", b"b")], false));
+    let mut leftovers = Leftovers {
+        trash: &|_: &Path| false,
+        trashed: false,
+    };
+    extract(&zip, "n.zip", &out, &NO_STOP, &mut leftovers).unwrap();
+    assert!(!leftovers.trashed);
+    assert_eq!(
+        names_in(&out),
+        ["b.txt".into(), partial_name("n.zip", 1, lang)]
+    );
+    assert_eq!(std::fs::read(ours.join("a.txt")).unwrap(), b"ha");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -812,7 +904,7 @@ fn only_this_zips_own_work_folder_name_is_refused() {
         &build(&[e("docs (incomplete)/a.txt", b"x")], false),
     );
     assert_eq!(
-        extract(&zip, "docs.zip", &out, &NO_STOP),
+        extract(&zip, "docs.zip", &out, &NO_STOP, &mut Leftovers::default()),
         Err(ZipError::WorkFolderName)
     );
     assert!(names_in(&out).is_empty());
@@ -821,12 +913,12 @@ fn only_this_zips_own_work_folder_name_is_refused() {
         "other.zip",
         &build(&[e("Rapport (onvolledig)/a.txt", b"x")], false),
     );
-    assert!(extract(&zip, "other.zip", &out, &NO_STOP).is_ok());
+    assert!(extract(&zip, "other.zip", &out, &NO_STOP, &mut Leftovers::default()).is_ok());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
-fn a_leftover_with_files_of_someone_else_keeps_them() {
+fn a_leftover_with_files_of_someone_else_goes_to_the_trash_whole() {
     let dir = temp_dir("leftover-user");
     let out = dir.join("out");
     std::fs::create_dir(&out).unwrap();
@@ -838,12 +930,21 @@ fn a_leftover_with_files_of_someone_else_keeps_them() {
     std::fs::write(ours.join("d/mine.txt"), b"mine").unwrap();
 
     let zip = write_zip(&dir, "u.zip", &build(&[e("d/a.txt", b"hello")], false));
-    let done = extract(&zip, "u.zip", &out, &NO_STOP).unwrap();
+    let bin = dir.join("bin");
+    let trash = test_trash(&bin);
+    let mut leftovers = Leftovers {
+        trash: &trash,
+        trashed: false,
+    };
+    let done = extract(&zip, "u.zip", &out, &NO_STOP, &mut leftovers).unwrap();
     assert_eq!(done.folder, out);
+    assert!(leftovers.trashed);
     assert_eq!(std::fs::read(out.join("d/a.txt")).unwrap(), b"hello");
-    // Only the zip's own file went from the leftover; theirs and the folder stay.
-    assert_eq!(names_in(&ours.join("d")), ["mine.txt"]);
-    assert_eq!(std::fs::read(ours.join("d/mine.txt")).unwrap(), b"mine");
+    assert!(!ours.exists());
+    // The whole leftover is in the Trash, their file too: nothing was deleted.
+    let trashed = bin.join(ours.file_name().unwrap());
+    assert_eq!(std::fs::read(trashed.join("d/mine.txt")).unwrap(), b"mine");
+    assert_eq!(std::fs::read(trashed.join("d/a.txt")).unwrap(), b"ha");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -868,7 +969,12 @@ fn removing_what_was_extracted_leaves_other_files() {
     assert_eq!(names_in(&work.join("a")), ["other.txt"]);
     // Not ours without the mark: nothing is touched.
     std::fs::write(work.join("top.txt"), b"x").unwrap();
-    assert!(!remove_leftover(&work, &listed));
+    let mut leftovers = Leftovers {
+        trash: &|_: &Path| panic!("a folder without the mark never goes to the Trash"),
+        trashed: false,
+    };
+    assert!(!trash_leftover(&work, &mut leftovers));
+    assert!(!leftovers.trashed);
     assert!(work.join("top.txt").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }

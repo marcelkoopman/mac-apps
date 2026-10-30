@@ -147,6 +147,13 @@ progress = ["objc2-app-kit/NSAccessibilityProtocols", "objc2-app-kit/NSCell", "o
 blur = ["objc2-foundation/NSArray"]
 # `mac_ui::image`: an NSImage from encoded bytes or straight RGBA8, and its pixel size.
 image = ["objc2-app-kit/NSBitmapImageRep", "objc2-app-kit/NSImageRep", "objc2-foundation/NSDictionary"]
+# `mac_ui::trash`: a file or folder to the Trash (NSFileManager trashItemAtURL) instead of deleting it.
+trash = [
+    "objc2-foundation/NSError",
+    "objc2-foundation/NSFileManager",
+    "objc2-foundation/NSString",
+    "objc2-foundation/NSURL",
+]
 # `mac_ui::quicklook`: the first page of a document as PNG bytes through QLThumbnailGenerator
 # (QuickLookThumbnailing), waited for with a timeout. The PNG comes from the CGImage through an
 # NSBitmapImageRep; everything stays in memory.

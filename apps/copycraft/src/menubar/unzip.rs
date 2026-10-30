@@ -86,9 +86,12 @@ impl App {
                 // Ended when this closure is left, a panic included, so Quit never waits for
                 // an extraction that is gone.
                 let _ended = EndOnDrop(&run);
-                crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop)
+                let mut leftovers = crate::zip_archive::Leftovers::default();
+                let result =
+                    crate::zip_archive::extract(&zip.path, &name, &dest, &run.stop, &mut leftovers);
+                (result, leftovers.trashed)
             },
-            |app, result| app.unzip_done(result),
+            |app, (result, trashed)| app.unzip_done(result, trashed),
         );
         if !started {
             self.unzip_started = None;
@@ -100,6 +103,7 @@ impl App {
     fn unzip_done(
         &mut self,
         result: Result<crate::zip_archive::Extracted, crate::zip_archive::ZipError>,
+        trashed: bool,
     ) {
         self.unzip_started = None;
         self.unzip_stop = None;
@@ -116,6 +120,12 @@ impl App {
                 crate::locale::tf("zip_extracted", &[&folder])
             }
             Err(error) => error.message().to_string(),
+        };
+        // A work folder of an earlier, crashed try went to the Trash: say where it is.
+        let message = if trashed {
+            crate::locale::tf("zip_and_trashed", &[&message])
+        } else {
+            message
         };
         super::state::save_feedback(&message);
     }
