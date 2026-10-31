@@ -19,17 +19,19 @@ struct ChartSpec: Decodable, Sendable {
     let points: [ChartPoint]
 }
 
-/// One row's point: `x` (a number, or days since 1970-01-01 for dates) or `label` (a text x),
-/// and `y`.
+/// One row's point: `x` (a number, or days since 1970-01-01 for dates) or `label` (a text x,
+/// one bar per row), and `y`.
 struct ChartPoint: Decodable, Sendable {
     let label: String?
     let x: Double?
     let y: Double
 }
 
-/// One mark, its texts formatted in the app's language.
+/// One mark, its texts formatted in the app's language. `id` is its place in the points: a
+/// bar's identity on the x axis (`key`), so rows with the same text stay separate bars.
 struct ChartRow: Identifiable {
     let id: Int
+    let key: String
     let label: String
     let x: Double
     let date: Date
@@ -45,6 +47,11 @@ struct ChartView: View {
 
     /// Dates come as whole days (UTC): shown in UTC, so a day never slips to the one before.
     static let utc = TimeZone(identifier: "UTC") ?? TimeZone.current
+    /// Bars in view at once; the x axis scrolls sideways to the others (macOS 14 and later; the
+    /// app needs macOS 26).
+    static let barsInView = 50
+    /// A longer bar label is cut, with "…".
+    static let labelLength = 24
 
     init(spec: ChartSpec) {
         self.spec = spec
@@ -58,11 +65,12 @@ struct ChartView: View {
             let xText: String
             switch spec.kind {
             case "dates": xText = ChartView.day(date, locale: locale)
-            case "categories": xText = point.label ?? ""
+            case "bars": xText = point.label ?? ""
             default: xText = ChartView.number(x, locale: locale)
             }
             rows.append(ChartRow(
                 id: index,
+                key: String(index),
                 label: point.label ?? "",
                 x: x,
                 date: date,
@@ -97,16 +105,22 @@ struct ChartView: View {
                 }
                 .chartXAxis { dateAxis }
             )
-        case "categories":
+        case "bars":
+            // One bar per row in table order: x is the row's place (never its text, which
+            // would stack rows with the same text), labelled with its text.
             styled(
                 Chart(rows) { row in
-                    PointMark(
-                        x: .value(spec.xLabel, row.label),
+                    BarMark(
+                        x: .value(spec.xLabel, row.key),
                         y: .value(spec.yLabel, row.y)
                     )
                     .accessibilityLabel(Text(verbatim: row.xText))
                     .accessibilityValue(Text(verbatim: row.yText))
                 }
+                .chartXScale(domain: rows.map(\.key))
+                .chartXAxis { barAxis }
+                .chartScrollableAxes(.horizontal)
+                .chartXVisibleDomain(length: min(ChartView.barsInView, max(rows.count, 1)))
             )
         default:
             styled(
@@ -142,6 +156,27 @@ struct ChartView: View {
                 }
             }
         }
+    }
+
+    /// A label under every bar: its row's text, upright to fit 50 bars in view.
+    private var barAxis: some AxisContent {
+        AxisMarks(values: rows.map(\.key)) { value in
+            AxisTick()
+            AxisValueLabel(collisionResolution: .greedy, orientation: .verticalReversed) {
+                if let key = value.as(String.self), let place = Int(key),
+                   rows.indices.contains(place)
+                {
+                    Text(verbatim: ChartView.short(rows[place].label))
+                        .font(.caption2)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    /// `text` cut at `labelLength` characters, with "…".
+    static func short(_ text: String) -> String {
+        text.count > labelLength ? String(text.prefix(labelLength - 1)) + "…" : text
     }
 
     /// Grid lines, ticks and days formatted in the app's language.

@@ -3,8 +3,8 @@
 //! (`swift/CopyCraftCharts`). Nothing is added up or averaged.
 //!
 //! The y column holds numbers; the x column is any column the chart can read. A number x gives
-//! a scatter, a date x points along a time axis (both in x order), a text x points per value on
-//! a category axis (in table order). Rows with an empty x, or an empty or non-numeric y, are
+//! a scatter, a date x points along a time axis (both in x order), a text x one bar per row (in
+//! table order, each labelled with its text: rows with the same text stay separate bars). Rows with an empty x, or an empty or non-numeric y, are
 //! skipped and counted. Above [`MAX_POINTS`] rows an even, fixed sample is drawn (every n-th
 //! row) and the note says so. Every label comes translated from here; the JSON is wiped when
 //! dropped.
@@ -27,17 +27,17 @@ pub enum ChartKind {
     Scatter,
     /// A date column: points on a time axis.
     Dates,
-    /// A text column: points per value on a category axis.
-    Categories,
+    /// A text column: one bar per row, labelled with its text.
+    Bars,
 }
 
 impl ChartKind {
-    /// "scatter", "dates", "categories": the JSON's `kind`.
+    /// "scatter", "dates", "bars": the JSON's `kind`.
     pub fn code(self) -> &'static str {
         match self {
             ChartKind::Scatter => "scatter",
             ChartKind::Dates => "dates",
-            ChartKind::Categories => "categories",
+            ChartKind::Bars => "bars",
         }
     }
 }
@@ -45,7 +45,7 @@ impl ChartKind {
 /// What a column can be in a chart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnRole {
-    /// A category axis (x only).
+    /// Bar labels (x only).
     Text,
     /// A time axis (x only).
     Date,
@@ -281,7 +281,8 @@ pub enum Points {
     /// `(x, y)`: a number x, or a date x in days since 1970-01-01 (with the time of day as a
     /// fraction); in x order.
     Pairs(Vec<(f64, f64)>),
-    /// `(x's text, y)`, in table order.
+    /// `(x's text, y)`: one bar per row, in table order; the same text twice stays two bars
+    /// (the Swift view tells them apart by their place here).
     Labelled(Vec<(String, f64)>),
 }
 
@@ -513,14 +514,14 @@ pub fn build(
     let kind = match role(x.dtype()) {
         Some(ColumnRole::Number) => ChartKind::Scatter,
         Some(ColumnRole::Date) => ChartKind::Dates,
-        Some(ColumnRole::Text) => ChartKind::Categories,
+        Some(ColumnRole::Text) => ChartKind::Bars,
         None => return Err(ChartProblem::Columns),
     };
     let x_label = x.name().to_string();
     let y_label = y.name().to_string();
     let series = tf_in(lang, "chart_scatter_series", &[&y_label, &x_label]);
     let (points, note) = match kind {
-        ChartKind::Categories => {
+        ChartKind::Bars => {
             let texts = x.str().map_err(|_| ChartProblem::Columns)?;
             let rows: Vec<usize> = (0..ys.len())
                 .filter(|&row| {

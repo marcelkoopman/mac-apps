@@ -62,13 +62,13 @@ fn columns_get_their_roles() {
 }
 
 #[test]
-fn a_text_x_gives_one_point_per_row_in_table_order() {
+fn a_text_x_gives_one_bar_per_row_in_table_order() {
     for (lang, series) in [
         (Lang::Nl, "revenue tegen category"),
         (Lang::En, "revenue vs. category"),
     ] {
         let data = build(&shop(), &request(0, 2), lang).expect("chart");
-        assert_eq!(data.kind, ChartKind::Categories);
+        assert_eq!(data.kind, ChartKind::Bars);
         // Nothing added up or averaged: every row, Books three times.
         assert_eq!(
             labelled(&data),
@@ -97,6 +97,30 @@ fn a_text_x_gives_one_point_per_row_in_table_order() {
         );
         assert_eq!(data.note.text(lang), "");
     }
+}
+
+#[test]
+fn rows_with_the_same_text_stay_separate_bars() {
+    let df = parse_table("last_name,salary\nWilliams,3100\nSmith,2800\nWilliams,4200\n")
+        .expect("fake table");
+    let data = build(&df, &request(0, 1), Lang::En).expect("chart");
+    assert_eq!(
+        labelled(&data),
+        [
+            ("Williams".to_string(), 3100.0),
+            ("Smith".to_string(), 2800.0),
+            ("Williams".to_string(), 4200.0)
+        ]
+    );
+    // Three bars in the JSON, both Williams rows, in table order.
+    assert_eq!(
+        data.to_json().as_str(),
+        concat!(
+            r#"{"kind":"bars","locale":"en","x_label":"last_name","y_label":"salary","#,
+            r#""series":"salary vs. last_name","points":[{"label":"Williams","y":3100.0},"#,
+            r#"{"label":"Smith","y":2800.0},{"label":"Williams","y":4200.0}]}"#
+        )
+    );
 }
 
 #[test]
@@ -144,9 +168,9 @@ fn a_datetime_x_keeps_the_time_of_day() {
     let df = parse_table("at,sales\n2026-03-01T12:00:00,1\n2026-03-01T00:00:00,2\n")
         .expect("fake table");
     let Some(ColumnRole::Date) = role(df.columns()[0].dtype()) else {
-        // This parser keeps the column as text: then it is a category axis instead.
+        // This parser keeps the column as text: then it gives bars instead.
         let data = build(&df, &request(0, 1), Lang::En).expect("chart");
-        assert_eq!(data.kind, ChartKind::Categories);
+        assert_eq!(data.kind, ChartKind::Bars);
         return;
     };
     let data = build(&df, &request(0, 1), Lang::En).expect("chart");
@@ -515,7 +539,7 @@ fn json_snapshot() {
     assert_eq!(
         categories.to_json().as_str(),
         concat!(
-            r#"{"kind":"categories","locale":"en","x_label":"shop","y_label":"b","#,
+            r#"{"kind":"bars","locale":"en","x_label":"shop","y_label":"b","#,
             r#""series":"b vs. shop","points":[{"label":"B","y":1.0},{"label":"A","y":2.0}]}"#
         )
     );
