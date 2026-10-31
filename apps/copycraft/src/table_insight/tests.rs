@@ -147,7 +147,7 @@ fn sales() -> DataFrame {
 
 /// The trend of the chart of `y` against `x` of `df`, as drawn.
 fn trend_of(df: &DataFrame, x: usize, y: usize) -> Option<TrendFacts> {
-    let chart = build(df, &ChartRequest { x, y }, Lang::En).expect("chart");
+    let chart = build(df, &ChartRequest { x, y, start: 0 }, Lang::En).expect("chart");
     TrendFacts::from_chart(&chart)
 }
 
@@ -157,7 +157,6 @@ fn trend_facts_of_the_points_by_date() {
     // In date order, as drawn: every row's value, nothing added up.
     let values: Vec<f64> = trend.points.iter().map(|(_, v)| *v).collect();
     assert_eq!(values, MONTHS);
-    assert_eq!(trend.total, 12);
     let shape = trend.shape();
     assert_eq!((shape.peak, shape.low), (10, 0));
     // Two rises of three steps (April–July, August–November): the first wins.
@@ -219,7 +218,7 @@ fn only_a_chart_over_a_date_column() {
 }
 
 #[test]
-fn beyond_sixty_points_the_last_ones() {
+fn summarize_gets_the_window_drawn() {
     let mut csv = String::from("day,amount\n");
     // 70 Mondays from 2024-01-01, value = week number.
     let start = 19_723; // 2024-01-01
@@ -228,30 +227,26 @@ fn beyond_sixty_points_the_last_ones() {
         csv.push_str(&format!("{year:04}-{month:02}-{date:02},{}\n", week + 1));
     }
     let df = parse_table(&csv).expect("fake");
+    // Rows 1–50: weeks 1 to 50.
     let trend = trend_of(&df, 0, 1).expect("trend");
-    assert_eq!((trend.points.len(), trend.total), (MAX_TREND_POINTS, 70));
-    assert_eq!(trend.points[0].1, 11.0);
-    assert_eq!(trend.label(0, Lang::En), "11 March 2024");
+    assert_eq!(trend.points.len(), crate::chart_data::WINDOW);
+    assert_eq!(trend.points[0].1, 1.0);
+    assert_eq!(trend.label(0, Lang::En), "1 January 2024");
     let prompt = trend.prompt(Lang::Nl);
-    assert!(prompt.contains("Alleen de laatste 60 van 70 punten."));
-    assert!(prompt.contains("- 11 maart 2024: 11\n"));
+    assert!(prompt.contains("- 1 januari 2024: 1\n"));
     // A steady rise: one run over every step.
-    assert_eq!(trend.shape().run, Some((0, 59, true)));
-}
-
-#[test]
-fn a_sampled_chart_gives_the_sample() {
-    let mut csv = String::from("day,amount\n");
-    for row in 0..6_000 {
-        let (year, month, date) = civil_from_days(row);
-        csv.push_str(&format!("{year:04}-{month:02}-{date:02},{row}\n"));
-    }
-    let df = parse_table(&csv).expect("fake");
-    let trend = trend_of(&df, 0, 1).expect("trend");
-    // The points drawn (5 000 of 6 000), of them the last 60.
-    assert_eq!(trend.total, crate::chart_data::MAX_POINTS);
-    let last = trend.points.last().expect("points");
-    assert_eq!(*last, (5_998, 5_998.0));
+    assert_eq!(trend.shape().run, Some((0, 49, true)));
+    // Rows 51–70: the 20 weeks of that window.
+    let request = ChartRequest {
+        x: 0,
+        y: 1,
+        start: 50,
+    };
+    let chart = build(&df, &request, Lang::En).expect("chart");
+    let trend = TrendFacts::from_chart(&chart).expect("trend");
+    assert_eq!(trend.points.len(), 20);
+    assert_eq!(trend.points[0].1, 51.0);
+    assert_eq!(trend.points[19].1, 70.0);
 }
 
 #[test]

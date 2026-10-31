@@ -32,7 +32,11 @@ fn labelled(data: &ChartData) -> Vec<(String, f64)> {
 }
 
 fn request(x: usize, y: usize) -> ChartRequest {
-    ChartRequest { x, y }
+    ChartRequest { x, y, start: 0 }
+}
+
+fn at(start: usize, x: usize, y: usize) -> ChartRequest {
+    ChartRequest { x, y, start }
 }
 
 #[test]
@@ -90,9 +94,10 @@ fn a_text_x_gives_one_bar_per_row_in_table_order() {
         assert_eq!(
             data.note,
             ChartNote {
+                start: 0,
+                end: 6,
+                total: 6,
                 skipped: 0,
-                shown: 6,
-                total: 6
             }
         );
         assert_eq!(data.note.text(lang), "");
@@ -179,76 +184,148 @@ fn a_datetime_x_keeps_the_time_of_day() {
     assert_eq!(points[0].1, 2.0);
 }
 
-#[test]
-fn large_tables_are_sampled_evenly() {
+/// `rows` rows of x = row, y = row * 2 (fake numbers).
+fn counting(rows: usize) -> DataFrame {
     let mut csv = String::from("x,y\n");
-    for row in 0..12_000 {
+    for row in 0..rows {
         csv.push_str(&format!("{row},{}\n", row * 2));
     }
-    // One row without a y: skipped, and not in the total.
-    csv.push_str("12000,\n");
-    let df = parse_table(&csv).expect("fake table");
-    let data = build(&df, &request(0, 1), Lang::Nl).expect("chart");
-    let points = pairs(&data);
-    assert_eq!(points.len(), MAX_POINTS);
-    // Every 12 000 / 5 000-th row: the same rows each time.
-    assert_eq!(points[0], (0.0, 0.0));
-    assert_eq!(points[1], (2.0, 4.0));
-    assert_eq!(points[2], (4.0, 8.0));
-    assert_eq!(points[3], (7.0, 14.0));
-    assert_eq!(points[MAX_POINTS - 1], (11_997.0, 23_994.0));
-    let again = build(&df, &request(0, 1), Lang::Nl).expect("chart");
-    assert_eq!(pairs(&again), points);
-    assert_eq!(
-        data.note,
-        ChartNote {
-            skipped: 1,
-            shown: MAX_POINTS,
-            total: 12_000
-        }
-    );
-    assert_eq!(
-        data.note.text(Lang::Nl),
-        "Steekproef van 5.000 van 12.000 rijen · 1 waarde overgeslagen"
-    );
-    assert_eq!(
-        data.note.text(Lang::En),
-        "Sample of 5,000 of 12,000 rows · 1 value skipped"
-    );
-    let note = ChartNote {
-        skipped: 0,
-        shown: 5000,
-        total: 64_659,
-    };
-    assert_eq!(note.text(Lang::Nl), "Steekproef van 5.000 van 64.659 rijen");
-    // Exactly the limit: all rows, no note.
-    let mut limit = String::from("x,y\n");
-    for row in 0..MAX_POINTS {
-        limit.push_str(&format!("{row},{row}\n"));
-    }
-    let all = build(
-        &parse_table(&limit).expect("table"),
-        &request(0, 1),
-        Lang::En,
-    )
-    .expect("chart");
-    assert_eq!(pairs(&all).len(), MAX_POINTS);
-    assert_eq!(all.note.text(Lang::En), "");
+    parse_table(&csv).expect("fake table")
 }
 
 #[test]
-fn a_text_x_is_sampled_in_table_order_too() {
+fn only_a_window_of_fifty_rows_is_drawn() {
+    let df = counting(64_659);
+    let data = build(&df, &request(0, 1), Lang::Nl).expect("chart");
+    let points = pairs(&data);
+    // Rows 1–50, nothing more, whatever the table's size.
+    assert_eq!(points.len(), WINDOW);
+    assert_eq!(points[0], (0.0, 0.0));
+    assert_eq!(points[WINDOW - 1], (49.0, 98.0));
+    assert_eq!(
+        data.note,
+        ChartNote {
+            start: 0,
+            end: 50,
+            total: 64_659,
+            skipped: 0,
+        }
+    );
+    assert_eq!(data.note.text(Lang::Nl), "Rij 1–50 van 64.659");
+    assert_eq!(data.note.text(Lang::En), "Rows 1–50 of 64,659");
+    assert_eq!(data.note.previous(), None);
+    assert_eq!(data.note.next(), Some(50));
+    // The window after: rows 51–100.
+    let second = build(&df, &at(50, 0, 1), Lang::En).expect("chart");
+    assert_eq!(pairs(&second)[0], (50.0, 100.0));
+    assert_eq!(second.note.text(Lang::En), "Rows 51–100 of 64,659");
+    assert_eq!(second.note.previous(), Some(0));
+    // The last window has the 9 rows left; no next.
+    let last = build(&df, &at(64_650, 0, 1), Lang::En).expect("chart");
+    assert_eq!(pairs(&last).len(), 9);
+    assert_eq!(pairs(&last)[8], (64_658.0, 129_316.0));
+    assert_eq!(last.note.text(Lang::En), "Rows 64,651–64,659 of 64,659");
+    assert_eq!(last.note.next(), None);
+    assert_eq!(last.note.previous(), Some(64_600));
+    // The JSON stays small: 50 points.
+    assert!(data.to_json().len() < 2_000);
+}
+
+#[test]
+fn the_window_stays_inside_the_table() {
+    // 120 rows: windows from 0, 50 and 100 (the last one 20 rows).
+    let note = |start| ChartNote::window(start, 120);
+    assert_eq!((note(0).start, note(0).end), (0, 50));
+    assert_eq!((note(100).start, note(100).end), (100, 120));
+    // Past the end: the last window. Between two: the one it is in.
+    assert_eq!((note(500).start, note(500).end), (100, 120));
+    assert_eq!((note(73).start, note(73).end), (50, 100));
+    // Paging forward and back walks 0, 50, 100 and stops at both ends.
+    let mut starts = vec![0];
+    let mut shown = note(0);
+    while let Some(next) = shown.next() {
+        starts.push(next);
+        shown = note(next);
+    }
+    assert_eq!(starts, [0, 50, 100]);
+    assert_eq!(shown.previous(), Some(50));
+    assert_eq!(note(50).previous(), Some(0));
+    assert_eq!(note(0).previous(), None);
+    // Exactly one window, or fewer rows: no paging, no note.
+    for total in [0, 1, 50] {
+        let one = ChartNote::window(0, total);
+        assert_eq!((one.previous(), one.next()), (None, None), "{total}");
+        assert_eq!(one.text(Lang::En), "", "{total}");
+    }
+    assert_eq!(ChartNote::window(0, 51).next(), Some(50));
+    // A table that got shorter: the chart moves back to its last window.
+    let data = build(&counting(120), &at(9_000, 0, 1), Lang::En).expect("chart");
+    assert_eq!(data.note.start, 100);
+    assert_eq!(pairs(&data).len(), 20);
+}
+
+#[test]
+fn rows_without_values_are_skipped_inside_the_window() {
     let mut csv = String::from("shop,sales\n");
-    for row in 0..10_000 {
-        csv.push_str(&format!("shop{},{row}\n", row % 3));
+    for row in 0..120 {
+        // Every tenth row has no sales.
+        let sales = if row % 10 == 3 {
+            String::new()
+        } else {
+            row.to_string()
+        };
+        csv.push_str(&format!("shop{},{sales}\n", row % 3));
     }
     let df = parse_table(&csv).expect("fake table");
     let data = build(&df, &request(0, 1), Lang::En).expect("chart");
     let points = labelled(&data);
-    assert_eq!(points.len(), MAX_POINTS);
+    // 50 rows, 5 of them without sales: 45 bars, in table order.
+    assert_eq!(points.len(), 45);
     assert_eq!(points[0], ("shop0".to_string(), 0.0));
-    assert_eq!(points[1], ("shop2".to_string(), 2.0));
-    assert_eq!(data.note.text(Lang::En), "Sample of 5,000 of 10,000 rows");
+    assert_eq!(points[3], ("shop1".to_string(), 4.0));
+    assert_eq!(data.note.skipped, 5);
+    assert_eq!(
+        data.note.text(Lang::En),
+        "Rows 1–50 of 120 · 5 values skipped"
+    );
+    assert_eq!(
+        data.note.text(Lang::Nl),
+        "Rij 1–50 van 120 · 5 waarden overgeslagen"
+    );
+    // A window without a single value: no chart, but the window is still known for paging.
+    let mut gap = String::from("x,y\n");
+    for row in 0..100 {
+        let y = if row < 50 {
+            row.to_string()
+        } else {
+            String::new()
+        };
+        gap.push_str(&format!("{row},{y}\n"));
+    }
+    let gap = parse_table(&gap).expect("fake table");
+    let outcome = ChartOutcome::build(&gap, &at(50, 0, 1), Lang::En, 1);
+    assert!(matches!(outcome.result, Err(ChartProblem::NoValues)));
+    assert_eq!(outcome.note.previous(), Some(0));
+    assert_eq!(outcome.note.text(Lang::En), "Rows 51–100 of 100");
+    let back = ChartOutcome::build(&gap, &request(0, 1), Lang::En, 2);
+    assert!(back.result.is_ok());
+}
+
+#[test]
+fn long_labels_are_cut() {
+    let long = "a".repeat(200);
+    let name = "é".repeat(60);
+    let df = parse_table(&format!("{name},b\n{long},1\nshort,2\n")).expect("fake table");
+    let data = build(&df, &request(0, 1), Lang::En).expect("chart");
+    let points = labelled(&data);
+    assert_eq!(points[0].0.chars().count(), MAX_LABEL_CHARS);
+    assert!(points[0].0.ends_with('…'));
+    assert_eq!(points[1].0, "short");
+    assert_eq!(data.x_label.chars().count(), MAX_LABEL_CHARS);
+    assert_eq!(
+        cut(&"x".repeat(MAX_LABEL_CHARS)),
+        "x".repeat(MAX_LABEL_CHARS)
+    );
 }
 
 /// Made-up people like those of a large sample CSV: unique ids counting up, first and last
@@ -334,16 +411,19 @@ fn the_first_chart_is_age_per_city() {
     let data = build(&df, &first, Lang::Nl).expect("chart");
     assert_eq!(data.x_label, "city");
     assert_eq!(data.y_label, "age");
-    // A point per person, all twelve cities, no Overig.
+    // A bar per person of the first 50, no Overig.
     let points = labelled(&data);
-    assert_eq!(points.len(), df.height());
+    assert_eq!(points.len(), WINDOW);
     let ages = df.column("age").expect("age").i64().expect("numbers");
     let towns = df.column("city").expect("city").str().expect("text");
     for (row, (city, age)) in points.iter().enumerate() {
         assert_eq!(Some(city.as_str()), towns.get(row));
         assert_eq!(Some(*age as i64), ages.get(row));
     }
-    assert!(points.iter().any(|(city, _)| city == "City11"));
+    // The next window has the other people.
+    let rest = build(&df, &at(WINDOW, 5, 4), Lang::Nl).expect("chart");
+    assert_eq!(labelled(&rest).len(), df.height() - WINDOW);
+    assert_eq!(rest.note.next(), None);
 }
 
 #[test]
@@ -582,14 +662,17 @@ fn a_request_is_fitted_to_the_columns() {
     let text = chart_columns(&parse_table("category,shop\nBooks,A\nGames,B\n").expect("table"));
     assert_eq!(request(0, 1).fitted(&text), None);
     assert_eq!(request(0, 1).fitted(&[]), None);
+    // The window stays when the columns change.
+    assert_eq!(at(150, 3, 3).fitted(&columns), Some(at(150, 3, 2)));
+    assert_eq!(at(150, 1, 1).fitted(&one), Some(at(150, 0, 1)));
 }
 
 #[test]
 fn an_outcome_shows_no_content() {
     let outcome = ChartOutcome::build(&shop(), &request(0, 2), Lang::En, 7);
-    let (json, note) = outcome.result.as_ref().expect("chart");
+    let json = outcome.result.as_ref().expect("chart");
     assert!(json.contains("Books"));
-    assert_eq!(note.skipped, 0);
+    assert_eq!(outcome.note.skipped, 0);
     // A text x: nothing for Summarize.
     assert!(outcome.trend.is_none());
     let shown = format!("{outcome:?}");

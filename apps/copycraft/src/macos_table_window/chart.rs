@@ -1,14 +1,14 @@
 //! The table window's chart (*Chart* on the toolbar, only in a build with Swift Charts): the
 //! version shown drawn by Swift Charts ([`crate::macos_chart`]) over the sidebar and grid: one
-//! point per row, with two pop-ups above it, the x column and the y column, and *Table* to go
-//! back (as Esc). Rust works the chart out on a thread
+//! point per row of a window of 50 rows, with two pop-ups above it, the x column and the y
+//! column, *Previous 50* / *Next 50* to move the window, and *Table* to go back (as Esc). Rust works the chart out on a thread
 //! ([`crate::chart_data`]); a result for an older request is dropped. Masked like the grid:
 //! the chart is hidden under the cover. Nothing here is logged; closing the window drops the
 //! chart and empties the pop-ups. Under a chart over a date column, *Summarize* puts its trend
 //! into words ([`super::insight`]).
 
 use super::*;
-use crate::chart_data::{self, ChartOutcome, ChartRequest};
+use crate::chart_data::{self, ChartNote, ChartOutcome, ChartRequest};
 use crate::macos_chart::ChartHost;
 use mac_ui::objc2_app_kit::{NSBezelStyle, NSCellImagePosition, NSImage, NSPopUpButton};
 
@@ -21,13 +21,18 @@ const POPUP_MAX_W: f64 = 220.0;
 /// The pop-ups, by tag.
 const X_TAG: isize = 1;
 const Y_TAG: isize = 4;
+/// *Previous 50* and *Next 50*, by tag.
+const PREVIOUS_TAG: isize = 5;
+const NEXT_TAG: isize = 6;
 
 struct Pane {
     pane: Retained<NSView>,
     x: Retained<NSPopUpButton>,
     y: Retained<NSPopUpButton>,
     back: Retained<NSButton>,
-    /// The sample and the skipped values, why there is no chart, or "Making the chart…".
+    previous: Retained<NSButton>,
+    next: Retained<NSButton>,
+    /// The rows shown and the skipped values, why there is no chart, or "Making the chart…".
     note: Retained<NSTextField>,
     host: Option<ChartHost>,
 }
@@ -45,6 +50,9 @@ thread_local! {
     /// The chart is up (instead of the grid).
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
     static REQUEST: Cell<Option<ChartRequest>> = const { Cell::new(None) };
+    /// The window of the last outcome: what *Previous 50* / *Next 50* move from. None while a
+    /// chart is being worked out (both off).
+    static WINDOW_SHOWN: Cell<Option<ChartNote>> = const { Cell::new(None) };
     /// The number of the last request; an outcome with another one is dropped.
     static GENERATION: Cell<u64> = const { Cell::new(0) };
     /// The version the chart was asked for (table, version, versions, rows).
@@ -79,18 +87,39 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
         popup
     };
     let (x, y) = (popup(X_TAG), popup(Y_TAG));
-    let back = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
-    back.setBezelStyle(NSBezelStyle::Push);
-    if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
-        &NSString::from_str("tablecells"),
-        None,
-    ) {
-        back.setImage(Some(&image));
-        back.setImagePosition(NSCellImagePosition::ImageLeading);
-    }
-    back.setAutoresizingMask(mask(&[A::ViewMinYMargin, A::ViewMinXMargin]));
+    let button = |symbol: &str, leading: bool, right: bool| {
+        let button = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
+        button.setBezelStyle(NSBezelStyle::Push);
+        if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            &NSString::from_str(symbol),
+            None,
+        ) {
+            button.setImage(Some(&image));
+            button.setImagePosition(if leading {
+                NSCellImagePosition::ImageLeading
+            } else {
+                NSCellImagePosition::ImageTrailing
+            });
+        }
+        let side = if right {
+            A::ViewMinXMargin
+        } else {
+            A::ViewMaxXMargin
+        };
+        button.setAutoresizingMask(mask(&[A::ViewMinYMargin, side]));
+        pane.addSubview(&button);
+        button
+    };
+    let back = button("tablecells", true, true);
     wire(&back, sel!(tableWindowChartBack:));
-    pane.addSubview(&back);
+    let previous = button("chevron.left", true, false);
+    previous.setTag(PREVIOUS_TAG);
+    previous.setEnabled(false);
+    wire(&previous, sel!(tableWindowChartPage:));
+    let next = button("chevron.right", false, false);
+    next.setTag(NEXT_TAG);
+    next.setEnabled(false);
+    wire(&next, sel!(tableWindowChartPage:));
     let note = widgets::label(
         mtm,
         mac_ui::metrics::FONT_CAPTION,
@@ -106,6 +135,8 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
         x,
         y,
         back,
+        previous,
+        next,
         note,
         host: None,
     };
@@ -185,10 +216,12 @@ pub(super) fn leave() {
     // An outcome still on its way is dropped.
     GENERATION.set(GENERATION.get().wrapping_add(1));
     SIGNATURE.set(None);
+    WINDOW_SHOWN.set(None);
     insight::reset(insight::Place::Chart);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow_mut().as_mut() {
             drop_host(pane);
+            set_paging(pane, true);
             pane.pane.setHidden(true);
             widgets::wipe_text_field(&pane.note);
         }
@@ -221,6 +254,22 @@ pub(super) fn changed(tag: isize, index: isize) {
             ask();
         }
         None => leave(),
+    }
+}
+
+/// *Previous 50* or *Next 50* (`tag`): the window before or after the one shown.
+pub(super) fn page(tag: isize) {
+    let (Some(request), Some(shown)) = (REQUEST.get(), WINDOW_SHOWN.get()) else {
+        return;
+    };
+    let start = match tag {
+        PREVIOUS_TAG => shown.previous(),
+        NEXT_TAG => shown.next(),
+        _ => None,
+    };
+    if let Some(start) = start {
+        REQUEST.set(Some(ChartRequest { start, ..request }));
+        ask();
     }
 }
 
@@ -260,13 +309,22 @@ pub(super) fn show(outcome: ChartOutcome) {
     let hidden = masked();
     // Summarize, under the chart, for a chart over a date column.
     insight::set_trend(outcome.trend.clone());
+    // The window drawn (moved back when the table got shorter) is the one paged from.
+    WINDOW_SHOWN.set(Some(outcome.note));
+    if let Some(request) = REQUEST.get() {
+        REQUEST.set(Some(ChartRequest {
+            start: outcome.note.start,
+            ..request
+        }));
+    }
     PANE.with(|slot| {
         let mut borrowed = slot.borrow_mut();
         let Some(pane) = borrowed.as_mut() else {
             return;
         };
+        let rows = outcome.note.text(lang);
         let note = match &outcome.result {
-            Ok((json, chart_note)) => {
+            Ok(json) => {
                 let drawn = match &pane.host {
                     Some(host) => {
                         host.view().setFrame(host_frame(&pane.pane));
@@ -292,17 +350,24 @@ pub(super) fn show(outcome: ChartOutcome) {
                     host.view().setHidden(hidden || !drawn);
                 }
                 if drawn {
-                    chart_note.text(lang)
+                    rows
                 } else {
                     crate::locale::t("chart_unavailable").to_string()
                 }
             }
             Err(problem) => {
                 drop_host(pane);
-                problem.message(lang).to_string()
+                // Still paged: a window with no values can be left for the next one.
+                let message = problem.message(lang);
+                if rows.is_empty() {
+                    message.to_string()
+                } else {
+                    format!("{message} · {rows}")
+                }
             }
         };
         pane.note.setStringValue(&NSString::from_str(&note));
+        set_paging(pane, hidden);
     });
 }
 
@@ -316,6 +381,7 @@ pub(super) fn apply_mask(masked: bool) {
             for popup in [&pane.x, &pane.y] {
                 popup.setEnabled(!masked);
             }
+            set_paging(pane, masked);
         }
     });
     insight::apply_mask(insight::Place::Chart, masked);
@@ -352,6 +418,7 @@ pub(super) fn relabel() {
 pub(super) fn wipe() {
     leave();
     REQUEST.set(None);
+    WINDOW_SHOWN.set(None);
     CHOICES.with(|choices| *choices.borrow_mut() = Choices::default());
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
@@ -372,6 +439,13 @@ fn relabel_pane(pane: &Pane) {
         popup.setAccessibilityLabel(Some(&s(label)));
         popup.setToolTip(Some(&s(label)));
     }
+    for (button, title, tip) in [
+        (&pane.previous, t("chart_previous"), t("chart_previous_tip")),
+        (&pane.next, t("chart_next"), t("chart_next_tip")),
+    ] {
+        button.setTitle(&s(title));
+        button.setToolTip(Some(&s(tip)));
+    }
     pane.back.setTitle(&s(t("table_view")));
     pane.back
         .setToolTip(Some(&s(&commands::keyed_tip(t("chart_back_tip"), "Esc"))));
@@ -387,10 +461,13 @@ fn ask() {
     GENERATION.set(generation);
     // The series asked for is new: Summarize waits for it.
     insight::reset(insight::Place::Chart);
+    // No paging until this window is there.
+    WINDOW_SHOWN.set(None);
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
             pane.note
                 .setStringValue(&NSString::from_str(crate::locale::t("chart_working")));
+            set_paging(pane, true);
         }
     });
     launcher::emit(UserEvent::TableWindow(TableWindowEvent::Chart {
@@ -448,7 +525,18 @@ fn set_items(popup: &NSPopUpButton, titles: &[String], selected: Option<usize>) 
     }
 }
 
-/// The two pop-ups, left to right along the top; *Table* at the right; the note under them.
+/// *Previous 50* / *Next 50*: on when there is a window that way, the chart is shown and not
+/// `off` (masked, or being worked out).
+fn set_paging(pane: &Pane, off: bool) {
+    let shown = WINDOW_SHOWN.get().filter(|_| !off && ACTIVE.get());
+    pane.previous
+        .setEnabled(shown.is_some_and(|note| note.previous().is_some()));
+    pane.next
+        .setEnabled(shown.is_some_and(|note| note.next().is_some()));
+}
+
+/// The two pop-ups and *Previous 50* / *Next 50*, left to right along the top; *Table* at the
+/// right; the note under them.
 fn layout(pane: &Pane) {
     let size = pane.pane.frame().size;
     let top = size.height - PAD - ROW_H;
@@ -457,6 +545,12 @@ fn layout(pane: &Pane) {
         popup.sizeToFit();
         let width = popup.frame().size.width.min(POPUP_MAX_W);
         popup.setFrame(NSRect::new(NSPoint::new(x, top), NSSize::new(width, ROW_H)));
+        x += width + GAP;
+    }
+    for button in [&pane.previous, &pane.next] {
+        button.sizeToFit();
+        let width = button.frame().size.width;
+        button.setFrame(NSRect::new(NSPoint::new(x, top), NSSize::new(width, ROW_H)));
         x += width + GAP;
     }
     pane.back.sizeToFit();

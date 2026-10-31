@@ -16,8 +16,6 @@ use crate::table_profile::{ColumnProfile, Extreme, TableProfile, decimal_mark, n
 
 /// The most outlier rows that go to the model (the furthest past the fence first).
 pub const MAX_ROWS: usize = 20;
-/// The most points of a chart that go to the model: the last ones by date.
-pub const MAX_TREND_POINTS: usize = 60;
 /// An answer longer than this, in characters, is no "1 or 2 sentences" and is not shown.
 pub const MAX_ANSWER_CHARS: usize = 600;
 
@@ -146,15 +144,14 @@ pub fn outlier_sentence(column: &ColumnProfile, lang: Lang) -> Option<Zeroizing<
 // Trend
 
 /// The points of a chart over a date column, for Summarize: the values by date as drawn (one
-/// per row; the last [`MAX_TREND_POINTS`]), with the y column's name. Wiped when dropped; its
+/// per row, at most the chart's window of [`crate::chart_data::WINDOW`] rows), with the y
+/// column's name. Wiped when dropped; its
 /// `Debug` shows no name or value.
 pub struct TrendFacts {
     /// The y column's name.
     pub column: String,
     /// `(day, value)`, oldest first.
     pub points: Vec<(i32, f64)>,
-    /// The points before the cut to the last [`MAX_TREND_POINTS`].
-    pub total: usize,
 }
 
 impl std::fmt::Debug for TrendFacts {
@@ -187,7 +184,7 @@ pub struct TrendShape {
 
 impl TrendFacts {
     /// The trend of a drawn chart: only one over a date column, with at least two points
-    /// (in date order, as drawn).
+    /// (in date order, as drawn: the window's rows).
     pub fn from_chart(chart: &ChartData) -> Option<TrendFacts> {
         let Points::Pairs(pairs) = &chart.points else {
             return None;
@@ -195,15 +192,13 @@ impl TrendFacts {
         if chart.kind != ChartKind::Dates || pairs.len() < 2 {
             return None;
         }
-        let total = pairs.len();
-        let points = pairs[total.saturating_sub(MAX_TREND_POINTS)..]
+        let points = pairs
             .iter()
             .map(|(day, value)| (day.floor() as i32, *value))
             .collect();
         Some(TrendFacts {
             column: chart.y_label.clone(),
             points,
-            total,
         })
     }
 
@@ -309,9 +304,6 @@ impl TrendFacts {
         let mut lines = vec![tf_in(lang, "insight_p_series", &[&self.column])];
         let count = self.points.len();
         lines.push(tf_in(lang, "insight_p_by_date", &[&count]));
-        if self.total > count {
-            lines.push(tf_in(lang, "insight_trend_cut", &[&count, &self.total]));
-        }
         for (place, (_, value)) in self.points.iter().enumerate() {
             lines.push(format!(
                 "- {}: {}",

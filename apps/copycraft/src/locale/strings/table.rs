@@ -192,9 +192,21 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     // The table window's chart
     ("chart_scatter_series", "{0} tegen {1}", "{0} vs. {1}"),
     (
-        "chart_sample",
-        "Steekproef van {0} van {1} rijen",
-        "Sample of {0} of {1} rows",
+        "chart_rows_window",
+        "Rij {0}–{1} van {2}",
+        "Rows {0}–{1} of {2}",
+    ),
+    ("chart_previous", "Vorige 50", "Previous 50"),
+    ("chart_next", "Volgende 50", "Next 50"),
+    (
+        "chart_previous_tip",
+        "Toon de 50 rijen hiervoor",
+        "Show the 50 rows before these",
+    ),
+    (
+        "chart_next_tip",
+        "Toon de 50 rijen hierna",
+        "Show the 50 rows after these",
     ),
     (
         "chart_no_columns",
@@ -442,11 +454,6 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "insight_trend_fall",
         "Langste daling: {0} keer op rij, van {1} tot {2}.",
         "Longest fall: {0} times in a row, from {1} to {2}.",
-    ),
-    (
-        "insight_trend_cut",
-        "Alleen de laatste {0} van {1} punten.",
-        "Only the last {0} of {1} points.",
     ),
     ("month_1", "januari", "January"),
     ("month_2", "februari", "February"),

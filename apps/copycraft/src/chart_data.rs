@@ -4,9 +4,12 @@
 //!
 //! The y column holds numbers; the x column is any column the chart can read. A number x gives
 //! a scatter, a date x points along a time axis (both in x order), a text x one bar per row (in
-//! table order, each labelled with its text: rows with the same text stay separate bars). Rows with an empty x, or an empty or non-numeric y, are
-//! skipped and counted. Above [`MAX_POINTS`] rows an even, fixed sample is drawn (every n-th
-//! row) and the note says so. Every label comes translated from here; the JSON is wiped when
+//! table order, each labelled with its text: rows with the same text stay separate bars).
+//!
+//! Only a window of [`WINDOW`] rows is drawn at a time (rows 1–50, then *Next 50*): the frame is
+//! sliced before anything is read, so a table of any size costs the same 50 rows. Rows in the
+//! window with an empty x, or an empty or non-numeric y, are skipped and counted. Labels are cut
+//! to [`MAX_LABEL_CHARS`]. Every label comes translated from here; the JSON is wiped when
 //! dropped.
 
 use polars::prelude::{Column, DataFrame, DataType, TimeUnit};
@@ -17,8 +20,13 @@ use std::sync::Arc;
 use crate::locale::{Lang, t_in, tf_in};
 use crate::table_insight::TrendFacts;
 
-/// At most this many points, taken evenly from the rows with values.
-pub const MAX_POINTS: usize = 5000;
+/// The rows drawn at a time: the chart never gets more.
+pub const WINDOW: usize = 50;
+/// A bar label or column name longer than this, in characters, is cut with "…".
+pub const MAX_LABEL_CHARS: usize = 40;
+/// The rows the first-choice heuristics look at (few values, ids counting up, addresses):
+/// the top of the table, so a large table costs no more.
+const SCAN_ROWS: usize = 1000;
 
 /// How the x axis reads, from the x column's role (not chosen on its own).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,13 +89,16 @@ impl ChartColumn {
     }
 }
 
-/// The chart asked for: two column places, never names or values.
+/// The chart asked for: two column places and the first row of the window, never names or
+/// values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChartRequest {
     /// The x column: any column the chart can read.
     pub x: usize,
     /// The y column: a number column.
     pub y: usize,
+    /// The window's first row (0-based, a multiple of [`WINDOW`]).
+    pub start: usize,
 }
 
 impl ChartRequest {
@@ -104,6 +115,7 @@ impl ChartRequest {
             return Some(ChartRequest {
                 x: x.index,
                 y: y.index,
+                start: 0,
             });
         }
         let y = columns
@@ -124,15 +136,15 @@ impl ChartRequest {
             .iter()
             .find_map(|fits| columns.iter().filter(|c| c.index != y).find(|c| fits(c)))?
             .index;
-        Some(ChartRequest { x, y })
+        Some(ChartRequest { x, y, start: 0 })
     }
 
     /// This request made to fit `columns` (after a pop-up changed, or another version): the x
     /// kept when it is still offered, else the first choice's; the y kept when it is offered
     /// beside that x. An x that took the y's column moves the y to the next number column
     /// (round to the first); a y that is gone becomes the first choice's (or the first left).
-    /// An x with no other number column beside it gives the first choice. Never x == y.
-    /// `None` when no chart fits.
+    /// An x with no other number column beside it gives the first choice. Never x == y. The
+    /// window stays (a shorter table moves it back when drawn). `None` when no chart fits.
     pub fn fitted(self, columns: &[ChartColumn]) -> Option<ChartRequest> {
         let first = ChartRequest::first(columns)?;
         let x = if x_choices(columns).contains(&self.x) {
@@ -146,17 +158,31 @@ impl ChartRequest {
         } else if self.y == x {
             match ys.iter().find(|&&y| y > self.y).or(ys.first()) {
                 Some(&next) => next,
-                None => return Some(first),
+                None => {
+                    return Some(ChartRequest {
+                        start: self.start,
+                        ..first
+                    });
+                }
             }
         } else if ys.contains(&first.y) {
             first.y
         } else {
             match ys.first() {
                 Some(&y) => y,
-                None => return Some(first),
+                None => {
+                    return Some(ChartRequest {
+                        start: self.start,
+                        ..first
+                    });
+                }
             }
         };
-        Some(ChartRequest { x, y })
+        Some(ChartRequest {
+            x,
+            y,
+            start: self.start,
+        })
     }
 }
 
@@ -174,27 +200,58 @@ pub fn y_choices(columns: &[ChartColumn], x: usize) -> Vec<usize> {
         .collect()
 }
 
-/// What the note under the pop-ups says about the points: values skipped, and a sample.
+/// The window drawn and what the note under the pop-ups says about it: the rows shown of
+/// how many, and the values skipped in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChartNote {
-    /// Rows left out: an empty x, an empty or non-numeric y.
-    pub skipped: usize,
-    /// The points drawn.
-    pub shown: usize,
-    /// The rows with values; more than `shown` when a sample is drawn.
+    /// The window's first row (0-based).
+    pub start: usize,
+    /// Past the window's last row: at most `start + WINDOW`.
+    pub end: usize,
+    /// The table's rows.
     pub total: usize,
+    /// Rows in the window left out: an empty x, an empty or non-numeric y.
+    pub skipped: usize,
 }
 
 impl ChartNote {
-    /// "Steekproef van 5.000 van 64.659 rijen · 3 waarden overgeslagen", or empty.
+    /// The window from `start` of a table of `total` rows: moved back to the last window when
+    /// `start` is past the end, and to a multiple of [`WINDOW`].
+    pub fn window(start: usize, total: usize) -> ChartNote {
+        let last = total.saturating_sub(1) / WINDOW * WINDOW;
+        let start = (start / WINDOW * WINDOW).min(last);
+        ChartNote {
+            start,
+            end: (start + WINDOW).min(total),
+            total,
+            skipped: 0,
+        }
+    }
+
+    /// The window before this one's first row, if any (*Vorige 50*).
+    pub fn previous(self) -> Option<usize> {
+        (self.start > 0).then(|| self.start.saturating_sub(WINDOW))
+    }
+
+    /// The window after this one's first row, if any (*Volgende 50*).
+    pub fn next(self) -> Option<usize> {
+        (self.end < self.total).then_some(self.start + WINDOW)
+    }
+
+    /// "Rij 1–50 van 64.659 · 3 waarden overgeslagen" (the rows only when there are more than
+    /// one window), or empty.
     pub fn text(self, lang: Lang) -> String {
         use crate::table_profile::whole;
         let mut parts: Vec<String> = Vec::new();
-        if self.shown < self.total {
+        if self.total > WINDOW {
             parts.push(tf_in(
                 lang,
-                "chart_sample",
-                &[&whole(self.shown, lang), &whole(self.total, lang)],
+                "chart_rows_window",
+                &[
+                    &whole(self.start + 1, lang),
+                    &whole(self.end, lang),
+                    &whole(self.total, lang),
+                ],
             ));
         }
         match self.skipped {
@@ -206,12 +263,13 @@ impl ChartNote {
     }
 }
 
-/// A chart worked out on a worker, for the table window: the JSON to draw (with its note) or
-/// why there is none. `generation` is the window's number of the request: an older one is
+/// A chart worked out on a worker, for the table window: the JSON to draw or why there is none,
+/// and the window it is about (for the note and paging, also without a chart). `generation` is the window's number of the request: an older one is
 /// dropped. Its `Debug` shows no labels or values.
 pub struct ChartOutcome {
     pub generation: u64,
-    pub result: Result<(Zeroizing<String>, ChartNote), ChartProblem>,
+    pub result: Result<Zeroizing<String>, ChartProblem>,
+    pub note: ChartNote,
     /// The points for Summarize: a date x with at least two points.
     pub trend: Option<Arc<TrendFacts>>,
 }
@@ -224,11 +282,13 @@ impl ChartOutcome {
             Ok(data) => ChartOutcome {
                 generation,
                 trend: TrendFacts::from_chart(&data).map(Arc::new),
-                result: Ok((data.to_json(), data.note)),
+                result: Ok(data.to_json()),
+                note: data.note,
             },
             Err(problem) => ChartOutcome {
                 generation,
                 result: Err(problem),
+                note: ChartNote::window(request.start, df.height()),
                 trend: None,
             },
         }
@@ -240,9 +300,10 @@ impl Clone for ChartOutcome {
         ChartOutcome {
             generation: self.generation,
             result: match &self.result {
-                Ok((json, note)) => Ok((Zeroizing::new(json.as_str().to_string()), *note)),
+                Ok(json) => Ok(Zeroizing::new(json.as_str().to_string())),
                 Err(problem) => Err(*problem),
             },
+            note: self.note,
             trend: self.trend.clone(),
         }
     }
@@ -318,10 +379,13 @@ impl Drop for ChartData {
     }
 }
 
-/// The columns of `df` a chart can use, in order, with what makes each a good first choice.
+/// The columns of `df` a chart can use, in order, with what makes each a good first choice
+/// (judged on the first 1,000 rows).
 pub fn chart_columns(df: &DataFrame) -> Vec<ChartColumn> {
-    let rows = df.height();
-    df.columns()
+    // The top of the table only: the same cost for any number of rows.
+    let head = df.slice(0, SCAN_ROWS);
+    let rows = head.height();
+    head.columns()
         .iter()
         .enumerate()
         .filter_map(|(index, column)| {
@@ -508,8 +572,17 @@ pub fn build(
     if request.x == request.y {
         return Err(ChartProblem::Columns);
     }
-    let x = df.columns().get(request.x).ok_or(ChartProblem::Columns)?;
-    let y = df.columns().get(request.y).ok_or(ChartProblem::Columns)?;
+    let mut note = ChartNote::window(request.start, df.height());
+    // Only the window's rows are read: the slice shares the frame's buffers.
+    let window = df.slice(i64::try_from(note.start).unwrap_or(i64::MAX), WINDOW);
+    let x = window
+        .columns()
+        .get(request.x)
+        .ok_or(ChartProblem::Columns)?;
+    let y = window
+        .columns()
+        .get(request.y)
+        .ok_or(ChartProblem::Columns)?;
     let ys = numbers(y)?;
     let kind = match role(x.dtype()) {
         Some(ColumnRole::Number) => ChartKind::Scatter,
@@ -517,24 +590,22 @@ pub fn build(
         Some(ColumnRole::Text) => ChartKind::Bars,
         None => return Err(ChartProblem::Columns),
     };
-    let x_label = x.name().to_string();
-    let y_label = y.name().to_string();
+    let x_label = cut(x.name());
+    let y_label = cut(y.name());
     let series = tf_in(lang, "chart_scatter_series", &[&y_label, &x_label]);
-    let (points, note) = match kind {
+    let points = match kind {
         ChartKind::Bars => {
             let texts = x.str().map_err(|_| ChartProblem::Columns)?;
-            let rows: Vec<usize> = (0..ys.len())
-                .filter(|&row| {
-                    ys[row].is_finite()
-                        && texts.get(row).is_some_and(|text| !text.trim().is_empty())
-                })
-                .collect();
-            let (rows, note) = sample(rows, ys.len());
-            let points = rows
-                .into_iter()
-                .filter_map(|row| Some((texts.get(row)?.to_string(), ys[row])))
-                .collect();
-            (Points::Labelled(points), note)
+            // In table order; a row with an empty x or y is skipped.
+            Points::Labelled(
+                (0..ys.len())
+                    .filter(|&row| ys[row].is_finite())
+                    .filter_map(|row| {
+                        let text = texts.get(row).filter(|text| !text.trim().is_empty())?;
+                        Some((cut(text), ys[row]))
+                    })
+                    .collect(),
+            )
         }
         ChartKind::Scatter | ChartKind::Dates => {
             let xs = if kind == ChartKind::Dates {
@@ -542,24 +613,23 @@ pub fn build(
             } else {
                 numbers(x)?
             };
-            let rows: Vec<usize> = (0..ys.len())
+            let mut pairs: Vec<(f64, f64)> = (0..ys.len())
                 .filter(|&row| ys[row].is_finite() && xs.get(row).is_some_and(|v| v.is_finite()))
+                .map(|row| (xs[row], ys[row]))
                 .collect();
-            let (rows, note) = sample(rows, ys.len());
-            let mut pairs: Vec<(f64, f64)> =
-                rows.into_iter().map(|row| (xs[row], ys[row])).collect();
             // In x order (stable: rows with the same x keep the table's order).
             pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
-            (Points::Pairs(pairs), note)
+            Points::Pairs(pairs)
         }
     };
-    let empty = match &points {
-        Points::Pairs(pairs) => pairs.is_empty(),
-        Points::Labelled(points) => points.is_empty(),
+    let drawn = match &points {
+        Points::Pairs(pairs) => pairs.len(),
+        Points::Labelled(points) => points.len(),
     };
-    if empty {
+    if drawn == 0 {
         return Err(ChartProblem::NoValues);
     }
+    note.skipped = (note.end - note.start).saturating_sub(drawn);
     Ok(ChartData {
         kind,
         lang,
@@ -571,22 +641,16 @@ pub fn build(
     })
 }
 
-/// At most [`MAX_POINTS`] of `rows` (the rows with values, of `height`), taken evenly: every
-/// n-th, the same ones each time. With the note on what was skipped and sampled.
-fn sample(rows: Vec<usize>, height: usize) -> (Vec<usize>, ChartNote) {
-    let total = rows.len();
-    let note = |shown: usize| ChartNote {
-        skipped: height - total,
-        shown,
-        total,
-    };
-    if total <= MAX_POINTS {
-        return (rows, note(total));
+/// `text` cut to [`MAX_LABEL_CHARS`] characters, with "…" when cut.
+fn cut(text: &str) -> String {
+    match text.char_indices().nth(MAX_LABEL_CHARS - 1) {
+        Some((end, _)) if text.chars().count() > MAX_LABEL_CHARS => {
+            let mut short = text[..end].to_string();
+            short.push('…');
+            short
+        }
+        _ => text.to_string(),
     }
-    let picked = (0..MAX_POINTS)
-        .map(|i| rows[i * total / MAX_POINTS])
-        .collect();
-    (picked, note(MAX_POINTS))
 }
 
 /// A number column as `f64`, `NaN` where empty or not a number.

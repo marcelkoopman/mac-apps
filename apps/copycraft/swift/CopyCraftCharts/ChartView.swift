@@ -47,9 +47,8 @@ struct ChartView: View {
 
     /// Dates come as whole days (UTC): shown in UTC, so a day never slips to the one before.
     static let utc = TimeZone(identifier: "UTC") ?? TimeZone.current
-    /// Bars in view at once; the x axis scrolls sideways to the others (macOS 14 and later; the
-    /// app needs macOS 26).
-    static let barsInView = 50
+    /// The most points drawn: Rust sends a window of 50 rows; more are never drawn.
+    static let maxPoints = 50
     /// A longer bar label is cut, with "…".
     static let labelLength = 24
 
@@ -58,8 +57,9 @@ struct ChartView: View {
         let locale = Locale(identifier: spec.locale)
         self.locale = locale
         var rows: [ChartRow] = []
-        rows.reserveCapacity(spec.points.count)
-        for (index, point) in spec.points.enumerated() {
+        let points = spec.points.prefix(ChartView.maxPoints)
+        rows.reserveCapacity(points.count)
+        for (index, point) in points.enumerated() {
             let x = point.x ?? 0
             let date = Date(timeIntervalSince1970: x * 86_400)
             let xText: String
@@ -106,8 +106,8 @@ struct ChartView: View {
                 .chartXAxis { dateAxis }
             )
         case "bars":
-            // One bar per row in table order: x is the row's place (never its text, which
-            // would stack rows with the same text), labelled with its text.
+            // One bar per row of the window in table order: x is the row's place (never its
+            // text, which would stack rows with the same text), labelled with its text.
             styled(
                 Chart(rows) { row in
                     BarMark(
@@ -119,8 +119,6 @@ struct ChartView: View {
                 }
                 .chartXScale(domain: rows.map(\.key))
                 .chartXAxis { barAxis }
-                .chartScrollableAxes(.horizontal)
-                .chartXVisibleDomain(length: min(ChartView.barsInView, max(rows.count, 1)))
             )
         default:
             styled(
@@ -158,11 +156,11 @@ struct ChartView: View {
         }
     }
 
-    /// A label under every bar: its row's text, upright to fit 50 bars in view.
+    /// A label under a bar: its row's text, cut short; labels that would overlap are left out.
     private var barAxis: some AxisContent {
         AxisMarks(values: rows.map(\.key)) { value in
             AxisTick()
-            AxisValueLabel(collisionResolution: .greedy, orientation: .verticalReversed) {
+            AxisValueLabel(collisionResolution: .greedy) {
                 if let key = value.as(String.self), let place = Int(key),
                    rows.indices.contains(place)
                 {
@@ -212,9 +210,12 @@ struct ChartView: View {
     }
 }
 
+/// The most JSON bytes read: 50 points with cut labels stay far below this.
+private let maxSpecBytes = 1 << 20
+
 /// The spec in `bytes` (UTF-8 JSON, `len` bytes, read in place), or nil when it does not decode.
 private func decodeSpec(_ bytes: UnsafePointer<UInt8>?, _ len: Int) -> ChartSpec? {
-    guard let bytes, len > 0 else { return nil }
+    guard let bytes, len > 0, len <= maxSpecBytes else { return nil }
     let data = Data(
         bytesNoCopy: UnsafeMutableRawPointer(mutating: bytes),
         count: len,

@@ -142,6 +142,7 @@ impl App {
             launcher::show_table_chart(ChartOutcome {
                 generation,
                 result: Err(ChartProblem::Columns),
+                note: crate::chart_data::ChartNote::default(),
                 trend: None,
             });
             return;

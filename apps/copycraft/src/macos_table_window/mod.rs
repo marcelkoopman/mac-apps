@@ -222,6 +222,14 @@ define_class!(
             }
         }
 
+        /// *Previous 50* / *Next 50* above the chart: the window before or after.
+        #[unsafe(method(tableWindowChartPage:))]
+        fn chart_page(&self, sender: Option<&NSButton>) {
+            if let Some(button) = sender {
+                chart::page(button.tag());
+            }
+        }
+
         /// *Table* above the chart: back to the table.
         #[unsafe(method(tableWindowChartBack:))]
         fn chart_back(&self, _sender: Option<&NSButton>) {
