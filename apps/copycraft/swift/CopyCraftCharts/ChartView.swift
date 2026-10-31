@@ -27,6 +27,16 @@ struct ChartPoint: Decodable, Sendable {
     let y: Double
 }
 
+/// What the chart shows: when it changes (other columns, the window before or after), the
+/// marks move to their new places.
+struct ChartIdentity: Equatable {
+    let kind: String
+    let xLabel: String
+    let yLabel: String
+    let xs: [Double]
+    let ys: [Double]
+}
+
 /// One mark, its texts formatted in the app's language. `id` is its place in the points: a
 /// bar's identity on the x axis (`key`), so rows with the same text stay separate bars.
 struct ChartRow: Identifiable {
@@ -44,6 +54,9 @@ struct ChartView: View {
     let spec: ChartSpec
     let locale: Locale
     let rows: [ChartRow]
+    let identity: ChartIdentity
+    /// System Settings › Accessibility › Display › Reduce motion: then nothing moves.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dates come as whole days (UTC): shown in UTC, so a day never slips to the one before.
     static let utc = TimeZone(identifier: "UTC") ?? TimeZone.current
@@ -51,6 +64,20 @@ struct ChartView: View {
     static let maxPoints = 50
     /// A longer bar label is cut, with "…".
     static let labelLength = 24
+    /// The marks moving to a new chart.
+    static let change = Animation.easeInOut(duration: 0.35)
+    /// Bars and the area under a line: the accent colour, fading downwards (system colours, so
+    /// light and dark mode both work).
+    static let fill = LinearGradient(
+        colors: [Color.accentColor, Color.accentColor.opacity(0.35)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+    static let area = LinearGradient(
+        colors: [Color.accentColor.opacity(0.3), Color.accentColor.opacity(0)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
 
     init(spec: ChartSpec) {
         self.spec = spec
@@ -80,10 +107,18 @@ struct ChartView: View {
             ))
         }
         self.rows = rows
+        self.identity = ChartIdentity(
+            kind: spec.kind,
+            xLabel: spec.xLabel,
+            yLabel: spec.yLabel,
+            xs: rows.map(\.x),
+            ys: rows.map(\.y)
+        )
     }
 
     var body: some View {
         content
+            .animation(reduceMotion ? nil : ChartView.change, value: identity)
             .accessibilityLabel(Text(verbatim: spec.series))
             .padding(16)
             .environment(\.locale, locale)
@@ -94,12 +129,31 @@ struct ChartView: View {
     private var content: some View {
         switch spec.kind {
         case "dates":
+            // A smooth line through the points, over an area fading downwards. Only the
+            // points are read by VoiceOver.
             styled(
                 Chart(rows) { row in
+                    AreaMark(
+                        x: .value(spec.xLabel, row.date),
+                        y: .value(spec.yLabel, row.y)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(ChartView.area)
+                    .accessibilityHidden(true)
+                    LineMark(
+                        x: .value(spec.xLabel, row.date),
+                        y: .value(spec.yLabel, row.y)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
                     PointMark(
                         x: .value(spec.xLabel, row.date),
                         y: .value(spec.yLabel, row.y)
                     )
+                    .symbolSize(24)
+                    .foregroundStyle(Color.accentColor)
                     .accessibilityLabel(Text(verbatim: row.xText))
                     .accessibilityValue(Text(verbatim: row.yText))
                 }
@@ -114,6 +168,8 @@ struct ChartView: View {
                         x: .value(spec.xLabel, row.key),
                         y: .value(spec.yLabel, row.y)
                     )
+                    .foregroundStyle(ChartView.fill)
+                    .cornerRadius(3)
                     .accessibilityLabel(Text(verbatim: row.xText))
                     .accessibilityValue(Text(verbatim: row.yText))
                 }
@@ -127,6 +183,7 @@ struct ChartView: View {
                         x: .value(spec.xLabel, row.x),
                         y: .value(spec.yLabel, row.y)
                     )
+                    .foregroundStyle(Color.accentColor.opacity(0.8))
                     .accessibilityLabel(Text(verbatim: "\(spec.xLabel) \(row.xText)"))
                     .accessibilityValue(Text(verbatim: "\(spec.yLabel) \(row.yText)"))
                 }
