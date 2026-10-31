@@ -207,7 +207,8 @@ fn only_a_chart_over_a_date_column() {
     let df = sales();
     // A text x or a number x: no trend.
     assert!(trend_of(&df, 0, 2).is_none());
-    assert!(trend_of(&df, 2, 2).is_none());
+    let numbers = parse_table("a,b\n1,2\n3,4\n").expect("fake");
+    assert!(trend_of(&numbers, 0, 1).is_none());
     // One point is no trend.
     let one = parse_table("day,amount\n2026-01-01,5\n2026-01-09,\n").expect("fake");
     assert!(trend_of(&one, 0, 1).is_none());

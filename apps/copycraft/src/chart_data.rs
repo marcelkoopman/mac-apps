@@ -128,8 +128,11 @@ impl ChartRequest {
     }
 
     /// This request made to fit `columns` (after a pop-up changed, or another version): the x
-    /// and y kept when they are still offered, else the first choice's. `None` when no chart
-    /// fits.
+    /// kept when it is still offered, else the first choice's; the y kept when it is offered
+    /// beside that x. An x that took the y's column moves the y to the next number column
+    /// (round to the first); a y that is gone becomes the first choice's (or the first left).
+    /// An x with no other number column beside it gives the first choice. Never x == y.
+    /// `None` when no chart fits.
     pub fn fitted(self, columns: &[ChartColumn]) -> Option<ChartRequest> {
         let first = ChartRequest::first(columns)?;
         let x = if x_choices(columns).contains(&self.x) {
@@ -137,10 +140,21 @@ impl ChartRequest {
         } else {
             first.x
         };
-        let y = if y_choices(columns).contains(&self.y) {
+        let ys = y_choices(columns, x);
+        let y = if ys.contains(&self.y) {
             self.y
-        } else {
+        } else if self.y == x {
+            match ys.iter().find(|&&y| y > self.y).or(ys.first()) {
+                Some(&next) => next,
+                None => return Some(first),
+            }
+        } else if ys.contains(&first.y) {
             first.y
+        } else {
+            match ys.first() {
+                Some(&y) => y,
+                None => return Some(first),
+            }
         };
         Some(ChartRequest { x, y })
     }
@@ -151,11 +165,11 @@ pub fn x_choices(columns: &[ChartColumn]) -> Vec<usize> {
     columns.iter().map(|c| c.index).collect()
 }
 
-/// The columns the y pop-up offers: the number columns.
-pub fn y_choices(columns: &[ChartColumn]) -> Vec<usize> {
+/// The columns the y pop-up offers beside the x column `x`: the other number columns.
+pub fn y_choices(columns: &[ChartColumn], x: usize) -> Vec<usize> {
     columns
         .iter()
-        .filter(|c| c.role == ColumnRole::Number)
+        .filter(|c| c.role == ColumnRole::Number && c.index != x)
         .map(|c| c.index)
         .collect()
 }
@@ -490,6 +504,9 @@ pub fn build(
     request: &ChartRequest,
     lang: Lang,
 ) -> Result<ChartData, ChartProblem> {
+    if request.x == request.y {
+        return Err(ChartProblem::Columns);
+    }
     let x = df.columns().get(request.x).ok_or(ChartProblem::Columns)?;
     let y = df.columns().get(request.y).ok_or(ChartProblem::Columns)?;
     let ys = numbers(y)?;

@@ -110,9 +110,11 @@ fn a_number_x_gives_a_scatter_in_x_order() {
         [(1.0, 10.0), (1.0, 11.0), (2.0, 20.0), (3.0, 30.0)]
     );
     assert_eq!(data.series, "b vs. a");
-    // X and y may be the same column when someone picks it.
-    let same = build(&df, &request(1, 1), Lang::En).expect("chart");
-    assert_eq!(pairs(&same)[0], (10.0, 10.0));
+    // Never one column against itself.
+    assert_eq!(
+        build(&df, &request(1, 1), Lang::En),
+        Err(ChartProblem::Columns)
+    );
 }
 
 #[test]
@@ -423,6 +425,18 @@ fn without_a_good_category_the_first_chart_falls_back() {
         first("first_name,shop,sales\nAnja,Webwinkel,1\nBram,Webwinkel,2\n"),
         Some(request(1, 2))
     );
+    // Never a first chart of a column against itself.
+    for csv in [
+        SHOP,
+        "id,city\n1,Utrecht\n2,Gouda\n3,Utrecht\n",
+        "a,b,c,shop\n1,5,9,A\n4,2,7,B\n2,8,3,A\n",
+        "first_name,shop,sales\nAnja,Webwinkel,1\nBram,Webwinkel,2\n",
+    ] {
+        let request = first(csv).expect("a chart");
+        assert_ne!(request.x, request.y, "{csv}");
+    }
+    let request = ChartRequest::first(&chart_columns(&self::people())).expect("a chart");
+    assert_ne!(request.x, request.y);
     // One number column beside true/false only: no x beside it.
     assert_eq!(first("sales,paid\n1,true\n2,false\n"), None);
     assert_eq!(first("id,paid\n1,true\n2,false\n"), None);
@@ -512,7 +526,10 @@ fn the_pop_ups_offer_what_fits() {
     let columns = chart_columns(&shop());
     // X: every column; y: the number columns.
     assert_eq!(x_choices(&columns), [0, 1, 2, 3]);
-    assert_eq!(y_choices(&columns), [2, 3]);
+    // Y: the number columns but the x column.
+    assert_eq!(y_choices(&columns, 0), [2, 3]);
+    assert_eq!(y_choices(&columns, 2), [3]);
+    assert_eq!(y_choices(&columns, 3), [2]);
     // True/false columns are not offered.
     let flags = chart_columns(&parse_table("paid,sales\ntrue,1\nfalse,2\n").expect("table"));
     assert_eq!(x_choices(&flags), [1]);
@@ -527,6 +544,16 @@ fn a_request_is_fitted_to_the_columns() {
     // Text for y, or a column that is gone: the first choice's.
     assert_eq!(request(1, 0).fitted(&columns), Some(request(1, 3)));
     assert_eq!(request(9, 9).fitted(&columns), Some(request(2, 3)));
+    // X moved onto the y column: the y goes to the next number column, round to the first.
+    assert_eq!(request(3, 3).fitted(&columns), Some(request(3, 2)));
+    assert_eq!(request(2, 2).fitted(&columns), Some(request(2, 3)));
+    let three =
+        chart_columns(&parse_table("a,b,c,shop\n1,5,9,A\n4,2,7,B\n2,8,3,A\n").expect("table"));
+    assert_eq!(request(1, 1).fitted(&three), Some(request(1, 2)));
+    assert_eq!(request(2, 2).fitted(&three), Some(request(2, 0)));
+    // The only number column as x: nothing left for y, so the first choice.
+    let one = chart_columns(&parse_table("shop,sales\nA,5\nB,2\nA,8\n").expect("table"));
+    assert_eq!(request(1, 1).fitted(&one), Some(request(0, 1)));
     // No number column, or no columns: nothing.
     let text = chart_columns(&parse_table("category,shop\nBooks,A\nGames,B\n").expect("table"));
     assert_eq!(request(0, 1).fitted(&text), None);

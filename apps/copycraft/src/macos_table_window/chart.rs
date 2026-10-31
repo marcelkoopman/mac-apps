@@ -409,7 +409,7 @@ fn fill(view: &TableWindowView, request: ChartRequest) {
     };
     let choices = Choices {
         xs: chart_data::x_choices(columns),
-        ys: chart_data::y_choices(columns),
+        ys: chart_data::y_choices(columns, request.x),
     };
     PANE.with(|slot| {
         let borrowed = slot.borrow();
