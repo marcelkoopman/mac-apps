@@ -58,7 +58,9 @@
 # raw NSError read is gone. The run-time class and selector checks stay.
 # copycraft blocks 90: +3, the table window's chart (src/macos_chart.rs, approved by Marcel 2026-10-30):
 # ChartHost's cc_chart_create + retain, cc_chart_update and cc_chart_release into the Swift Charts view.
-copycraft blocks 90
+# copycraft blocks 91: +1, *Save as PNG* above the table window's chart (asked for by Marcel 2026-10-31):
+# ChartHost::png calls cc_chart_png (Swift's ImageRenderer) and takes over the NSData it returns.
+copycraft blocks 91
 copycraft fn 5
 # copycraft impl 3: -6, About, Settings and Welcome lost their delegates' NSObjectProtocol and
 # NSWindowDelegate impls (approved by Marcel 2026-10-30): mac_ui::panel::on_close is their window delegate.

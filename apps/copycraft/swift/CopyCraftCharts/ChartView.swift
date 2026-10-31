@@ -315,6 +315,53 @@ public func ccChartUpdate(
     }
 }
 
+/// The chart in `host` as PNG: what it shows now (the same spec, at its size), at scale 2,
+/// without motion, on an opaque background of its appearance (light or dark). Nil when it has
+/// no size or cannot be drawn. Written nowhere: the bytes go back to Rust.
+@MainActor
+private func chartPNG(_ host: NSHostingView<ChartView>) -> Data? {
+    let size = host.bounds.size
+    guard size.width >= 1, size.height >= 1 else { return nil }
+    let appearance = host.effectiveAppearance
+    let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    // The window background of that appearance, resolved now (a dynamic colour would follow
+    // whatever appearance the renderer has).
+    var background = dark ? NSColor.black : NSColor.white
+    appearance.performAsCurrentDrawingAppearance {
+        if let resolved = NSColor.windowBackgroundColor.usingColorSpace(.sRGB) {
+            background = resolved
+        }
+    }
+    let content = ChartView(spec: host.rootView.spec)
+        .frame(width: size.width, height: size.height)
+        .background(Color(nsColor: background))
+        .environment(\.colorScheme, dark ? .dark : .light)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
+    let renderer = ImageRenderer(content: content)
+    renderer.scale = 2
+    renderer.isOpaque = true
+    guard let image = renderer.cgImage else { return nil }
+    return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+}
+
+/// The chart in the view from `cc_chart_create` as PNG bytes: a retained NSData the caller
+/// releases, or nil when it cannot be drawn. Main thread only.
+@_cdecl("cc_chart_png")
+public func ccChartPng(_ view: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
+    guard let view else { return nil }
+    let address = Int(bitPattern: view)
+    let result = MainActor.assumeIsolated { () -> Int in
+        guard let pointer = UnsafeMutableRawPointer(bitPattern: address) else { return 0 }
+        let host = Unmanaged<NSHostingView<ChartView>>.fromOpaque(pointer).takeUnretainedValue()
+        guard let png = chartPNG(host) else { return 0 }
+        return Int(bitPattern: Unmanaged.passRetained(png as NSData).toOpaque())
+    }
+    return UnsafeMutableRawPointer(bitPattern: result)
+}
+
 /// Release the view from `cc_chart_create` (the reference it was returned with). Main thread only.
 @_cdecl("cc_chart_release")
 public func ccChartRelease(_ view: UnsafeMutableRawPointer?) {

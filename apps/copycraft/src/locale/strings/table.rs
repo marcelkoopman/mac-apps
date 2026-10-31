@@ -197,6 +197,14 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
         "Rows {0}–{1} of {2}",
     ),
     ("chart_previous", "Vorige 50", "Previous 50"),
+    ("chart_save", "Bewaar als PNG", "Save as PNG"),
+    (
+        "chart_save_tip",
+        "Bewaar de grafiek zoals je hem nu ziet als PNG-bestand",
+        "Save the chart as you see it now as a PNG file",
+    ),
+    ("save_panel_chart", "Bewaar grafiek", "Save chart"),
+    ("chart_file_name", "grafiek", "chart"),
     ("chart_next", "Volgende 50", "Next 50"),
     (
         "chart_previous_tip",

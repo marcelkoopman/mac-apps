@@ -230,6 +230,12 @@ define_class!(
             }
         }
 
+        /// *Save as PNG* above the chart: the chart as shown, to a file the user picks.
+        #[unsafe(method(tableWindowChartSave:))]
+        fn chart_save(&self, _sender: Option<&NSButton>) {
+            launcher::emit(UserEvent::TableWindow(TableWindowEvent::SaveChart));
+        }
+
         /// *Table* above the chart: back to the table.
         #[unsafe(method(tableWindowChartBack:))]
         fn chart_back(&self, _sender: Option<&NSButton>) {
@@ -469,6 +475,11 @@ pub(crate) fn show(view: TableWindowView, sheet: Option<crate::dataframe::Prepar
         panel::activate_app(mtm);
         panel::bring_to_front(&window);
     }
+}
+
+/// The chart shown, as PNG bytes for *Save as PNG*; `None` (with a beep) when none is shown.
+pub(crate) fn chart_png() -> Option<zeroize::Zeroizing<Vec<u8>>> {
+    chart::png()
 }
 
 /// Draw the chart the app worked out (dropped when it is for an older request).

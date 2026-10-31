@@ -30,6 +30,8 @@ struct Pane {
     x: Retained<NSPopUpButton>,
     y: Retained<NSPopUpButton>,
     back: Retained<NSButton>,
+    /// *Save as PNG*: the chart as shown.
+    save: Retained<NSButton>,
     previous: Retained<NSButton>,
     next: Retained<NSButton>,
     /// The rows shown and the skipped values, why there is no chart, or "Making the chart…".
@@ -112,6 +114,9 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
     };
     let back = button("tablecells", true, true);
     wire(&back, sel!(tableWindowChartBack:));
+    let save = button("square.and.arrow.down", true, true);
+    save.setEnabled(false);
+    wire(&save, sel!(tableWindowChartSave:));
     let previous = button("chevron.left", true, false);
     previous.setTag(PREVIOUS_TAG);
     previous.setEnabled(false);
@@ -135,6 +140,7 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
         x,
         y,
         back,
+        save,
         previous,
         next,
         note,
@@ -446,6 +452,8 @@ fn relabel_pane(pane: &Pane) {
         button.setTitle(&s(title));
         button.setToolTip(Some(&s(tip)));
     }
+    pane.save.setTitle(&s(t("chart_save")));
+    pane.save.setToolTip(Some(&s(t("chart_save_tip"))));
     pane.back.setTitle(&s(t("table_view")));
     pane.back
         .setToolTip(Some(&s(&commands::keyed_tip(t("chart_back_tip"), "Esc"))));
@@ -526,17 +534,19 @@ fn set_items(popup: &NSPopUpButton, titles: &[String], selected: Option<usize>) 
 }
 
 /// *Previous 50* / *Next 50*: on when there is a window that way, the chart is shown and not
-/// `off` (masked, or being worked out).
+/// `off` (masked, or being worked out). *Save as PNG*: on while a chart is drawn and shown.
 fn set_paging(pane: &Pane, off: bool) {
     let shown = WINDOW_SHOWN.get().filter(|_| !off && ACTIVE.get());
+    pane.save
+        .setEnabled(shown.is_some() && drawn(pane).is_some());
     pane.previous
         .setEnabled(shown.is_some_and(|note| note.previous().is_some()));
     pane.next
         .setEnabled(shown.is_some_and(|note| note.next().is_some()));
 }
 
-/// The two pop-ups and *Previous 50* / *Next 50*, left to right along the top; *Table* at the
-/// right; the note under them.
+/// The two pop-ups and *Previous 50* / *Next 50*, left to right along the top; *Save as PNG*
+/// and *Table* at the right; the note under them.
 fn layout(pane: &Pane) {
     let size = pane.pane.frame().size;
     let top = size.height - PAD - ROW_H;
@@ -559,6 +569,12 @@ fn layout(pane: &Pane) {
         NSPoint::new(size.width - PAD - back_w, top),
         NSSize::new(back_w, ROW_H),
     ));
+    pane.save.sizeToFit();
+    let save_w = pane.save.frame().size.width;
+    pane.save.setFrame(NSRect::new(
+        NSPoint::new(size.width - PAD - back_w - GAP - save_w, top),
+        NSSize::new(save_w, ROW_H),
+    ));
     pane.note.setFrame(NSRect::new(
         NSPoint::new(PAD, top - NOTE_H - 4.0),
         NSSize::new((size.width - PAD * 2.0).max(0.0), NOTE_H),
@@ -574,6 +590,28 @@ fn host_frame(pane: &NSView) -> NSRect {
         NSPoint::new(PAD, PAD + bar),
         NSSize::new((size.width - PAD * 2.0).max(0.0), height),
     )
+}
+
+/// The chart host, when a chart is drawn and not hidden.
+fn drawn(pane: &Pane) -> Option<&ChartHost> {
+    pane.host.as_ref().filter(|host| !host.view().isHidden())
+}
+
+/// *Save as PNG*: the chart as shown (the window of rows, the columns, the axis titles), as PNG
+/// bytes. `None` (and a beep) when no chart is shown: masked, being worked out, or none.
+pub(super) fn png() -> Option<zeroize::Zeroizing<Vec<u8>>> {
+    let png = PANE.with(|slot| {
+        let borrowed = slot.borrow();
+        let pane = borrowed.as_ref()?;
+        if !ACTIVE.get() || WINDOW_SHOWN.get().is_none() || masked() {
+            return None;
+        }
+        drawn(pane)?.png()
+    });
+    if png.is_none() {
+        NSBeep();
+    }
+    png
 }
 
 fn drop_host(pane: &mut Pane) {

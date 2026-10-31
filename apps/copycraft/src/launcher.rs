@@ -172,6 +172,8 @@ pub enum TableWindowEvent {
     CopyProfile {
         generation: u64,
     },
+    /// *Save as PNG* above the chart: the chart as shown, to a file the user picks.
+    SaveChart,
     Closed,
 }
 

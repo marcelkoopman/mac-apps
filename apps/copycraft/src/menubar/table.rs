@@ -250,6 +250,7 @@ impl App {
                 generation,
             } => self.table_chart(request, generation),
             launcher::TableWindowEvent::Profile { generation } => self.table_profile(generation),
+            launcher::TableWindowEvent::SaveChart => self.save_table_chart(),
             launcher::TableWindowEvent::CopyProfile { generation } => {
                 self.copy_table_profile(generation);
             }

@@ -23,6 +23,7 @@ mod ffi {
         pub fn cc_chart_create(bytes: *const u8, len: usize) -> *mut c_void;
         pub fn cc_chart_update(view: *mut c_void, bytes: *const u8, len: usize) -> bool;
         pub fn cc_chart_release(view: *mut c_void);
+        pub fn cc_chart_png(view: *mut c_void) -> *mut c_void;
     }
 }
 
@@ -73,6 +74,28 @@ impl ChartHost {
     #[cfg(not(copycraft_charts))]
     pub fn update(&self, _json: &str) -> bool {
         false
+    }
+}
+
+impl ChartHost {
+    /// The chart as shown now, as PNG bytes (scale 2, opaque, in the view's appearance).
+    /// `None` when it cannot be drawn or this build has no charts.
+    #[cfg(copycraft_charts)]
+    pub fn png(&self) -> Option<zeroize::Zeroizing<Vec<u8>>> {
+        use mac_ui::objc2_foundation::NSData;
+        let raw = Retained::as_ptr(&self.view)
+            .cast_mut()
+            .cast::<std::ffi::c_void>();
+        // SAFETY: `self` holds the NSHostingView from `cc_chart_create` (alive while `self`
+        // is) and is main-thread only (not Send). The result is null or an NSData Swift
+        // retained for us (+1): `from_raw` takes that reference over and releases it once.
+        let data = unsafe { Retained::from_raw(ffi::cc_chart_png(raw).cast::<NSData>()) }?;
+        Some(zeroize::Zeroizing::new(data.to_vec()))
+    }
+
+    #[cfg(not(copycraft_charts))]
+    pub fn png(&self) -> Option<zeroize::Zeroizing<Vec<u8>>> {
+        None
     }
 }
 

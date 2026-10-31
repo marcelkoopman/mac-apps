@@ -327,6 +327,52 @@ impl App {
         }
     }
 
+    /// *Save as PNG* above the table window's chart: the chart as shown, to a file the user
+    /// picks. Nothing else is written; a failure says only that it failed.
+    pub(crate) fn save_table_chart(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            if self.saving.is_some() {
+                return;
+            }
+            let Some(png) = crate::macos_table_window::chart_png() else {
+                return;
+            };
+            let _wait = crate::macos_launcher::PanelWait::show();
+            let name = crate::open_file::save_name(crate::locale::t("chart_file_name"), "png");
+            let started = crate::macos_table_window::keeping_revealed(|| {
+                (|| -> anyhow::Result<()> {
+                    let mtm = mac_ui::objc2::MainThreadMarker::new()
+                        .context("the save panel needs the main thread")?;
+                    let Some(path) = mac_ui::file_panel::choose_save_path(
+                        mtm,
+                        crate::locale::t("save_panel_chart"),
+                        &name,
+                        &["png"],
+                    )?
+                    else {
+                        return Ok(());
+                    };
+                    std::thread::Builder::new()
+                        .name("copycraft-save".into())
+                        .spawn(move || {
+                            // No path or reason in the message: "Save failed" only.
+                            let result =
+                                std::fs::write(&path, png.as_slice()).map_err(|_| String::new());
+                            launcher::emit(UserEvent::SaveFinished(result));
+                        })
+                        .context("cannot start the save thread")?;
+                    self.saving = Some(Background::now());
+                    Ok(())
+                })()
+            });
+            // The panel or the thread did not start: said, not logged.
+            if started.is_err() {
+                super::state::save_feedback(crate::locale::t("save_failed_toast"));
+            }
+        }
+    }
+
     /// The DataFrame of the version the table window shows, when it has a frame.
     pub(crate) fn window_table_frame(&mut self) -> Option<polars::prelude::DataFrame> {
         let (_, home) = self.window_source()?;
