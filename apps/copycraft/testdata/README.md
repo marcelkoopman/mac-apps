@@ -989,3 +989,56 @@ Needs macOS 26 with Apple Intelligence on, and a build with Swift (`copycraft: s
 - [ ] Switch Settings › Language: the buttons and facts follow in the new language, and an earlier answer is dropped (click again for one in the new language).
 - [ ] The prompt gets only numbers worked out in Rust: put a made-up secret in another column (e.g. shop `Klant-Geheim-777777`) and check that neither answer mentions it.
 - [ ] Nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value, fact or answer; no new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data`.
+
+## TestFlight (Mac App Store-build, alleen Mac)
+
+### 1. Vooraf in het Apple Developer-account
+
+- [ ] App Store Connect: een macOS-app met bundle ID `nl.marcelkoopman.copycraft`, gelijk aan `CFBundleIdentifier` in het Info.plist (`identifier` in `apps/copycraft/Cargo.toml`; `scripts/finish_info_plist.sh` controleert hem).
+- [ ] Certificaat **Apple Distribution** (voor de app; oudere naam *3rd Party Mac Developer Application*), met private key in de keychain.
+- [ ] Certificaat **Mac Installer Distribution** (in de keychain *3rd Party Mac Developer Installer: Naam (TEAMID)*), met private key.
+- [ ] Een **Mac App Store**-provisioningprofiel (`.provisionprofile`) voor `nl.marcelkoopman.copycraft` en het eigen team. Het script stopt als het profiel van een ander team of een andere app is.
+
+### 2. Bouwen met `scripts/build_store_pkg.sh`
+
+Alleen op macOS, met `cargo-bundle` geïnstalleerd (`cargo install cargo-bundle`). Verplichte omgevingsvariabelen (het script leest niets uit de repo of een secret store):
+
+```
+export APPLE_TEAM_ID=ABCDE12345                                           # 10 tekens, A-Z en 0-9
+export STORE_APP_IDENTITY="Apple Distribution: Naam (ABCDE12345)"
+export STORE_INSTALLER_IDENTITY="3rd Party Mac Developer Installer: Naam (ABCDE12345)"
+export STORE_PROVISION_PROFILE=~/Downloads/CopyCraft_Mac_App_Store.provisionprofile
+# optioneel: export KEYCHAIN=~/Library/Keychains/<naam>.keychain-db       # alleen deze keychain
+scripts/build_store_pkg.sh                     # of: scripts/build_store_pkg.sh pad/naar/CopyCraft.pkg
+```
+
+- [ ] Het script controleert eerst de identiteiten (`security find-identity`), het profiel en de entitlements (`TEAMID` ingevuld uit `APPLE_TEAM_ID`), en bouwt dan: release-build voor `aarch64-apple-darwin`, `cargo bundle`, Info.plist, app-icoon, privacy-manifest, profiel als `Contents/embedded.provisionprofile`, `codesign` met `assets/entitlements.store.plist`, en `productbuild --sign`.
+- [ ] Het eindigt met `✅ …/target/store/CopyCraft.pkg (team …, nl.marcelkoopman.copycraft). Upload met Transporter.` Het stopt als de sandbox- of user-selected-files-entitlement ontbreekt of als er een netwerk-entitlement in de signature staat.
+- [ ] De App Store-build wordt niet genotariseerd, en het uploaden zit niet in het script.
+
+### 3. Uploaden
+
+- [ ] Sleep `target/store/CopyCraft.pkg` in **Transporter** (Mac App Store), log in met het Apple-account van het team en klik *Lever af*. Of via de commandoregel: `xcrun altool --upload-app --type macos --file target/store/CopyCraft.pkg` met een App Store Connect API-sleutel of een app-specifiek wachtwoord.
+- [ ] Elke upload heeft een hoger buildnummer nodig dan de vorige. Dat komt uit `version` in `apps/copycraft/Cargo.toml` (via `cargo bundle`). Controleer het met `plutil -p …/CopyCraft.app/Contents/Info.plist | grep CFBundle.*Version`. Het versienummer wordt alleen verhoogd als Marcel dat zegt (een `chore(release)`-commit). Verhoog het dus niet zelf om opnieuw te kunnen uploaden.
+- [ ] Na de upload verwerkt App Store Connect de build. Hij verschijnt daarna onder *TestFlight* (een mail meldt het als de verwerking klaar is). `ITSAppUsesNonExemptEncryption` staat al op `false` in `assets/Info.plist.ext`, dus er komt geen vraag over export-compliance.
+
+### 4. TestFlight-testers
+
+- [ ] **Interne testers**: leden van het App Store Connect-team (maximaal 100). De build is direct beschikbaar, zonder review.
+- [ ] **Externe testers**: via e-mail of een openbare link. De eerste build van een versie gaat eerst door de **Beta App Review**. Vul daarvoor *Wat moet je testen* en de reviewnotities in (zie 6).
+- [ ] Testers installeren de app met de TestFlight-app op de Mac.
+
+### 5. Testen in de sandbox (TestFlight-build, alleen verzonnen data)
+
+- [ ] **Plakken en het klembord lezen**: kopieer verzonnen tekst (bijv. `testscherm 123`) en een verzonnen CSV in een andere app. De kaart toont ze, en *Kopieer* en plakken in TextEdit geven ze terug. macOS kan bij het lezen van het klembord om toestemming vragen ("Plakken toestaan"). Controleer dat CopyCraft ook na een weigering niet crasht.
+- [ ] **Schermopname voor de schermafbeelding (⌃⌥4)**: bij de eerste ⌃⌥4 vraagt macOS om toestemming voor Schermopname, met de tekst uit `NSScreenCaptureUsageDescription` (NL en EN). Zonder toestemming verschijnt de melding en volgt geen crash. Na toestemming werkt de volgende schermafbeelding. Er wordt geen bestand geschreven (`ls -t ~/Library/Containers/nl.marcelkoopman.copycraft/Data/tmp | head`).
+- [ ] **Bewaar- en open-dialogen (door de gebruiker gekozen bestanden)**: ⌘O op een verzonnen `.csv`, slepen naar de kaart, en *Bewaar…* / *Save…* op de kaart (bewaar-dialoog). Ze werken alleen op de bestanden die je kiest. Een pad dat niet gekozen is, wordt niet gelezen, en er staat niets nieuws buiten de container.
+- [ ] **Leg uit / Vat samen zonder Apple Intelligence** (Apple Intelligence uit, of een Mac zonder): de knoppen zijn grijs, met de korte reden in de notitie en de tooltip, en de feitenzinnen staan er nog. Met Apple Intelligence aan werken ze zoals in *Explain and Summarize with the Apple model* hierboven.
+- [ ] De app werkt volledig offline (wifi uit) en schrijft niets in Console (`log stream --predicate 'process == "CopyCraft"'`).
+
+### 6. Notities voor de review (App Store Connect › App Review-informatie)
+
+- Geen Toegankelijkheid (Accessibility) en geen toetsaanslagen: CopyCraft vraagt geen Toegankelijkheid-toestemming en leest of verstuurt geen toetsaanslagen. De sneltoets voor de schermafbeelding (standaard ⌃⌥4) is een globale sneltoets via de `global-hotkey`-crate (Carbon `RegisterEventHotKey`).
+- Schermopname wordt alleen gebruikt voor schermafbeeldingen die de gebruiker zelf start (⌃⌥4 of het menu). De afbeelding gaat naar het klembord en blijft op de Mac.
+- *Leg uit* / *Vat samen* gebruiken het Apple-model op het apparaat (Apple Intelligence). Er gaat niets naar een server, en de app heeft geen netwerk-entitlement.
+- Sandbox-entitlements: alleen `com.apple.security.app-sandbox` en `com.apple.security.files.user-selected.read-write`.
