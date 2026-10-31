@@ -48,8 +48,14 @@ fn columns_get_their_roles() {
             ColumnRole::Number
         ]
     );
-    // X: the category; y: the first number column.
-    assert_eq!(ChartRequest::first(&columns), Some(request(0, 2)));
+    // Two number columns that are not ids: revenue on x, units on y (a scatter).
+    assert_eq!(ChartRequest::first(&columns), Some(request(2, 3)));
+    // One such number column: the category on x, the number on y.
+    let one = parse_table("category,revenue\nBooks,1\nGames,2\nBooks,3\n").expect("table");
+    assert_eq!(
+        ChartRequest::first(&chart_columns(&one)),
+        Some(request(0, 1))
+    );
     // Without a number column: no chart (nothing to put on the y axis).
     let text = parse_table("city,name\nUtrecht,Anja\nGouda,Jan\n").expect("fake table");
     assert_eq!(ChartRequest::first(&chart_columns(&text)), None);
@@ -242,6 +248,42 @@ fn people() -> DataFrame {
 }
 
 #[test]
+fn two_numbers_come_before_a_category() {
+    // Like a sample people table: an id, names, age, salary and a city. Age against salary,
+    // not one of them per city.
+    let mut csv = String::from("id,first_name,age,city,salary\n");
+    for row in 1..=40 {
+        csv.push_str(&format!(
+            "{row},Name{},{},City{},{}\n",
+            row % 7,
+            20 + row * 7 % 45,
+            row % 5,
+            30_000 + row * 1_337 % 50_000
+        ));
+    }
+    let df = parse_table(&csv).expect("fake table");
+    let first = ChartRequest::first(&chart_columns(&df)).expect("a chart");
+    assert_eq!(first, request(2, 4));
+    let data = build(&df, &first, Lang::En).expect("chart");
+    assert_eq!(data.kind, ChartKind::Scatter);
+    assert_eq!(
+        (data.x_label.as_str(), data.y_label.as_str()),
+        ("age", "salary")
+    );
+    assert_eq!(pairs(&data).len(), 40);
+    // An id is no second number: with one number beside it the city is on x again.
+    let mut ids = String::from("id,age,city\n");
+    for row in 1..=20 {
+        ids.push_str(&format!("{row},{},City{}\n", 20 + row % 9, row % 3));
+    }
+    let df = parse_table(&ids).expect("fake table");
+    assert_eq!(
+        ChartRequest::first(&chart_columns(&df)),
+        Some(request(2, 1))
+    );
+}
+
+#[test]
 fn the_first_chart_is_age_per_city() {
     let df = people();
     let columns = chart_columns(&df);
@@ -353,7 +395,7 @@ fn without_a_good_category_the_first_chart_falls_back() {
         ));
     }
     assert_eq!(first(&unique), Some(request(1, 2)));
-    // Only names and two numbers: the second number against the first, no id or name.
+    // Only names and two numbers: the first against the second, no id or name.
     let mut names = String::from("id,first_name,email,age,height\n");
     for row in 0..30 {
         names.push_str(&format!(
@@ -362,7 +404,7 @@ fn without_a_good_category_the_first_chart_falls_back() {
             150 + row % 7
         ));
     }
-    assert_eq!(first(&names), Some(request(4, 3)));
+    assert_eq!(first(&names), Some(request(3, 4)));
     // The people without their city: no text but names, so the id against age.
     let mut people = people();
     let _ = people.drop_in_place("city").expect("city");
@@ -483,8 +525,8 @@ fn a_request_is_fitted_to_the_columns() {
     assert_eq!(request(3, 2).fitted(&columns), Some(request(3, 2)));
     assert_eq!(request(1, 3).fitted(&columns), Some(request(1, 3)));
     // Text for y, or a column that is gone: the first choice's.
-    assert_eq!(request(1, 0).fitted(&columns), Some(request(1, 2)));
-    assert_eq!(request(9, 9).fitted(&columns), Some(request(0, 2)));
+    assert_eq!(request(1, 0).fitted(&columns), Some(request(1, 3)));
+    assert_eq!(request(9, 9).fitted(&columns), Some(request(2, 3)));
     // No number column, or no columns: nothing.
     let text = chart_columns(&parse_table("category,shop\nBooks,A\nGames,B\n").expect("table"));
     assert_eq!(request(0, 1).fitted(&text), None);

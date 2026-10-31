@@ -91,13 +91,21 @@ pub struct ChartRequest {
 }
 
 impl ChartRequest {
-    /// The first chart `columns` allow, as a person would pick it. Y: the first number column
-    /// that is not an id (else an id). X, another column: a text column with few values (never
-    /// names or e-mail addresses), else a date column, a number column that is not an id, any
-    /// text column but names, an id, and last a column of names. `None` without a number
-    /// column, or with nothing for x beside it.
+    /// The first chart `columns` allow, as a person would pick it. With two number columns
+    /// that are not ids: the first on x, the next on y (a scatter, e.g. age against salary).
+    /// Otherwise y is the first number column that is not an id (else an id), and x another
+    /// column: a text column with few values (never names or e-mail addresses), else a date
+    /// column, a number column that is not an id, any text column but names, an id, and last
+    /// a column of names. `None` without a number column, or with nothing for x beside it.
     pub fn first(columns: &[ChartColumn]) -> Option<ChartRequest> {
         let number = |id: bool| move |c: &&ChartColumn| c.role == ColumnRole::Number && c.id == id;
+        let mut plain = columns.iter().filter(number(false));
+        if let (Some(x), Some(y)) = (plain.next(), plain.next()) {
+            return Some(ChartRequest {
+                x: x.index,
+                y: y.index,
+            });
+        }
         let y = columns
             .iter()
             .find(number(false))
