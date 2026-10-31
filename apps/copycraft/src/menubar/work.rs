@@ -63,14 +63,6 @@ impl Lanes {
 
 type Finish = Box<dyn FnOnce(&mut App) + Send>;
 
-/// Run `finish` on the main thread, from a worker: its progress or its result.
-pub(crate) fn on_main(finish: impl FnOnce(&mut App) + Send + 'static) {
-    let finish: Finish = Box::new(finish);
-    launcher::emit(UserEvent::WorkDone(WorkDone(Arc::new(Mutex::new(Some(
-        finish,
-    ))))));
-}
-
 /// A background result on its way to the main thread ([`UserEvent::WorkDone`]).
 #[derive(Clone)]
 pub struct WorkDone(Arc<Mutex<Option<Finish>>>);

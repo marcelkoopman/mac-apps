@@ -36,10 +36,8 @@ impl App {
     /// Read a dropped or chosen file on a thread (a large file, a picture), then show it. A
     /// promised file (`promised`) is removed after the read.
     pub(crate) fn open_path(&mut self, path: std::path::PathBuf, promised: bool) {
-        // Its checksums are read alongside, on their own thread ([`App::start_checksum`]); a
-        // promised file goes when both reads are done with it.
-        let promised = promised.then(|| super::checksum::PromisedFile::new(path.clone()));
-        let checksum = self.start_checksum(path.clone(), promised.clone());
+        // A promised file goes when the read (and a zip's card) is done with it.
+        let promised = promised.then(|| PromisedFile::new(path.clone()));
         // The card says "Opening file…" when this takes a while ([`Self::spin_opening`]).
         let token = self.opening.begin();
         self.opening_started = Some((token, Instant::now()));
@@ -58,10 +56,10 @@ impl App {
                 warm_card_answers(&opened);
                 opened
             },
-            move |app, opened| app.show_dropped_file(opened, Some(checksum)),
+            move |app, opened| app.show_dropped_file(opened, true),
         );
         if let Some(opened) = opened {
-            self.show_dropped_file(opened, Some(checksum));
+            self.show_dropped_file(opened, true);
         }
     }
 
@@ -69,17 +67,15 @@ impl App {
     /// same limit, zeroized when it falls off or on Wipe), then onto the card. The clipboard is
     /// left as it is.
     pub(crate) fn show_dropped(&mut self, opened: crate::open_file::OpenedFile) {
-        self.show_dropped_file(opened, None);
+        self.show_dropped_file(opened, false);
     }
 
-    /// [`Self::show_dropped`] for a file read from a path, whose checksums are being read by
-    /// run `checksum` ([`App::start_checksum`]); `None` for what has none.
+    /// [`Self::show_dropped`], `from_path` for a file read from a path ([`Self::open_path`]).
     pub(crate) fn show_dropped_file(
         &mut self,
         opened: crate::open_file::OpenedFile,
-        checksum: Option<u64>,
+        from_path: bool,
     ) {
-        self.tie_checksum(checksum);
         let opened = self.look_at_dropped_image(opened);
         // The clipboard's copy goes into history first, by the usual rules (paused, private,
         // a token or key, history off), if it is not there yet: the drop takes the card, not
@@ -134,10 +130,10 @@ impl App {
             );
         }
         self.show_source(opened);
-        // Read from a path ([`Self::open_path`], the only caller with a checksum): the card has
+        // Read from a path ([`Self::open_path`]): the card has
         // said "Opening file…" since the drop or ⌘O; now it shows the file. A CSV, TSV or JSON
         // table stays on the card too: its Open Table button opens the table window.
-        if checksum.is_some() && self.opening.read() {
+        if from_path && self.opening.read() {
             self.opening_over();
         }
         launcher::order_front();
@@ -462,7 +458,6 @@ impl App {
             self.close_table_window();
         }
         self.opened = None;
-        self.drop_checksum();
         self.opened_superseded = false;
         self.opened_table = crate::settings::preferred_table();
         if let Some(cursor) = self.clipboard_cursor.take() {
@@ -698,7 +693,6 @@ impl App {
             shown_mark: None,
             diff_picks: Vec::new(),
             diff: None,
-            checksum: None,
             back_to_source: false,
         }
     }
@@ -920,4 +914,20 @@ pub(crate) fn warm_card_answers(opened: &crate::open_file::OpenedFile) {
     crate::toolbar_visibility::shows_dataframe_button(kind, text);
     commands::offers_text_menu(text);
     commands::copied_text_chips(text);
+}
+
+/// A promised file (from Photos, Mail, …) is removed once the card's read (and a zip's card,
+/// for Uitpakken) is done with it: when the last handle goes.
+pub(crate) struct PromisedFile(std::path::PathBuf);
+
+impl PromisedFile {
+    pub(crate) fn new(path: std::path::PathBuf) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self(path))
+    }
+}
+
+impl Drop for PromisedFile {
+    fn drop(&mut self) {
+        mac_ui::drop::discard_promised(&self.0);
+    }
 }

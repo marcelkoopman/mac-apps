@@ -170,7 +170,6 @@ fn copied(text: &str) -> crate::commands::LaunchData {
         shown_mark: None,
         diff_picks: Vec::new(),
         diff: None,
-        checksum: None,
         back_to_source: false,
     }
 }
@@ -237,7 +236,6 @@ fn picture() -> crate::commands::LaunchData {
         shown_mark: None,
         diff_picks: Vec::new(),
         diff: None,
-        checksum: None,
         back_to_source: false,
     }
 }

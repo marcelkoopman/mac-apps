@@ -620,7 +620,6 @@ fn origineel_and_cmd_z_put_the_file_and_its_versions_back() {
     for part in [
         "self.opened.take()",
         "std::mem::replace(&mut self.opened_table",
-        "self.checksum.take()",
         "view: self.card_view",
     ] {
         assert!(keep.contains(part), "{part}");
@@ -630,7 +629,6 @@ fn origineel_and_cmd_z_put_the_file_and_its_versions_back() {
         "self.made_source.take()",
         "self.opened = Some(opened)",
         "self.opened_table = table",
-        "self.checksum = checksum",
         "self.card_view = view",
         "self.browsing = None",
         "self.refresh_popup()",

@@ -12,14 +12,6 @@ pub struct ContentActions {
 }
 
 pub fn content_actions(data: &LaunchData) -> ContentActions {
-    // The checksums can be selected in the well; Copy and Save are the file's, not theirs.
-    if data.view == CardView::Checksum {
-        return ContentActions {
-            copy: false,
-            save: false,
-            preview: false,
-        };
-    }
     if data.view == CardView::Diff {
         let ready = data.diff.as_ref().is_some_and(|diff| diff.phase.copyable());
         return ContentActions {

@@ -341,7 +341,6 @@ impl App {
         self.forget_decoded_picture();
         self.close_table_window();
         self.opened = None;
-        self.drop_checksum();
         self.release_made_source();
         self.dropped_text_wait.clear();
         self.dropped_image_wait.clear();
@@ -477,7 +476,6 @@ impl App {
         self.browsing = Some(id);
         self.reset_view();
         self.opened = None;
-        self.drop_checksum();
         if launcher::is_open() {
             self.refresh_popup();
         }
@@ -509,7 +507,6 @@ impl App {
                 self.history_cursor = 0;
                 self.refresh_status_menu();
                 self.opened = None;
-                self.drop_checksum();
                 self.show_restored();
                 return Ok(());
             }
@@ -524,7 +521,6 @@ impl App {
         self.write_own(text.as_str())?;
         self.record_own_copy(text.as_str());
         self.opened = None;
-        self.drop_checksum();
         self.show_restored();
         Ok(())
     }

@@ -319,8 +319,6 @@ pub fn keeps_card_open(id: &CommandId) -> bool {
             | CommandId::Schema
             | CommandId::Sample
             | CommandId::Info
-            | CommandId::Checksums
-            | CommandId::ChecksumCompare
             | CommandId::Unzip
             | CommandId::UnzipStop
             | CommandId::Ocr
@@ -454,8 +452,6 @@ pub fn symbol_for(id: &CommandId) -> Option<&'static str> {
         CommandId::Schema => "list.bullet.indent",
         CommandId::Sample => "doc.badge.plus",
         CommandId::Info => "info",
-        CommandId::Checksums => "number.square",
-        CommandId::ChecksumCompare => "checkmark.circle",
         CommandId::Unzip => "archivebox",
         CommandId::Ocr => "text.viewfinder",
         CommandId::Qr => "qrcode",

@@ -425,7 +425,6 @@ impl App {
         self.attach_table(&mut data);
         self.attach_image(&mut data);
         self.attach_text(&mut data);
-        self.attach_checksum(&mut data);
         self.attach_made_source(&mut data);
         if let Some(error) = &self.work_error {
             data.notice = Some(match data.notice.take() {

@@ -17,8 +17,6 @@ pub(crate) struct MadeSource {
     opened: crate::open_file::OpenedFile,
     /// Its table versions, when its table lived with the file (not in history).
     table: TableVersions,
-    /// Its checksums, when they were read before the copy.
-    checksum: Option<super::checksum::ChecksumRun>,
     /// The view the card had on it.
     view: CardView,
     /// The copy made from it ([`hash_text`]): browsing to that entry keeps the file
@@ -43,7 +41,7 @@ pub(crate) fn offers_back_to_source(kept: bool, file_on_card: bool) -> bool {
 
 impl App {
     /// A copy (`made`, its [`hash_text`]) was made from the file on the card, which now leaves
-    /// it: keep the file, its versions and finished checksums for *Origineel* and ⌘Z. One file
+    /// it: keep the file and its versions for *Origineel* and ⌘Z. One file
     /// is kept: one kept before is wiped. Nothing when no copy was written or no file is shown.
     /// A table window on the file must be closed first (it unpins the file's table).
     pub(crate) fn keep_made_source(&mut self, made: Option<u64>) {
@@ -54,12 +52,10 @@ impl App {
             return;
         };
         let table = std::mem::replace(&mut self.opened_table, crate::settings::preferred_table());
-        let checksum = self.checksum.take().filter(|run| run.finished());
         self.release_made_source();
         self.made_source = Some(MadeSource {
             opened,
             table,
-            checksum,
             view: self.card_view,
             copy,
         });
@@ -75,7 +71,6 @@ impl App {
         let MadeSource {
             opened,
             table,
-            checksum,
             view,
             copy: _,
         } = source;
@@ -98,7 +93,6 @@ impl App {
         self.opened = Some(opened);
         self.opened_superseded = false;
         self.opened_table = table;
-        self.checksum = checksum;
         self.browsing = None;
         self.card_view = view;
         self.refresh_popup();

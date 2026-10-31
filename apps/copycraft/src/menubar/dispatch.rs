@@ -41,8 +41,7 @@ impl App {
             | CommandId::Sample
             | CommandId::Info
             | CommandId::Ocr
-            | CommandId::Qr
-            | CommandId::Checksums => {
+            | CommandId::Qr => {
                 if matches!(id, CommandId::Format) && self.format_link_in_place() {
                     return;
                 }
@@ -205,7 +204,6 @@ impl App {
             CommandId::RestoreTableVersion => self.table_restore(TableTarget::Card),
             CommandId::ImageStep(op) => self.image_step(op),
             CommandId::ImageResizeCustom => self.custom_resize(),
-            CommandId::ChecksumCompare => self.compare_checksum(),
             CommandId::Unzip => self.unzip_opened(),
             CommandId::UnzipStop => self.unzip_stop(),
             // The card pops the menu itself.

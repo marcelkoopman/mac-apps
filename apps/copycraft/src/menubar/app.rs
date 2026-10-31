@@ -181,8 +181,6 @@ pub(crate) struct App {
     /// The dropped picture last looked at (its allocation): whether it is a picture file
     /// *Remove metadata* is offered for, and whether it carries a location. Yes or no only.
     pub(crate) picture_probe: Option<(usize, (bool, bool))>,
-    /// The checksums of the dropped or chosen file on the card ([`checksum::ChecksumRun`]).
-    pub(crate) checksum: Option<super::checksum::ChecksumRun>,
     /// The copies Image ▾ steps made ([`CopySteps`]), for ⌘Z and ⇧⌘Z on the picture card.
     pub(crate) image_steps: Option<CopySteps>,
     /// The copies Text ▾ steps made of the text on the card ([`CopySteps`]).

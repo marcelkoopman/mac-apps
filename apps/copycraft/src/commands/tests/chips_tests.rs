@@ -771,28 +771,26 @@ fn a_dropped_picture_file_offers_strip_metadata_before_image_menu() {
 }
 
 #[test]
-fn a_dropped_file_offers_checksums_and_compare_last_and_a_copy_does_not() {
-    let mut input = data(SubjectKind::Text, Some("fake file body"));
-    assert!(!ids(&crate::commands::chips(&input)).contains(&CommandId::Checksums));
-    input.checksum = Some(crate::commands::ChecksumShown::default());
-    let ids = ids(&crate::commands::chips(&input));
-    assert_eq!(
-        ids[ids.len() - 2..],
-        [CommandId::Checksums, CommandId::ChecksumCompare]
-    );
-    assert_eq!(
-        CardView::from_command(&CommandId::Checksums),
-        Some(CardView::Checksum)
-    );
-    // Also on a file shown only as a note.
-    let mut noted = data(SubjectKind::NoText, None);
-    noted.checksum = Some(crate::commands::ChecksumShown::default());
-    assert_eq!(
-        titles(&crate::commands::chips(&noted)),
-        ["Checksums", "Check Hash from Clipboard"]
-    );
-    crate::locale::set_test_language(crate::settings::Language::Nl);
-    let nl = titles(&crate::commands::chips(&noted));
+fn a_dropped_file_offers_no_checksums() {
+    let mut file = data(SubjectKind::Text, Some("fake file body"));
+    file.source_name = Some("fake.iso".into());
+    let noted = data(SubjectKind::NoText, None);
+    for language in [crate::settings::Language::Nl, crate::settings::Language::En] {
+        crate::locale::set_test_language(language);
+        for input in [&file, &noted] {
+            for title in titles(&crate::commands::chips(input)) {
+                assert!(
+                    ![
+                        "Controlegetallen",
+                        "Controleer hash van klembord",
+                        "Checksums"
+                    ]
+                    .contains(&title.as_str())
+                        && !title.contains("Hash from Clipboard"),
+                    "{title}"
+                );
+            }
+        }
+    }
     crate::locale::set_test_language(crate::settings::Language::En);
-    assert_eq!(nl, ["Controlegetallen", "Controleer hash van klembord"]);
 }

@@ -88,10 +88,6 @@ pub fn chips(data: &LaunchData) -> Vec<Command> {
         ));
         chips.push(table_copy_command(crate::dataframe::TableCopy::Csv));
     }
-    // Every dropped or chosen file, also one shown only as a note: its checksums.
-    if data.checksum.is_some() {
-        chips.extend(checksum_chips());
-    }
     // A copy made from a file the card still keeps: *Origineel* puts that file back, first.
     if data.back_to_source {
         chips.insert(0, back_to_source_chip());
@@ -118,24 +114,6 @@ pub(crate) fn unzip_chip() -> Command {
         crate::locale::t("detail_unzip"),
         "unzip extract zip archive uitpakken",
     )
-}
-
-/// The Checksums view toggle and *Check Hash from Clipboard*, last on the row.
-pub(crate) fn checksum_chips() -> [Command; 2] {
-    [
-        command(
-            CommandId::Checksums,
-            crate::locale::t("chip_checksums"),
-            crate::locale::t("detail_checksums"),
-            "checksum hash sha256 sha-256 md5 sum",
-        ),
-        command(
-            CommandId::ChecksumCompare,
-            crate::locale::t("chip_checksum_compare"),
-            crate::locale::t("detail_checksum_compare"),
-            "checksum hash compare verify clipboard sha256 md5",
-        ),
-    ]
 }
 
 /// "Diff" up front (after Visit on a link).

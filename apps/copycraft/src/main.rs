@@ -8,7 +8,6 @@ mod card_layout;
 mod card_theme;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod chart_data;
-mod checksum;
 mod clipboard;
 mod color;
 mod column_picker;
