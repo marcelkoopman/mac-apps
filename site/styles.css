@@ -414,3 +414,17 @@ figcaption {
         flex-direction: column;
     }
 }
+
+.lang-switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.lang-switch a:hover,
+.lang-switch [aria-current] {
+    color: var(--text);
+}

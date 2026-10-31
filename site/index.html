@@ -1,22 +1,25 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>CopyCraft — Alles wat je kopieert, meteen bruikbaar op je Mac</title>
+        <title>CopyCraft — Everything you copy, ready to use on your Mac</title>
         <meta
             name="description"
-            content="CopyCraft is een klembordhulp voor de menubalk van macOS 26: herkent en decodeert wat je plakt, met tekstbewerkingen, schermafbeeldingen met tekstherkenning, afbeeldingsbewerking, AI op je Mac en een tabelvenster met grafiek. Volledig offline."
+            content="CopyCraft is a clipboard helper for the macOS 26 menu bar: it recognises and decodes what you paste, with text tools, screenshots with text recognition, image editing, on-device AI and a table window with a chart. Fully offline."
         />
         <meta
             property="og:title"
-            content="CopyCraft — Alles wat je kopieert, meteen bruikbaar op je Mac"
+            content="CopyCraft — Everything you copy, ready to use on your Mac"
         />
         <meta
             property="og:description"
-            content="Klembordhulp voor de menubalk van macOS 26. Herkent JSON, YAML, CSV, JWT en meer, met tekstherkenning, AI op je Mac en een tabelvenster met grafiek. Volledig offline, geen account."
+            content="Clipboard helper for the macOS 26 menu bar. Recognises JSON, YAML, CSV, JWT and more, with text recognition, on-device AI and a table window with a chart. Fully offline, no account."
         />
         <meta property="og:type" content="website" />
+        <link rel="alternate" hreflang="en" href="https://marcelkoopman.github.io/mac-apps/" />
+        <link rel="alternate" hreflang="nl" href="https://marcelkoopman.github.io/mac-apps/nl/" />
+        <link rel="alternate" hreflang="x-default" href="https://marcelkoopman.github.io/mac-apps/" />
         <link rel="icon" href="app-icon.png" />
         <link rel="stylesheet" href="styles.css" />
     </head>
@@ -28,8 +31,8 @@
                     CopyCraft
                 </a>
                 <nav>
-                    <a href="#features">Functies</a>
-                    <a href="#screenshots">Schermafbeeldingen</a>
+                    <a href="#features">Features</a>
+                    <a href="#screenshots">Screenshots</a>
                     <a href="#download">Download</a>
                     <a href="privacy/">Privacy</a>
                     <a
@@ -39,63 +42,66 @@
                         >GitHub</a
                     >
                 </nav>
+                <p class="lang-switch" aria-label="Language">
+                    <span aria-current="page">EN</span> | <a href="nl/" hreflang="nl" lang="nl">NL</a>
+                </p>
             </div>
         </header>
 
         <main>
             <section class="hero">
                 <div class="container">
-                    <p class="eyebrow">Klembordhulp voor macOS</p>
+                    <p class="eyebrow">Clipboard helper for macOS</p>
                     <h1>
-                        Alles wat je kopieert,<br /><span class="accent"
-                            >meteen bruikbaar.</span
+                        Everything you copy,<br /><span class="accent"
+                            >ready to use.</span
                         >
                     </h1>
                     <p class="lead">
-                        Druk op ⌃⌥Spatie en plak met ⌘V: CopyCraft herkent
-                        JSON, YAML, CSV, een JWT of een Unix-tijd, maakt het
-                        leesbaar en geeft je de juiste bewerkingen. Een
-                        menubalk-app die volledig offline op je Mac werkt.
+                        Press ⌃⌥Space and paste with ⌘V: CopyCraft recognises
+                        JSON, YAML, CSV, a JWT or a Unix time, makes it
+                        readable and gives you the right actions. A menu bar
+                        app that works fully offline on your Mac.
                     </p>
                     <div class="hero-actions">
                         <a class="button primary" href="#download"
                             >Download CopyCraft</a
                         >
                         <a class="button ghost" href="#features"
-                            >Bekijk functies</a
+                            >See features</a
                         >
                     </div>
                     <p class="microcopy">
-                        Gratis download · macOS 26 of nieuwer · Geen account
-                        nodig · Volledig offline
+                        Free download · macOS 26 or later · No account needed
+                        · Fully offline
                     </p>
 
                     <div
                         class="app-window"
                         role="img"
-                        aria-label="Voorbeeld: CopyCraft herkent wat je kopieert, en een CSV wordt een tabel met grafiek"
+                        aria-label="Example: CopyCraft recognises what you copy, and a CSV becomes a table with a chart"
                     >
                         <div class="window-bar">
                             <span></span><span></span><span></span>
-                            <strong>CopyCraft — voorbeeld</strong>
+                            <strong>CopyCraft — example</strong>
                         </div>
                         <div class="window-body">
                             <div class="table-demo">
                                 <div class="row head">
-                                    <span>Gekopieerd</span><span>Herkend</span
-                                    ><span>Actie</span>
+                                    <span>Copied</span><span>Recognised</span
+                                    ><span>Action</span>
                                 </div>
                                 <div class="row">
-                                    <span>{"naam":"Jan",…}</span
-                                    ><span>JSON</span><span>Opmaak</span>
+                                    <span>{"name":"Jan",…}</span
+                                    ><span>JSON</span><span>Format</span>
                                 </div>
                                 <div class="row">
-                                    <span>naam: Jan</span><span>YAML</span
-                                    ><span>Naar JSON</span>
+                                    <span>name: Jan</span><span>YAML</span
+                                    ><span>To JSON</span>
                                 </div>
                                 <div class="row">
-                                    <span>maand,omzet,…</span><span>CSV</span
-                                    ><span>Open tabel</span>
+                                    <span>month,revenue,…</span><span>CSV</span
+                                    ><span>Open Table</span>
                                 </div>
                             </div>
                             <div class="chart-demo">
@@ -111,109 +117,105 @@
 
             <section id="features" class="section">
                 <div class="container">
-                    <h2>Gemaakt voor wat je kopieert</h2>
+                    <h2>Made for what you copy</h2>
                     <p class="section-lead">
-                        Eén kaart bij je cursor voor tekst, code, data,
-                        afbeeldingen en bestanden. Alles draait op je Mac.
+                        One card at your cursor for text, code, data, images
+                        and files. Everything runs on your Mac.
                     </p>
 
                     <div class="grid">
                         <article class="card">
-                            <h3>Klembord eerst</h3>
+                            <h3>Clipboard first</h3>
                             <p>
-                                ⌃⌥Spatie opent een kaart bij je cursor. Plak met
-                                ⌘V of sleep tekst, een afbeelding, PDF,
-                                Word-bestand of zip erop. Zet je
-                                klembordgeschiedenis aan, dan bewaart CopyCraft
-                                20 kopieën en 20 vastgezette items in het
-                                werkgeheugen, doorzoekbaar en met een diff van
-                                twee kopieën.
+                                ⌃⌥Space opens a card at your cursor. Paste with
+                                ⌘V or drop text, an image, a PDF, a Word file or
+                                a zip on it. Turn on clipboard history and
+                                CopyCraft keeps 20 copies and 20 pinned items in
+                                memory, searchable and with a diff of two
+                                copies.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Herkent en decodeert</h3>
+                            <h3>Recognises and decodes</h3>
                             <p>
                                 JSON, YAML, XML, HTML, Markdown, code (Rust,
-                                Java, Python), URL's en CSV/TSV worden herkend en
-                                opgemaakt. Decodeert JWT, UUID, Unix-tijd, ISO
-                                8601, URL, Base64 en hashes, en zet YAML om naar
-                                JSON.
+                                Java, Python), URLs and CSV/TSV are recognised
+                                and formatted. Decodes JWT, UUID, Unix time, ISO
+                                8601, URL, Base64 and hashes, and converts YAML
+                                to JSON.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Tekstmenu en fragmenten</h3>
+                            <h3>Text menu and snippets</h3>
                             <p>
-                                Regels filteren, omkeren of een kolom pakken,
-                                URL's opschonen, hoofdletterstijl, Base64-, URL-
-                                en hex-codering, SHA-256, SHA-1 en MD5, en een
-                                QR-code. Fragmenten met invulvelden, en nieuwe
-                                UUID's en tijdstempels.
+                                Filter or reverse lines or take a column, clean
+                                up URLs, case style, Base64, URL and hex
+                                encoding, SHA-256, SHA-1 and MD5, and a QR code.
+                                Snippets with fields to fill in, and new UUIDs
+                                and timestamps.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Schermafbeeldingen met tekstherkenning</h3>
+                            <h3>Screenshots with text recognition</h3>
                             <p>
-                                ⌃⌥4 maakt een schermafbeelding van een gebied,
-                                een venster of het hele scherm, direct op het
-                                klembord. De tekst erin wordt op je Mac herkend;
-                                sleep de miniatuur om hem te delen.
+                                ⌃⌥4 takes a screenshot of an area, a window or
+                                the whole screen, straight to the clipboard. The
+                                text in it is recognised on your Mac; drag the
+                                thumbnail to share it.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Afbeeldingen en documenten</h3>
+                            <h3>Images and documents</h3>
                             <p>
-                                Tekst en QR-codes lezen uit afbeeldingen, formaat
-                                wijzigen, draaien, spiegelen, grijstinten en
-                                metadata verwijderen; bewaren als PNG, JPEG of
-                                HEIC. Tekst uit PDF (ook gescand) en Word, en een
-                                zip bekijken en uitpakken.
+                                Read text and QR codes from images, resize,
+                                rotate, flip, grayscale and remove metadata; save
+                                as PNG, JPEG or HEIC. Text from PDF (scanned
+                                too) and Word, and view and extract a zip.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Tabelvenster</h3>
+                            <h3>Table window</h3>
                             <p>
-                                Open een CSV of TSV als tabel: zoeken, sorteren,
-                                kolommen kiezen, dubbele en lege rijen
-                                verwijderen, met ongedaan maken. Het profiel
-                                toont missende waarden, typen en uitschieters.
-                                Kopieer als JSON of CSV, of bewaar als CSV.
+                                Open a CSV or TSV as a table: search, sort,
+                                choose columns, remove duplicate and empty rows,
+                                with undo. The profile shows missing values,
+                                types and outliers. Copy as JSON or CSV, or save
+                                as CSV.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Grafiek, bewaard als PNG</h3>
+                            <h3>Chart, saved as PNG</h3>
                             <p>
-                                Kies kolommen en zie ze als grafiek in het
-                                tabelvenster. Bewaar de grafiek als PNG of laat
-                                de trend in woorden samenvatten.
+                                Choose columns and see them as a chart in the
+                                table window. Save the chart as PNG or have the
+                                trend summarised in words.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>AI op je Mac</h3>
+                            <h3>AI on your Mac</h3>
                             <p>
-                                Met Apple Intelligence: samenvatten, herschrijven,
-                                spelling verbeteren en vertalen (NL↔EN), code
-                                uitleggen en de structuur van JSON of YAML
-                                uitleggen. Alles op het apparaat; vraagt een Mac
-                                met Apple silicon.
+                                With Apple Intelligence: summarise, rewrite, fix
+                                spelling and translate (NL↔EN), explain code and
+                                explain the structure of JSON or YAML. All on
+                                the device; needs a Mac with Apple silicon.
                             </p>
                         </article>
 
                         <article class="card">
-                            <h3>Volledig offline</h3>
+                            <h3>Fully offline</h3>
                             <p>
-                                Geen netwerkrechten, geen account, geen
-                                analytics, telemetrie of crashrapporten. De
-                                geschiedenis staat alleen in het werkgeheugen;
-                                alleen fragmenten die je zelf bewaart komen op
-                                schijf. Lees het
-                                <a href="privacy/">privacybeleid</a>.
+                                No network access, no account, no analytics,
+                                telemetry or crash reports. History is kept in
+                                memory only; only snippets you save yourself go
+                                to disk. Read the
+                                <a href="privacy/">privacy policy</a>.
                             </p>
                         </article>
                     </div>
@@ -226,22 +228,22 @@
                         <figure class="screen">
                             <img
                                 src="screenshot-table.png"
-                                alt="Schermafbeelding van de CopyCraft-kaart met een geplakt CSV-bestand"
+                                alt="Screenshot of the CopyCraft card with a pasted CSV file"
                             />
                             <figcaption>
-                                Een geplakte CSV op de kaart, met Open tabel en
-                                Kopieer als JSON.
+                                A pasted CSV on the card, with Open Table and
+                                Copy as JSON.
                             </figcaption>
                         </figure>
 
                         <figure class="screen">
                             <img
                                 src="screenshot-graph.png"
-                                alt="Schermafbeelding van de grafiek in het tabelvenster van CopyCraft"
+                                alt="Screenshot of the chart in the CopyCraft table window"
                             />
                             <figcaption>
-                                De grafiek in het tabelvenster, met Bewaar als
-                                PNG en Vat samen.
+                                The chart in the table window, with Save as PNG
+                                and Summarize.
                             </figcaption>
                         </figure>
                     </div>
@@ -252,16 +254,16 @@
                 <div class="container narrow">
                     <h2>Download CopyCraft</h2>
                     <p class="section-lead">
-                        Download de nieuwste versie rechtstreeks via GitHub
+                        Download the latest version directly from GitHub
                         Releases.
                     </p>
 
                     <div class="download-box">
                         <div>
-                            <strong>Nieuwste versie</strong>
+                            <strong>Latest version</strong>
                             <p>
-                                Bekijk de release notes en download de .dmg van
-                                de meest recente versie.
+                                Read the release notes and download the .dmg of
+                                the most recent version.
                             </p>
                         </div>
                         <a
@@ -270,13 +272,13 @@
                             target="_blank"
                             rel="noopener"
                         >
-                            Naar GitHub Releases
+                            Go to GitHub Releases
                         </a>
                     </div>
 
                     <p class="microcopy">
-                        Vereist macOS 26 (Tahoe) of nieuwer. De AI-functies
-                        vragen daarnaast een Mac met Apple silicon en Apple
+                        Requires macOS 26 (Tahoe) or later. The AI features
+                        also need a Mac with Apple silicon and Apple
                         Intelligence.
                     </p>
                 </div>
@@ -296,7 +298,7 @@
                     ·
                     <a href="privacy/">Privacy</a>
                     ·
-                    <a href="support/">Ondersteuning</a>
+                    <a href="support/">Support</a>
                 </p>
             </div>
         </footer>
