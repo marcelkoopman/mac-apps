@@ -1,6 +1,6 @@
 [package]
 name = "copycraft"
-version = "0.1.107"
+version = "0.1.108"
 edition.workspace = true
 license = "LicenseRef-Proprietary"
 publish = false
@@ -13,7 +13,7 @@ identifier = "nl.marcelkoopman.copycraft"
 # size, CFBundleIconName/CFBundleIconFile = AppIcon), as in the release workflow.
 # Privacy manifest: lands in Contents/Resources/PrivacyInfo.xcprivacy (like ticker's config.toml).
 resources = ["PrivacyInfo.xcprivacy"]
-version = "0.1.107"
+version = "0.1.108"
 category = "Utilities"
 copyright = "© 2026 Marcel Koopman"
 short_description = "Clipboard transformer"
