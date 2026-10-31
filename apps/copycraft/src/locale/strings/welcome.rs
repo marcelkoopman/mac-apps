@@ -23,13 +23,13 @@ pub(super) const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "welcome_history",
-        "Standaard leest CopyCraft je klembord niet zelf: plak (⌘V) of sleep iets in de kaart om ermee te werken.",
-        "By default CopyCraft does not read your clipboard on its own: paste (⌘V) or drop something on the card to work with it.",
+        "Kopieer zoals altijd en open dan CopyCraft: met Klembordgeschiedenis bijhouden aan staat je kopie al op de kaart. Anders plak (⌘V) of sleep je iets in de kaart.",
+        "Copy as usual, then open CopyCraft: with Keep clipboard history on, your copy is already on the card. Otherwise paste (⌘V) or drop something on the card.",
     ),
     (
         "welcome_history_choice",
-        "Zet je dit aan, dan leest CopyCraft elke kopie, alleen in het geheugen; weg bij stoppen of vergrendelen, en na de bewaartermijn (5, 15 of 60 min) als je die kiest. macOS vraagt één keer of CopyCraft andere apps mag lezen. Anders alleen wat je in de kaart plakt of neerzet.",
-        "When on, CopyCraft reads every copy, in memory only; gone when you quit or lock, and after the retention time (5, 15 or 60 min) if you pick one. macOS asks once whether CopyCraft may read other apps. Otherwise only what you paste or drop on the card.",
+        "CopyCraft leest dan elke kopie en houdt die alleen in het geheugen van je Mac, nooit op schijf: weg zodra je CopyCraft stopt of je scherm vergrendelt.",
+        "CopyCraft then reads every copy and keeps it only in your Mac's memory, never on disk: gone as soon as you quit CopyCraft or lock your screen.",
     ),
     (
         "clipboard_history",

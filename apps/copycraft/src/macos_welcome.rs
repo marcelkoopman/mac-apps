@@ -1,4 +1,4 @@
-//! The first-run welcome window: the hotkey, the screenshot hotkey, paste-first (⌘V or a drop), the offline promise, what
+//! The first-run welcome window: the hotkey, the screenshot hotkey, copy then open (⌘V or a drop with history off), the offline promise, what
 //! stays out of history, "Keep clipboard history" (off on a new install), Open at Login, and buttons for Settings and "Get Started". Shown once (see
 //! [`crate::settings::should_show_welcome`]) and again from the status menu.
 

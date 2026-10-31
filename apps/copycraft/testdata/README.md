@@ -989,6 +989,18 @@ Needs macOS 26 with Apple Intelligence on, and a build with Swift (`copycraft: s
 - [ ] The prompt gets only numbers worked out in Rust: put a made-up secret in another column (e.g. shop `Klant-Geheim-777777`) and check that neither answer mentions it.
 - [ ] Nothing in Console (`log stream --predicate 'process == "CopyCraft"'`) with a column name, value, fact or answer; no new file in `~/Library/Containers/nl.marcelkoopman.copycraft/Data`.
 
+## Welkomstscherm: Klembordgeschiedenis bijhouden (alleen Mac, nepdata)
+
+Nieuwe installatie nabootsen: stop CopyCraft en wis zijn instellingen (`defaults delete nl.marcelkoopman.copycraft`; dit wist ook de sneltoetsen en het thema). Kopieer alleen verzonnen tekst, bijv. `{"naam":"Test","id":1}`.
+
+- [ ] Start CopyCraft: het welkomstscherm komt. Het vinkje *Klembordgeschiedenis bijhouden* / *Keep clipboard history* staat **uit**. De regel erboven luidt *Kopieer zoals altijd en open dan CopyCraft: met Klembordgeschiedenis bijhouden aan staat je kopie al op de kaart. Anders plak (⌘V) of sleep je iets in de kaart.* (EN: *Copy as usual, then open CopyCraft: with Keep clipboard history on, your copy is already on the card. Otherwise paste (⌘V) or drop something on the card.*), de grijze zin eronder *CopyCraft leest dan elke kopie en houdt die alleen in het geheugen van je Mac, nooit op schijf: weg zodra je CopyCraft stopt of je scherm vergrendelt.* (EN: *CopyCraft then reads every copy and keeps it only in your Mac's memory, never on disk: gone as soon as you quit CopyCraft or lock your screen.*). Alles past netjes in het venster, niets afgekapt.
+- [ ] Met het vinkje uit: kopieer de testtekst in TextEdit (⌘C) en open de kaart met ⌃⌥Spatie: de kaart toont *Plak hier (⌘V) of zet geschiedenis aan in Instellingen*, niet de kopie. ⌘V zet hem erop.
+- [ ] Open Instellingen (knop *Instellingen…* in het welkomstscherm) › Privacy, met het welkomstscherm nog open. Zet in het welkomstscherm het vinkje aan: in Instellingen staat *Klembordgeschiedenis bijhouden* meteen ook aan. Zet het in Instellingen uit: het vinkje in het welkomstscherm gaat meteen uit. Zet het weer aan in het welkomstscherm.
+- [ ] Na aanzetten (macOS kan één keer vragen of CopyCraft uit andere apps mag plakken: kies *Sta toe*): kopieer de testtekst in TextEdit (⌘C) en open de kaart met ⌃⌥Spatie: de kaart toont meteen de kopie als JSON met *Opmaak* / *Format*, zonder plakken. Hetzelfde via een klik op het menubalkpictogram.
+- [ ] Klik *Aan de slag*, stop CopyCraft en start opnieuw: de instelling blijft aan (Instellingen › Privacy). Open *Welkomstscherm* uit het menubalkmenu: het vinkje staat aan.
+- [ ] Bestaande installatie: zet op een Mac met een eerdere CopyCraft-versie (al eens gestart, instelling nooit aangeraakt) deze versie neer en start: *Klembordgeschiedenis bijhouden* staat aan, zoals voorheen.
+- [ ] Geen nieuw bestand in `~/Library/Containers/nl.marcelkoopman.copycraft/Data` met de testtekst; niets in Console (`log stream --predicate 'process == "CopyCraft"'`) met de gekopieerde tekst.
+
 ## TestFlight (Mac App Store-build, alleen Mac)
 
 ### 1. Vooraf in het Apple Developer-account
