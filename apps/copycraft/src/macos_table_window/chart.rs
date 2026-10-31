@@ -1,14 +1,14 @@
 //! The table window's chart (*Chart* on the toolbar, only in a build with Swift Charts): the
-//! version shown drawn by Swift Charts ([`crate::macos_chart`]) over the sidebar and grid, with
-//! pop-ups for the chart type, the columns, the date step and the calculation above it, and
-//! *Table* to go back (as Esc). Rust works the chart out on a thread
+//! version shown drawn by Swift Charts ([`crate::macos_chart`]) over the sidebar and grid: one
+//! point per row, with two pop-ups above it, the x column and the y column, and *Table* to go
+//! back (as Esc). Rust works the chart out on a thread
 //! ([`crate::chart_data`]); a result for an older request is dropped. Masked like the grid:
 //! the chart is hidden under the cover. Nothing here is logged; closing the window drops the
-//! chart and empties the pop-ups. Under a series per week or month, *Summarize* puts its trend
+//! chart and empties the pop-ups. Under a chart over a date column, *Summarize* puts its trend
 //! into words ([`super::insight`]).
 
 use super::*;
-use crate::chart_data::{self, Aggregate, Bucket, ChartKind, ChartOutcome, ChartRequest};
+use crate::chart_data::{self, ChartOutcome, ChartRequest};
 use crate::macos_chart::ChartHost;
 use mac_ui::objc2_app_kit::{NSBezelStyle, NSCellImagePosition, NSImage, NSPopUpButton};
 
@@ -19,21 +19,15 @@ const GAP: f64 = 8.0;
 const POPUP_MAX_W: f64 = 220.0;
 
 /// The pop-ups, by tag.
-const KIND_TAG: isize = 0;
 const X_TAG: isize = 1;
-const BUCKET_TAG: isize = 2;
-const AGGREGATE_TAG: isize = 3;
 const Y_TAG: isize = 4;
 
 struct Pane {
     pane: Retained<NSView>,
-    kind: Retained<NSPopUpButton>,
     x: Retained<NSPopUpButton>,
-    bucket: Retained<NSPopUpButton>,
-    aggregate: Retained<NSPopUpButton>,
     y: Retained<NSPopUpButton>,
     back: Retained<NSButton>,
-    /// The skipped values, why there is no chart, or "Making the chart…".
+    /// The sample and the skipped values, why there is no chart, or "Making the chart…".
     note: Retained<NSTextField>,
     host: Option<ChartHost>,
 }
@@ -41,9 +35,7 @@ struct Pane {
 /// What the pop-ups' items stand for, in order.
 #[derive(Default)]
 struct Choices {
-    kinds: Vec<ChartKind>,
     xs: Vec<usize>,
-    aggregates: Vec<Aggregate>,
     ys: Vec<usize>,
 }
 
@@ -86,13 +78,7 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
         pane.addSubview(&popup);
         popup
     };
-    let (kind, x, bucket, aggregate, y) = (
-        popup(KIND_TAG),
-        popup(X_TAG),
-        popup(BUCKET_TAG),
-        popup(AGGREGATE_TAG),
-        popup(Y_TAG),
-    );
+    let (x, y) = (popup(X_TAG), popup(Y_TAG));
     let back = NSButton::initWithFrame(NSButton::alloc(mtm), NSRect::ZERO);
     back.setBezelStyle(NSBezelStyle::Push);
     if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
@@ -117,10 +103,7 @@ pub(super) fn build(mtm: MainThreadMarker, content: &NSView, frame: NSRect) {
     content.addSubview(&pane);
     let built = Pane {
         pane,
-        kind,
         x,
-        bucket,
-        aggregate,
         y,
         back,
         note,
@@ -220,19 +203,8 @@ pub(super) fn changed(tag: isize, index: isize) {
     CHOICES.with(|choices| {
         let choices = choices.borrow();
         match tag {
-            KIND_TAG => request.kind = choices.kinds.get(index).copied().unwrap_or(request.kind),
             X_TAG => request.x = choices.xs.get(index).copied().unwrap_or(request.x),
-            BUCKET_TAG => {
-                request.bucket = Bucket::ALL.get(index).copied().unwrap_or(request.bucket);
-            }
-            AGGREGATE_TAG => {
-                request.aggregate = choices
-                    .aggregates
-                    .get(index)
-                    .copied()
-                    .unwrap_or(request.aggregate);
-            }
-            Y_TAG => request.y = choices.ys.get(index).copied().or(request.y),
+            Y_TAG => request.y = choices.ys.get(index).copied().unwrap_or(request.y),
             _ => {}
         }
     });
@@ -286,7 +258,7 @@ pub(super) fn show(outcome: ChartOutcome) {
     }
     let lang = crate::locale::lang();
     let hidden = masked();
-    // Summarize, under the chart, for a series per week or month.
+    // Summarize, under the chart, for a chart over a date column.
     insight::set_trend(outcome.trend.clone());
     PANE.with(|slot| {
         let mut borrowed = slot.borrow_mut();
@@ -294,7 +266,7 @@ pub(super) fn show(outcome: ChartOutcome) {
             return;
         };
         let note = match &outcome.result {
-            Ok((json, skipped)) => {
+            Ok((json, chart_note)) => {
                 let drawn = match &pane.host {
                     Some(host) => {
                         host.view().setFrame(host_frame(&pane.pane));
@@ -319,11 +291,10 @@ pub(super) fn show(outcome: ChartOutcome) {
                 if let Some(host) = &pane.host {
                     host.view().setHidden(hidden || !drawn);
                 }
-                match (drawn, *skipped) {
-                    (false, _) => crate::locale::t("chart_unavailable").to_string(),
-                    (true, 0) => String::new(),
-                    (true, 1) => crate::locale::t("chart_one_skipped").to_string(),
-                    (true, n) => crate::locale::tf("chart_skipped", &[&n]),
+                if drawn {
+                    chart_note.text(lang)
+                } else {
+                    crate::locale::t("chart_unavailable").to_string()
                 }
             }
             Err(problem) => {
@@ -342,7 +313,7 @@ pub(super) fn apply_mask(masked: bool) {
             if let Some(host) = &pane.host {
                 host.view().setHidden(masked);
             }
-            for popup in [&pane.kind, &pane.x, &pane.bucket, &pane.aggregate, &pane.y] {
+            for popup in [&pane.x, &pane.y] {
                 popup.setEnabled(!masked);
             }
         }
@@ -384,7 +355,7 @@ pub(super) fn wipe() {
     CHOICES.with(|choices| *choices.borrow_mut() = Choices::default());
     PANE.with(|slot| {
         if let Some(pane) = slot.borrow().as_ref() {
-            for popup in [&pane.kind, &pane.x, &pane.bucket, &pane.aggregate, &pane.y] {
+            for popup in [&pane.x, &pane.y] {
                 popup.removeAllItems();
             }
         }
@@ -395,10 +366,7 @@ fn relabel_pane(pane: &Pane) {
     let t = crate::locale::t;
     let s = |text: &str| NSString::from_str(text);
     for (popup, label) in [
-        (&pane.kind, t("chart_type")),
         (&pane.x, t("chart_x_column")),
-        (&pane.bucket, t("chart_bucket")),
-        (&pane.aggregate, t("chart_aggregate")),
         (&pane.y, t("chart_y_column")),
     ] {
         popup.setAccessibilityLabel(Some(&s(label)));
@@ -431,82 +399,35 @@ fn ask() {
     }));
 }
 
-/// Fill the pop-ups for `request` on `view`'s columns, show the ones it uses and lay them out.
+/// Fill the two pop-ups for `request` on `view`'s columns and lay them out.
 fn fill(view: &TableWindowView, request: ChartRequest) {
-    let lang = crate::locale::lang();
     let columns = &view.chart_columns;
     let name = |index: usize| {
         view.columns
             .get(index)
             .map_or(String::new(), |column| column.shown.clone())
     };
-    let ys = chart_data::y_choices(columns);
     let choices = Choices {
-        kinds: chart_data::kinds(columns),
-        xs: chart_data::x_choices(columns, request.kind),
-        aggregates: if ys.is_empty() {
-            vec![Aggregate::Count]
-        } else {
-            Aggregate::ALL.to_vec()
-        },
-        ys,
+        xs: chart_data::x_choices(columns),
+        ys: chart_data::y_choices(columns),
     };
-    let scatter = request.kind == ChartKind::Scatter;
-    let by_date =
-        !scatter && chart_data::role_of(columns, request.x) == Some(chart_data::ColumnRole::Date);
     PANE.with(|slot| {
         let borrowed = slot.borrow();
         let Some(pane) = borrowed.as_ref() else {
             return;
         };
-        let kinds: Vec<String> = choices
-            .kinds
-            .iter()
-            .map(|kind| kind.title(lang).to_string())
-            .collect();
-        set_items(
-            &pane.kind,
-            &kinds,
-            choices.kinds.iter().position(|k| *k == request.kind),
-        );
         let xs: Vec<String> = choices.xs.iter().map(|i| name(*i)).collect();
         set_items(
             &pane.x,
             &xs,
             choices.xs.iter().position(|i| *i == request.x),
         );
-        let buckets: Vec<String> = Bucket::ALL
-            .iter()
-            .map(|bucket| bucket.title(lang).to_string())
-            .collect();
-        set_items(
-            &pane.bucket,
-            &buckets,
-            Bucket::ALL.iter().position(|b| *b == request.bucket),
-        );
-        let aggregates: Vec<String> = choices
-            .aggregates
-            .iter()
-            .map(|aggregate| aggregate.title(lang).to_string())
-            .collect();
-        set_items(
-            &pane.aggregate,
-            &aggregates,
-            choices
-                .aggregates
-                .iter()
-                .position(|a| *a == request.aggregate),
-        );
         let ys: Vec<String> = choices.ys.iter().map(|i| name(*i)).collect();
         set_items(
             &pane.y,
             &ys,
-            choices.ys.iter().position(|i| Some(*i) == request.y),
+            choices.ys.iter().position(|i| *i == request.y),
         );
-        pane.bucket.setHidden(!by_date);
-        pane.aggregate.setHidden(scatter);
-        pane.y
-            .setHidden(!scatter && (request.aggregate == Aggregate::Count || request.y.is_none()));
         layout(pane);
     });
     CHOICES.with(|slot| *slot.borrow_mut() = choices);
@@ -527,15 +448,12 @@ fn set_items(popup: &NSPopUpButton, titles: &[String], selected: Option<usize>) 
     }
 }
 
-/// The pop-ups shown, left to right along the top; *Table* at the right; the note under them.
+/// The two pop-ups, left to right along the top; *Table* at the right; the note under them.
 fn layout(pane: &Pane) {
     let size = pane.pane.frame().size;
     let top = size.height - PAD - ROW_H;
     let mut x = PAD;
-    for popup in [&pane.kind, &pane.x, &pane.bucket, &pane.aggregate, &pane.y] {
-        if popup.isHidden() {
-            continue;
-        }
+    for popup in [&pane.x, &pane.y] {
         popup.sizeToFit();
         let width = popup.frame().size.width.min(POPUP_MAX_W);
         popup.setFrame(NSRect::new(NSPoint::new(x, top), NSSize::new(width, ROW_H)));

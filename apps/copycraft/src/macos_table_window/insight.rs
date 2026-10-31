@@ -227,7 +227,7 @@ pub(super) fn set_profile(profile: Option<Arc<TableProfile>>) {
     paint(Place::Profile);
 }
 
-/// The chart shown changed (or went): Summarize is about its week or month series.
+/// The chart shown changed (or went): Summarize is about its points over a date column.
 pub(super) fn set_trend(trend: Option<Arc<TrendFacts>>) {
     reset(Place::Chart);
     let Some(trend) = trend else {

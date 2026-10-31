@@ -16,36 +16,35 @@ struct ChartSpec: Decodable, Sendable {
     let xLabel: String
     let yLabel: String
     let series: String
-    let unit: String?
-    let skipped: Int
     let points: [ChartPoint]
 }
 
-/// A bar or line point (`label`, `value`, `date`, `other`) or a scatter point (`x`, `y`).
+/// One row's point: `x` (a number, or days since 1970-01-01 for dates) or `label` (a text x),
+/// and `y`.
 struct ChartPoint: Decodable, Sendable {
     let label: String?
-    let value: Double?
-    let date: String?
-    let other: Bool?
     let x: Double?
-    let y: Double?
+    let y: Double
 }
 
 /// One mark, its texts formatted in the app's language.
 struct ChartRow: Identifiable {
     let id: Int
     let label: String
-    let value: Double
-    let valueText: String
     let x: Double
+    let date: Date
     let y: Double
     let xText: String
+    let yText: String
 }
 
 struct ChartView: View {
     let spec: ChartSpec
     let locale: Locale
     let rows: [ChartRow]
+
+    /// Dates come as whole days (UTC): shown in UTC, so a day never slips to the one before.
+    static let utc = TimeZone(identifier: "UTC") ?? TimeZone.current
 
     init(spec: ChartSpec) {
         self.spec = spec
@@ -54,18 +53,22 @@ struct ChartView: View {
         var rows: [ChartRow] = []
         rows.reserveCapacity(spec.points.count)
         for (index, point) in spec.points.enumerated() {
-            let value = point.value ?? 0
             let x = point.x ?? 0
-            let y = point.y ?? 0
-            let isScatter = spec.kind == "scatter"
+            let date = Date(timeIntervalSince1970: x * 86_400)
+            let xText: String
+            switch spec.kind {
+            case "dates": xText = ChartView.day(date, locale: locale)
+            case "categories": xText = point.label ?? ""
+            default: xText = ChartView.number(x, locale: locale)
+            }
             rows.append(ChartRow(
                 id: index,
-                label: ChartView.label(point, unit: spec.unit, locale: locale),
-                value: value,
-                valueText: ChartView.number(isScatter ? y : value, locale: locale),
+                label: point.label ?? "",
                 x: x,
-                y: y,
-                xText: ChartView.number(x, locale: locale)
+                date: date,
+                y: point.y,
+                xText: xText,
+                yText: ChartView.number(point.y, locale: locale)
             ))
         }
         self.rows = rows
@@ -76,59 +79,56 @@ struct ChartView: View {
             .accessibilityLabel(Text(verbatim: spec.series))
             .padding(16)
             .environment(\.locale, locale)
+            .environment(\.timeZone, ChartView.utc)
     }
 
     @ViewBuilder
     private var content: some View {
         switch spec.kind {
-        case "scatter":
+        case "dates":
+            styled(
+                Chart(rows) { row in
+                    PointMark(
+                        x: .value(spec.xLabel, row.date),
+                        y: .value(spec.yLabel, row.y)
+                    )
+                    .accessibilityLabel(Text(verbatim: row.xText))
+                    .accessibilityValue(Text(verbatim: row.yText))
+                }
+                .chartXAxis { dateAxis }
+            )
+        case "categories":
+            styled(
+                Chart(rows) { row in
+                    PointMark(
+                        x: .value(spec.xLabel, row.label),
+                        y: .value(spec.yLabel, row.y)
+                    )
+                    .accessibilityLabel(Text(verbatim: row.xText))
+                    .accessibilityValue(Text(verbatim: row.yText))
+                }
+            )
+        default:
             styled(
                 Chart(rows) { row in
                     PointMark(
                         x: .value(spec.xLabel, row.x),
                         y: .value(spec.yLabel, row.y)
                     )
-                    .foregroundStyle(by: .value(spec.series, spec.series))
                     .accessibilityLabel(Text(verbatim: "\(spec.xLabel) \(row.xText)"))
-                    .accessibilityValue(Text(verbatim: "\(spec.yLabel) \(row.valueText)"))
+                    .accessibilityValue(Text(verbatim: "\(spec.yLabel) \(row.yText)"))
                 }
                 .chartXAxis { numberAxis }
-            )
-        case "line":
-            styled(
-                Chart(rows) { row in
-                    LineMark(
-                        x: .value(spec.xLabel, row.label),
-                        y: .value(spec.yLabel, row.value)
-                    )
-                    .symbol(.circle)
-                    .foregroundStyle(by: .value(spec.series, spec.series))
-                    .accessibilityLabel(Text(verbatim: row.label))
-                    .accessibilityValue(Text(verbatim: row.valueText))
-                }
-            )
-        default:
-            styled(
-                Chart(rows) { row in
-                    BarMark(
-                        x: .value(spec.xLabel, row.label),
-                        y: .value(spec.yLabel, row.value)
-                    )
-                    .foregroundStyle(by: .value(spec.series, spec.series))
-                    .accessibilityLabel(Text(verbatim: row.label))
-                    .accessibilityValue(Text(verbatim: row.valueText))
-                }
             )
         }
     }
 
-    /// The axis titles, the value axis in the app's language and the legend, on each chart.
+    /// The axis titles (the column names) and the y axis in the app's language.
     private func styled(_ chart: some View) -> some View {
         chart
             .chartXAxisLabel(spec.xLabel)
             .chartYAxisLabel(spec.yLabel)
             .chartYAxis { numberAxis }
-            .chartLegend(position: .bottom, alignment: .leading)
     }
 
     /// Grid lines, ticks and numbers formatted in the app's language.
@@ -144,35 +144,36 @@ struct ChartView: View {
         }
     }
 
+    /// Grid lines, ticks and days formatted in the app's language.
+    private var dateAxis: some AxisContent {
+        AxisMarks { value in
+            AxisGridLine()
+            AxisTick()
+            AxisValueLabel {
+                if let date = value.as(Date.self) {
+                    Text(verbatim: ChartView.day(date, locale: locale))
+                }
+            }
+        }
+    }
+
     /// A number in the app's language ("1.234,5" in Dutch, "1,234.5" in English).
     static func number(_ value: Double, locale: Locale) -> String {
         value.formatted(.number.locale(locale))
     }
 
-    /// The point's label: a date group's first day formatted per its unit in the app's language,
-    /// else the label as Rust gave it (a group's text, or "Other" already translated).
-    static func label(_ point: ChartPoint, unit: String?, locale: Locale) -> String {
-        let fallback = point.label ?? ""
-        guard let text = point.date, let date = day(text) else { return fallback }
-        switch unit {
-        case "day", "week":
-            // A week is labelled by its Monday.
-            return date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
-        case "month":
-            return date.formatted(.dateTime.month(.abbreviated).year().locale(locale))
-        case "year":
-            return date.formatted(.dateTime.year().locale(locale))
-        default:
-            return fallback
-        }
-    }
-
-    /// Midnight (here) of `yyyy-mm-dd`.
-    static func day(_ text: String) -> Date? {
-        let parts = text.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3 else { return nil }
-        let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
-        return Calendar(identifier: .gregorian).date(from: components)
+    /// A day in the app's language ("5 mrt 2026" / "Mar 5, 2026"), read in UTC.
+    static func day(_ date: Date, locale: Locale) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utc
+        let style = Date.FormatStyle(
+            date: .abbreviated,
+            time: .omitted,
+            locale: locale,
+            calendar: calendar,
+            timeZone: utc
+        )
+        return date.formatted(style)
     }
 }
 

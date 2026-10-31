@@ -1,9 +1,10 @@
 //! Fake data only: made-up shops, customers and amounts.
 
 use super::*;
-use crate::chart_data::ChartKind;
+use crate::chart_data::{ChartRequest, build};
 use crate::dataframe::parse_table;
 use crate::table_profile::profile;
+use polars::prelude::DataFrame;
 
 /// 200 rows: amounts 10–14 with 30 outliers (1001–1030, a higher one later), a customer
 /// column and a second number column with a value that may never reach the model.
@@ -129,38 +130,31 @@ fn factors_against_the_mean() {
     assert_eq!(factor(5.0, -2.0, Lang::En), None);
 }
 
-/// A year of made-up monthly sales, two rows a month (half the total each).
+/// A year of made-up sales, one row on the first of each month.
 const MONTHS: [f64; 12] = [
     10.0, 12.0, 15.0, 14.0, 18.0, 22.0, 25.0, 24.0, 30.0, 35.0, 50.0, 40.0,
 ];
 
+/// A shop, a day and the revenue of that day; the rows not in date order.
 fn sales() -> DataFrame {
     let mut csv = String::from("shop,day,revenue\n");
-    for (month, total) in MONTHS.iter().enumerate() {
-        for (shop, day) in [("Noord", 3), ("Zuid", 17)] {
-            csv.push_str(&format!(
-                "{shop},2025-{:02}-{day:02},{}\n",
-                month + 1,
-                total / 2.0
-            ));
-        }
+    for (month, value) in MONTHS.iter().enumerate().rev() {
+        let shop = if month % 2 == 0 { "Noord" } else { "Zuid" };
+        csv.push_str(&format!("{shop},2025-{:02}-01,{value}\n", month + 1));
     }
     parse_table(&csv).expect("fake sales")
 }
 
-fn line(bucket: Bucket, aggregate: Aggregate) -> ChartRequest {
-    ChartRequest {
-        kind: ChartKind::Line,
-        x: 1,
-        y: Some(2),
-        aggregate,
-        bucket,
-    }
+/// The trend of the chart of `y` against `x` of `df`, as drawn.
+fn trend_of(df: &DataFrame, x: usize, y: usize) -> Option<TrendFacts> {
+    let chart = build(df, &ChartRequest { x, y }, Lang::En).expect("chart");
+    TrendFacts::from_chart(&chart)
 }
 
 #[test]
-fn trend_facts_of_monthly_totals() {
-    let trend = TrendFacts::build(&sales(), &line(Bucket::Month, Aggregate::Sum)).expect("trend");
+fn trend_facts_of_the_points_by_date() {
+    let trend = trend_of(&sales(), 1, 2).expect("trend");
+    // In date order, as drawn: every row's value, nothing added up.
     let values: Vec<f64> = trend.points.iter().map(|(_, v)| *v).collect();
     assert_eq!(values, MONTHS);
     assert_eq!(trend.total, 12);
@@ -168,111 +162,95 @@ fn trend_facts_of_monthly_totals() {
     assert_eq!((shape.peak, shape.low), (10, 0));
     // Two rises of three steps (April–July, August–November): the first wins.
     assert_eq!(shape.run, Some((3, 6, true)));
-    assert_eq!(trend.label(10, Lang::Nl), "november 2025");
-    assert_eq!(trend.label(2, Lang::En), "March 2025");
+    assert_eq!(trend.label(10, Lang::Nl), "1 november 2025");
+    assert_eq!(trend.label(2, Lang::En), "1 March 2025");
     let en = trend.sentence(Lang::En);
     assert_eq!(
         en.as_str(),
-        "Peak in November 2025 (50); lowest point in January 2025 (10). Rose from 10 in \
-         January 2025 to 40 in December 2025 (+300%). Longest rise: 3 times in a row, from \
-         April 2025 to July 2025."
+        "Peak on 1 November 2025 (50); lowest point on 1 January 2025 (10). Rose from 10 on \
+         1 January 2025 to 40 on 1 December 2025 (+300%). Longest rise: 3 times in a row, from \
+         1 April 2025 to 1 July 2025."
     );
     let nl = trend.sentence(Lang::Nl);
-    assert!(nl.starts_with("Piek in november 2025 (50); laagste punt in januari 2025 (10)."));
-    assert!(nl.contains("Gestegen van 10 in januari 2025 naar 40 in december 2025 (+300%)."));
+    assert!(nl.starts_with("Piek op 1 november 2025 (50); laagste punt op 1 januari 2025 (10)."));
+    assert!(nl.contains("Gestegen van 10 op 1 januari 2025 naar 40 op 1 december 2025 (+300%)."));
     let prompt = trend.prompt(Lang::En);
-    assert!(prompt.starts_with("Series: Sum of revenue\nValues per month (12):\n"));
-    assert!(prompt.contains("- November 2025: 50\n"));
+    assert!(prompt.starts_with("Column: revenue\nValues by date, one per row (12):\n"));
+    assert!(prompt.contains("- 1 November 2025: 50\n"));
     assert!(prompt.ends_with(en.as_str()));
-    // The series only: no shop.
+    let dutch = trend.prompt(Lang::Nl);
+    assert!(dutch.starts_with("Kolom: revenue\nWaarden op datum, één per rij (12):\n"));
+    // The y column only: no shop.
     assert!(!prompt.contains("Noord") && !prompt.contains("Zuid"));
 }
 
 #[test]
-fn falls_flats_and_counts() {
+fn falls_and_flats() {
     let mut csv = String::from("day,amount\n");
     for (month, value) in [(1, 9.0), (2, 8.0), (3, 7.0), (4, 9.5), (5, 9.0)] {
         csv.push_str(&format!("2026-{month:02}-10,{value}\n"));
     }
     let df = parse_table(&csv).expect("fake");
-    let request = ChartRequest {
-        kind: ChartKind::Bar,
-        x: 0,
-        y: Some(1),
-        aggregate: Aggregate::Sum,
-        bucket: Bucket::Month,
-    };
-    let trend = TrendFacts::build(&df, &request).expect("trend");
+    let trend = trend_of(&df, 0, 1).expect("trend");
     assert_eq!(trend.shape().run, Some((0, 2, false)));
     let en = trend.sentence(Lang::En);
     assert!(
-        en.contains("Unchanged at 9 from January 2026 to May 2026."),
+        en.contains("Unchanged at 9 from 10 January 2026 to 10 May 2026."),
         "{}",
         en.as_str()
     );
-    assert!(en.contains("Longest fall: 2 times in a row, from January 2026 to March 2026."));
-    let mut count = request;
-    count.aggregate = Aggregate::Count;
-    let counted = TrendFacts::build(&df, &count).expect("trend");
-    assert!(counted.column.is_none());
-    assert!(
-        counted
-            .prompt(Lang::Nl)
-            .starts_with("Reeks: Aantal rijen\n")
-    );
+    assert!(en.contains("Longest fall: 2 times in a row, from 10 January 2026 to 10 March 2026."));
 }
 
 #[test]
-fn only_weeks_and_months_of_a_date_column() {
+fn only_a_chart_over_a_date_column() {
     let df = sales();
-    for bucket in [Bucket::Day, Bucket::Year] {
-        assert!(TrendFacts::build(&df, &line(bucket, Aggregate::Sum)).is_none());
-    }
-    let mut scatter = line(Bucket::Month, Aggregate::Sum);
-    scatter.kind = ChartKind::Scatter;
-    assert!(TrendFacts::build(&df, &scatter).is_none());
-    // A text column groups no time.
-    let mut shops = line(Bucket::Month, Aggregate::Sum);
-    shops.x = 0;
-    assert!(TrendFacts::build(&df, &shops).is_none());
+    // A text x or a number x: no trend.
+    assert!(trend_of(&df, 0, 2).is_none());
+    assert!(trend_of(&df, 2, 2).is_none());
     // One point is no trend.
-    let one = parse_table("day,amount\n2026-01-01,5\n2026-01-09,6\n").expect("fake");
-    let request = ChartRequest {
-        kind: ChartKind::Bar,
-        x: 0,
-        y: Some(1),
-        aggregate: Aggregate::Sum,
-        bucket: Bucket::Month,
-    };
-    assert!(TrendFacts::build(&one, &request).is_none());
+    let one = parse_table("day,amount\n2026-01-01,5\n2026-01-09,\n").expect("fake");
+    assert!(trend_of(&one, 0, 1).is_none());
+    // Two rows on one day: two points, as drawn.
+    let same = parse_table("day,amount\n2026-01-01,5\n2026-01-01,6\n").expect("fake");
+    let trend = trend_of(&same, 0, 1).expect("trend");
+    assert_eq!(trend.points, [(20_454, 5.0), (20_454, 6.0)]);
 }
 
 #[test]
-fn weeks_beyond_sixty_keep_the_last_ones() {
+fn beyond_sixty_points_the_last_ones() {
     let mut csv = String::from("day,amount\n");
     // 70 Mondays from 2024-01-01, value = week number.
-    let start = 19_723; // 2024-01-01, a Monday
+    let start = 19_723; // 2024-01-01
     for week in 0..70 {
         let (year, month, date) = civil_from_days(start + week * 7);
         csv.push_str(&format!("{year:04}-{month:02}-{date:02},{}\n", week + 1));
     }
     let df = parse_table(&csv).expect("fake");
-    let request = ChartRequest {
-        kind: ChartKind::Line,
-        x: 0,
-        y: Some(1),
-        aggregate: Aggregate::Sum,
-        bucket: Bucket::Week,
-    };
-    let trend = TrendFacts::build(&df, &request).expect("trend");
+    let trend = trend_of(&df, 0, 1).expect("trend");
     assert_eq!((trend.points.len(), trend.total), (MAX_TREND_POINTS, 70));
     assert_eq!(trend.points[0].1, 11.0);
-    assert_eq!(trend.label(0, Lang::En), "week of 11 March 2024");
+    assert_eq!(trend.label(0, Lang::En), "11 March 2024");
     let prompt = trend.prompt(Lang::Nl);
     assert!(prompt.contains("Alleen de laatste 60 van 70 punten."));
-    assert!(prompt.contains("- week van 11 maart 2024: 11\n"));
+    assert!(prompt.contains("- 11 maart 2024: 11\n"));
     // A steady rise: one run over every step.
     assert_eq!(trend.shape().run, Some((0, 59, true)));
+}
+
+#[test]
+fn a_sampled_chart_gives_the_sample() {
+    let mut csv = String::from("day,amount\n");
+    for row in 0..6_000 {
+        let (year, month, date) = civil_from_days(row);
+        csv.push_str(&format!("{year:04}-{month:02}-{date:02},{row}\n"));
+    }
+    let df = parse_table(&csv).expect("fake");
+    let trend = trend_of(&df, 0, 1).expect("trend");
+    // The points drawn (5 000 of 6 000), of them the last 60.
+    assert_eq!(trend.total, crate::chart_data::MAX_POINTS);
+    let last = trend.points.last().expect("points");
+    assert_eq!(*last, (5_998, 5_998.0));
 }
 
 #[test]
@@ -319,9 +297,9 @@ fn the_answer_must_use_the_facts_numbers() {
 
 #[test]
 fn a_trend_answer_is_checked_too() {
-    let trend = TrendFacts::build(&sales(), &line(Bucket::Month, Aggregate::Sum)).expect("trend");
+    let trend = trend_of(&sales(), 1, 2).expect("trend");
     let facts = trend.prompt(Lang::En);
-    let good = "Revenue has grown since March 2025, with a peak of 50 in November.";
+    let good = "Revenue has grown since 1 March 2025, with a peak of 50 in November.";
     assert_eq!(
         check_answer(good, &facts, Lang::En)
             .as_deref()
@@ -338,7 +316,7 @@ fn a_trend_answer_is_checked_too() {
 
 #[test]
 fn debug_shows_no_name_or_value() {
-    let trend = TrendFacts::build(&sales(), &line(Bucket::Month, Aggregate::Sum)).expect("trend");
+    let trend = trend_of(&sales(), 1, 2).expect("trend");
     let text = format!("{trend:?}");
     assert!(!text.contains("revenue") && !text.contains("50"));
     assert_eq!(model_language(Lang::Nl), mac_ai::Language::Dutch);

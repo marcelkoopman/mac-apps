@@ -101,6 +101,12 @@ fn the_chart_button_needs_a_grid_and_columns_that_fit() {
     view.wipe();
     assert!(view.chart_columns.is_empty());
     assert!(!crate::commands::table_window_chart_on(&view));
+    // Text only: nothing for the y axis, so no chart.
+    let text = "naam;plaats\nJan;Groningen\nAnja;Utrecht\n";
+    let table = read(text, crate::dataframe::ReadOptions::default());
+    let view = table_window_view(&table, text);
+    assert_eq!(view.chart_columns.len(), 2);
+    assert!(!crate::commands::table_window_chart_on(&view));
 }
 
 #[test]
@@ -137,7 +143,7 @@ fn the_chart_button_follows_the_frame_not_the_format() {
         let frame = table.frame.as_ref().expect("frame");
         let data =
             crate::chart_data::build(frame, &request, crate::locale::Lang::En).expect("chart data");
-        assert_eq!(data.skipped, 0, "{src}");
+        assert_eq!(data.note.skipped, 0, "{src}");
     }
 }
 

@@ -158,7 +158,7 @@ pub enum Language {
 pub enum FactTask {
     /// Why a column's outliers stand out: statistics of the column and of its outlier rows.
     ExplainOutliers,
-    /// What a series of week or month totals does: the totals and fixed facts about them.
+    /// What a column's values do over time: the values by date and fixed facts about them.
     SummarizeTrend,
 }
 
@@ -180,12 +180,12 @@ impl FactTask {
                  Nederlands."
             }
             (FactTask::SummarizeTrend, Language::English) => {
-                "The text gives totals per week or per month and fixed facts about them. \
+                "The text gives a column's values by date, one per row, and fixed facts about them. \
                  Describe the trend in 1 or 2 short sentences, for example where it grows, \
                  where it peaks and where it drops. Answer in English."
             }
             (FactTask::SummarizeTrend, Language::Dutch) => {
-                "De tekst geeft totalen per week of per maand en vaste feiten daarover. \
+                "De tekst geeft de waarden van een kolom op datum, één per rij, en vaste feiten daarover. \
                  Beschrijf de trend in 1 of 2 korte zinnen, bijvoorbeeld waar het groeit, \
                  waar de piek ligt en waar het daalt. Antwoord in het Nederlands."
             }

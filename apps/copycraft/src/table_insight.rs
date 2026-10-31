@@ -3,21 +3,20 @@
 //! the check of its answer.
 //!
 //! The model never sees a table cell. It gets the column's statistics and the values of at
-//! most [`MAX_ROWS`] outliers (no other column of those rows), or the totals of a week or month
-//! series with fixed facts about them. Every number in its answer must be one of those numbers
+//! most [`MAX_ROWS`] outliers (no other column of those rows), or the points of a chart over
+//! a date column (date and value, as drawn) with fixed facts about them. Every number in its answer must be one of those numbers
 //! ([`check_answer`]); otherwise only the Rust fact sentence is shown. Nothing here is logged
 //! or stored: prompts and answers are wiped when dropped.
 
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::chart_data::{Aggregate, Bucket, ChartRequest, civil_from_days, date_series};
+use crate::chart_data::{ChartData, ChartKind, Points, civil_from_days};
 use crate::locale::{Lang, t_in, tf_in};
 use crate::table_profile::{ColumnProfile, Extreme, TableProfile, decimal_mark, number, whole};
-use polars::prelude::DataFrame;
 
 /// The most outlier rows that go to the model (the furthest past the fence first).
 pub const MAX_ROWS: usize = 20;
-/// The most points of a series that go to the model: the last ones.
+/// The most points of a chart that go to the model: the last ones by date.
 pub const MAX_TREND_POINTS: usize = 60;
 /// An answer longer than this, in characters, is no "1 or 2 sentences" and is not shown.
 pub const MAX_ANSWER_CHARS: usize = 600;
@@ -146,15 +145,13 @@ pub fn outlier_sentence(column: &ColumnProfile, lang: Lang) -> Option<Zeroizing<
 // ---------------------------------------------------------------------------------------------
 // Trend
 
-/// A bar or line chart's series per week or month, for Summarize: the values in time order
-/// (the last [`MAX_TREND_POINTS`]), with the column's name. Wiped when dropped; its `Debug`
-/// shows no name or value.
+/// The points of a chart over a date column, for Summarize: the values by date as drawn (one
+/// per row; the last [`MAX_TREND_POINTS`]), with the y column's name. Wiped when dropped; its
+/// `Debug` shows no name or value.
 pub struct TrendFacts {
-    pub bucket: Bucket,
-    pub aggregate: Aggregate,
-    /// The value column's name; `None` when rows are counted.
-    pub column: Option<String>,
-    /// `(first day of the week or month, value)`, oldest first.
+    /// The y column's name.
+    pub column: String,
+    /// `(day, value)`, oldest first.
     pub points: Vec<(i32, f64)>,
     /// The points before the cut to the last [`MAX_TREND_POINTS`].
     pub total: usize,
@@ -163,7 +160,6 @@ pub struct TrendFacts {
 impl std::fmt::Debug for TrendFacts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TrendFacts")
-            .field("bucket", &self.bucket)
             .field("points", &self.points.len())
             .finish_non_exhaustive()
     }
@@ -171,9 +167,7 @@ impl std::fmt::Debug for TrendFacts {
 
 impl Drop for TrendFacts {
     fn drop(&mut self) {
-        if let Some(column) = self.column.as_mut() {
-            column.zeroize();
-        }
+        self.column.zeroize();
         for point in self.points.iter_mut() {
             *point = (0, 0.0);
         }
@@ -192,25 +186,22 @@ pub struct TrendShape {
 }
 
 impl TrendFacts {
-    /// The trend of the chart `request` asks for of `df`: only a bar or line chart of a date
-    /// column per week or month, with at least two points.
-    pub fn build(df: &DataFrame, request: &ChartRequest) -> Option<TrendFacts> {
-        let mut points = date_series(df, request)?;
-        let total = points.len();
-        if total < 2 {
+    /// The trend of a drawn chart: only one over a date column, with at least two points
+    /// (in date order, as drawn).
+    pub fn from_chart(chart: &ChartData) -> Option<TrendFacts> {
+        let Points::Pairs(pairs) = &chart.points else {
+            return None;
+        };
+        if chart.kind != ChartKind::Dates || pairs.len() < 2 {
             return None;
         }
-        if total > MAX_TREND_POINTS {
-            points.drain(..total - MAX_TREND_POINTS);
-        }
-        let column = match request.aggregate {
-            Aggregate::Count => None,
-            _ => Some(df.columns().get(request.y?)?.name().to_string()),
-        };
+        let total = pairs.len();
+        let points = pairs[total.saturating_sub(MAX_TREND_POINTS)..]
+            .iter()
+            .map(|(day, value)| (day.floor() as i32, *value))
+            .collect();
         Some(TrendFacts {
-            bucket: request.bucket,
-            aggregate: request.aggregate,
-            column,
+            column: chart.y_label.clone(),
             points,
             total,
         })
@@ -254,24 +245,11 @@ impl TrendFacts {
         TrendShape { peak, low, run }
     }
 
-    /// The label of point `place`: "maart 2026" / "March 2026", "week van 2 maart 2026" /
-    /// "week of 2 March 2026".
+    /// The label of point `place`: its day, "2 maart 2026" / "2 March 2026".
     pub fn label(&self, place: usize, lang: Lang) -> String {
         let day = self.points.get(place).map_or(0, |(day, _)| *day);
         let (year, month, date) = civil_from_days(day);
-        let name = month_name(month, lang);
-        match self.bucket {
-            Bucket::Week => tf_in(lang, "insight_week_of", &[&format!("{date} {name} {year}")]),
-            _ => format!("{name} {year}"),
-        }
-    }
-
-    /// The series' title: "Som van omzet" / "Sum of revenue", or the row count.
-    fn series(&self, lang: Lang) -> String {
-        match &self.column {
-            Some(name) => tf_in(lang, "chart_series", &[&self.aggregate.title(lang), name]),
-            None => t_in(lang, "chart_rows").to_string(),
-        }
+        format!("{date} {} {year}", month_name(month, lang))
     }
 
     /// The Rust fact sentences: peak and lowest point, start to end, the longest run. Shown
@@ -325,15 +303,12 @@ impl TrendFacts {
         text
     }
 
-    /// The facts the model gets: the series' title, its points as "label: value", and the fixed
+    /// The facts the model gets: the y column's name, its points as "label: value", and the fixed
     /// facts of [`TrendFacts::sentence`].
     pub fn prompt(&self, lang: Lang) -> Zeroizing<String> {
-        let mut lines = vec![tf_in(lang, "insight_p_series", &[&self.series(lang)])];
+        let mut lines = vec![tf_in(lang, "insight_p_series", &[&self.column])];
         let count = self.points.len();
-        lines.push(match self.bucket {
-            Bucket::Week => tf_in(lang, "insight_p_per_week", &[&count]),
-            _ => tf_in(lang, "insight_p_per_month", &[&count]),
-        });
+        lines.push(tf_in(lang, "insight_p_by_date", &[&count]));
         if self.total > count {
             lines.push(tf_in(lang, "insight_trend_cut", &[&count, &self.total]));
         }
